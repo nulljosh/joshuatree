@@ -75,10 +75,6 @@ void gui_draw_window_frame(int x, int y, int w, int h, const char *name);
    i386 answers with wx_text, ARM with arch/arm64/text.c. */
 void gui_icon_text(const char *s, int lx, int ly, int face, int mul, unsigned int fg);
 int gui_icon_text_w(const char *s, int face, int mul);
-/* The Calendar tile's live face, over its blank page art: the month in red and the day in ink, for month 1..12 and
-   day 1..31. Month 0 means the date is unknown (the Pi has no battery clock), and the tile shows a red header dash and
-   an ink dash instead of a made-up date. */
-void gui_calendar_face(int cx_center, int cy_bottom, int size, int month, int day);
 /* The software cursor: an antialiased arrow CURSOR_W x CURSOR_H logical
    pixels, top-left at the pointer. gui_cursor_save copies the patch it is
    about to cover (at physical resolution, up to CURSOR_MAX_SCALE),

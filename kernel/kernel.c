@@ -3486,13 +3486,6 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     return out;
 }
 
-/* Forward-declared: the real body lives past wx_text/wx_text_lw's own
-   definitions further down this file (Calendar's date overlay is drawn
-   with the same physical-resolution DejaVu text the Weather window
-   uses), but gui_draw_one_icon_on itself needs to call it from up here,
-   at every one of its draw sites (dock, dock-magnified, Apps-folder
-   grid, drag preview all funnel through this one function). */
-static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size);
 #include "clockicon.h"
 
 static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int size, unsigned int under){
@@ -3562,32 +3555,6 @@ static void wall_caches_drop(void){
 }
 
 /* The software cursor (save-under, the antialiased arrow) lives in gui_paint.c, shared with the ARM build. */
-
-/* v0.89.x: gui_calendar_draw_date (above, near gui_draw_one_icon_on)
-   draws the real date fresh on every call, so the Calendar tile is never
-   stale on any redraw that actually happens -- but the dock is
-   event-driven (gui_redraw_dock_band/gui_draw_dock only ever run off a
-   hover, drag or menu change, see gui_run's cursor_only/dock_only/
-   menu_only split below), not painted every loop tick the way
-   gui_draw_menubar now is. An idle desktop, cursor parked outside the
-   dock all night, would sit with yesterday's day number on screen until
-   the next real mouse event. Same fix shape as v0.76.17's own menu-bar
-   staleness (this file's gui_menubar_last_min): a cheap once-a-loop CMOS
-   check, self-gated on a real day change, called from the exact spot
-   gui_run already reads the clock unconditionally every iteration. */
-static int gui_calendar_last_dom = -1;
-static void gui_calendar_check_rollover(int hover_slot, int drag_slot, int mx, int my){
-    u8 h, m, wd, dom, mon;
-    cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
-    int domv = (dom & 0x0F) + ((dom >> 4) * 10);
-    if (gui_calendar_last_dom < 0) { gui_calendar_last_dom = domv; return; } /* first call: seed, no false redraw at boot */
-    if (domv == gui_calendar_last_dom) return;
-    gui_calendar_last_dom = domv;
-    gui_cursor_restore();
-    gui_draw_dock(hover_slot, drag_slot, mx, my);
-    gui_cursor_save(mx, my);
-    gui_draw_cursor(mx, my);
-}
 
 /* App viewers have their own input loops. Keep the pointer alive while one
    is open, drawing it in screen coordinates outside the app viewport. */
@@ -3912,21 +3879,10 @@ static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, u
 }
 static int wx_text_lw(const char *s, int size, int bold, int mul){ int sc = (int)window_scale(); return (wx_text_w(s, size, bold, mul) + sc - 1) / sc; }
 
-/* The Calendar tile's live face is gui_calendar_face (kernel/gui_paint.c, shared with the Pi), drawn over the
-   cached blank page at every site that draws the icon. Its date comes from cmos_read_time_stable, the same read the
-   menu bar clock makes, so the icon and the clock never disagree. These two answer its text through wx_text, the
-   physical-resolution DejaVu path the Weather window uses. */
+/* gui_paint.h's icon text, through wx_text, the physical-resolution DejaVu path the Weather window uses. The Pi
+   draws its window labels with it; nothing on i386 calls it since the Calendar tile became a plain picture. */
 void gui_icon_text(const char *s, int lx, int ly, int face, int mul, unsigned int fg){ wx_text(s, lx, ly, face, 1, mul, fg); }
 int gui_icon_text_w(const char *s, int face, int mul){ return wx_text_lw(s, face, 1, mul); }
-static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
-    u8 h, m, wd, dom, mon;
-    cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
-    int domv = (dom & 0x0F) + ((dom >> 4) * 10);
-    int monv = (mon & 0x0F) + ((mon >> 4) * 10);
-    if (monv < 1 || monv > 12) monv = 1;
-    if (domv < 1 || domv > 31) domv = 1;
-    gui_calendar_face(cx_center, cy_bottom, size, monv, domv);
-}
 
 /* "18°" style degrees into out. */
 char *wx_put_int(char *o, int v){
@@ -5273,11 +5229,6 @@ static void gui_run(void){
             gui_draw_menubar();
             if (gui_menubar_last_min != min_before && my < GUI_MENUBAR_H) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
         }
-        /* v0.89.x: same "call it unconditionally every idle iteration,
-           let it self-gate" shape as the minute check just above, for the
-           Calendar dock tile's day number (see gui_calendar_check_rollover's
-           own comment). */
-        gui_calendar_check_rollover(dock_hover, drag_slot, mx, my);
         /* v43: weather, after the desktop is already on screen so the
            fetch never delays the first frame, then every ten minutes. */
         if (!weather_tried_once || ticks() - weather_last_tick > 100 * 600) {

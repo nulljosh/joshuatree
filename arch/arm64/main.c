@@ -43,8 +43,10 @@ static void uart_init(void) {
 #endif
 }
 static void console_putc(char c);   /* the same text, on the screen once there is one */
-static int con_quiet;   /* the rest of this line goes to the UART only: key echoes stay off the screen once the ask> prompt is in use */
+static int con_quiet;   /* the rest of this line goes to the UART only: key echoes stay off the screen while the Terminal has the keys */
 static int con_line_start = 1;   /* the next character begins a line */
+static int con_to_term;          /* a Terminal command is running: what it prints goes to the Terminal, not the Console */
+void term_output(int on) { con_to_term = on; }   /* ask.c, around one command */
 static void uart_putc(char c) {
     while (REG(UART_FR) & TXFF) {}
     REG(UART_DR) = (unsigned char)c;
@@ -63,7 +65,7 @@ static int con_noise(const char *s) {
         "usb ", "wifi power", "wifi sdio", "wifi f1", "wifi alp", "wifi chip", "wifi cores", "wifi arm", "wifi fw ", "wifi ht ",
         "wifi bus", "wifi radio up", "wifi ver", "wifi mac", "wifi found", "wifi scan", "wifi joining", "wifi handshake", "wifi assoc",
         "Wi-Fi: found", "Wi-Fi: looked", "Wi-Fi: this Pi", "Wi-Fi: chip", "Wi-Fi: connecting", "Wi-Fi: the router", "Wi-Fi: we answered", "Wi-Fi: handshake",
-        "dhcp: lease", "net dhcp", "@", "M1d calendar", "Wi-Fi: connected", "Internet: online" };
+        "dhcp: lease", "net dhcp", "@", "Wi-Fi: connected", "Internet: online" };
     for (unsigned i = 0; i < sizeof skip / sizeof skip[0]; i++) {
         const char *a = s, *b = skip[i];
         while (*b && *a == *b) { a++; b++; }
@@ -86,10 +88,10 @@ static void uart_dec(unsigned v) {
     while (n) uart_putc(b[--n]);
 }
 /* M4: the same printing for the drivers in their own files (pci.c, xhci.c) */
-int ask_active(void);   /* ask.c */
+static int term_front(void);   /* the Terminal window is open: it has the keyboard */
 void kputs(const char *s) {
-    if (ask_active() && s[0] == 'u' && s[1] == 's' && s[2] == 'b' && s[3] == ' ' && s[4] == 'k' && s[5] == 'e' && s[6] == 'y' && s[7] == ' ')
-        con_quiet = 1;   /* xhci.c's "usb key 0x0d j" echo: the letter is on the ask> row now, the line stays on the UART */
+    if (term_front() && s[0] == 'u' && s[1] == 's' && s[2] == 'b' && s[3] == ' ' && s[4] == 'k' && s[5] == 'e' && s[6] == 'y' && s[7] == ' ')
+        con_quiet = 1;   /* xhci.c's "usb key 0x0d j" echo: the letter is on the Terminal's ask> row, the line stays on the UART */
     uart_puts(s);
 }
 void kdec(unsigned v) { uart_dec(v); }
@@ -152,7 +154,11 @@ static unsigned long l3[512] __attribute__((aligned(4096)));   /* ...and one of 
 #else
 #define RAM_GIB 1
 #endif
-#define USER_BASE (((unsigned long)RAM_GIB << 30) + (64UL << 20))   /* the arena: one 2 MiB block, clear of the kernel image and the heap */
+/* The arena: one 2 MiB block, clear of the kernel image and the heap. 64 MiB into RAM unless the heap reaches that far
+   (an image with a language model baked in, llm_model.S), then the first 2 MiB boundary after the heap. */
+#define ARENA_LOW (((unsigned long)RAM_GIB << 30) + (64UL << 20))
+#define HEAP_END ((unsigned long)_heap_start + HEAP_SIZE)
+#define USER_BASE (HEAP_END <= ARENA_LOW ? ARENA_LOW : (HEAP_END + (2UL << 20) - 1) & ~((2UL << 20) - 1))
 #define UP_CODE  0x0000UL   /* EL0 code, read-only and executable */
 #define UP_STACK 0x2000UL   /* EL0 stack, one page; sp starts at its top */
 #define UP_KERN  0x4000UL   /* a page in the same arena that only EL1 may touch */
@@ -477,11 +483,16 @@ int text_width(int which, const char *s, int px10);
 int text_selftest(int px10, int *w, int *h, int *adv);
 static int text_ok;     /* smooth text is up */
 static unsigned fb_color(unsigned c) { return fb_swap ? (c & 0xFF00FF00u) | (c >> 16 & 0xFF) | (c & 0xFF) << 16 : c; }
-static char con_log[LOG_MAX];
-static unsigned con_len, con_col, con_row;
-static unsigned con_anchor;   /* offset in the log of the line at the top of the window while it follows the newest output */
-static int con_scrolled;      /* the keyboard moved the view back: new output is only logged until End */
-static unsigned con_vtop, con_vlast;   /* while scrolled: the first line shown (0 based) and the last (1 based) */
+/* Two windows share this renderer, each with its own text: the Console (the boot log, logs only, no input) and the
+   Terminal (the ask> command line, docs/TERMINAL.md). cp is the one in front; the other only keeps its text. */
+struct pane {
+    char log[LOG_MAX];
+    unsigned len, col, row;
+    unsigned anchor;          /* offset in the log of the line at the top of the window while it follows the newest output */
+    int scrolled;             /* the keyboard moved the view back: new output is only logged until End */
+    unsigned vtop, vlast;     /* while scrolled: the first line shown (0 based) and the last (1 based) */
+};
+static struct pane con_p, term_p, *cp = &con_p;
 static int con_wx, con_wy, con_ww;
 static int con_live;    /* the framebuffer is up: draw as we go */
 static int con_x, con_y, con_cw, con_ch, con_base, con_cols, con_rows, con_px10;
@@ -506,7 +517,7 @@ static void con_glyph(unsigned col, unsigned row, char c) {
 static void con_wipe(void) {
     fb_rect(con_x, con_y, con_cols * con_cw, con_rows * con_ch, CON_BG);
     fb_flush(con_x - 4, con_y, con_cols * con_cw + 8, con_rows * con_ch);
-    con_col = con_row = 0;
+    cp->col = cp->row = 0;
 }
 static int con_replaying;
 static void con_draw(unsigned i);
@@ -514,35 +525,35 @@ static void con_scroll(unsigned end) {   /* the window is full: wipe it and redr
     con_wipe();
     if (con_replaying) return;
     unsigned start = end; int nl = 0;
-    while (start > 0) { if (con_log[start - 1] == '\n' && ++nl > con_rows / 2) break; start--; }
-    con_anchor = start;
+    while (start > 0) { if (cp->log[start - 1] == '\n' && ++nl > con_rows / 2) break; start--; }
+    cp->anchor = start;
     con_replaying = 1;
     for (unsigned k = start; k < end; k++) con_draw(k);
     con_replaying = 0;
 }
-static void con_draw(unsigned i) {   /* draws con_log[i]; a newline only moves the cursor, the next character scrolls */
-    char c = con_log[i];
+static void con_draw(unsigned i) {   /* draws cp->log[i]; a newline only moves the cursor, the next character scrolls */
+    char c = cp->log[i];
     if (c == '\r') return;
-    if (c == '\n') { con_col = 0; con_row++; return; }
-    if (con_col >= (unsigned)con_cols) { con_col = 0; con_row++; }
-    if (con_row >= (unsigned)con_rows) {
+    if (c == '\n') { cp->col = 0; cp->row++; return; }
+    if (cp->col >= (unsigned)con_cols) { cp->col = 0; cp->row++; }
+    if (cp->row >= (unsigned)con_rows) {
         con_scroll(i);
-        if (con_col >= (unsigned)con_cols) { con_col = 0; con_row++; }
-        if (con_row >= (unsigned)con_rows) con_wipe();
+        if (cp->col >= (unsigned)con_cols) { cp->col = 0; cp->row++; }
+        if (cp->row >= (unsigned)con_rows) con_wipe();
     }
-    con_glyph(con_col++, con_row, c);
+    con_glyph(cp->col++, cp->row, c);
 }
 static unsigned con_nlines(void) {   /* lines in the log, a last line still being written counts */
     unsigned n = 0;
-    for (unsigned i = 0; i < con_len; i++) if (con_log[i] == '\n') n++;
-    return n + (con_len && con_log[con_len - 1] != '\n');
+    for (unsigned i = 0; i < cp->len; i++) if (cp->log[i] == '\n') n++;
+    return n + (cp->len && cp->log[cp->len - 1] != '\n');
 }
 static unsigned con_line_off(unsigned line) {   /* where line n starts in the log */
     unsigned i = 0;
-    while (line && i < con_len) { if (con_log[i++] == '\n') line--; }
+    while (line && i < cp->len) { if (cp->log[i++] == '\n') line--; }
     return i;
 }
-static unsigned con_off_line(unsigned off) { unsigned n = 0; for (unsigned i = 0; i < off && i < con_len; i++) if (con_log[i] == '\n') n++; return n; }
+static unsigned con_off_line(unsigned off) { unsigned n = 0; for (unsigned i = 0; i < off && i < cp->len; i++) if (cp->log[i] == '\n') n++; return n; }
 #define CON_TITLE_BG  0x00F5F0EB   /* the window frame's cream title band (gui_draw_window_frame) */
 #define CON_HINT_INK  0x0075726E   /* secondary grey ink on it */
 static void con_text(const char *s, int right, int y) {   /* a short grey string, right edge at x = right, vertically in the title band */
@@ -560,7 +571,7 @@ static void con_text(const char *s, int right, int y) {   /* a short grey string
     }
 }
 static void con_hint(void) {   /* the title bar's "lines 12-27 of 61": a photo says which part of the log it shows */
-    unsigned total = con_nlines(), first = con_scrolled ? con_vtop : con_off_line(con_anchor), last = con_scrolled ? con_vlast : total;
+    unsigned total = con_nlines(), first = cp->scrolled ? cp->vtop : con_off_line(cp->anchor), last = cp->scrolled ? cp->vlast : total;
     char b[40]; int n = 0;
     for (const char *t = "lines "; *t; ) b[n++] = *t++;
     unsigned v[3] = { first + 1, last, total };
@@ -585,16 +596,17 @@ static int con_is_status(const char *l, unsigned n) {   /* wifi and usb lines th
     return 0;
 }
 static void con_summary(void) {   /* the row under the text: the newest wifi and usb line, cut to fit, whatever is scrolled into view */
+    if (cp != &con_p) return;   /* the Console's own row: the Terminal has its prompt there */
     unsigned wo = 0, wn = 0, uo = 0, un = 0;
-    for (unsigned i = 0; i < con_len; ) {
-        unsigned e = i; while (e < con_len && con_log[e] != '\n') e++;
-        if (con_is_status(con_log + i, e - i)) { if (con_log[i] == 'w') { wo = i; wn = e - i; } else { uo = i; un = e - i; } }
+    for (unsigned i = 0; i < con_p.len; ) {
+        unsigned e = i; while (e < con_p.len && con_p.log[e] != '\n') e++;
+        if (con_is_status(con_p.log + i, e - i)) { if (con_p.log[i] == 'w') { wo = i; wn = e - i; } else { uo = i; un = e - i; } }
         i = e + 1;
     }
     unsigned cols = (unsigned)con_cols > 90 ? 90 : (unsigned)con_cols, half = cols > 4 ? (cols - 3) / 2 : 1;
     char b[96]; unsigned n = 0;
     for (int part = 0; part < 2; part++) {
-        const char *l = part ? con_log + uo : con_log + wo, *none = part ? "usb -" : "wifi -"; unsigned ln = part ? un : wn;
+        const char *l = part ? con_p.log + uo : con_p.log + wo, *none = part ? "usb -" : "wifi -"; unsigned ln = part ? un : wn;
         unsigned start = n;
         if (!ln) { l = none; (void)l; ln = 0; }
         for (unsigned i = 0; i < ln && n - start < half; i++) b[n++] = (l[i] >= 32 && l[i] < 127) ? l[i] : '?';
@@ -609,68 +621,69 @@ static void con_summary(void) {   /* the row under the text: the newest wifi and
 static int con_render(unsigned top) {   /* draws the window from line `top` down; 1 if the end of the log fits */
     unsigned nl = con_nlines(), line = top, last = top;
     con_wipe();
-    for (unsigned k = con_line_off(top); k < con_len; k++) {
-        char c = con_log[k];
+    for (unsigned k = con_line_off(top); k < cp->len; k++) {
+        char c = cp->log[k];
         if (c == '\r') continue;
         if (c == '\n') {
-            con_col = 0; con_row++; line++;
-            if (con_row >= (unsigned)con_rows) { con_vlast = last + 1; return 0; }
+            cp->col = 0; cp->row++; line++;
+            if (cp->row >= (unsigned)con_rows) { cp->vlast = last + 1; return 0; }
             last = line; continue;
         }
-        if (con_col >= (unsigned)con_cols) { con_col = 0; con_row++; }
-        if (con_row >= (unsigned)con_rows) { con_vlast = last + 1; return 0; }
-        con_glyph(con_col++, con_row, c);
+        if (cp->col >= (unsigned)con_cols) { cp->col = 0; cp->row++; }
+        if (cp->row >= (unsigned)con_rows) { cp->vlast = last + 1; return 0; }
+        con_glyph(cp->col++, cp->row, c);
         last = line;
     }
-    con_vlast = last < nl ? last + 1 : nl;
+    cp->vlast = last < nl ? last + 1 : nl;
     return 1;
 }
 static void con_follow(void) {   /* End: back to the newest, the same picture the streaming draw would have made */
-    if (!con_scrolled) return;
-    con_scrolled = 0;
+    if (!cp->scrolled) return;
+    cp->scrolled = 0;
     con_wipe();
-    for (unsigned k = con_anchor; k < con_len; k++) con_draw(k);
+    for (unsigned k = cp->anchor; k < cp->len; k++) con_draw(k);
 }
 static int con_key(unsigned code, unsigned value) {   /* Page Up 104, Page Down 109, Home 102, End 107: 1 if the console took the key */
     if (code != 104 && code != 109 && code != 102 && code != 107) return 0;
     if (!con_live || !value) return 1;
     unsigned half = (unsigned)con_rows / 2 ? (unsigned)con_rows / 2 : 1, nl = con_nlines();
     if (code == 104 || code == 102) {
-        unsigned cur = con_scrolled ? con_vtop : con_off_line(con_anchor);
-        con_vtop = code == 102 ? 0 : cur > half ? cur - half : 0;
-        con_scrolled = 1;
-        con_render(con_vtop);
-    } else if (code == 109 && con_scrolled) {
-        con_vtop += half; if (con_vtop >= nl) con_vtop = nl ? nl - 1 : 0;
-        if (con_render(con_vtop)) con_follow(); /* the end of the log is in view: follow again */
+        unsigned cur = cp->scrolled ? cp->vtop : con_off_line(cp->anchor);
+        cp->vtop = code == 102 ? 0 : cur > half ? cur - half : 0;
+        cp->scrolled = 1;
+        con_render(cp->vtop);
+    } else if (code == 109 && cp->scrolled) {
+        cp->vtop += half; if (cp->vtop >= nl) cp->vtop = nl ? nl - 1 : 0;
+        if (con_render(cp->vtop)) con_follow(); /* the end of the log is in view: follow again */
     } else if (code == 107) con_follow();
     con_hint();
     return 1;
 }
 static int cur_hold(void);           /* slice 4, below: take the pointer's arrow off the Console while it draws */
 static void cur_release(int held);   /* ...and put it back */
-static void console_putc(char c) {
-    if (con_len == LOG_MAX) {   /* full: forget the older half, up to a line end */
-        unsigned drop = LOG_MAX / 2;
-        while (drop < con_len && con_log[drop - 1] != '\n') drop++;
-        unsigned gone = con_off_line(drop);
-        for (unsigned i = drop; i < con_len; i++) con_log[i - drop] = con_log[i];
-        con_len -= drop;
-        con_anchor = con_anchor > drop ? con_anchor - drop : 0;
-        con_vtop = con_vtop > gone ? con_vtop - gone : 0; con_vlast = con_vlast > gone ? con_vlast - gone : 0;
+static void pane_putc(struct pane *p, char c) {
+    if (p->len == LOG_MAX) {   /* full: forget the older half, up to a line end */
+        unsigned drop = LOG_MAX / 2, gone = 0;
+        while (drop < p->len && p->log[drop - 1] != '\n') drop++;
+        for (unsigned i = 0; i < drop; i++) if (p->log[i] == '\n') gone++;
+        for (unsigned i = drop; i < p->len; i++) p->log[i - drop] = p->log[i];
+        p->len -= drop;
+        p->anchor = p->anchor > drop ? p->anchor - drop : 0;
+        p->vtop = p->vtop > gone ? p->vtop - gone : 0; p->vlast = p->vlast > gone ? p->vlast - gone : 0;
     }
-    con_log[con_len++] = c;
-    if (!con_live) return;
+    p->log[p->len++] = c;
+    if (!con_live || p != cp) return;   /* a window that is closed or behind only keeps its text */
     int held = cur_hold();
-    unsigned was = con_anchor;
-    if (!con_scrolled) con_draw(con_len - 1);
-    if (c == '\n' || con_anchor != was) {
-        unsigned e = con_len - 1, s = e; while (s > 0 && con_log[s - 1] != '\n') s--;
-        if (c == '\n' && con_is_status(con_log + s, e - s)) con_summary();
+    unsigned was = cp->anchor;
+    if (!cp->scrolled) con_draw(cp->len - 1);
+    if (c == '\n' || cp->anchor != was) {
+        unsigned e = cp->len - 1, s = e; while (s > 0 && cp->log[s - 1] != '\n') s--;
+        if (c == '\n' && con_is_status(cp->log + s, e - s)) con_summary();
         con_hint();
     }
     cur_release(held);
 }
+static void console_putc(char c) { pane_putc(con_to_term ? &term_p : &con_p, c); }
 /* The console's type. DejaVu Sans Mono at the screen's scale, unless a quick test of the rasterizer says no: then the
    8x16 VGA font at a whole-number scale (2x on a 1080p screen), which needs nothing but integer stores. */
 static void con_layout(int win_x, int win_y, int win_w, int win_h) {
@@ -685,17 +698,25 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
         con_cw = 8 * con_vga; con_ch = 16 * con_vga; con_base = 0;
     }
     con_cols = (win_w - sc(12)) / con_cw;
-    con_rows = (win_h - sc(46)) / con_ch - 2;   /* then a row pinning the wifi and usb status, and the ask> prompt last */
+    con_rows = (win_h - sc(46)) / con_ch - 1;   /* then one row: the Console's wifi and usb status, or the Terminal's ask> prompt */
 }
-/* The bottom row: "ask> " and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
-void con_prompt(const char *s, unsigned n) {
+const char *ask_prompt(void);   /* ask.c: "Claude Haiku 5.5 $ ", naming the model that last answered */
+/* The Terminal's bottom row: the prompt and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
+void con_clear(void) {         /* /clear: the Terminal's window empties, its text stays in the scrollback */
     if (!con_live) return;
     int held = cur_hold();
-    unsigned row = (unsigned)con_rows + 1, cols = (unsigned)con_cols, room = cols > 7 ? cols - 6 : 1;
+    con_wipe(); cp->anchor = cp->len; cp->scrolled = 0; con_hint();
+    cur_release(held);
+}
+void con_prompt(const char *s, unsigned n) {
+    if (!con_live || cp != &term_p) return;
+    int held = cur_hold();
+    const char *p = ask_prompt();
+    unsigned plen = 0; while (p[plen]) plen++;
+    unsigned row = (unsigned)con_rows, cols = (unsigned)con_cols, room = cols > plen + 2 ? cols - plen - 1 : 1;
     int y = con_y + (int)row * con_ch;
     fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
     fb_flush(con_x - 4, y, con_cols * con_cw + 8, con_ch);
-    const char *p = "ask> ";
     unsigned col = 0;
     for (; *p; p++) con_glyph(col++, row, *p);
     if (n > room) { s += n - room; n = room; }
@@ -706,9 +727,9 @@ void con_prompt(const char *s, unsigned n) {
 int con_columns(void) { return con_live ? con_cols : 0; }
 static void con_start(void) {   /* the screen is ready: replay what was printed before it */
     con_live = 1;
-    con_col = con_row = 0;
-    for (unsigned i = 0; i < con_len; i++) con_draw(i);
-    con_summary(); con_hint(); con_prompt("", 0);
+    cp->col = cp->row = 0;
+    for (unsigned i = 0; i < cp->len; i++) con_draw(i);
+    con_summary(); con_hint();
 }
 
 /* ---- The crash screen. An unexpected exception at EL1 (a kernel bug; the deliberate EL0 faults are answered in
@@ -751,11 +772,11 @@ static void crash(const struct frame *f) {
     crash_s("FAR "); crash_x(far); crash_nl();
     crash_s("ELR "); crash_x(f->elr); crash_nl();
     crash_s("last console lines:"); crash_nl();
-    unsigned end = con_len;
-    if (end && con_log[end - 1] == '\n') end--;
+    unsigned end = con_p.len;
+    if (end && con_p.log[end - 1] == '\n') end--;
     unsigned start = end; int nl = 0;
-    while (start > 0) { if (con_log[start - 1] == '\n' && ++nl >= 5) break; start--; }
-    for (unsigned i = start; i < end; i++) { if (con_log[i] == '\n') crash_nl(); else if (con_log[i] != '\r') crash_c(con_log[i]); }
+    while (start > 0) { if (con_p.log[start - 1] == '\n' && ++nl >= 5) break; start--; }
+    for (unsigned i = start; i < end; i++) { if (con_p.log[i] == '\n') crash_nl(); else if (con_p.log[i] != '\r') crash_c(con_p.log[i]); }
     crash_nl();
     crash_s("halted: this core sleeps in a wfe loop"); crash_nl();
     for (unsigned r = 0; r < CRASH_ROWS && r < crash_row; r++) {   /* the UART first: it works whatever state the screen is in */
@@ -817,7 +838,7 @@ void gui_text(const char *s, int x, int y, unsigned int fg) {
     if (text_ok) text_draw(2, s, x * k, y * k + 25 * k / 2, 120 * k, fb_color(fg), fb, fb_pitch, (int)fb_w, (int)fb_h);
 }
 int gui_text_width(const char *s) { int k = (int)window_scale(); return text_ok ? text_width(2, s, 120 * k) / k : 0; }
-/* The icon text (the Calendar face's month and day): bold sans, face 0..3 a 16, 20, 24 or 28 physical pixel face times
+/* The icon text (window labels): bold sans, face 0..3 a 16, 20, 24 or 28 physical pixel face times
    mul, as i386's wx_text, with the line box's top at logical ly; DejaVu's ascent puts the baseline 93% of a face down. */
 void gui_icon_text(const char *s, int lx, int ly, int face, int mul, unsigned int fg) {
     int k = (int)window_scale(), px = (16 + 4 * face) * mul;
@@ -844,27 +865,61 @@ static void menu_mark_paint(int cx, int cy, int T, unsigned ink) {
         window_pixel_phys(ox + col, oy + row, out);
     }
 }
-static void dock_paint(void) {
-    static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
-    gui_draw_dock_tray();
-    int size = DOCK_ICON, pw = size * (int)window_scale(), y0 = gui_dock_y0(), drawn = 0;
-    for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
-        int icon = order[slot], cx = gui_slot_x(slot) + size / 2, cy_bottom = y0 + DOCK_PAD + size;
-        gui_draw_icon_shadow(cx, cy_bottom, size);
-        unsigned long mark = heap_mark();   /* the bump heap never frees: the decode and the tile are rolled back */
-        unsigned int *tile = kmalloc((unsigned)(pw * pw) * 4);
-        unsigned char *art = 0;
-        unsigned aw = 0, ah = 0, ach = 0;
-        if (tile && png_decode(ICON_ART[icon], ICON_ART_LEN[icon], &art, &aw, &ah, &ach) == 0 && art && aw == ICON_ART_SIZE && ah == ICON_ART_SIZE && ach == 4) {
-            gui_icon_art_scale(art, tile, pw, DOCK_TRAY_COLOR);
-            gui_blit_tile(tile, cx - size / 2, cy_bottom - size, size, DOCK_TRAY_COLOR);
-            /* Calendar's art is a blank page; i386 writes the date on it (gui_calendar_face). The Pi has no battery
-               clock and no time source yet, so it gets the face's "date unknown" dashes, never a made-up date. */
-            if (icon == GUI_CALENDAR) { gui_calendar_face(cx, cy_bottom, size, 0, 0); uart_puts("M1d calendar face, date unknown\n"); }
-            drawn++;
-        }
-        heap_release(mark);
+/* The live Calendar tile. The authored art (art/icons/calendar.svg, a page with a terracotta binding and a 4 x 3 grid)
+   is the picture when the clock is not set. Once the network has set it, the grid is painted over as this month: seven
+   columns, a square per day from the first's weekday on, today's in the accent. No digits (pictures only). The art's
+   128-unit page runs x 20..108, the binding ends at y 46, the page at y 104; the grid sits in x 25..103, y 50..102. */
+unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
+static unsigned long civil_days(long y, unsigned m, unsigned d);
+static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day);
+static long clock_year;   /* the local year of the last clock_local call */
+#ifdef CAL_TEST_UTC
+static unsigned long cal_utc(void) { return CAL_TEST_UTC; }   /* the caltest build: a fixed date for arm64-calicon-check.py */
+#else
+static unsigned long cal_utc(void) { return net_clock_utc(); }
+#endif
+static int cal_shown = -1;   /* the day the tile shows, as a y/m/d number; -1 is the plain art */
+static int cal_today(void) {   /* today's y/m/d number, or -1 with no clock */
+    unsigned long u = cal_utc(); if (!u) return -1;
+    unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
+    return (int)(clock_year * 12 + (long)mo) * 32 + (int)dd;
+}
+static void cal_overlay(unsigned *tile, int pw, int today) {
+    long y = today / 32 / 12; unsigned mo = (unsigned)(today / 32 % 12), d = (unsigned)(today % 32);
+    unsigned long first = civil_days(y, mo, 1), next = civil_days(mo == 12 ? y + 1 : y, mo == 12 ? 1 : mo + 1, 1);
+    unsigned dow1 = (unsigned)((first + 4) % 7), n = (unsigned)(next - first);   /* 1970-01-01 was a Thursday; 0 = Sunday */
+    for (int py = pw * 49 / 128; py < pw * 103 / 128; py++) for (int px = pw * 24 / 128; px < pw * 104 / 128; px++) tile[py * pw + px] = 0x00F3F3F6;   /* the page, over the art's grid */
+    for (unsigned k = 0; k < n; k++) {
+        unsigned c = (dow1 + k) % 7, r = (dow1 + k) / 7, col = k + 1 == d ? 0x00b5502c : 0x00C7C8CE;
+        int x0 = pw * (int)(175 + 78 * c) / 896, x1 = pw * (int)(175 + 78 * c + 57) / 896;   /* 7 columns of 78/7 units from x 25, squares 57/7 wide */
+        int y0 = pw * (int)(300 + 52 * r) / 768, y1 = pw * (int)(300 + 52 * r + 40) / 768;   /* 6 rows of 52/6 units from y 50, squares 40/6 tall */
+        if (x1 == x0) x1++;
+        if (y1 == y0) y1++;
+        for (int py = y0; py < y1; py++) for (int px = x0; px < x1; px++) tile[py * pw + px] = col;
     }
+}
+static int dock_tile(int slot, int shadow) {   /* one slot's art onto the dock; shadow 0 repaints the tile alone, its corners keep the old shadow */
+    static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
+    int size = DOCK_ICON, pw = size * (int)window_scale(), drawn = 0;
+    int icon = order[slot], cx = gui_slot_x(slot) + size / 2, cy_bottom = gui_dock_y0() + DOCK_PAD + size;
+    if (shadow) gui_draw_icon_shadow(cx, cy_bottom, size);
+    unsigned long mark = heap_mark();   /* the bump heap never frees: the decode and the tile are rolled back */
+    unsigned int *tile = kmalloc((unsigned)(pw * pw) * 4);
+    unsigned char *art = 0;
+    unsigned aw = 0, ah = 0, ach = 0;
+    if (tile && png_decode(ICON_ART[icon], ICON_ART_LEN[icon], &art, &aw, &ah, &ach) == 0 && art && aw == ICON_ART_SIZE && ah == ICON_ART_SIZE && ach == 4) {
+        gui_icon_art_scale(art, tile, pw, DOCK_TRAY_COLOR);
+        if (icon == 2) { cal_shown = cal_today(); if (cal_shown >= 0) cal_overlay(tile, pw, cal_shown); }   /* ICON_ART[2], Calendar */
+        gui_blit_tile(tile, cx - size / 2, cy_bottom - size, size, DOCK_TRAY_COLOR);
+        drawn = 1;
+    }
+    heap_release(mark);
+    return drawn;
+}
+static void dock_paint(void) {
+    gui_draw_dock_tray();
+    int drawn = 0;
+    for (int slot = 0; slot < GUI_ICON_COUNT; slot++) drawn += dock_tile(slot, 1);
     uart_puts("M1d dock "); uart_dec((unsigned)drawn); uart_puts(" icons\n");
 }
 /* Slice 3: the hover label, the i386 one (gui_draw_dock_label). The first hover keeps a copy of the dock's band, so
@@ -930,14 +985,15 @@ static int cur_hold(void) {   /* the Console is about to draw: take the arrow of
     return 1;
 }
 static void cur_release(int held) { if (held) cur_show(); }
-static void console_frame(void) {   /* the i386 window frame, and a white well for the log */
+static void console_frame(void) {   /* the i386 window frame, and a white well for the text */
     int s = (int)window_scale();
-    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Console");
+    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? "Terminal" : "Console");
     fb_rect((win_lx + 8) * s, (win_ly + 30) * s, (win_lw - 16) * s, (win_lh - 38) * s, CON_BG);
 }
-/* The red close button puts the wallpaper back where the Console was. The log keeps every line (and the UART still
+static int term_front(void) { return cp == &term_p && (con_live || !fb); }   /* with no screen at all, the UART is the Terminal */
+/* The red close button puts the wallpaper back where the window was. The log keeps every line (and the UART still
    prints them); a click on any dock tile opens it again with the newest lines, so the one debug view on a Pi can
-   never be lost for good. */
+   never be lost for good. The Terminal (its tile, or F1) takes the same rectangle: one of the two is in front. */
 static void console_close(void) {
     if (!con_live || !con_under) return;
     int s = (int)window_scale(), x = win_lx * s, y = win_ly * s, w = win_lw * s, h = win_lh * s;
@@ -945,25 +1001,28 @@ static void console_close(void) {
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = con_under[j * w + i];
     fb_flush(x, y, w, h);
     con_live = 0;
-    uart_puts("console closed\n");
+    uart_puts(cp == &term_p ? "terminal closed\n" : "console closed\n");
     cur_show();
 }
 void ask_redraw(void);   /* ask.c: the line being typed, back on the ask> row */
-static void console_open(void) {
-    if (con_live || !con_under) return;
+static void pane_open(struct pane *p) {   /* the Console or the Terminal in front, its newest lines in view */
+    if (con_live && cp == p) return;
+    if (!fb) { cp = p; uart_puts(p == &term_p ? "terminal open\n" : "console open\n"); return; }   /* no screen: the keys still follow */
     int s = (int)window_scale();
     cur_hide();
+    cp = p;
     console_frame();
-    con_live = 1; con_scrolled = 0;
+    con_live = 1; cp->scrolled = 0;
     unsigned nl = con_nlines(), keep = con_rows > 1 ? (unsigned)con_rows - 1 : 1;
-    con_anchor = con_line_off(nl > keep ? nl - keep : 0);
+    cp->anchor = con_line_off(nl > keep ? nl - keep : 0);
     con_wipe();
-    for (unsigned k = con_anchor; k < con_len; k++) con_draw(k);
+    for (unsigned k = cp->anchor; k < cp->len; k++) con_draw(k);
     con_summary(); con_hint(); ask_redraw();
     fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
-    uart_puts("console open\n");
+    uart_puts(p == &term_p ? "terminal open\n" : "console open\n");
     cur_show();
 }
+static void console_open(void) { pane_open(&con_p); }
 /* The Calculator (calc.c holds the sums and the keypad; this draws it). One window at a time: it takes the Console's
    place, so the Console's saved wallpaper is what closing it puts back, and the Console then comes back. The Apps
    tile or F2 opens it; a click on a key or typing works it; Esc or the red dot closes it. */
@@ -1019,7 +1078,7 @@ static void calc_close(void) {
     calc_live = 0;
     con_live = 1;   /* console_close puts the Console's saved wallpaper back over the same rectangle */
     console_close();
-    console_open();
+    pane_open(cp);   /* whichever of the Console and the Terminal was in front before */
 }
 static void calc_did(int ran) {   /* after a key: redraw, and log a finished sum on the UART (what arm64-calc-check.py reads) */
     calc_paint();
@@ -1033,6 +1092,7 @@ static void pointer_moved(void) {   /* one report done: the arrow to its new pla
     if (slot != hover_slot) { hover_slot = slot; dock_hover(slot); }
     cur_show();
 }
+static void dock_activate(int slot);
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
@@ -1045,12 +1105,206 @@ static void pointer_click(void) {   /* the left button went down */
             int x, y, w, h; calc_cell(i, &x, &y, &w, &h);
             if (lx >= x && lx < x + w && ly >= y && ly < y + h) { calc_did(calc_press(calc_key(i))); return; }
         }
-    } else if (slot >= 0) {
-        calc_close();
-        console_open();
-        uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
-    } else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
+    } else if (slot >= 0) dock_activate(slot);
+    else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
 }
+static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key or Spotlight: slot 0 is handled by the caller's calc_open */
+    if (slot == 0) { calc_open(); return; }
+    calc_close();
+    if (slot == 6) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line */
+    console_open();
+    uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
+}
+
+/* ---- Keyboard only: the Pi has no mouse yet, and the Terminal (the agent's prompt) could only be opened by a click.
+   F1 or Ctrl+Space opens Spotlight, a small bar over the desktop: type to filter the dock's names, Up and Down to
+   choose, Enter opens, Esc closes. With no pane holding the keys (the Console takes none), Left and Right move the
+   dock's hover label, Enter opens that tile, Esc clears it. F2 or Ctrl+T opens the Terminal at once; Esc with the
+   Terminal in front and no question running hands the keys back to the desktop (the Console). ---- */
+int ask_pending(void);
+int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
+#define SPOT_W 300
+#define SPOT_ROW 22
+#define SPOT_MAX 5                    /* matches shown at most */
+static char spot_text[24]; static unsigned spot_len;
+static int spot_live, spot_sel, spot_hits[GUI_ICON_COUNT], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
+static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
+static int spot_lx, spot_ly, spot_lh;   /* the bar on the logical grid; its height is what is drawn now */
+static int spot_match(const char *name) {   /* the typed text, case folded, anywhere in the name */
+    if (!spot_len) return 1;
+    for (unsigned i = 0; name[i]; i++) {
+        unsigned k = 0;
+        while (k < spot_len && name[i + k] && (name[i + k] | 32) == (spot_text[k] | 32)) k++;
+        if (k == spot_len) return 1;
+    }
+    return 0;
+}
+static int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
+static void spot_paint(void) {
+    int s = (int)window_scale();
+    spot_n = 0;
+    for (int i = 0; i < GUI_ICON_COUNT && spot_n < SPOT_MAX; i++) if (spot_match(dock_names[i])) spot_hits[spot_n++] = i;
+    if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
+    cur_hide();
+    int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];   /* the desktop back, then the bar at its new height */
+    spot_lh = 34 + SPOT_ROW * spot_n + (spot_n ? 6 : 0);
+    gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, SPOT_W, spot_lh, 0x00faf8f4, 10);
+    window_rect(spot_lx + 12, spot_ly + 9, 3, 16, 0x00b5502c);   /* the accent: a caret mark at the left of the typed line */
+    gui_text(spot_len ? spot_text : "Open an app", spot_lx + 22, spot_ly + 9, spot_len ? 0x001C1C1E : 0x0075726E);
+    if (spot_n) gui_hairline_h(spot_lx + 10, spot_ly + 33, SPOT_W - 20, 0x00DDD8CE);
+    for (int r = 0; r < spot_n; r++) {
+        int ry = spot_ly + 37 + r * SPOT_ROW, on = r == spot_sel;
+        if (on) window_rect(spot_lx + 8, ry, SPOT_W - 16, SPOT_ROW - 2, 0x00b5502c);
+        gui_text(dock_names[spot_hits[r]], spot_lx + 22, ry + 2, on ? 0x00FFFFFF : 0x001C1C1E);
+    }
+    fb_flush(x, y, w, h);
+    cur_show();
+    con_quiet = 1; uart_puts("spotlight: "); uart_puts(spot_text); uart_putc(' '); uart_dec((unsigned)spot_n); uart_putc('\n');
+}
+static void spot_open(void) {
+    if (spot_live || !fb) return;
+    int s = (int)window_scale(), w = SPOT_W * s, h = spot_hmax() * s;
+    spot_lx = ((int)fb_w / s - SPOT_W) / 2; spot_ly = sg(MENUBAR_H) / s + 24;
+    if (!spot_under) spot_under = kmalloc((unsigned)(w * h) * 4);
+    if (!spot_under) { uart_puts("oom spotlight\n"); return; }
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) spot_under[j * w + i] = fb[(unsigned)(spot_ly * s + j) * fb_pitch + (unsigned)(spot_lx * s + i)];
+    spot_live = 1; spot_len = 0; spot_text[0] = 0; spot_sel = 0;
+    con_quiet = 1; uart_puts("spotlight open\n");
+    spot_paint();
+}
+static void spot_close(void) {
+    if (!spot_live) return;
+    int s = (int)window_scale(), w = SPOT_W * s, h = spot_hmax() * s, x = spot_lx * s, y = spot_ly * s;
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];
+    fb_flush(x, y, w, h);
+    spot_live = 0;
+    con_quiet = 1; uart_puts("spotlight close\n");
+    cur_show();
+}
+static int spot_key(unsigned code) {   /* a key down with the bar open: every key is Spotlight's */
+    if (code == 1) spot_close();
+    else if (code == 28 || code == 96) { int slot = spot_n ? spot_hits[spot_sel] : -1; spot_close(); if (slot >= 0) dock_activate(slot); }
+    else if (code == 103) { if (spot_sel > 0) spot_sel--; spot_paint(); }
+    else if (code == 108) { if (spot_sel + 1 < spot_n) spot_sel++; spot_paint(); }
+    else if (code == 14) { if (spot_len) spot_text[--spot_len] = 0; spot_sel = 0; spot_paint(); }
+    else { int ch = ask_char(code); if (ch >= ' ' && ch < 127 && spot_len + 1 < sizeof spot_text) { spot_text[spot_len++] = (char)ch; spot_text[spot_len] = 0; spot_sel = 0; spot_paint(); } }
+    return 1;
+}
+static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hover(slot); }
+static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
+    int chord = ctrl_held || gui_held || alt_held;
+    if (code == 59 || (chord && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1, Cmd/Ctrl/Alt+Space toggle */
+    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
+    if (spot_live) return spot_key(code);
+    if (calc_live) return 0;
+    if (term_front()) { if (code == 1 && !ask_pending()) { console_open(); return 1; } return 0; }   /* Esc: the keys back to the desktop */
+    if (!fb) return 0;
+    if (code == 105 || code == 106) { dock_select(dock_sel < 0 ? (code == 106 ? 0 : GUI_ICON_COUNT - 1) : (dock_sel + (code == 106 ? 1 : GUI_ICON_COUNT - 1)) % GUI_ICON_COUNT); return 1; }
+    if ((code == 28 || code == 96) && dock_sel >= 0) { int slot = dock_sel; dock_select(-1); dock_activate(slot); return 1; }
+    if (code == 1) { if (dock_sel >= 0) dock_select(-1); return 1; }   /* Esc with nothing open does nothing */
+    /* The bare desktop: no pane has the keys (the Console is logs only). Any letter or digit opens Spotlight with it
+       typed, and Enter, Space or Tab open it empty: a keyboard whose F-keys or modifiers never arrive still gets in. */
+    if (chord) return 0;
+    if (code == 28 || code == 96 || code == 57 || code == 15) { spot_open(); return 1; }
+    int ch = ask_char(code);
+    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) { spot_open(); if (spot_live) spot_key(code); return 1; }
+    return 0;
+}
+
+/* The dev card's key debug line (KEY_DEBUG, set by JT_WIFI_DEV=1 builds only): for 3 seconds after a key, the menu bar
+   shows the last raw HID report in hex ("m" in front for a media interface) and the decoded key, so a real-board test
+   shows exactly what the keyboard sends. The UART gets the same line ("keydbg: ..."). Release builds compile it out. */
+#ifdef KEY_DEBUG
+#define KD_X 180                      /* on the 960x540 grid: the menu bar's middle, clear of Spotlight and the status half */
+#define KD_W 296
+static char kd_hex[48], kd_name[32]; static int kd_dirty, kd_shown; static unsigned long kd_until; static unsigned *kd_under;
+static unsigned long kd_ms(void) {
+    unsigned long f, c; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    return c / ((f ? f : 54000000) / 1000);
+}
+void key_raw(const unsigned char *r, unsigned len, unsigned kind) {   /* xhci.c: every keyboard or media report */
+    static unsigned prev; unsigned n = 0, set = 0;
+    for (unsigned i = 0; i < len; i++) set += r[i] != 0;
+    int release = set < prev || !set; prev = set;
+    if (release) return;              /* fewer bytes set: a key let go; keep showing the press */
+    if (kind == 3) { kd_hex[n++] = 'm'; kd_hex[n++] = ' '; }
+    for (unsigned i = 0; i < len && n + 4 < sizeof kd_hex; i++) {
+        kd_hex[n++] = "0123456789abcdef"[r[i] >> 4]; kd_hex[n++] = "0123456789abcdef"[r[i] & 15]; kd_hex[n++] = ' ';
+    }
+    kd_hex[n] = 0; kd_name[0] = 0; kd_dirty = 1;
+}
+static void kd_cat(const char *t) { unsigned n = 0; while (kd_name[n]) n++; while (*t && n + 1 < sizeof kd_name) kd_name[n++] = *t++; kd_name[n] = 0; }
+static void kd_key(unsigned code) {   /* a key down: its name, with the modifiers held */
+    static const char *const fk[] = { "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10" };
+    kd_name[0] = 0;
+    if (ctrl_held && code != 29 && code != 97) kd_cat("Ctrl+");
+    if (gui_held && code != 125 && code != 126) kd_cat("Cmd+");
+    if (alt_held && code != 56 && code != 100) kd_cat("Alt+");
+    int ch = ask_char(code); char one[2] = { (char)ch, 0 };
+    kd_cat(code >= 59 && code <= 68 ? fk[code - 59] : code == 87 ? "F11" : code == 88 ? "F12" : code == 57 ? "Space" :
+           code == 28 || code == 96 ? "Enter" : code == 1 ? "Esc" : code == 15 ? "Tab" : code == 14 ? "Backspace" :
+           code == 29 || code == 97 ? "Ctrl" : code == 125 || code == 126 ? "Cmd" : code == 56 || code == 100 ? "Alt" :
+           code == 42 || code == 54 ? "Shift" : code == 103 ? "Up" : code == 108 ? "Down" : code == 105 ? "Left" :
+           code == 106 ? "Right" : ch > ' ' && ch < 127 ? one : "?");
+    if (kd_name[0] == '?') { kd_name[0] = 0; kd_cat("code "); char d[4] = { (char)('0' + code / 100 % 10), (char)('0' + code / 10 % 10), (char)('0' + code % 10), 0 }; kd_cat(d); }
+    kd_dirty = 1;
+}
+static void keydbg_tick(void) {   /* the poll loop: draw a new line, or take an old one down after 3 seconds */
+    if (!fb) return;
+    int x = sg(KD_X), w = sg(KD_W), h = sg(MENUBAR_H) - 1;
+    if (kd_shown && !kd_dirty && kd_ms() > kd_until) {
+        cur_hide();
+        for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)j * fb_pitch + (unsigned)(x + i)] = kd_under[j * w + i];
+        fb_flush(x, 0, w, h);
+        kd_shown = 0;
+    }
+    if (!kd_dirty) return;
+    kd_dirty = 0;
+    if (!kd_under) kd_under = kmalloc((unsigned)(w * h) * 4);
+    if (!kd_under) return;
+    cur_hide();
+    if (!kd_shown) for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) kd_under[j * w + i] = fb[(unsigned)j * fb_pitch + (unsigned)(x + i)];
+    fb_rect(x, 0, w, h, 0x00141311);
+    char line[96]; unsigned n = 0;
+    for (const char *t = "key "; *t; ) line[n++] = *t++;
+    for (const char *t = kd_hex; *t && n < 80; ) line[n++] = *t++;
+    for (const char *t = kd_name; *t && n < 95; ) line[n++] = *t++;
+    line[n] = 0;
+    int s = (int)window_scale();
+    gui_text(line, x / s + 6, (h / s - 13) / 2, 0x00faf8f4);
+    fb_flush(x, 0, w, h);
+    con_quiet = 1; uart_puts("keydbg: "); uart_puts(line); uart_putc('\n');
+    kd_shown = 1; kd_until = kd_ms() + 3000;
+}
+#else
+void key_raw(const unsigned char *r, unsigned len, unsigned kind) { (void)r; (void)len; (void)kind; }
+static void kd_key(unsigned code) { (void)code; }
+static void keydbg_tick(void) {}
+#endif
+#ifdef KEY_SELFTEST
+/* keydbg-kernel8.elf only (arm64-keydbg-check.py): made-up HID reports through xhci.c's parser, since QEMU's usb-kbd
+   never sends a report ID. Each step prints a marker, then the UART shows what the keys did. */
+void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p);
+void hid_media(const unsigned char *r, unsigned len);
+static void key_selftest(void) {
+    static unsigned char last[8];
+    static const unsigned char id_ctrl_t[9] = { 2, 0x01, 0, 0x17 }, id_none[9] = { 2 }, id_esc[9] = { 2, 0, 0, 0x29 };   /* ID 2 reads as Shift if not skipped */
+    static const unsigned char ctrl_space[8] = { 0x01, 0, 0x2C }, none[8] = { 0 }, esc[8] = { 0, 0, 0x29 };
+    uart_puts("keytest: id9 ctrl+t\n"); hid_kbd(id_ctrl_t, 9, last); hid_kbd(id_none, 9, last);
+    uart_puts("keytest: id9 esc\n"); hid_kbd(id_esc, 9, last); hid_kbd(id_none, 9, last);
+    uart_puts("keytest: boot8 ctrl+space\n"); hid_kbd(ctrl_space, 8, last); hid_kbd(none, 8, last);
+    uart_puts("keytest: boot8 esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
+    static const unsigned char br_down[3] = { 3, 0x70, 0 }, br_up[3] = { 3, 0x6F, 0 };   /* a Mac-mode F1 and F2 */
+    uart_puts("keytest: media f1\n"); hid_media(br_down, 3);
+    uart_puts("keytest: media esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
+    uart_puts("keytest: media f2\n"); hid_media(br_up, 3);
+    uart_puts("keytest: media esc2\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
+    uart_puts("keytest: done\n");
+}
+#endif
 
 unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
 static unsigned *mb_save; static int mb_h, mb_x0;
@@ -1079,6 +1333,7 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
     int dst = utc >= nth_sunday_utc(y, 3, 2, 10) && utc < nth_sunday_utc(y, 11, 1, 9);
     unsigned long loc = utc - (dst ? 7 : 8) * 3600UL;
     civil_from_days(loc / 86400, &y, mon, day);
+    clock_year = y;
     *hh = (unsigned)(loc % 86400) / 3600; *mm = (unsigned)(loc % 3600) / 60;
 }
 int wifi_signal_level(void);   /* wifi.c: 1 to 3 from how loud our network was in the scan */
@@ -1111,7 +1366,20 @@ void menubar_wifi(int state) {
     }
     fb_flush(mb_x0, 0, W - mb_x0, mb);
 }
+static void cal_tick(void) {   /* the day has changed (or the clock just arrived): the Calendar tile again, the hover band's copy with it */
+    if (!fb || cal_today() == cal_shown) return;
+    int s = (int)window_scale(), h = hover_slot, top = gui_dock_band_top() * s, rows = (int)fb_h - top;
+    if (dock_band) dock_hover(-1);   /* the plain band back first, so the copy below holds no label */
+    cur_hide();
+    dock_tile(3, 0);   /* slot 3, Calendar */
+    fb_flush(gui_slot_x(3) * s, gui_dock_y0() * s, DOCK_ICON * s + s, (DOCK_PAD + DOCK_ICON) * s + s);
+    if (dock_band) for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) dock_band[i] = fb[(unsigned)top * fb_pitch + i];
+    cur_show();
+    if (h >= 0) dock_hover(h);
+    uart_puts("calendar tile redrawn\n");
+}
 void menubar_tick(void) {   /* the poll loop calls this; it redraws only when the minute has changed */
+    cal_tick();
     unsigned long u = net_clock_utc();
     if (!u || mb_wifi < 0) return;
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
@@ -1142,7 +1410,7 @@ static void fb_init(void) {
     mb_h = mb - 1; mb_x0 = W / 2;                          /* keep the bare right half of the bar, for menubar_status() */
     mb_save = kmalloc((unsigned)(mb_h * (W - mb_x0)) * 4);
     if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) mb_save[y * (W - mb_x0) + (x - mb_x0)] = fb[(unsigned)y * fb_pitch + (unsigned)x];
-    text_ok = text_init();                                /* before the dock (the Calendar face) and the window (its title) */
+    text_ok = text_init();                                /* before the window (its title) */
     dock_paint();                                         /* the i386 dock, while only the wallpaper is under it */
     int band_y = gui_dock_band_top() * (int)window_scale();   /* the top of the dock's band, room for a hover label */
     /* Slice 3: the Console wears the i386 window frame (gui_paint.c): rounded cream body on the wallpaper, traffic
@@ -1178,7 +1446,7 @@ static void fb_init(void) {
         if (con_x < wx) con_x = wx;
         if (con_y < wy) con_y = wy;
         if (con_x + con_cols * con_cw > wr) con_cols = (wr - con_x) / con_cw;
-        if (con_y + (con_rows + 2) * con_ch > wb) con_rows = (wb - con_y) / con_ch - 2;
+        if (con_y + (con_rows + 1) * con_ch > wb) con_rows = (wb - con_y) / con_ch - 1;
     }
     con_start();
 #ifdef DOCK_HOVER_TEST   /* the dockhover test build: the label over one slot, then (arm64-m1c-check.py) its pixels */
@@ -1252,10 +1520,22 @@ static void m1_selftest(void) {
 #endif
 }
 
+/* ask.c's agent loop: [[open APP]] opens a dock app by name. Only the Calculator opens on ARM so far (the Console is
+   always open); any other name returns 0. */
+int app_open_name(const char *name) {
+    static const char *const openable[] = {"calculator", "console"};
+    for (unsigned a = 0; a < 2; a++) {
+        const char *w = openable[a]; unsigned i = 0;
+        for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
+        if (!w[i] && !name[i]) { if (a == 0) calc_open(); return 1; }
+    }
+    return 0;
+}
+
 /* ---- Input, from any driver: Linux evdev events (virtio input speaks them natively; the USB HID driver in xhci.c
    translates its reports into them). The pointer starts mid-screen; a tablet sets it, a mouse moves it. ---- */
 struct input_event { unsigned short type, code; unsigned value; };
-int ask_key(unsigned code, unsigned value);   /* ask.c: the ask> line editor */
+int ask_key(unsigned code, unsigned value);   /* ask.c: the prompt's line editor */
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 void ask_poll(void);
 static void input_event(struct input_event e) {
@@ -1265,10 +1545,18 @@ static void input_event(struct input_event e) {
         if (e.code == 272 && e.value) pointer_click();
         return;
     }
-    if (e.type == 1 && e.value && (e.code == 60 || (calc_live && e.code != 42 && e.code != 54))) {        /* F2, or a key for the open Calculator (Shift still goes to ask.c) */
+    if (e.type == 1 && (e.code == 29 || e.code == 97)) ctrl_held = e.value != 0;                          /* Ctrl, either side; the key still echoes below */
+    if (e.type == 1 && (e.code == 125 || e.code == 126)) gui_held = e.value != 0;   /* Cmd (left 0x08, right 0x80 in a boot report) */
+    if (e.type == 1 && (e.code == 56 || e.code == 100)) alt_held = e.value != 0;    /* Alt, Option on a Mac board */
+    if (e.type == 1 && e.value) kd_key(e.code);
+    if (e.type == 1 && e.value && ui_key(e.code)) {                                                        /* Spotlight, the dock keys, F2 and Ctrl+T */
         con_quiet = 1;
         uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
-        if (e.code == 60) { if (calc_live) calc_close(); else calc_open(); return; }
+        return;
+    }
+    if (e.type == 1 && e.value && calc_live && e.code != 42 && e.code != 54) {                            /* a key for the open Calculator (Shift still goes to ask.c) */
+        con_quiet = 1;
+        uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
         if (e.code == 1) { calc_close(); return; }                                                          /* Esc */
         int ch = e.code == 15 ? '\t' : e.code == 14 ? '\b' : e.code == 28 || e.code == 96 ? '\n' : ask_char(e.code);
         if (ch) calc_did(calc_type(ch));
@@ -1276,9 +1564,11 @@ static void input_event(struct input_event e) {
     }
     if (e.type == 1 && calc_live && e.code != 42 && e.code != 54) return;                                  /* its key ups */
     if (e.type == 1) {                                                                                     /* EV_KEY: keys */
-        int held = cur_hold();
-        if (!con_key(e.code, e.value)) {   /* the console's scroll keys are not logged: that would add lines to the picture they move */
-            if (ask_key(e.code, e.value) || ask_active()) con_quiet = 1;   /* typed keys show on the ask> row; the echo stays on the UART */
+        int held = cur_hold(), term = term_front();
+        if (!con_key(e.code, e.value)) {   /* the scroll keys are not logged: that would add lines to the picture they move */
+            /* Only the Terminal takes typing; Shift always reaches ask.c, as the Calculator reads its state there */
+            if (term || e.code == 42 || e.code == 54) ask_key(e.code, e.value);
+            con_quiet = 1;   /* typed keys show on the ask> row, or nowhere; the echo stays on the UART and off the Console */
             uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
         }
         cur_release(held);
@@ -1560,6 +1850,8 @@ static void blk_probe(void) {}
 void net_stack_demo(void);
 void net_clock_sync(void);
 void tls_demo(void);
+void input_drain(void) { usb_poll(); input_poll(); }   /* ask.c, between agent steps: the keys that queued during a request */
+
 void main(void) {
     unsigned long el;
     uart_init();
@@ -1583,6 +1875,9 @@ void main(void) {
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+#ifdef KEY_SELFTEST
+    key_selftest();
+#endif
     if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
@@ -1592,15 +1887,15 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); ask_poll(); demo_tick(); menubar_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); ask_poll(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
             __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
-            usb_poll(); input_poll(); ask_poll();
+            usb_poll(); input_poll(); ask_poll(); keydbg_tick();
         }
 #endif
     }
-    if (inputs) for (;;) { __asm__ volatile ("wfi"); input_poll(); ask_poll(); }   /* asleep until a device interrupts */
+    if (inputs) for (;;) { __asm__ volatile ("wfi"); input_poll(); ask_poll(); keydbg_tick(); }   /* asleep until a device interrupts */
     for (;;) __asm__ volatile ("wfe");
 }

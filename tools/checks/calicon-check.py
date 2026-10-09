@@ -1,46 +1,27 @@
 #!/usr/bin/env python3
-"""Headless proof that the dock's Calendar tile shows the real current
-date, macOS style, instead of the old fixed baked-in "SEP 17" art.
+"""Headless proof that the dock's Calendar tile is a calendar picture -- a
+page with a terracotta binding bar on top and a grid of day squares -- and
+that it never draws a date, a dash or any other text over it.
 
-v0.89.x replaced that baked art (art/icons/calendar.svg's month/day strokes,
-authored by tools/gen/restyle_icons.py, rasterized by tools/gen/
-gen_icon_art.py into kernel/icon_art.h) with a plain white tile, and draws
-the real month/day at runtime on top of it (gui_calendar_draw_date in
-kernel/kernel.c), off the exact same cmos_read_time_stable() read the menu
-bar clock already trusts, so the two can never disagree.
+History. v0.89.x drew the live month and day over a blank page
+(gui_calendar_face). The Pi has no clock, so it got the "date unknown"
+face instead: a red bar and one ink dash on a cream tile, which Joshua's
+real-board photo showed as a half-drawn icon (2026-10). The tile is now
+authored art only (tools/gen/restyle_icons.py "calendar" ->
+art/icons/calendar.svg -> kernel/icon_art.h), the same on i386 and the Pi.
 
-Same boot + pmemsave shape as iconlight-check.py: -display none, -vga std,
-wait for a real window_present_count change, dump the real 1920x1080
-framebuffer. Two boots, two different QEMU -rtc base= dates (real wall-clock
-CMOS seed, not a kernel command-line flag, so this exercises the exact RTC
-path the kernel reads on real hardware). QMP ports 4511/4512, inside this
-project's reserved 4511-4519 range.
+Two boots, two different QEMU -rtc base= dates (Feb 3 and Nov 28), so a
+live overlay coming back would show up as the tile changing with the date.
+QMP ports 4511/4512, inside this project's reserved 4511-4519 range.
 
-The oracle, on the dock's Calendar tile (slot 3, the same geometry
-iconlight-check.py/dockhover-check.py already use for this boot config:
-960x540 logical @2x, dock_scale_pct 7, GUI_ICON_COUNT 11, DOCK_ICON 37,
-SLOT0_X 247, PITCH 43, tile top y 469):
-
-  1. the day-number band (lower half of the tile) differs substantially
-     between the two boots -- pixel-count of "dark ink" (near-black, the
-     day numeral's own colour) in that band must differ by at least
-     DAY_DIFF_MIN pixels between Feb 3 and Nov 28 (very different glyph
-     shapes: "3" vs "28", one digit vs two). The old fixed art shows "17"
-     in both boots, so this is near zero on that build.
-  2. the month band (upper part of the tile) also differs substantially
-     the same way -- "FEB" vs "NOV" -- by at least MONTH_DIFF_MIN
-     mismatched red-ink pixels between the two boots.
-  3. the month band contains real red ink in both boots (mean of the red
-     channel minus the mean of green/blsue over the reddest pixels there
-     clears RED_MIN), proving the month text is actually the red caps
-     macOS uses, not some other color or nothing at all.
-
-Confirmed discriminating: run with --check-old first (see below) against
-the pre-existing baked "SEP 17" art (git stash the working tree's
-art/icons/calendar.svg + kernel/icon_art.h + kernel/kernel.c changes,
-rebuild, run) -- both boots render the same fixed glyph, so 1 and 2 both
-read ~0 and the check fails; after restoring this change and rebuilding,
-both pass.
+The oracle, on the dock's Calendar tile (slot 3; 960x540 @2x, 74 physical px):
+  1. the tile is the same in both boots (at most SAME_MAX pixels differ);
+  2. the top band carries the terracotta binding bar (ACCENT_TOP_MIN px);
+  3. the lower band carries a grid of grey day squares (GREY_MIN px, and at
+     least GRID_COLS separate grey runs across one row of squares);
+  4. no dark ink anywhere in the tile (INK_MAX), so no numerals or dashes.
+Confirmed discriminating: the previous kernel (blank page + live date)
+fails every one of the five asserts below.
 
 Usage: tools/checks/calicon-check.py   (from the repo root, after make kernel.elf)
 """
@@ -60,30 +41,6 @@ CAL_SLOT = 3  # Apps, Files, Mail, Calendar
 TILE_X0 = (SLOT0_X + CAL_SLOT * PITCH) * SCALE
 TILE_Y0 = ICON_TOP_Y * SCALE
 TILE_W = DOCK_ICON * SCALE  # 74
-
-# gui_calendar_draw_date's own layout (kernel/kernel.c): month cap top at
-# y + size*17/100, day cap top at y + size*41/100, tile height = size.
-# Physical bands, generous margins either side of those anchors so a small
-# layout tweak doesn't make this check flaky.
-MONTH_ROWS = range(int(TILE_W * 0.10), int(TILE_W * 0.42))
-DAY_ROWS = range(int(TILE_W * 0.44), int(TILE_W * 0.98))
-COLS = range(2, TILE_W - 2)
-
-DAY_DIFF_MIN = 80      # dark-ink pixel count must differ by at least this many
-MONTH_DIFF_MIN = 60    # red-ink pixel count must differ by at least this many
-RED_MIN = 60           # red channel must lead green/blue by this much, averaged over the reddest pixels
-
-# v0.89.x follow-up: the day numeral used to run edge to edge on the dock's
-# 74-physical-px tile (mul_d=2, sized against the bigger Apps-folder grid
-# tile and never checked against the dock's own smaller one -- a real crop
-# showed "25" with almost no side margin and its stroke crossing into the
-# tile's own bottom curve). MARGIN_COLS keeps ink out of the same inset the
-# rest of the dock's glyphs respect (restyle_icons.py's shared top-16/
-# bottom-20-of-128 band is ~12.5%/15.6%; 8% here on a 74px tile is a real
-# margin with slack for AA fringing, not a tight pin). BOTTOM_NO_INK_ROWS
-# catches the day numeral's descender crossing the tile's own bottom edge.
-MARGIN_COLS = max(3, int(TILE_W * 0.08))
-BOTTOM_NO_INK_ROWS = range(int(TILE_W * 0.94), TILE_W)
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
@@ -149,173 +106,46 @@ def boot_and_dump(rtc_base, port):
     return Image.frombytes("RGBA", (W, H), open(dump, "rb").read(), "raw", "BGRA").convert("RGB")
 
 
-def lum(p):
-    return (p[0] * 299 + p[1] * 587 + p[2] * 114) / 1000.0
+SAME_MAX = 4
+ACCENT_TOP_MIN = 300
+GREY_MIN = 600
+GRID_COLS = 4
+INK_MAX = 0
 
 
-def dark_mask(img):
-    """1 where a pixel in the tile is dark ink (the day numeral), 0 elsewhere."""
-    out = {}
-    for y in DAY_ROWS:
-        for x in COLS:
-            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
-            out[(x, y)] = 1 if lum(p) < 110 else 0
-    return out
+def tile(img):
+    return {(i, j): img.getpixel((TILE_X0 + i, TILE_Y0 + j)) for j in range(TILE_W) for i in range(TILE_W)}
 
 
-def red_mask(img):
-    """1 where a pixel in the tile is red ink (the month label), 0 elsewhere."""
-    out = {}
-    for y in MONTH_ROWS:
-        for x in COLS:
-            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
-            out[(x, y)] = 1 if (p[0] - max(p[1], p[2])) > 60 and p[0] > 140 else 0
-    return out
+def accent(c): return c[0] > 140 and c[0] - c[1] > 60 and c[0] - c[2] > 80
+def grey(c): return 170 <= min(c) and max(c) <= 220 and max(c) - min(c) <= 12
+def ink(c): return max(c) < 0x60
 
 
-TILE_R = int(TILE_W * 0.22)  # gui_draw_one_icon_on's own squircle radius: size * 22/100
+img_feb = boot_and_dump("2026-02-03T12:00:00", PORT_A)
+img_nov = boot_and_dump("2026-11-28T12:00:00", PORT_B)
+a, b = tile(img_feb), tile(img_nov)
 
-
-def red_outside_rounded_rect(img):
-    """Count of red month-label ink that falls outside the tile's own
-    rounded-rect corners -- the size>40 phone/Apps-folder branch of
-    gui_calendar_draw_date once spilled "SEP" past both straight edges
-    of a bigger tile; this catches the same overflow shape even when it
-    only clips a corner rather than a full side."""
-    count = 0
-    for y in MONTH_ROWS:
-        for x in COLS:
-            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
-            if not ((p[0] - max(p[1], p[2])) > 60 and p[0] > 140):
-                continue
-            cx = x if x < TILE_R else (TILE_W - 1 - x if x >= TILE_W - TILE_R else None)
-            cy = y if y < TILE_R else (TILE_W - 1 - y if y >= TILE_W - TILE_R else None)
-            if cx is not None and cy is not None:
-                dx, dy = TILE_R - cx, TILE_R - cy
-                if dx * dx + dy * dy > TILE_R * TILE_R:
-                    count += 1
-    return count
-
-
-def edge_ink_count(img):
-    """Count of dark or red ink pixels in the tile's own side margins or
-    right against its bottom edge -- the exact shape of the overflow bug
-    (text running edge to edge with no inset, or a descender crossing the
-    tile's own bottom curve)."""
-    count = 0
-    for y in list(DAY_ROWS) + list(MONTH_ROWS):
-        for x in list(range(0, MARGIN_COLS)) + list(range(TILE_W - MARGIN_COLS, TILE_W)):
-            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
-            is_dark = lum(p) < 110
-            is_red = (p[0] - max(p[1], p[2])) > 60 and p[0] > 140
-            if is_dark or is_red:
-                count += 1
-    for y in BOTTOM_NO_INK_ROWS:
-        for x in COLS:
-            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
-            if lum(p) < 110:
-                count += 1
-    return count
-
-
-BG_SAMPLE_ROWS = range(12, 56)  # clear of the top/bottom squircle curve's own AA blend
-BG_SAMPLE_COLS = list(range(0, 3)) + list(range(TILE_W - 3, TILE_W))  # hard against the sides, where the month/day text (centered) never reaches
-WHITE_MIN = 210   # near-white background: every channel must clear this, well above the #E0E1E6 gradient floor
-CENTER_TOL_PCT = 0.12  # day numeral's ink centroid must sit within this fraction of tile width from center
-
-
-def bg_near_white(img):
-    """Sample straight down the tile's own left/right edges (outside the
-    centered text's reach) and confirm the material tile itself is
-    near-white, not the old flat grey a plain fill would read as -- this
-    is the same #F5F5F8/#E0E1E6 squircle every other white-tile icon
-    (Files/Notes/Reminders) already uses."""
-    samples = [img.getpixel((TILE_X0 + x, TILE_Y0 + y)) for y in BG_SAMPLE_ROWS for x in BG_SAMPLE_COLS]
-    lo = min(min(p) for p in samples)
-    return lo
-
-
-def day_centroid_offset(img):
-    """Horizontal centroid of the day numeral's dark ink, as a fraction of
-    tile width away from the tile's own center column -- proof the digits
-    are actually centered, not left/right of the squircle."""
-    xs = []
-    for y in DAY_ROWS:
-        for x in COLS:
-            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
-            if lum(p) < 110:
-                xs.append(x)
-    if not xs:
-        return None
-    centroid = sum(xs) / len(xs)
-    return abs(centroid - TILE_W / 2.0) / TILE_W
-
-
-def red_strength(img):
-    reddest = []
-    for y in MONTH_ROWS:
-        for x in COLS:
-            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
-            reddest.append((p[0] - (p[1] + p[2]) / 2.0, p))
-    reddest.sort(key=lambda t: -t[0])
-    top = reddest[:40] if len(reddest) >= 40 else reddest
-    if not top:
-        return 0
-    return sum(t[0] for t in top) / len(top)
-
-
-img_feb = boot_and_dump("2026-02-03T12:00:00", PORT_A)  # "FEB 3"
-img_nov = boot_and_dump("2026-11-28T12:00:00", PORT_B)  # "NOV 28"
-
-day_feb, day_nov = dark_mask(img_feb), dark_mask(img_nov)
-month_feb, month_nov = red_mask(img_feb), red_mask(img_nov)
-
-day_diff = sum(1 for k in day_feb if day_feb[k] != day_nov[k])
-month_diff = sum(1 for k in month_feb if month_feb[k] != month_nov[k])
-red_feb, red_nov = red_strength(img_feb), red_strength(img_nov)
-
-print("day-number band pixel diff:  %d (need >= %d)" % (day_diff, DAY_DIFF_MIN))
-print("month band pixel diff:       %d (need >= %d)" % (month_diff, MONTH_DIFF_MIN))
-print("month band red strength:     Feb boot %.1f, Nov boot %.1f (need >= %d each)" % (red_feb, red_nov, RED_MIN))
+same = sum(1 for k in a if max(abs(x - y) for x, y in zip(a[k], b[k])) > 8)
+top = sum(1 for (i, j), c in b.items() if j < TILE_W * 0.36 and accent(c))
+low = {k: c for k, c in b.items() if k[1] > TILE_W * 0.38 and k[1] < TILE_W * 0.85}
+greys = sum(1 for c in low.values() if grey(c))
+row = int(TILE_W * 0.45)  # through the first row of day squares
+runs, prev = 0, False
+for i in range(TILE_W):
+    g = grey(b[(i, row)]) or accent(b[(i, row)])
+    if g and not prev: runs += 1
+    prev = g
+inks = sum(1 for c in list(a.values()) + list(b.values()) if ink(c))
 
 fail = 0
-if day_diff < DAY_DIFF_MIN:
-    print("FAIL: the day-number area barely changed between Feb 3 and Nov 28 -- looks like fixed/baked art, not a live date")
-    fail = 1
-if month_diff < MONTH_DIFF_MIN:
-    print("FAIL: the month area barely changed between Feb 3 and Nov 28 -- looks like fixed/baked art, not a live date")
-    fail = 1
-if red_feb < RED_MIN or red_nov < RED_MIN:
-    print("FAIL: the month area is not red ink in at least one boot")
-    fail = 1
-
-red_out_nov = red_outside_rounded_rect(img_nov)
-print("red month ink outside rounded corners (NOV 28 boot): %d (need 0, corner radius %dpx)" % (red_out_nov, TILE_R))
-if red_out_nov > 0:
-    print("FAIL: the month label's red ink clips the tile's own rounded corner")
-    fail = 1
-
-edge_nov = edge_ink_count(img_nov)  # two-digit day ("28"), the wider/worst case for side overflow
-print("edge-margin ink pixels (NOV 28 boot): %d (need 0, margin %dpx each side + bottom %d%% of tile)"
-      % (edge_nov, MARGIN_COLS, int((1 - BOTTOM_NO_INK_ROWS.start / TILE_W) * 100)))
-if edge_nov > 0:
-    print("FAIL: the date text runs into the tile's own side margin or bottom edge -- "
-          "match the inset the rest of the dock's glyphs keep off the squircle")
-    fail = 1
-
-white_nov = bg_near_white(img_nov)
-print("tile background darkest channel (NOV 28 boot): %d (need >= %d, i.e. near-white, not flat grey)" % (white_nov, WHITE_MIN))
-if white_nov < WHITE_MIN:
-    print("FAIL: the tile background reads as flat grey, not the near-white squircle every other white-tile icon uses")
-    fail = 1
-
-center_nov = day_centroid_offset(img_nov)
-print("day-numeral centroid offset (NOV 28 boot): %s (need <= %.2f of tile width)"
-      % ("%.3f" % center_nov if center_nov is not None else "n/a", CENTER_TOL_PCT))
-if center_nov is None or center_nov > CENTER_TOL_PCT:
-    print("FAIL: the day digits are not horizontally centered in the tile")
-    fail = 1
-
+for ok, msg in ((same <= SAME_MAX, "tile pixels that change between Feb 3 and Nov 28: %d (need <= %d)" % (same, SAME_MAX)),
+                (top >= ACCENT_TOP_MIN, "terracotta binding-bar pixels in the top band: %d (need >= %d)" % (top, ACCENT_TOP_MIN)),
+                (greys >= GREY_MIN, "grey day-square pixels in the lower band: %d (need >= %d)" % (greys, GREY_MIN)),
+                (runs >= GRID_COLS, "day squares across row y=%d: %d (need >= %d)" % (row, runs, GRID_COLS)),
+                (inks <= INK_MAX, "dark ink pixels (text, dashes) in the tile: %d (need <= %d)" % (inks, INK_MAX))):
+    print(("ok:   " if ok else "FAIL: ") + msg)
+    fail |= not ok
 if fail:
     sys.exit(1)
-print("PASS: the Calendar dock tile shows a real, live date (month in red ink, day number below), not fixed art")
+print("PASS: the Calendar dock tile is a calendar picture (binding bar, day grid), the same on every date, no text")

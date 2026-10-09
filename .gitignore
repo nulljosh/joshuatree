@@ -57,6 +57,7 @@ drivers/user_*.h
 arch/arm64/kernel8.img
 arch/arm64/pi-kernel8.elf
 arch/arm64/kernel8.elf
+arch/arm64/keydbg-kernel8.elf
 arch/arm64/wifi_fw.S
 # Wi-Fi credentials never enter the repo; the build reads ~/.config/joshuatree/wifi.conf
 arch/arm64/wifi.conf
@@ -66,5 +67,6 @@ arch/arm64/claude_cfg.h
 arch/arm64/claude_cfg.h.tmp
 arch/arm64/wifi_cfg.h
 arch/arm64/wifi_cfg.h.tmp
+arch/arm64/llm.cfg
 arch/arm64/tls_ta.h
 arch/arm64/bearssl/

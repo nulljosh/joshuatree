@@ -140,6 +140,7 @@ void _start(int argc, char **argv) {
                 cx = x; cy = y;
                 if (!over) reveal(y, x);
             } else if (ev.kind == JT_EV_KEY) {
+                if (ev.a == '`') { say("mines: crashing on purpose\n"); *(volatile unsigned *)0 = 1; }
                 if (ev.a == JT_KEY_ESC) break;
                 else if (ev.a == 'r') { unsigned t = 0; jt_time(&t); seed ^= t * 2654435761u; if (!seed) seed = 1; deal(); }
                 else if (ev.a == JT_KEY_UP && cy > 0) cy--;

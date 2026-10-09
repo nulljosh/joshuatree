@@ -119,6 +119,7 @@ try:
     check("right token -> 200", st == 200, str(st))
     check("reply starts with S <uuid>", bool(m), text[:60])
     check("reply carries the answer", "echo: what is in VERSION" in text, text[:80])
+    check("second line names the model: no --model, so just M Claude", text.split("\n")[1:2] == ["M Claude"], text[:80])
     check("reply punctuation is ASCII", '- "ok"' in text and all(ord(ch) < 128 for ch in text), repr(text[-20:]))
     calls = stub_calls(tmp)
     check("claude ran once", len(calls) == 1, str(len(calls)))
@@ -198,6 +199,34 @@ try:
         r = subprocess.run([sys.executable, RELAY, "--port", "0"], env={**os.environ, "CLAUDE_RELAY_TOKEN": bad},
                            capture_output=True, text=True, timeout=10)
         check("refuses to start with token %r" % bad, r.returncode != 0 and "refusing" in r.stderr)
+
+    # model and effort (the Pi's /model and /effort): a whitelist, never a pass-through
+    n0 = len(stub_calls(tmp))
+    for bad in ({"model": "claude-opus-5-5"}, {"model": "gpt-4"}, {"model": "opus --x"}, {"model": 7}, {"effort": "max"}, {"effort": ["low"]}):
+        st, _ = req(port, dict({"prompt": "hi"}, **bad))
+        check("refused: %r -> 400" % (bad,), st == 400, str(st))
+    check("a refused model or effort never started claude", len(stub_calls(tmp)) == n0)
+    st, data = req(port, {"prompt": "hi", "model": "opus", "effort": "high"})
+    calls = stub_calls(tmp)
+    check("model opus -> --model opus, name in the S line", st == 200 and calls[-1]["argv"][-2:] == ["--model", "opus"]
+          and data.startswith(b"S ") and data.split(b"\n")[1] == b"M Claude Opus", repr(data[:80]))
+    st, _ = req(port, {"prompt": "hi", "model": "auto"})
+    check("model auto adds no --model", st == 200 and "--model" not in stub_calls(tmp)[-1]["argv"])
+    # the API path: the model id and the thinking budget the Messages API call gets
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("relay_mod", RELAY); rm = importlib.util.module_from_spec(spec); spec.loader.exec_module(rm)
+    sent = []
+    def fake(cfg, key, model, messages, system="", effort="medium"):
+        sent.append((model, rm.EFFORTS[effort])); return {"content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn"}
+    rm.api_call = fake
+    kf = os.path.join(tmp, "key"); open(kf, "w").write("k")
+    cfg = type("C", (), {"api_key_file": kf, "api_model": "claude-haiku-5-5", "api_model_hard": "claude-sonnet-5-5",
+                         "api_model_top": "claude-opus-5-5", "timeout": 5})()
+    r1 = rm.run_api(cfg, "hi", "", [], "opus", "high"); r2 = rm.run_api(cfg, "hi", "", [], "auto", "low"); r3 = rm.run_api(cfg, "why is it so", "", [])
+    check("API: opus + high -> the top model, 2048 thinking, 4096 max", sent[0] == ("claude-opus-5-5", (2048, 4096)) and r1[2] == "Claude Opus 5.5", repr(sent[0]))
+    check("API: auto + low -> pick_model's cheap model, no thinking, 300 max", sent[1] == ("claude-haiku-5-5", (0, 300)), repr(sent[1]))
+    check("API: no fields -> pick_model and medium, as before", sent[2] == ("claude-sonnet-5-5", (0, 600)), repr(sent[2]))
+
 
     # discrimination: the same request with the token check removed must get through
     mutant = os.path.join(tmp, "relay_mutant.py")

@@ -18,9 +18,11 @@ Usage: tools/checks/ring3mines-check.py   (from the repo root, after make kernel
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
+from scratch import scratch_dir
 
-LOG = "/tmp/jt-ring3mines-serial.log"
-DUMP = "/tmp/jt-ring3mines.raw"
+TMP = scratch_dir("ring3mines")
+LOG = os.path.join(TMP, "serial.log")
+DUMP = os.path.join(TMP, "fb.raw")
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2

@@ -152,7 +152,7 @@ QEMU proves the arrow, the label and the clicks, but not real mice or the real c
 2. Hover the dock: the tile's name shows above it and goes away when the pointer leaves. No arrow-shaped mark stays in the dock.
 3. Click the Console's red button: the window goes and the wallpaper is back. Click any dock tile: the Console is back with `dock <name>: not on ARM yet` as its newest line.
 4. Unplug the mouse and plug it in again: `usb port ... disconnected`, then a new `usb mouse` line, and it moves the arrow again.
-5. Keyboard and mouse together, on the hub and on the Pi's own ports: typing at `ask>` still works while the arrow sits over the Console.
+5. Keyboard and mouse together, on the hub and on the Pi's own ports: typing at the Claude prompt still works while the arrow sits over the Console.
 6. A wireless keyboard and mouse receiver (one USB plug, two devices inside): both should show as `usb kbd` and `usb mouse` on one address.
 7. If the arrow moves too slowly or too fast at 1080p, say so: there is no acceleration yet, one mouse count is one pixel.
 

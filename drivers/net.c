@@ -643,6 +643,7 @@ static const u8 *dns_skip_name(const u8 *p) {
    a small host-side program replicating this exact check, fed a real
    correct-ID answer (accepted) and a real wrong-ID answer (rejected). */
 u32 net_dns_wait_ticks = WAN_TIMEOUT_TICKS;   /* a caller that can retry (the Pi clock) sets this short */
+u32 net_connect_wait_ticks = WAN_TIMEOUT_TICKS;   /* the SYN-ACK wait; the Pi browser sets it short so a dead host fails in seconds */
 int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
     u8 query[256];
     u16 txid = (u16)(ticks() & 0xFFFF); if (!txid) txid = 1;
@@ -921,7 +922,7 @@ int tcp_get_timeout(u32 dest_ip, u16 dest_port, const void *request, u32 request
     u8 *payload;
     u32 paylen;
     int got_synack = 0;
-    u32 synack_deadline = ticks() + WAN_TIMEOUT_TICKS;
+    u32 synack_deadline = ticks() + net_connect_wait_ticks;
     while (ticks() < synack_deadline && !got_synack) {
         u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
@@ -1011,7 +1012,7 @@ int tcp_open(u32 dest_ip, u16 dest_port) {
     if (!tcp_send_segment(st.ip, st.mac, st.lport, st.rport, st.seq, 0, TCP_SYN, 0, 0)) { net_err = NET_ERR_SEND; return 0; }
     st.seq++;
     struct tcp_header *tcp; u8 *payload; u32 paylen;
-    u32 deadline = ticks() + WAN_TIMEOUT_TICKS;
+    u32 deadline = ticks() + net_connect_wait_ticks;
     while (ticks() < deadline) {
         u32 n = active_receive(st.rx, sizeof st.rx);
         if (!n || !tcp_match(st.ip, st.lport, st.rport, st.rx, n, &tcp, &payload, &paylen)) continue;
