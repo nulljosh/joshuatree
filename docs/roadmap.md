@@ -136,7 +136,6 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 **Goal (Joshua, 2026-10-06 night, /goal): we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi.** The Pi runs the OS, the Claude app (phase 1, via a relay on the Mac) is the way in, and a session on the Pi edits and rebuilds a small Joshua Tree. The road there is the queue below: Wi-Fi (the relay needs the network), the desktop and dock, SD writes, `get`, then phase 2 of the Claude app (the model reading and writing the OS's own files through a tool loop), then a build toolchain on the box (the Plank compiler, 8.0). Say honestly what is not here yet in every release note.
 Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance"). Software first; items that need a part wait for the part.
 - [ ] [Fable] Wi-Fi stage 1: the CYW43455 wakes up over SDIO, loads its firmware and lists the networks on screen. In progress, 2.16.0.
-- [x] [Fable] `browse URL` on the real Pi stuck on "fetching". Two causes, both in the code path, neither a `ticks` wait: `drivers/http.c` sent every DNS query to SLIRP's 10.0.2.3, which is nobody on a real LAN (now the DHCP lease's DNS server), and each stage waited its own 20 s (DNS, SYN-ACK, 15 s per TLS read), so a dead hop read as a hang. The browser now gives DNS 3 s, the connect 4 s and each read 8 s, and prints `dns ok`, `tcp ok`, `tls ok`, `http NNN` as it goes, so the next board test shows where it stops. Check: `tools/checks/arm64-browser-deadserver-check.py`. Still to prove on the board: that BearSSL finishes a handshake against a real site within the budget.
 - [ ] [Fable] Wi-Fi stage 2: join works on the real board (our own WPA2, `arch/arm64/wpa.h`; name and key from `~/.config/joshuatree/wifi.conf`, never the repo). DHCP and the clock code landed in c14ac464, untested on the board. The IP stack ported from `drivers/net.c`.
 - [ ] [Fable] Admin and sudo (Joshua, 2026-10-06: "fix it soon"): a second privilege tier on the accounts that already exist (login screen, PBKDF2 passwords, Settings "Add user"). An admin flag per account, a password prompt before anything that installs, deletes a user or changes system settings, and a normal-user role that cannot. i386 build first; it touches `kernel/auth.h`, Settings and the syscall gate, not the ARM files, so it can run beside Wi-Fi. Per-user home folders and file permissions follow (6.0).
 - [ ] [Fable] Sound out of the 3.5 mm jack (PWM audio on GPIO 40 and 41 through DMA), then HDMI audio; then Movies plays a clip with sound on the Pi.
@@ -433,7 +432,6 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
 - [ ] [Sonnet] Video editor: basic timeline, trimming, and export.
-- [x] [Haiku] Scientific Calculator app: standard and scientific modes, memory functions. On ARM too: the Apps tile or F2 opens it, and dividing by zero says Error. `tools/checks/arm64-calc-check.py`.
 - [ ] [Sonnet] Basic games: Pong, Chess, Conway's Game of Life, fully playable in the OS.
 - [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
 - [ ] [Sonnet] Installing and updating apps from inside the OS.
@@ -513,3 +511,17 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.
+
+### Decided 2026-10-08 evening (Joshua)
+- [ ] [Sonnet] Terminal and panes host the agent and commands; the Console becomes logs only. Queued after browser v2.
+- [ ] [Fable] Samantha works as an agent in Joshua Tree: actions open, browse, calc, say, read, list, status; up to 5 steps, 4 actions per turn, with a kill switch.
+- [ ] [Sonnet] Browser v2 on the Pi: a working browser controllable from Console and Terminal. Pages with heavy scripts still show little text, because the Pi does not run JavaScript.
+- [ ] [Joshua] Codex on the Pi: decide between Pi-direct (a gray area) and official codex on the Mac via the relay (read-only). Joshua tests `browse https://chatgpt.com` on the Pi first. Nothing for the Codex login is built.
+
+### Queued 2026-10-08 late evening
+- [ ] [Fable] Rendered browse: the Mac relay renders JS pages in headless Chromium for `browse -r`; then QuickJS on the Pi with a tiny page model for simple scripts.
+- [ ] [Fable] Video on the Pi: JPEG or MJPEG decoding, then an audio driver. Joshua to say whether he listens through HDMI or the 3.5mm jack.
+- [ ] [Sonnet] Relay over TLS, so the token no longer crosses Wi-Fi in clear. Also: on-device Wi-Fi setup for cards that carry no key.
+- [ ] [Sonnet] Model and effort controls (/model, /effort) per Terminal pane, after the Samantha agent.
+- [ ] [Joshua] Media through the Mac relay (ElevenLabs voice, Higgsfield video): no render without Joshua's explicit yes, one clip at a time.
+- [ ] [Fable] Voxel game app and Java research, on the roadmap for the next few weeks.
