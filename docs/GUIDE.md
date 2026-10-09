@@ -55,7 +55,7 @@ successful join, Samantha cannot reach the relay. The desktop still works.
 
 ### Ask Samantha or read a web page
 
-Open Terminal from the dock, or press F1. Type `help` for local commands.
+Open Terminal from the dock, or press F2 (Ctrl+T also works). Type `help` for local commands.
 Type `browse example.com` to read a web page as text. A bare host name uses
 HTTPS. This is a text browser: pages that need JavaScript may not work.
 Use `links`, `open 1`, `back`, `forward` and `find WORD` to move around.
