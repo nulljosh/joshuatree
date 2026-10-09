@@ -146,18 +146,23 @@ DOCK = {
         <path d="M18 36 L64 72.5 L110 36" stroke="#B8C5D8" stroke-width="2" fill="none" stroke-linejoin="round" opacity="0.8"/>
       </g>"""),
 
-    # Calendar: a plain white tile, no baked date. v0.89.x: the month/day
-    # used to be hand-drawn strokes here ("SEP 17", fixed forever, not
-    # <text> since rsvg would pick whatever font the host has and
-    # gen_icon_art.py --check would then differ machine to machine); now
-    # the real current date is drawn at runtime instead, by
-    # gui_calendar_draw_date in kernel/kernel.c, directly on top of this
-    # tile's white/shadow art on every icon draw, off the same RTC read
-    # the menu bar clock already trusts. Nothing left to bake in: this
-    # tile is just the squircle, its top highlight and its drop shadow,
-    # same shared technique every other tile below uses, with no glyph
-    # body of its own.
-    "calendar": ("#F5F5F8", "#E0E1E6", "", ""),
+    # Calendar: a picture of a calendar, no date. A white page with a
+    # terracotta binding bar across the top, two binder rings over it and a
+    # 4 x 3 grid of day squares, one of them in the accent. No numbers: the
+    # Pi has no clock, and its old blank page with a "date unknown" dash
+    # read as a half-drawn icon on the real board (2026-10).
+    "calendar": ("#F5F5F8", "#E0E1E6",
+                 lg("page", (0, "#FFFFFF"), (1, "#F1F1F4"))
+                 + lg("bind", (0, "#C8613B"), (1, "#A6461F")),
+                 """
+      <rect x="20" y="22" width="88" height="82" rx="12" fill="url(#page)" stroke="#D5D6DC" stroke-width="1.5"/>
+      <path d="M20 46 V34 A12 12 0 0 1 32 22 H96 A12 12 0 0 1 108 34 V46 Z" fill="url(#bind)"/>
+      <g fill="#7A3018"><rect x="40" y="17" width="7" height="14" rx="3.5"/><rect x="81" y="17" width="7" height="14" rx="3.5"/></g>
+      <g fill="#C7C8CE">"""
+                 + "".join('<rect x="%d" y="%d" width="14" height="13" rx="3"/>' % (31 + 19 * c, 53 + 17 * r)
+                           for r in range(3) for c in range(4) if (r, c) != (1, 2))
+                 + """</g>
+      <rect x="69" y="70" width="14" height="13" rx="3" fill="#b5502c"/>"""),
 
     # Notes: a yellow pencil over ruled paper.
     "notes": ("#F6F6F8", "#E0E1E6",

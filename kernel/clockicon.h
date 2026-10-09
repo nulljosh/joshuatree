@@ -52,10 +52,9 @@ static int gui_clock_tick(int *seen){
     *seen = cm;
     return changed;
 }
-/* Live overlays drawn over a cached tile: Calendar's date, Clock's hands. */
+/* Live overlays drawn over a cached tile: Clock's hands. Calendar is a plain picture, no live date. */
 static void gui_icon_overlay(int icon, int cx_center, int cy_bottom, int size){
-    if (icon == GUI_CALENDAR) gui_calendar_draw_date(cx_center, cy_bottom, size);
-    else if (icon == 23) gui_clock_draw_hands(cx_center, cy_bottom, size);
+    if (icon == 23) gui_clock_draw_hands(cx_center, cy_bottom, size);
 }
 
 #endif

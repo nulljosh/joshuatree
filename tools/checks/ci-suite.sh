@@ -188,7 +188,7 @@ retry|3|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/ic
 retry|4|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
 retry|7|Dock icon lighting (one soft top light, top highlight, no dark outline)|python3 ./tools/checks/iconlight-check.py
 once |1|Every authored icon shares one tile silhouette, AA edges, glyph margin|python3 ./tools/checks/iconinset-check.py
-retry|0|Calendar dock tile shows today's date, not fixed art|python3 ./tools/checks/calicon-check.py
+retry|0|Calendar dock tile is a page-and-grid picture, no date or dash, same on every date|python3 ./tools/checks/calicon-check.py
 retry|6|Clock icon is a live analog face: hands follow the RTC and redraw on the minute|python3 ./tools/checks/clockicon-check.py
 retry|2|Shadow under the dock darkens the photo, no flat bands|python3 ./tools/checks/dockband-check.py
 retry|1|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
