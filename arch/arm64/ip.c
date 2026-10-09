@@ -92,7 +92,6 @@ static unsigned num(const char *p, int n) { unsigned v = 0; for (int i = 0; i < 
 void net_clock_sync(void) {
     unsigned ip = 0;
     if (!net_get_gateway()) return;
-    extern unsigned net_dns_wait_ticks;
     net_dns_wait_ticks = 200;   /* 2 s a try, not the 20 s a slow WAN gets: a lost first packet must not cost the clock half a minute */
     for (int t = 0; t < 6 && !ip; t++)   /* the first lookup can be lost to ARP or a busy router: the gateway first (it answers from cache), then the DNS server */
         if (!dns_resolve("www.google.com", t % 2 == 1 && net_get_dns() ? net_get_dns() : net_get_gateway(), &ip)) ip = 0;
