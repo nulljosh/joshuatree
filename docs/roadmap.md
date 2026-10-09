@@ -274,6 +274,16 @@ Round 5, 2026-10-06 night (Android and ChromeOS, the phone and the laptop that u
 
 The research loop ends here (Joshua's /loop, 2026-10-06): five rounds now cover Circle and Onyx on the Pi, Raspberry Pi OS and RISC OS, macOS and Windows, SerenityOS and Haiku, Android and ChromeOS. New rounds were starting to repeat what is already listed.
 
+### From the hobby OS comparison (2026-10-08)
+
+The top five gaps from `docs/RESEARCH.md` (written from memory) that were not already on this list:
+
+- [ ] [Fable] Bad-argument tests for every system call (xv6 `usertests`): bad pointers, huge lengths and closed handles. Check: a ring-3 program runs them all and the kernel returns an error for each and keeps running.
+- [ ] [Haiku] Attach a debugger to QEMU: lldb on QEMU's gdb stub for both ports. Check: a script boots paused, stops at the kernel entry and reads a register.
+- [ ] [Sonnet] A manual page for every shell command, read with `man NAME`. Check: fails if any command in the shell's table has no page.
+- [ ] [Sonnet] A ports folder: build scripts for outside C programs against libjt, Lua first. Check: the ported Lua runs a script as a ring-3 app and prints the right answer.
+- [ ] [Fable] One driver out of the kernel: the mouse as a ring-3 program. Check: kill it, the kernel keeps running, restarts it, and the pointer moves again.
+
 ### Nimbus, the hardware (Joshua, 2026-10-06 night)
 
 The hardware is called Neo in the files (`docs/hardware/neo_cad.py`, the blueprint, the build guide); Strata was the earlier name. Joshua prefers Nimbus and wants the design refreshed in Blender with the original Macintosh as inspiration: a compact, square box.
