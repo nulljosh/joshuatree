@@ -176,6 +176,10 @@ static void to_text(const char *h, unsigned n) {
     nlinks = 0; title[0] = 0;
     while (i < n) {
         char c = h[i];
+        if (skip) {   /* inside script or style: only the literal closing tag ends it; a '<' in code is not a tag */
+            if (c == '<' && h[i + 1] == '/' && starts(h + i + 2, skip == 1 ? "script" : "style")) { skip = 0; while (i < n && h[i] != '>') i++; }
+            i++; continue;
+        }
         if (c == '<') {
             unsigned e = i + 1; while (e < n && h[e] != '>') e++;
             const char *tag = h + i + 1; unsigned tn = e - i - 1;
@@ -184,9 +188,8 @@ static void to_text(const char *h, unsigned n) {
                 i = e + 3; continue;
             }
             int close = tag[0] == '/'; if (close) { tag++; tn--; }
-            if (!skip && !close && (is_tag(tag, tn, "script") || is_tag(tag, tn, "style"))) skip = is_tag(tag, tn, "script") ? 1 : 2;
-            else if (skip && close && is_tag(tag, tn, skip == 1 ? "script" : "style")) skip = 0;
-            else if (!skip) {
+            if (!close && (is_tag(tag, tn, "script") || is_tag(tag, tn, "style"))) skip = is_tag(tag, tn, "script") ? 1 : 2;
+            else {
                 int heading = tn >= 2 && (tag[0] | 32) == 'h' && tag[1] >= '1' && tag[1] <= '6' && (tn == 2 || tag[2] == ' ' || tag[2] == '\n');
                 if (is_tag(tag, tn, "title")) in_title = !close;
                 else if (is_tag(tag, tn, "a")) {
@@ -213,7 +216,6 @@ static void to_text(const char *h, unsigned n) {
             }
             i = e + 1; continue;
         }
-        if (skip) { i++; continue; }
         if (c == '&') { char d; unsigned k = entity(h + i + 1, &d); if (k) { c = d; i += k; } }
         i++;
         int ws = c == ' ' || c == '\n' || c == '\r' || c == '\t';

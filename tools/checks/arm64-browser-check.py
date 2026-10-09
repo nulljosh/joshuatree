@@ -4,11 +4,14 @@ HTTPS from a server on the host, follows a redirect, prints readable text with n
 link N. All through QEMU's virtio keyboard (QMP send-key) and user network; the result is read off the UART log.
 
 The server has a throwaway self-signed certificate for 10.0.2.2, built into the kernel's trust anchors with TLS_TA=.
-  1. browse https://10.0.2.2:PORT/start  ->  302 to /page; the UART shows the page title, its paragraph text, no
-     script or style body, each link's text followed by its number, and "links: 2".
-  2. open 2  ->  the server gets GET /second (an absolute link to the same host) and its title is printed.
-  3. browse .../loop  ->  a redirect to itself stops at "browser: too many redirects"; the server saw 4 GETs at most.
-  4. open 9  ->  "browser: no such link".
+  1. browse 10.0.2.2:PORT/start (a bare host: https is the default) -> 302 to /dir/page; the UART shows the title,
+     the paragraph text, no script or style body, &#NN; decoded, "text [N]" links, "- " list items, a blank line
+     before the heading, and the status line "URL  line 1 of Y".
+  2. open 3 -> the relative link sub/rel resolves to /dir/sub/rel. back -> /dir/page again (no new fetch). forward.
+  3. open 2 -> the absolute link /third; links lists both URLs; find grows jumps to that line; more at the end says so.
+  4. browse .../heavy -> a page that is mostly script and style prints its one sentence.
+  5. browse .../loop -> a redirect to itself stops at "browser: too many redirects"; the server saw 4 GETs at most.
+  6. open 9 -> "browser: no such link". help lists the commands. All through cmd.c's one cmd_run.
 Nothing typed here ever reaches Claude: the build has no relay token and "claude:" never appears.
 Skips (exit 0) when clang's aarch64 target, ld.lld, openssl or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-browser-check.py   (from the repo root)
@@ -23,15 +26,18 @@ if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64", "
 seen = []
 PAGE = (b"<html><head><title>Joshua &amp; the Tree</title><style>body{color:red}</style></head><body>"
         b"<script>alert('nope')</script><h1>Desert news</h1>\n<p>The   tree   grows slowly.</p>"
-        b"<p>Read <a href='/second'>the second page</a> or <a href=\"https://10.0.2.2:%d/third\">the third</a>.</p>"
+        b"<p>Read <a href='/second'>the second page</a> or <a href=\"https://10.0.2.2:%d/third\">the third</a> "
+        b"or <a href='sub/rel'>a relative one</a>.</p><p>&#74;oshua&#x27;s &lt;tree&gt;&nbsp;&quot;grows&quot;</p>"
         b"<!-- hidden --><ul><li>one</li><li>two</li></ul></body></html>")
 SECOND = b"<html><head><title>Second Page</title></head><body>Made it.</body></html>"
+HEAVY = (b"<html><head><title>Heavy</title><script>var a = '<p>fake</p>';</script></head><body><style>p{x:y}</style>"
+         + b"<script>" + b"if (a < b) { c(); }\n" * 400 + b"</script><p>One real sentence.</p></body></html>")
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         seen.append(self.path)
         if self.path in ("/start", "/loop"):
-            self.send_response(302); self.send_header("Location", "/page" if self.path == "/start" else "/loop"); self.end_headers(); return
-        body = PAGE % port if self.path == "/page" else SECOND
+            self.send_response(302); self.send_header("Location", "/dir/page" if self.path == "/start" else "/loop"); self.end_headers(); return
+        body = PAGE % port if self.path == "/dir/page" else HEAVY if self.path == "/heavy" else SECOND
         self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
     def log_message(self, *a): pass
 
@@ -91,27 +97,55 @@ try:
     if r.returncode: print(r.stdout[-2000:], r.stderr[-2000:]); print("FAIL: arch/arm64 does not build"); sys.exit(1)
     b = Boot()
     check("DHCP leased an address", b.wait_for("net dhcp 10.0.2.15 gw 10.0.2.2", 20), b.uart()[-300:])
-    b.type("browse https://10.0.2.2:%d/start" % port)
+    b.type("browse 10.0.2.2:%d/start" % port)
     check("the page arrived through the redirect", b.wait_for("links: ", 60), b.uart()[-800:])
-    page = lines_after(b.uart(), 1); text = "\n".join(page)
-    check("the server saw /start then /page", seen == ["/start", "/page"], seen)
+    page = lines_after(b.uart(), 1); text = "\n".join(page); flat = text.replace("\n", " ")
+    raw = b.uart().split("browser: fetching\n")[1].split("ask> ")[0]
+    check("a bare host defaults to https, and /start redirected to /dir/page", seen == ["/start", "/dir/page"], seen)
     check("the title line, entity decoded", "browser: Joshua & the Tree" in page, page)
     check("the heading and paragraph text, spaces collapsed", "Desert news" in page and "The tree grows slowly." in text, page)
+    check("a blank line between the heading and the paragraph", "Desert news\n\nThe tree grows slowly." in raw, raw)
     check("script, style and comment bodies are gone", "alert" not in text and "color" not in text and "hidden" not in text, page)
-    check("links are numbered after their text", "the second page[1]" in text and "the third[2]" in text, page)
+    check("links are numbered after their text", "the second page [1]" in flat and "the third [2]" in flat and "a relative one [3]" in flat, page)
+    check("numeric and named entities decode", "Joshua's <tree> \"grows\"" in text, page)
     check("list items on their own lines", "- one" in page and "- two" in page, page)
-    check("link count", "links: 2, open N follows one" in page, page)
+    check("the status line says where we are", "/dir/page" in text and "line 1 of" in text, page)
+    check("link count", "links: 3, open N follows one" in page, page)
     check("every line fits the 53-column Pi console", all(len(l) <= 53 for l in page), [l for l in page if len(l) > 53])
     seen.clear()
+    b.type("open 3")
+    check("open 3 fetched the relative link as /dir/sub/rel", b.wait_for("links: 0", 60) and seen == ["/dir/sub/rel"], (seen, b.uart()[-400:]))
+    seen.clear()
+    b.type("back")
+    check("back refetched /dir/page", b.wait_for("links: 3", 60) and seen == ["/dir/page"], (seen, b.uart()[-400:]))
+    seen.clear()
+    b.type("forward")
+    check("forward went to /dir/sub/rel again", b.wait_for("links: 0", 60, count=2) and seen == ["/dir/sub/rel"], (seen, b.uart()[-400:]))
+    b.type("forward")
+    check("nothing ahead after the newest page", b.wait_for("browser: nothing ahead", 10), b.uart()[-300:])
+    b.type("back"); b.wait_for("links: 3", 60, count=2)
+    seen.clear()
     b.type("open 2")
-    check("open 2 fetched the absolute link /third", b.wait_for("links: 0", 60) and seen == ["/third"], (seen, b.uart()[-400:]))
-    check("the second title printed", "browser: Second Page" in b.uart() and "Made it." in b.uart(), lines_after(b.uart(), 2))
+    check("open 2 fetched the absolute link /third", b.wait_for("links: 0", 60, count=3) and seen == ["/third"], (seen, b.uart()[-400:]))
+    check("the second title printed", "browser: Second Page" in b.uart() and "Made it." in b.uart(), b.uart()[-400:])
+    b.type("back"); b.wait_for("links: 3", 60, count=3)
+    b.type("links")
+    check("links lists every URL with its number", b.wait_for("links: 3\n", 10) and "[3] https://10.0.2.2:%d/dir/sub/rel" % port in b.uart(), b.uart()[-500:])
+    b.type("find grows")
+    check("find is case blind and lands on the line", b.wait_for("browser: found", 10) and b.wait_for("line 3 of", 5), b.uart()[-400:])
+    b.type("more")
+    check("more past the end says so", b.wait_for("browser: end of page", 10), b.uart()[-300:])
+    seen.clear()
+    b.type("browse https://10.0.2.2:%d/heavy" % port)
+    check("a script-heavy page prints its one sentence", b.wait_for("One real sentence.", 60) and "fake" not in b.uart() and "if (a" not in b.uart(), b.uart()[-500:])
     seen.clear()
     b.type("browse https://10.0.2.2:%d/loop" % port)
     check("a redirect loop stops", b.wait_for("browser: too many redirects", 90), b.uart()[-400:])
     check("at most 4 hops were fetched", 1 <= len(seen) <= 4, seen)
     b.type("open 9")
     check("open 9 says no such link", b.wait_for("browser: no such link", 10), b.uart()[-300:])
+    b.type("help")
+    check("help lists the commands", b.wait_for("find WORD", 10), b.uart()[-300:])
     check("nothing went to Claude", "claude:" not in b.uart())
 finally:
     if b: b.close()
@@ -119,4 +153,4 @@ finally:
     shutil.rmtree(tmp, ignore_errors=True)
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True, timeout=60)
 if fails: print("FAIL: " + ", ".join(fails)); sys.exit(1)
-print("PASS: the ARM64 browser reads an HTTPS page through a redirect, numbers its links and follows one")
+print("PASS: the ARM64 browser reads pages, follows links, goes back and forward, finds words and pages through text")
