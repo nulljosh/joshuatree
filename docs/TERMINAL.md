@@ -15,13 +15,24 @@ The ARM desktop has two text windows in the same spot. One is in front at a time
 
 ## Getting there
 
-- Click the Terminal tile in the dock, or press F1. F1 again goes back to the Console.
+- Click the Terminal tile in the dock, or press F2 (or Ctrl+T). Esc, with no question running, goes back to the Console.
 - Any other dock tile brings the Console back. The red dot closes whichever window is open.
-- With no screen at all, F1 still moves the keyboard to the Terminal, and the UART shows everything.
+- With no screen at all, F2 still moves the keyboard to the Terminal, and the UART shows everything.
 
 The UART gets every line from both windows, unchanged. The QEMU checks read it there.
 
 ## Keys
+
+No mouse is needed. The desktop's keys, in `arch/arm64/main.c` (`ui_key`); `tools/checks/arm64-keys-check.py` presses each one:
+
+| Key | Does |
+|---|---|
+| F1, Ctrl+Space | Spotlight: a bar over the desktop. Type to filter the dock's names (prefix or any part), Up and Down choose, Enter opens, Esc closes |
+| F2, Ctrl+T | The Terminal, at once; it has the keyboard |
+| Left, Right | With no pane holding the keys, move the dock's label along the tiles |
+| Enter | Open the labelled tile |
+| Esc | Clear the label; with the Terminal in front, back to the Console. While a question runs it stops the agent instead |
+| Page Up, Page Down, Home, End | Scroll the window in front |
 
 A release build has no relay token. Claude then answers `claude: no token`, and the other commands still work. Only the dev card that `tools/flash-pi.sh` writes carries a token. The token comes from a file outside the repo and is never printed.
 
