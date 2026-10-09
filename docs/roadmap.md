@@ -80,7 +80,6 @@ Two notebook pages checked against the tree. Already shipped and not listed: men
 - [ ] [Joshua] Competitor research as a doc: Apple Mac mini against our box on RAM (8 to 16 GB), integrated CPU, multi-display over HDMI, internal or external design, USB-C ports. A good-computer checklist for `docs/HARDWARE.md`.
 - [ ] [Fable] Time Machine: snapshots of the disk with a browse-the-past view. Nothing exists; needs a FAT snapshot design first.
 - [ ] [Sonnet] Fullscreen avatar, custom: Samantha (or Joshua's face) full screen as a mode, with the face picked in Settings. The page also lists video, audio and GUI mode as three ways to talk to her.
-- [ ] [Fable] Integrated LLM that runs on the box, not through the proxy. Needs the Pi to have the memory and a runtime; decide once M4 is real.
 - [ ] [Sonnet] Improved chat app: more tools and persistent memory across boots (a file the app reads at start).
 - [ ] [Sonnet] Spotlight: one key opens a search box over apps, files, contacts, events. The Search app does files only; the existing Spotlight-style item under Desktop and apps is the same item.
 - [ ] [Sonnet] Dock position setting: left, bottom, or hidden. Already listed under Desktop and apps as Moveable dock position; this is the second ask for it.
@@ -136,7 +135,6 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 **Goal (Joshua, 2026-10-06 night, /goal): we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi.** The Pi runs the OS, the Claude app (phase 1, via a relay on the Mac) is the way in, and a session on the Pi edits and rebuilds a small Joshua Tree. The road there is the queue below: Wi-Fi (the relay needs the network), the desktop and dock, SD writes, `get`, then phase 2 of the Claude app (the model reading and writing the OS's own files through a tool loop), then a build toolchain on the box (the Plank compiler, 8.0). Say honestly what is not here yet in every release note.
 Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance"). Software first; items that need a part wait for the part.
 - [ ] [Fable] Wi-Fi stage 1: the CYW43455 wakes up over SDIO, loads its firmware and lists the networks on screen. In progress, 2.16.0.
-- [x] [Fable] `browse URL` on the real Pi stuck on "fetching". Two causes, both in the code path, neither a `ticks` wait: `drivers/http.c` sent every DNS query to SLIRP's 10.0.2.3, which is nobody on a real LAN (now the DHCP lease's DNS server), and each stage waited its own 20 s (DNS, SYN-ACK, 15 s per TLS read), so a dead hop read as a hang. The browser now gives DNS 3 s, the connect 4 s and each read 8 s, and prints `dns ok`, `tcp ok`, `tls ok`, `http NNN` as it goes, so the next board test shows where it stops. Check: `tools/checks/arm64-browser-deadserver-check.py`. Still to prove on the board: that BearSSL finishes a handshake against a real site within the budget.
 - [ ] [Fable] Wi-Fi stage 2: join works on the real board (our own WPA2, `arch/arm64/wpa.h`; name and key from `~/.config/joshuatree/wifi.conf`, never the repo). DHCP and the clock code landed in c14ac464, untested on the board. The IP stack ported from `drivers/net.c`.
 - [ ] [Fable] Admin and sudo (Joshua, 2026-10-06: "fix it soon"): a second privilege tier on the accounts that already exist (login screen, PBKDF2 passwords, Settings "Add user"). An admin flag per account, a password prompt before anything that installs, deletes a user or changes system settings, and a normal-user role that cannot. i386 build first; it touches `kernel/auth.h`, Settings and the syscall gate, not the ARM files, so it can run beside Wi-Fi. Per-user home folders and file permissions follow (6.0).
 - [ ] [Fable] Sound out of the 3.5 mm jack (PWM audio on GPIO 40 and 41 through DMA), then HDMI audio; then Movies plays a clip with sound on the Pi.
@@ -433,7 +431,6 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
 - [ ] [Sonnet] Video editor: basic timeline, trimming, and export.
-- [x] [Haiku] Scientific Calculator app: standard and scientific modes, memory functions. On ARM too: the Apps tile or F2 opens it, and dividing by zero says Error. `tools/checks/arm64-calc-check.py`.
 - [ ] [Sonnet] Basic games: Pong, Chess, Conway's Game of Life, fully playable in the OS.
 - [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
 - [ ] [Sonnet] Installing and updating apps from inside the OS.
