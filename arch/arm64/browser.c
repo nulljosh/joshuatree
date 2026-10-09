@@ -1,5 +1,5 @@
-/* A text browser in the Console. `browse URL` at the prompt row fetches the page (https through tls.c, http through the
-   shared stack), follows up to 3 redirects, turns the HTML into readable text and prints it into the Console, which
+/* A text browser in the Terminal. `browse URL` at the ask> row fetches the page (https through tls.c, http through the
+   shared stack), follows up to 3 redirects, turns the HTML into readable text and prints it into the Terminal, which
    already scrolls (Page Up, Page Down, Home, End). Each link gets a number after its text, `[3]`; `open 3` fetches it.
    Every line fits the 53-column rule through ask.c's say_wrapped. Everything is static: one page at a time. */
 #include "../../drivers/net.h"
@@ -16,7 +16,7 @@ void *kmalloc(unsigned int n);
 #define URL_MAX 256
 #define LINK_MAX 32
 #define RAW_MAX 65536       /* the reply, headers and all */
-#define TEXT_MAX 8192       /* the readable text: half the Console log, so a page never pushes itself out */
+#define TEXT_MAX 8192       /* the readable text: half the Terminal's log, so a page never pushes itself out */
 /* Budgets in ticks (100 a second). A fetch answers or fails in about 10 s: 3 s for DNS, 4 s for the SYN-ACK, 8 s for
    each piece of the reply (tls.c's own read budget matches). The stack's defaults are 20 s each, which on a real LAN
    with a dead hop reads as "stuck on fetching". */

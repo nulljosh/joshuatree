@@ -10,7 +10,8 @@ input-send-event it:
   - moves it off onto the wallpaper: the capsule is gone, the dock's band matches the untouched boot screen pixel for
     pixel (no ghost of the arrow left in the band's saved copy), and the arrow shows at the new spot;
   - clicks the Console's red close button: "console closed", and the wallpaper is back where the window was;
-  - clicks the Terminal tile: "console open" and "dock Terminal: not on ARM yet", the window is back with its log;
+  - clicks the Mail tile: "console open" and "dock Mail: not on ARM yet", the window is back with its log;
+  - clicks the Terminal tile: "terminal open", the same window empty with the ask> prompt on its bottom row;
   - plugs a second mouse into the hub after boot and moves it ("usb mouse ... port N.3", then a new "mouse X,Y").
 Then the cursortest build on QEMU's Raspberry Pi 4B model at 1080p (window_scale 2): the arrow and the label over
 slot 3. The cache cleaning a real board needs is invisible to QEMU, so the source is checked for it.
@@ -33,7 +34,7 @@ main_c = open(os.path.join(arch, "main.c")).read()
 def body(name):   # the definition, not a forward declaration
     m = re.search(r"\n(static )?void %s\([^)]*\) \{" % name, main_c)
     return main_c[m.start():main_c.find("\n}\n", m.start())] if m else ""
-for fn, call in (("cur_flush", "fb_flush("), ("cur_show", "cur_flush("), ("cur_hide", "cur_flush("), ("console_close", "fb_flush("), ("console_open", "fb_flush(")):
+for fn, call in (("cur_flush", "fb_flush("), ("cur_show", "cur_flush("), ("cur_hide", "cur_flush("), ("console_close", "fb_flush("), ("pane_open", "fb_flush(")):   # pane_open draws the Console and the Terminal
     if call not in body(fn): fails.append(f"main.c {fn}() no longer cleans the cache over what it drew: a real Pi will not show it")
 if "cur_hide();" not in body("dock_hover"):
     fails.append("main.c dock_hover() no longer takes the arrow off before copying the dock's band")
@@ -150,12 +151,12 @@ try:
                 white = sum(1 for c in well if c == (255, 255, 255))
                 if white * 10 > len(well) or len(set(well)) < 100: fails.append(f"the window is still there after closing ({white} of {len(well)} white, {len(set(well))} colours)")
                 else: print(f"  ok: closing the Console puts the wallpaper back ({len(set(well))} colours where the window was)")
-        tx, ty = slot_centre(W, H, 6)
-        if not move_to(tx, ty): fails.append("could not move onto the Terminal tile")
+        tx, ty = slot_centre(W, H, 2)
+        if not move_to(tx, ty): fails.append("could not move onto the Mail tile")
         else:
             click()
-            if not (wait_for("console open", 30) and wait_for("dock Terminal: not on ARM yet", 30)):
-                fails.append(f"clicking the Terminal tile did not reopen the Console, got {uart()[-300:]!r}")
+            if not (wait_for("console open", 30) and wait_for("dock Mail: not on ARM yet", 30)):
+                fails.append(f"clicking the Mail tile did not reopen the Console, got {uart()[-300:]!r}")
             else:
                 time.sleep(0.3)
                 img = screendump(cmd, tmp)
@@ -165,7 +166,22 @@ try:
                     well = [px(img, x, y) for y in range(wy + 34, wy + win_h - 14) for x in range(wx + 8, wx + win_w - 4)]
                     ink = sum(1 for c in well if max(c) < 0x90)
                     if ink < 300: fails.append(f"the reopened Console shows no log ({ink} ink pixels)")
-                    else: print(f"  ok: a dock click reopens the Console with its log ({ink} ink pixels) and prints 'dock Terminal: not on ARM yet'")
+                    else: print(f"  ok: a dock click reopens the Console with its log ({ink} ink pixels) and prints 'dock Mail: not on ARM yet'")
+        # the Terminal tile opens the Terminal in the same rectangle: an empty scrollback and the ask> prompt on its bottom row
+        tx, ty = slot_centre(W, H, 6)
+        if not move_to(tx, ty): fails.append("could not move onto the Terminal tile")
+        else:
+            click()
+            if not wait_for("terminal open", 30): fails.append(f"clicking the Terminal tile printed no 'terminal open', got {uart()[-300:]!r}")
+            else:
+                time.sleep(0.3)
+                img = screendump(cmd, tmp)
+                sc = lambda v: v * H // 600
+                dark = lambda y0, y1: sum(1 for y in range(y0, y1) for x in range(wx + 8, wx + win_w - 4) if max(px(img, x, y)) < 0x90)
+                body, prompt = dark(wy + sc(34), wy + sc(32 + 18 * 16)), dark(wy + sc(32 + 18 * 16), wy + sc(32 + 19 * 16))
+                if px(img, wx + 19, wy + 16) != (0xff, 0x5f, 0x57) or prompt < 40 or body > 40:
+                    fails.append(f"the Terminal is not an empty window with an ask> prompt ({body} ink pixels above, {prompt} on the prompt row)")
+                else: print(f"  ok: the Terminal tile opens the Terminal: empty above, ask> on the bottom row ({prompt} ink pixels)")
         # hot-plug: a second mouse on a free hub port, found by the once-a-second rescan, and it moves the same pointer
         r = cmd("device_add", driver="usb-mouse", bus="x.0", port="1.3", id="m2")
         if "error" in r: fails.append(f"device_add of a second mouse failed: {r}")

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Claude in the ARM Console: type a question at the Console's prompt (`Claude Haiku 5.5 $ `, naming the model) and Claude's answer is printed in the Console, through the
-real relay on this machine and the shared IP stack on virtio-net. No app, no model, no internet.
+"""Claude in the ARM Terminal: open the Terminal (F1), type a question at its prompt (`Claude Haiku 5.5 $ `, naming the model) and Claude's answer is printed in
+the Terminal, through the real relay on this machine and the shared IP stack on virtio-net. No app, no model, no
+internet. The Console is logs only: typing with it in front asks nothing, and the answer never lands in it
+(docs/TERMINAL.md). The file keeps its old name so the suite and the docs that point at it stay put.
 
 The host side is the real tools/claude-relay/relay.py, bound to 127.0.0.1 on a free port, with a throwaway token file and
 a stub `claude` first on PATH (it records its argv and stdin and answers in Claude Code's JSON shape). The kernel is
@@ -9,11 +11,12 @@ network reaches the host's loopback at 10.0.2.2. Keys go in through QMP send-key
 (the i386 harness limit on Enter does not apply to the ARM virtio keyboard).
 
 Boot 1, virtio-net, ramfb, virtio keyboard:
+  0. the Console has no input: "hi" and Enter with it in front reach nobody. Then F1 opens the Terminal.
   1. typing: the letters land on the prompt row (its pixels change), Backspace takes one back, and the per-key echo
      lines stay on the UART only.
   2. ask: Enter sends; "claude: thinking", the stub got exactly the typed text on stdin, and the stub's answer comes back
-     word for word, wrapped to lines of at most 53 columns, and the Console window gains ink. A reply at all proves the
-     bearer was sent: the relay answers 401 without it.
+     word for word, wrapped to lines of at most 53 columns, and the Terminal window gains ink. A reply at all proves the
+     bearer was sent: the relay answers 401 without it. F1 back to the Console: the answer's ##### line is not there.
   3. follow-up: a second question reaches the stub with --resume <the session the first reply named>. The relay runs
      with --model claude-sonnet-5-5, so the first question is echoed after the default prompt "Claude Haiku 5.5 $ "
      and the follow-up after "Claude Sonnet 5.5 $ ", the model the relay said answered.
@@ -131,6 +134,11 @@ class Boot:
             if "return" in r or "error" in r: return r
     def key(self, *qcodes):
         self.cmd("send-key", keys=[{"type": "qcode", "data": k} for k in qcodes]); time.sleep(0.12)
+    def terminal(self):   # F1 brings the Terminal to the front; a window switch is a whole redraw, so let it settle
+        n = self.uart().count("terminal open")
+        self.key("f1")
+        if not self.wait_for("terminal open", 10, n + 1): raise SystemExit("FAIL: F1 did not open the Terminal: %r" % self.uart()[-300:])
+        time.sleep(0.4)
     def type(self, text):
         for ch in text:
             if ch == " ": self.key("spc")
@@ -177,6 +185,10 @@ try:
     b = Boot("net", True)
     try:
         check("DHCP leased an address", "net dhcp 10.0.2.15 gw 10.0.2.2" in b.uart(), b.uart()[-300:])
+        b.type("hi"); b.key("ret"); time.sleep(1.5)
+        check("the Console takes no input: hi and Enter with it in front ask nobody",
+              "claude: thinking" not in b.uart() and DEFAULT + "hi" not in b.uart() and not stub_calls(), b.uart()[-300:])
+        b.terminal()
         a = b.shot(); body, prompt = bands(a)
         b.type(QUESTION + "x"); b.key("backspace"); time.sleep(0.4)
         t = b.shot()
@@ -198,9 +210,15 @@ try:
         c = b.shot()
         dense_a, dense_c = densest_row(a, body), densest_row(c, body)
         print("    densest text row: %d inked columns at boot, %d with the answer" % (dense_a, dense_c))
-        check("the answer is drawn in the Console window: its ##### line is the densest row on screen",
+        check("the answer is drawn in the Terminal window: its ##### line is the densest row on screen",
               dense_c > dense_a + 60, "%d vs %d" % (dense_c, dense_a))
         check("the prompt row is empty again after Enter", ink(c, *prompt) < ink(t, *prompt))
+        n = b.uart().count("console open"); b.key("f1")
+        check("F1 again brings the Console back", b.wait_for("console open", 10, n + 1), b.uart()[-300:])
+        time.sleep(0.4); d = b.shot()
+        check("the answer is not in the Console: no ##### row there", densest_row(d, body) < dense_c - 60,
+              "%d vs %d in the Terminal" % (densest_row(d, body), dense_c))
+        b.terminal()
         # a follow-up resumes the relay's session
         b.type(SECOND); b.key("ret")
         b.wait_for("claude: thinking", 10, 2); b.wait_for(MARK, 30, 2)
@@ -217,6 +235,14 @@ try:
         b.type("hi"); b.key("ret")
         check("a wrong token prints claude: error -401", b.wait_for("claude: error -401", 20), b.uart()[-300:])
         check("the 401 never ran claude", len(stub_calls()) == 2)
+        # the Terminal's own scrollback: five more refusals (3+ lines each) overflow its rows, then Page Up and End
+        for k in range(2, 7): b.type("hi"); b.key("ret"); b.wait_for("claude: error -401", 20, k)
+        time.sleep(0.4)
+        region = lambda s, r: [s[2][(y * s[0] + r[0]) * 3:(y * s[0] + r[2]) * 3] for y in range(r[1], r[3])]
+        e = b.shot(); b.key("pgup"); time.sleep(0.4); f = b.shot(); b.key("end"); time.sleep(0.4); g = b.shot()
+        check("Page Up scrolls the Terminal back", region(e, body) != region(f, body))
+        check("... the prompt row stays put while scrolled", region(e, prompt) == region(f, prompt))
+        check("... and End brings back the newest picture, pixel for pixel", region(e, body) == region(g, body))
         out = b.uart()
         check("the token never appears on the UART", TOKEN not in out and OTHER not in out)
         long_lines = [l for l in out.split(DEFAULT + QUESTION)[-1].splitlines() if len(l) > 53]
@@ -227,7 +253,7 @@ try:
     n0 = len(stub_calls())
     b = Boot("nonet", False)
     try:
-        b.type("hi"); b.key("ret")
+        b.terminal(); b.type("hi"); b.key("ret")
         check("with no network card the prompt is the default model", b.wait_for(DEFAULT + "hi\n", 10), b.uart()[-300:])
         check("with no network card: claude: no network", b.wait_for("claude: no network", 10), b.uart()[-300:])
         time.sleep(1)
@@ -241,7 +267,7 @@ try:
     start_relay(TOKEN)
     b = Boot("notoken", True)
     try:
-        b.type("hi"); b.key("ret")
+        b.terminal(); b.type("hi"); b.key("ret")
         check("with no token the prompt is Claude alone", b.wait_for("\nClaude $ hi\n", 10), b.uart()[-300:])
         check("with no token: claude: no token", b.wait_for("claude: no token", 10), b.uart()[-300:])
     finally:
@@ -252,6 +278,7 @@ finally:
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True, timeout=120)
     shutil.rmtree(tmp, ignore_errors=True)
 if fails:
-    print("FAIL: %d of the Claude Console checks failed" % len(fails)); sys.exit(1)
-print("PASS: typed at the ARM Console's prompt (Claude Haiku 5.5 $, then the model that answered), the question reaches the relay over virtio-net and the stub's answer is "
-      "printed in 53-column lines; a wrong token, no network and no token each print their own line")
+    print("FAIL: %d of the Claude Terminal checks failed" % len(fails)); sys.exit(1)
+print("PASS: the Console takes no input; typed at the ARM Terminal's prompt (Claude Haiku 5.5 $, then the model that answered), the question reaches the relay over virtio-net "
+      "and the stub's answer is printed in the Terminal in 53-column lines, not the Console; a wrong token, no network and "
+      "no token each print their own line")
