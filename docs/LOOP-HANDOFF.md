@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-10-08, morning)
+# Joshua Tree loop handoff (2026-10-08, evening)
 
 ## What the loop is
 
@@ -22,28 +22,30 @@ Joshua's /goal: a mini Joshua Tree with Claude Code inside it, running on the Pi
 
 ## Where things stand
 
-- The Pi 4 joins Wi-Fi on the real board. The chip has no login helper, so the WPA2 handshake is ours (arch/arm64/wpa.h). The stall was the router wanting its exact security element repeated in our reply. PR 453 (the Pi stack) is merged.
-- A later stretch of Wi-Fi trouble (joins refused, then no address) cleared after a router reboot. Nothing in the code is known to be at fault.
-- Clock: a lost DNS lookup used to wait 20 seconds per try. Each try now waits 2 seconds and retries six times.
-- The console stays quiet on a good boot. Lines appear only when something breaks. The boot screen draws the tree while the photo decodes, and a small apple sits beside the Steve Jobs tribute line.
-- The green light works. The old blink broke the keyboard because it waited on the `ticks` counter, which stops early; Samantha's blink now waits on the hardware clock and drives GPIO 42 directly. PR 459 is merged.
-- PR 460 (Samantha through the Messages API, the Pi's live status, and the actions `[[note TEXT]]` and `[[led blink]]`) is in local CI, then GitHub. Main is 2.29.x; 460 is 2.30.0.
-- Merged today: the Pi stack, the HTTPS plan (458), the graph refresh. Open: 460, 463 (graph Pi row), 464 (CLAUDE.md and AGENTS.md sync for Codex), 465 (landing Pi section).
-- The API credit runs a repo agent: `~/.config/joshuatree/agent.py` (own branch, hard cost cap, no push). Codex on the Pi needs a secure tunnel; a relay Codex mode was blocked as a remote-run risk.
-- Benchmark: DEFERRED. Run `/jt-bench` only when nothing else is running on the Mac.
-- Naming: the file manager becomes Folio and the OS may become Mirage. Both decided in chat, neither done, trademark check still needed; each goes in its own PR.
+- Evening: Joshua flashed 2.32.1 and confirmed on the real Pi 4: `browse https://heyitsmejosh.com` gives dns ok, tcp ok, tls ok, http 200, the page title and a link. First HTTPS page fetched by his own OS on the board. Wi-Fi icon and a network clock show in the menu bar. JavaScript-heavy pages show little text.
+- Main is 2.32.1. Merged today: the Pi Calculator with scientific mode (#475), a text browser on the Pi with HTTPS (#476), a tiny local LLM on the Pi (#477), the clean bench numbers (#473), a Bookrank deflake (#474), the Codex notes (#464), and the browse DNS fix (#479). The DNS fix: the Pi's DNS went to QEMU's 10.0.2.3 instead of the DHCP server. Each browse step now times out fast and prints dns, tcp, tls and http lines.
+- The SD card holds the 2.32.1 dev build. The browser is not yet confirmed on the real board. The Mac lost sight of the card for a long stretch (reader or port), and the flash itself takes seconds.
+- Security, open: every Pi image built on the Mac embedded the relay token, not only the dev card. The fix is draft PR 481 (token and relay host only with JT_WIFI_DEV=1). It is not merged. Two more findings are open: the token goes in clear over Wi-Fi, and the certificate clock is set from an HTTP Date header nobody authenticates.
+- Drafts: 478 (Minesweeper, icon rule failures), 480 (docs batch: LESSONS, RESEARCH, LOCAL-LLM plan, SECURITY-PI review, CLAUDE.md trimmed with loop rules), 481 (token gate).
+- Finished branches with no PR yet: self-update path from the SD card, SD card writes, loop safety tools, landing and docs refresh, CI doc, the kernel.c usertest slice, the bench.sh fix, QMP ports, the bench-docs check, the Hikko deflake.
+- Benchmark: DEFERRED. A repo agent (`agent.py`) was running at 17:00. Run `/jt-bench` only when nothing else is running on the Mac.
+- Credit: about $124 of $200 spent (logs, 70 finished agents), roughly $76 left, expires Nov 4. Finished on branches: landing refresh v2 and QA page, loop hardening scripts, CI doc, security review, local-LLM plan, token gate fix (draft 481), a prompt that names the model (hit its turn limit, WIP, not merged). Running or queued: browser v2, Codex groundwork, Codex capture harness (local mocks only), Samantha agent, roadmap sync. The main session only reviews and merges.
+- Goals set: Samantha as an agent in Joshua Tree (see roadmap, decided 2026-10-08 evening); a working browser controllable from Console and Terminal.
+- Process: new PRs open as drafts so CI does not send failure emails. A credit agent runs the full local suite first. 11 landing, demo and portfolio browser checks cannot run locally (no Chromium), so CI answers those.
+- Weekly Claude usage is 98 percent and resets Saturday 22:00. Loop is live until then.
+- Process lessons: open drafts first (drafts never run CI, so no failure emails). Run the suite locally through credit agents before ready. Never resolve a Makefile conflict by taking one side; the calc.o FPCC rule was lost once that way. Generated files take main's side on conflicts.
 
 ## Next, in order
 
-1. Merge 460 once local and GitHub CI are green, then 463, 464 and 465 (merge 463 before 465: both bump the version).
-2. More Pi actions (SD card files, opening an app), then hide the Console on boot and move chat into its own Claude app, then the model and effort in the prompt.
-3. Folio and Mirage renames, each in its own PR, after a trademark check.
-4. HTTPS on the Pi: vendor the full BearSSL TLS client (the repo has only five crypto files; the upstream file list is in `~/Documents/Code/scratch-bearssl`).
-5. Split kernel/kernel.c, which is far too big to work in.
-6. Benchmark when the Mac is quiet.
+1. Joshua is flashing another card: the 481 token gate must be merged before it goes to anyone else. Then fix the two open findings: token over Wi-Fi in clear, and the clock from an unauthenticated Date header.
+2. Browser confirmed on the board (evening). Next: browser v2 and the Terminal and Console split.
+3. Move 478 out of draft once its icon rules pass; review 480.
+4. Open PRs for the finished branches, one at a time, starting with the bench.sh fix (it wipes the real-Pi section of docs/BENCHMARKS.md).
+5. Benchmark when the Mac is quiet.
+6. Split kernel/kernel.c, which is too big to work in.
 
 ## Restart prompt
 
 ```
-/loop Joshua Tree loop. State in ~/Documents/Code/joshuatree/docs/LOOP-HANDOFF.md on origin/main. First: finish PR 459 (keyboard message, light off) once its rerun is green, then PR 460 (Samantha through the Messages API and Pi tools, draft): one tools/ci-local.sh run, ready, merge on GitHub green. After the Saturday reset: Pi actions (light, SD card files, open an app), hide the Console on boot, a separate Claude app, model and effort in the prompt. Then the Burrow to Drawer rename in its own PR, split kernel/kernel.c, and HTTPS on the Pi from the plan in PR 458. Benchmark stays deferred until nothing else runs. Ship visible fixes as their own tiny PR. One Haiku agent at a time, verify every claim yourself, kill by PID only. Joshua swaps the SD card by hand, so batch board tests and ask for one swap per round. Never pull the card mid-flash. Never print Wi-Fi secrets or the relay key. Stop and checkpoint at 95 percent usage.
+/loop Joshua Tree loop, live until Saturday 22:00. State in docs/LOOP-HANDOFF.md on origin/main. First: merge 481 (relay token only in dev builds) once its CI is green, then fix the token-over-Wi-Fi and Date-header clock findings. Then confirm the 2.32.1 browser on the real board when the SD reader is back, move 478 out of draft and review 480, and open PRs for the finished branches one at a time. Drafts first, one tools/ci-local.sh at a time, merge on GitHub green, never resolve a Makefile conflict by taking one side. Benchmark only when no agent.py, ci-local, ci-suite or qemu-system is running. Credit is about $80 until Nov 4; reviews and merges only near the Saturday reset (98 percent weekly).
 ```
