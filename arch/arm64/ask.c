@@ -13,6 +13,10 @@
 #include "../../drivers/net.h"
 #include "../../drivers/http.h"
 #include "claude_cfg.h"
+#ifdef CLAUDE_RELEASE        /* a Pi release image: no token, so the Console says `claude: no token` (the Makefile sets it) */
+#undef CLAUDE_TOKEN_LEN
+#define CLAUDE_TOKEN_LEN 0
+#endif
 
 void kputs(const char *s);                     /* main.c */
 void kdec(unsigned v);
@@ -223,9 +227,14 @@ static unsigned pi_status(char *st) {   /* "ip 10.0.0.189, utc 1791..., wifi 3/3
    (the caller may fall back to the local model) and -2 for a refusal it already printed. */
 static int post(const char *q, unsigned n, char *reply, char **ans) {
     static char body[2 * RESULT_MAX + 256];
-    unsigned b = 0;                            /* {"prompt":"...","session":"...","pi":"..."}: only " and \ need escaping in ASCII */
+    unsigned b = 0;                            /* {"prompt":"...","session":"...","pi":"..."}: " and \ escaped, newlines as \n, other controls as spaces */
     for (const char *p = "{\"prompt\":\""; *p; p++) body[b++] = *p;
-    for (unsigned i = 0; i < n; i++) { if (q[i] == '"' || q[i] == '\\') body[b++] = '\\'; body[b++] = q[i]; }
+    for (unsigned i = 0; i < n; i++) {
+        char c = q[i];
+        if (c == '"' || c == '\\') { body[b++] = '\\'; body[b++] = c; }
+        else if (c == '\n') { body[b++] = '\\'; body[b++] = 'n'; }
+        else body[b++] = (unsigned char)c < 32 ? ' ' : c;
+    }
     for (const char *p = "\",\"session\":\""; *p; p++) body[b++] = *p;
     for (const char *p = session; *p; p++) body[b++] = *p;
     for (const char *p = "\",\"pi\":\""; *p; p++) body[b++] = *p;
