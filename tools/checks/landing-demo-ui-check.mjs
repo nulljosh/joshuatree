@@ -112,8 +112,9 @@ try {
   // ---- iPad: touch, no keyboard ----
   {
     const { ctx, page } = await open({ ...devices['iPad Mini'] });
-    await page.waitForTimeout(1500);
-    ok(await page.locator('#demo-composer').isVisible(), 'an iPad shows the chat bar too');
+    await page.locator('#hero-poster').tap();
+    await page.locator('#demo-composer').waitFor({ state: 'visible', timeout: 120000 });
+    ok(await page.locator('#demo-composer').isVisible(), 'an iPad shows the chat bar after boot');
     await ctx.close();
   }
 

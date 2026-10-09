@@ -286,6 +286,7 @@
   #demo-exit::after { content: ""; position: absolute; inset: -10px; }
   #demo-composer { display: flex; gap: 8px; width: 100%; max-width: 430px; margin: 10px auto 0; box-sizing: border-box; }
   #demo-composer[hidden] { display: none; }
+  html:not(.no-poster) #demo-frame:has(#hero-poster:not([hidden])) #demo-composer { display: none; }
   #demo-composer input { flex: 1; min-width: 0; min-height: 44px; box-sizing: border-box; padding: 0 16px; font: 16px/1.2 inherit; font-family: inherit; color: var(--fg); background: var(--bg); border: 1px solid rgba(128,128,128,0.45); border-radius: 999px; }
   #demo-composer input:focus { outline: 2px solid var(--fg); outline-offset: 1px; }
   #demo-composer button { flex: none; width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border: none; border-radius: 50%; background: var(--fg); color: var(--bg); cursor: pointer; }
@@ -615,7 +616,7 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">30</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">2.33.2</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">2.33.3</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
@@ -707,7 +708,8 @@
     <div class="tile"><p><strong>A menu bar that tells you.</strong> Wi-Fi bars and a 12-hour clock sit at the top right. The console stays quiet and only shows a line when something breaks.</p></div>
     <div class="tile"><p><strong>Samantha, on the board.</strong> Type a question and she answers, through a small relay on your Mac that calls the Claude API. The relay picks a small model for easy questions and a strong one for hard ones, and you bring your own key. She can read files from a shared folder.</p></div>
     <div class="tile"><p><strong>She knows the board.</strong> Each question goes out with the Pi's live status: its address, its clock and its Wi-Fi. She can act on it too: print a note, or blink the green light.</p></div>
-    <div class="tile"><p><strong>Not yet.</strong> A mouse on the Pi (it works in the emulator). HTTPS and a browser. Opening apps on the Pi. Each is on the <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/roadmap.md">roadmap</a>.</p></div>
+    <div class="tile"><p><strong>Browse the web.</strong> Fetch an HTTPS page and read its text in the Terminal. Back, forward and find are built in. Pages that need JavaScript are still limited.</p></div>
+    <div class="tile"><p><strong>Still ahead.</strong> The mouse needs a test on the real board. The Calculator opens on the Pi; most desktop apps still need their own Pi port. Sound and a graphical browser are on the <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/roadmap.md">roadmap</a>.</p></div>
   </div>
   <p class="sub" style="margin-top:16px"><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/RASPBERRY-PI.md">Put it on your own Pi</a></p>
 </section>
@@ -795,7 +797,7 @@
   #progress-chart-live .progress-pt:focus { outline: none; }
 </style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="17" y1="10" x2="437" y2="10" stroke="var(--grid)"/><line x1="17" y1="80" x2="437" y2="80" stroke="var(--grid)"/><text x="13" y="13" font-size="9" fill="var(--muted)" text-anchor="end">30</text><text x="13" y="83" font-size="9" fill="var(--muted)" text-anchor="end">15</text><text x="13" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="17" y1="10" x2="17" y2="150" stroke="var(--axis)"/><line x1="17" y1="150" x2="437" y2="150" stroke="var(--axis)"/><polyline points="17,150 27,150 37,150 47,150 57,150 68,118 78,113 88,113 98,80 109,66 119,57 129,52 139,52 150,52 160,52 170,48 180,38 191,34 201,34 211,34 221,34 232,29 242,29 252,29 262,29 273,29 283,29 293,29 303,29 314,38 324,38 334,38 344,38 355,29 365,29 375,29 385,20 396,10 406,10 416,10 426,10 437,10" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 0 apps shipped" data-tooltip="Aug 31 &#183; 0 apps"><circle class="progress-hit" cx="17" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="17" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="57" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="57" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 15 apps shipped" data-tooltip="Sep 14 &#183; 15 apps"><circle class="progress-hit" cx="98" cy="80" r="11" fill="transparent"/><circle class="progress-dot" cx="98" cy="80" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21 apps shipped" data-tooltip="Sep 15 &#183; 21 apps"><circle class="progress-hit" cx="139" cy="52" r="11" fill="transparent"/><circle class="progress-dot" cx="139" cy="52" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 22, 24 apps shipped" data-tooltip="Sep 22 &#183; 24 apps"><circle class="progress-hit" cx="180" cy="38" r="11" fill="transparent"/><circle class="progress-dot" cx="180" cy="38" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="221" cy="34" r="11" fill="transparent"/><circle class="progress-dot" cx="221" cy="34" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 29, 26 apps shipped" data-tooltip="Sep 29 &#183; 26 apps"><circle class="progress-hit" cx="262" cy="29" r="11" fill="transparent"/><circle class="progress-dot" cx="262" cy="29" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 2, 26 apps shipped" data-tooltip="Oct 2 &#183; 26 apps"><circle class="progress-hit" cx="303" cy="29" r="11" fill="transparent"/><circle class="progress-dot" cx="303" cy="29" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 3, 24 apps shipped" data-tooltip="Oct 3 &#183; 24 apps"><circle class="progress-hit" cx="344" cy="38" r="11" fill="transparent"/><circle class="progress-dot" cx="344" cy="38" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 5, 28 apps shipped" data-tooltip="Oct 5 &#183; 28 apps"><circle class="progress-hit" cx="385" cy="20" r="11" fill="transparent"/><circle class="progress-dot" cx="385" cy="20" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 7, 30 apps shipped" data-tooltip="Oct 7 &#183; 30 apps"><circle class="progress-hit" cx="426" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="426" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 7, 30 apps shipped" data-tooltip="Oct 7 &#183; 30 apps"><circle class="progress-hit" cx="437" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="437" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="17" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="98" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="150" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 16</text><text x="201" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 24</text><text x="262" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 29</text><text x="314" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Oct 3</text><text x="396" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Oct 7</text><text x="17" y="184" font-size="14" fill="var(--muted)">30 apps &#183; 100% documented</text></svg>
 <!-- progress-chart:end -->
-            <!-- roadmap-summary:start --><p class="roadmap-next">Next up: a demo that talks you through it, an assistant that runs the Pi, and icons that match.</p><!-- roadmap-summary:end -->
+            <!-- roadmap-summary:start --><p class="roadmap-next">Next up: a demo that talks you through it, icons that match, and photos, games and voice notes.</p><!-- roadmap-summary:end -->
           </div>
         </div>
       </div>
@@ -874,7 +876,7 @@
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.33.2</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.33.3</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
 </footer>
 
@@ -1178,6 +1180,9 @@
     e.preventDefault();
     var email = input.value.trim();
     if (!email) { setStatus('Enter an email first.', 'error'); return; }
+    if (email.length > input.maxLength || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatus('That email doesn\'t look right. Try again.', 'error'); return;
+    }
     button.disabled = true;
     setStatus('Adding you...');
     fetch('/api/waitlist', {
@@ -1188,8 +1193,10 @@
       if (res.ok) {
         setStatus("You're on the list. We'll email you when it's real.", 'ok');
         form.reset();
-      } else {
+      } else if (res.status === 400) {
         setStatus('That email doesn\'t look right. Try again.', 'error');
+      } else {
+        setStatus('Could not add you right now. Try again in a bit.', 'error');
       }
     }).catch(function () {
       setStatus('Could not reach the server. Try again in a bit.', 'error');

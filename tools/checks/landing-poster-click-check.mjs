@@ -62,6 +62,7 @@ for (const [tag, vp, mobile] of [['desktop click', { width: 1440, height: 900 },
   await page.goto(base);
   const visible = await page.evaluate(() => { const e = document.getElementById('hero-poster'); return !!e && !e.hidden && getComputedStyle(e).display !== 'none'; });
   ok(visible, `${tag}: poster is up before the click`);
+  if (mobile) ok(!await page.locator('#demo-composer').isVisible(), `${tag}: poster and real composer do not show two input bars`);
   const booted = await page.waitForFunction(() => window.__jt && /samopen/.test(window.__jt.serial) && /face: hd=/.test(window.__jt.serial), null, { timeout: BOOT_MS }).then(() => true, () => false);
   ok(booted, `${tag}: emulator booted to Samantha behind the poster (serial samopen, face: hd=)`);
   await page.waitForTimeout(3000);   // her portrait paints a moment after face: hd=
@@ -90,6 +91,7 @@ for (const [tag, vp, mobile] of [['desktop click', { width: 1440, height: 900 },
   const t0 = Date.now();
   const lifted = await page.waitForFunction(() => document.getElementById('hero-poster').hidden, null, { timeout: LIFT_MS }).then(() => true, () => false);
   ok(lifted, `${tag}: poster lifted in ${lifted ? Date.now() - t0 : '>' + LIFT_MS} ms (want under ${LIFT_MS / 1000} s, the 60 s fallback does not count)`);
+  if (mobile && lifted) ok(await page.locator('#demo-composer').isVisible(), `${tag}: real composer is available after boot`);
   const painted = await page.evaluate(() => {
     const c = document.getElementById('screen_canvas'), g = document.createElement('canvas');
     g.width = 32; g.height = 56; const x = g.getContext('2d'); x.drawImage(c, 0, 0, 32, 56);

@@ -77,3 +77,7 @@ Start with `docs/LOOP-HANDOFF.md`, then `docs/roadmap.md`'s Top 10. The plan has
 Good fits for Codex: reviewing a PR against its checks, running `tools/ci-local.sh` (one run at a time) and reading the failure, small fixes with a test, relay and script work in Python, docs and roadmap tidying, and regenerating the graphs (`tools/gen/`). Poor fits: long unattended loops, the big `kernel/kernel.c` split, or anything that needs the real Pi board (flashing and the photos stay with Joshua).
 
 Use the shared notes in `CLAUDE.md` ("Pi, Samantha and the relay") before touching `arch/arm64/`.
+
+## The loop
+
+Current scope and resume steps: `docs/LOOP-HANDOFF.md`.
