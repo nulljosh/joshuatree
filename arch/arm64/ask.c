@@ -103,6 +103,7 @@ void ask_redraw(void) { con_prompt(line, len); }   /* main.c: the Terminal was r
 /* One key event, while the Terminal is in front (Shift always). 1 when it is the editor's. */
 static int stop_flag;        /* the kill switch: Esc, or "stop" and Enter, while the agent loop runs */
 static int is_stop(const char *s, unsigned n) { return n == 4 && s[0] == 's' && s[1] == 't' && s[2] == 'o' && s[3] == 'p'; }
+int ask_pending(void) { return pending; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
 int ask_key(unsigned code, unsigned value) {
     if (code == KEY_LSHIFT || code == KEY_RSHIFT) { shift = value != 0; return 1; }
     if (code == KEY_ESC) { if (value && pending) stop_flag = 1; return 0; }

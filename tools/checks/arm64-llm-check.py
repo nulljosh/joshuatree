@@ -149,7 +149,7 @@ class Boot:
         time.sleep(0.5)
         self.s = socket.socket(socket.AF_UNIX); self.s.settimeout(20); self.s.connect(sock); self.f = self.s.makefile("rw")
         self.f.readline(); self.cmd("qmp_capabilities")
-        self.cmd("send-key", keys=[{"type": "qcode", "data": "f1"}])   # typing lives in the Terminal (docs/TERMINAL.md)
+        self.cmd("send-key", keys=[{"type": "qcode", "data": "f2"}])   # typing lives in the Terminal (docs/TERMINAL.md)
         if not self.wait_for("terminal open", 10): raise SystemExit("FAIL: F1 did not open the Terminal: %r" % self.uart()[-300:])
     def uart(self): return open(self.log, errors="replace").read() if os.path.exists(self.log) else ""
     def wait_for(self, pattern, secs, count=1):

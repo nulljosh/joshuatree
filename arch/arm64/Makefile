@@ -11,7 +11,9 @@
 #   oomtest     oom-kernel8.elf / oom-kernel8.img: HEAP_SIZE shrunk to OOM_HEAP bytes (make -B oomtest OOM_HEAP=n)
 #   hovertest   hover-kernel8.elf / hover-kernel8.img: the dock's hover label over slot 3 (Calendar) at boot
 #   cursortest  cursor-kernel8.elf / cursor-kernel8.img: the pointer's arrow over slot 3 at boot, with its hover label
+#   keydbgtest  keydbg-kernel8.elf: the dev card's key debug line on, plus made-up HID reports (a report ID) at boot
 #   calctest    calc-kernel8.elf: the Calculator open at boot with four sums typed into it
+#   caltest     cal-kernel8.elf: the clock fixed at CAL_UTC, so the Calendar tile shows that month with that day in the accent
 # The Console's ask> prompt asks the Claude relay. claude_cfg.sh writes its address and token (gitignored) on every build
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token), but only when
 # JT_WIFI_DEV=1 (tools/flash-pi.sh) or CLAUDE_RELAY_TOKEN_FILE is set explicitly (the checks); a release build has neither.
@@ -125,8 +127,9 @@ pi-xhci.o: xhci.c
 	$(CC) -DPI_BUILD -c $< -o $@
 pi-start.o: start.S
 	$(CC) -c $< -o $@
+# JT_WIFI_DEV=1 (the dev card) also turns on the key debug line in the menu bar (main.c KEY_DEBUG); release builds never.
 pi-main.o: main.c $(MAINDEP)
-	$(CC) -DPI_BUILD -c $< -o $@
+	$(CC) -DPI_BUILD $(if $(filter 1,$(JT_WIFI_DEV)),-DKEY_DEBUG) -c $< -o $@
 kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
 	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
 pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
@@ -158,14 +161,19 @@ $(eval $(call variant,fpnosave,-DFP_TEST,fptest.o,-DFP_NOSAVE))
 $(eval $(call variant,oom,-DOOM_TEST -DHEAP_SIZE=$(OOM_HEAP)UL,,))
 $(eval $(call variant,hover,-DDOCK_HOVER_TEST=3,,))
 $(eval $(call variant,cursor,-DCURSOR_TEST,,))
+$(eval $(call variant,keydbg,-DKEY_DEBUG -DKEY_SELFTEST,,))
 crashtest: crash-kernel8.elf crash-kernel8.img
 fpsave: fp-kernel8.elf
 fpnosave: fpnosave-kernel8.elf
 oomtest: oom-kernel8.elf oom-kernel8.img
 hovertest: hover-kernel8.elf hover-kernel8.img
 cursortest: cursor-kernel8.elf cursor-kernel8.img
+keydbgtest: keydbg-kernel8.elf
 $(eval $(call variant,calc,-DCALC_TEST,,))
 calctest: calc-kernel8.elf
+CAL_UTC ?= 1775000000
+$(eval $(call variant,cal,-DCAL_TEST_UTC=$(CAL_UTC)UL,,))
+caltest: cal-kernel8.elf
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
 run-pi: kernel8.img
@@ -173,4 +181,4 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg
 FORCE:
-.PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest calctest
+.PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest

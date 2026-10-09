@@ -134,10 +134,10 @@ class Boot:
             if "return" in r or "error" in r: return r
     def key(self, *qcodes):
         self.cmd("send-key", keys=[{"type": "qcode", "data": k} for k in qcodes]); time.sleep(0.12)
-    def terminal(self):   # F1 brings the Terminal to the front; a window switch is a whole redraw, so let it settle
+    def terminal(self):   # F2 brings the Terminal to the front; a window switch is a whole redraw, so let it settle
         n = self.uart().count("terminal open")
-        self.key("f1")
-        if not self.wait_for("terminal open", 10, n + 1): raise SystemExit("FAIL: F1 did not open the Terminal: %r" % self.uart()[-300:])
+        self.key("f2")
+        if not self.wait_for("terminal open", 10, n + 1): raise SystemExit("FAIL: F2 did not open the Terminal: %r" % self.uart()[-300:])
         time.sleep(0.4)
     def type(self, text):
         for ch in text:
@@ -213,8 +213,8 @@ try:
         check("the answer is drawn in the Terminal window: its ##### line is the densest row on screen",
               dense_c > dense_a + 60, "%d vs %d" % (dense_c, dense_a))
         check("the prompt row is empty again after Enter", ink(c, *prompt) < ink(t, *prompt))
-        n = b.uart().count("console open"); b.key("f1")
-        check("F1 again brings the Console back", b.wait_for("console open", 10, n + 1), b.uart()[-300:])
+        n = b.uart().count("console open"); b.key("esc")
+        check("Esc brings the Console back", b.wait_for("console open", 10, n + 1), b.uart()[-300:])
         time.sleep(0.4); d = b.shot()
         check("the answer is not in the Console: no ##### row there", densest_row(d, body) < dense_c - 60,
               "%d vs %d in the Terminal" % (densest_row(d, body), dense_c))
