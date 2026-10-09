@@ -1256,6 +1256,18 @@ static void m1_selftest(void) {
 #endif
 }
 
+/* ask.c's agent loop: [[open APP]] opens a dock app by name. Only the Calculator opens on ARM so far (the Console is
+   always open); any other name returns 0. */
+int app_open_name(const char *name) {
+    static const char *const openable[] = {"calculator", "console"};
+    for (unsigned a = 0; a < 2; a++) {
+        const char *w = openable[a]; unsigned i = 0;
+        for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
+        if (!w[i] && !name[i]) { if (a == 0) calc_open(); return 1; }
+    }
+    return 0;
+}
+
 /* ---- Input, from any driver: Linux evdev events (virtio input speaks them natively; the USB HID driver in xhci.c
    translates its reports into them). The pointer starts mid-screen; a tablet sets it, a mouse moves it. ---- */
 struct input_event { unsigned short type, code; unsigned value; };
@@ -1564,6 +1576,8 @@ static void blk_probe(void) {}
 void net_stack_demo(void);
 void net_clock_sync(void);
 void tls_demo(void);
+void input_drain(void) { usb_poll(); input_poll(); }   /* ask.c, between agent steps: the keys that queued during a request */
+
 void main(void) {
     unsigned long el;
     uart_init();

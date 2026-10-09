@@ -55,7 +55,7 @@ Then in Joshua Tree: Settings > Assistant > Claude relay = 10.0.2.2:8765, Claude
 Python standard library only. tools/checks/claude-relay-check.py proves the rules above
 against a stub `claude`.
 """
-import argparse, hmac, http.server, json, os, re, signal, subprocess, sys, threading, time, urllib.request, urllib.error
+import argparse, hmac, http.server, json, os, re, signal, subprocess, sys, threading, time, urllib.request, urllib.error, uuid
 
 DEFAULT_PORT = 8765
 DEFAULT_TIMEOUT = 150          # seconds; the kernel waits up to 240 s (JT_HTTP_POST_TICKS_CLAUDE), so the relay's 504 lands first
@@ -100,10 +100,16 @@ def claude_argv(cfg, session):
 
 SAMANTHA = ("You are Samantha, the assistant inside Joshua Tree, a small operating system built from scratch "
             "that runs on a Raspberry Pi. You answer at its console. Be warm, plain and brief: a few short "
-            "sentences, no markdown, no lists unless asked. You can also act on the Pi: end your answer with an "
-            "action, alone on its own line, under 80 characters. [[note TEXT]] prints TEXT on the Pi's console. "
-            "[[led blink]] blinks the Pi's green light once. These two are the only actions; use one only when it "
-            "helps, never invent others.")
+            "sentences, no markdown, no lists unless asked. You can also act on the Pi: end your answer with "
+            "actions, each alone on its own line, under 80 characters, at most 4 per answer. "
+            "[[note TEXT]] prints TEXT on the Pi's console. [[say TEXT]] shows TEXT as a spoken caption. "
+            "[[led blink]] blinks the Pi's green light once. [[open APP]] opens an app by name (Calculator). "
+            "[[browse URL]] fetches an http or https page as text. [[calc EXPR]] works out a sum on the Pi. "
+            "[[status]] reports the Pi's address, clock and Wi-Fi. These are the only actions; never invent others. "
+            "After the Pi runs them it sends you what they printed as the next message; use that to finish the "
+            "task, up to 5 rounds. Use an action only when it helps: browse when you need a live page, calc for "
+            "arithmetic, status when asked about the Pi. Nothing you can do changes a file; if a task would need "
+            "to, ask first and explain what would change.")
 
 
 TOP_WORDS = ("architecture", "design a", "prove", "security", "tradeoff", "step by step plan")
@@ -151,16 +157,22 @@ def api_call(cfg, key, model, messages, system=SAMANTHA):
         return json.loads(r.read().decode("utf-8", "replace"))
 
 
-def run_api(cfg, prompt, pi=""):
+API_HISTORY_MAX = 24           # messages kept per session: 5 agent rounds and their results, with room for a follow-up
+
+
+def run_api(cfg, prompt, pi="", history=None):
     """--api-key-file mode: the Messages API with two read-only file tools, paid from the Claude Platform credit, not
-    the Claude Code plan. Stateless: each question stands alone, at most 4 model turns. Returns (status, text)."""
+    the Claude Code plan. At most 4 model turns per question. `history` is the session's earlier messages (the agent
+    loop sends an action's result as the next user turn); it is extended in place. Returns (status, text)."""
     try:
         key = open(os.path.expanduser(cfg.api_key_file)).read().strip()
     except OSError:
         return 502, "The relay has no API key file."
     model = pick_model(cfg, prompt)
     system = SAMANTHA + (" Live status of the Pi you run on (ip, clock in UTC seconds since 1970, Wi-Fi bars): " + pi if pi else "")
-    messages = [{"role": "user", "content": prompt}]
+    messages = history if history is not None else []
+    messages.append({"role": "user", "content": prompt})
+    del messages[:-API_HISTORY_MAX]
     try:
         for _ in range(4):
             d = api_call(cfg, key, model, messages, system)
@@ -175,7 +187,8 @@ def run_api(cfg, prompt, pi=""):
     except (urllib.error.URLError, OSError, ValueError, KeyError):
         return 502, "The API did not answer."
     text = "".join(b.get("text", "") for b in d.get("content", []) if isinstance(b, dict))
-    return (200, "S -\n" + text) if text else (502, "The API returned no text.")
+    if text: messages.append({"role": "assistant", "content": text})
+    return (200, text) if text else (502, "The API returned no text.")
 
 
 class Relay:
@@ -184,10 +197,17 @@ class Relay:
         self.token = token.encode()
         self.busy = threading.Lock()
         self.sessions = set()   # session ids this relay has handed out; --resume only accepts these
+        self.api_history = {}   # --api-key-file mode: session id -> its messages, so an agent round can continue
 
     def run_claude(self, prompt, session, pi=""):
         """Returns (status, text). Kills claude's whole process group past the timeout."""
-        if self.cfg.api_key_file: return run_api(self.cfg, prompt, pi)
+        if self.cfg.api_key_file:
+            if not session:
+                session = str(uuid.uuid4())
+                if len(self.sessions) >= SESSIONS_MAX: self.sessions.clear(); self.api_history.clear()
+                self.sessions.add(session)
+            status, text = run_api(self.cfg, prompt, pi, self.api_history.setdefault(session, []))
+            return status, ("S %s\n%s" % (session, text)) if status == 200 else text
         p = subprocess.Popen(claude_argv(self.cfg, session), cwd=self.cfg.cwd, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
         try:
