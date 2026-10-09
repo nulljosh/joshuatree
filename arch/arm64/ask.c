@@ -1,7 +1,9 @@
-/* Claude in the Console. The bottom row of the Console window is a one-line editor, `ask> `: typed keys land there,
-   Backspace takes one back, Enter sends the line to the Claude relay on the Mac (tools/claude-relay/relay.py) as one
-   HTTP POST through the shared IP stack, and the answer is printed into the Console, wrapped to 53 columns (the house
-   rule, so a photo of the Pi screen and the UART log read the same). No app, no ring 3: the kernel asks.
+/* Claude in the Terminal. The bottom row of the Terminal window (its dock tile, or F1) is a one-line editor, `ask> `:
+   typed keys land there, Backspace takes one back, Enter runs the line. `browse`, `open N` and `llm` are commands;
+   anything else goes to the Claude relay on the Mac (tools/claude-relay/relay.py) as one HTTP POST through the shared
+   IP stack. Everything a command prints goes into the Terminal, above the prompt, wrapped to 53 columns (the house
+   rule, so a photo of the Pi screen and the UART log read the same); the Console only keeps logs (docs/TERMINAL.md).
+   No app, no ring 3: the kernel asks.
 
    Where the relay is and the token it wants come from claude_cfg.h, generated at build time by claude_cfg.sh from the
    environment and a file outside the repo; the token is sent only in the Authorization header of this one request and
@@ -17,6 +19,7 @@ void kputs(const char *s);                     /* main.c */
 void kdec(unsigned v);
 int con_columns(void);
 void con_prompt(const char *s, unsigned n);
+void term_output(int on);   /* main.c: what a command prints goes to the Terminal */
 unsigned long heap_mark(void);
 unsigned long net_clock_utc(void);   /* ip.c: seconds since 1970, 0 until the network set it */
 int wifi_signal_level(void);         /* wifi.c: 1 to 3 */
@@ -32,7 +35,7 @@ int browse_command(const char *q, unsigned n);   /* browser.c */
 
 static char line[ASK_MAX + 1], question[ASK_MAX + 1];
 static unsigned len, qlen;
-static int shift, pending, active;
+static int shift, pending;
 static char session[37];     /* the relay's session uuid, "" before the first answer */
 
 /* Linux key codes 0..57 to characters, plain and with Shift. 0 is a key the editor does not type. */
@@ -52,17 +55,15 @@ static const char shifted[58] = {
 #define KEY_LSHIFT 42
 #define KEY_RSHIFT 54
 
-int ask_active(void) { return active; }
 int ask_char(unsigned code) { return code < 58 ? (shift ? shifted[code] : plain[code]) : 0; }   /* main.c's Calculator: same map, same Shift */
-void ask_redraw(void) { con_prompt(line, len); }   /* main.c: the Console was reopened, put the line being typed back */
+void ask_redraw(void) { con_prompt(line, len); }   /* main.c: the Terminal was reopened, put the line being typed back */
 
-/* One key event from any keyboard. 1 when it is the editor's (the caller then keeps its echo line off the screen). */
+/* One key event, while the Terminal is in front (Shift always). 1 when it is the editor's. */
 int ask_key(unsigned code, unsigned value) {
     if (code == KEY_LSHIFT || code == KEY_RSHIFT) { shift = value != 0; return 1; }
     int typed = code < 58 && plain[code];
     if (!typed && code != KEY_BACKSPACE && code != KEY_ENTER && code != KEY_KPENTER) return 0;
     if (!value) return 1;                      /* key up: nothing to do, but it is still ours */
-    active = 1;
     if (typed) { if (len < ASK_MAX) line[len++] = shift ? shifted[code] : plain[code]; }
     else if (code == KEY_BACKSPACE) { if (len) len--; }
     else if (len && !pending) {                /* Enter: hand the line to ask_poll, outside the input handler */
@@ -157,7 +158,7 @@ static unsigned put_dec(char *o, unsigned long v) {   /* decimal digits of v at 
     while (n) o[k++] = t[--n];
     return k;
 }
-/* The local model (llm.c): `llm PROMPT` at the ask> row, and Samantha's answer when the relay cannot be reached. */
+/* The local model (llm.c): `llm PROMPT` at the Terminal's ask> row, and Samantha's answer when the relay cannot be reached. */
 int llm_generate(const char *prompt, unsigned n, char *out, unsigned cap, unsigned *npos, unsigned *tps10);
 static void local(const char *q, unsigned n) {
     static char out[2048];
@@ -253,7 +254,9 @@ static void ask(const char *q, unsigned n) {
 /* Called from the main loop: runs a question Enter queued, so the keyboard handler never blocks on the network. */
 void ask_poll(void) {
     if (!pending) return;
+    term_output(1);
     ask(question, qlen);
+    term_output(0);
     pending = 0;
     con_prompt(line, len);
 }
