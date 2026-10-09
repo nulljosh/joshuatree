@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Unit tests for tools/claude-relay/relay.py: file tools, model routing, system prompt, and the "M <model>" line the
 Pi's prompt shows ("Claude Sonnet 5.5 $ "). No network."""
-import importlib.util, os, pathlib, re, sys, tempfile, types, unittest
+import builtins, importlib.util, os, pathlib, re, sys, tempfile, types, unittest
+from unittest.mock import patch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -43,6 +44,46 @@ class Tools(unittest.TestCase):
             self.assertTrue(self.read(n).startswith("No such file"), n)
         for a in (None, [], "a.txt", {}, {"name": 5}):
             self.assertTrue(relay.run_tool("read_file", a).startswith("No such file"), repr(a))
+
+    def test_file_replaced_with_symlink_before_open(self):
+        target = os.path.join(self.d, "a.txt")
+        outside = os.path.join(self.tmp.name, "outside.txt")
+        old_open, old_os_open = builtins.open, os.open
+
+        def replace(path):
+            if path in (target, "a.txt"):
+                os.unlink(target)
+                os.symlink(outside, target)
+
+        def file_open(path, *args, **kwargs):
+            replace(path)
+            return old_open(path, *args, **kwargs)
+
+        def fd_open(path, *args, **kwargs):
+            replace(path)
+            return old_os_open(path, *args, **kwargs)
+
+        with patch("builtins.open", file_open), patch.object(os, "open", fd_open):
+            self.assertTrue(self.read("a.txt").startswith("No such file"))
+
+    def test_file_replaced_with_fifo_before_open(self):
+        target = os.path.join(self.d, "a.txt")
+        old_open = os.open
+        def fifo_open(path, *args, **kwargs):
+            if path == "a.txt":
+                os.unlink(target)
+                os.mkfifo(target)
+            return old_open(path, *args, **kwargs)
+        with patch.object(os, "open", fifo_open):
+            self.assertTrue(self.read("a.txt").startswith("No such file"))
+
+    def test_missing_file_at_open_is_refused(self):
+        old_open = os.open
+        def missing_open(path, *args, **kwargs):
+            if path == "a.txt": os.unlink(os.path.join(self.d, path))
+            return old_open(path, *args, **kwargs)
+        with patch.object(os, "open", missing_open):
+            self.assertTrue(self.read("a.txt").startswith("No such file"))
 
     def test_unknown_and_missing_dir(self):
         self.assertEqual(relay.run_tool("rm", {}), "Unknown tool.")

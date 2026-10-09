@@ -136,3 +136,7 @@ The short list. Everything below is the long list; done items moved to [roadmap-
 - [x] [Sonnet] The Terminal hosts the agent and commands; the Console is logs only. Merged in 2.33.0. Per-pane model settings are still open in the roadmap.
 - [x] [Fable] Samantha works as an agent in Joshua Tree: actions open, browse, calc, say, read, list, status; up to 5 steps, 4 actions per turn, with a kill switch.
 - [x] [Sonnet] Browser v2 on the Pi: a working browser controllable from Console and Terminal. Pages with heavy scripts still show little text, because the Pi does not run JavaScript.
+
+## 2026-10-09: relay file safety, CI balance and first guide chapter
+
+The relay now opens shared files relative to a pinned directory, refuses symlinks at open time and refuses non-regular files without blocking. Regression checks replace a listed file with a symlink, FIFO or missing file. CI was rebalanced using all 215 timings from green run 37983553844, with no checks removed and the two-job local limit unchanged. The Wi-Fi chapter in `docs/GUIDE.md` explains setup, commands, failures and the files behind them; the remaining guide chapters and coverage guard stay open.

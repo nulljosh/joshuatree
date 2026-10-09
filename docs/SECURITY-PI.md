@@ -117,3 +117,9 @@ Check: the same script as finding 1 covers it: build with the flag unset and fai
 - `arch/arm64/wifi.c`'s WPA2 handshake was not reviewed.
 - Whether `www.google.com` keeps answering plain `HEAD /` on port 80 with a Date header.
 - The relay's tool sandbox (`~/pi-files`, read only) was read in its header comment only.
+
+## Relay follow-up, 2026-10-09
+
+The API relay's shared-folder reader had a high-severity check/open race: a local process with write access to `~/pi-files` could replace an approved file with a symlink, letting a model read outside the folder. The reader now pins the folder, opens with `O_NOFOLLOW` and checks the opened descriptor is a regular file. Nonblocking open also prevents a replacement FIFO from hanging the relay. `tools/checks/relay-api-check.py` reproduces the old symlink leak and covers FIFO and deletion races. The API key file is now closed after each read.
+
+The existing release-token guard in `arch/arm64/claude_cfg.sh` already addresses finding 1 for normal release builds: only `JT_WIFI_DEV=1` or an explicitly supplied token file embeds a token. Findings 2 and 3 remain open: Pi requests still send a bearer token over HTTP, and the certificate clock still trusts an unauthenticated Date header. TLS entropy remains timer-based. This follow-up does not certify those paths or the hardware.
