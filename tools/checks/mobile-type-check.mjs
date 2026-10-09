@@ -68,18 +68,13 @@ try {
   // phone
   const { ctx, page } = await open({ ...devices['iPhone 13'] });
   await page.waitForFunction(() => window.__jt && window.__jt.ready, null, { timeout: 120000 });
-  await page.waitForTimeout(8000); // let the kernel reach its home screen
+  await page.locator('#hero-poster').tap();
+  await page.locator('#demo-composer').waitFor({ state: 'visible', timeout: 120000 });
 
   const input = page.locator('#demo-compose-input');
   const send = page.locator('#demo-compose-send');
   ok(await page.locator('#demo-composer').isVisible(), 'phone viewport shows the chat bar');
   ok(await send.isVisible(), 'phone viewport shows the Send button (an icon)');
-
-  // Open Samantha from the phone home screen with a real tap, then give the
-  // kernel a few seconds to draw her empty prompt.
-  const rect0 = await page.evaluate(() => { const r = document.getElementById('screen_canvas').getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
-  await page.touchscreen.tap(rect0[0] + rect0[2] * 0.30, rect0[1] + rect0[3] * 0.23);
-  await page.waitForTimeout(7000);
 
   // 2. a real touch tap in the chat bar. The demo goes full screen so she can
   // be seen above the keyboard.
