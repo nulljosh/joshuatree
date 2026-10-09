@@ -1127,7 +1127,7 @@ int ask_char(unsigned code);                  /* ask.c: a key code as the charac
 #define SPOT_ROW 22
 #define SPOT_MAX 5                    /* matches shown at most */
 static char spot_text[24]; static unsigned spot_len;
-static int spot_live, spot_sel, spot_hits[GUI_ICON_COUNT], spot_n, dock_sel = -1, ctrl_held;
+static int spot_live, spot_sel, spot_hits[GUI_ICON_COUNT], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
 static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
 static int spot_lx, spot_ly, spot_lh;   /* the bar on the logical grid; its height is what is drawn now */
 static int spot_match(const char *name) {   /* the typed text, case folded, anywhere in the name */
@@ -1196,16 +1196,109 @@ static int spot_key(unsigned code) {   /* a key down with the bar open: every ke
 static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hover(slot); }
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
     if (spot_live) return spot_key(code);
-    if (code == 59 || (ctrl_held && code == 57)) { spot_open(); return 1; }                       /* F1, Ctrl+Space */
+    int chord = ctrl_held || gui_held || alt_held;
+    if (code == 59 || (chord && code == 57)) { spot_open(); return 1; }                            /* F1; Cmd+Space (the Mac's), Ctrl+Space, Alt+Space */
     if (code == 60 || (ctrl_held && code == 20)) { calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
     if (calc_live) return 0;
     if (term_front()) { if (code == 1 && !ask_pending()) { console_open(); return 1; } return 0; }   /* Esc: the keys back to the desktop */
     if (!fb) return 0;
     if (code == 105 || code == 106) { dock_select(dock_sel < 0 ? (code == 106 ? 0 : GUI_ICON_COUNT - 1) : (dock_sel + (code == 106 ? 1 : GUI_ICON_COUNT - 1)) % GUI_ICON_COUNT); return 1; }
-    if (code == 28 || code == 96) { if (dock_sel < 0) return 0; int slot = dock_sel; dock_select(-1); dock_activate(slot); return 1; }
-    if (code == 1) { if (dock_sel >= 0) dock_select(-1); return 1; }
+    if ((code == 28 || code == 96) && dock_sel >= 0) { int slot = dock_sel; dock_select(-1); dock_activate(slot); return 1; }
+    if (code == 1) { if (dock_sel >= 0) dock_select(-1); return 1; }   /* Esc with nothing open does nothing */
+    /* The bare desktop: no pane has the keys (the Console is logs only). Any letter or digit opens Spotlight with it
+       typed, and Enter, Space or Tab open it empty: a keyboard whose F-keys or modifiers never arrive still gets in. */
+    if (chord) return 0;
+    if (code == 28 || code == 96 || code == 57 || code == 15) { spot_open(); return 1; }
+    int ch = ask_char(code);
+    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) { spot_open(); if (spot_live) spot_key(code); return 1; }
     return 0;
 }
+
+/* The dev card's key debug line (KEY_DEBUG, set by JT_WIFI_DEV=1 builds only): for 3 seconds after a key, the menu bar
+   shows the last raw HID report in hex ("m" in front for a media interface) and the decoded key, so a real-board test
+   shows exactly what the keyboard sends. The UART gets the same line ("keydbg: ..."). Release builds compile it out. */
+#ifdef KEY_DEBUG
+#define KD_X 180                      /* on the 960x540 grid: the menu bar's middle, clear of Spotlight and the status half */
+#define KD_W 296
+static char kd_hex[48], kd_name[32]; static int kd_dirty, kd_shown; static unsigned long kd_until; static unsigned *kd_under;
+static unsigned long kd_ms(void) {
+    unsigned long f, c; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    return c / ((f ? f : 54000000) / 1000);
+}
+void key_raw(const unsigned char *r, unsigned len, unsigned kind) {   /* xhci.c: every keyboard or media report */
+    static unsigned prev; unsigned n = 0, set = 0;
+    for (unsigned i = 0; i < len; i++) set += r[i] != 0;
+    int release = set < prev || !set; prev = set;
+    if (release) return;              /* fewer bytes set: a key let go; keep showing the press */
+    if (kind == 3) { kd_hex[n++] = 'm'; kd_hex[n++] = ' '; }
+    for (unsigned i = 0; i < len && n + 4 < sizeof kd_hex; i++) {
+        kd_hex[n++] = "0123456789abcdef"[r[i] >> 4]; kd_hex[n++] = "0123456789abcdef"[r[i] & 15]; kd_hex[n++] = ' ';
+    }
+    kd_hex[n] = 0; kd_name[0] = 0; kd_dirty = 1;
+}
+static void kd_cat(const char *t) { unsigned n = 0; while (kd_name[n]) n++; while (*t && n + 1 < sizeof kd_name) kd_name[n++] = *t++; kd_name[n] = 0; }
+static void kd_key(unsigned code) {   /* a key down: its name, with the modifiers held */
+    static const char *const fk[] = { "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10" };
+    kd_name[0] = 0;
+    if (ctrl_held && code != 29 && code != 97) kd_cat("Ctrl+");
+    if (gui_held && code != 125 && code != 126) kd_cat("Cmd+");
+    if (alt_held && code != 56 && code != 100) kd_cat("Alt+");
+    int ch = ask_char(code); char one[2] = { (char)ch, 0 };
+    kd_cat(code >= 59 && code <= 68 ? fk[code - 59] : code == 87 ? "F11" : code == 88 ? "F12" : code == 57 ? "Space" :
+           code == 28 || code == 96 ? "Enter" : code == 1 ? "Esc" : code == 15 ? "Tab" : code == 14 ? "Backspace" :
+           code == 29 || code == 97 ? "Ctrl" : code == 125 || code == 126 ? "Cmd" : code == 56 || code == 100 ? "Alt" :
+           code == 42 || code == 54 ? "Shift" : code == 103 ? "Up" : code == 108 ? "Down" : code == 105 ? "Left" :
+           code == 106 ? "Right" : ch > ' ' && ch < 127 ? one : "?");
+    if (kd_name[0] == '?') { kd_name[0] = 0; kd_cat("code "); char d[4] = { (char)('0' + code / 100 % 10), (char)('0' + code / 10 % 10), (char)('0' + code % 10), 0 }; kd_cat(d); }
+    kd_dirty = 1;
+}
+static void keydbg_tick(void) {   /* the poll loop: draw a new line, or take an old one down after 3 seconds */
+    if (!fb) return;
+    int x = sg(KD_X), w = sg(KD_W), h = sg(MENUBAR_H) - 1;
+    if (kd_shown && !kd_dirty && kd_ms() > kd_until) {
+        cur_hide();
+        for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)j * fb_pitch + (unsigned)(x + i)] = kd_under[j * w + i];
+        fb_flush(x, 0, w, h);
+        kd_shown = 0;
+    }
+    if (!kd_dirty) return;
+    kd_dirty = 0;
+    if (!kd_under) kd_under = kmalloc((unsigned)(w * h) * 4);
+    if (!kd_under) return;
+    cur_hide();
+    if (!kd_shown) for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) kd_under[j * w + i] = fb[(unsigned)j * fb_pitch + (unsigned)(x + i)];
+    fb_rect(x, 0, w, h, 0x00141311);
+    char line[96]; unsigned n = 0;
+    for (const char *t = "key "; *t; ) line[n++] = *t++;
+    for (const char *t = kd_hex; *t && n < 80; ) line[n++] = *t++;
+    for (const char *t = kd_name; *t && n < 95; ) line[n++] = *t++;
+    line[n] = 0;
+    int s = (int)window_scale();
+    gui_text(line, x / s + 6, (h / s - 13) / 2, 0x00faf8f4);
+    fb_flush(x, 0, w, h);
+    con_quiet = 1; uart_puts("keydbg: "); uart_puts(line); uart_putc('\n');
+    kd_shown = 1; kd_until = kd_ms() + 3000;
+}
+#endif
+#ifdef KEY_SELFTEST
+/* keydbg-kernel8.elf only (arm64-keydbg-check.py): made-up HID reports through xhci.c's parser, since QEMU's usb-kbd
+   never sends a report ID. Each step prints a marker, then the UART shows what the keys did. */
+void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p);
+static void key_selftest(void) {
+    static unsigned char last[8];
+    static const unsigned char id_ctrl_t[9] = { 2, 0x01, 0, 0x17 }, id_none[9] = { 2 }, id_esc[9] = { 2, 0, 0, 0x29 };   /* ID 2 reads as Shift if not skipped */
+    static const unsigned char ctrl_space[8] = { 0x01, 0, 0x2C }, none[8] = { 0 }, esc[8] = { 0, 0, 0x29 };
+    uart_puts("keytest: id9 ctrl+t\n"); hid_kbd(id_ctrl_t, 9, last); hid_kbd(id_none, 9, last);
+    uart_puts("keytest: id9 esc\n"); hid_kbd(id_esc, 9, last); hid_kbd(id_none, 9, last);
+    uart_puts("keytest: boot8 ctrl+space\n"); hid_kbd(ctrl_space, 8, last); hid_kbd(none, 8, last);
+    uart_puts("keytest: boot8 esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
+    uart_puts("keytest: done\n");
+}
+#else
+void key_raw(const unsigned char *r, unsigned len, unsigned kind) { (void)r; (void)len; (void)kind; }
+static void kd_key(unsigned code) { (void)code; }
+static void keydbg_tick(void) {}
+#endif
 
 unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
 static unsigned *mb_save; static int mb_h, mb_x0;
@@ -1447,6 +1540,9 @@ static void input_event(struct input_event e) {
         return;
     }
     if (e.type == 1 && (e.code == 29 || e.code == 97)) ctrl_held = e.value != 0;                          /* Ctrl, either side; the key still echoes below */
+    if (e.type == 1 && (e.code == 125 || e.code == 126)) gui_held = e.value != 0;   /* Cmd (left 0x08, right 0x80 in a boot report) */
+    if (e.type == 1 && (e.code == 56 || e.code == 100)) alt_held = e.value != 0;    /* Alt, Option on a Mac board */
+    if (e.type == 1 && e.value) kd_key(e.code);
     if (e.type == 1 && e.value && ui_key(e.code)) {                                                        /* Spotlight, the dock keys, F2 and Ctrl+T */
         con_quiet = 1;
         uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
@@ -1773,6 +1869,9 @@ void main(void) {
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+#ifdef KEY_SELFTEST
+    key_selftest();
+#endif
     if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
@@ -1782,15 +1881,15 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); ask_poll(); demo_tick(); menubar_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); ask_poll(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
             __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
-            usb_poll(); input_poll(); ask_poll();
+            usb_poll(); input_poll(); ask_poll(); keydbg_tick();
         }
 #endif
     }
-    if (inputs) for (;;) { __asm__ volatile ("wfi"); input_poll(); ask_poll(); }   /* asleep until a device interrupts */
+    if (inputs) for (;;) { __asm__ volatile ("wfi"); input_poll(); ask_poll(); keydbg_tick(); }   /* asleep until a device interrupts */
     for (;;) __asm__ volatile ("wfe");
 }

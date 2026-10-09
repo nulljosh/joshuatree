@@ -120,9 +120,10 @@ static unsigned long *dcbaa;
 /* ---- Devices. One slot per device. A device has up to MAX_FN HID functions (a composite keyboard can be a keyboard
    and a mouse and more); each has its own interrupt IN endpoint, ring and report buffer. ---- */
 #define MAX_DEV 16
-#define MAX_FN 3
+#define MAX_FN 4
 struct hidfn {
-    unsigned kind;                                 /* 1 boot keyboard, 2 boot mouse; 0 means not running */
+    unsigned kind;                                 /* 1 boot keyboard, 2 boot mouse, 3 a keyboard's other HID interface
+                                                      (media keys); 0 means not running */
     unsigned dci, mps, iface, reqlen;
     struct ring intr;
     unsigned char *buf, last[8];
@@ -269,21 +270,39 @@ static void echo_key(unsigned usage, int shift) {
 }
 static int has(const unsigned char *r, unsigned char k) { for (int i = 2; i < 8; i++) if (r[i] == k) return 1; return 0; }
 
+void key_raw(const unsigned char *r, unsigned len, unsigned kind);   /* main.c: the dev card's key debug line */
+/* One keyboard report into key events; p holds the last one (8 bytes). A boot report is 8 bytes: modifiers, reserved,
+   six keys down. A keyboard that ignored SET_PROTOCOL(boot) may put a report ID in front: 9 or more bytes, byte 0
+   nonzero. Skip it, or the ID is read as modifiers and the real modifier byte (Ctrl, Cmd) is lost. Exported so
+   main.c's KEY_SELFTEST build can feed it made-up reports. */
+void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p) {
+    if (len > 8 && r[0]) { r++; len--; }   /* ponytail: a 9+ byte report with no ID and modifiers held is misread; none seen yet */
+    if (len < 8 || r[2] == 1) return;      /* short, or "too many keys" (rollover error) */
+    for (int b = 0; b < 8; b++)
+        if ((r[0] ^ p[0]) & (1u << b)) kinput(1, mod_keys[b], (r[0] >> b) & 1);
+    for (int i = 2; i < 8; i++) if (p[i] && !has(r, p[i]) && p[i] < 128 && hid_keys[p[i]]) kinput(1, hid_keys[p[i]], 0);
+    for (int i = 2; i < 8; i++) if (r[i] && !has(p, r[i])) {
+        echo_key(r[i], (r[0] & 0x22) != 0);
+        if (r[i] < 128 && hid_keys[r[i]]) kinput(1, hid_keys[r[i]], 1);
+    }
+    kinput(0, 0, 0);
+    for (int i = 0; i < 8; i++) p[i] = r[i];
+}
+/* A keyboard's media interface (consumer page, usually [report ID, usage low, usage high]). A Mac-mode top row sends
+   F1 and F2 as brightness down and up, and some boards have a Spotlight (AC Search) key: those become F1, F2 and F1.
+   ponytail: three usages and the ID-prefixed layout only; the dev card's debug line shows anything else. */
+static void hid_media(const unsigned char *r, unsigned len) {
+    unsigned u = len >= 3 ? (unsigned)(r[1] | r[2] << 8) : len == 2 ? (unsigned)(r[0] | r[1] << 8) : 0;
+    unsigned code = u == 0x70 || u == 0x221 ? 59 : u == 0x6F ? 60 : 0;
+    if (code) { kinput(1, code, 1); kinput(1, code, 0); kinput(0, 0, 0); }
+}
 static void hid_report(struct hidfn *f, unsigned len) {
     dma_sync(f->buf, 64);
     unsigned char *r = f->buf, *p = f->last;
-    if (f->kind == 1) {   /* boot keyboard: modifiers, reserved, six keys down */
-        if (len < 8 || r[2] == 1) return;             /* short, or "too many keys" (rollover error) */
-        for (int b = 0; b < 8; b++)
-            if ((r[0] ^ p[0]) & (1u << b)) kinput(1, mod_keys[b], (r[0] >> b) & 1);
-        for (int i = 2; i < 8; i++) if (p[i] && !has(r, p[i]) && p[i] < 128 && hid_keys[p[i]]) kinput(1, hid_keys[p[i]], 0);
-        for (int i = 2; i < 8; i++) if (r[i] && !has(p, r[i])) {
-            echo_key(r[i], (r[0] & 0x22) != 0);
-            if (r[i] < 128 && hid_keys[r[i]]) kinput(1, hid_keys[r[i]], 1);
-        }
-        kinput(0, 0, 0);
-        for (int i = 0; i < 8; i++) p[i] = r[i];
-    } else {              /* boot mouse: buttons, dx, dy (signed) */
+    if (f->kind != 2) key_raw(r, len, f->kind);
+    if (f->kind == 1) hid_kbd(r, len, p);
+    else if (f->kind == 3) hid_media(r, len);
+    else {                /* boot mouse: buttons, dx, dy (signed) */
         if (len < 3) return;
         for (int b = 0; b < 3; b++)
             if ((r[0] ^ p[0]) & (1u << b)) kinput(1, 272 + b, (r[0] >> b) & 1);   /* BTN_LEFT, BTN_RIGHT, BTN_MIDDLE */
@@ -311,7 +330,7 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
 static void remove_dev(struct usbdev *d) {
     for (unsigned i = 0; i < MAX_DEV; i++)
         if (devs[i].used && &devs[i] != d && devs[i].phub == d->slot) remove_dev(&devs[i]);
-    for (unsigned j = 0; j < d->nfn; j++) if (d->fn[j].kind) { if (d->fn[j].kind == 1) nkbd--; else nmouse--; d->fn[j].kind = 0; }
+    for (unsigned j = 0; j < d->nfn; j++) if (d->fn[j].kind) { if (d->fn[j].kind == 1) nkbd--; else if (d->fn[j].kind == 2) nmouse--; d->fn[j].kind = 0; }
     command(0, 0, (TRB_DISABLE_SLOT << 10) | d->slot << 24);
     dcbaa[d->slot] = 0; dma_sync(&dcbaa[d->slot], 8);
     d->used = 0;
@@ -445,13 +464,14 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
     /* Walk the configuration: every HID boot interface (subclass 1, protocol 1 keyboard or 2 mouse) of the first
        alternate setting, on any interface number, with its interrupt IN endpoint. Other HID interfaces are only reported. */
     struct { unsigned kind, iface, addr, mps, interval; } cand[MAX_FN];
-    unsigned nc = 0, want = 0, c_if = 0, c_proto = 0;
+    unsigned nc = 0, want = 0, c_if = 0, c_proto = 0, has_kbd = 0, has_other = 0;
     for (unsigned i = 0; i + 2 <= total && b[i] >= 2 && i + b[i] <= total; i += b[i]) {
         if (b[i + 1] == 4 && b[i] >= 9) {   /* interface: number, alternate, class, subclass, protocol at 2, 3, 5, 6, 7 */
             c_if = b[i + 2]; c_proto = b[i + 7]; want = 0;
             if (b[i + 5] == 9) is_hub = 1;
             if (b[i + 3] == 0 && b[i + 5] == 3) {
-                if (b[i + 6] == 1 && (b[i + 7] == 1 || b[i + 7] == 2)) want = 1;
+                if (b[i + 6] == 1 && (b[i + 7] == 1 || b[i + 7] == 2)) { want = 1; if (b[i + 7] == 1) has_kbd = 1; }
+                else if (has_kbd && !has_other) { want = 1; c_proto = 3; has_other = 1; }   /* a Mac-style top row: media keys */
                 else { kputs("usb hid if "); kdec(c_if); kputs(" sub "); kdec(b[i + 6]); kputs(" proto "); kdec(b[i + 7]); kputs("\n"); }
             }
         } else if (b[i + 1] == 5 && want && b[i] >= 7 && (b[i + 2] & 0x80) && (b[i + 3] & 3) == 3 && nc < MAX_FN) {   /* interrupt IN endpoint */
@@ -500,11 +520,13 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
     d->nfn = nc;
     for (unsigned k = 0; k < nc; k++) {
         struct hidfn *f = &d->fn[k];
-        control(d, 0x21, 0x0B, 0, f->iface, 0, 0);          /* SET_PROTOCOL(boot) */
+        if (cand[k].kind != 3 && !control(d, 0x21, 0x0B, 0, f->iface, 0, 0)) {   /* SET_PROTOCOL(boot) */
+            kputs("usb set protocol refused if "); kdec(f->iface); kputs("\n");   /* reports may then carry a report ID */
+        }
         control(d, 0x21, 0x0A, 0, f->iface, 0, 0);          /* SET_IDLE(0): report only on change; a stall here is fine */
         f->kind = cand[k].kind;
-        if (f->kind == 1) nkbd++; else nmouse++;
-        kputs(f->kind == 1 ? "usb kbd" : "usb mouse"); kputs(" addr "); kdec(d->slot);
+        if (f->kind == 1) nkbd++; else if (f->kind == 2) nmouse++;
+        kputs(f->kind == 1 ? "usb kbd" : f->kind == 2 ? "usb mouse" : "usb media"); kputs(" addr "); kdec(d->slot);
         kputs(" port "); print_where(d); kputs(" "); kputs(speed_name(speed)); kputs(" "); kx(vid); kputs(":"); kx(pid);
         kputs(" if "); kdec(f->iface); kputs(" ep "); kx(cand[k].addr); kputs("\n");
         queue_intr(d, f);
