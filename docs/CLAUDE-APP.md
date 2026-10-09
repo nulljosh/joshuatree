@@ -64,7 +64,7 @@ What it does not protect against:
 This is phase 1. Claude Code runs on the host, through the relay. Joshua Tree is the front end. That is all.
 
 - **No tools on Joshua Tree itself.** Claude cannot read or change Joshua Tree's own files. That is phase 2. It needs real TLS on the OS, or a trusted relay protocol where the relay calls back into the machine, with the same care as this one.
-- **Not on the Raspberry Pi yet.** It works in QEMU and on any i386 machine with a supported network card. The ARM64 build has no apps yet, but its Console can ask the same relay (below). On a real Pi that waits on Wi-Fi.
+- **Not on the Raspberry Pi yet.** It works in QEMU and on any i386 machine with a supported network card. The ARM64 build has no apps yet, but its Terminal can ask the same relay (below). On a real Pi that waits on Wi-Fi.
 - **Not in the browser demo.** The demo on the landing page cannot reach a relay on your network. The app says so in one red line, at once, and never waits.
 - **One answer at a time, no streaming.** The answer arrives whole. While it waits, Weather and Stocks refreshes wait too. The desktop keeps running.
 - **Up to 8 KB of answer.** Longer answers are cut. Curly quotes and dashes become plain ASCII, because the OS fonts are ASCII.
@@ -72,10 +72,10 @@ This is phase 1. Claude Code runs on the host, through the relay. Joshua Tree is
 
 ## On ARM64: Claude in the Console
 
-The ARM build has no apps yet, so it asks from the Console instead. Type at the `ask>` row and press Enter; the answer prints in the Console. It talks to the same relay with the same token, read at build time from the same token file (or the file named by `CLAUDE_RELAY_TOKEN_FILE`), with the host and port from `CLAUDE_RELAY_HOST` and `CLAUDE_RELAY_PORT`. The token is compiled into the image and kept out of git, so treat a built Pi image like the token itself. It works on QEMU's virt machine today. A real Pi says `claude: no network` until Wi-Fi joins. Details: the Claude section of [ARM64.md](ARM64.md).
+The ARM build has no apps yet, so it asks from its Terminal window instead (the dock tile or F1, see [TERMINAL.md](TERMINAL.md)). Type at the prompt on the bottom row (`Claude Haiku 5.5 $ `, which then names the model that last answered) and press Enter; the answer prints in the Terminal. It talks to the same relay with the same token, read at build time from the same token file (or the file named by `CLAUDE_RELAY_TOKEN_FILE`), with the host and port from `CLAUDE_RELAY_HOST` and `CLAUDE_RELAY_PORT`. The token is compiled into the image and kept out of git, so treat a built Pi image like the token itself. It works on QEMU's virt machine today. A real Pi says `claude: no network` until Wi-Fi joins. Details: the Claude section of [ARM64.md](ARM64.md).
 
 ## Checks
 
-- `tools/checks/claude-relay-check.py` runs the relay against a stub `claude`: token refused and accepted, session resume, the exact read-only command line, the prompt on stdin, the timeout kill, the size cap, one at a time, and clean logs. It also runs a copy with the token check removed and proves a tokenless request then gets through.
-- `tools/checks/arm64-claude-console-check.py` boots the ARM build with the real relay and the stub: a question typed at the Console's `ask>` row gets the answer printed in 53-column lines, a follow-up resumes the session, and a wrong token, no network and no token each print their own line.
+- `tools/checks/claude-relay-check.py` runs the relay against a stub `claude`: token refused and accepted, session resume, the exact read-only command line, the prompt on stdin, the timeout kill, the size cap, one at a time, and clean logs, and the second reply line, `M <model>`, that the Pi's prompt shows. It also runs a copy with the token check removed and proves a tokenless request then gets through.
+- `tools/checks/arm64-claude-console-check.py` boots the ARM build with the real relay and the stub: a question typed at the Terminal's prompt gets the answer printed in 53-column lines, a follow-up resumes the session and is echoed after `Claude Sonnet 5.5 $ `, the model the relay said answered, and a wrong token, no network and no token each print their own line.
 - `tools/checks/ring3claude-check.py` boots QEMU with the real relay and the stub: the answer is drawn, the session resumes, a wrong token, a stopped relay and no relay at all each show the red line.

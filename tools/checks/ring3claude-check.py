@@ -132,6 +132,7 @@ def source_checks():
     check("bearer disarmed after every POST", sc.count("http_post_set_bearer(0)") >= 2)
     check("no ring-3 header or app holds the token", "claude_token" not in jts and "claude_token" not in app and "Bearer" not in app)
     check("the app posts with JT_POST_CLAUDE", "JT_POST_CLAUDE" in app and '"/api/claude"' in app)
+    check("the app skips the relay's M <model> line (it is for the Pi's prompt)", "body[0] == 'M' && body[1] == ' '" in app)
 
 
 def main():

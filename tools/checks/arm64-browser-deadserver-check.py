@@ -3,7 +3,7 @@
 "browser: fetching" for a long time: every stage waited its own 20 s and the DNS query went to SLIRP's 10.0.2.3, which
 is nobody on a real LAN. Now each stage has a short budget and prints a line when it passes.
 
-One QEMU boot, three fetches typed at the ask> row, timed from "browser: fetching" on the UART:
+One QEMU boot, three fetches typed at the Console's prompt row, timed from "browser: fetching" on the UART:
   1. https://10.0.2.2:SILENT/   a host socket that accepts and never answers: "dns ok", "tcp ok", then
                                 "browser: tls timeout" within 12 s.
   2. http://10.0.2.2:SILENT/    the same over plain http: "browser: reply timeout" within 12 s.
@@ -12,7 +12,7 @@ Then `open 9` still answers "browser: no such link", so the prompt is alive afte
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-browser-deadserver-check.py   (from the repo root)
 """
-import json, os, shutil, socket, subprocess, sys, tempfile, threading, time
+import json, os, re, shutil, socket, subprocess, sys, tempfile, threading, time
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 arch = os.path.join(root, "arch/arm64")
@@ -44,6 +44,8 @@ class Boot:
         time.sleep(0.5)
         self.s = socket.socket(socket.AF_UNIX); self.s.settimeout(20); self.s.connect(sock); self.f = self.s.makefile("rw")
         self.f.readline(); self.cmd("qmp_capabilities")
+        self.cmd("send-key", keys=[{"type": "qcode", "data": "f1"}])   # typing lives in the Terminal (docs/TERMINAL.md)
+        if not self.wait_for("terminal open", 10): raise SystemExit("FAIL: F1 did not open the Terminal: %r" % self.uart()[-300:])
     def uart(self): return open(self.log, errors="replace").read() if os.path.exists(self.log) else ""
     def wait_for(self, text, secs, count=1):
         end = time.time() + secs
@@ -68,13 +70,14 @@ def check(name, ok, detail=""):
     print(("  ok: " if ok else "  FAIL: ") + name + ("" if ok else "  " + repr(detail)[:600]))
     if not ok: fails.append(name)
 
+PROMPT_RE = re.compile(r"Claude(?: Haiku 5\.5)? \$ ")   # ask.c's prompt: the default model, or Claude alone in a build with no relay token
 def fetch(b, n, url, want, lines):
     """Types `browse url`, waits for the n-th fetch to end in `want`, times it, and checks the progress lines before it."""
     b.type("browse " + url)
     b.wait_for("browser: fetching", 10, count=n); t0 = time.time()
     done = b.wait_for(want, LIMIT + 20)
     took = time.time() - t0
-    out = b.uart().split("browser: fetching\n")[n].split("ask> ")[0] if done else b.uart()[-500:]
+    out = PROMPT_RE.split(b.uart().split("browser: fetching\n")[n])[0] if done else b.uart()[-500:]
     check("%s ends in %r" % (url.split("//")[1], want), done, out)
     check("  within %.0f s (took %.1f s)" % (LIMIT, took), done and took <= LIMIT, took)
     for l in lines: check("  printed %r first" % l, done and l in out, out)

@@ -12,7 +12,7 @@ Nine steps. Each one says what exists and what is missing.
 
 ### 1. The Pi takes the prompt
 
-- Exists: the `ask>` row in the ARM Console (`arch/arm64/ask.c`). A USB keyboard works on the real Pi. Wi-Fi joins and holds, DHCP leases an address, the clock is set from the network. The Pi sends its live status (IP, clock, Wi-Fi) with each question.
+- Exists: the Claude prompt row in the ARM Console (`arch/arm64/ask.c`). A USB keyboard works on the real Pi. Wi-Fi joins and holds, DHCP leases an address, the clock is set from the network. The Pi sends its live status (IP, clock, Wi-Fi) with each question.
 - Missing: voice (no USB audio driver yet). No mouse on the real board (works in QEMU only). The Console is still the only way in; there is no separate Claude app on ARM.
 
 ### 2. The relay

@@ -16,7 +16,7 @@ The glyph is bold and sits in the middle. It keeps out of the top `GLYPH_TOP_MAR
 
 There is one light, from the top. A dock tile gets darker from top to bottom by `DEPTH_MIN = 6` to `DEPTH_MAX = 45` luminance steps, never a dark rim (`EDGE_MAX = 6`), and a white lip along the top edge, stroked `HL_WIDTH = 5.0` units wide, `HL_ALPHA = 0.5` strong, fading out over `HL_FADE = 22` units. Gradients exist only to carry that light, so they never change hue: none runs more than `GRADIENT_HUE_MAX = 15` degrees of hue from end to end.
 
-No text, letters or wordmarks, so `ICON_TEXT_ELEMENTS = 0`. The one exception is the Calendar tile: its art is a blank tile and the kernel writes today's month and day on it, because a calendar showing a fixed date would lie. No emblem and no speech bubble drawn around a picture. No purple or teal in any icon's colours, so `ICON_PURPLE_TEAL = 0`.
+No text, letters or wordmarks, so `ICON_TEXT_ELEMENTS = 0`. That includes Calendar: its tile is a page with a terracotta binding bar and a grid of day squares, with no date, because the Pi has no clock and a blank page with a dash read as half drawn. No emblem and no speech bubble drawn around a picture. No purple or teal in any icon's colours, so `ICON_PURPLE_TEAL = 0`.
 
 The house accent is terracotta, `ACCENT = #b5502c`, the landing page's accent and the colour of the Music, Movies and Hamurapi tiles. The one deliberate exception is Tonchi, which keeps its own sky blue, `LEXLY_BLUE = #2E86DE`, because that is the colour of its store icon.
 

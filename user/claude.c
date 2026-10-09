@@ -280,6 +280,10 @@ static void send(void) {
             if (k == 1 && ar->sid[0] == '-') ar->sid[0] = 0;
             body = ar->resp + (i < r ? i + 1 : i);
         }
+        if (body[0] == 'M' && body[1] == ' ') {                      /* "M Claude Haiku 5.5\n": the Pi's prompt uses it, the app does not */
+            while (*body && *body != '\n') body++;
+            if (*body) body++;
+        }
         log_add('C', body, slen(body));
         status = 0; status_rgb = MUTED;
         serial_n("claude: reply ", r);
