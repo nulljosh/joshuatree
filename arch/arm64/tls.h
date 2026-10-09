@@ -4,6 +4,9 @@
 #define TLS_ERR_DNS     -1   /* the name did not resolve */
 #define TLS_ERR_CONNECT -2   /* no TCP connection */
 #define TLS_ERR_TIMEOUT -3   /* connected, nothing came back in time */
+int tls_connect(unsigned ip, unsigned short port, const char *host);   /* the three steps of https_fetch, for a caller that reports progress */
+int tls_handshake(void);
+int tls_exchange(const void *request, unsigned request_len, char *out, unsigned max);
 int https_fetch(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max);
 int https_get(const char *host, unsigned short port, const char *path, char *body, unsigned max);
 int https_last_status(void);
