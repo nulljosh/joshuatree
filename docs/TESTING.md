@@ -142,7 +142,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Dock icon halo (clean clip to the tray, no glyph bleed) | `tools/checks/iconhalo-check.py` | retry |
 | Dock icon lighting (one soft top light, top highlight, no dark outline) | `tools/checks/iconlight-check.py` | retry |
 | Every authored icon shares one tile silhouette, AA edges, glyph margin | `tools/checks/iconinset-check.py` | once |
-| Calendar dock tile shows today's date, not fixed art | `tools/checks/calicon-check.py` | retry |
+| Calendar dock tile is a page-and-grid picture, no date or dash, same on every date | `tools/checks/calicon-check.py` | retry |
 | Clock icon is a live analog face: hands follow the RTC and redraw on the minute | `tools/checks/clockicon-check.py` | retry |
 | Shadow under the dock darkens the photo, no flat bands | `tools/checks/dockband-check.py` | retry |
 | Titlebar traffic-light AA (real coverage blend, not binary) | `tools/checks/titlebar-aa-check.py` | retry |
