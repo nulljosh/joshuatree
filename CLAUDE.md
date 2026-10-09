@@ -40,7 +40,7 @@ Keep the Satellite wallpaper in colour. Landing page: off-white `#faf8f4`, near-
 `arch/arm64/` is a separate build (plan in `docs/ARM64.md`). `make -C arch/arm64 run` boots it in QEMU; `tools/checks/arm64-m0-check.py` proves it. The i386 Makefile is untouched.
 
 - Flash with `tools/flash-pi.sh`. Only that dev card carries the Wi-Fi key and relay token. Keys live in `~/.config/joshuatree/` and `~/.claude-relay-token`; never print or commit one.
-- The relay (`tools/claude-relay/relay.py`) answers the Pi's `ask>` prompt through the Messages API.
+- The relay (`tools/claude-relay/relay.py`) answers the Pi's prompt (`Claude Haiku 5.5 $ `, named for the model that last answered) through the Messages API.
 - Samantha acts on the Pi with `[[note TEXT]]` or `[[led blink]]` lines, run by `arch/arm64/ask.c`. A new action goes in the relay, in `ask.c` and in `tools/checks/pi-actions-check.py`.
 - The green light is GPIO 42, never driven at boot. Never wait on `ticks` in `arch/arm64/main.c`: it stops counting and hangs the boot loop.
 - The SD card drops off the Mac for a second or two. Flash with a loop that waits for it, mounts and writes in one step.

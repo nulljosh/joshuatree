@@ -1,4 +1,4 @@
-/* A text browser in the Console. `browse URL` at the ask> row fetches the page (https through tls.c, http through the
+/* A text browser in the Console. `browse URL` at the prompt row fetches the page (https through tls.c, http through the
    shared stack), follows up to 3 redirects, turns the HTML into readable text and prints it into the Console, which
    already scrolls (Page Up, Page Down, Home, End). Each link gets a number after its text, `[3]`; `open 3` fetches it.
    Every line fits the 53-column rule through ask.c's say_wrapped. Everything is static: one page at a time. */
@@ -214,7 +214,7 @@ static void show(const char *url) {
     heap_release(mark);
 }
 
-/* The ask> line, before it goes to Claude. 1 when it was a browser command. */
+/* The prompt line, before it goes to Claude. 1 when it was a browser command. */
 int browse_command(const char *q, unsigned n) {
     if (n > 7 && starts(q, "browse ")) {
         unsigned s = 7; while (s < n && q[s] == ' ') s++;

@@ -1,4 +1,4 @@
-/* Claude in the Console. The bottom row of the Console window is a one-line editor, `ask> `: typed keys land there,
+/* Claude in the Console. The bottom row of the Console window is a one-line editor behind a shell-style prompt naming the model, `Claude Haiku 5.5 $ `: typed keys land there,
    Backspace takes one back, Enter sends the line to the Claude relay on the Mac (tools/claude-relay/relay.py) as one
    HTTP POST through the shared IP stack, and the answer is printed into the Console, wrapped to 53 columns (the house
    rule, so a photo of the Pi screen and the UART log read the same). No app, no ring 3: the kernel asks.
@@ -34,6 +34,26 @@ static char line[ASK_MAX + 1], question[ASK_MAX + 1];
 static unsigned len, qlen;
 static int shift, pending, active;
 static char session[37];     /* the relay's session uuid, "" before the first answer */
+
+/* The prompt names the model that last answered: "Claude Sonnet 5.5 $ ". Before any answer, and whenever the relay
+   cannot be reached, it names the relay's default model (--api-model, Haiku); a build with no relay token says "Claude".
+   tools/checks/relay-api-check.py keeps ASK_DEFAULT_MODEL in step with relay.py's default. */
+#define ASK_DEFAULT_MODEL "Claude Haiku 5.5"
+#define MODEL_MAX 32
+static char prompt[MODEL_MAX + 4];
+static void set_model(const char *m, unsigned n) {   /* n bytes of m, or the default when m is 0 */
+    if (!m) { m = CLAUDE_TOKEN_LEN ? ASK_DEFAULT_MODEL : "Claude"; for (n = 0; m[n]; n++) {} }
+    unsigned k = 0;
+    for (; k < n && k < MODEL_MAX; k++) prompt[k] = m[k];
+    prompt[k++] = ' '; prompt[k++] = '$'; prompt[k++] = ' '; prompt[k] = 0;
+}
+const char *ask_prompt(void) { if (!prompt[0]) set_model(0, 0); return prompt; }   /* main.c draws it on the bottom row */
+/* The relay's "M <name>" line is network data: only a name that starts "Claude", short, printable ASCII, is used. */
+static void take_model(const char *s, unsigned n) {
+    if (n < 6 || n > MODEL_MAX || !(s[0] == 'C' && s[1] == 'l' && s[2] == 'a' && s[3] == 'u' && s[4] == 'd' && s[5] == 'e')) return;
+    for (unsigned i = 0; i < n; i++) if (s[i] < 32 || s[i] > 126) return;
+    set_model(s, n);
+}
 
 /* Linux key codes 0..57 to characters, plain and with Shift. 0 is a key the editor does not type. */
 static const char plain[58] = {
@@ -157,7 +177,7 @@ static unsigned put_dec(char *o, unsigned long v) {   /* decimal digits of v at 
     while (n) o[k++] = t[--n];
     return k;
 }
-/* The local model (llm.c): `llm PROMPT` at the ask> row, and Samantha's answer when the relay cannot be reached. */
+/* The local model (llm.c): `llm PROMPT` at the prompt row, and Samantha's answer when the relay cannot be reached. */
 int llm_generate(const char *prompt, unsigned n, char *out, unsigned cap, unsigned *npos, unsigned *tps10);
 static void local(const char *q, unsigned n) {
     static char out[2048];
@@ -176,7 +196,7 @@ static void fallback(const char *q, unsigned n) { if (llm_present()) local(q, n)
 
 static void ask(const char *q, unsigned n) {
     static char body[2 * ASK_MAX + 192], reply[REPLY_MAX + 1];
-    say_wrapped("ask> ", q, n);
+    say_wrapped(ask_prompt(), q, n);
     if (browse_command(q, n)) return;          /* browser.c: `browse URL` and `open N` never go to Claude */
     if (n > 4 && q[0] == 'l' && q[1] == 'l' && q[2] == 'm' && q[3] == ' ') { local(q + 4, n - 4); return; }
     if (!CLAUDE_TOKEN_LEN) { kputs("claude: no token\n"); fallback(q, n); return; }
@@ -186,6 +206,7 @@ static void ask(const char *q, unsigned n) {
 #else
         kputs("claude: no network\n");
 #endif
+        set_model(0, 0);                       /* out of reach: the prompt goes back to the default model */
         fallback(q, n);                        /* the relay is out of reach: the local model answers */
         return;
     }
@@ -223,6 +244,7 @@ static void ask(const char *q, unsigned n) {
         int e = net_last_error();
         if (e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) kputs("claude: timeout\n");
         else { kputs("claude: error "); kputs(e == NET_ERR_NONE ? "busy" : net_error_name(e)); kputs("\n"); }
+        set_model(0, 0);
         fallback(q, n);                        /* the relay never answered: the local model does */
         return;
     }
@@ -233,10 +255,15 @@ static void ask(const char *q, unsigned n) {
         say_wrapped("", reply, (unsigned)got);
         return;
     }
-    unsigned start = 0;                        /* "S <session uuid>\n<answer>" */
+    unsigned start = 0;                        /* "S <session uuid>\nM <model>\n<answer>" */
     if (got >= 2 && reply[0] == 'S' && reply[1] == ' ') {
         unsigned e = 2; while (e < (unsigned)got && reply[e] != '\n') e++;
         if (is_session(reply + 2, e - 2)) { for (unsigned i = 0; i < 36; i++) session[i] = reply[2 + i]; session[36] = 0; }
+        start = e < (unsigned)got ? e + 1 : e;
+    }
+    if (start + 2 <= (unsigned)got && reply[start] == 'M' && reply[start + 1] == ' ') {
+        unsigned e = start + 2; while (e < (unsigned)got && reply[e] != '\n') e++;
+        take_model(reply + start + 2, e - start - 2);
         start = e < (unsigned)got ? e + 1 : e;
     }
     say_wrapped("", reply + start, take_actions(reply + start, (unsigned)got - start));

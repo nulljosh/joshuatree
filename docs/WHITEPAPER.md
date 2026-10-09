@@ -64,7 +64,7 @@ She talks to a Claude relay on the Mac (`tools/claude-relay/relay.py`,
 `docs/CLAUDE-APP.md`): the OS posts a question over plain HTTP, the relay
 answers from the Claude API, picking a cheap model for short questions and
 a stronger one for long or hard ones, with read-only tools over one shared
-folder of files on the Mac. On the Pi she answers at the Console's `ask>`
+folder of files on the Mac. On the Pi she answers at the Console's prompt
 row. Each question carries the Pi's live status (IP address, clock, Wi-Fi
 signal), and an answer can end with an action the Pi carries out: print a
 note, or blink the board's green light.
@@ -219,7 +219,7 @@ every program that runs is trusted the same.
   is saved to it. MBR and FAT32 writes are on the list.
 - **No apps on the Pi.** The ARM build runs one EL0 test program with a
   write and exit syscall. The twenty-six ring-3 apps have not been rebuilt
-  for ARM; Samantha on the Pi is the Console's `ask>` row.
+  for ARM; Samantha on the Pi is the Console's prompt row.
 - **No self-update.** A new build still means a card swap. The serial
   loader and the fallback kernel are not written.
 - **No admin tier.** No accounts, no sudo, no privilege boundary between

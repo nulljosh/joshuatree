@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The ARM64 text browser (arch/arm64/browser.c): `browse URL` typed at the Console's ask> row fetches a page over
+"""The ARM64 text browser (arch/arm64/browser.c): `browse URL` typed at the Console's prompt row fetches a page over
 HTTPS from a server on the host, follows a redirect, prints readable text with numbered links, and `open N` follows
 link N. All through QEMU's virtio keyboard (QMP send-key) and user network; the result is read off the UART log.
 
@@ -13,7 +13,7 @@ Nothing typed here ever reaches Claude: the build has no relay token and "claude
 Skips (exit 0) when clang's aarch64 target, ld.lld, openssl or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-browser-check.py   (from the repo root)
 """
-import http.server, json, os, shutil, socket, ssl, subprocess, sys, tempfile, threading, time
+import http.server, json, os, re, shutil, socket, ssl, subprocess, sys, tempfile, threading, time
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 arch = os.path.join(root, "arch/arm64")
@@ -81,8 +81,9 @@ fails = []
 def check(name, ok, detail=""):
     print(("  ok: " if ok else "  FAIL: ") + name + ("" if ok else "  " + repr(detail)[:600]))
     if not ok: fails.append(name)
+PROMPT_RE = re.compile(r"Claude(?: Haiku 5\.5)? \$ ")   # ask.c's prompt: the default model, or Claude alone in a build with no relay token
 def lines_after(out, n):   # the browser's output after the n-th "browser: fetching"
-    return [l for l in out.split("browser: fetching\n")[n].split("ask> ")[0].splitlines() if l and not l.startswith("key ")]
+    return [l for l in PROMPT_RE.split(out.split("browser: fetching\n")[n])[0].splitlines() if l and not l.startswith("key ")]
 
 b = None
 try:
