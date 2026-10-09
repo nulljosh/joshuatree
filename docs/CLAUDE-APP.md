@@ -4,7 +4,7 @@ Claude is an app in the Launchpad. You type a question, Claude Code answers in t
 
 ## How it works
 
-Joshua Tree has no TLS and no Node. Claude Code needs both. So Claude Code does not run on Joshua Tree. It runs on your Mac, and Joshua Tree talks to it.
+The i386 app has no native TLS or Node. Claude Code needs both. So Claude Code does not run on Joshua Tree. It runs on your Mac, and Joshua Tree talks to it.
 
 The piece in the middle is the relay, `tools/claude-relay/relay.py`. It is one Python file, standard library only. Joshua Tree sends it a plain HTTP POST. The relay runs `claude -p` (headless Claude Code, on your own logged-in plan) and sends the answer back as plain text.
 
@@ -55,7 +55,7 @@ What keeps that small:
 What it does not protect against:
 
 - **Your repo is readable.** Claude can read every file under the relay's `--cwd`. Keep secrets out of it, or point `--cwd` somewhere smaller.
-- **`--lan` is plain HTTP.** On a LAN the token crosses the wire unencrypted. Anyone who sees one request can replay it. Use `--lan` only on a network you trust.
+- **LAN requires TLS.** `--lan` is refused without `--tls-cert` and `--tls-key`. The Pi uses HTTPS with no HTTP fallback. See [encrypted Pi relay](RELAY-TLS.md) to update the relay and card together. Default loopback HTTP remains for i386 and QEMU. The i386 app cannot use a TLS LAN relay yet.
 - **The token sits in `SETTINGS.TXT`.** Like the Mail token, it is plain text on the Joshua Tree disk. See `docs/THREAT-MODEL.md`.
 - **`--tools` can widen it.** Passing write tools turns it into an agent that changes files. The relay warns you, loudly.
 
@@ -70,7 +70,9 @@ This is phase 1. Claude Code runs on the host, through the relay. Joshua Tree is
 - **Up to 8 KB of answer.** Longer answers are cut. Curly quotes and dashes become plain ASCII, because the OS fonts are ASCII.
 - **Sessions live in the relay.** Restart the relay and the next question starts a fresh conversation.
 
-## On ARM64: Claude in the Console
+## On ARM64: Claude in Terminal
+
+The Pi uses HTTPS for its relay requests. Certificate setup and the clock bootstrap limits are in [RELAY-TLS.md](RELAY-TLS.md). QEMU defaults to loopback HTTP; `CLAUDE_RELAY_TLS=1` exercises the HTTPS path.
 
 The ARM build has no apps yet, so it asks from its Terminal window instead (the dock tile or F1, see [TERMINAL.md](TERMINAL.md)). Type at the prompt on the bottom row (`Claude Haiku 5.5 $ `, which then names the model that last answered) and press Enter; the answer prints in the Terminal. It talks to the same relay with the same token, read at build time from the same token file (or the file named by `CLAUDE_RELAY_TOKEN_FILE`), with the host and port from `CLAUDE_RELAY_HOST` and `CLAUDE_RELAY_PORT`. The token is compiled into the image and kept out of git, so treat a built Pi image like the token itself. It works on QEMU's virt machine today. A real Pi says `claude: no network` until Wi-Fi joins. Details: the Claude section of [ARM64.md](ARM64.md).
 

@@ -16,9 +16,7 @@ void *kmalloc(unsigned int n);         /* main.c */
 unsigned long heap_mark(void);
 void heap_release(unsigned long m);
 
-#ifndef BUILD_UTC
-#define BUILD_UTC 1790000000UL   /* the Makefile passes the real build time; this is 2026-09 */
-#endif
+unsigned long net_clock_floor(void);  /* clock.c: the build time, never unauthenticated network time */
 #define TLS_READ_TICKS 800       /* 8 s for one piece of the reply to show up; the browser promises an answer in about 10 */
 
 static br_ssl_client_context sc;
@@ -26,13 +24,14 @@ static br_x509_minimal_context xc;
 static unsigned char iobuf[BR_SSL_BUFSIZE_BIDI];
 static br_sslio_context ioc;
 static int tls_err, last_status;
+static unsigned read_ticks = TLS_READ_TICKS;
 
 int tls_last_error(void) { return tls_err; }
 int https_last_status(void) { return last_status; }
 
 static int sock_read(void *ctx, unsigned char *buf, size_t len) {
     (void)ctx;
-    int r = tcp_read(buf, (unsigned)len, TLS_READ_TICKS);
+    int r = tcp_read(buf, (unsigned)len, read_ticks);
     return r > 0 ? r : -1;
 }
 static int sock_write(void *ctx, const unsigned char *buf, size_t len) {
@@ -40,7 +39,7 @@ static int sock_write(void *ctx, const unsigned char *buf, size_t len) {
     return tcp_write(buf, (unsigned)len) ? (int)len : -1;
 }
 
-/* ponytail: the DRBG is seeded from the generic timer, read between short, data-dependent spins. Weak against a
+/* shortcut: the DRBG is seeded from the generic timer, read between short, data-dependent spins. Weak against a
    patient attacker on the same board; the Pi 4 has a hardware RNG at 0xFE104000 to use when this matters. */
 static void entropy(unsigned char *out, unsigned n) {
     unsigned long c, mix = 0x9E3779B97F4A7C15UL;
@@ -69,7 +68,8 @@ static void setup(const char *host) {
     br_ssl_client_zero(&sc);
     br_ssl_engine_set_versions(&sc.eng, BR_TLS12, BR_TLS12);
     br_x509_minimal_init(&xc, &br_sha256_vtable, TAS, TAS_NUM);
-    unsigned long now = net_clock_utc(); if (!now) now = BUILD_UTC;   /* no battery clock: the network's time, else the build's */
+    unsigned long now = net_clock_utc(), floor = net_clock_floor();
+    if (now < floor) now = floor;
     br_x509_minimal_set_time(&xc, (uint32_t)(now / 86400 + 719528), (uint32_t)(now % 86400));
     br_ssl_engine_set_suites(&sc.eng, suites, sizeof suites / sizeof suites[0]);
     br_ssl_client_set_rsapub(&sc, br_rsa_i31_public);
@@ -110,7 +110,7 @@ static int failed(void) {   /* -1, with the engine's error or the network's in t
     return -1;
 }
 int tls_connect(unsigned ip, unsigned short port, const char *host) {
-    tls_err = 0;
+    tls_err = 0; read_ticks = TLS_READ_TICKS;
     if (!tcp_open(ip, port)) { tls_err = TLS_ERR_CONNECT; return -1; }
     setup(host);
     return 0;
@@ -133,12 +133,18 @@ int tls_exchange(const void *request, unsigned request_len, char *out, unsigned 
     return total;
 }
 /* The three steps in one, after a DNS lookup of host (TLS_ERR_DNS when that fails). */
-int https_fetch(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max) {
+int https_fetch_timeout(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max, unsigned reply_ticks) {
     unsigned ip;
     tls_err = 0;
     if (!http_resolve_host(host, &ip)) { tls_err = TLS_ERR_DNS; return -1; }
     if (tls_connect(ip, port, host) < 0 || tls_handshake() < 0) return -1;
-    return tls_exchange(request, request_len, out, max);
+    read_ticks = reply_ticks ? reply_ticks : TLS_READ_TICKS;
+    int got = tls_exchange(request, request_len, out, max);
+    read_ticks = TLS_READ_TICKS;
+    return got;
+}
+int https_fetch(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max) {
+    return https_fetch_timeout(host, port, request, request_len, out, max, TLS_READ_TICKS);
 }
 
 /* The body of GET https://host/path, like drivers/http.c's http_get. Returns its length, -1 on any failure. */

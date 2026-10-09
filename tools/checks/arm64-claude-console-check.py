@@ -30,9 +30,11 @@ Boot 3, built with no token file: the prompt is "Claude $ " (no relay, so no kno
 Discriminating: point ask.c at another path ("/api/claudx") and step 2 fails with "claude: error -404": the stub is
 never asked, no answer on the UART and no ##### line on the screen.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
+Pass --tls to run the same end-to-end token/session/answer checks over HTTPS with a throwaway certificate.
 Usage: tools/checks/arm64-claude-console-check.py   (from the repo root)
 """
-import json, os, re, shutil, socket, subprocess, sys, tempfile, time
+import json, os, re, shutil, socket, subprocess, sys, tempfile, threading, time
+TLS = "--tls" in sys.argv
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from freeport import free_port
@@ -74,6 +76,13 @@ with open(token_file, "w") as f: f.write(TOKEN + "\n")
 os.chmod(token_file, 0o600)
 stub_log = tmp + "/stub.log"
 port = free_port()
+cert, key = tmp + "/cert.pem", tmp + "/key.pem"
+if TLS:
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
+                    "-subj", "/CN=10.0.2.2", "-addext", "subjectAltName=DNS:10.0.2.2",
+                    "-keyout", key, "-out", cert], check=True, capture_output=True)
+    subprocess.run(["make", "-C", arch, "clean"], check=True, capture_output=True)
+
 base_env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE_RELAY")}
 
 def stub_calls():
@@ -82,8 +91,8 @@ def stub_calls():
 
 def build(with_token):
     env = dict(base_env, CLAUDE_RELAY_HOST="10.0.2.2", CLAUDE_RELAY_PORT=str(port),
-               CLAUDE_RELAY_TOKEN_FILE=token_file if with_token else tmp + "/no-such-token")
-    r = subprocess.run(["make", "-C", arch], env=env, capture_output=True, text=True, timeout=300)
+               CLAUDE_RELAY_TOKEN_FILE=token_file if with_token else tmp + "/no-such-token", CLAUDE_RELAY_TLS="1" if TLS else "0")
+    r = subprocess.run(["make", "-C", arch, "TLS_TA=" + (cert if TLS else "")], env=env, capture_output=True, text=True, timeout=300)
     if r.returncode: print("FAIL: arch/arm64 does not build:\n" + r.stdout[-2000:] + r.stderr[-2000:]); sys.exit(1)
     return r.stdout + r.stderr
 
@@ -95,7 +104,7 @@ def start_relay(token):
                CLAUDE_RELAY_TOKEN=token)
     err = open(tmp + "/relay-%d.log" % time.time_ns(), "w+")
     relay = subprocess.Popen([sys.executable, relay_py, "--port", str(port), "--cwd", tmp, "--timeout", "20",
-                              "--model", "claude-sonnet-5-5"],
+                              "--model", "claude-sonnet-5-5", *(["--tls-cert", cert, "--tls-key", key] if TLS else [])],
                              env=env, stdout=subprocess.DEVNULL, stderr=err)
     for _ in range(100):
         time.sleep(0.05)
@@ -249,6 +258,32 @@ try:
         check("every line after the first question fits 53 columns", not long_lines, repr(long_lines))
     finally:
         b.close()
+
+    if TLS:
+        stop_relay()
+        capture = socket.socket(); capture.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        capture.bind(("127.0.0.1", port)); capture.listen(); capture.settimeout(0.2)
+        wire, done = [], threading.Event()
+        def sniff():
+            while not done.is_set():
+                try: conn, _ = capture.accept()
+                except socket.timeout: continue
+                except OSError: break
+                with conn:
+                    conn.settimeout(2)
+                    try: wire.append(conn.recv(8192))
+                    except OSError: pass
+        th = threading.Thread(target=sniff); th.start()
+        b = Boot("plaintext", True)
+        try:
+            b.terminal(); b.type("hi"); b.key("ret")
+            check("a plaintext relay fails closed", b.wait_for("TLS failed, no HTTP fallback", 25), b.uart()[-300:])
+            time.sleep(0.5)
+            sent = b"".join(wire)
+            check("the raw port sees TLS, never a bearer or HTTP POST", bool(sent) and sent[0] == 22
+                  and b"Bearer " not in sent and b"POST " not in sent and TOKEN.encode() not in sent)
+        finally:
+            b.close(); done.set(); capture.close(); th.join(3)
 
     n0 = len(stub_calls())
     b = Boot("nonet", False)

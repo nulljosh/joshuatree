@@ -1,7 +1,7 @@
 /* Claude in the Terminal. The bottom row of the Terminal window (its dock tile, or F1) is a one-line editor behind a prompt naming the model, `Claude Haiku 5.5 $ `:
    typed keys land there, Backspace takes one back, Enter runs the line. `browse`, `open N` and `llm` are commands;
-   anything else goes to the Claude relay on the Mac (tools/claude-relay/relay.py) as one HTTP POST through the shared
-   IP stack. Everything a command prints goes into the Terminal, above the prompt, wrapped to 53 columns (the house
+   anything else goes to the Claude relay on the Mac (tools/claude-relay/relay.py) as one POST through the shared
+   IP stack, HTTPS on the Pi and loopback HTTP by default in QEMU. Everything a command prints goes into the Terminal, above the prompt, wrapped to 53 columns (the house
    rule, so a photo of the Pi screen and the UART log read the same); the Console only keeps logs (docs/TERMINAL.md).
    No app, no ring 3: the kernel asks.
 
@@ -14,6 +14,7 @@
    runs them and sends what they printed back as the next turn, up to AGENT_STEPS times (docs/AGENT.md). */
 #include "../../drivers/net.h"
 #include "../../drivers/http.h"
+#include "tls.h"
 #include "claude_cfg.h"
 #ifdef CLAUDE_RELEASE        /* a Pi release image: no token, so the Console says `claude: no token` (the Makefile sets it) */
 #undef CLAUDE_TOKEN_LEN
@@ -29,6 +30,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *));
 int con_columns(void);
 void con_prompt(const char *s, unsigned n);
 void term_output(int on);   /* main.c: what a command prints goes to the Terminal */
+void *kmalloc(unsigned n);
 unsigned long heap_mark(void);
 unsigned long net_clock_utc(void);   /* ip.c: seconds since 1970, 0 until the network set it */
 int wifi_signal_level(void);         /* wifi.c: 1 to 3 */
@@ -302,6 +304,31 @@ static int slash(const char *q, unsigned n) {
     return 1;
 }
 
+#if defined(PI_BUILD) || CLAUDE_TLS
+/* The Pi never sends its bearer over HTTP. QEMU keeps the loopback-only path unless TLS is requested. */
+static int relay_post_tls(const char *body, unsigned len, const char *token, char *reply, int *status) {
+    static char req[2 * RESULT_MAX + 512 + sizeof(CLAUDE_HOST)];
+    char digits[10]; unsigned n = 0, dn = 0, v = len;
+    do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    const char *parts[] = {"POST /api/claude HTTP/1.0\r\nHost: ", CLAUDE_HOST, "\r\nAuthorization: Bearer ", token,
+                          "\r\nContent-Type: application/json\r\nContent-Length: "};
+    for (unsigned i = 0; i < 5; i++) for (const char *p = parts[i]; *p; p++) req[n++] = *p;
+    while (dn) req[n++] = digits[--dn];
+    for (const char *p = "\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
+    for (unsigned i = 0; i < len; i++) req[n++] = body[i];
+    char *raw = kmalloc(REPLY_MAX + 2048);
+    int got = raw ? https_fetch_timeout(CLAUDE_HOST, CLAUDE_PORT, req, n, raw, REPLY_MAX + 2048, ASK_TICKS) : -1;
+    for (unsigned i = 0; i < n; i++) ((volatile char *)req)[i] = 0;
+    *status = got > 0 ? http_status_of(raw, (unsigned)got) : 0;
+    if (got <= 0) return -1;
+    int start = http_body_start(raw, (unsigned)got);
+    if (start < 0 || (unsigned)(got - start) > REPLY_MAX) return -1;
+    got -= start;
+    for (int i = 0; i < got; i++) reply[i] = raw[start + i];
+    return got;
+}
+#endif
+
 /* One POST to the relay. Returns the answer's length with *ans pointing into reply, -1 when the relay never answered
    (the caller may fall back to the local model) and -2 for a refusal it already printed. */
 static int post(const char *q, unsigned n, char *reply, char **ans) {
@@ -326,16 +353,24 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
     for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
     token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
     unsigned long mark = heap_mark();          /* http.c borrows two buffers from the bump heap; give them back */
+    int status;
+#if defined(PI_BUILD) || CLAUDE_TLS
+    int got = relay_post_tls(body, b, token, reply, &status);
+#else
     http_post_set_bearer(token);
     int got = http_post_timeout(CLAUDE_HOST, "/api/claude", CLAUDE_PORT, body, b, reply, REPLY_MAX, ASK_TICKS);
     http_post_set_bearer(0);
+    status = http_last_status();
+#endif
     heap_release(mark);
     for (int i = 0; i < 64; i++) token[i] = 0;
-    int status = http_last_status();
     steps_total++;
     if (got < 0) {
         relay_state = 2; last_name[0] = 0;     /* out of reach: the prompt goes back to the default model */
         int e = net_last_error();
+#if defined(PI_BUILD) || CLAUDE_TLS
+        kputs("claude: TLS failed, no HTTP fallback\n");
+#endif
         if (e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) kputs("claude: timeout\n");
         else { kputs("claude: error "); kputs(e == NET_ERR_NONE ? "busy" : net_error_name(e)); kputs("\n"); }
         return -1;

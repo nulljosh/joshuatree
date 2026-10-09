@@ -273,6 +273,8 @@ retry|6|ARM64 FP state: q0-q31, FPCR and FPSR survive timer interrupts whose han
 retry|6|ARM64 out of memory: a full heap prints oom fb or oom text and the kernel carries on (no screen, or the VGA fallback font) on virt and the Pi 4B model (skips where the tools are missing)|python3 ./tools/checks/arm64-oom-check.py
 retry|6|ARM64 boot health: the Pi image boots on QEMU's raspi4b with no FAIL line beyond the listed expected ones, no oom, no crash, and the desktop up (skips where the tools are missing)|python3 ./tools/checks/arm64-boot-health-check.py
 once |1|Pi card flasher: kernel, firmware and tools/pi-config.txt land on a stand-in card, and what was there is kept as .bak (skips where the tools are missing)|bash ./tools/checks/flash-pi-check.sh
+once |6|ARM64 clock accepts bounded HTTPS dates only, never before the build or an accepted clock (host harness)|python3 ./tools/checks/arm64-clock-check.py
+retry|6|ARM64 Terminal asks the real relay over TLS, with session resume and wrong-token refusal|python3 ./tools/checks/arm64-claude-console-check.py --tls
 EOF
 }
 

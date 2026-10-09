@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """ARM64 HTTPS: the aarch64 kernel fetches a page over TLS 1.2 (arch/arm64/tls.c, BearSSL) from a server on the host.
 
-Makes a throwaway self-signed certificate for 10.0.2.2 (QEMU's user-mode address for the host), starts a Python HTTPS
-server on it, builds arch/arm64 with TLSPORT set to that port and TLS_TA pointing at the certificate, and boots on
+Makes a throwaway CA and signed certificate for 10.0.2.2 (QEMU's user-mode address for the host), starts a Python HTTPS
+server on it, builds arch/arm64 with TLSPORT set to that port and TLS_TA pointing at the CA, and boots on
 QEMU's user network. Checks:
   - the server saw the GET, so the handshake really finished (the server would refuse a bad one);
   - "tls 200 N bytes", N being the exact length of the body it sent;
+  - wrong-name, expired and not-yet-valid certificates are refused before HTTP data;
   - a second build WITHOUT the throwaway certificate in the trust anchors prints "tls FAIL 62" (BearSSL's
     "certificate not trusted") and the server never sees a request: the trust check is real, not decoration.
 Skips (exit 0) when clang's aarch64 target, ld.lld, openssl or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-tls-check.py   (from the repo root)
 """
-import http.server, os, shutil, ssl, subprocess, sys, tempfile, threading, time
+import datetime, http.server, os, shutil, ssl, subprocess, sys, tempfile, threading, time
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 arch = os.path.join(root, "arch/arm64")
@@ -30,9 +31,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
 tmp = tempfile.mkdtemp()
-cert, key = tmp + "/cert.pem", tmp + "/key.pem"
-subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2", "-subj", "/CN=10.0.2.2",
-                "-addext", "subjectAltName=DNS:10.0.2.2", "-keyout", key, "-out", cert], check=True, capture_output=True)
+ca, cakey = tmp + "/ca.pem", tmp + "/ca.key"
+cert, key, csr = tmp + "/cert.pem", tmp + "/key.pem", tmp + "/leaf.csr"
+def openssl(*args):
+    subprocess.run(["openssl", *args], check=True, capture_output=True)
+openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "4", "-subj", "/CN=JT test CA",
+        "-addext", "basicConstraints=critical,CA:TRUE", "-keyout", cakey, "-out", ca)
+openssl("req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=10.0.2.2", "-keyout", key, "-out", csr)
+open(tmp + "/index", "w").close(); open(tmp + "/serial", "w").write("01\n")
+now = datetime.datetime.now(datetime.timezone.utc)
+def leaf(host, before, after):
+    config = tmp + "/ca.cnf"
+    open(config, "w").write(f"""[ca]
+default_ca=issuer
+[issuer]
+database={tmp}/index
+serial={tmp}/serial
+new_certs_dir={tmp}
+certificate={ca}
+private_key={cakey}
+default_md=sha256
+policy=names
+unique_subject=no
+x509_extensions=leaf
+[names]
+commonName=supplied
+[leaf]
+basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=DNS:{host}
+""")
+    fmt = lambda days: (now + datetime.timedelta(days=days)).strftime("%Y%m%d%H%M%SZ")
+    openssl("ca", "-batch", "-notext", "-config", config, "-in", csr, "-out", cert,
+            "-startdate", fmt(before), "-enddate", fmt(after))
+leaf("10.0.2.2", -1, 2)
 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 ctx.load_cert_chain(cert, key)
 server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
@@ -64,7 +97,7 @@ def boot(name, secs):
     finally:
         q.kill(); q.wait()
 try:
-    build(cert)
+    build(ca)
     out = boot("trusted", 60)
     lines = [l for l in out.splitlines() if l.startswith("tls ") or l.startswith("net ")]
     want = "tls 200 %d bytes" % len(REPLY)
@@ -72,6 +105,15 @@ try:
     else: fails.append("the server never saw the request, it saw %r; lines %r" % (seen, lines))
     if want in out: print("  ok: " + want)
     else: fails.append("no %r, lines were %r" % (want, lines))
+    for name, host, before, after, error in (("hostname", "wrong.example", -1, 2, 56),
+                                            ("expired", "10.0.2.2", -3, -2, 54),
+                                            ("future", "10.0.2.2", 1, 2, 54)):
+        seen.clear(); leaf(host, before, after); ctx.load_cert_chain(cert, key)
+        out = boot(name, 60)
+        if "tls FAIL %d" % error in out and not seen:
+            print("  ok: %s certificate refused before HTTP data" % name)
+        else: fails.append("%s: expected error %d, got %r, server saw %r" % (name, error, out[-500:], seen))
+    leaf("10.0.2.2", -1, 2); ctx.load_cert_chain(cert, key)
     seen.clear()
     build("")
     out = boot("untrusted", 60)

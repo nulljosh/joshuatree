@@ -20,7 +20,7 @@ Code's real `--output-format json` shape: result, session_id, is_error). Proves:
 
 Usage: python3 tools/checks/claude-relay-check.py
 """
-import http.client, json, os, re, shutil, socket, subprocess, sys, tempfile, threading, time
+import http.client, json, os, re, shutil, socket, ssl, subprocess, sys, tempfile, threading, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RELAY = os.path.join(ROOT, "tools", "claude-relay", "relay.py")
@@ -199,6 +199,26 @@ try:
         r = subprocess.run([sys.executable, RELAY, "--port", "0"], env={**os.environ, "CLAUDE_RELAY_TOKEN": bad},
                            capture_output=True, text=True, timeout=10)
         check("refuses to start with token %r" % bad, r.returncode != 0 and "refusing" in r.stderr)
+
+    for extra in (("--lan",), ("--tls-cert", "missing.pem"), ("--tls-key", "missing.key")):
+        bad = subprocess.run([sys.executable, RELAY, *extra], capture_output=True, text=True, timeout=10)
+        check("refuses insecure LAN or incomplete TLS config %r" % (extra,), bad.returncode != 0 and ("requires" in bad.stderr or "together" in bad.stderr))
+    cert, key = os.path.join(tmp, "cert.pem"), os.path.join(tmp, "tls.key")
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
+                    "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1",
+                    "-keyout", key, "-out", cert], check=True, capture_output=True)
+    tp, _, tport, _ = start_relay(RELAY, tmp, extra_args=("--tls-cert", cert, "--tls-key", key)); procs.append(tp)
+    context = ssl.create_default_context(cafile=cert)
+    tc = http.client.HTTPSConnection("127.0.0.1", tport, context=context, timeout=10)
+    tc.request("POST", "/api/claude", json.dumps({"prompt": "tls question"}), headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"})
+    tr = tc.getresponse(); td = tr.read(); tc.close()
+    check("verified HTTPS relay answers authenticated prompt", tr.status == 200 and td.startswith(b"S "))
+    n0 = len(stub_calls(tmp))
+    try:
+        req(tport, {"prompt": "must not run"}, timeout=3)
+    except (OSError, http.client.HTTPException):
+        pass
+    check("TLS port refuses plain HTTP without starting Claude", len(stub_calls(tmp)) == n0)
 
     # model and effort (the Pi's /model and /effort): a whitelist, never a pass-through
     n0 = len(stub_calls(tmp))
