@@ -58,7 +58,7 @@ Then in Joshua Tree: Settings > Assistant > Claude relay = 10.0.2.2:8765, Claude
 Python standard library only. tools/checks/claude-relay-check.py proves the rules above
 against a stub `claude`.
 """
-import argparse, hmac, http.server, json, os, re, signal, subprocess, sys, threading, time, urllib.request, urllib.error, uuid
+import argparse, hmac, http.server, json, os, re, signal, stat, subprocess, sys, threading, time, urllib.request, urllib.error, uuid
 
 DEFAULT_PORT = 8765
 DEFAULT_TIMEOUT = 150          # seconds; the kernel waits up to 240 s (JT_HTTP_POST_TICKS_CLAUDE), so the relay's 504 lands first
@@ -160,16 +160,32 @@ TOOLS = [
 def run_tool(name, args):
     """Read-only, one folder, plain file names only: no paths, no dot files, no links, 20000 characters at most."""
     try:
-        files = sorted(f for f in os.listdir(FILES_DIR) if not f.startswith(".")
-                       and os.path.isfile(os.path.join(FILES_DIR, f)) and not os.path.islink(os.path.join(FILES_DIR, f)))
+        directory = os.open(FILES_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError:
         return "The shared folder does not exist."
-    if name == "list_files": return "\n".join(files) or "(empty)"
-    if name == "read_file":
-        n = args.get("name", "") if isinstance(args, dict) else ""
-        if n not in files: return "No such file. Use list_files first."
-        with open(os.path.join(FILES_DIR, n), errors="replace") as fh: return fh.read(20000)
-    return "Unknown tool."
+    try:
+        files = []
+        for f in os.listdir(directory):
+            try:
+                if not f.startswith(".") and stat.S_ISREG(os.stat(f, dir_fd=directory, follow_symlinks=False).st_mode):
+                    files.append(f)
+            except OSError:
+                continue   # a file removed while listing is no longer available
+        if name == "list_files": return "\n".join(sorted(files)) or "(empty)"
+        if name == "read_file":
+            n = args.get("name", "") if isinstance(args, dict) else ""
+            if n not in files: return "No such file. Use list_files first."
+            try:
+                # Pin the folder and refuse links at open time; a replaced FIFO must not block the relay.
+                fd = os.open(n, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+                with os.fdopen(fd, errors="replace") as fh:
+                    if not stat.S_ISREG(os.fstat(fh.fileno()).st_mode): return "No such file. Use list_files first."
+                    return fh.read(20000)
+            except OSError:
+                return "No such file. Use list_files first."
+        return "Unknown tool."
+    finally:
+        os.close(directory)
 
 
 def api_call(cfg, key, model, messages, system=SAMANTHA, effort="medium"):
@@ -192,7 +208,7 @@ def run_api(cfg, prompt, pi="", history=None, want="auto", effort="medium"):
     loop sends an action's result as the next user turn); it is extended in place. `want` is a MODELS word, `effort` an
     EFFORTS key. Returns (status, text, name of the model that answered)."""
     try:
-        key = open(os.path.expanduser(cfg.api_key_file)).read().strip()
+        with open(os.path.expanduser(cfg.api_key_file)) as fh: key = fh.read().strip()
     except OSError:
         return 502, "The relay has no API key file.", ""
     model = pick_model(cfg, prompt) if want == "auto" else {"haiku": cfg.api_model, "sonnet": cfg.api_model_hard, "opus": cfg.api_model_top}[want]

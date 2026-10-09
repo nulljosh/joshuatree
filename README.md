@@ -63,7 +63,7 @@ On the real Pi 4: memcpy 1109 MB/s, alloc 30 ns/op, Wi-Fi joined in 6.4 s; the f
 
 ## Read more
 
-[Our story](docs/STORY.md): who we are and how it went. [The docs](docs/README.md): whitepaper, architecture, the design rules, hardware, the Raspberry Pi guide and the roadmap.
+[Our story](docs/STORY.md): who we are and how it went. [User guide](docs/GUIDE.md): Wi-Fi setup and troubleshooting in plain words. [The docs](docs/README.md): whitepaper, architecture, the design rules, hardware, the Raspberry Pi guide and the roadmap.
 
 ## License
 
