@@ -61,7 +61,7 @@ cd "$(dirname "$0")/../.."
 python3 << 'PYEOF'
 import subprocess, re
 
-EXCLUDE_DIRS = ("node_modules/", ".claude/", "landing/v86/")
+EXCLUDE_DIRS = ("node_modules/", ".claude/", "landing/v86/", "third_party/")
 EXCLUDE_BASENAMES = {"wallpaper.h", "editor_fonts.h", "vgafont.h", "icon_art.h"}
 EXCLUDE_PREFIX = ("drivers/app_",)
 
