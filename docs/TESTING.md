@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (208 checks)
+## The suite (211 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -207,7 +207,10 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | ARM64 browser: browse URL typed at the Terminal's ask> row reads an HTTPS page through a redirect, prints readable text with numbered links, open N follows one, a redirect loop stops (skips where the tools are missing) | `tools/checks/arm64-browser-check.py` | retry |
 | ARM64 browser, dead server: a host that accepts and never answers, and a closed port, each end in one timeout line (tls, reply, connect) within 12 s with dns ok and tcp ok printed first, and the prompt still answers (skips where the tools are missing) | `tools/checks/arm64-browser-deadserver-check.py` | retry |
 | ARM64 green light: the Pi's activity LED is blinked through the firmware mailbox (pin 42), never at boot, on a wait that ends (static, no hardware) | `tools/checks/arm64-led-check.py` | once |
-| Pi actions: an answer's [[note TEXT]] and [[led blink]] lines are stripped and run by ask.c's real parser (compiled on the host), anything else stays as text, and the relay prompt names both | `tools/checks/pi-actions-check.py` | once |
+| Pi actions: an answer's [[note]], [[say]], [[led blink]], [[open]], [[browse]] (http/https only), [[calc]] and [[status]] lines are stripped and recorded by ask.c's real parser (compiled on the host), four per turn, unknown ones recorded to ignore, the rest stays as text, and the relay prompt names them all | `tools/checks/pi-actions-check.py` | once |
+| Pi release image carries no relay token: pi-ask.o built without JT_WIFI_DEV=1 has none, the dev build does (host only) | `tools/checks/pi-release-notoken-check.sh` | once |
+| ARM64 agent loop: against a fake relay, [[browse]] then a final answer with agent: step 1 and 2 logged, 4 actions per turn and 5 steps then step limit, Esc stops it, unknown actions logged and ignored (skips where the tools are missing) | `tools/checks/arm64-agent-check.py` | retry |
+| ARM64 /model and /effort: slash commands run on the Pi, model and effort reach a fake relay only when not default, a bad value is refused in one line and never sent, /status /help /clear (skips where the tools are missing) | `tools/checks/arm64-model-check.py` | retry |
 | ARM64 Claude in the Terminal: the Console takes no input; typed at the Terminal's ask> row, a question reaches the real relay (stub claude, 127.0.0.1) over virtio-net and the answer prints in 53-column lines; wrong token -401, no network and no token each say so (skips where the tools are missing) | `tools/checks/arm64-claude-console-check.py` | retry |
 | ARM64 M3a: an unprivileged EL0 program prints through a write syscall, exits, and a direct access to a kernel-only page faults while the kernel survives (skips where the tools are missing) | `tools/checks/arm64-m3-check.py` | retry |
 | ARM64 M4 Wi-Fi proto: wifi_proto.h packs and parses SDPCM, BCDC, escan and NVRAM on the host clang | `tools/checks/wifi-host-check.sh` | retry |

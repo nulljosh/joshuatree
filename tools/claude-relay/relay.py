@@ -13,7 +13,10 @@ plain HTTP POST (SYS_HTTP_POST). This relay takes that POST and does the Claude 
 
     POST /api/claude
     Authorization: Bearer <token>
-    Content-Type: application/json      {"prompt": "...", "session": "<uuid or empty>"}
+    Content-Type: application/json      {"prompt": "...", "session": "<uuid or empty>",
+                                         "model": "auto|haiku|sonnet|opus", "effort": "low|medium|high"}
+      (model and effort are optional, default auto and medium; anything else is 400. The reply's
+       second line is "M <name of the model that answered>".)
       (or text/plain: the whole body is the prompt, session from the X-Claude-Session header)
 
     200 text/plain:   S <session uuid>\\nM <model that answered, e.g. Claude Haiku 5.5>\\n<reply text>
@@ -55,7 +58,7 @@ Then in Joshua Tree: Settings > Assistant > Claude relay = 10.0.2.2:8765, Claude
 Python standard library only. tools/checks/claude-relay-check.py proves the rules above
 against a stub `claude`.
 """
-import argparse, hmac, http.server, json, os, re, signal, subprocess, sys, threading, time, urllib.request, urllib.error
+import argparse, hmac, http.server, json, os, re, signal, subprocess, sys, threading, time, urllib.request, urllib.error, uuid
 
 DEFAULT_PORT = 8765
 DEFAULT_TIMEOUT = 150          # seconds; the kernel waits up to 240 s (JT_HTTP_POST_TICKS_CLAUDE), so the relay's 504 lands first
@@ -87,23 +90,40 @@ def to_ascii(text):
     return "".join(out)
 
 
-def claude_argv(cfg, session):
+# The Pi's /model and /effort (docs/AGENT.md). The request may carry "model" and "effort"; each must be one of these
+# words. A model word picks a configured model id (--api-model and friends); a user-supplied id never reaches the API.
+MODELS = ("auto", "haiku", "sonnet", "opus")
+EFFORTS = {                    # name: (thinking budget tokens, max_tokens); medium is what the relay always did
+    "low": (0, 300),
+    "medium": (0, 600),
+    "high": (2048, 4096),      # max_tokens must exceed the thinking budget
+}
+
+
+def claude_argv(cfg, session, model="auto"):
     """The exact command line one request runs. The prompt is NOT here: it goes on stdin."""
     argv = [cfg.claude, "-p", "--output-format", "json"]
     argv += ["--tools", *cfg.tools]
     argv += ["--allowedTools", *[t + "(./**)" for t in cfg.tools]]
     argv += ["--permission-mode", "dontAsk", "--strict-mcp-config", "--setting-sources", "project"]
-    if cfg.model: argv += ["--model", cfg.model]
+    if model != "auto": argv += ["--model", model]   # an alias from MODELS, never raw input
+    elif cfg.model: argv += ["--model", cfg.model]
     if session: argv += ["--resume", session]
     return argv
 
 
 SAMANTHA = ("You are Samantha, the assistant inside Joshua Tree, a small operating system built from scratch "
             "that runs on a Raspberry Pi. You answer at its console. Be warm, plain and brief: a few short "
-            "sentences, no markdown, no lists unless asked. You can also act on the Pi: end your answer with an "
-            "action, alone on its own line, under 80 characters. [[note TEXT]] prints TEXT on the Pi's console. "
-            "[[led blink]] blinks the Pi's green light once. These two are the only actions; use one only when it "
-            "helps, never invent others.")
+            "sentences, no markdown, no lists unless asked. You can also act on the Pi: end your answer with "
+            "actions, each alone on its own line, under 80 characters, at most 4 per answer. "
+            "[[note TEXT]] prints TEXT on the Pi's console. [[say TEXT]] shows TEXT as a spoken caption. "
+            "[[led blink]] blinks the Pi's green light once. [[open APP]] opens an app by name (Calculator). "
+            "[[browse URL]] fetches an http or https page as text. [[calc EXPR]] works out a sum on the Pi. "
+            "[[status]] reports the Pi's address, clock and Wi-Fi. These are the only actions; never invent others. "
+            "After the Pi runs them it sends you what they printed as the next message; use that to finish the "
+            "task, up to 5 rounds. Use an action only when it helps: browse when you need a live page, calc for "
+            "arithmetic, status when asked about the Pi. Nothing you can do changes a file; if a task would need "
+            "to, ask first and explain what would change.")
 
 
 TOP_WORDS = ("architecture", "design a", "prove", "security", "tradeoff", "step by step plan")
@@ -152,27 +172,37 @@ def run_tool(name, args):
     return "Unknown tool."
 
 
-def api_call(cfg, key, model, messages, system=SAMANTHA):
-    body = json.dumps({"model": model, "max_tokens": 600, "system": system, "tools": TOOLS, "messages": messages}).encode()
+def api_call(cfg, key, model, messages, system=SAMANTHA, effort="medium"):
+    budget, max_tokens = EFFORTS[effort]
+    req_body = {"model": model, "max_tokens": max_tokens, "system": system, "tools": TOOLS, "messages": messages}
+    if budget: req_body["thinking"] = {"type": "enabled", "budget_tokens": budget}
+    body = json.dumps(req_body).encode()
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     with urllib.request.urlopen(req, timeout=cfg.timeout) as r:
         return json.loads(r.read().decode("utf-8", "replace"))
 
 
-def run_api(cfg, prompt, pi=""):
+API_HISTORY_MAX = 24           # messages kept per session: 5 agent rounds and their results, with room for a follow-up
+
+
+def run_api(cfg, prompt, pi="", history=None, want="auto", effort="medium"):
     """--api-key-file mode: the Messages API with two read-only file tools, paid from the Claude Platform credit, not
-    the Claude Code plan. Stateless: each question stands alone, at most 4 model turns. Returns (status, text)."""
+    the Claude Code plan. At most 4 model turns per question. `history` is the session's earlier messages (the agent
+    loop sends an action's result as the next user turn); it is extended in place. `want` is a MODELS word, `effort` an
+    EFFORTS key. Returns (status, text, name of the model that answered)."""
     try:
         key = open(os.path.expanduser(cfg.api_key_file)).read().strip()
     except OSError:
-        return 502, "The relay has no API key file."
-    model = pick_model(cfg, prompt)
+        return 502, "The relay has no API key file.", ""
+    model = pick_model(cfg, prompt) if want == "auto" else {"haiku": cfg.api_model, "sonnet": cfg.api_model_hard, "opus": cfg.api_model_top}[want]
     system = SAMANTHA + (" Live status of the Pi you run on (ip, clock in UTC seconds since 1970, Wi-Fi bars): " + pi if pi else "")
-    messages = [{"role": "user", "content": prompt}]
+    messages = history if history is not None else []
+    messages.append({"role": "user", "content": prompt})
+    del messages[:-API_HISTORY_MAX]
     try:
         for _ in range(4):
-            d = api_call(cfg, key, model, messages, system)
+            d = api_call(cfg, key, model, messages, system, effort)
             blocks = d.get("content", [])
             if d.get("stop_reason") != "tool_use": break
             messages.append({"role": "assistant", "content": blocks})
@@ -180,11 +210,12 @@ def run_api(cfg, prompt, pi=""):
                        for b in blocks if b.get("type") == "tool_use"]
             messages.append({"role": "user", "content": results})
     except urllib.error.HTTPError as e:
-        return 502, "The API said %d." % e.code
+        return 502, "The API said %d." % e.code, ""
     except (urllib.error.URLError, OSError, ValueError, KeyError):
-        return 502, "The API did not answer."
+        return 502, "The API did not answer.", ""
     text = "".join(b.get("text", "") for b in d.get("content", []) if isinstance(b, dict))
-    return (200, "S -\nM %s\n%s" % (display_name(model), text)) if text else (502, "The API returned no text.")
+    if text: messages.append({"role": "assistant", "content": text})
+    return (200, text, display_name(model)) if text else (502, "The API returned no text.", "")
 
 
 class Relay:
@@ -193,11 +224,18 @@ class Relay:
         self.token = token.encode()
         self.busy = threading.Lock()
         self.sessions = set()   # session ids this relay has handed out; --resume only accepts these
+        self.api_history = {}   # --api-key-file mode: session id -> its messages, so an agent round can continue
 
-    def run_claude(self, prompt, session, pi=""):
+    def run_claude(self, prompt, session, pi="", model="auto", effort="medium"):
         """Returns (status, text). Kills claude's whole process group past the timeout."""
-        if self.cfg.api_key_file: return run_api(self.cfg, prompt, pi)
-        p = subprocess.Popen(claude_argv(self.cfg, session), cwd=self.cfg.cwd, stdin=subprocess.PIPE,
+        if self.cfg.api_key_file:
+            if not session:
+                session = str(uuid.uuid4())
+                if len(self.sessions) >= SESSIONS_MAX: self.sessions.clear(); self.api_history.clear()
+                self.sessions.add(session)
+            status, text, name = run_api(self.cfg, prompt, pi, self.api_history.setdefault(session, []), model, effort)
+            return status, ("S %s\nM %s\n%s" % (session, name, text)) if status == 200 else text
+        p = subprocess.Popen(claude_argv(self.cfg, session, model), cwd=self.cfg.cwd, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
         try:
             out, _ = p.communicate(prompt.encode("utf-8"), timeout=self.cfg.timeout)
@@ -218,7 +256,8 @@ class Relay:
         if sid:
             if len(self.sessions) >= SESSIONS_MAX: self.sessions.clear()
             self.sessions.add(sid)
-        return 200, "S %s\nM %s\n%s" % (sid or "-", display_name(self.cfg.model), text)
+        used = "Claude " + model.capitalize() if model != "auto" else display_name(self.cfg.model)   # claude -p has no effort knob: ignored here
+        return 200, "S %s\nM %s\n%s" % (sid or "-", used, text)
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -263,11 +302,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         raw = self.rfile.read(n)
         ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
         session = ""
+        model, effort = "auto", "medium"
         if ctype == "application/json":
             try: d = json.loads(raw.decode("utf-8"))
             except ValueError: return self.reply(400, "Bad JSON.", n, t0)
             if not isinstance(d, dict): return self.reply(400, "Bad JSON.", n, t0)
             prompt, session = d.get("prompt", ""), d.get("session", "") or ""
+            model, effort = d.get("model", "auto"), d.get("effort", "medium")
+            if not (isinstance(model, str) and isinstance(effort, str) and model in MODELS and effort in EFFORTS):   # a whitelist: anything else, even a real model id, is refused
+                return self.reply(400, "Unknown model or effort.", n, t0)
             pi = d.get("pi", "") if isinstance(d.get("pi", ""), str) else ""
             self.pi_status = pi[:120]
             if not isinstance(prompt, str) or not isinstance(session, str): return self.reply(400, "Bad JSON.", n, t0)
@@ -279,7 +322,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if session and (not UUID_RE.match(session) or session not in r.sessions):
             session = ""  # unknown or malformed: start fresh rather than pass it to --resume
         if not r.busy.acquire(blocking=False): return self.reply(429, "Claude is busy with another question.", n, t0)
-        try: status, text = r.run_claude(prompt, session, getattr(self, "pi_status", ""))
+        try: status, text = r.run_claude(prompt, session, getattr(self, "pi_status", ""), model, effort)
         finally: r.busy.release()
         return self.reply(status, text, n, t0)
 

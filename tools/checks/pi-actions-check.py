@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Samantha's Pi actions: [[note TEXT]] and [[led blink]] at the end of an answer.
+"""Samantha's Pi actions: [[note TEXT]], [[say TEXT]], [[led blink]], [[open APP]], [[browse URL]], [[calc EXPR]] and
+[[status]] at the end of an answer (docs/AGENT.md).
 
 Host-only, no hardware. Compiles the real take_actions block out of arch/arm64/ask.c with clang and feeds it replies:
-known markers are stripped and recorded, everything else stays in the printed text. Also checks the relay's system
-prompt names both actions, so the model knows they exist.
+known markers are stripped and recorded, an unknown marker line is recorded as kind 0 (the kernel logs and ignores
+it), a fifth action, a long one or one inside a sentence stays in the printed text, and [[browse]] takes http and
+https only. Also checks the relay's system prompt names every action and the ask-before-changing-files rule.
 """
 import os, re, subprocess, sys, tempfile
 
@@ -13,19 +15,26 @@ if not m:
     print("FAIL: no pi-actions block in arch/arm64/ask.c"); sys.exit(1)
 relay = open("tools/claude-relay/relay.py").read()
 prompt = re.search(r"SAMANTHA = \((.*?)\)\n", relay, re.S)
-if not prompt or "[[note TEXT]]" not in prompt.group(1) or "[[led blink]]" not in prompt.group(1):
-    print("FAIL: the relay's SAMANTHA prompt does not name [[note TEXT]] and [[led blink]]"); sys.exit(1)
+ACTIONS = ["[[note TEXT]]", "[[say TEXT]]", "[[led blink]]", "[[open APP]]", "[[browse URL]]", "[[calc EXPR]]", "[[status]]"]
+missing = [a for a in ACTIONS if not prompt or a not in prompt.group(1)]
+if missing or "ask first" not in prompt.group(1):
+    print("FAIL: the relay's SAMANTHA prompt lacks %s or the ask-first rule" % (missing or "nothing")); sys.exit(1)
 
 LONG = "[[note " + "x" * 80 + "]]"
 CASES = [   # reply -> printed text, actions as "kind:text"
     ("Done.\n[[note hello there]]", "Done.", ["1:hello there"]),
     ("Blinking.\n[[led blink]]\n", "Blinking.", ["2:"]),
-    ("Hi.\n[[reboot]]", "Hi.\n[[reboot]]", []),
+    ("Hi.\n[[reboot]]", "Hi.", ["0:reboot"]),
     ("Hi.\n" + LONG, "Hi.\n" + LONG, []),
     ("Say [[led blink]] to blink.", "Say [[led blink]] to blink.", []),
     ("Ok.\n[[note a]]\r\n[[led blink]]  ", "Ok.", ["1:a", "2:"]),
     ("Plain answer\nover two lines", "Plain answer\nover two lines", []),
-    ("[[note ]]", "[[note ]]", []),
+    ("[[note ]]", "", ["0:note "]),
+    ("Look.\n[[say hi there]]\n[[open Calculator]]\n[[calc 2+2]]\n[[status]]", "Look.", ["3:hi there", "4:Calculator", "6:2+2", "7:"]),
+    ("Page.\n[[browse https://example.com/a]]\n[[browse http://10.0.2.2:80/x]]", "Page.", ["5:https://example.com/a", "5:http://10.0.2.2:80/x"]),
+    ("No.\n[[browse ftp://x]]\n[[browse example.com]]", "No.", ["0:browse ftp://x", "0:browse example.com"]),
+    ("Five.\n[[note 1]]\n[[note 2]]\n[[note 3]]\n[[note 4]]\n[[note 5]]", "Five.\n[[note 5]]", ["1:1", "1:2", "1:3", "1:4"]),
+    ("[[statusx]]\n[[open]]", "", ["0:statusx", "0:open"]),
 ]
 harness = m.group(0) + r"""
 #include <stdio.h>
@@ -57,5 +66,5 @@ for (reply, want_text, want_acts), got in zip(CASES, out.split("\x03")):
     if text != want_text or acts != want_acts:
         print("FAIL: %r -> %r %r, want %r %r" % (reply, text, acts, want_text, want_acts)); ok = False
 if ok:
-    print("PASS: %d replies: [[note]] and [[led blink]] are stripped and run, anything else stays as text" % len(CASES))
+    print("PASS: %d replies: the seven actions are stripped and recorded, four per turn, unknown ones recorded to ignore, the rest stays as text" % len(CASES))
 sys.exit(0 if ok else 1)

@@ -84,15 +84,15 @@ class ModelName(unittest.TestCase):
         cfg = types.SimpleNamespace(api_key_file=key, api_model="claude-haiku-5-5", api_model_hard="claude-sonnet-5-5",
                                     api_model_top="claude-opus-5-5", timeout=5)
         seen = []
-        def fake(cfg_, key_, model, messages, system=None):
+        def fake(cfg_, key_, model, messages, system=None, effort="medium"):
             seen.append(model)
             return {"stop_reason": "end_turn", "content": [{"type": "text", "text": "hello"}]}
         old, relay.api_call = relay.api_call, fake
         try:
             for q, name in (("hi", "Claude Haiku 5.5"), ("why is it slow", "Claude Sonnet 5.5"),
                             ("security review", "Claude Opus 5.5")):
-                st, text = relay.run_api(cfg, q)
-                self.assertEqual((st, text), (200, "S -\nM %s\nhello" % name), q)
+                st, text, used = relay.run_api(cfg, q)
+                self.assertEqual((st, text, used), (200, "hello", name), q)
         finally:
             relay.api_call = old
             tmp.cleanup()

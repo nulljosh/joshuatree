@@ -55,8 +55,10 @@ wifi_cfg.h: wifi_cfg.sh FORCE
 	@./wifi_cfg.sh
 ask.o: ask.c claude_cfg.h ../../drivers/http.h ../../drivers/net.h
 	$(NETCC) -c ask.c -o $@
+# A Pi image carries the relay token only on the dev card (JT_WIFI_DEV=1, the same flag that carries the Wi-Fi key);
+# a release build has no relay config at all. tools/checks/pi-release-notoken-check.sh proves it. QEMU builds are unchanged.
 pi-ask.o: ask.c claude_cfg.h ../../drivers/http.h ../../drivers/net.h
-	$(NETCC) -DPI_BUILD -c ask.c -o $@
+	$(NETCC) -DPI_BUILD $(if $(filter 1,$(JT_WIFI_DEV)),,-DCLAUDE_RELEASE) -c ask.c -o $@
 ttf.o: ../../drivers/ttf.c
 	$(FPCC) -c $< -o $@
 text.o: text.c ../../drivers/ttf.h
