@@ -64,6 +64,8 @@ text.o: text.c ../../drivers/ttf.h
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
 # The Calculator's evaluator: the FPU does the sums, so it is built like text.c; main.c draws its window.
+cmd.o: cmd.c
+	$(CC) -c $< -o $@
 calc.o: calc.c
 	$(FPCC) -c $< -o $@
 # The local language model (llm.c, llama2.c's forward pass). LLM_MODEL= and LLM_TOK= name a llama2.c checkpoint and
@@ -122,12 +124,12 @@ pi-start.o: start.S
 	$(CC) -c $< -o $@
 pi-main.o: main.c $(MAINDEP)
 	$(CC) -DPI_BUILD -c $< -o $@
-kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
-pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
+kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
+pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
 pi: wifi-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
@@ -137,12 +139,12 @@ $(1)-pi-main.o: main.c $(MAINDEP)
 	$(CC) -DPI_BUILD $(2) -c $$< -o $$@
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
-$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
-$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
+$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
+$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
 $(1)-kernel8.img: $(1)-pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
 endef
 fptest.o: fptest.c
 	$(FPCC) -c $< -o $@

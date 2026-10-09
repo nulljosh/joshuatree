@@ -1052,7 +1052,8 @@ static void pointer_click(void) {   /* the left button went down */
     } else if (slot >= 0) {
         calc_close();
         console_open();
-        uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
+        if (slot == 6) uart_puts("dock Terminal: a stub on ARM, the Console's ask> row runs its commands (cmd.c)\n");
+        else { uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n"); }
     } else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
 }
 
