@@ -224,6 +224,14 @@ try:
         b.type("hi"); b.key("ret")
         check("a wrong token prints claude: error -401", b.wait_for("claude: error -401", 20), b.uart()[-300:])
         check("the 401 never ran claude", len(stub_calls()) == 2)
+        # the Terminal's own scrollback: five more refusals (3+ lines each) overflow its rows, then Page Up and End
+        for k in range(2, 7): b.type("hi"); b.key("ret"); b.wait_for("claude: error -401", 20, k)
+        time.sleep(0.4)
+        region = lambda s, r: [s[2][(y * s[0] + r[0]) * 3:(y * s[0] + r[2]) * 3] for y in range(r[1], r[3])]
+        e = b.shot(); b.key("pgup"); time.sleep(0.4); f = b.shot(); b.key("end"); time.sleep(0.4); g = b.shot()
+        check("Page Up scrolls the Terminal back", region(e, body) != region(f, body))
+        check("... the ask> prompt row stays put while scrolled", region(e, prompt) == region(f, prompt))
+        check("... and End brings back the newest picture, pixel for pixel", region(e, body) == region(g, body))
         out = b.uart()
         check("the token never appears on the UART", TOKEN not in out and OTHER not in out)
         long_lines = [l for l in out.split("ask> " + QUESTION)[-1].splitlines() if len(l) > 53]

@@ -1303,7 +1303,8 @@ static void input_event(struct input_event e) {
         int held = cur_hold(), term = term_front();
         if (!con_key(e.code, e.value)) {   /* the scroll keys are not logged: that would add lines to the picture they move */
             /* Only the Terminal takes typing; Shift always reaches ask.c, as the Calculator reads its state there */
-            if (((term || e.code == 42 || e.code == 54) && ask_key(e.code, e.value)) || term) con_quiet = 1;   /* typed keys show on the ask> row; the echo stays on the UART */
+            if (term || e.code == 42 || e.code == 54) ask_key(e.code, e.value);
+            con_quiet = 1;   /* typed keys show on the ask> row, or nowhere; the echo stays on the UART and off the Console */
             uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
         }
         cur_release(held);
