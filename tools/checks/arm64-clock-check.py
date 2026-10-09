@@ -54,6 +54,8 @@ int main(void) {
     sync_date(valid); assert(net_clock_utc() == 1791549297UL); /* reject rollback even after a good sync */
     sync_date("Fri, 09 Oct 2026 13:34:56 GMT"); assert(net_clock_utc() == 1791552896UL);
     fail_tls = 1; sync_date("Fri, 09 Oct 2026 14:34:56 GMT"); assert(net_clock_utc() == 1791552896UL);
+    tick = 0xfffffff0U; unsigned long before_wrap = net_clock_utc();
+    tick += 200; assert(net_clock_utc() == before_wrap + 2);
     puts("PASS: HTTPS-only clock, strict bounded dates, build floor, monotonic resync and failure preservation");
 }
 '''

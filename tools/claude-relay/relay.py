@@ -8,7 +8,7 @@
     a password for your account. Anyone holding it can make Claude read the files under
     --cwd (the repo by default) and spend your plan's usage.
 
-Joshua Tree cannot run Claude Code itself. The i386 app sends a loopback HTTP POST
+Joshua Tree cannot run Claude Code itself. The i386 app defaults to a loopback HTTP POST
 (SYS_HTTP_POST); the Pi Terminal uses HTTPS. This relay handles the Claude part:
 
     POST /api/claude

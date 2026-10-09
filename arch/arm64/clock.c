@@ -14,7 +14,11 @@ static unsigned long clock_utc0;
 static unsigned clock_tick0;
 unsigned long net_clock_floor(void) { return BUILD_UTC; }
 unsigned long net_clock_utc(void) {
-    return clock_utc0 ? clock_utc0 + (unsigned long)((unsigned)(ticks() - clock_tick0) / 100) : 0;
+    if (!clock_utc0) return 0;
+    unsigned seconds = (unsigned)(ticks() - clock_tick0) / 100;
+    clock_utc0 += seconds;
+    clock_tick0 += seconds * 100;   /* carry whole seconds forward so the 32-bit tick wrap cannot roll time back */
+    return clock_utc0;
 }
 static unsigned number(const char *p, unsigned n) {
     unsigned v = 0;

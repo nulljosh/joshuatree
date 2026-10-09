@@ -305,7 +305,7 @@ static int slash(const char *q, unsigned n) {
 }
 
 #if defined(PI_BUILD) || CLAUDE_TLS
-/* The Pi never sends its bearer over HTTP. QEMU keeps the loopback-only path unless TLS is requested. */
+/* The Pi never sends its bearer over HTTP. QEMU retains its existing HTTP path unless TLS is requested. */
 static int relay_post_tls(const char *body, unsigned len, const char *token, char *reply, int *status) {
     static char req[2 * RESULT_MAX + 512 + sizeof(CLAUDE_HOST)];
     char digits[10]; unsigned n = 0, dn = 0, v = len;
