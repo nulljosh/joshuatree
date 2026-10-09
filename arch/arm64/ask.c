@@ -39,6 +39,13 @@ static char line[ASK_MAX + 1], question[ASK_MAX + 1];
 static unsigned len, qlen;
 static int shift, pending, active;
 static char session[37];     /* the relay's session uuid, "" before the first answer */
+/* Runtime model and effort (docs/AGENT.md): /model and /effort change these, post() sends them when not default. */
+static int model_i, effort_i = 1;                 /* index into models[] (0 auto) and efforts[] (1 medium, the default) */
+static const char *const models[] = {"auto", "haiku", "sonnet", "opus"};
+static const char *const efforts[] = {"low", "medium", "high"};
+static char last_name[32];                        /* the model that answered last, as the relay names it: "Claude Opus 5.5" */
+static unsigned steps_total;                      /* relay calls since /clear */
+static int relay_state;                           /* 0 not tried, 1 answered, 2 failed */
 
 /* Linux key codes 0..57 to characters, plain and with Shift. 0 is a key the editor does not type. */
 static const char plain[58] = {
@@ -59,6 +66,15 @@ static const char shifted[58] = {
 #define KEY_ESC 1
 
 int ask_active(void) { return active; }
+/* The prompt on the bottom row: "Claude Opus 5.5 high $ ". The effort shows only when it is not the default. */
+const char *ask_label(void) {
+    static char lab[64]; unsigned o = 0;
+    if (last_name[0]) for (const char *p = last_name; *p && o < 40; p++) lab[o++] = *p;
+    else { for (const char *p = "Claude "; *p; p++) lab[o++] = *p; for (const char *p = models[model_i]; *p; p++) lab[o++] = *p; }
+    if (effort_i != 1) { lab[o++] = ' '; for (const char *p = efforts[effort_i]; *p; p++) lab[o++] = *p; }
+    lab[o++] = ' '; lab[o++] = '$'; lab[o++] = ' '; lab[o] = 0;
+    return lab;
+}
 int ask_char(unsigned code) { return code < 58 ? (shift ? shifted[code] : plain[code]) : 0; }   /* main.c's Calculator: same map, same Shift */
 void ask_redraw(void) { con_prompt(line, len); }   /* main.c: the Console was reopened, put the line being typed back */
 
@@ -223,6 +239,47 @@ static unsigned pi_status(char *st) {   /* "ip 10.0.0.189, utc 1791..., wifi 3/3
     return k;
 }
 
+/* Slash commands run on the Pi and are never sent (docs/AGENT.md). Returns 1 when q was one. */
+static int word_is(const char *s, unsigned n, const char *w) { unsigned i = 0; for (; w[i]; i++) if (i >= n || s[i] != w[i]) return 0; return i == n; }
+static void choices(const char *label, const char *const *list, unsigned count, unsigned cur) {
+    kputs(label); kputs(":");
+    for (unsigned i = 0; i < count; i++) { kputs(i == cur ? " [" : " "); kputs(list[i]); if (i == cur) kputs("]"); }
+    kputs("\n");
+}
+void con_clear(void);   /* main.c: empties the Console window, keeps the log */
+static int slash(const char *q, unsigned n) {
+    if (!n || q[0] != '/') return 0;
+    unsigned c = 1; while (c < n && q[c] != ' ') c++;      /* the command word is q[1..c) */
+    const char *a = q + c; unsigned an = n - c;            /* its argument, trimmed */
+    while (an && *a == ' ') { a++; an--; }
+    while (an && a[an - 1] == ' ') an--;
+    const char *w = q + 1; unsigned wn = c - 1;
+    if (word_is(w, wn, "model") || word_is(w, wn, "effort")) {
+        int is_model = w[0] == 'm';
+        const char *const *list = is_model ? models : efforts; unsigned count = is_model ? 4 : 3, i;
+        if (!an) { choices(is_model ? "model" : "effort", list, count, is_model ? (unsigned)model_i : (unsigned)effort_i); return 1; }
+        for (i = 0; i < count; i++) if (word_is(a, an, list[i])) break;
+        if (i == count) { kputs(is_model ? "model: not one of auto, haiku, sonnet, opus\n" : "effort: not one of low, medium, high\n"); return 1; }
+        if (is_model) { model_i = (int)i; last_name[0] = 0; } else effort_i = (int)i;
+        kputs(is_model ? "model: " : "effort: "); kputs(list[i]); kputs("\n");
+        ask_redraw();                                      /* the prompt shows it */
+    } else if (word_is(w, wn, "status")) {
+        kputs("status: model "); kputs(models[model_i]); kputs(", effort "); kputs(efforts[effort_i]); kputs("\n");
+        kputs("status: prompt "); kputs(ask_label()); kputs("\n");
+        kputs("status: relay ");
+        kputs(!CLAUDE_TOKEN_LEN ? "no token" : !net_get_gateway() ? "no network" : relay_state == 1 ? "answered last time"
+              : relay_state == 2 ? "did not answer last time" : "not tried yet");
+        kputs("\nstatus: steps used "); kdec(steps_total); kputs("\n");
+    } else if (word_is(w, wn, "clear")) {
+        session[0] = 0; last_name[0] = 0; steps_total = 0; relay_state = 0;
+        con_clear(); kputs("clear: new conversation\n"); ask_redraw();
+    } else if (word_is(w, wn, "help")) {
+        kputs("/model [auto|haiku|sonnet|opus]  pick the model\n/effort [low|medium|high]  how hard it thinks\n"
+              "/status  model, effort, relay, steps\n/clear  new conversation\n");
+    } else kputs("unknown command, try /help\n");
+    return 1;
+}
+
 /* One POST to the relay. Returns the answer's length with *ans pointing into reply, -1 when the relay never answered
    (the caller may fall back to the local model) and -2 for a refusal it already printed. */
 static int post(const char *q, unsigned n, char *reply, char **ans) {
@@ -237,6 +294,8 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
     }
     for (const char *p = "\",\"session\":\""; *p; p++) body[b++] = *p;
     for (const char *p = session; *p; p++) body[b++] = *p;
+    if (model_i) { for (const char *p = "\",\"model\":\""; *p; p++) body[b++] = *p; for (const char *p = models[model_i]; *p; p++) body[b++] = *p; }
+    if (effort_i != 1) { for (const char *p = "\",\"effort\":\""; *p; p++) body[b++] = *p; for (const char *p = efforts[effort_i]; *p; p++) body[b++] = *p; }
     for (const char *p = "\",\"pi\":\""; *p; p++) body[b++] = *p;
     b += pi_status(body + b);                  /* the Pi's live status, so the answer can be about this machine */
     body[b++] = '"'; body[b++] = '}';
@@ -251,13 +310,16 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
     heap_release(mark);
     for (int i = 0; i < 64; i++) token[i] = 0;
     int status = http_last_status();
+    steps_total++;
     if (got < 0) {
+        relay_state = 2;
         int e = net_last_error();
         if (e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) kputs("claude: timeout\n");
         else { kputs("claude: error "); kputs(e == NET_ERR_NONE ? "busy" : net_error_name(e)); kputs("\n"); }
         return -1;
     }
     reply[got] = 0;
+    relay_state = status == 200 ? 1 : 2;
     if (status != 200) {                       /* the relay's own one-line reason follows its code */
         if (!status) { kputs("claude: error bad reply\n"); return -2; }
         kputs("claude: error -"); kdec((unsigned)status); kputs("\n");
@@ -267,7 +329,13 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
     unsigned start = 0;                        /* "S <session uuid>\n<answer>" */
     if (got >= 2 && reply[0] == 'S' && reply[1] == ' ') {
         unsigned e = 2; while (e < (unsigned)got && reply[e] != '\n') e++;
-        if (is_session(reply + 2, e - 2)) { for (unsigned i = 0; i < 36; i++) session[i] = reply[2 + i]; session[36] = 0; }
+        if (e - 2 >= 36 && is_session(reply + 2, 36)) {
+            for (unsigned i = 0; i < 36; i++) session[i] = reply[2 + i];
+            session[36] = 0;
+            unsigned k = 0;                    /* "S <uuid> <model name>": the model that answered, for the prompt */
+            if (e > 39 && reply[38] == ' ') for (unsigned i = 39; i < e && k < sizeof last_name - 1; i++) last_name[k++] = reply[i] >= 32 && reply[i] < 127 ? reply[i] : '?';
+            if (k) last_name[k] = 0;
+        }
         start = e < (unsigned)got ? e + 1 : e;
     }
     *ans = reply + start;
@@ -328,6 +396,7 @@ static void ask(const char *q, unsigned n) {
     static char reply[REPLY_MAX + 1];
     say_wrapped("ask> ", q, n);
     if (is_stop(q, n)) { kputs("agent: nothing running\n"); return; }
+    if (slash(q, n)) return;
     if (browse_command(q, n)) return;          /* browser.c: `browse URL` and `open N` never go to Claude */
     if (n > 4 && q[0] == 'l' && q[1] == 'l' && q[2] == 'm' && q[3] == ' ') { local(q + 4, n - 4); return; }
     if (!CLAUDE_TOKEN_LEN) { kputs("claude: no token\n"); fallback(q, n); return; }

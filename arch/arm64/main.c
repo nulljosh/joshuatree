@@ -692,6 +692,13 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
     con_rows = (win_h - sc(46)) / con_ch - 2;   /* then a row pinning the wifi and usb status, and the ask> prompt last */
 }
 /* The bottom row: "ask> " and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
+const char *ask_label(void);   /* ask.c */
+void con_clear(void) {         /* /clear: the window empties, the log stays (the status rows read it) */
+    if (!con_live) return;
+    int held = cur_hold();
+    con_wipe(); con_anchor = con_len; con_scrolled = 0; con_hint();
+    cur_release(held);
+}
 void con_prompt(const char *s, unsigned n) {
     if (!con_live) return;
     int held = cur_hold();
@@ -699,7 +706,10 @@ void con_prompt(const char *s, unsigned n) {
     int y = con_y + (int)row * con_ch;
     fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
     fb_flush(con_x - 4, y, con_cols * con_cw + 8, con_ch);
-    const char *p = "ask> ";
+    const char *p = ask_label();
+    unsigned lw = 0; while (p[lw]) lw++;
+    if (lw + 4 > cols) { p = ""; lw = 0; }     /* a very narrow window: no room for the long prompt, just the line */
+    room = cols > lw + 1 ? cols - lw - 1 : 1;
     unsigned col = 0;
     for (; *p; p++) con_glyph(col++, row, *p);
     if (n > room) { s += n - room; n = room; }
