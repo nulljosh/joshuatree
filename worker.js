@@ -568,18 +568,34 @@ async function handleWaitlistPost(request, env) {
 }
 
 const WAITLIST_MAIL_TEXT = [
-  "You're on the list.",
+  "Welcome to Joshua Tree.",
   "",
-  "Joshua Tree is an operating system written from scratch. It boots in your browser right now, with a dock full of apps and Samantha, the assistant who lives inside it.",
+  "You're on the dev kit waitlist. I'll email you when the first kits are ready. Nothing to buy or do today.",
   "",
-  "Try the live demo: https://joshuatree.heyitsmejosh.com",
-  "Watch the 36 second ad: https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4",
+  "While you wait, try the real thing. Joshua Tree is a computer built from scratch, with its own apps and Samantha to help you use them. It runs right in your browser.",
   "",
-  "The hardware is called Neo, a concept case for the OS. It is not for sale yet. When the dev kit is ready you'll get one email from me, and nothing else in between.",
+  "Try Joshua Tree: https://joshuatree.heyitsmejosh.com",
+  "Watch the short film: https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7.mp4",
   "",
+  "The dev kit will be a Raspberry Pi running Joshua Tree. Neo, the case, is still a concept. Neither is for sale yet.",
+  "",
+  "Thanks for being here at the beginning.",
   "Joshua",
+  "",
+  "You received this because you joined the Joshua Tree dev kit waitlist.",
 ].join("\n");
-const WAITLIST_MAIL_HTML = `<div style="background:#F4EEE3;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;color:#1A1814"><div style="max-width:520px;margin:0 auto"><p style="font-size:28px;font-weight:600;letter-spacing:-0.02em;margin:0 0 16px">You're on the list.</p><p style="font-size:16px;line-height:1.55;margin:0 0 16px">Joshua Tree is an operating system written from scratch. It boots in your browser right now, with a dock full of apps and Samantha, the assistant who lives inside it.</p><p style="margin:0 0 16px"><a href="https://joshuatree.heyitsmejosh.com" style="background:#B9542C;color:#F4EEE3;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px;display:inline-block">Try the live demo</a></p><p style="margin:0 0 24px"><a href="https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4" style="color:#B9542C;font-weight:600">Watch the 36 second ad</a></p><p style="font-size:15px;line-height:1.55;color:#6F675C;margin:0 0 16px">The hardware is called Neo, a concept case for the OS. It is not for sale yet. When the dev kit is ready you'll get one email from me, and nothing else in between.</p><p style="font-size:15px;margin:0">Joshua</p></div></div>`;
+const WAITLIST_MAIL_HTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Welcome to Joshua Tree</title></head>
+<body style="margin:0;background:#faf8f4;color:#1c1c1e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">You're on the dev kit waitlist. I'll let you know when the first kits are ready.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf8f4"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px">
+<tr><td style="padding:0 0 24px;border-bottom:1px solid #dedbd5"><img src="https://joshuatree.heyitsmejosh.com/mark.png" width="40" height="40" alt="" style="display:inline-block;vertical-align:middle;margin-right:12px"><span style="font-size:14px;font-weight:700;letter-spacing:2px;vertical-align:middle">JOSHUA TREE</span></td></tr>
+<tr><td style="padding:32px 0 28px"><p style="margin:0 0 12px;color:#964326;font-size:12px;font-weight:700;letter-spacing:2px">THE DEV KIT WAITLIST</p><h1 style="margin:0 0 20px;font-size:40px;line-height:1.1;letter-spacing:-1.5px;font-weight:700">Welcome to<br>Joshua Tree.</h1><p style="margin:0;font-size:17px;line-height:1.6">You're on the list. I'll email you when the first kits are ready. Nothing to buy or do today.</p></td></tr>
+<tr><td style="padding:28px;background:#fff;border:1px solid #dedbd5;border-radius:16px"><h2 style="margin:0 0 12px;font-size:24px;line-height:1.2;letter-spacing:-0.5px">While you wait, try the real thing.</h2><p style="margin:0 0 24px;font-size:16px;line-height:1.6">A computer built from scratch, with its own apps and Samantha to help you use them. It runs right in your browser.</p><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#b5502c" style="border-radius:24px"><a href="https://joshuatree.heyitsmejosh.com" style="display:inline-block;padding:14px 24px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;border-radius:24px">Try Joshua Tree</a></td></tr></table><p style="margin:20px 0 0;font-size:14px;line-height:1.5"><a href="https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7.mp4" style="color:#964326;text-decoration:underline">Watch the short film</a></p></td></tr>
+<tr><td style="padding:28px 0"><p style="margin:0 0 20px;color:#5b5751;font-size:14px;line-height:1.6">The dev kit will be a Raspberry Pi running Joshua Tree. Neo, the case, is still a concept. Neither is for sale yet.</p><p style="margin:0;font-size:16px;line-height:1.6">Thanks for being here at the beginning.<br><strong>Joshua</strong></p></td></tr>
+<tr><td style="padding:20px 0 0;border-top:1px solid #dedbd5;color:#5b5751;font-size:12px;line-height:1.6">You received this because you joined the Joshua Tree dev kit waitlist.<br>Free and open source. Made in Vancouver, BC.</td></tr>
+</table></td></tr></table></body></html>`;
 
 // Resend confirmation. Never fails the signup: the address is already saved, a mail hiccup just logs.
 async function sendWaitlistEmail(env, email) {

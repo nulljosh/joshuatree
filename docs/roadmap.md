@@ -1,7 +1,7 @@
 # Joshua Tree roadmap
 
 Freestanding i386 kernel, no libc. This is the forward plan. What already
-shipped lives in `git log`, `git tag -l "jt-v*"`, and the [GitHub
+shipped lives in `git log`, `git tag -l`, and the [GitHub
 releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
@@ -12,31 +12,22 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Top 10, right now (2026-10-08)
+## Next priorities (reviewed 2026-10-09)
 
-The short list. Everything below is the long list; done items moved to [roadmap-done.md](roadmap-done.md).
+The ordered list below is the near-term queue. The topic sections keep the longer plan. Completed work is in [roadmap-done.md](roadmap-done.md); `VERSION` and the GitHub releases are the source for release numbers.
 
-**Done on the Pi.** Wi-Fi joins with our own WPA2, the clock sets itself from the net, the menu bar shows the three bars and the clock, the console is quiet, the boot screen shows, the green light blinks once at boot, Samantha answers and acts ([[note TEXT]] prints a note, [[led blink]] blinks the light). First benchmark on the board: memcpy 1109 MB/s, alloc 30 ns, Wi-Fi joined in 6.4 s, clock set in 8.7 s.
-
-**Shipped 2026-10-08 (main is 2.32.1).** HTTPS through BearSSL (TLS 1.2) and a text browser at the `ask>` row (`browse URL`, `open N`, PR 476); Joshua confirmed `browse https://heyitsmejosh.com` on the board with `dns ok`, `tcp ok`, `tls ok`, `http 200`. The Calculator on ARM (PR 475, `tools/checks/arm64-calc-check.py`). A tiny local model in the kernel, `llm PROMPT`, with no weights baked into release builds (PR 477, `tools/checks/arm64-llm-check.py`). A browse that fails fast with progress lines instead of sticking on fetching, and the DNS stub so the fuzz harness links (PR 479, `tools/checks/arm64-browser-deadserver-check.py`). Not merged: the prompt naming the model it used (no branch yet), and the relay token kept to dev builds only (branch `token-gate`, 2.32.2).
-
-**Mac-style USB keyboard (2026-10-09).** On the board, F1, F2 and Cmd or Ctrl+Space did nothing. Cmd was never tracked, report-ID reports lost their modifier byte, and a Mac-mode top row sends media keys on an interface we never opened. Now all three are handled, any letter on the bare desktop opens Spotlight, and the dev card shows raw HID bytes in the menu bar. Check: `tools/checks/arm64-keydbg-check.py`.
-
-**Keyboard fix, 2026-10-09.** Spotlight shortcuts close it when pressed again, and F2 or Ctrl+T opens Terminal even while search is open. Search debug messages stay off the Console so they cannot repaint through the overlay. The keyboard-only check verifies these paths and that closing search restores the screen.
+**On the real Pi:** the desktop, USB keyboard, Wi-Fi, network clock and Samantha relay work. Joshua confirmed an HTTPS fetch on the board. The merged Terminal, bounded agent loop, browser navigation and model controls have QEMU checks; the latest keyboard fixes still need another board pass.
 
 **Next, in order**
-1. The Terminal hosts the agent and the Console becomes logs. Why: the `ask>` row lives on the Console's bottom line, so chat and boot noise share one window. Check: `tools/checks/arm64-claude-console-check.py` passes with the question typed into the Terminal, and the Console shows only log lines.
-2. Samantha as an agent on the Pi: more actions, multi-step answers, a kill switch. Why: today she can note and blink; an agent needs to open apps, chain steps and be stopped. Check: a pi-actions check that runs every action in `arch/arm64/ask.c` under QEMU and proves Esc stops a running sequence.
-3. Browser v2: back, forward, find, entities, links. Why: one-page reading works; a second page and a search do not. Check: `tools/checks/arm64-browser-check.py` extended with `back`, `forward`, `find WORD`, a named entity and a relative link.
-4. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
-5. Security findings 2 and 3 from the Pi security review: the relay token travels over HTTPS, and the certificate check has a trusted clock. Why: the token is plain text on the wire today, and a wrong clock accepts an expired certificate. Check: `tools/checks/arm64-claude-console-check.py` against a TLS relay, and a browser check that fails with the clock set before the certificate's start.
-6. SD card writes (MBR and FAT32) and the self-update path with a fallback kernel. Why: nothing can be saved on the board, and a new build still needs a card swap. Check: write a file under QEMU, read it back after reboot; then a fake release that boots once and falls back.
-7. The local model with real weights read from the SD card. Why: the kernel runs the forward pass, but release builds carry no weights. Check: `tools/checks/arm64-llm-check.py` with the model loaded from a FAT image instead of the link.
-8. A wired USB mouse on the Pi. Pointer and clicks work in QEMU; needs a mouse in a port on the board. Check: `tools/checks/arm64-m2-check.py` plus one board photo.
-9. Split `kernel/kernel.c` in slices. Why: it is too big to work in. Check: `make` and `./check.sh` after every slice, `tools/checks/check-refs.sh` after each move.
-10. Trademark check before any rename (Folio, Mirage). Why: a rename on a box with a taken name is a redo. Check: the search result written in this file.
+1. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
+2. Security findings 2 and 3 from the Pi security review: the relay token travels over HTTPS, and the certificate check has a trusted clock. Why: the token is plain text on the wire today, and a wrong clock accepts an expired certificate. Check: `tools/checks/arm64-claude-console-check.py` against a TLS relay, and a browser check that fails with the clock set before the certificate's start.
+3. SD card writes (MBR and FAT32) and the self-update path with a fallback kernel. Why: nothing can be saved on the board, and a new build still needs a card swap. Check: write a file under QEMU, read it back after reboot; then a fake release that boots once and falls back.
+4. The local model with real weights read from the SD card. Why: the kernel runs the forward pass, but release builds carry no weights. Check: `tools/checks/arm64-llm-check.py` with the model loaded from a FAT image instead of the link.
+5. A wired USB mouse on the Pi. Pointer and clicks work in QEMU; needs a mouse in a port on the board. Check: `tools/checks/arm64-m2-check.py` plus one board photo.
+6. Split `kernel/kernel.c` in slices. Why: it is too big to work in. Check: `make` and `./check.sh` after every slice, `tools/checks/check-refs.sh` after each move.
+7. Trademark check before any rename (Folio, Mirage). Why: a rename on a box with a taken name is a redo. Check: the search result written in this file.
 
-Older queue items (Notes and Clock on ARM, the boot chime, the admin tier, the Claude app on ARM, [docs/AUTONOMY.md](AUTONOMY.md)) stay open below and come after these.
+Notes and Clock on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AUTONOMY.md) stay open below.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, fewer get it onto a real board. Lean into that:
 - **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`), film the first ugly print and every fix, then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
@@ -56,8 +47,7 @@ Older queue items (Notes and Clock on ARM, the boot chime, the admin tier, the C
 - [ ] [Sonnet] Baseline JPEG decoder on the Pi build, then an MJPEG video path from the Mac relay. Silent first, sound after audio output. The i386 kernel already has `drivers/jpeg.c`; reuse it. Check: `tools/checks/jpeg-host-check.sh` plus an arm64 check that shows relayed frames.
 - [ ] [Sonnet] ElevenLabs text to speech for Samantha through the Mac relay. The key stays on the Mac. The relay enforces a per-request and a per-day character cap. Check: a relay test that refuses text over each cap and never returns the key.
 - [ ] [Joshua] Higgsfield video through the Mac relay, under Joshua's spending rule: never automatic, always an explicit yes from Joshua with the cost shown first, one clip at a time, nothing from Samantha on her own. Check: a relay test that a request without a fresh yes is refused and that Samantha's actions cannot start one.
-- [ ] [Sonnet] Model and effort controls in the Terminal and the panes (`/model`, `/effort`), if not yet merged. Check: a shell or pane test that the command changes the setting the next request sends.
-- [ ] [Haiku] Calendar icon fix, if not yet merged. The Pi tile got its face in 2.26.0; confirm the other places the icon shows. Check: `tools/checks/check-calendar.sh` and the icon margin check.
+- [ ] [Sonnet] Model and effort controls per Terminal pane (`/model`, `/effort`). The single Terminal already has them; ARM panes still need separate settings. Check: a shell or pane test that the command changes the setting the next request sends.
 
 ## Now (set 2026-10-03)
 Samantha runs the machine, and Joshua is the face of the web portfolio. The phone demo, the OS and the landing all work on a phone. Everything below is what is left, in the order to pick it up. Merge one PR at a time, green first. `docs/LOOP-HANDOFF.md` has the restart prompt and the exact state. Full items live in the themed sections further down.
@@ -83,10 +73,9 @@ How to use this: the Pickup list below stays the near-term queue. When a Pickup 
 
 ### [5.0] Talk to it: Claude Code in Joshua Tree
 - [ ] [5.0] [Fable] Claude phase 2: tools on Joshua Tree itself, so Claude can read and change the OS's own files. Needs real TLS on the box or a trusted relay protocol that calls back into the machine.
-- [ ] [5.0] Claude on the real Pi: the same Console prompt, once Wi-Fi stage 2 joins a network. Today it says `claude: no network`.
 
 ## Pickup (written 2026-10-03, night)
-Main is 2.6.24 and live. CI takes about 10 minutes. The 3.0.0 gate is one thing: the desktop boots on a real Raspberry Pi 4.
+Open work by topic. The 3.0 gate above also needs a working mouse on the real board; a desktop boot alone does not close it.
 
 ### Landing and demo, to A+
 - [ ] [Sonnet] Phone shows two input bars: the OS draws its own chat bar and the page draws a real composer for the phone keyboard. Keep one visible. The OS bar can hide while the composer is up, or the composer can be the only bar and feed the OS. Check: `tools/checks/phone-boot-check.py` plus a screenshot of the phone tour.
@@ -100,11 +89,9 @@ Two notebook pages checked against the tree. Already shipped and not listed: men
 - [ ] [Joshua] Competitor research as a doc: Apple Mac mini against our box on RAM (8 to 16 GB), integrated CPU, multi-display over HDMI, internal or external design, USB-C ports. A good-computer checklist for `docs/HARDWARE.md`.
 - [ ] [Fable] Time Machine: snapshots of the disk with a browse-the-past view. Nothing exists; needs a FAT snapshot design first.
 - [ ] [Sonnet] Fullscreen avatar, custom: Samantha (or Joshua's face) full screen as a mode, with the face picked in Settings. The page also lists video, audio and GUI mode as three ways to talk to her.
-- [ ] [Fable] Integrated LLM that runs on the box, not through the proxy. Needs the Pi to have the memory and a runtime; decide once M4 is real.
+- [ ] [Fable] An integrated LLM that runs on the box. The small forward-pass runtime landed; real weights from the SD card remain in Next priorities. A full Turing model still needs a memory and runtime decision.
 - [ ] [Sonnet] Improved chat app: more tools and persistent memory across boots (a file the app reads at start).
 - [ ] [Sonnet] Spotlight: one key opens a search box over apps, files, contacts, events. The Search app does files only; the existing Spotlight-style item under Desktop and apps is the same item.
-- [ ] [Sonnet] Dock position setting: left, bottom, or hidden. Already listed under Desktop and apps as Moveable dock position; this is the second ask for it.
-- [ ] [Fable] Multitasking through a compositor: the same compositor item as under Architecture, bumped because the notebook lists it as a headline feature.
 - [ ] [Sonnet] GarageBand-lite: record and layer a few tracks from the Sound Blaster, then play them back. Movie trim (iMovie) is already listed.
 - [ ] [Sonnet] Sharp image everywhere, no visible pixels: audit the icons and small type at retina scale, same bar as the JT retina polish rule.
 - [ ] [Fable] The big promise, in his words: say "computer, run the simulation", "build me a game", "publish and monetize my apps", "add X feature", "patch Y bug", and the OS does it. Samantha plus a coding agent plus the publish flow. Scope it as a doc before any code.
@@ -144,21 +131,15 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 
 ### CI and speed
 
-- [ ] [Sonnet] `tools/checks/samantha-fullscreen-check.py` flakes on a loaded GitHub runner (2026-10-06, PR 432, a docs-only change): "the caption does not fade: it went from full to nothing in 1 in-between polls" and "after Esc the menu bar is not back". The check samples the fade by wall-clock polls, so a slow runner sees one frame. Measure the fade against the kernel's own tick count (or slow the poll budget to the frame rate) instead of retrying it.
-
-- [ ] [Sonnet] Parallel-safe checks (found 2026-10-06 night): several checks write fixed paths such as `/tmp/jt-feature-drive.raw`, so two `ci-local.sh` runs at once corrupt each other's QEMU dumps and fail feature-drive, menuclock, ring3crash-all, qa-gallery and soak at random. Give every check its own `tempfile.mkdtemp()` directory and its own QMP socket, then prove it with two suites side by side. Until then, run one `ci-local.sh` at a time.
+- [ ] [Sonnet] Convert the remaining fixed scratch paths in `tools/checks/tmp-paths-baseline.txt` to private directories and sockets. The one-suite lock already prevents collisions; keep it until the baseline is empty. Check: `tools/checks/tmp-paths-check.py`.
 - [ ] [Sonnet] Six of the last ten red runs were slow-runner timing flakes (Chat tool scenes, the phone mute button, Keyrate, the Apps folder layout): eight QEMUs share one runner. Find out how many cores the runner has, cap QEMUs per runner or move to 10 shards (the balancer says about 319 s of checks per shard, 12 shards about 266 s), and watch the next ten runs.
 - [ ] [Haiku] Re-balance after adding checks. New manifest lines default to 30 s until timed: run `python3 tools/gen/ci-balance.py <run-id>` on a green run (`--check` shows the numbers first) and commit the result.
 - [ ] [Haiku] About a third of recent runs were cancelled by force-pushes to an open PR. Push once per PR, or fold PRs together before CI starts.
-- [ ] [Sonnet] `tools/ci-local.sh` takes about 27 minutes (8 shards, 2 at a time). Run 4 at a time on the M4 and use the balanced manifest.
+- [ ] [Sonnet] Reduce local CI time without raising the two-job concurrency cap. Four concurrent jobs previously exhausted the Mac's memory; measure slow checks and rebalance first.
 
 ### Raspberry Pi and ARM64
 **Goal (Joshua, 2026-10-06 night, /goal): we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi.** The Pi runs the OS, the Claude app (phase 1, via a relay on the Mac) is the way in, and a session on the Pi edits and rebuilds a small Joshua Tree. The road there is the queue below: Wi-Fi (the relay needs the network), the desktop and dock, SD writes, `get`, then phase 2 of the Claude app (the model reading and writing the OS's own files through a tool loop), then a build toolchain on the box (the Plank compiler, 8.0). Say honestly what is not here yet in every release note.
 Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance"). Software first; items that need a part wait for the part.
-- [ ] [Fable] Wi-Fi stage 1: the CYW43455 wakes up over SDIO, loads its firmware and lists the networks on screen. In progress, 2.16.0.
-- [x] [Fable] `browse URL` on the real Pi stuck on "fetching". Two causes, both in the code path, neither a `ticks` wait: `drivers/http.c` sent every DNS query to SLIRP's 10.0.2.3, which is nobody on a real LAN (now the DHCP lease's DNS server), and each stage waited its own 20 s (DNS, SYN-ACK, 15 s per TLS read), so a dead hop read as a hang. The browser now gives DNS 3 s, the connect 4 s and each read 8 s, and prints `dns ok`, `tcp ok`, `tls ok`, `http NNN` as it goes, so the next board test shows where it stops. Check: `tools/checks/arm64-browser-deadserver-check.py`. Still to prove on the board: that BearSSL finishes a handshake against a real site within the budget.
-- [x] [Fable] The Pi browser is usable: `back`, `forward` (8 pages), `reload`, `links`, `more`/`up`/`down`/`top`/`bottom`, `find WORD`, `help`, a status line (URL, line X of Y), `&#NN;` entities, blank lines before headings, `text [3]` links, one clear line per failure. All commands go through one `cmd_run(line, sink)` in `arch/arm64/cmd.c`, so a Terminal app can take the input later; the Console keeps the ask> row for now. Check: `tools/checks/arm64-browser-check.py`.
-- [ ] [Fable] Wi-Fi stage 2: join works on the real board (our own WPA2, `arch/arm64/wpa.h`; name and key from `~/.config/joshuatree/wifi.conf`, never the repo). DHCP and the clock code landed in c14ac464, untested on the board. The IP stack ported from `drivers/net.c`.
 - [ ] [Fable] Admin and sudo (Joshua, 2026-10-06: "fix it soon"): a second privilege tier on the accounts that already exist (login screen, PBKDF2 passwords, Settings "Add user"). An admin flag per account, a password prompt before anything that installs, deletes a user or changes system settings, and a normal-user role that cannot. i386 build first; it touches `kernel/auth.h`, Settings and the syscall gate, not the ARM files, so it can run beside Wi-Fi. Per-user home folders and file permissions follow (6.0).
 - [ ] [Fable] Sound out of the 3.5 mm jack (PWM audio on GPIO 40 and 41 through DMA), then HDMI audio; then Movies plays a clip with sound on the Pi.
 - [ ] [Fable] SD card reads and writes through EMMC2, so files survive a reboot and the Wi-Fi firmware can load from the card.
@@ -177,12 +158,10 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
 Also missing, added 2026-10-06 night, in order:
 - [ ] [Sonnet] Clean shutdown and reboot from the keyboard (the mailbox power-off and the watchdog reset), instead of pulling the plug.
 - [ ] [Fable] The other three cores: wake them from the spin table, give each a stack, run the desktop on one and the drivers on another.
-- [ ] [Sonnet] A clock that is right: the Pi has no battery clock, so take the time from the network once Wi-Fi joins (SNTP), and show it in the menu bar.
 - [ ] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, a HID-over-GATT or classic HID mouse. After Wi-Fi stage 2.
 - [ ] [Sonnet] Heat and the fan: read the SoC temperature through the mailbox, show it, drive the fan pin.
 - [ ] [Fable] Update over Wi-Fi: the Pi fetches the newest kernel8.img from the GitHub release and writes it to the card, then reboots. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror (no TLS yet).
 - [ ] [Sonnet] A Wi-Fi settings screen on the Pi: name and password typed on the keyboard and saved on the card, so nothing is baked into the build.
-- [ ] [Sonnet] A crash screen: when the kernel faults, draw the fault address, the last console lines and the register dump on screen instead of freezing.
 - [ ] [Fable] The Pi 5 (M5): the RP1 chip over PCIe for every peripheral.
 Gaps against Linux distributions (Kali, Ubuntu, Arch), 2026-10-06 night. Most are already on the version road (4.0 processes and a real shell, 6.0 users and backups, 7.0 TLS and a browser, 8.0 a compiler and `get`); these are the ones it did not name:
 - [ ] [Fable] An SSH server: log in to the Pi from the Mac over Wi-Fi, with its own crypto (ed25519, ChaCha20-Poly1305). It makes the serial cable optional for everything but early boot.
@@ -213,7 +192,6 @@ From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal 
 - [ ] [Sonnet] Drop files from the Mac over Wi-Fi: a tiny upload server on the Pi (plain HTTP PUT), no card swap.
 - [ ] [Sonnet] `joshuatree.local`: mDNS so the Pi announces its name on the network.
 - [ ] [Fable] GPU 3D: the V3D block for real 3D, the way Onyx did it. Samantha's face in 3D is the first use.
-- [ ] [Fable] A web browser on the Pi: Madobe on this OS, already the 7.0 gate; NetSurf is the reference port.
 - [ ] [Sonnet] I2C and SPI drivers for breadboard sensors and small screens.
 - [ ] [Sonnet] Console emulators (NES first), later.
 Sources: Onyx on Circle (Adafruit blog, 2026-09-29), Circle's feature list (github.com/rsta2/circle), rpi4-osdev, AROS on the Pi (Hackaday, 2026-08-23).
@@ -235,15 +213,10 @@ Round 3, 2026-10-06 night (macOS Tahoe 26 and Windows 11 2026). Joshua Tree alre
 - [ ] [Sonnet] A Start-style launcher you can customise: pin, reorder and hide apps in the Launchpad.
 - [ ] [Sonnet] Camera controls in Settings, once the Pi camera driver exists.
 Sources: Tom's Guide and TechRadar on macOS Tahoe 26, Pureinfotech and Digital Citizen on Windows 11 2026.
-- [ ] [Fable] Serial loader: a small loader on the card receives each new kernel over the serial cable and boots it, so testing needs no card swaps. Waits on the cable (Joshua, this week).
-- [ ] [Fable] Console text on the real Pi, fixed in 2.12.5, waiting on a photo: the boot lines showed as one thin mark each. Cause: the screen is cached memory and the GPU only sees what the kernel cleans out of the cache. The console wiped its full page after the one clean at startup, and nothing after that left the cache, so only two pixel columns of old text survived. Now every glyph and every wipe is cleaned, the console scrolls, and a diagnostic line ends the log. Tick it when a photo shows the text. Check: `tools/checks/arm64-m1c-check.py` fails if a draw or a wipe stops cleaning.
 - [ ] [Fable] M1d part two (slices 1 to 4 of 5 done: 2.15.0 the Satellite wallpaper and the real menu bar on ARM, `arch/arm64/wall.c`; 2.22.0 the dock from the shared `kernel/gui_paint.c`; 2.23.0 the hover label and the window frame from it too; 2.24.0 the mouse, the shared arrow, the label following it and clicks; slice 5 is typing into apps): the real window and dock drawing code (`drivers/window.c`) running on the ARM build instead of rectangles, and the framebuffer mapped write-combining so a live desktop needs no cache cleans.
-- [ ] [Fable] M1d part two: the real window and dock drawing code (`drivers/window.c`) running on the ARM build instead of rectangles, and the framebuffer mapped write-combining so a live desktop needs no cache cleans.
 - [ ] [Fable] M2: IP, DHCP and a TCP connection on top of the ARM network card (port the i386 stack above the NIC), and the net and disk drivers moved to interrupts too (input already is). Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
-- [ ] [Joshua] M4 USB on the real Pi 4: boot the 2.13.0 SD card with a keyboard in, photograph the screen. The Pi's PCIe bring-up and the VL805 firmware load are written from Circle and Linux but have never run on a board; every step prints a short `usb ...` line, so the photo shows how far it got.
 - [ ] [Fable] ARM IP stack, stage 2: TCP that survives a lost segment (retransmit, reorder, a real window) before the Claude app runs on ARM over Wi-Fi; net and disk drivers on interrupts too (input already is).
 - [ ] [Fable] Still ahead on ARM: M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
-- [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO). Stage 1 (list networks) is built, waiting on a photo from the real board; stage 2 join works on the board; IP is next. Ethernet first for everything else.
 
 ### x86-64 (Joshua, 2026-10-06 night: "let's do x86-64 next")
 
@@ -414,7 +387,6 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 - [ ] [Sonnet] Samantha's mail tools ship: "read my email" and "email Mom that I'm late" work in Chat, with a scenario check.
 - [ ] [Sonnet] Samantha tools for every app: open, read and write Notes, Files, Calendar, Reminders, Weather, Stocks. A few apps a night, one check each.
 - [ ] [Sonnet] She says nothing when "Tap to boot" lifts the landing poster: the demo has no greeting line, only the opt-in `?tour` questions, so it needs one short spoken hello sent through her existing speak path, which depends on the voice relay and ElevenLabs key that live outside this repo.
-- [ ] [Sonnet] Boot straight into Samantha: a kernel command-line flag (`samantha`) opens her full screen after boot.
 - [ ] [Joshua] Google project for mail sign-in (OAuth client id), then [Sonnet] sign in with Google in Mail.
 - [ ] [Sonnet] Lip-synced face: one Higgsfield lip-sync render of a sentence about Joshua Tree, cut into a viseme library, the server sends a mouth timeline with each reply. The face benchmark (PR #241) must grade it A+ (sync is the gap: best so far 55/100).
 - [ ] [Sonnet] Chat listens: speak to Samantha instead of typing. She already answers out loud with her face moving (1.6.9); hearing you needs a microphone path first.
@@ -423,7 +395,7 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 - [ ] [Sonnet] Third-party LLM support: let users choose their preferred model provider (OpenAI, Anthropic, local, etc.).
 
 ## Desktop and apps
-3 of 26 apps (Burrow, Weather, Mail) can open in their own window, capped at 2 at once; Reminders (1.9.9) and Calendar (1.9.12) left that set for ring 3.
+Desktop apps run as protected ring-3 programs. The Pi app port is separate; its current limits are in `docs/AGENT.md`.
 
 - [ ] [Sonnet] Calendar's Year view shows each day as a dot, not a number. A ring-3 window is 345px tall, which leaves about 10px per week row, and a digit needs 16. Either scale the digit font down for the mini months or let the year view use the full window height. `tools/checks/calviews-check.py` now proves the week bands of dots, so it should be tightened to digits when this lands.
 - [ ] [Fable] Per-window backing stores, not drawing straight into the shared framebuffer.
@@ -434,7 +406,6 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 - [ ] [Sonnet] Right-click context menus.
 - [ ] [Sonnet] App switcher and global hotkeys.
 - [ ] [Sonnet] Lock screen, sleep, and ACPI shutdown.
-- [ ] [Haiku] Clock app with timer and alarm.
 - [ ] [Sonnet] Maps app. The wallpaper already fetches map tiles.
 - [ ] [Haiku] Screenshot tool.
 - [ ] [Sonnet] Undo in editors.
@@ -481,9 +452,7 @@ The Mac apps and menu bar pieces this OS still lacks, listed so they can be pick
 - [ ] [Sonnet] Browser (a real web browser app, not a stub).
 - [ ] [Sonnet] Messages.
 - [ ] [Sonnet] FaceTime.
-- [ ] [Sonnet] Photos.
 - [ ] [Sonnet] Preview (open and view documents and images).
-- [ ] [Sonnet] Maps.
 - [ ] [Sonnet] System Settings as its own app, not panels inside Settings.
 - [ ] [Sonnet] App Store.
 - [ ] [Sonnet] Podcasts.
@@ -505,12 +474,14 @@ Everything a stranger needs to use it for an hour in the browser or an emulator 
 - [ ] [Fable] Samantha fixes her own bugs: a failing check becomes a draft PR she opens herself (Claude for the hard part at first), gated on `tools/ci-local.sh`. First target: the three compiler warnings in the build.
 
 ## Later
+
+The following 1.0 decisions are historical context, not the current Pi queue.
+
 Joshua's call, 2026-09-22: **1.0 is a Snow Leopard release.** No new features. Stability, reliability and speed only. New apps and features wait for 1.1.
 Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature works, nothing crashes, all text and icons are sharp, and the icons have taste, not a Microsoft look. Real hardware is trusted for now and proven after.
 Joshua's call, 2026-09-21: Decided for 1.0, stated in the release notes: no Wi-Fi, no Bluetooth (both need firmware blobs and a full 802.11 or BT stack, months of work each), English only (every UI string is compiled in; a language table is a 1.1 project), no screen reader. Keyboard-only use and large text in Notes are the accessibility floor.
 
 - [ ] [Joshua] V1 product vision: full-color UI with crisp icons and fonts, music and video at 100+ fps, clean typography, mobile-first design discipline across every surface.
-- [ ] [Fable] A web browser, which needs secure connections first.
 - [ ] [Joshua] Public APIs and webhooks: exposing kernel features over HTTP for external automation and integration.
 - [ ] [Joshua] Performance targets: 100+ fps sustained in all apps, instant launch times, memory efficiency on low-spec hardware.
 - [ ] [Joshua] Plugins system. Needs a design pass on what a plugin can touch first.
@@ -535,7 +506,7 @@ Needs a call from Joshua before scoping:
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background, that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
 1. **One input bar and a talking tour** (plain: a demo that talks you through it) [Sonnet]: the phone shows two bars and the tour is silent after the intro.
-2. **Samantha as an agent on the Pi** (plain: an assistant that runs the Pi) [Fable]: the Terminal hosts the agent, the Console becomes logs, then actions, multi-step answers and a kill switch. The Pi boots, joins Wi-Fi, browses over HTTPS and runs the Calculator; the order is the Next list at the top.
+2. **Pi relay security** (plain: skip) [Fable]: the Terminal, bounded agent loop and browser controls are merged. Next: relay TLS and a trusted certificate clock, then a board retest.
 3. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
 4. **Every icon in one style** (plain: icons that match) [Sonnet]: the fleet icons keep their own tile colors.
 5. **Photos, Minesweeper, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.
@@ -544,16 +515,5 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.
 
-### Decided 2026-10-08 evening (Joshua)
-- [ ] [Sonnet] Terminal and panes host the agent and commands; the Console becomes logs only. Queued after browser v2.
-- [ ] [Fable] Samantha works as an agent in Joshua Tree: actions open, browse, calc, say, read, list, status; up to 5 steps, 4 actions per turn, with a kill switch.
-- [ ] [Sonnet] Browser v2 on the Pi: a working browser controllable from Console and Terminal. Pages with heavy scripts still show little text, because the Pi does not run JavaScript.
-- [ ] [Joshua] Codex on the Pi: decide between Pi-direct (a gray area) and official codex on the Mac via the relay (read-only). Joshua tests `browse https://chatgpt.com` on the Pi first. Nothing for the Codex login is built.
-
-### Queued 2026-10-08 late evening
+### Pi follow-ups
 - [ ] [Fable] Rendered browse: the Mac relay renders JS pages in headless Chromium for `browse -r`; then QuickJS on the Pi with a tiny page model for simple scripts.
-- [ ] [Fable] Video on the Pi: JPEG or MJPEG decoding, then an audio driver. Joshua to say whether he listens through HDMI or the 3.5mm jack.
-- [ ] [Sonnet] Relay over TLS, so the token no longer crosses Wi-Fi in clear. Also: on-device Wi-Fi setup for cards that carry no key.
-- [ ] [Sonnet] Model and effort controls (/model, /effort) per Terminal pane, after the Samantha agent.
-- [ ] [Joshua] Media through the Mac relay (ElevenLabs voice, Higgsfield video): no render without Joshua's explicit yes, one clip at a time.
-- [ ] [Fable] Voxel game app and Java research, on the roadmap for the next few weeks.
