@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (212 checks)
+## The suite (215 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -220,6 +220,9 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | ARM64 M4 USB: the aarch64 kernel finds an xHCI controller behind a PCIe root port, enumerates a hub, a keyboard behind it and a mouse, and reads key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-usb-check.py` | retry |
 | ARM64 mouse: a USB mouse behind a hub moves the shared arrow over the ARM desktop, the dock label follows it and leaves no ghost, the Console's close button and a dock click work, a hot-plugged mouse moves it, and the scale-2 arrow at 1080p (skips where the tools are missing) | `tools/checks/arm64-mouse-check.py` | retry |
 | ARM64 Calculator: calc.c gets a table of 42 sums right on the host (sin(30deg)=0.5, 5!=120, 2^10=1024, 1/0 is an error), its keypad's memory and Deg keys work, and the calctest build types four sums at boot with the same answers on the UART and the window in a screendump (QEMU part skips where the tools are missing) | `tools/checks/arm64-calc-check.py` | retry |
+| ARM64 keyboard only: with no mouse, Ctrl+Space and F1 open Spotlight (drawn in the house colours), typing term and Enter opens the Terminal with the keyboard, Esc hands the keys back, Left and Right move the dock's label and Enter opens that tile, F2 opens the Terminal at once (skips where the tools are missing) | `tools/checks/arm64-keys-check.py` | retry |
+| ARM64 Mac-style USB keyboard: over xHCI, Cmd+Space opens Spotlight, a plain letter on the bare desktop opens it with the letter typed, Esc with it closed does nothing, a 9-byte report with a report ID still gives Ctrl+T, and the key debug line shows only in the dev build (skips where the tools are missing) | `tools/checks/arm64-keydbg-check.py` | retry |
+| ARM64 live Calendar tile: the caltest build fixes the clock at two dates and a screendump shows the month grid with that day's square in the accent, and only that one (skips where the tools are missing) | `tools/checks/arm64-calicon-check.py` | retry |
 | ARM64 crash screen: an unexpected EL1 fault prints class, ESR, FAR, ELR and the last console lines on the UART, draws them as a panel (QEMU screendump on virt and the Pi 4B model) and halts quietly (skips where the tools are missing) | `tools/checks/arm64-crash-check.py` | retry |
 | ARM64 FP state: q0-q31, FPCR and FPSR survive timer interrupts whose handler wipes them, and the build without the save fails the same test (skips where the tools are missing) | `tools/checks/arm64-fp-check.py` | retry |
 | ARM64 out of memory: a full heap prints oom fb or oom text and the kernel carries on (no screen, or the VGA fallback font) on virt and the Pi 4B model (skips where the tools are missing) | `tools/checks/arm64-oom-check.py` | retry |
@@ -234,10 +237,10 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 |---|---|
 | Burrow | `tools/checks/burrow-labels-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/filesview-check.py`, `tools/checks/ring3burrow-check.py` |
 | Mail | `tools/checks/arm64-led-check.py`, `tools/checks/esc-desktop-check.py`, `tools/checks/mailsend-check.py`, `tools/checks/mailtools-check.py`, `tools/checks/read-long-files-check.py` |
-| Calendar | `tools/checks/apptop-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/ring3calendar-check.py` |
+| Calendar | `tools/checks/apptop-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/ring3calendar-check.py` |
 | Notes | `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3resize-check.py`, `tools/checks/ring3window-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py`, `tools/checks/ring3window-check.py` |
-| Terminal | `tools/checks/arm64-browser-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
+| Terminal | `tools/checks/arm64-browser-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
 | Samantha | `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs` |
 | Curbfind | `tools/checks/ring3curbfind-check.py` |
@@ -255,7 +258,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Epiphany | `tools/checks/epiphany-cmdbar-check.py`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3epiphany-check.py` |
 | Portfolio | `tools/checks/portfolio-check.py`, `tools/checks/portfolio-mute-check.mjs`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3portfolio-check.py` |
 | Activity | `tools/checks/arm64-led-check.py`, `tools/checks/panes-check.py`, `tools/checks/ring3activity-check.py` |
-| Clock | `tools/checks/clock-check.py`, `tools/checks/clockicon-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/movie-check.py`, `tools/checks/ring3clock-check.py`, `tools/checks/ring3windgate-check.py` |
+| Clock | `tools/checks/arm64-calicon-check.py`, `tools/checks/clock-check.py`, `tools/checks/clockicon-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/movie-check.py`, `tools/checks/ring3clock-check.py`, `tools/checks/ring3windgate-check.py` |
 | Music | `tools/checks/music-check.py` |
 | Movies | `tools/checks/movie-check.py` |
 | Hamurapi | `tools/checks/ring3hamurabi-check.py` |

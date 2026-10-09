@@ -291,7 +291,7 @@ void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p) {
 /* A keyboard's media interface (consumer page, usually [report ID, usage low, usage high]). A Mac-mode top row sends
    F1 and F2 as brightness down and up, and some boards have a Spotlight (AC Search) key: those become F1, F2 and F1.
    ponytail: three usages and the ID-prefixed layout only; the dev card's debug line shows anything else. */
-static void hid_media(const unsigned char *r, unsigned len) {
+void hid_media(const unsigned char *r, unsigned len) {   /* exported for main.c KEY_SELFTEST */
     unsigned u = len >= 3 ? (unsigned)(r[1] | r[2] << 8) : len == 2 ? (unsigned)(r[0] | r[1] << 8) : 0;
     unsigned code = u == 0x70 || u == 0x221 ? 59 : u == 0x6F ? 60 : 0;
     if (code) { kinput(1, code, 1); kinput(1, code, 0); kinput(0, 0, 0); }

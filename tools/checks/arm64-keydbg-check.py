@@ -8,8 +8,10 @@ keydbg-kernel8.elf (make keydbgtest: the dev card's debug line, plus made-up rep
   2. a plain 8-byte boot report with Ctrl+Space still opens it (the skip leaves boot reports alone).
   3. Cmd+Space over USB (meta_l, the GUI modifier 0x08) opens Spotlight, and the debug line shows the raw report
      ("keydbg: key 08 00 2c ...") and the name ("Cmd+Space").
-  4. a plain letter on the bare desktop opens Spotlight with it typed ("spotlight: j"); Esc closes it; Esc again does nothing.
-kernel8.elf (release): Cmd+Space works too, and there is no debug line: no "keydbg:" on the UART or in the image.
+  4. made-up media reports (consumer page 0x70, 0x6F, a Mac-mode F1 and F2) open Spotlight and the Terminal.
+     QEMU's usb-kbd has no media interface, so the walk that opens one on a real board is not covered here.
+  5. a plain letter on the bare desktop opens Spotlight with it typed ("spotlight: j"); Esc closes it; Esc again does nothing.
+kernel8.elf (release): Cmd+Space works too, and pi-main.o has the line only with JT_WIFI_DEV=1, and there is no debug line: no "keydbg:" on the UART or in the image.
 Skips (exit 0) when the tools are missing. QEMU runs headless and every step has a timeout.
 """
 import json, os, shutil, socket, subprocess, sys, tempfile, time
@@ -61,7 +63,9 @@ def dev(uart, wait_for, key, expect):
     step("a 9-byte report with a report ID: Ctrl+T opens the Terminal", "terminal open" in between("keytest: id9 ctrl+t", "keytest: id9 esc"))
     step("a 9-byte report with a report ID: Esc hands the keys back", "console open" in between("keytest: id9 esc", "keytest: boot8"))
     step("a plain 8-byte boot report: Ctrl+Space opens Spotlight", "spotlight open" in between("keytest: boot8 ctrl+space", "keytest: boot8 esc"))
-    step("a plain 8-byte boot report: Esc closes it", "spotlight close" in between("keytest: boot8 esc", "keytest: done"))
+    step("a plain 8-byte boot report: Esc closes it", "spotlight close" in between("keytest: boot8 esc", "keytest: media f1"))
+    step("a media report, brightness down (a Mac-mode F1), opens Spotlight", "spotlight open" in between("keytest: media f1", "keytest: media esc"))
+    step("a media report, brightness up (a Mac-mode F2), opens the Terminal", "terminal open" in between("keytest: media f2", "keytest: media esc2"))
     done = expect("spotlight open", "Cmd+Space over USB opens Spotlight"); key("meta_l", "spc"); done()
     step("the debug line shows the raw report and the key name",
          wait_for("keydbg: key 08 00 2c 00 00 00 00 00 Cmd+Space", 30), uart())
@@ -80,5 +84,14 @@ boot("keydbg-kernel8.elf", dev)
 boot("kernel8.elf", release)
 step("the release image carries no debug line", b"keydbg: " not in open(os.path.join(arch, "kernel8.elf"), "rb").read())
 step("the dev image does", b"keydbg: " in open(os.path.join(arch, "keydbg-kernel8.elf"), "rb").read())
+# The Pi's switch: pi-main.o has the line only with JT_WIFI_DEV=1 (tools/flash-pi.sh); -B both ways, then a plain rebuild
+# so a later `make pi` never picks up the dev object.
+def pi_main(dev):
+    env = dict(os.environ); env.pop("JT_WIFI_DEV", None)
+    if dev: env["JT_WIFI_DEV"] = "1"
+    ok = subprocess.run(["make", "-B", "-C", arch, "pi-main.o"], env=env, capture_output=True, timeout=300).returncode == 0
+    return ok and b"keydbg: " in open(os.path.join(arch, "pi-main.o"), "rb").read()
+step("Pi dev build (JT_WIFI_DEV=1) has the debug line", pi_main(True))
+step("Pi release build does not", not pi_main(False))
 if fails: print("FAIL: " + "; ".join(fails)); sys.exit(1)
 print("PASS: arm64-keydbg-check: report IDs, Cmd+Space, letter-opens-Spotlight, and the dev-only key debug line")

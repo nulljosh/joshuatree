@@ -1279,11 +1279,16 @@ static void keydbg_tick(void) {   /* the poll loop: draw a new line, or take an 
     con_quiet = 1; uart_puts("keydbg: "); uart_puts(line); uart_putc('\n');
     kd_shown = 1; kd_until = kd_ms() + 3000;
 }
+#else
+void key_raw(const unsigned char *r, unsigned len, unsigned kind) { (void)r; (void)len; (void)kind; }
+static void kd_key(unsigned code) { (void)code; }
+static void keydbg_tick(void) {}
 #endif
 #ifdef KEY_SELFTEST
 /* keydbg-kernel8.elf only (arm64-keydbg-check.py): made-up HID reports through xhci.c's parser, since QEMU's usb-kbd
    never sends a report ID. Each step prints a marker, then the UART shows what the keys did. */
 void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p);
+void hid_media(const unsigned char *r, unsigned len);
 static void key_selftest(void) {
     static unsigned char last[8];
     static const unsigned char id_ctrl_t[9] = { 2, 0x01, 0, 0x17 }, id_none[9] = { 2 }, id_esc[9] = { 2, 0, 0, 0x29 };   /* ID 2 reads as Shift if not skipped */
@@ -1292,12 +1297,13 @@ static void key_selftest(void) {
     uart_puts("keytest: id9 esc\n"); hid_kbd(id_esc, 9, last); hid_kbd(id_none, 9, last);
     uart_puts("keytest: boot8 ctrl+space\n"); hid_kbd(ctrl_space, 8, last); hid_kbd(none, 8, last);
     uart_puts("keytest: boot8 esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
+    static const unsigned char br_down[3] = { 3, 0x70, 0 }, br_up[3] = { 3, 0x6F, 0 };   /* a Mac-mode F1 and F2 */
+    uart_puts("keytest: media f1\n"); hid_media(br_down, 3);
+    uart_puts("keytest: media esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
+    uart_puts("keytest: media f2\n"); hid_media(br_up, 3);
+    uart_puts("keytest: media esc2\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
     uart_puts("keytest: done\n");
 }
-#else
-void key_raw(const unsigned char *r, unsigned len, unsigned kind) { (void)r; (void)len; (void)kind; }
-static void kd_key(unsigned code) { (void)code; }
-static void keydbg_tick(void) {}
 #endif
 
 unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
