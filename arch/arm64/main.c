@@ -865,24 +865,61 @@ static void menu_mark_paint(int cx, int cy, int T, unsigned ink) {
         window_pixel_phys(ox + col, oy + row, out);
     }
 }
-static void dock_paint(void) {
-    static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
-    gui_draw_dock_tray();
-    int size = DOCK_ICON, pw = size * (int)window_scale(), y0 = gui_dock_y0(), drawn = 0;
-    for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
-        int icon = order[slot], cx = gui_slot_x(slot) + size / 2, cy_bottom = y0 + DOCK_PAD + size;
-        gui_draw_icon_shadow(cx, cy_bottom, size);
-        unsigned long mark = heap_mark();   /* the bump heap never frees: the decode and the tile are rolled back */
-        unsigned int *tile = kmalloc((unsigned)(pw * pw) * 4);
-        unsigned char *art = 0;
-        unsigned aw = 0, ah = 0, ach = 0;
-        if (tile && png_decode(ICON_ART[icon], ICON_ART_LEN[icon], &art, &aw, &ah, &ach) == 0 && art && aw == ICON_ART_SIZE && ah == ICON_ART_SIZE && ach == 4) {
-            gui_icon_art_scale(art, tile, pw, DOCK_TRAY_COLOR);
-            gui_blit_tile(tile, cx - size / 2, cy_bottom - size, size, DOCK_TRAY_COLOR);
-            drawn++;
-        }
-        heap_release(mark);
+/* The live Calendar tile. The authored art (art/icons/calendar.svg, a page with a terracotta binding and a 4 x 3 grid)
+   is the picture when the clock is not set. Once the network has set it, the grid is painted over as this month: seven
+   columns, a square per day from the first's weekday on, today's in the accent. No digits (pictures only). The art's
+   128-unit page runs x 20..108, the binding ends at y 46, the page at y 104; the grid sits in x 25..103, y 50..102. */
+unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
+static unsigned long civil_days(long y, unsigned m, unsigned d);
+static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day);
+static long clock_year;   /* the local year of the last clock_local call */
+#ifdef CAL_TEST_UTC
+static unsigned long cal_utc(void) { return CAL_TEST_UTC; }   /* the caltest build: a fixed date for arm64-calicon-check.py */
+#else
+static unsigned long cal_utc(void) { return net_clock_utc(); }
+#endif
+static int cal_shown = -1;   /* the day the tile shows, as a y/m/d number; -1 is the plain art */
+static int cal_today(void) {   /* today's y/m/d number, or -1 with no clock */
+    unsigned long u = cal_utc(); if (!u) return -1;
+    unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
+    return (int)(clock_year * 12 + (long)mo) * 32 + (int)dd;
+}
+static void cal_overlay(unsigned *tile, int pw, int today) {
+    long y = today / 32 / 12; unsigned mo = (unsigned)(today / 32 % 12), d = (unsigned)(today % 32);
+    unsigned long first = civil_days(y, mo, 1), next = civil_days(mo == 12 ? y + 1 : y, mo == 12 ? 1 : mo + 1, 1);
+    unsigned dow1 = (unsigned)((first + 4) % 7), n = (unsigned)(next - first);   /* 1970-01-01 was a Thursday; 0 = Sunday */
+    for (int py = pw * 49 / 128; py < pw * 103 / 128; py++) for (int px = pw * 24 / 128; px < pw * 104 / 128; px++) tile[py * pw + px] = 0x00F3F3F6;   /* the page, over the art's grid */
+    for (unsigned k = 0; k < n; k++) {
+        unsigned c = (dow1 + k) % 7, r = (dow1 + k) / 7, col = k + 1 == d ? 0x00b5502c : 0x00C7C8CE;
+        int x0 = pw * (int)(175 + 78 * c) / 896, x1 = pw * (int)(175 + 78 * c + 57) / 896;   /* 7 columns of 78/7 units from x 25, squares 57/7 wide */
+        int y0 = pw * (int)(300 + 52 * r) / 768, y1 = pw * (int)(300 + 52 * r + 40) / 768;   /* 6 rows of 52/6 units from y 50, squares 40/6 tall */
+        if (x1 == x0) x1++;
+        if (y1 == y0) y1++;
+        for (int py = y0; py < y1; py++) for (int px = x0; px < x1; px++) tile[py * pw + px] = col;
     }
+}
+static int dock_tile(int slot, int shadow) {   /* one slot's art onto the dock; shadow 0 repaints the tile alone, its corners keep the old shadow */
+    static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
+    int size = DOCK_ICON, pw = size * (int)window_scale(), drawn = 0;
+    int icon = order[slot], cx = gui_slot_x(slot) + size / 2, cy_bottom = gui_dock_y0() + DOCK_PAD + size;
+    if (shadow) gui_draw_icon_shadow(cx, cy_bottom, size);
+    unsigned long mark = heap_mark();   /* the bump heap never frees: the decode and the tile are rolled back */
+    unsigned int *tile = kmalloc((unsigned)(pw * pw) * 4);
+    unsigned char *art = 0;
+    unsigned aw = 0, ah = 0, ach = 0;
+    if (tile && png_decode(ICON_ART[icon], ICON_ART_LEN[icon], &art, &aw, &ah, &ach) == 0 && art && aw == ICON_ART_SIZE && ah == ICON_ART_SIZE && ach == 4) {
+        gui_icon_art_scale(art, tile, pw, DOCK_TRAY_COLOR);
+        if (icon == 2) { cal_shown = cal_today(); if (cal_shown >= 0) cal_overlay(tile, pw, cal_shown); }   /* ICON_ART[2], Calendar */
+        gui_blit_tile(tile, cx - size / 2, cy_bottom - size, size, DOCK_TRAY_COLOR);
+        drawn = 1;
+    }
+    heap_release(mark);
+    return drawn;
+}
+static void dock_paint(void) {
+    gui_draw_dock_tray();
+    int drawn = 0;
+    for (int slot = 0; slot < GUI_ICON_COUNT; slot++) drawn += dock_tile(slot, 1);
     uart_puts("M1d dock "); uart_dec((unsigned)drawn); uart_puts(" icons\n");
 }
 /* Slice 3: the hover label, the i386 one (gui_draw_dock_label). The first hover keeps a copy of the dock's band, so
@@ -1055,6 +1092,7 @@ static void pointer_moved(void) {   /* one report done: the arrow to its new pla
     if (slot != hover_slot) { hover_slot = slot; dock_hover(slot); }
     cur_show();
 }
+static void dock_activate(int slot);
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
@@ -1067,14 +1105,106 @@ static void pointer_click(void) {   /* the left button went down */
             int x, y, w, h; calc_cell(i, &x, &y, &w, &h);
             if (lx >= x && lx < x + w && ly >= y && ly < y + h) { calc_did(calc_press(calc_key(i))); return; }
         }
-    } else if (slot == 6) {   /* dock_names[6], Terminal: the command line */
-        calc_close();
-        pane_open(&term_p);
-    } else if (slot >= 0) {
-        calc_close();
-        console_open();
-        uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
-    } else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
+    } else if (slot >= 0) dock_activate(slot);
+    else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
+}
+static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key or Spotlight: slot 0 is handled by the caller's calc_open */
+    if (slot == 0) { calc_open(); return; }
+    calc_close();
+    if (slot == 6) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line */
+    console_open();
+    uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
+}
+
+/* ---- Keyboard only: the Pi has no mouse yet, and the Terminal (the agent's prompt) could only be opened by a click.
+   F1 or Ctrl+Space opens Spotlight, a small bar over the desktop: type to filter the dock's names, Up and Down to
+   choose, Enter opens, Esc closes. With no pane holding the keys (the Console takes none), Left and Right move the
+   dock's hover label, Enter opens that tile, Esc clears it. F2 or Ctrl+T opens the Terminal at once; Esc with the
+   Terminal in front and no question running hands the keys back to the desktop (the Console). ---- */
+int ask_pending(void);
+int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
+#define SPOT_W 300
+#define SPOT_ROW 22
+#define SPOT_MAX 5                    /* matches shown at most */
+static char spot_text[24]; static unsigned spot_len;
+static int spot_live, spot_sel, spot_hits[GUI_ICON_COUNT], spot_n, dock_sel = -1, ctrl_held;
+static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
+static int spot_lx, spot_ly, spot_lh;   /* the bar on the logical grid; its height is what is drawn now */
+static int spot_match(const char *name) {   /* the typed text, case folded, anywhere in the name */
+    if (!spot_len) return 1;
+    for (unsigned i = 0; name[i]; i++) {
+        unsigned k = 0;
+        while (k < spot_len && name[i + k] && (name[i + k] | 32) == (spot_text[k] | 32)) k++;
+        if (k == spot_len) return 1;
+    }
+    return 0;
+}
+static int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
+static void spot_paint(void) {
+    int s = (int)window_scale();
+    spot_n = 0;
+    for (int i = 0; i < GUI_ICON_COUNT && spot_n < SPOT_MAX; i++) if (spot_match(dock_names[i])) spot_hits[spot_n++] = i;
+    if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
+    cur_hide();
+    int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];   /* the desktop back, then the bar at its new height */
+    spot_lh = 34 + SPOT_ROW * spot_n + (spot_n ? 6 : 0);
+    gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, SPOT_W, spot_lh, 0x00faf8f4, 10);
+    window_rect(spot_lx + 12, spot_ly + 9, 3, 16, 0x00b5502c);   /* the accent: a caret mark at the left of the typed line */
+    gui_text(spot_len ? spot_text : "Open an app", spot_lx + 22, spot_ly + 9, spot_len ? 0x001C1C1E : 0x0075726E);
+    if (spot_n) gui_hairline_h(spot_lx + 10, spot_ly + 33, SPOT_W - 20, 0x00DDD8CE);
+    for (int r = 0; r < spot_n; r++) {
+        int ry = spot_ly + 37 + r * SPOT_ROW, on = r == spot_sel;
+        if (on) window_rect(spot_lx + 8, ry, SPOT_W - 16, SPOT_ROW - 2, 0x00b5502c);
+        gui_text(dock_names[spot_hits[r]], spot_lx + 22, ry + 2, on ? 0x00FFFFFF : 0x001C1C1E);
+    }
+    fb_flush(x, y, w, h);
+    cur_show();
+    con_quiet = 1; uart_puts("spotlight: "); uart_puts(spot_text); uart_putc(' '); uart_dec((unsigned)spot_n); uart_putc('\n');
+}
+static void spot_open(void) {
+    if (spot_live || !fb) return;
+    int s = (int)window_scale(), w = SPOT_W * s, h = spot_hmax() * s;
+    spot_lx = ((int)fb_w / s - SPOT_W) / 2; spot_ly = sg(MENUBAR_H) / s + 24;
+    if (!spot_under) spot_under = kmalloc((unsigned)(w * h) * 4);
+    if (!spot_under) { uart_puts("oom spotlight\n"); return; }
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) spot_under[j * w + i] = fb[(unsigned)(spot_ly * s + j) * fb_pitch + (unsigned)(spot_lx * s + i)];
+    spot_live = 1; spot_len = 0; spot_text[0] = 0; spot_sel = 0;
+    uart_puts("spotlight open\n");
+    spot_paint();
+}
+static void spot_close(void) {
+    if (!spot_live) return;
+    int s = (int)window_scale(), w = SPOT_W * s, h = spot_hmax() * s, x = spot_lx * s, y = spot_ly * s;
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];
+    fb_flush(x, y, w, h);
+    spot_live = 0;
+    uart_puts("spotlight close\n");
+    cur_show();
+}
+static int spot_key(unsigned code) {   /* a key down with the bar open: every key is Spotlight's */
+    if (code == 1) spot_close();
+    else if (code == 28 || code == 96) { int slot = spot_n ? spot_hits[spot_sel] : -1; spot_close(); if (slot >= 0) dock_activate(slot); }
+    else if (code == 103) { if (spot_sel > 0) spot_sel--; spot_paint(); }
+    else if (code == 108) { if (spot_sel + 1 < spot_n) spot_sel++; spot_paint(); }
+    else if (code == 14) { if (spot_len) spot_text[--spot_len] = 0; spot_sel = 0; spot_paint(); }
+    else { int ch = ask_char(code); if (ch >= ' ' && ch < 127 && spot_len + 1 < sizeof spot_text) { spot_text[spot_len++] = (char)ch; spot_text[spot_len] = 0; spot_sel = 0; spot_paint(); } }
+    return 1;
+}
+static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hover(slot); }
+static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
+    if (spot_live) return spot_key(code);
+    if (code == 59 || (ctrl_held && code == 57)) { spot_open(); return 1; }                       /* F1, Ctrl+Space */
+    if (code == 60 || (ctrl_held && code == 20)) { calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
+    if (calc_live) return 0;
+    if (term_front()) { if (code == 1 && !ask_pending()) { console_open(); return 1; } return 0; }   /* Esc: the keys back to the desktop */
+    if (!fb) return 0;
+    if (code == 105 || code == 106) { dock_select(dock_sel < 0 ? (code == 106 ? 0 : GUI_ICON_COUNT - 1) : (dock_sel + (code == 106 ? 1 : GUI_ICON_COUNT - 1)) % GUI_ICON_COUNT); return 1; }
+    if (code == 28 || code == 96) { if (dock_sel < 0) return 0; int slot = dock_sel; dock_select(-1); dock_activate(slot); return 1; }
+    if (code == 1) { if (dock_sel >= 0) dock_select(-1); return 1; }
+    return 0;
 }
 
 unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
@@ -1104,6 +1234,7 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
     int dst = utc >= nth_sunday_utc(y, 3, 2, 10) && utc < nth_sunday_utc(y, 11, 1, 9);
     unsigned long loc = utc - (dst ? 7 : 8) * 3600UL;
     civil_from_days(loc / 86400, &y, mon, day);
+    clock_year = y;
     *hh = (unsigned)(loc % 86400) / 3600; *mm = (unsigned)(loc % 3600) / 60;
 }
 int wifi_signal_level(void);   /* wifi.c: 1 to 3 from how loud our network was in the scan */
@@ -1136,7 +1267,20 @@ void menubar_wifi(int state) {
     }
     fb_flush(mb_x0, 0, W - mb_x0, mb);
 }
+static void cal_tick(void) {   /* the day has changed (or the clock just arrived): the Calendar tile again, the hover band's copy with it */
+    if (!fb || cal_today() == cal_shown) return;
+    int s = (int)window_scale(), h = hover_slot, top = gui_dock_band_top() * s, rows = (int)fb_h - top;
+    if (dock_band) dock_hover(-1);   /* the plain band back first, so the copy below holds no label */
+    cur_hide();
+    dock_tile(3, 0);   /* slot 3, Calendar */
+    fb_flush(gui_slot_x(3) * s, gui_dock_y0() * s, DOCK_ICON * s + s, (DOCK_PAD + DOCK_ICON) * s + s);
+    if (dock_band) for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) dock_band[i] = fb[(unsigned)top * fb_pitch + i];
+    cur_show();
+    if (h >= 0) dock_hover(h);
+    uart_puts("calendar tile redrawn\n");
+}
 void menubar_tick(void) {   /* the poll loop calls this; it redraws only when the minute has changed */
+    cal_tick();
     unsigned long u = net_clock_utc();
     if (!u || mb_wifi < 0) return;
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
@@ -1302,20 +1446,21 @@ static void input_event(struct input_event e) {
         if (e.code == 272 && e.value) pointer_click();
         return;
     }
-    if (e.type == 1 && e.value && (e.code == 60 || (calc_live && e.code != 42 && e.code != 54))) {        /* F2, or a key for the open Calculator (Shift still goes to ask.c) */
+    if (e.type == 1 && (e.code == 29 || e.code == 97)) ctrl_held = e.value != 0;                          /* Ctrl, either side; the key still echoes below */
+    if (e.type == 1 && e.value && ui_key(e.code)) {                                                        /* Spotlight, the dock keys, F2 and Ctrl+T */
         con_quiet = 1;
         uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
-        if (e.code == 60) { if (calc_live) calc_close(); else calc_open(); return; }
+        return;
+    }
+    if (e.type == 1 && e.value && calc_live && e.code != 42 && e.code != 54) {                            /* a key for the open Calculator (Shift still goes to ask.c) */
+        con_quiet = 1;
+        uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
         if (e.code == 1) { calc_close(); return; }                                                          /* Esc */
         int ch = e.code == 15 ? '\t' : e.code == 14 ? '\b' : e.code == 28 || e.code == 96 ? '\n' : ask_char(e.code);
         if (ch) calc_did(calc_type(ch));
         return;
     }
     if (e.type == 1 && calc_live && e.code != 42 && e.code != 54) return;                                  /* its key ups */
-    if (e.type == 1 && e.code == 59) {                                                                     /* F1: Terminal and Console swap */
-        if (e.value) { if (term_front()) console_open(); else pane_open(&term_p); }   /* the open Calculator keeps F1 (above) */
-        return;
-    }
     if (e.type == 1) {                                                                                     /* EV_KEY: keys */
         int held = cur_hold(), term = term_front();
         if (!con_key(e.code, e.value)) {   /* the scroll keys are not logged: that would add lines to the picture they move */

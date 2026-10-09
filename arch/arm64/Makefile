@@ -12,6 +12,7 @@
 #   hovertest   hover-kernel8.elf / hover-kernel8.img: the dock's hover label over slot 3 (Calendar) at boot
 #   cursortest  cursor-kernel8.elf / cursor-kernel8.img: the pointer's arrow over slot 3 at boot, with its hover label
 #   calctest    calc-kernel8.elf: the Calculator open at boot with four sums typed into it
+#   caltest     cal-kernel8.elf: the clock fixed at CAL_UTC, so the Calendar tile shows that month with that day in the accent
 # The Console's ask> prompt asks the Claude relay. claude_cfg.sh writes its address and token (gitignored) on every build
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token), but only when
 # JT_WIFI_DEV=1 (tools/flash-pi.sh) or CLAUDE_RELAY_TOKEN_FILE is set explicitly (the checks); a release build has neither.
@@ -166,6 +167,9 @@ hovertest: hover-kernel8.elf hover-kernel8.img
 cursortest: cursor-kernel8.elf cursor-kernel8.img
 $(eval $(call variant,calc,-DCALC_TEST,,))
 calctest: calc-kernel8.elf
+CAL_UTC ?= 1775000000
+$(eval $(call variant,cal,-DCAL_TEST_UTC=$(CAL_UTC)UL,,))
+caltest: cal-kernel8.elf
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
 run-pi: kernel8.img
@@ -173,4 +177,4 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg
 FORCE:
-.PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest calctest
+.PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest calctest caltest
