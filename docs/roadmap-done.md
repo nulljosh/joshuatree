@@ -104,3 +104,8 @@ Items ticked off in `docs/roadmap.md`, moved here on 2026-10-06 so the roadmap o
 - [x] [Sonnet] Boot health, 2.17.0: `tools/checks/arm64-boot-health-check.py` boots the Pi image on QEMU and fails on any `FAIL` line not in its short expected list, any `oom`, a crash report, or a missing desktop, so a new failing step cannot slip in unseen.
 ## Moved from the desktop branch, 2026-10-07
 - [x] [Sonnet] Two suites at once corrupted each other, found 2026-10-06 (feature-drive, menuclock, ring3crash-all, qa-gallery and soak failed at random on truncated dumps). `tools/ci-local.sh` now takes a one-at-a-time lock, those checks use private temp dirs, `tools/checks/tmp-paths-check.py` stops new fixed paths, and the Samantha caption-fade check steps her clock instead of polling the host's (`tools/checks/samantha-fullscreen-check.py`). The 122 older checks still on fixed paths are listed in `tools/checks/tmp-paths-baseline.txt`; the lock covers them until each is converted.
+
+## October 9 keyboard repair
+
+**Mac-style USB keyboard (2026-10-09).** On the board, F1, F2 and Cmd or Ctrl+Space did nothing. Cmd was never tracked, report-ID reports lost their modifier byte, and a Mac-mode top row sends media keys on an interface we never opened. Now all three are handled, any letter on the bare desktop opens Spotlight, and the dev card shows raw HID bytes in the menu bar. Check: `tools/checks/arm64-keydbg-check.py`.
+**Keyboard fix, 2026-10-09.** Spotlight shortcuts close it when pressed again, and F2 or Ctrl+T opens Terminal even while search is open. Search debug messages stay off the Console so they cannot repaint through the overlay. The keyboard-only check verifies these paths and that closing search restores the screen.
