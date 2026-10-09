@@ -1171,7 +1171,7 @@ static void spot_open(void) {
     cur_hide();
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) spot_under[j * w + i] = fb[(unsigned)(spot_ly * s + j) * fb_pitch + (unsigned)(spot_lx * s + i)];
     spot_live = 1; spot_len = 0; spot_text[0] = 0; spot_sel = 0;
-    uart_puts("spotlight open\n");
+    con_quiet = 1; uart_puts("spotlight open\n");
     spot_paint();
 }
 static void spot_close(void) {
@@ -1181,7 +1181,7 @@ static void spot_close(void) {
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];
     fb_flush(x, y, w, h);
     spot_live = 0;
-    uart_puts("spotlight close\n");
+    con_quiet = 1; uart_puts("spotlight close\n");
     cur_show();
 }
 static int spot_key(unsigned code) {   /* a key down with the bar open: every key is Spotlight's */
@@ -1195,10 +1195,10 @@ static int spot_key(unsigned code) {   /* a key down with the bar open: every ke
 }
 static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hover(slot); }
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
-    if (spot_live) return spot_key(code);
     int chord = ctrl_held || gui_held || alt_held;
-    if (code == 59 || (chord && code == 57)) { spot_open(); return 1; }                            /* F1; Cmd+Space (the Mac's), Ctrl+Space, Alt+Space */
-    if (code == 60 || (ctrl_held && code == 20)) { calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
+    if (code == 59 || (chord && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1, Cmd/Ctrl/Alt+Space toggle */
+    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
+    if (spot_live) return spot_key(code);
     if (calc_live) return 0;
     if (term_front()) { if (code == 1 && !ask_pending()) { console_open(); return 1; } return 0; }   /* Esc: the keys back to the desktop */
     if (!fb) return 0;

@@ -27,10 +27,10 @@ No mouse is needed. The desktop's keys, in `arch/arm64/main.c` (`ui_key`); `tool
 
 | Key | Does |
 |---|---|
-| F1, Cmd+Space, Ctrl+Space, Alt+Space | Spotlight: a bar over the desktop. Type to filter the dock's names (prefix or any part), Up and Down choose, Enter opens, Esc closes |
+| F1, Cmd+Space, Ctrl+Space, Alt+Space | Toggle Spotlight: press again to close. Type to filter the dock's names (prefix or any part), Up and Down choose, Enter opens, Esc closes |
 | A letter or digit | With no pane holding the keys, Spotlight with that character already typed |
 | Enter, Space, Tab | With no pane holding the keys and no dock label, Spotlight, empty |
-| F2, Ctrl+T | The Terminal, at once; it has the keyboard |
+| F2, Ctrl+T | The Terminal, at once, closing Spotlight if open; it has the keyboard |
 | Left, Right | With no pane holding the keys, move the dock's label along the tiles |
 | Enter | Open the labelled tile |
 | Esc | Clear the label; with the Terminal in front, back to the Console. While a question runs it stops the agent instead. With nothing open it does nothing |

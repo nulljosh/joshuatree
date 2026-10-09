@@ -22,6 +22,8 @@ The short list. Everything below is the long list; done items moved to [roadmap-
 
 **Mac-style USB keyboard (2026-10-09).** On the board, F1, F2 and Cmd or Ctrl+Space did nothing. Cmd was never tracked, report-ID reports lost their modifier byte, and a Mac-mode top row sends media keys on an interface we never opened. Now all three are handled, any letter on the bare desktop opens Spotlight, and the dev card shows raw HID bytes in the menu bar. Check: `tools/checks/arm64-keydbg-check.py`.
 
+**Keyboard fix, 2026-10-09.** Spotlight shortcuts close it when pressed again, and F2 or Ctrl+T opens Terminal even while search is open. Search debug messages stay off the Console so they cannot repaint through the overlay. The keyboard-only check verifies these paths and that closing search restores the screen.
+
 **Next, in order**
 1. The Terminal hosts the agent and the Console becomes logs. Why: the `ask>` row lives on the Console's bottom line, so chat and boot noise share one window. Check: `tools/checks/arm64-claude-console-check.py` passes with the question typed into the Terminal, and the Console shows only log lines.
 2. Samantha as an agent on the Pi: more actions, multi-step answers, a kill switch. Why: today she can note and blink; an agent needs to open apps, chain steps and be stopped. Check: a pi-actions check that runs every action in `arch/arm64/ask.c` under QEMU and proves Esc stops a running sequence.

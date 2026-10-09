@@ -1,5 +1,13 @@
 # Joshua Tree loop handoff (2026-10-08, late evening)
 
+## Pickup update (2026-10-09)
+
+The older snapshot below is historical. Cached main is 2.33.1. Keyboard work through `ec114bf9` is on `fix/pi-input-wifi-20261009`, in `~/Documents/Code/jt-pi-repair`, with a 2.33.2 patch prepared for review.
+
+Spotlight shortcuts now toggle search closed. F2 and Ctrl+T close search and open Terminal. Search debug lines stay on serial so they do not repaint through the overlay. The keyboard-only and USB key-debug checks pass, including exact pixel restoration. A fresh Pi dev image builds. The full suite and the real-board test are still pending; no SD card was flashed. Wi-Fi was left alone because Joshua reports it works about nine times out of ten.
+
+Next: review the draft PR, then run the full local suite before ready. Merge or deploy only after Joshua approves the PR. Batch the board check into one card swap: letter opens search, type `term`, Enter opens Terminal, Esc returns, search shortcuts toggle, and F2/Ctrl+T work while search is open. Do not restart the broad roadmap loop for this fix.
+
 ## What the loop is
 
 The Pi loop. Joshua Tree runs on a real Raspberry Pi 4 with a USB keyboard. The loop merges green PRs one at a time, rebuilds the SD card image, and works the roadmap toward a Pi that boots, gets online, and lets Joshua use it without a keyboard-only detour.

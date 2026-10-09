@@ -8,6 +8,8 @@ virtio keyboard, and keys go in through QMP send-key, the path arm64-claude-cons
   3. Esc hands the keys back to the desktop ("console open"); Right three times moves the dock's label to Calendar
      ("M1d hover 2 Mail" on the way) and Enter opens that tile ("dock Calendar: not on ARM yet").
   4. F2 opens the Terminal at once; Esc back; F1 opens Spotlight and Esc closes it ("spotlight close").
+  5. Every Spotlight shortcut toggles it closed and restores the covered pixels exactly. F2 and Ctrl+T also dismiss
+     an open Spotlight before giving the Terminal the keyboard.
 Every step proves the Terminal is reachable with no mouse. Skips (exit 0) when the tools are missing.
 """
 import json, os, shutil, socket, subprocess, sys, tempfile, time
@@ -68,6 +70,21 @@ try:
     done = expect("spotlight open", "F1 opens Spotlight too"); key("f1"); done()
     done = expect("spotlight close", "Esc closes it"); key("esc"); done()
     after = shot()
+    for shortcut in [("f1",), ("ctrl", "spc"), ("meta_l", "spc"), ("alt", "spc")]:
+        before = shot()
+        done = expect("spotlight open", "shortcut opens Spotlight: " + "+".join(shortcut)); key(*shortcut); done()
+        done = expect("spotlight close", "same shortcut closes Spotlight: " + "+".join(shortcut)); key(*shortcut); done()
+        closed = shot()
+        w, h, pixels = before; scale = 2 if h >= 1080 else 1
+        start, end = 40 * scale * w * 3, min(h, 220 * scale) * w * 3
+        step("toggle restores the pixels under Spotlight: " + "+".join(shortcut), pixels[start:end] == closed[2][start:end])
+        key("esc")
+    for shortcut in [("f2",), ("ctrl", "t")]:
+        key("f1")
+        done = expect("spotlight close", "Terminal shortcut dismisses Spotlight: " + "+".join(shortcut))
+        opened = expect("terminal open", "Terminal shortcut opens Terminal: " + "+".join(shortcut))
+        key(*shortcut); done(); opened()
+        key("esc")
     step("closing Spotlight puts the desktop back (no accent mark left where the bar was)",
          count(after, (0xb5, 0x50, 0x2c)) <= count(base, (0xb5, 0x50, 0x2c)))
 finally:
