@@ -16,7 +16,7 @@ plain HTTP POST (SYS_HTTP_POST). This relay takes that POST and does the Claude 
     Content-Type: application/json      {"prompt": "...", "session": "<uuid or empty>"}
       (or text/plain: the whole body is the prompt, session from the X-Claude-Session header)
 
-    200 text/plain:   S <session uuid>\\n<reply text>
+    200 text/plain:   S <session uuid>\\nM <model that answered, e.g. Claude Haiku 5.5>\\n<reply text>
     401 no or wrong token          404 any other path        405 not POST
     411 no Content-Length          413 body over the cap     400 bad JSON, empty prompt, bad session
     429 a request is already running (one at a time)        504 claude ran past --timeout
@@ -119,6 +119,15 @@ def pick_model(cfg, prompt):
     return cfg.api_model_hard if hard else cfg.api_model
 
 
+MODEL_RE = re.compile(r"^claude-([a-z]+)-(\d+)-(\d+)$")
+
+
+def display_name(model):
+    """claude-sonnet-5-5 -> "Claude Sonnet 5.5", the name the Pi shows in its prompt. Anything else is just "Claude"."""
+    m = MODEL_RE.match(model or "")
+    return "Claude %s %s.%s" % (m.group(1).capitalize(), m.group(2), m.group(3)) if m else "Claude"
+
+
 FILES_DIR = os.path.expanduser("~/pi-files")   # the only folder the model can look in
 TOOLS = [
     {"name": "list_files", "description": "List the files in the shared folder.",
@@ -175,7 +184,7 @@ def run_api(cfg, prompt, pi=""):
     except (urllib.error.URLError, OSError, ValueError, KeyError):
         return 502, "The API did not answer."
     text = "".join(b.get("text", "") for b in d.get("content", []) if isinstance(b, dict))
-    return (200, "S -\n" + text) if text else (502, "The API returned no text.")
+    return (200, "S -\nM %s\n%s" % (display_name(model), text)) if text else (502, "The API returned no text.")
 
 
 class Relay:
@@ -209,7 +218,7 @@ class Relay:
         if sid:
             if len(self.sessions) >= SESSIONS_MAX: self.sessions.clear()
             self.sessions.add(sid)
-        return 200, "S %s\n%s" % (sid or "-", text)
+        return 200, "S %s\nM %s\n%s" % (sid or "-", display_name(self.cfg.model), text)
 
 
 class Handler(http.server.BaseHTTPRequestHandler):

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Writes claude_cfg.h (gitignored, never committed): where the Console's `ask>` prompt finds the Claude relay and the
+# Writes claude_cfg.h (gitignored, never committed): where the Console's Claude prompt finds the Claude relay and the
 # token it sends. The relay's host and port come from CLAUDE_RELAY_HOST and CLAUDE_RELAY_PORT (default 10.0.2.2, which
 # is the Mac as QEMU's user network sees it, and 8765, the relay's own default). The token comes from the file in
 # CLAUDE_RELAY_TOKEN_FILE, default ~/.claude-relay-token, the same file docs/CLAUDE-APP.md has you make. No file, or a

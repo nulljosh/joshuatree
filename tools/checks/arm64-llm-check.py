@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The local language model on ARM (arch/arm64/llm.c): `llm PROMPT` at the Console's ask> row, and Samantha falling back
+"""The local language model on ARM (arch/arm64/llm.c): `llm PROMPT` at the Console's prompt row, and Samantha falling back
 to it when the Claude relay cannot be reached. Headless QEMU, keys through QMP, the answer read off the UART.
 
 The checkpoint is tiny and random (dim 64, 2 layers, 4 heads sharing 2 key/value heads, a 377-token vocab, its own classifier, made here
@@ -222,5 +222,5 @@ finally:
     shutil.rmtree(tmp, ignore_errors=True)
 for m in fails: print("FAIL: " + m)
 if fails: sys.exit(1)
-print("PASS: the kernel runs the llama2.c forward pass exactly (tiny random checkpoint, QEMU, %s tok/s), `llm` answers at the ask> row, "
+print("PASS: the kernel runs the llama2.c forward pass exactly (tiny random checkpoint, QEMU, %s tok/s), `llm` answers at the prompt row, "
       "and Samantha falls back to it when the relay is unreachable" % " and ".join(speeds))

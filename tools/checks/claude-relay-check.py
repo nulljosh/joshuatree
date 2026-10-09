@@ -119,6 +119,7 @@ try:
     check("right token -> 200", st == 200, str(st))
     check("reply starts with S <uuid>", bool(m), text[:60])
     check("reply carries the answer", "echo: what is in VERSION" in text, text[:80])
+    check("second line names the model: no --model, so just M Claude", text.split("\n")[1:2] == ["M Claude"], text[:80])
     check("reply punctuation is ASCII", '- "ok"' in text and all(ord(ch) < 128 for ch in text), repr(text[-20:]))
     calls = stub_calls(tmp)
     check("claude ran once", len(calls) == 1, str(len(calls)))

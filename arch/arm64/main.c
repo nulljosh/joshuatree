@@ -43,7 +43,7 @@ static void uart_init(void) {
 #endif
 }
 static void console_putc(char c);   /* the same text, on the screen once there is one */
-static int con_quiet;   /* the rest of this line goes to the UART only: key echoes stay off the screen once the ask> prompt is in use */
+static int con_quiet;   /* the rest of this line goes to the UART only: key echoes stay off the screen once the Claude prompt is in use */
 static int con_line_start = 1;   /* the next character begins a line */
 static void uart_putc(char c) {
     while (REG(UART_FR) & TXFF) {}
@@ -89,7 +89,7 @@ static void uart_dec(unsigned v) {
 int ask_active(void);   /* ask.c */
 void kputs(const char *s) {
     if (ask_active() && s[0] == 'u' && s[1] == 's' && s[2] == 'b' && s[3] == ' ' && s[4] == 'k' && s[5] == 'e' && s[6] == 'y' && s[7] == ' ')
-        con_quiet = 1;   /* xhci.c's "usb key 0x0d j" echo: the letter is on the ask> row now, the line stays on the UART */
+        con_quiet = 1;   /* xhci.c's "usb key 0x0d j" echo: the letter is on the prompt row now, the line stays on the UART */
     uart_puts(s);
 }
 void kdec(unsigned v) { uart_dec(v); }
@@ -689,17 +689,20 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
         con_cw = 8 * con_vga; con_ch = 16 * con_vga; con_base = 0;
     }
     con_cols = (win_w - sc(12)) / con_cw;
-    con_rows = (win_h - sc(46)) / con_ch - 2;   /* then a row pinning the wifi and usb status, and the ask> prompt last */
+    con_rows = (win_h - sc(46)) / con_ch - 2;   /* then a row pinning the wifi and usb status, and the Claude prompt last */
 }
-/* The bottom row: "ask> " and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
+/* The bottom row: the prompt naming the model ("Claude Haiku 5.5 $ ", ask.c) and the line being typed, its tail when
+   it is longer than the row, then a cursor. */
+const char *ask_prompt(void);
 void con_prompt(const char *s, unsigned n) {
     if (!con_live) return;
     int held = cur_hold();
-    unsigned row = (unsigned)con_rows + 1, cols = (unsigned)con_cols, room = cols > 7 ? cols - 6 : 1;
+    const char *p = ask_prompt();
+    unsigned plen = 0; while (p[plen]) plen++;
+    unsigned row = (unsigned)con_rows + 1, cols = (unsigned)con_cols, room = cols > plen + 2 ? cols - plen - 1 : 1;
     int y = con_y + (int)row * con_ch;
     fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
     fb_flush(con_x - 4, y, con_cols * con_cw + 8, con_ch);
-    const char *p = "ask> ";
     unsigned col = 0;
     for (; *p; p++) con_glyph(col++, row, *p);
     if (n > room) { s += n - room; n = room; }
@@ -952,7 +955,7 @@ static void console_close(void) {
     uart_puts("console closed\n");
     cur_show();
 }
-void ask_redraw(void);   /* ask.c: the line being typed, back on the ask> row */
+void ask_redraw(void);   /* ask.c: the line being typed, back on the prompt row */
 static void console_open(void) {
     if (con_live || !con_under) return;
     int s = (int)window_scale();
@@ -1259,7 +1262,7 @@ static void m1_selftest(void) {
 /* ---- Input, from any driver: Linux evdev events (virtio input speaks them natively; the USB HID driver in xhci.c
    translates its reports into them). The pointer starts mid-screen; a tablet sets it, a mouse moves it. ---- */
 struct input_event { unsigned short type, code; unsigned value; };
-int ask_key(unsigned code, unsigned value);   /* ask.c: the ask> line editor */
+int ask_key(unsigned code, unsigned value);   /* ask.c: the prompt's line editor */
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 void ask_poll(void);
 static void input_event(struct input_event e) {
@@ -1282,7 +1285,7 @@ static void input_event(struct input_event e) {
     if (e.type == 1) {                                                                                     /* EV_KEY: keys */
         int held = cur_hold();
         if (!con_key(e.code, e.value)) {   /* the console's scroll keys are not logged: that would add lines to the picture they move */
-            if (ask_key(e.code, e.value) || ask_active()) con_quiet = 1;   /* typed keys show on the ask> row; the echo stays on the UART */
+            if (ask_key(e.code, e.value) || ask_active()) con_quiet = 1;   /* typed keys show on the prompt row; the echo stays on the UART */
             uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
         }
         cur_release(held);
