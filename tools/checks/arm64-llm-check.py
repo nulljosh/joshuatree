@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The local language model on ARM (arch/arm64/llm.c): `llm PROMPT` at the Console's ask> row, and Samantha falling back
+"""The local language model on ARM (arch/arm64/llm.c): `llm PROMPT` at the Terminal's ask> row, and Samantha falling back
 to it when the Claude relay cannot be reached. Headless QEMU, keys through QMP, the answer read off the UART.
 
 The checkpoint is tiny and random (dim 64, 2 layers, 4 heads sharing 2 key/value heads, a 377-token vocab, its own classifier, made here
@@ -103,7 +103,7 @@ def reference(w, vocab, scores, text):   # llama2.c run.c, greedy: (decoded text
         token = nxt
     return out, pos, margin
 
-def squash(s):   # what is left to compare after the Console wraps lines: no whitespace, non-printables as '?'
+def squash(s):   # what is left to compare after the Terminal wraps lines: no whitespace, non-printables as '?'
     return "".join(ch if 32 < ord(ch) < 127 else ("?" if ch not in " \n" else "") for ch in s)
 
 fails = []
@@ -149,6 +149,8 @@ class Boot:
         time.sleep(0.5)
         self.s = socket.socket(socket.AF_UNIX); self.s.settimeout(20); self.s.connect(sock); self.f = self.s.makefile("rw")
         self.f.readline(); self.cmd("qmp_capabilities")
+        self.cmd("send-key", keys=[{"type": "qcode", "data": "f1"}])   # typing lives in the Terminal (docs/TERMINAL.md)
+        if not self.wait_for("terminal open", 10): raise SystemExit("FAIL: F1 did not open the Terminal: %r" % self.uart()[-300:])
     def uart(self): return open(self.log, errors="replace").read() if os.path.exists(self.log) else ""
     def wait_for(self, pattern, secs, count=1):
         end = time.time() + secs

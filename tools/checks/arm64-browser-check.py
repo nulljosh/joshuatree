@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The ARM64 text browser (arch/arm64/browser.c): `browse URL` typed at the Console's ask> row fetches a page over
+"""The ARM64 text browser (arch/arm64/browser.c): `browse URL` typed at the Terminal's ask> row fetches a page over
 HTTPS from a server on the host, follows a redirect, prints readable text with numbered links, and `open N` follows
 link N. All through QEMU's virtio keyboard (QMP send-key) and user network; the result is read off the UART log.
 
@@ -58,6 +58,8 @@ class Boot:
         time.sleep(0.5)
         self.s = socket.socket(socket.AF_UNIX); self.s.settimeout(20); self.s.connect(sock); self.f = self.s.makefile("rw")
         self.f.readline(); self.cmd("qmp_capabilities")
+        self.cmd("send-key", keys=[{"type": "qcode", "data": "f1"}])   # typing lives in the Terminal (docs/TERMINAL.md)
+        if not self.wait_for("terminal open", 10): raise SystemExit("FAIL: F1 did not open the Terminal: %r" % self.uart()[-300:])
     def uart(self): return open(self.log, errors="replace").read() if os.path.exists(self.log) else ""
     def wait_for(self, text, secs, count=1):
         end = time.time() + secs

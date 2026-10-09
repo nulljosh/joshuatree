@@ -948,7 +948,7 @@ static void console_frame(void) {   /* the i386 window frame, and a white well f
     gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? "Terminal" : "Console");
     fb_rect((win_lx + 8) * s, (win_ly + 30) * s, (win_lw - 16) * s, (win_lh - 38) * s, CON_BG);
 }
-static int term_front(void) { return con_live && cp == &term_p; }
+static int term_front(void) { return cp == &term_p && (con_live || !fb); }   /* with no screen at all, the UART is the Terminal */
 /* The red close button puts the wallpaper back where the window was. The log keeps every line (and the UART still
    prints them); a click on any dock tile opens it again with the newest lines, so the one debug view on a Pi can
    never be lost for good. The Terminal (its tile, or F1) takes the same rectangle: one of the two is in front. */
@@ -964,7 +964,8 @@ static void console_close(void) {
 }
 void ask_redraw(void);   /* ask.c: the line being typed, back on the ask> row */
 static void pane_open(struct pane *p) {   /* the Console or the Terminal in front, its newest lines in view */
-    if ((con_live && cp == p) || !con_under) return;
+    if (con_live && cp == p) return;
+    if (!fb) { cp = p; uart_puts(p == &term_p ? "terminal open\n" : "console open\n"); return; }   /* no screen: the keys still follow */
     int s = (int)window_scale();
     cur_hide();
     cp = p;
