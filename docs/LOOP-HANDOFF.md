@@ -1,29 +1,30 @@
-# Joshua Tree loop handoff (2026-10-09, morning)
+# Joshua Tree loop handoff (2026-10-09, afternoon)
 
 ## What the loop is
 
-Finish the landing-page QA and dev-kit signup improvements, then merge PR #488 only after the full local gate and GitHub checks pass. Joshua explicitly approved a safe merge. Do not start the broad Pi roadmap loop from this checkpoint.
+Finish Pi relay TLS and HTTPS clock validation in PR #490, then merge on green. Joshua explicitly approved merging these changes when safe. Keep usage low: no new features, agents or background automation.
 
 ## Where things stand
 
-Main is 2.33.2 at dd8dd756. Branch `fix/landing-waitlist-feedback` and draft PR #488 contain the 2.33.3 landing validation and error feedback, one mobile composer after boot, updated Pi copy, redesigned welcome email, and roadmap cleanup. The worktree also holds three mobile check updates: tap the boot poster before expecting the real composer; the typing check no longer taps an obsolete phone home-screen icon.
+Main is 2.33.4 at 755e3f73. PR #488 shipped landing signup/mobile fixes and the redesigned welcome email, with actual delivery confirmed in Apple Mail. PR #489 shipped relay shared-file race protection, CI balancing and the Wi-Fi guide; full local checks and GitHub CI passed before merge.
 
-The original full local run finished with three mobile checks failing because they expected the composer before boot. Every other regression check and all four demo checks passed. All three corrected mobile checks now pass individually. The full local gate must run again before marking the PR ready; skipped draft checks are not a merge gate.
+Draft PR #490 is on fix/pi-relay-tls-clock, rebased onto main. It requires TLS for Pi relay traffic without an HTTP fallback, requires certificate/key configuration for a LAN relay, and accepts clock dates only over verified HTTPS with strict parsing and rollback protection. Focused host and QEMU checks pass, including wrong-host, expired, future and untrusted certificates, session resume and proof that a plaintext endpoint receives no bearer.
 
-The production signup delivered the original confirmation. The redesigned email was sent once to Joshua from the branch's actual handler using an in-memory waitlist, without changing production signup data. Apple Mail access now works. Delivery, header, button, film link and footer are visually confirmed in Mail. Browser QA covered 19 destinations, the 30-second film, five accordions, gallery, privacy, boot, full screen and Escape; no horizontal overflow at 320, 390, 768 or 1280 pixels with accordions open. Safari, Firefox and a physical phone remain unchecked.
+The first full local run exposed ARM checks cleaning the same build directory from different shards. ARM build checks now share shard 6. Final local validation is running in /tmp/jt-pi-security-final-ci.log, with shard logs /tmp/jt-ci-local-92797-shard*.log. The head was rebased without changing its source tree. Mark ready only after a full local pass, then require actual GitHub CI, not draft skips. This checkpoint only updates documentation.
 
-Other work: Minesweeper PR #478 remains draft and is outside this session. Pi keyboard repair PR #487 merged; the development card was flashed and safely ejected by the earlier session, with its real-board test still pending. No card was flashed in this landing session. Benchmarks wait until checks and other host work are quiet.
+No new card was flashed and no live relay restarted. TLS migration needs the relay certificate, matching host name or IP and development card updated together; read docs/RELAY-TLS.md. Initial certificate validation uses build time, so a certificate expired since the build can pass the first clock handshake. Persistent or signed fresh time and hardware entropy remain open. Physical Pi verification remains required.
+
+Minesweeper #478 is draft with conflicts and outside the current security scope. There are zero open issues and no orphaned remote branches. Benchmarks are deferred while CI or QEMU runs. Checkpoint issue sync cannot locate this repo's docs/roadmap.md because the current script only accepts a root roadmap.
 
 ## Next, in order
 
-1. Commit the three corrected browser checks and checkpoint docs, then run `bash tools/ci-local.sh`, one run at a time and two jobs maximum.
-2. Review the full result, push and update PR #488 validation. Mark ready only on local green. Wait for actual GitHub checks, not draft skips.
-3. Review current diff and head, then squash merge #488 on green using the verified head. No admin bypass. The normal main workflow deploys the landing and Worker.
-4. Verify merge, deployment and live page; update the QA report under the Codex chat's outputs folder. Keep unchecked browsers explicit.
-5. Resume any Pi or Minesweeper work only from its own approved scope. Benchmark on a quiet Mac.
+1. Read the final local log and all shard results. Investigate any failure; do not bypass checks or run another suite in parallel.
+2. Update #490 validation, mark ready on local green and wait for actual GitHub CI, including ARM tests. Merge safely using the verified head once green; Joshua has approved this.
+3. Verify the normal release and landing deployment. Coordinate the relay certificate and card setup before a flash; verify keyboard, Wi-Fi, clock, relay and USB mouse on the board.
+4. Run clean benchmarks only after all CI and QEMU work is quiet. Keep clock bootstrap and hardware randomness gaps explicit.
 
 ## Restart prompt
 
 ```text
-Continue the Joshua Tree landing QA on fix/landing-waitlist-feedback, draft PR #488. Read docs/LOOP-HANDOFF.md and the current check results first. Run the full local gate before ready, then actual GitHub CI. Joshua has approved merging safely on green. Do not bypass failing or skipped checks. Finish the QA report and verify the automatic deploy. Keep usage and replies lean; do not start unrelated roadmap work or subagents.
+Continue Joshua Tree PR #490 on fix/pi-relay-tls-clock. Read docs/LOOP-HANDOFF.md and /tmp/jt-pi-security-final-ci.log first. Complete the full local gate, then actual GitHub checks, then merge safely as Joshua approved. No bypasses, new features, subagents or background automation. No card flash or live relay restart without coordinated certificate/card setup. Keep replies and usage lean. Defer benchmarks until the Mac is quiet.
 ```
