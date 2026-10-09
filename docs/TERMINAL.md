@@ -2,7 +2,7 @@
 
 The ARM desktop has two text windows in the same spot. One is in front at a time.
 
-**Console: logs only.** Boot messages, Wi-Fi, errors and key echoes. It has no input row. It opens at boot, because on a Pi with no serial cable it is the only debug view. Page Up, Page Down, Home and End scroll it.
+**Console: logs only.** Boot messages, Wi-Fi and errors. It has no input row, and typing with it in front does nothing (the key echoes go to the UART only). It opens at boot, because on a Pi with no serial cable it is the only debug view. Page Up, Page Down, Home and End scroll it.
 
 **Terminal: the command line.** Its bottom row is the `ask>` prompt. Type, Backspace, Enter. Every command runs here and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too.
 
