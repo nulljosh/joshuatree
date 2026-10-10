@@ -2,15 +2,13 @@
 
 ## Current task
 
-Branch feat/pi-brick, version 2.37.0, builds on power controls #494. Brick is an original native ARM brick-breaker. Open it from Spotlight. Arrows/A-D or mouse move the paddle; Space/click launches and pauses, R restarts, Escape/red dot closes. It has 32 bricks, three lives, win and game-over states. Scores are not saved and there is no sound.
-
-The fixed-size integer rules have no allocator. A 30 Hz hardware-counter tick animates independently of input. Spotlight suspends painting; switching apps closes the game. Outside the game, the virtio desktop keeps its interrupt-driven wait.
+Branch feat/pi-notifications, version 2.38.0, based on Brick #495. The Pi menu bar shows bounded, four-second messages for Wi-Fi joining and Brick win/game over. A newer message replaces the previous one. The clock and Wi-Fi retain their space; input stays with the app. The hardware counter drives expiry, including the virt desktop while no keys arrive.
 
 ## Checks and review
 
-Brick's host physics harness passes under ASan/UBSan, including collisions, bounds, pause, win, lost lives, restart and 10,000 steps. The real QEMU keyboard/mouse/pixel test passes: held arrows, mouse movement/click, timer-driven ball motion, pause, restart, Spotlight overlay, app switching, red close and Escape. The existing M2 disk/network/input check and Pi shutdown/restart checks pass. The normal Pi build, pre-push, references, registration and generated docs pass. The framebuffer screenshot was inspected.
+ASan/UBSan checks cover truncation, nonprintable bytes, replacement, empty messages and timer wrap. QEMU checks real visible/cleared pixels, idle expiry, Spotlight input and unchanged clock/Wi-Fi pixels. The first pixel test caught an oversized font; fixed by using the normal menu font and clipping to the free gap. Build and regression results are in the PR. Full release-wide validation and physical Pi checks remain; no merge, deployment or flash.
 
-No full suite was started for Brick. It stays draft until release-wide validation and Joshua's PR approval. No merge, deployment or card flash was done. Physical Pi play remains.
+The user authorized a roadmap loop until five-hour usage reaches 90%, and added CI/CD, release versions/tags, zero open issues/PRs/stale branches and ISO download links. GitHub currently has zero open issues. Do not close real work just to make the counts zero. Merge/deploy still requires explicit PR approval. No paid calls, resets or flashes; skip blocked work.
 
 ## Parent branches
 
@@ -23,6 +21,10 @@ PR #493: fixed-path preflight and reserved ARM shard affinity, version 2.35.1. I
 PR #494: confirmed keyboard shutdown/restart, version 2.36.0. Host safety and actual HID-to-watchdog raspi4b shutdown/reboot pass. Physical verification and release-wide validation remain.
 
 At the last GitHub read, #492, #493 and #494 were open drafts. Merge or deploy only after Joshua explicitly approves the PR. Never bypass a failing gate or raise the two-job local cap.
+
+PR #495: native Brick; focused physics/input/pixel checks pass, full gate and board play remain.
+
+PR #496: app text contrast and refreshed landing captures, version 2.37.1. Build, boot, sharpness, Terminal regressions and pre-push pass. Head 14bca641. Based on #495, independent of this notification branch.
 
 ## Physical state and limits
 

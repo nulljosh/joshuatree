@@ -111,7 +111,7 @@ user.o: user.S
 	$(CC) -c $< -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = brick.h brick_ui.h power.h clock_ui.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = notice.h brick.h brick_ui.h power.h clock_ui.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
@@ -193,3 +193,5 @@ FORCE:
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
 $(eval $(call variant,restart,-DPOWER_SELFTEST=2,,))
+
+$(eval $(call variant,notice,-DNOTICE_SELFTEST,,))
