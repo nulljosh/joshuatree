@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.36.0 development branch (2026-10-10)
+
+Keyboard shutdown and restart are implemented for the Pi. Both require an explicit Enter after the chord; Escape cancels, a busy Samantha request refuses, and a hidden prompt cannot confirm. The host safety harness and real HID-to-watchdog shutdown/reboot pass on QEMU raspi4b. This is not merged or flashed; physical board verification remains. Check: `tools/checks/arm64-power-check.py`.
+
 Items ticked off in `docs/roadmap.md`, moved here on 2026-10-06 so the roadmap only shows open work. Nothing was deleted; each item sits under the heading it had. The full history is in `git log` and the GitHub releases.
 
 ### Landing and demo, to A+

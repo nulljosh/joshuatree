@@ -1203,8 +1203,14 @@ static int spot_key(unsigned code) {   /* a key down with the bar open: every ke
     return 1;
 }
 static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hover(slot); }
+#ifdef PI_BUILD
+#include "power.h"
+#endif
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
     int chord = ctrl_held || gui_held || alt_held;
+#ifdef PI_BUILD
+    if (power_key(code)) return 1;
+#endif
     if (code == 59 || (chord && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1, Cmd/Ctrl/Alt+Space toggle */
     if (code == 60 || (ctrl_held && code == 20)) { spot_close(); clock_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
     if (spot_live) return spot_key(code);
@@ -1895,6 +1901,17 @@ void main(void) {
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+#ifdef POWER_SELFTEST
+    void hid_kbd(const unsigned char *, unsigned, unsigned char *);
+    unsigned char previous[8] = {0};
+    const unsigned char chord[8] = { 0x05, 0, POWER_SELFTEST == 1 ? 0x4D : 0x4C };
+    const unsigned char none[8] = {0}, escape[8] = { 0, 0, 0x29 }, enter[8] = { 0, 0, 0x28 };
+    hid_kbd(chord, 8, previous); hid_kbd(none, 8, previous);
+    hid_kbd(escape, 8, previous); hid_kbd(none, 8, previous);
+    uart_puts("power: cancellation survived\n");
+    hid_kbd(chord, 8, previous); hid_kbd(none, 8, previous);
+    hid_kbd(enter, 8, previous);
+#endif
 #ifdef KEY_SELFTEST
     key_selftest();
 #endif

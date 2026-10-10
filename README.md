@@ -17,6 +17,8 @@ Where it is going, and the picture of how it all fits: [Vision](docs/VISION.md).
 
 You can talk to it. Ask Samantha to set a reminder, take a note or open an app, and she answers out loud. (She is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
 
+Pi development build: keyboard restart and shutdown with confirmation. See [the guide](docs/GUIDE.md#restart-or-shut-down-the-pi). Physical verification is pending.
+
 ## In plain words
 
 A computer is a pile of chips and a pile of software on top. Most people never see the bottom of that pile. This project is the whole pile, written by one person: the code that wakes the chip, draws the screen, reads the keyboard, and runs the apps. You can read all of it.

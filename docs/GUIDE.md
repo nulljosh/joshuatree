@@ -188,3 +188,17 @@ do not expose its port to the public internet.
 
 For the technical map and checks, see [Architecture](ARCHITECTURE.md),
 [Terminal](TERMINAL.md) and [the Pi security review](SECURITY-PI.md).
+
+## Restart or shut down the Pi
+
+The 2.36.0 development build adds keyboard power controls. Press
+Ctrl+Alt+Delete to restart, or Ctrl+Alt+End to shut down. On a Mac keyboard,
+Alt is Option and End may require Fn+Right. Terminal asks for confirmation:
+Enter proceeds, Escape cancels. Ordinary letters do not confirm. Wait for
+Samantha to finish an active request first.
+
+Conversations are still held in memory and will be lost. Shutdown asks the
+firmware to power down the SD interface and halt; it does not remove the
+board's physical power supply. Restart boots the OS again. These paths
+pass in QEMU; confirm them on the board before relying on them. The current
+card has not been updated.
