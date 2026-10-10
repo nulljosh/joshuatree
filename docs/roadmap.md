@@ -27,7 +27,7 @@ The ordered list below is the near-term queue. The topic sections keep the longe
 6. Split `kernel/kernel.c` in slices. Why: it is too big to work in. Check: `make` and `./check.sh` after every slice, `tools/checks/check-refs.sh` after each move.
 7. Trademark check before any rename (Folio, Mirage). Why: a rename on a box with a taken name is a redo. Check: the search result written in this file.
 
-Notes and Clock on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AUTONOMY.md) stay open below.
+Notes on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AUTONOMY.md) stay open below.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, fewer get it onto a real board. Lean into that:
 - **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`), film the first ugly print and every fix, then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
