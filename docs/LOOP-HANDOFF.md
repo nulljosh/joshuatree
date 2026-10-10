@@ -2,7 +2,9 @@
 
 ## Current task
 
-The footer branch fix/landing-footer in work/landing-footer adds a wide original desert illustration using the existing vector tree mark, a larger closing statement and accessible 44px directory links. It is based on release/2.39.0 but does not change that candidate or its running full gate. Footer version is 2.39.1; full gate and release approval remain required before it can reach main.
+The current worktree work/landing-footer is now on fix/ci-pi-runner (2.39.2), stacked on footer PR #500. Candidate GitHub run 38093213365 failed only the Pi power check because Ubuntu 24.04's QEMU has no raspi4b machine. Seven suite shards, demo and network passed. The ARM-reserved shard now uses Ubuntu 26.04 and fails early unless QEMU lists raspi4b; other shards stay on 24.04. Runner/cache versions are separated. Linux CI validation of this repair is still pending. The footer suite also now installs WebKit, matching its new browser check.
+
+The footer branch fix/landing-footer (PR #500) adds a wide original desert illustration using the existing vector tree mark, a larger closing statement and accessible 44px directory links. It is based on release/2.39.0 but does not change that candidate or its running full gate. Footer version is 2.39.1; full gate and release approval remain required before it can reach main.
 
 Release candidate branch release/2.39.0 in work/pi-notifications combines #478 and #491–498. It includes Mines, Pi RNG/Terminal/Calendar repairs, Clock, keyboard power controls, Brick, menu notices, app text contrast, fresh landing captures, the CI preflight/ARM affinity repair and direct ISO downloads. No merge or deployment has happened.
 
@@ -16,7 +18,7 @@ The combined 2.39.0 full local gate and GitHub validation have not completed yet
 
 ## Goal and approval
 
-Continue implementable roadmap tasks until five-hour usage has 15% or less remaining, then stop. The latest snapshot was 26% remaining. The user added a reference-inspired landing footer; it is isolated from the running release candidate. Keep markdown fresh. Target working CI/CD, version/tag/release updates, direct ISO links, zero unresolved PRs/issues/stale branches, and A+ QA before main. Never close real work just to make counts zero.
+Continue implementable roadmap tasks until five-hour usage has 15% or less remaining, then stop. The latest snapshot was 17% remaining; stop at 15%. The user added a reference-inspired landing footer; it is isolated from the running release candidate. Keep markdown fresh. Target working CI/CD, version/tag/release updates, direct ISO links, zero unresolved PRs/issues/stale branches, and A+ QA before main. Never close real work just to make counts zero.
 
 Main has zero open issues. Every remote branch was main or belonged to an open PR. The unused local feat/pi-codex-relay branch was deleted after verifying it was an ancestor; no work was lost. Active worktrees and their local branches remain untouched.
 

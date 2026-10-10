@@ -83,7 +83,8 @@ jobs:
     # exact shape of "it was green yesterday and red today with no commit
     # in between". Bump this line deliberately when the toolchain should
     # move, so the bump is a commit that CI itself proves out.
-    runs-on: ubuntu-24.04
+    # ARM is reserved on shard 6 and needs QEMU with raspi4b support.
+    runs-on: ${{ matrix.shard == 6 && 'ubuntu-26.04' || 'ubuntu-24.04' }}
     # A wedged QEMU process (hung boot, a script waiting forever on a socket
     # that will never answer) used to have no ceiling: the job would sit
     # "in_progress" indefinitely, which reads the same as "still fine" on
@@ -119,6 +120,9 @@ jobs:
         run: |
           nproc
           qemu-system-aarch64 --version
+          if [ "${{ matrix.shard }}" = 6 ]; then
+            qemu-system-aarch64 -machine help | awk '$1 == "raspi4b" { found = 1 } END { if (!found) { print "FAIL: QEMU lacks raspi4b"; exit 1 } }'
+          fi
           openssl version
       # The old cache step pointed at /var/cache/apt/archives, which apt on
       # the runner empties after a successful install, so it restored an
@@ -134,9 +138,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-ubuntu-24.04-${{ hashFiles('kernel/**', 'drivers/**', 'boot/**', 'lib/**', 'arch/arm64/**', 'third_party/bearssl/**', 'Makefile') }}
+          key: ccache-ubuntu-${{ matrix.shard == 6 && '26.04' || '24.04' }}-${{ hashFiles('kernel/**', 'drivers/**', 'boot/**', 'lib/**', 'arch/arm64/**', 'third_party/bearssl/**', 'Makefile') }}
           restore-keys: |
-            ccache-ubuntu-24.04-
+            ccache-ubuntu-${{ matrix.shard == 6 && '26.04' || '24.04' }}-
       - name: Build
         run: |
           echo "/usr/lib/ccache" >> "$GITHUB_PATH"
