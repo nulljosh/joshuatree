@@ -80,6 +80,9 @@ How to use this: the Pickup list below stays the near-term queue. When a Pickup 
 Open work by topic. The 3.0 gate above also needs a working mouse on the real board; a desktop boot alone does not close it.
 
 ### Landing and demo, to A+
+
+Footer polish is prepared separately for review: a spacious directory, original desert line art built from our tree mark, dark mode and real 44px link targets. Chromium and WebKit checks cover phone/tablet/desktop layout, links, keyboard focus and contrast. The main release candidate is unchanged while its full gate runs.
+
 - [ ] [Sonnet] Phone shows two input bars: the OS draws its own chat bar and the page draws a real composer for the phone keyboard. Keep one visible. The OS bar can hide while the composer is up, or the composer can be the only bar and feed the OS. Check: `tools/checks/phone-boot-check.py` plus a screenshot of the phone tour.
 - [ ] [Sonnet] The tour is silent after the intro video. Joshua speaks each stop in his cloned voice (`/api/speak` with `voice: "joshua"`, see the personas doc in the Turing repo), with the caption on screen and the speaker button respected. Check: extend `tools/checks/portfolio-mute-check.mjs` so muted means no audio request.
 - [ ] [Sonnet] Real-Chrome QA of the whole tour after any tour change, desktop and phone. Headless Chromium has no H.264, so it skips the intro video: run the checks with the system Chrome (`CHROMIUM_PATH`). The last full desktop pass was clean (intro, then Epiphany, Curbfind, Bookrank, Lexly, Hikko). The phone tour was last checked before the 2.6.13 fixes.

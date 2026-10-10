@@ -428,8 +428,15 @@
   .mark-tree { --src: url(mark-tree.svg); }
   .closing { color: var(--fg); font-size: 18px; line-height: 1.65; max-width: 52ch; text-align: center; margin: 0 auto; }
 
-  footer { text-align: center; padding: 0 0 40px; color: var(--sub); font-size: 13px; background: var(--bg); }
-  footer .sheet-rule { padding: 14px 20px 28px; }
+  footer { text-align: center; padding: 48px 0 0; color: var(--sub); font-size: 13px; background: var(--bg); }
+  footer .grain-zone { display: grid; grid-template-columns: 120px 1fr; align-items: start; gap: 48px; max-width: 1120px; margin: 0 auto; padding: 0 32px 64px; text-align: left; }
+  footer .seal { margin: 6px 0 0; }
+  .foot-story h2 { margin: 0 0 24px; color: var(--fg); font-size: clamp(36px, 5.2vw, 64px); line-height: 1.08; letter-spacing: -0.045em; }
+  footer .closing-name { font-size: 14px; font-weight: 400; line-height: 1.6; text-align: left; color: var(--sub); }
+  footer .closing { font-size: 16px; max-width: 60ch; margin: 0; text-align: left; }
+  footer .sheet-rule { max-width: 1120px; margin: 0 auto; padding: 14px 32px 40px; }
+  .foot-landscape { height: clamp(240px, 27vw, 460px); margin-top: 32px; background: var(--accent); -webkit-mask: url(footer-landscape.svg) center bottom / cover no-repeat; mask: url(footer-landscape.svg) center bottom / cover no-repeat; pointer-events: none; }
+  @media (max-width: 700px) { footer .grain-zone { grid-template-columns: 1fr; gap: 24px; padding: 0 24px 40px; } footer .seal { width: 80px; height: 80px; } footer .sheet-rule { padding-inline: 24px; } }
   @media (max-width: 520px) { footer .sheet-rule { flex-wrap: wrap; justify-content: center; white-space: normal; gap: 10px 16px; } footer .sheet-rule::before { order: -1; flex-basis: 100%; } }
 
   .specs a { color: var(--fg); text-decoration-color: var(--accent); text-underline-offset: 3px; }
@@ -464,15 +471,15 @@
   .specs a { position: relative; }
 
   /* Footer directory: four columns like apple.com, two-by-two on phones. */
-  .foot-dir { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px 24px; max-width: 880px; margin: 0 auto; padding: 0 20px 28px; text-align: left; }
+  .foot-dir { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px 24px; max-width: 1120px; margin: 0 auto; padding: 0 32px 40px; text-align: left; }
   .foot-col h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--fg); letter-spacing: 0.02em; }
   .foot-col ul { list-style: none; margin: 0; padding: 0; }
-  .foot-col a { position: relative; display: inline-block; padding: 5px 0; color: var(--sub); text-decoration: none; font-size: 13px; line-height: 1.35; }
-  .foot-col a::after { content: ""; position: absolute; top: 50%; left: 0; transform: translateY(-50%); width: 100%; height: 44px; min-width: 44px; }
+  .foot-col a { position: relative; display: inline-block; min-height: 44px; min-width: 44px; padding: 12px 0; color: var(--sub); text-decoration: none; font-size: 14px; line-height: 20px; }
   .foot-col a:hover { color: var(--fg); text-decoration: underline; }
-  .foot-bar { max-width: 880px; margin: 0 auto; padding: 18px 20px 0; border-top: 1px solid var(--border); }
+  .foot-bar { max-width: 1056px; margin: 0 32px; padding: 24px 0 0; border-top: 1px solid var(--border); }
+  @media (min-width: 1120px) { .foot-bar { margin-inline: auto; } }
   .foot-bar .foot-meta { margin: 0; }
-  @media (max-width: 700px) { .foot-dir { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 700px) { .foot-dir { grid-template-columns: repeat(2, 1fr); } .foot-landscape { -webkit-mask-position: right bottom; mask-position: right bottom; } }
   .foot-meta { color: var(--sub); font-size: 12.5px; line-height: 1.9; }
   .foot-meta a { color: var(--sub); }
   footer a { color: var(--accent2); }
@@ -616,7 +623,7 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">31</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">2.39.0</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">2.39.1</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
@@ -823,15 +830,16 @@
   </div>
 </section>
 
-<section class="grain-zone reveal">
-  <img class="seal" src="logo.svg" alt="The Joshua Tree mark: a Joshua tree with its branches raised like arms" width="160" height="160" loading="lazy">
-  <p class="closing-name">Settlers named the Joshua tree for Joshua, arms raised to the sky.</p>
-  <p class="closing">A real computer built from nothing, not a skin on someone else's. <span data-fact="apps">31</span> apps, Samantha to run them, and now a real Raspberry Pi with Wi-Fi. Free and open source, named for the tree that survives on nothing.</p>
-</section>
-
 </main>
 
 <footer>
+<section class="grain-zone" aria-label="About Joshua Tree">
+  <img class="seal" src="logo.svg" alt="The Joshua Tree mark: a Joshua tree with its branches raised like arms" width="160" height="160" loading="lazy">
+  <div class="foot-story"><h2>Rooted ideas.<br>Bolder tomorrows.</h2>
+  <p class="closing-name">Settlers named the Joshua tree for Joshua, arms raised to the sky.</p>
+  <p class="closing">A real computer built from nothing, not a skin on someone else's. <span data-fact="apps">31</span> apps, Samantha to run them, and now a real Raspberry Pi with Wi-Fi. Free and open source, named for the tree that survives on nothing.</p>
+  </div>
+</section>
   <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Company</span><span>Rooted ideas. Bolder tomorrows.</span></div>
   <nav class="foot-dir" aria-label="Footer">
     <div class="foot-col">
@@ -877,8 +885,9 @@
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.39.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.39.1</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
+  <div class="foot-landscape" aria-hidden="true"></div>
 </footer>
 
 <script>
