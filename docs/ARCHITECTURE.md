@@ -128,7 +128,9 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `arch/arm64/notice.h` | One bounded menu message; a newer one replaces it and it expires after four seconds, including timer wrap. |
 | `arch/arm64/brick.h`, `arch/arm64/brick_ui.h`, `tools/checks/arm64-brick-check.py` | Original brick-breaker rules and ARM window: 32 bricks, three lives, arrows or mouse, pause and restart. Hardware-counter animation; host physics and QEMU input/pixel checks. |
 | `arch/arm64/power.h`, `tools/checks/arm64-power-check.py` | Pi keyboard shutdown and restart, explicit confirmation and cancellation, VideoCore SD power-off and watchdog reset; host safety checks and real raspi4b shutdown/reboot tests. |
-| `tools/gen/ci-balance.py` | Rebalances the CI shards. Reads how long each check took in a finished run and rewrites the shard numbers in `tools/checks/ci-suite.sh` so every shard gets about the same work. |
+| `tools/gen/ci-balance.py` | Rebalances the CI shards. Reads how long each check took in a finished run and rewrites the shard numbers in `tools/checks/ci-suite.sh` while preserving shard 6 for shared ARM builds. |
+| `tools/checks/ci-tooling-check.py` | Host fixtures prove ARM builds stay together when balancing and a fixed test path stops local CI before builds. |
+| `tools/ci-local.sh`, `tools/hooks/pre-push` | Run the fixed-path guard before builds; local CI then runs the release suite with two workers. |
 | `tools/ci-lock.sh` | One suite at a time on this Mac. `ci-local.sh` and `ci-suite.sh` source it: an atomic `mkdir` lock with a pid file, stale locks cleared, a 60 minute wait, released on exit. `CI_LOCAL_NO_LOCK=1` skips it. |
 | `tools/checks/scratch.py` | Gives each QEMU check its own temp directory, removed at exit. `JT_KEEP_TMP=1` keeps it for debugging. |
 | `tools/checks/tmp-paths-check.py`, `tools/checks/tmp-paths-baseline.txt` | Fails when a check hard-codes a fixed `/tmp/jt-*` path or socket. The baseline lists the older offenders and only ever shrinks. |
