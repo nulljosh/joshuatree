@@ -1,41 +1,35 @@
 # Joshua Tree handoff (2026-10-10)
 
-## Current work
+## Current task
 
-Branch feat/pi-power-controls, version 2.36.0, builds on the Clock branch (#492), independently of CI fixes #493. The single roadmap task is keyboard shutdown/reboot: Ctrl+Alt+End / Ctrl+Alt+Delete, Enter confirms, Escape cancels. Busy Samantha requests and hidden prompts refuse confirmation. The Pi uses the VideoCore SD power-state tag and BCM watchdog halt/reset. The host harness and QEMU raspi4b tests pass; the QEMU variants feed real HID reports through the keyboard parser and require actual shutdown or a second boot. No card was flashed and physical verification remains. Only focused checks and the normal pre-push gate are being run for this task; it stays draft pending release-wide validation and Joshua's PR approval.
+Branch feat/pi-brick, version 2.37.0, builds on power controls #494. Brick is an original native ARM brick-breaker. Open it from Spotlight. Arrows/A-D or mouse move the paddle; Space/click launches and pauses, R restarts, Escape/red dot closes. It has 32 bricks, three lives, win and game-over states. Scores are not saved and there is no sound.
 
-Branch feat/pi-clock-calendar, version 2.35.0, builds on PR #491 (fix/pi-rng-terminal-calendar, 2.34.0). Joshua asked for a readable Pi Calendar icon, a Clock app and Samantha QA in QEMU. Calendar now shows the month and large day number, with a zero-based month encoding that also handles December. Clock opens from Spotlight or Samantha's open action, displays Vancouver time and date, refreshes each minute and waits for network time when unset. Escape and the close button restore the previous pane. Samantha's dock tile now opens the existing assistant Terminal instead of the placeholder Console. Vancouver remains UTC-7 after March 8, 2026, per the B.C. time change.
+The fixed-size integer rules have no allocator. A 30 Hz hardware-counter tick animates independently of input. Spotlight suspends painting; switching apps closes the game. Outside the game, the virtio desktop keeps its interrupt-driven wait.
 
-## Validation
+## Checks and review
 
-The prior session inspected a real QEMU screenshot and passed the focused Calendar/Clock/launch check after correcting Vancouver's winter offset. Temporary logs disappeared overnight. PR #492 is saved as draft. The first full process ended without a summary after 68 checks. The completed rerun (work/clock-ci-retry.log) passed 217 of 218 suite checks and all four demos; window snapping needed its one retry. The only failure was a fixed screenshot export path in arm64-calicon-check.py. That unnecessary export is removed and tmp-paths-check.py now passes. Calendar/Clock/Samantha checks passed after the removal. Ten additional host checks covered Vancouver transitions, New Year and leap day. A fresh two-job tools/ci-local.sh run must finish green before marking the PR ready; its log is work/clock-ci-final.log. No app source changed for this test correction. The suite includes the Calendar/Clock check, Samantha TLS/session/token checks and the bounded agent loop against fake responses. No paid Claude request is needed. Do not bypass a failing check. PR #491 was fully green and still open at resume; Joshua must explicitly approve PRs before merge.
+Brick's host physics harness passes under ASan/UBSan, including collisions, bounds, pause, win, lost lives, restart and 10,000 steps. The real QEMU keyboard/mouse/pixel test passes: held arrows, mouse movement/click, timer-driven ball motion, pause, restart, Spotlight overlay, app switching, red close and Escape. The existing M2 disk/network/input check and Pi shutdown/restart checks pass. The normal Pi build, pre-push, references, registration and generated docs pass. The framebuffer screenshot was inspected.
 
-## Physical state
+No full suite was started for Brick. It stays draft until release-wide validation and Joshua's PR approval. No merge, deployment or card flash was done. Physical Pi play remains.
 
-The 2.34.0 development card was flashed, hash-verified and safely ejected at Joshua's request. Joshua confirmed it boots and Spotlight opens Terminal. He noticed the tiny calendar grid and has not yet tested Samantha. The new 2.35.0 changes have not been flashed. Physical Clock, icon and Samantha verification remain; no claim of API expiry is confirmed.
+## Parent branches
 
-The previous Mac TLS relay stopped overnight. It was restored as a foreground process from approved main commit ab90b912, with the existing credentials. Strict TLS, GET rejection and wrong-token refusal passed without a model call. Its CA and server certificate live under ~/.config/joshuatree/relay-tls, with private keys on the Mac. Before another Pi test, recheck the Mac LAN address and start the reviewed relay with the existing token, API key file and TLS certificate flags as documented in docs/RELAY-TLS.md. Do not silently rotate credentials. Development card images and their backups contain credentials: keep them private.
+PR #491: RNG, Terminal and Calendar fixes, version 2.34.0. The development card booted on the physical Pi; hardware RNG and a real Samantha answer still need verification.
 
-## Limits
+PR #492: readable Calendar icon, Clock and Samantha dock launch, version 2.35.0. Focused QEMU checks pass. Clock is read-only, Calendar remains an icon.
 
-Clock is read-only: no alarms, timers or world clocks. Calendar is still an icon on ARM, not a full Calendar app. Clock bootstrap still uses build time. Terminal sessions reset on reboot and share browser navigation. The prior card boot proves boot only; RNG output and a real Samantha answer remain unverified on hardware.
+PR #493: fixed-path preflight and reserved ARM shard affinity, version 2.35.1. Its exact head 5d2e99f passed the full local gate: 219 suite checks and four demos, 2,391 seconds, zero failures. This validates the Clock code in that stack, not the later power/game additions.
 
-## Next pickup
+PR #494: confirmed keyboard shutdown/restart, version 2.36.0. Host safety and actual HID-to-watchdog raspi4b shutdown/reboot pass. Physical verification and release-wide validation remain.
 
-Joshua authorized more roadmap work and asked to keep README, loop pickup and roadmap current. Next is Codex access from the Pi. Official docs support device-code login in the official CLI and non-interactive read-only exec. A custom bare-metal OAuth client is not established by those docs; prefer the official CLI on the Mac, keep credentials off the card and establish tool isolation before wiring a relay. No Codex backend has been implemented or deployed yet. Do not change the current tested application source while the suite runs; use a separate branch/worktree for the next task.
+At the last GitHub read, #492, #493 and #494 were open drafts. Merge or deploy only after Joshua explicitly approves the PR. Never bypass a failing gate or raise the two-job local cap.
 
+## Physical state and limits
 
-## Work while Joshua is away
+The 2.34.0 development card was flashed, hash-verified and safely ejected. Joshua confirmed boot and Spotlight opening Terminal. Later Clock, power and Brick changes have not been flashed. The next board checks are the new icon/Clock, power controls, Brick, mouse, RNG and Samantha.
 
-Boot and desktop/Clock/Terminal chapters are now in docs/GUIDE.md.
-The ARM milestone list no longer repeats M1/M2 or describes confirmed board
-boot and Wi-Fi joining as future work. Terminal
-notes now match the model prompt, Samantha dock launch and Clock search.
-Codex implementation is pending a specific approval: automatic approval
-review rejected a proposed opt-in relay because it could send repository
-contents through the logged-in Mac CLI. The question is pending in chat;
-no relay or Pi source was changed. A sandbox probe read VERSION and refused
-access to the private Codex config. That checks one boundary only; it does
-not prove the whole CLI integration safe. Branch feat/pi-codex-relay remains an empty branch based on Clock. Its
-worktree at work/pi-codex is now reused for feat/pi-power-controls; no
-Codex backend was implemented.
+Clock bootstrap still uses build time. Conversations reset on reboot. Pi SD saving, local model weights from card and fallback updates remain unimplemented. Development card images and backups contain credentials; keep them private.
+
+The Mac TLS relay must be checked/restarted before a board Samantha test using the reviewed main script and existing credentials, as described in docs/RELAY-TLS.md. Do not rotate credentials silently. No paid model request was made for these tasks.
+
+Codex relay implementation remains pending specific repository-access approval after automatic review rejected its potential repository egress. No backend exists. The empty feat/pi-codex-relay branch remains; work/pi-codex is now used by feat/pi-brick.

@@ -18,6 +18,7 @@ static void term_output(int on) { (void)on; }
 static void uart_puts(const char *s) { if (strstr(s,"confirms")) prompts++; }
 static void spot_close(void) {}
 static void clock_close(void) {}
+static void brick_close(void) {}
 static void calc_close(void) {}
 static void pane_open(int *p) { (void)p; front=1; }
 #include "arch/arm64/power.h"

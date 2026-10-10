@@ -202,3 +202,16 @@ firmware to power down the SD interface and halt; it does not remove the
 board's physical power supply. Restart boots the OS again. These paths
 pass in QEMU; confirm them on the board before relying on them. The current
 card has not been updated.
+
+## Play Brick
+
+The 2.37.0 development build adds an original brick-breaker game. Open
+Spotlight with F1, type Brick and press Enter. Move the paddle with Left
+and Right, A and D, or the mouse inside the playfield. Space or a click
+launches the ball. Clear all 32 bricks before losing your three lives.
+
+Space or click pauses and resumes. R starts a new game. After a win or
+game over, Space starts again. Escape or the red button closes the game;
+opening another app closes it too. Spotlight temporarily suspends the
+animation while you search. Scores are not saved and the game is silent.
+QEMU checks pass; play on the real board is still pending.

@@ -6,7 +6,7 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 
 ## Apps currently implemented on ARM
 
-The Pi does not have the i386 demo's full app collection. Its native windows are the Calculator, Terminal, Console and Clock. The Apps tile opens Calculator; F2 opens Terminal. Vancouver stays UTC-7 after March 8, 2026, following [B.C. permanent Pacific time](https://news.gov.bc.ca/releases/2026AG0013-000209). Search Clock in Spotlight to open its time/date window; Escape closes it. The Samantha dock tile opens the assistant Terminal. Claude/Samantha and the text browser run as Terminal commands. The optional local model also runs there when weights are included in the image.
+The Pi does not have the i386 demo's full app collection. Its native windows are the Calculator, Terminal, Console, Clock and Brick (development branch). The Apps tile opens Calculator; F2 opens Terminal. Vancouver stays UTC-7 after March 8, 2026, following [B.C. permanent Pacific time](https://news.gov.bc.ca/releases/2026AG0013-000209). Search Brick in Spotlight for the brick-breaker game. Search Clock in Spotlight to open its time/date window; Escape closes it. The Samantha dock tile opens the assistant Terminal. Claude/Samantha and the text browser run as Terminal commands. The optional local model also runs there when weights are included in the image.
 
 Burrow, Mail, Calendar, Notes, Reminders, Weather, Stocks and Trash dock tiles do not open their own ARM apps. They return to the Console and print `not on ARM yet`. The live Calendar icon shows the month and day number; it does not open a Calendar app. Samantha's `note` action prints text; it does not save a Notes document.
 

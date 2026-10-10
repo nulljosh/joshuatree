@@ -111,7 +111,7 @@ user.o: user.S
 	$(CC) -c $< -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = power.h clock_ui.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = brick.h brick_ui.h power.h clock_ui.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c

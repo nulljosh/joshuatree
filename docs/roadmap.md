@@ -18,7 +18,7 @@ The ordered list below is the near-term queue. The topic sections keep the longe
 
 **On the real Pi:** the desktop, USB keyboard, Wi-Fi, network clock and Samantha relay work. Joshua confirmed an HTTPS fetch on the board. The merged Terminal, bounded agent loop, browser navigation and model controls have QEMU checks; the latest keyboard fixes still need another board pass.
 
-**In review:** PR #491 contains the RNG, Terminal and Calendar fixes (2.34.0, booted on the board). Draft PR #492 adds the readable Calendar icon, Clock and Samantha dock launch (2.35.0, focused QEMU checks passed; full local suite running). Neither PR is merged. The new Clock and icon still need a board check. Current validation and pickup details are in [LOOP-HANDOFF.md](LOOP-HANDOFF.md).
+**In review:** PR #491 contains the RNG, Terminal and Calendar fixes (2.34.0, booted on the board). Draft PR #492 adds the readable Calendar icon, Clock and Samantha dock launch (2.35.0, focused QEMU checks passed; full stack gate passed on #493). Neither PR is merged. The new Clock and icon still need a board check. Current validation and pickup details are in [LOOP-HANDOFF.md](LOOP-HANDOFF.md).
 
 **Next, in order**
 1. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
@@ -188,7 +188,7 @@ From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal 
 - [ ] [Fable] A USB stick as the first disk: mass storage over the xHCI driver we have, likely faster to "files survive a reboot" than EMMC2.
 - [ ] [Fable] Doom: the classic proof a platform is real, and Joshua's chosen benchmark (2026-10-06: "if we can get doom working that's sort of a benchmark"). Full speed with sound on the Pi is the flag right after 3.0. Keyboard first, gamepad next.
 - [ ] [Sonnet] USB gamepad: a HID report parser beside the keyboard and mouse. Doom and Hamurapi on the couch.
-- [ ] [Sonnet] Brick, our own brick-breaker (Joshua, 2026-10-07: "Breakout would be a cool game to add"). Own code, own name, own art: the rules of a ball, a paddle and a wall of bricks are free to use, but "Breakout", "Pong" and "Atari" are not. Mouse moves the paddle, keys work too. First proof the mouse and keyboard make a real game on the Pi.
+- [x] [Sonnet] Brick implemented in the 2.37.0 development branch: original ARM game with 32 bricks, three lives, keys or mouse, pause, restart and win/game-over states. Open Brick from Spotlight. Host physics and QEMU keyboard/mouse/pixel checks pass in `tools/checks/arm64-brick-check.py`; release review and physical Pi play remain.
 - [ ] [Sonnet] Paddle, a two-player bounce game (the Pong idea under our own name), and Snake. Small, original, no third-party code or assets.
 - [ ] [Fable] An Atari-style console: our own 6502 core and a tiny TIA-like video chip. Only homebrew games whose authors allow redistribution, never original cartridges (the ROMs are copyrighted). Avoid Tetris-like and Space-Invaders-like designs.
 - [ ] [Sonnet] Drop files from the Mac over Wi-Fi: a tiny upload server on the Pi (plain HTTP PUT), no card swap.
