@@ -23,7 +23,7 @@ mkdir -p ~/.config/joshuatree/relay-tls
 chmod 700 ~/.config/joshuatree/relay-tls
 cd ~/.config/joshuatree/relay-tls
 umask 077
-openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj '/CN=Joshua Tree relay CA' -addext 'basicConstraints=critical,CA:TRUE' -keyout ca.key -out ca.pem
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj '/CN=Joshua Tree relay CA' -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' -keyout ca.key -out ca.pem
 openssl req -new -newkey rsa:2048 -nodes -subj '/CN=192.168.1.10' -keyout server.key -out server.csr
 ```
 

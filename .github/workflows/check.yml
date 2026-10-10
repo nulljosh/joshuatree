@@ -214,7 +214,7 @@ jobs:
       - name: Landing demo shows Samantha's face and plays her voice (retries once)
         run: node tools/checks/facespeak-demo-check.mjs || (sleep 10 && node tools/checks/facespeak-demo-check.mjs)
       - name: Phone audio unlocks on a real tap (retries once)
-        run: node tools/checks/mobile-audio-check.mjs || (sleep 10 && node tools/checks/mobile-audio-check.mjs)
+        run: timeout 120s node tools/checks/mobile-audio-check.mjs || (sleep 10 && timeout 120s node tools/checks/mobile-audio-check.mjs)
       # Landing-only PR: the suite is skipped, so its landing checks run here.
       - name: Landing checks (landing-only PR, suite skipped)
         if: needs.changes.outputs.kernel == 'false'

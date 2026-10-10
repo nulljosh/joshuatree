@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tonchi pulls real courses through SYS_HTTP_GET and falls back to its Spanish deck.
 
-Headless only (-display none). CI never touches the live site: the replies come from a
+Headless only (-display none). App replies never touch the live site: they come from a
 loopback stub, the way tools/checks/ring3bookrank-live-check.py serves the shelf. The stub's
 good replies are not hand-written. They are what worker.js's own handleLexly() produces when
 its upstream fetches return tools/checks/tonchi-fixture.json, a captured slice of the real
@@ -199,6 +199,8 @@ def run(name):
 
         if not wait("tonchi: ring-3 window 804x345", 60): bad("Tonchi never opened its window"); return
         if not (wait("tonchi: courses ", 30) or wait("tonchi: samples ", 5)): bad("the program never said courses or samples"); return
+        # The startup weather fetch blocks desktop input after Tonchi reports its list.
+        if not wait("wxstate=", 60): bad("startup weather never finished; desktop input is blocked"); return
         time.sleep(0.5)
         s = serial()
         lines = [x.rstrip("\r") for x in re.findall(r"tonchi: [^\n]*", s)]
