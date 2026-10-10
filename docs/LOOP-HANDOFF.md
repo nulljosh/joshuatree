@@ -2,15 +2,15 @@
 
 ## Current task
 
-Branch feat/pi-brick, version 2.37.0, builds on power controls #494. Brick is an original native ARM brick-breaker. Open it from Spotlight. Arrows/A-D or mouse move the paddle; Space/click launches and pauses, R restarts, Escape/red dot closes. It has 32 bricks, three lives, win and game-over states. Scores are not saved and there is no sound.
-
-The fixed-size integer rules have no allocator. A 30 Hz hardware-counter tick animates independently of input. Spotlight suspends painting; switching apps closes the game. Outside the game, the virtio desktop keeps its interrupt-driven wait.
+Branch fix/app-text-contrast, version 2.37.1, builds on Brick #495. Ring-3 app text now uses the exact same ink curve as the kernel, including Terminal's mono face. The existing curve moved to lib/text_ink.h; glyph positions, sizes and widths are unchanged.
 
 ## Checks and review
 
-Brick's host physics harness passes under ASan/UBSan, including collisions, bounds, pause, win, lost lives, restart and 10,000 steps. The real QEMU keyboard/mouse/pixel test passes: held arrows, mouse movement/click, timer-driven ball motion, pause, restart, Spotlight overlay, app switching, red close and Escape. The existing M2 disk/network/input check and Pi shutdown/restart checks pass. The normal Pi build, pre-push, references, registration and generated docs pass. The framebuffer screenshot was inspected.
+Before/after real QEMU pixels show Mail and Notes full-ink coverage rising from 23–33% to 44–52%, with six intermediate edge levels. The stricter sharpness check requires 40% and rejects the old captures. Bold headings retain fewer mid-coverage pixels as stems darken; their separate floor preserves the six-level antialiasing requirement. Kernel build and boot pass. Terminal cell spacing and antialiasing/pitch regressions pass. All 14 landing tiles were refreshed and the pre-push gate passes.
 
-No full suite was started for Brick. It stays draft until release-wide validation and Joshua's PR approval. No merge, deployment or card flash was done. Physical Pi play remains.
+No full suite was started for this fix. It stays draft until release-wide validation and Joshua's PR approval. No merge, deployment or card flash was done.
+
+The user explicitly authorized continuing through implementable roadmap tasks until the five-hour quota has 10% remaining. Check usage between tasks; never use reset credits without explicit confirmation. Skip paid API calls, blocked Codex repository access and physical-only tasks. Do not spawn agents unless Joshua asks.
 
 ## Parent branches
 
@@ -23,6 +23,8 @@ PR #493: fixed-path preflight and reserved ARM shard affinity, version 2.35.1. I
 PR #494: confirmed keyboard shutdown/restart, version 2.36.0. Host safety and actual HID-to-watchdog raspi4b shutdown/reboot pass. Physical verification and release-wide validation remain.
 
 At the last GitHub read, #492, #493 and #494 were open drafts. Merge or deploy only after Joshua explicitly approves the PR. Never bypass a failing gate or raise the two-job local cap.
+
+PR #495: native Brick, version 2.37.0. Sanitized physics, real QEMU keyboard/mouse/timer/pixel checks, M2 input and Pi power regressions pass. Silent, scores not persisted; full gate and physical play remain.
 
 ## Physical state and limits
 

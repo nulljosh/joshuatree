@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.37.1 development branch (2026-10-10)
+
+Ring-3 app text now uses the kernel ink curve, including the Terminal mono face. Mail and Notes stem coverage rises from 23–33% to 44–52%, with six intermediate edge levels preserved. The stricter pixel check fails on the old renderer. Not merged or released. Check: `tools/checks/textsharp-check.py`.
+
 ## 2.37.0 development branch (2026-10-10)
 
 Brick is implemented as an original native ARM game: 32 bricks, three lives, keyboard or mouse paddle, pause, restart, win and game over. Spotlight opens it. Sanitized host physics and QEMU input/pixel checks pass; not merged, flashed or physically verified. Check: `tools/checks/arm64-brick-check.py`.
