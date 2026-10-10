@@ -111,7 +111,7 @@ user.o: user.S
 	$(CC) -c $< -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = clock_ui.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = power.h clock_ui.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
@@ -189,3 +189,7 @@ clean:
 	rm -rf *.o *.a *.elf *.img claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg
 FORCE:
 .PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest
+
+# Power checks invoke the real keyboard confirmation and Pi watchdog.
+$(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
+$(eval $(call variant,restart,-DPOWER_SELFTEST=2,,))

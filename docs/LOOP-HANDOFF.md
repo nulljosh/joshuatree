@@ -2,6 +2,8 @@
 
 ## Current work
 
+Branch feat/pi-power-controls, version 2.36.0, builds on the Clock branch (#492), independently of CI fixes #493. The single roadmap task is keyboard shutdown/reboot: Ctrl+Alt+End / Ctrl+Alt+Delete, Enter confirms, Escape cancels. Busy Samantha requests and hidden prompts refuse confirmation. The Pi uses the VideoCore SD power-state tag and BCM watchdog halt/reset. The host harness and QEMU raspi4b tests pass; the QEMU variants feed real HID reports through the keyboard parser and require actual shutdown or a second boot. No card was flashed and physical verification remains. Only focused checks and the normal pre-push gate are being run for this task; it stays draft pending release-wide validation and Joshua's PR approval.
+
 Branch feat/pi-clock-calendar, version 2.35.0, builds on PR #491 (fix/pi-rng-terminal-calendar, 2.34.0). Joshua asked for a readable Pi Calendar icon, a Clock app and Samantha QA in QEMU. Calendar now shows the month and large day number, with a zero-based month encoding that also handles December. Clock opens from Spotlight or Samantha's open action, displays Vancouver time and date, refreshes each minute and waits for network time when unset. Escape and the close button restore the previous pane. Samantha's dock tile now opens the existing assistant Terminal instead of the placeholder Console. Vancouver remains UTC-7 after March 8, 2026, per the B.C. time change.
 
 ## Validation
@@ -34,5 +36,6 @@ review rejected a proposed opt-in relay because it could send repository
 contents through the logged-in Mac CLI. The question is pending in chat;
 no relay or Pi source was changed. A sandbox probe read VERSION and refused
 access to the private Codex config. That checks one boundary only; it does
-not prove the whole CLI integration safe. Branch feat/pi-codex-relay is an
-empty isolated worktree at work/pi-codex, based on the Clock branch.
+not prove the whole CLI integration safe. Branch feat/pi-codex-relay remains an empty branch based on Clock. Its
+worktree at work/pi-codex is now reused for feat/pi-power-controls; no
+Codex backend was implemented.
