@@ -21,3 +21,16 @@ Clock is read-only: no alarms, timers or world clocks. Calendar is still an icon
 ## Next pickup
 
 Joshua authorized more roadmap work and asked to keep README, loop pickup and roadmap current. Next is Codex access from the Pi. Official docs support device-code login in the official CLI and non-interactive read-only exec. A custom bare-metal OAuth client is not established by those docs; prefer the official CLI on the Mac, keep credentials off the card and establish tool isolation before wiring a relay. No Codex backend has been implemented or deployed yet. Do not change the current tested application source while the suite runs; use a separate branch/worktree for the next task.
+
+
+## Work while Joshua is away
+
+The desktop, Clock and Terminal chapter is now in docs/GUIDE.md. Terminal
+notes now match the model prompt, Samantha dock launch and Clock search.
+Codex implementation is pending a specific approval: automatic approval
+review rejected a proposed opt-in relay because it could send repository
+contents through the logged-in Mac CLI. The question is pending in chat;
+no relay or Pi source was changed. A sandbox probe read VERSION and refused
+access to the private Codex config. That checks one boundary only; it does
+not prove the whole CLI integration safe. Branch feat/pi-codex-relay is an
+empty isolated worktree at work/pi-codex, based on the Clock branch.

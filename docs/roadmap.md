@@ -40,7 +40,7 @@ Notes on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AUTONOMY.md)
 - **Show it in person.** A live Pi on a table at Vancouver maker meetups and the UBC and SFU computing clubs; a Show HN with the 30-second boot video (`docs/LAUNCH.md`).
 - **Later, our own board.** A carrier board for the Raspberry Pi compute module with the mark on it, so the kit is ours down to the copper.
 
-**A guide for everyone (Joshua 2026-10-07).** Documentation a person can read without knowing code: a plain-words user guide where every part of the OS, and every file behind it, is explained so a curious reader understands what each piece does and why it is there. Plan: the guide ([docs/GUIDE.md](GUIDE.md), Wi-Fi chapter written), one chapter per area (boot, memory, screen, apps, network, Wi-Fi, Samantha), each file in `docs/ARCHITECTURE.md` gets a one-line "in plain words" summary, and a check keeps the two in step. Written a chapter at a time, Wi-Fi first because it is freshest.
+**A guide for everyone (Joshua 2026-10-07).** Documentation a person can read without knowing code: a plain-words user guide where every part of the OS, and every file behind it, is explained so a curious reader understands what each piece does and why it is there. Plan: the guide ([docs/GUIDE.md](GUIDE.md), Wi-Fi and Pi desktop/Clock/Terminal chapters written), one chapter per area (boot, memory, screen, apps, network, Wi-Fi, Samantha), each file in `docs/ARCHITECTURE.md` gets a one-line "in plain words" summary, and a check keeps the two in step. Written a chapter at a time, Wi-Fi first because it is freshest.
 
 ## Next few weeks
 

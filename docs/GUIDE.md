@@ -3,7 +3,59 @@
 Joshua Tree is an operating system built from scratch. On a Raspberry Pi 4,
 it draws its own desktop, reads a USB keyboard, joins Wi-Fi and lets you ask
 Samantha questions in Terminal. This guide explains one part at a time.
-Other chapters will cover boot, memory, the screen, apps and Samantha.
+The first chapters cover the desktop, Clock, Terminal and Wi-Fi. Later
+chapters will explain boot, memory, the screen and more apps.
+
+## Desktop, Clock and Terminal
+
+This chapter describes the 2.35.0 development build in PR #492. Its new
+Clock and Calendar icon have QEMU checks; a real Pi check is still needed.
+The card Joshua already booted is 2.34.0 and does not have these changes.
+
+### Open an app with the keyboard
+
+Press F1 to open Spotlight, type an app name, then press Enter. Up and Down
+choose another match; Escape closes the search. Ctrl+Space, Cmd+Space and
+Alt+Space also open Spotlight. A Mac keyboard may need its Fn key for F1.
+Some dock tiles are placeholders on the Pi. Calculator, Clock, Terminal
+and Console are available; the web demo's larger app collection is separate.
+
+### Read the date and time
+
+The Calendar tile shows a short month name and a large day number. It is
+an icon, not a calendar you can open to add events on the Pi.
+
+To see the time clearly, open Spotlight and search for Clock. It shows the
+time, date and Vancouver label. The display refreshes each minute. When
+network time is unavailable, it shows `--:--` and `Waiting for network time`.
+Escape or the red close button returns to the previous pane. There are no
+alarms or timers yet. The timezone is fixed to Vancouver, including its
+permanent UTC-7 offset from March 8, 2026.
+
+### Keep two conversations
+
+Press F2 or Ctrl+T for Terminal. The Terminal and Samantha dock tiles also
+open it. Type a question and press Enter. The prompt names the assistant
+model that last answered; it does not prove the next request will succeed.
+
+Press F3 to switch between two Terminal sessions. Each remembers its typed
+line, scrollback and assistant conversation until reboot. Finish or stop
+a running request before switching. Browser history is shared between the
+two sessions. `/clear` starts the current conversation over.
+
+Console shows boot messages and network errors. It does not take questions.
+Escape from an idle Terminal returns to Console. While the assistant is
+working, Escape asks it to stop between action steps; it may have to wait
+for the current network request to finish.
+
+### The files behind the desktop
+
+| File | What it does |
+|---|---|
+| `arch/arm64/main.c` | Draws the desktop, date icon and app search; handles app switching. |
+| `arch/arm64/clock_ui.h` | Draws the Clock window and refreshes it each minute. |
+| `arch/arm64/clock.c` | Obtains trusted network time. |
+| `arch/arm64/ask.c` | Keeps the two assistant conversations and sends questions. |
 
 ## Wi-Fi: from switching on to asking a question
 
