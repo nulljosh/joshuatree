@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.39.0 release candidate (2026-10-10)
+
+Combines the current review branches, including the older Mines app. Review caught Mines closing when its help panel was clicked. A QEMU regression reproduces that failure; off-board content clicks now stay in the game. The full combined gate and release approval remain.
+
 ## 2.38.1 development branch (2026-10-10)
 
 The README and site link directly to the latest PC ISO and checksums. Releases now upload a stable `joshuatree.iso` name as well as the versioned image, and checksum both. The alias becomes available when this release workflow runs after approval/merge; the current 2.33.5 release predates it. Check: `tools/checks/iso-boot-check.sh` and the workflow packaging step.

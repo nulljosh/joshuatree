@@ -2,38 +2,32 @@
 
 ## Current task
 
-Branch fix/iso-download-links, version 2.38.1, builds on notifications #497. The release workflow uploads stable joshuatree.iso plus the versioned image, with both in SHA256SUMS. README and site now have direct ISO/checksum links. These become live after the workflow runs following an approved merge; latest published release 2.33.5 only has its versioned image. The ISO is for BIOS PCs, not the Pi card.
+Release candidate branch release/2.39.0 in work/pi-notifications combines #478 and #491–498. It includes Mines, Pi RNG/Terminal/Calendar repairs, Clock, keyboard power controls, Brick, menu notices, app text contrast, fresh landing captures, the CI preflight/ARM affinity repair and direct ISO downloads. No merge or deployment has happened.
 
-## Checks and review
+Review reproduced Mines closing when its help panel was clicked. Off-board content clicks now do nothing; the new regression failed before the fix and passes with it. Escape closes, a scripted game wins and Mail opens afterwards. The unused old app-title painter was removed after verifying it had no callers, clearing the last normal-build warning.
 
-ISO CD-ROM, raw-USB and non-Bochs framebuffer boot checks pass. Executing the actual workflow packaging block produces identical stable/versioned images and correct checksums for both. Pre-push passes. Notifications #497 passed sanitized bounds/replacement/wrap tests, QEMU real pixels/idle expiry/input/status preservation, Brick regression, normal Pi build and i386 build/boot. No full gate has run for the latest feature/release stack yet.
+## Validation
 
-The user authorized a roadmap loop until five-hour usage reaches 90%, with A+ QA before main, CI/CD, release versions/tags, zero open issues/PRs/stale branches, fresh markdown and ISO links. At last check: zero open issues; nine remote branches, all main or attached to an open PR, so none are stale. Existing release and deploy runs on main are green. Draft PRs have not run GitHub CI and must not be described as green.
+Focused checks passed for the individual drafts: sanitizer and real QEMU input/pixel checks for games/power/notices, text sharpness and Terminal spacing, normal Pi image build, i386 build/boot and pre-push. Notes captures now open a new editor before typing; all 14 app tiles were retaken and inspected. ISO CD-ROM, raw-USB and non-Bochs framebuffer boot pass; the actual release packaging block creates identical stable/versioned ISOs and verified checksums.
 
-Merge/deploy still needs explicit PR approval. The release workflow has configured X keys and automatically posts release announcements; obtain authorization for that side effect or remove it from the intended release path before publishing. No paid calls, resets or flashes. Do not close real work merely to make counts zero.
+The combined 2.39.0 full local gate and GitHub validation have not completed yet. Keep this candidate draft until they pass. #493 alone passed 219 checks plus four demos on exact head 5d2e99f; that does not validate the later additions. Latest main release/deploy runs were green. Draft/skipped checks are not green checks.
 
-## Parent branches
+## Goal and approval
 
-PR #491: RNG, Terminal and Calendar fixes, version 2.34.0. The development card booted on the physical Pi; hardware RNG and a real Samantha answer still need verification.
+Continue implementable roadmap tasks until five-hour usage has 25% or less remaining, then stop. The latest snapshot was 37% remaining. Do not start another feature before completing the current release validation. Keep markdown fresh. Target working CI/CD, version/tag/release updates, direct ISO links, zero unresolved PRs/issues/stale branches, and A+ QA before main. Never close real work just to make counts zero.
 
-PR #492: readable Calendar icon, Clock and Samantha dock launch, version 2.35.0. Focused QEMU checks pass. Clock is read-only, Calendar remains an icon.
+Main has zero open issues. Every remote branch was main or belonged to an open PR. The unused local feat/pi-codex-relay branch was deleted after verifying it was an ancestor; no work was lost. Active worktrees and their local branches remain untouched.
 
-PR #493: fixed-path preflight and reserved ARM shard affinity, version 2.35.1. Its exact head 5d2e99f passed the full local gate: 219 suite checks and four demos, 2,391 seconds, zero failures. This validates the Clock code in that stack, not the later power/game additions.
+Explicit PR approval is still required to merge or deploy. The release workflow has configured X keys and posts release announcements, so publishing also needs authorization for that side effect or an approved change to the release path. No paid model requests, reset credits or hardware flashes are authorized by this loop.
 
-PR #494: confirmed keyboard shutdown/restart, version 2.36.0. Host safety and actual HID-to-watchdog raspi4b shutdown/reboot pass. Physical verification and release-wide validation remain.
+## PRs
 
-At the last GitHub read, #492, #493 and #494 were open drafts. Merge or deploy only after Joshua explicitly approves the PR. Never bypass a failing gate or raise the two-job local cap.
+#478 is the older Mines app. #491 is RNG/Terminal/Calendar (2.34.0, physically booted). #492 is readable Calendar/Clock/Samantha launch (2.35.0). #493 is CI preflight/affinity (2.35.1). #494 is power controls (2.36.0). #495 is Brick (2.37.0). #496 is app text and captures (2.37.1, head 14bca641). #497 is notifications (2.38.0, head 5df7be78). #498 is ISO links/packaging (2.38.1, head d75ab5c). The candidate contains all their code; do not close them until an approved candidate merge actually supersedes them.
 
-PR #495: native Brick; focused physics/input/pixel checks pass, full gate and board play remain.
+## Physical and release limits
 
-PR #496: app text contrast and refreshed landing captures, version 2.37.1. Build, boot, sharpness, Terminal regressions and pre-push pass. Head 14bca641. Based on #495, independent of this notification branch.
+Only 2.34.0 was flashed, hash-verified and ejected. Joshua confirmed boot and Spotlight opening Terminal. Clock/icon, power controls, Brick, notices, mouse, RNG and Samantha still need the board pass. ISO is for BIOS PCs, not the Pi card; UEFI and real PC boot remain unverified. Latest published 2.33.5 has a versioned ISO only; the stable alias becomes available when the new release workflow runs.
 
-## Physical state and limits
+Clock bootstrap still uses build time. Conversations reset on reboot. Pi SD saving, local weights from card and fallback updates remain open. Card backups and dev images contain credentials; never commit or copy them to outputs.
 
-The 2.34.0 development card was flashed, hash-verified and safely ejected. Joshua confirmed boot and Spotlight opening Terminal. Later Clock, power and Brick changes have not been flashed. The next board checks are the new icon/Clock, power controls, Brick, mouse, RNG and Samantha.
-
-Clock bootstrap still uses build time. Conversations reset on reboot. Pi SD saving, local model weights from card and fallback updates remain unimplemented. Development card images and backups contain credentials; keep them private.
-
-The Mac TLS relay must be checked/restarted before a board Samantha test using the reviewed main script and existing credentials, as described in docs/RELAY-TLS.md. Do not rotate credentials silently. No paid model request was made for these tasks.
-
-Codex relay implementation remains pending specific repository-access approval after automatic review rejected its potential repository egress. No backend exists. The empty feat/pi-codex-relay branch remains; work/pi-codex is now used by feat/pi-brick.
+The Mac TLS relay must be checked using docs/RELAY-TLS.md before a board Samantha test. Credentials stay in their existing private files. Codex relay implementation is still blocked on specific repository-egress approval after automatic review rejected it; no backend exists. No user answer granted that approval.

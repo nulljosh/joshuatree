@@ -4,7 +4,7 @@
  * SYS_WINDOW_OPEN for a framebuffer, SYS_WINDOW_POLL for input and the
  * present, SYS_EXIT to leave. A click reveals a cell; the keyboard works
  * too: arrows move a cursor, space or Enter reveals, f flags, r deals a
- * new board, esc closes. A click off the board (the title bar X) closes.
+ * new board, esc closes. The desktop handles the title bar X.
  *
  * The first board of every run comes from a fixed seed, so a check can
  * replay the same game blind: tools/checks/ring3mines-check.py grows the
@@ -36,7 +36,7 @@
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 static unsigned char cells[MH][MW] JT_DATA = {{0}};
 static int cx JT_DATA = 0, cy JT_DATA = 0, opened JT_DATA = 0, over JT_DATA = 0, won JT_DATA = 0;
-static unsigned seed JT_DATA = 0x9E3779B9u; /* ponytail: fixed first deal so the check can replay it; r reseeds from the clock */
+static unsigned seed JT_DATA = 0x9E3779B9u; /* shortcut: fixed first deal for replay; seed at launch when tests can pass a seed */
 
 static unsigned rnd(void) { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; return seed; }
 static int utoa10(unsigned v, char *buf) {
@@ -136,7 +136,7 @@ void _start(int argc, char **argv) {
         if (r == 1) {
             if (ev.kind == JT_EV_CLICK) {
                 int x = (ev.a - PAD) / CELL, y = (ev.b - TOP) / CELL;
-                if (ev.a < PAD || ev.b < TOP || x >= MW || y >= MH) break; /* title bar X, or off the board */
+                if (ev.a < PAD || ev.b < TOP || x >= MW || y >= MH) continue;
                 cx = x; cy = y;
                 if (!over) reveal(y, x);
             } else if (ev.kind == JT_EV_KEY) {

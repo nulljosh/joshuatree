@@ -18,9 +18,7 @@ The ordered list below is the near-term queue. The topic sections keep the longe
 
 **On the real Pi:** the desktop, USB keyboard, Wi-Fi, network clock and Samantha relay work. Joshua confirmed an HTTPS fetch on the board. The merged Terminal, bounded agent loop, browser navigation and model controls have QEMU checks; the latest keyboard fixes still need another board pass.
 
-**In review:** PR #491 contains the RNG, Terminal and Calendar fixes (2.34.0, booted on the board). Draft PR #492 adds the readable Calendar icon, Clock and Samantha dock launch (2.35.0, focused QEMU checks passed; full stack gate passed on #493). Neither PR is merged. The new Clock and icon still need a board check. Current validation and pickup details are in [LOOP-HANDOFF.md](LOOP-HANDOFF.md).
-
-**CI fixes in review preparation:** 2.35.1 rejects fixed test paths before builds and keeps shared ARM builders together when balancing. The offline host regression passes; full release validation remains pending.
+**Release candidate in preparation:** 2.39.0 combines the reviewed Pi RNG/Terminal/Calendar fixes, readable Clock/icon, confirmed keyboard power controls, Brick, menu notices, sharper app text, direct ISO downloads, the CI preflight/ARM affinity repair and the existing Mines app PR. Focused checks pass. Full combined validation and explicit PR approval are still required before release. Physical Pi verification remains for the new features; pickup details are in [LOOP-HANDOFF.md](LOOP-HANDOFF.md).
 
 **Next, in order**
 1. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
@@ -511,7 +509,7 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 2. **Pi relay security** (plain: skip) [Fable]: the Terminal, bounded agent loop and browser controls are merged. Next: relay TLS and a trusted certificate clock, then a board retest.
 3. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
 4. **Every icon in one style** (plain: icons that match) [Sonnet]: the fleet icons keep their own tile colors.
-5. **Photos, Minesweeper, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.
+5. **Photos, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.
 6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after the Pi boots.
 
 ## Landing roadmap summary

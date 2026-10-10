@@ -3908,19 +3908,6 @@ static void gui_apps_redraw_panel(const struct apps_geom *g, int scroll_offset, 
     gui_apps_draw_grid(g, scroll_offset, sel);
     serial_puts("appsgridrepaint\n");
 }
-/* The window frame's title while an app runs inside the Apps folder's
-   window. The frame is drawn once by gui_launch_from_dock with the folder's
-   own label; an app launched from the grid used to leave "Apps" up there.
-   The title sits outside the content viewport, so the viewport is lifted
-   just for this draw. */
-static void gui_app_frame_title(const char *label){
-    if (!gui_app_windowed) return;
-    int x = app_view_x - 8, y = app_view_y - 32;
-    window_clear_viewport();
-    window_rect(x + 90, y + 4, 320, 22, 0x00F5F0EB);
-    font_draw_string(label, x + 96, y + 8, 0x00403439, -1);
-    window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
-}
 static int gui_multiwin_open(int icon); static void gui_refuse_open(int icon);
 /* 2.0 gate 5: the Apps folder has no window of its own to host an app, so a launch closes the folder and opens the app as a compositor window, exactly a dock click (full table: the same refusal notice). */
 static void gui_apps_launch(int icon){ window_clear_viewport(); /* the window is sized and clamped against the whole screen, not the folder's smaller viewport */ if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); }

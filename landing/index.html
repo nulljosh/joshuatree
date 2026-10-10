@@ -615,11 +615,11 @@
      source it names. -->
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
-    <div class="fact"><strong><span data-fact="apps">30</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">2.33.5</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong><span data-fact="apps">31</span></strong><span class="label">Apps</span></div>
+    <div class="fact"><strong>v<span data-fact="version">2.39.0</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
-    <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
+    <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
     <p class="boot-line">or try it live above, or <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/RASPBERRY-PI.md">put it on a Raspberry Pi 4</a></p>
   </div>
 </section>
@@ -694,7 +694,7 @@
 
 <section class="protected reveal" id="protected" aria-label="Protected apps">
   <h2>One app crashes. The desktop stays up.</h2>
-  <p>Each app runs as its own protected program, walled off from the kernel and from every other app. <span data-fact="ring3">30</span> of the <span data-fact="apps">30</span> run that way now. Every app is out of the kernel.</p>
+  <p>Each app runs as its own protected program, walled off from the kernel and from every other app. <span data-fact="ring3">31</span> of the <span data-fact="apps">31</span> run that way now. Every app is out of the kernel.</p>
 </section>
 
 
@@ -740,7 +740,7 @@
       <div class="spec-body">
         <dl class="spec-dl">
           <div><dt>Kernel</dt><dd>A freestanding kernel for PCs (i386) and the Raspberry Pi 4 (ARM64). No libc, and no dependencies beyond the toolchain.</dd></div>
-          <div><dt>Apps</dt><dd><span data-fact="apps">30</span> built in, <span data-fact="ring3">30</span> of them running as their own protected programs at ring 3.</dd></div>
+          <div><dt>Apps</dt><dd><span data-fact="apps">31</span> built in, <span data-fact="ring3">31</span> of them running as their own protected programs at ring 3.</dd></div>
           <div><dt>Read more</dt><dd><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">Architecture</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/SYSCALL-ABI.md">System calls</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/THREAT-MODEL.md">Threat model</a></dd></div>
         </dl>
       </div>
@@ -771,7 +771,7 @@
       <summary>History</summary>
       <div class="spec-body">
         <div class="progress-section">
-          <p class="sub"><!-- progress-lede:start -->From a blank screen on Aug 31 to 30 apps today.<!-- progress-lede:end --></p>
+          <p class="sub"><!-- progress-lede:start -->From a blank screen on Aug 31 to 31 apps today.<!-- progress-lede:end --></p>
           <div class="progress-card">
             <!-- Real interactive version for this page specifically, not the same
                  static image README.md embeds (README can't run JS). Generated
@@ -781,7 +781,7 @@
                  fetched-and-reparsed image. Hover a point (or tap it on touch)
                  to see its real date and real line count. -->
             <!-- progress-chart:start -->
-<svg xmlns="http://www.w3.org/2000/svg" width="457" height="190" viewBox="0 0 457 190" id="progress-chart-live" role="img" aria-label="Apps shipped over time, 30 apps as of Oct 7"><style>
+<svg xmlns="http://www.w3.org/2000/svg" width="457" height="190" viewBox="0 0 457 190" id="progress-chart-live" role="img" aria-label="Apps shipped over time, 31 apps as of Oct 10"><style>
   #progress-chart-live {
     --grid: var(--border); --axis: var(--sub); --muted: var(--sub);
     --label: var(--sub); --strong: var(--fg); --line: var(--fg); --line2: var(--accent); --line2-pct: var(--accent);
@@ -795,7 +795,7 @@
   #progress-chart-live .progress-pt:focus .progress-dot,
   #progress-chart-live .progress-pt.is-active .progress-dot { r: 5.5; stroke-width: 2.5; }
   #progress-chart-live .progress-pt:focus { outline: none; }
-</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="17" y1="10" x2="437" y2="10" stroke="var(--grid)"/><line x1="17" y1="80" x2="437" y2="80" stroke="var(--grid)"/><text x="13" y="13" font-size="9" fill="var(--muted)" text-anchor="end">30</text><text x="13" y="83" font-size="9" fill="var(--muted)" text-anchor="end">15</text><text x="13" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="17" y1="10" x2="17" y2="150" stroke="var(--axis)"/><line x1="17" y1="150" x2="437" y2="150" stroke="var(--axis)"/><polyline points="17,150 27,150 37,150 47,150 57,150 68,118 78,113 88,113 98,80 109,66 119,57 129,52 139,52 150,52 160,52 170,48 180,38 191,34 201,34 211,34 221,34 232,29 242,29 252,29 262,29 273,29 283,29 293,29 303,29 314,38 324,38 334,38 344,38 355,29 365,29 375,29 385,20 396,10 406,10 416,10 426,10 437,10" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 0 apps shipped" data-tooltip="Aug 31 &#183; 0 apps"><circle class="progress-hit" cx="17" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="17" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="57" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="57" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 15 apps shipped" data-tooltip="Sep 14 &#183; 15 apps"><circle class="progress-hit" cx="98" cy="80" r="11" fill="transparent"/><circle class="progress-dot" cx="98" cy="80" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21 apps shipped" data-tooltip="Sep 15 &#183; 21 apps"><circle class="progress-hit" cx="139" cy="52" r="11" fill="transparent"/><circle class="progress-dot" cx="139" cy="52" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 22, 24 apps shipped" data-tooltip="Sep 22 &#183; 24 apps"><circle class="progress-hit" cx="180" cy="38" r="11" fill="transparent"/><circle class="progress-dot" cx="180" cy="38" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="221" cy="34" r="11" fill="transparent"/><circle class="progress-dot" cx="221" cy="34" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 29, 26 apps shipped" data-tooltip="Sep 29 &#183; 26 apps"><circle class="progress-hit" cx="262" cy="29" r="11" fill="transparent"/><circle class="progress-dot" cx="262" cy="29" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 2, 26 apps shipped" data-tooltip="Oct 2 &#183; 26 apps"><circle class="progress-hit" cx="303" cy="29" r="11" fill="transparent"/><circle class="progress-dot" cx="303" cy="29" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 3, 24 apps shipped" data-tooltip="Oct 3 &#183; 24 apps"><circle class="progress-hit" cx="344" cy="38" r="11" fill="transparent"/><circle class="progress-dot" cx="344" cy="38" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 5, 28 apps shipped" data-tooltip="Oct 5 &#183; 28 apps"><circle class="progress-hit" cx="385" cy="20" r="11" fill="transparent"/><circle class="progress-dot" cx="385" cy="20" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 7, 30 apps shipped" data-tooltip="Oct 7 &#183; 30 apps"><circle class="progress-hit" cx="426" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="426" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 7, 30 apps shipped" data-tooltip="Oct 7 &#183; 30 apps"><circle class="progress-hit" cx="437" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="437" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="17" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="98" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="150" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 16</text><text x="201" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 24</text><text x="262" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 29</text><text x="314" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Oct 3</text><text x="396" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Oct 7</text><text x="17" y="184" font-size="14" fill="var(--muted)">30 apps &#183; 100% documented</text></svg>
+</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="17" y1="10" x2="437" y2="10" stroke="var(--grid)"/><line x1="17" y1="80" x2="437" y2="80" stroke="var(--grid)"/><text x="13" y="13" font-size="9" fill="var(--muted)" text-anchor="end">31</text><text x="13" y="83" font-size="9" fill="var(--muted)" text-anchor="end">15</text><text x="13" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="17" y1="10" x2="17" y2="150" stroke="var(--axis)"/><line x1="17" y1="150" x2="437" y2="150" stroke="var(--axis)"/><polyline points="17,150 27,150 37,150 47,150 57,150 68,119 78,114 88,83 98,74 109,69 119,56 129,56 139,56 150,56 160,56 170,42 180,38 191,38 201,38 211,38 221,33 232,33 242,33 252,33 262,33 273,33 283,33 293,42 303,42 314,42 324,42 334,33 344,33 355,29 365,20 375,15 385,15 396,15 406,15 416,15 426,15 437,10" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 0 apps shipped" data-tooltip="Aug 31 &#183; 0 apps"><circle class="progress-hit" cx="17" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="17" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="57" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="57" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 17 apps shipped" data-tooltip="Sep 14 &#183; 17 apps"><circle class="progress-hit" cx="98" cy="74" r="11" fill="transparent"/><circle class="progress-dot" cx="98" cy="74" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21 apps shipped" data-tooltip="Sep 15 &#183; 21 apps"><circle class="progress-hit" cx="139" cy="56" r="11" fill="transparent"/><circle class="progress-dot" cx="139" cy="56" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 23, 25 apps shipped" data-tooltip="Sep 23 &#183; 25 apps"><circle class="progress-hit" cx="180" cy="38" r="11" fill="transparent"/><circle class="progress-dot" cx="180" cy="38" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 28, 26 apps shipped" data-tooltip="Sep 28 &#183; 26 apps"><circle class="progress-hit" cx="221" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="221" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 30, 26 apps shipped" data-tooltip="Sep 30 &#183; 26 apps"><circle class="progress-hit" cx="262" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="262" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 3, 24 apps shipped" data-tooltip="Oct 3 &#183; 24 apps"><circle class="progress-hit" cx="303" cy="42" r="11" fill="transparent"/><circle class="progress-dot" cx="303" cy="42" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 4, 26 apps shipped" data-tooltip="Oct 4 &#183; 26 apps"><circle class="progress-hit" cx="344" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="344" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 7, 30 apps shipped" data-tooltip="Oct 7 &#183; 30 apps"><circle class="progress-hit" cx="385" cy="15" r="11" fill="transparent"/><circle class="progress-dot" cx="385" cy="15" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 10, 30 apps shipped" data-tooltip="Oct 10 &#183; 30 apps"><circle class="progress-hit" cx="426" cy="15" r="11" fill="transparent"/><circle class="progress-dot" cx="426" cy="15" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 10, 31 apps shipped" data-tooltip="Oct 10 &#183; 31 apps"><circle class="progress-hit" cx="437" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="437" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="17" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="88" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="150" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 19</text><text x="201" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 25</text><text x="252" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 29</text><text x="344" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Oct 4</text><text x="426" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Oct 10</text><text x="17" y="184" font-size="14" fill="var(--muted)">31 apps &#183; 100% documented</text></svg>
 <!-- progress-chart:end -->
             <!-- roadmap-summary:start --><p class="roadmap-next">Next up: a demo that talks you through it, icons that match, and photos, games and voice notes.</p><!-- roadmap-summary:end -->
           </div>
@@ -826,7 +826,7 @@
 <section class="grain-zone reveal">
   <img class="seal" src="logo.svg" alt="The Joshua Tree mark: a Joshua tree with its branches raised like arms" width="160" height="160" loading="lazy">
   <p class="closing-name">Settlers named the Joshua tree for Joshua, arms raised to the sky.</p>
-  <p class="closing">A real computer built from nothing, not a skin on someone else's. <span data-fact="apps">30</span> apps, Samantha to run them, and now a real Raspberry Pi with Wi-Fi. Free and open source, named for the tree that survives on nothing.</p>
+  <p class="closing">A real computer built from nothing, not a skin on someone else's. <span data-fact="apps">31</span> apps, Samantha to run them, and now a real Raspberry Pi with Wi-Fi. Free and open source, named for the tree that survives on nothing.</p>
 </section>
 
 </main>
@@ -838,7 +838,8 @@
       <h3>Joshua Tree</h3>
       <ul>
         <li><a href="#demo">Try it live</a></li>
-        <li><a href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a></li>
+        <li><a href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a></li>
+        <li><a href="https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS">ISO checksums</a></li>
         <li><a href="https://github.com/nulljosh/joshuatree/releases">What&rsquo;s new</a></li>
         <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/roadmap.md">Roadmap</a></li>
         <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/VERSIONS.md">Version history</a></li>
@@ -876,7 +877,7 @@
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.33.5</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.39.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
 </footer>
 

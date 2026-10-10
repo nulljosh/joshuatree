@@ -103,6 +103,10 @@ try:
     time.sleep(0.5)
     if os.environ.get("JT_SHOT"): frame().save(os.environ["JT_SHOT"])
 
+    # A help-panel click belongs to the app; only Escape or the red dot closes.
+    move(700, 200); click(); time.sleep(0.3)
+    assert "mines: closed" not in serial(), "help-panel click closed Mines"
+
     # 2. play the scripted game: snake over the board, space on every safe cell
     mines = board()
     for y in range(MH):

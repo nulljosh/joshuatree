@@ -7,12 +7,16 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 ## Running suites safely
 
-Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
+Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (217 checks)
+## The suite (223 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
+| ARM menu notices: bounded messages, expiry, pixels and input | `tools/checks/arm64-notice-check.py` | once |
+| Brick on ARM: collision rules, lives and win under sanitizers; keyboard/mouse play, timed animation, pause, restart, Spotlight and close in QEMU | `tools/checks/arm64-brick-check.py` | once |
+| Pi keyboard shutdown and restart: confirmed HID chords halt or reboot raspi4b, Escape cancels, busy and hidden prompts refuse (host and QEMU) | `tools/checks/arm64-power-check.py` | once |
+| CI tooling preserves shared ARM shard affinity and rejects fixed test paths before builds (host only) | `tools/checks/ci-tooling-check.py` | once |
 | Dock slot constants agree with kernel.c (static drift guard) | `tools/checks/dockslots-check.py` | once |
 | No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks) | `tools/checks/tmp-paths-check.py` | once |
 | docs/DESIGN.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static) | `tools/checks/design-doc-check.py` | once |
@@ -67,6 +71,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Tonchi lists the real courses live (Worker text from a stub), drills one with a score, bounds a hostile reply, and shows the Spanish deck for junk, a 500, an oversize body and no NIC | `tools/checks/ring3tonchi-live-check.py` | retry |
 | Fieldbook runs as a ring-3 process through the table-driven launcher: draws the ranked field list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3fieldbook-check.py` | retry |
 | Clock runs as a ring-3 process through the table-driven launcher: draws the moving time, takes a timer through the real input logic, closes on Esc, desktop alive | `tools/checks/ring3clock-check.py` | retry |
+| Mines (Minesweeper) runs as a ring-3 process: a scripted game on the fixed first board is won by keyboard, closes on Esc, desktop alive | `tools/checks/ring3mines-check.py` | retry |
 | Movies plays a real AVI with sound at ring 3, audio-led: frame within one of the audio clock, drift under 100 ms, pause holds frame and sound (checked in the wav and on the framebuffer), seek by bar and keys, fullscreen, a damaged clip / non-AVI / over-cap file each show an error, closes on Esc, desktop alive | `tools/checks/movie-check.py` | retry |
 | Hamurapi (Hamurabi in the sources) is playable as a ring-3 program: draws its real title scene (sprite pixels equal the sheet), plays a classic reign by keyboard, a story reign with cards and choices and the robot's demo, and every year it logs equals a host replay of the same rules header, closes on Esc, desktop alive | `tools/checks/ring3hamurabi-check.py` | retry |
 | Windgate runs as a ring-3 process through the table-driven launcher: the circle grows on the in-breath and shrinks on the out-breath (measured off the framebuffer), all four presets by key and click log the web app's exact phases and seconds, pause holds the circle and the clock, closes on Esc, desktop alive | `tools/checks/ring3windgate-check.py` | retry |
@@ -210,7 +215,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Pi actions: an answer's [[note]], [[say]], [[led blink]], [[open]], [[browse]] (http/https only), [[calc]] and [[status]] lines are stripped and recorded by ask.c's real parser (compiled on the host), four per turn, unknown ones recorded to ignore, the rest stays as text, and the relay prompt names them all | `tools/checks/pi-actions-check.py` | once |
 | Pi release image carries no relay token: pi-ask.o built without JT_WIFI_DEV=1 has none, the dev build does (host only) | `tools/checks/pi-release-notoken-check.sh` | once |
 | ARM64 agent loop: against a fake relay, [[browse]] then a final answer with agent: step 1 and 2 logged, 4 actions per turn and 5 steps then step limit, Esc stops it, unknown actions logged and ignored (skips where the tools are missing) | `tools/checks/arm64-agent-check.py` | retry |
-| ARM64 /model and /effort: slash commands run on the Pi, model and effort reach a fake relay only when not default, a bad value is refused in one line and never sent, /status /help /clear (skips where the tools are missing) | `tools/checks/arm64-model-check.py` | retry |
+| ARM64 /model and /effort: two F3 sessions preserve separate settings, conversation and typing, block switching while busy; slash commands run on the Pi, model and effort reach a fake relay only when not default, a bad value is refused in one line and never sent, /status /help /clear (skips where the tools are missing) | `tools/checks/arm64-model-check.py` | retry |
 | ARM64 Claude in the Terminal: the Console takes no input; typed at the Terminal's ask> row, a question reaches the real relay (stub claude, 127.0.0.1) over virtio-net and the answer prints in 53-column lines; wrong token -401, no network and no token each say so (skips where the tools are missing) | `tools/checks/arm64-claude-console-check.py` | retry |
 | ARM64 relay token gate: a 24-byte throwaway token is absent from kernel8.img with JT_WIFI_DEV unset and present with it set (skips where the tools are missing) | `tools/checks/arm64-token-gate-check.py` | retry |
 | ARM64 M3a: an unprivileged EL0 program prints through a write syscall, exits, and a direct access to a kernel-only page faults while the kernel survives (skips where the tools are missing) | `tools/checks/arm64-m3-check.py` | retry |
@@ -222,12 +227,13 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | ARM64 Calculator: calc.c gets a table of 42 sums right on the host (sin(30deg)=0.5, 5!=120, 2^10=1024, 1/0 is an error), its keypad's memory and Deg keys work, and the calctest build types four sums at boot with the same answers on the UART and the window in a screendump (QEMU part skips where the tools are missing) | `tools/checks/arm64-calc-check.py` | retry |
 | ARM64 keyboard only: with no mouse, Ctrl+Space and F1 open Spotlight (drawn in the house colours), typing term and Enter opens the Terminal with the keyboard, Esc hands the keys back, Left and Right move the dock's label and Enter opens that tile, F2 opens the Terminal at once (skips where the tools are missing) | `tools/checks/arm64-keys-check.py` | retry |
 | ARM64 Mac-style USB keyboard: over xHCI, Cmd+Space opens Spotlight, a plain letter on the bare desktop opens it with the letter typed, Esc with it closed does nothing, a 9-byte report with a report ID still gives Ctrl+T, and the key debug line shows only in the dev build (skips where the tools are missing) | `tools/checks/arm64-keydbg-check.py` | retry |
-| ARM64 live Calendar tile: the caltest build fixes the clock at two dates and a screendump shows the month grid with that day's square in the accent, and only that one (skips where the tools are missing) | `tools/checks/arm64-calicon-check.py` | retry |
+| ARM64 Calendar month/day digits, December rollover, Clock time/date and unset state, Spotlight open/close and Samantha launch (skips where the tools are missing) | `tools/checks/arm64-calicon-check.py` | retry |
 | ARM64 crash screen: an unexpected EL1 fault prints class, ESR, FAR, ELR and the last console lines on the UART, draws them as a panel (QEMU screendump on virt and the Pi 4B model) and halts quietly (skips where the tools are missing) | `tools/checks/arm64-crash-check.py` | retry |
 | ARM64 FP state: q0-q31, FPCR and FPSR survive timer interrupts whose handler wipes them, and the build without the save fails the same test (skips where the tools are missing) | `tools/checks/arm64-fp-check.py` | retry |
 | ARM64 out of memory: a full heap prints oom fb or oom text and the kernel carries on (no screen, or the VGA fallback font) on virt and the Pi 4B model (skips where the tools are missing) | `tools/checks/arm64-oom-check.py` | retry |
 | ARM64 boot health: the Pi image boots on QEMU's raspi4b with no FAIL line beyond the listed expected ones, no oom, no crash, and the desktop up (skips where the tools are missing) | `tools/checks/arm64-boot-health-check.py` | retry |
 | Pi card flasher: kernel, firmware and tools/pi-config.txt land on a stand-in card, and what was there is kept as .bak (skips where the tools are missing) | `tools/checks/flash-pi-check.sh` | once |
+| ARM64 RNG200 full seeds, health faults, bounded waits and wiped failures (host harness) | `tools/checks/arm64-rng-check.py` | once |
 | ARM64 clock accepts bounded HTTPS dates only, never before the build or an accepted clock (host harness) | `tools/checks/arm64-clock-check.py` | once |
 | ARM64 Terminal asks the real relay over TLS, with session resume and wrong-token refusal | `tools/checks/arm64-claude-console-check.py` | retry |
 
@@ -243,7 +249,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Notes | `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3resize-check.py`, `tools/checks/ring3window-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py`, `tools/checks/ring3window-check.py` |
 | Terminal | `tools/checks/arm64-browser-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
-| Samantha | `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
+| Samantha | `tools/checks/arm64-calicon-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs` |
 | Curbfind | `tools/checks/ring3curbfind-check.py` |
 | Keyrate | `tools/checks/ring3app-check.py` |
@@ -267,6 +273,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Windgate | `tools/checks/ring3windgate-check.py` |
 | Panes | `tools/checks/panes-check.py` |
 | Claude | `tools/checks/arm64-claude-console-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3claude-check.py` |
+| Mines | `tools/checks/ring3mines-check.py` |
 | Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | none yet |
 
