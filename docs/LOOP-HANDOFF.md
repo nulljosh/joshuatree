@@ -2,6 +2,8 @@
 
 ## Current task
 
+The footer branch fix/landing-footer in work/landing-footer adds a wide original desert illustration using the existing vector tree mark, a larger closing statement and accessible 44px directory links. It is based on release/2.39.0 but does not change that candidate or its running full gate. Footer version is 2.39.1; full gate and release approval remain required before it can reach main.
+
 Release candidate branch release/2.39.0 in work/pi-notifications combines #478 and #491–498. It includes Mines, Pi RNG/Terminal/Calendar repairs, Clock, keyboard power controls, Brick, menu notices, app text contrast, fresh landing captures, the CI preflight/ARM affinity repair and direct ISO downloads. No merge or deployment has happened.
 
 Review reproduced Mines closing when its help panel was clicked. Off-board content clicks now do nothing; the new regression failed before the fix and passes with it. Escape closes, a scripted game wins and Mail opens afterwards. The unused old app-title painter was removed after verifying it had no callers, clearing the last normal-build warning.
@@ -14,7 +16,7 @@ The combined 2.39.0 full local gate and GitHub validation have not completed yet
 
 ## Goal and approval
 
-Continue implementable roadmap tasks until five-hour usage has 25% or less remaining, then stop. The latest snapshot was 37% remaining. Do not start another feature before completing the current release validation. Keep markdown fresh. Target working CI/CD, version/tag/release updates, direct ISO links, zero unresolved PRs/issues/stale branches, and A+ QA before main. Never close real work just to make counts zero.
+Continue implementable roadmap tasks until five-hour usage has 15% or less remaining, then stop. The latest snapshot was 26% remaining. The user added a reference-inspired landing footer; it is isolated from the running release candidate. Keep markdown fresh. Target working CI/CD, version/tag/release updates, direct ISO links, zero unresolved PRs/issues/stale branches, and A+ QA before main. Never close real work just to make counts zero.
 
 Main has zero open issues. Every remote branch was main or belonged to an open PR. The unused local feat/pi-codex-relay branch was deleted after verifying it was an ancestor; no work was lost. Active worktrees and their local branches remain untouched.
 

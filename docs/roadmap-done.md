@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.39.1 development branch (2026-10-10)
+
+The landing footer has a wider directory, a larger closing statement and original desert line art built from our existing tree mark. Links now have separate 44px tap targets instead of overlapping invisible hit areas. Chromium and WebKit checks cover 320/390/768/1280px in both themes, keyboard focus, contrast and real links. Not merged or deployed. Check: `tools/checks/landing-specs-footer-check.mjs`.
+
 ## 2.39.0 release candidate (2026-10-10)
 
 Combines the current review branches, including the older Mines app. Review caught Mines closing when its help panel was clicked. A QEMU regression reproduces that failure; off-board content clicks now stay in the game. The full combined gate and release approval remain.
