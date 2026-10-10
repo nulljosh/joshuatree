@@ -1033,7 +1033,12 @@ const char *calc_input(void);
 const char *calc_output(void);
 int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
 static int calc_live;
-static int clock_live;
+static int clock_live, brick_live, spot_live;
+static void brick_open(void);
+static void brick_close(void);
+static int brick_key(unsigned code, unsigned value);
+static void brick_mouse(int lx, int ly);
+static void brick_tick(void);
 static void clock_open(void);
 static void clock_close(void);
 #define CALC_TOP 36      /* the display's top, under the title band */
@@ -1069,6 +1074,7 @@ static void calc_paint(void) {
     cur_show();
 }
 static void calc_open(void) {
+    brick_close();
     clock_close();
     if (calc_live || !con_under) return;   /* no saved wallpaper (a full heap): nothing to close it back to */
     console_close();
@@ -1090,6 +1096,7 @@ static void calc_did(int ran) {   /* after a key: redraw, and log a finished sum
 static void pointer_moved(void) {   /* one report done: the arrow to its new place, the dock's label to the slot under it */
     if (!fb) return;
     int s = (int)window_scale(), slot = gui_dock_hit_test((int)mouse_x / s, (int)mouse_y / s);
+    if (brick_live) brick_mouse((int)mouse_x / s, (int)mouse_y / s);
     cur_wanted = 1;
     cur_hide();
     if (slot != hover_slot) { hover_slot = slot; dock_hover(slot); }
@@ -1100,8 +1107,12 @@ static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
     int dx = lx - (win_lx + 24), dy = ly - (win_ly + 16);   /* the close button: gui_draw_window_frame's red dot, radius 7 */
-    if (slot == 0) calc_open();   /* Apps: the Calculator, the one app on ARM so far */
-    else if (calc_live && slot < 0) {
+    if (slot == 0) calc_open();   /* Apps tile opens Calculator; Brick and Clock are in Spotlight. */
+    else if (brick_live && slot < 0) {
+        if (spot_live) return;
+        if (dx * dx + dy * dy <= 8 * 8) brick_close();
+        else if (lx >= win_lx && lx < win_lx + win_lw && ly >= win_ly + 32 && ly < win_ly + win_lh) brick_key(57, 1);
+    } else if (calc_live && slot < 0) {
         if (dx * dx + dy * dy <= 8 * 8) { calc_close(); return; }
         int cols, n = calc_keys(&cols);
         for (int i = 0; i < n; i++) {
@@ -1116,6 +1127,8 @@ static void pointer_click(void) {   /* the left button went down */
 static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key or Spotlight: slot 0 is handled by the caller's calc_open */
     if (slot == 0) { calc_open(); return; }
     if (slot == GUI_ICON_COUNT) { clock_open(); return; }
+    if (slot == GUI_ICON_COUNT + 1) { brick_open(); return; }
+    brick_close();
     clock_close();
     calc_close();
     if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line */
@@ -1135,7 +1148,7 @@ int ask_char(unsigned code);                  /* ask.c: a key code as the charac
 #define SPOT_ROW 22
 #define SPOT_MAX 5                    /* matches shown at most */
 static char spot_text[24]; static unsigned spot_len;
-static int spot_live, spot_sel, spot_hits[GUI_ICON_COUNT + 1], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
+static int spot_sel, spot_hits[GUI_ICON_COUNT + 2], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
 static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
 static int spot_lx, spot_ly, spot_lh;   /* the bar on the logical grid; its height is what is drawn now */
 static int spot_match(const char *name) {   /* the typed text, case folded, anywhere in the name */
@@ -1147,12 +1160,12 @@ static int spot_match(const char *name) {   /* the typed text, case folded, anyw
     }
     return 0;
 }
-static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : dock_names[slot]; }
+static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : dock_names[slot]; }
 static int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
 static void spot_paint(void) {
     int s = (int)window_scale();
     spot_n = 0;
-    for (int i = 0; i <= GUI_ICON_COUNT && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
+    for (int i = 0; i <= GUI_ICON_COUNT + 1 && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
     if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
     cur_hide();
     int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;
@@ -1212,8 +1225,9 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
     if (power_key(code)) return 1;
 #endif
     if (code == 59 || (chord && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1, Cmd/Ctrl/Alt+Space toggle */
-    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); clock_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
+    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
     if (spot_live) return spot_key(code);
+    if (brick_live) return brick_key(code, 1);
     if (clock_live) { if (code == 1) clock_close(); return 1; }
     if (calc_live) return 0;
     if (code == 61 && term_front()) {   /* F3: the other Terminal session; never move a running request. */
@@ -1362,6 +1376,7 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
     *hh = (unsigned)(loc % 86400) / 3600; *mm = (unsigned)(loc % 3600) / 60;
 }
 #include "clock_ui.h"
+#include "brick_ui.h"
 int wifi_signal_level(void);   /* wifi.c: 1 to 3 from how loud our network was in the scan */
 /* The right end of the menu bar: the clock in 12-hour form, and left of it a three-bar signal icon, no name. Connected
    bars show in the same ink as the clock, as many as the signal earns; anything else (starting, joining, no network) is three
@@ -1547,13 +1562,13 @@ static void m1_selftest(void) {
 #endif
 }
 
-/* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console and Clock are available; other names return 0. */
+/* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock and Brick are available; other names return 0. */
 int app_open_name(const char *name) {
-    static const char *const openable[] = {"calculator", "console", "clock"};
-    for (unsigned a = 0; a < 3; a++) {
+    static const char *const openable[] = {"calculator", "console", "clock", "brick"};
+    for (unsigned a = 0; a < 4; a++) {
         const char *w = openable[a]; unsigned i = 0;
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
-        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); return 1; }
+        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); return 1; }
     }
     return 0;
 }
@@ -1580,6 +1595,7 @@ static void input_event(struct input_event e) {
         uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
         return;
     }
+    if (e.type == 1 && brick_live && !spot_live) { brick_key(e.code, e.value); return; }
     if (e.type == 1 && e.value && calc_live && e.code != 42 && e.code != 54) {                            /* a key for the open Calculator (Shift still goes to ask.c) */
         con_quiet = 1;
         uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
@@ -1915,7 +1931,7 @@ void main(void) {
 #ifdef KEY_SELFTEST
     key_selftest();
 #endif
-    if (usb_ok) {
+    if (usb_ok || inputs) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
            so its handler never runs; the short unmask is for the virtio devices, whose handler acknowledges them. */
@@ -1924,15 +1940,15 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); ask_poll(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); ask_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
-            __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
-            usb_poll(); input_poll(); ask_poll(); keydbg_tick();
+            else __asm__ volatile ("wfi");
+            usb_poll(); input_poll(); ask_poll(); brick_tick(); keydbg_tick();
         }
 #endif
     }
-    if (inputs) for (;;) { __asm__ volatile ("wfi"); input_poll(); ask_poll(); keydbg_tick(); }   /* asleep until a device interrupts */
     for (;;) __asm__ volatile ("wfe");
 }

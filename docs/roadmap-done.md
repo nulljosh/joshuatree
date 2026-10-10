@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.37.0 development branch (2026-10-10)
+
+Brick is implemented as an original native ARM game: 32 bricks, three lives, keyboard or mouse paddle, pause, restart, win and game over. Spotlight opens it. Sanitized host physics and QEMU input/pixel checks pass; not merged, flashed or physically verified. Check: `tools/checks/arm64-brick-check.py`.
+
 ## 2.36.0 development branch (2026-10-10)
 
 Keyboard shutdown and restart are implemented for the Pi. Both require an explicit Enter after the chord; Escape cancels, a busy Samantha request refuses, and a hidden prompt cannot confirm. The host safety harness and real HID-to-watchdog shutdown/reboot pass on QEMU raspi4b. This is not merged or flashed; physical board verification remains. Check: `tools/checks/arm64-power-check.py`.

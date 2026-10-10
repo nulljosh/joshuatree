@@ -17,7 +17,7 @@ static int power_key(unsigned code) {
         return 1;
     }
     if (!ctrl_held || !alt_held || (code != 111 && code != 107)) return 0;
-    spot_close(); clock_close(); calc_close(); pane_open(&term_p);
+    spot_close(); brick_close(); clock_close(); calc_close(); pane_open(&term_p);
     if (ask_pending()) { power_message("Wait for Samantha to finish, then try again.\n"); return 1; }
     power_pending = code == 107 ? 1 : 2;
     power_message(power_pending == 1 ? "Shut down? Unsaved conversations will be lost.\n" : "Restart? Unsaved conversations will be lost.\n");

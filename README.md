@@ -17,7 +17,7 @@ Where it is going, and the picture of how it all fits: [Vision](docs/VISION.md).
 
 You can talk to it. Ask Samantha to set a reminder, take a note or open an app, and she answers out loud. (She is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
 
-Pi development build: keyboard restart and shutdown with confirmation. See [the guide](docs/GUIDE.md#restart-or-shut-down-the-pi). Physical verification is pending.
+Pi development build: Brick, an original brick-breaker with keys or mouse, plus keyboard restart and shutdown with confirmation. See [the guide](docs/GUIDE.md#restart-or-shut-down-the-pi). Physical verification is pending.
 
 ## In plain words
 

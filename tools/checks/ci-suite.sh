@@ -59,6 +59,7 @@ cd "$(dirname "$0")/../.."
 # retry?  shard  name                                                   command
 manifest() {
 cat <<'EOF'
+once |6|Brick on ARM: collision rules, lives and win under sanitizers; keyboard/mouse play, timed animation, pause, restart, Spotlight and close in QEMU|python3 ./tools/checks/arm64-brick-check.py
 once |6|Pi keyboard shutdown and restart: confirmed HID chords halt or reboot raspi4b, Escape cancels, busy and hidden prompts refuse (host and QEMU)|python3 ./tools/checks/arm64-power-check.py
 once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
 once |7|No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
