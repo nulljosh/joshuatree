@@ -23,16 +23,12 @@ the compositor's stretch. For every glyph pixel (estimated coverage > 8%,
 from luminance between the surface and the darkest ink pixel) it computes:
   core  share of glyph pixels at >= 90% ink   (sharpness: dense stems)
   mid   share of glyph pixels at 20..80% ink  (still antialiased, not 1-bit)
-Thresholds are calibrated to the ring-3 renderer, which rasterizes at 1x
-logical resolution from a 4-bit coverage atlas (user/libjt/text.c): a stem is
-about one pixel wide and there are at most 14 coverage levels, so the old
-physical-resolution bars (core >= 0.58, 12 intermediate levels) do not apply.
-Measured today: core 0.23-0.33, mid 0.40-0.58, 8 intermediate levels. PASS
-needs core >= 0.18 (stems keep real full-ink pixels; halved coverage or a
-blend that never reaches full ink fails), mid >= 0.25 (a binary/jagged renderer
-has mid ~0) and at least 6 distinct intermediate levels. The gap to the kernel
-text's 0.64 core is a roadmap item: libjt does not yet run the stem-darkening
-curve the kernel's text_ink applies.
+The shared kernel/app ink curve raises core coverage from 0.23-0.33 to
+0.44-0.52 on this 4-bit logical-resolution atlas. Require core >= 0.40;
+the old pre-boost-only renderer fails every row. Keep at least six distinct
+intermediate levels and mid >= 0.30 for body text. The bold browse heading
+has thicker stems and mid 0.19 after darkening, so its mid floor is 0.18.
+A binary renderer still fails both the mid and intermediate-level checks.
 
 Usage: python3 tools/checks/textsharp-check.py   (repo root, after make kernel.elf)
 """
@@ -54,7 +50,7 @@ VIEWS = [
     ("Notes editor", "open=notes", "notes: folders=", SENTENCE,
      {"Notes editor body line": (256, 196, 700, 244)}),
 ]
-CORE_MIN, MID_MIN, LEVELS_MIN = 0.18, 0.25, 6
+CORE_MIN, MID_MIN, LEVELS_MIN = 0.40, 0.30, 6
 
 
 def logical_px(img, box):
@@ -99,6 +95,7 @@ for app, flag, ready, typed, rows in VIEWS:
         print(f"FAIL: {app}: never captured"); fail = 1; continue
     for name, box in rows.items():
         px = logical_px(img, box)
+        mid_min = 0.18 if name == "Notes browse heading" else MID_MIN
         bg = max(set(px), key=px.count)          # the surface is the most common value
         fg = min(px)                             # darkest ink pixel (cores reach full ink)
         if bg - fg < 60:
@@ -109,11 +106,11 @@ for app, flag, ready, typed, rows in VIEWS:
         core = sum(a >= 0.9 for a in ink) / len(ink)
         mid = sum(0.2 < a < 0.8 for a in ink) / len(ink)
         levels = len({p for p in px if fg + 0.2 * (bg - fg) < p < fg + 0.8 * (bg - fg)})
-        print(f"{name}: {len(ink)} glyph px, core {core:.3f} (need >= {CORE_MIN}), mid {mid:.3f} (need >= {MID_MIN}), {levels} intermediate levels (need >= {LEVELS_MIN})")
+        print(f"{name}: {len(ink)} glyph px, core {core:.3f} (need >= {CORE_MIN}), mid {mid:.3f} (need >= {mid_min}), {levels} intermediate levels (need >= {LEVELS_MIN})")
         if core < CORE_MIN:
             print(f"FAIL: {name}: stems are soft, only {core:.1%} of glyph pixels are full ink (linear-coverage blending is back?)")
             fail = 1
-        if mid < MID_MIN or levels < LEVELS_MIN:
+        if mid < mid_min or levels < LEVELS_MIN:
             print(f"FAIL: {name}: edges have lost their antialiasing (binary/jagged text)")
             fail = 1
 print("PASS: UI text has dense stems and still-antialiased edges (Mail, Notes browse view, Notes editor)" if not fail else "textsharp-check: FAILED")

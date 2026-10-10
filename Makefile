@@ -173,6 +173,8 @@ user/libjt/aafont.h: tools/gen/gen_user_text.c drivers/ttf.c drivers/ttf.h drive
 user/libjt/aamono.h: user/libjt/aafont.h
 	@test -f $@
 
+user/libjt/text.o user/libjt/mono.o: lib/text_ink.h
+
 user/libjt/text.o: user/libjt/text.c user/libjt/text.h user/libjt/aafont.h user/jtsys.h
 user/libjt/mono.o: user/libjt/mono.c user/libjt/text.h user/libjt/aamono.h user/jtsys.h
 user/libjt/jpeg.o: user/libjt/jpeg.c drivers/jpeg.c drivers/jpeg.h user/libjt/string.h user/libjt/stdlib.h

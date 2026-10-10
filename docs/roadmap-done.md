@@ -7,6 +7,9 @@ The README and site link directly to the latest PC ISO and checksums. Releases n
 ## 2.38.0 development branch (2026-10-10)
 
 The Pi has a short menu-bar notification strip. Wi-Fi joined and Brick win/game-over messages clear after four seconds; later messages replace earlier ones. Bounded-message sanitizer tests and real QEMU pixels/input/idle-expiry pass. Not merged, released or tested on the board. Check: `tools/checks/arm64-notice-check.py`.
+## 2.37.1 development branch (2026-10-10)
+
+Ring-3 app text now uses the kernel ink curve, including the Terminal mono face. Mail and Notes stem coverage rises from 23–33% to 44–52%, with six intermediate edge levels preserved. The stricter pixel check fails on the old renderer. Not merged or released. Check: `tools/checks/textsharp-check.py`.
 
 ## 2.37.0 development branch (2026-10-10)
 
