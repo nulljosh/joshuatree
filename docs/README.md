@@ -14,6 +14,7 @@
 - [Raspberry Pi guide](RASPBERRY-PI.md): what to buy, the serial cable, and how to boot it on a real Pi 4. [Printable Pi case](hardware/PI-CASE.md)
 - [ARM64 and the Raspberry Pi](ARM64.md): the second CPU target. It boots under QEMU today with a drawn desktop, a keyboard, mouse, disk and network, and its first program in user mode (`make -C arch/arm64 run`); the Pi 4B is the first real board
 - [Autonomy](AUTONOMY.md): the gap list between today's Pi and a computer that fixes itself, with the first three tasks
+- [Encrypted Pi relay](RELAY-TLS.md): certificates, the trusted-time bootstrap and remaining security limits
 - [The Claude app](CLAUDE-APP.md): Claude Code from inside Joshua Tree, through a relay on your Mac, and its security model
 - [Roadmap](roadmap.md): what is next
 

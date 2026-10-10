@@ -123,3 +123,9 @@ Check: the same script as finding 1 covers it: build with the flag unset and fai
 The API relay's shared-folder reader had a high-severity check/open race: a local process with write access to `~/pi-files` could replace an approved file with a symlink, letting a model read outside the folder. The reader now pins the folder, opens with `O_NOFOLLOW` and checks the opened descriptor is a regular file. Nonblocking open also prevents a replacement FIFO from hanging the relay. `tools/checks/relay-api-check.py` reproduces the old symlink leak and covers FIFO and deletion races. The API key file is now closed after each read.
 
 The existing release-token guard in `arch/arm64/claude_cfg.sh` already addresses finding 1 for normal release builds: only `JT_WIFI_DEV=1` or an explicitly supplied token file embeds a token. Findings 2 and 3 remain open: Pi requests still send a bearer token over HTTP, and the certificate clock still trusts an unauthenticated Date header. TLS entropy remains timer-based. This follow-up does not certify those paths or the hardware.
+
+## TLS and clock follow-up, 2026-10-09
+
+Pi relay requests now use verified HTTPS with no HTTP fallback. LAN relay startup requires a certificate and key; loopback HTTP remains for i386/QEMU. Clock sync accepts only a verified HTTPS Date, refuses dates before the build or previous accepted time, rejects invalid/duplicate dates and preserves its last value on failure. See `docs/RELAY-TLS.md` for migration and checks.
+
+Finding 3 is reduced, not fully closed: the first handshake still validates at build time. An old certificate valid at build time but expired now can pass that bootstrap check. Removing that window needs persistent trusted time or a fresh signed-time protocol. Timer-based TLS entropy also remains open. No live relay was restarted and no card was flashed by this change.

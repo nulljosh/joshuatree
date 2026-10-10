@@ -20,7 +20,7 @@ The ordered list below is the near-term queue. The topic sections keep the longe
 
 **Next, in order**
 1. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
-2. Security findings 2 and 3 from the Pi security review: the relay token travels over HTTPS, and the certificate check has a trusted clock. Why: the token is plain text on the wire today, and a wrong clock accepts an expired certificate. Check: `tools/checks/arm64-claude-console-check.py` against a TLS relay, and a browser check that fails with the clock set before the certificate's start.
+2. Pi security: verify the TLS relay and HTTPS clock on the board, then replace the build-time clock bootstrap and timer entropy. The code now refuses plaintext Pi relay requests and time rollback; a certificate valid at build time but expired today can still pass the first clock handshake. Setup and checks: [RELAY-TLS.md](RELAY-TLS.md).
 3. SD card writes (MBR and FAT32) and the self-update path with a fallback kernel. Why: nothing can be saved on the board, and a new build still needs a card swap. Check: write a file under QEMU, read it back after reboot; then a fake release that boots once and falls back.
 4. The local model with real weights read from the SD card. Why: the kernel runs the forward pass, but release builds carry no weights. Check: `tools/checks/arm64-llm-check.py` with the model loaded from a FAT image instead of the link.
 5. A wired USB mouse on the Pi. Pointer and clicks work in QEMU; needs a mouse in a port on the board. Check: `tools/checks/arm64-m2-check.py` plus one board photo.
@@ -132,8 +132,8 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 ### CI and speed
 
 - [ ] [Sonnet] Convert the remaining fixed scratch paths in `tools/checks/tmp-paths-baseline.txt` to private directories and sockets. The one-suite lock already prevents collisions; keep it until the baseline is empty. Check: `tools/checks/tmp-paths-check.py`.
-- [ ] [Sonnet] Six of the last ten red runs were slow-runner timing flakes (Chat tool scenes, the phone mute button, Keyrate, the Apps folder layout): eight QEMUs share one runner. Find out how many cores the runner has, cap QEMUs per runner or move to 10 shards (the balancer says about 319 s of checks per shard, 12 shards about 266 s), and watch the next ten runs.
-CI shards rebalanced from green run 37983553844: 215 measured checks, slowest estimated shard 620 s down to 543 s, with the same eight shards and two local jobs. Re-run `tools/gen/ci-balance.py` when checks change; estimates need confirmation on the next full run.
+- [ ] [Sonnet] Six of the last ten red runs were slow-runner timing flakes (Chat tool scenes, the phone mute button, Keyrate, the Apps folder layout): each suite shard already has its own runner and runs its checks serially. Measure CPU load and guest startup before changing concurrency, and watch the next ten runs.
+CI now installs ARM QEMU, so ARM regressions run instead of skipping for a missing emulator. The 217 checks use the slower of the last green GitHub and local timings, with ARM build checks together on shard 6 so local cleans cannot collide. Eight shards and the two-job local cap remain. Re-run `tools/gen/ci-balance.py` on the next green GitHub run to measure the new ARM coverage.
 - [ ] [Haiku] About a third of recent runs were cancelled by force-pushes to an open PR. Push once per PR, or fold PRs together before CI starts.
 - [ ] [Sonnet] Reduce local CI time without raising the two-job concurrency cap. Four concurrent jobs previously exhausted the Mac's memory; measure slow checks and rebalance first.
 

@@ -25,8 +25,8 @@ NETPORT ?= 0
 # The IP stack is the i386 kernel's own drivers/net.c and drivers/http.c, built against drivers/nic.h (-DNET_NIC)
 # instead of the PC network cards. -mstrict-align: a real board's firmware may leave alignment checks on.
 NETCC = $(CC) -DNET_NIC -mstrict-align -I../../drivers -I../../kernel
-NETOBJ = net.o http.o ip.o tls.o browser.o $(BSSLOBJ)
-NETLD = net.o http.o ip.o tls.o browser.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
+NETOBJ = net.o http.o ip.o clock.o tls.o browser.o $(BSSLOBJ)
+NETLD = net.o http.o ip.o clock.o tls.o browser.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
 all: kernel8.elf
 net.o: ../../drivers/net.c ../../drivers/net.h ../../drivers/nic.h
 	$(NETCC) -c $< -o $@
@@ -34,6 +34,9 @@ http.o: ../../drivers/http.c ../../drivers/http.h
 	$(NETCC) -c $< -o $@
 # TLSPORT=n: at boot, GET https://10.0.2.2:n/hello and print the result (tools/checks/arm64-tls-check.py). 0 skips it.
 TLSPORT ?= 0
+BUILD_UTC ?= $(shell date +%s)
+clock.o: clock.c tls.h ../../drivers/net.h ../../drivers/http.h
+	$(NETCC) -DBUILD_UTC=$(BUILD_UTC)UL -c $< -o $@
 ip.o: ip.c ../../drivers/nic.h tls.h
 	$(NETCC) -DNETPORT=$(NETPORT) -DTLSPORT=$(TLSPORT) -c $< -o $@
 # HTTPS (tls.c) over BearSSL. The trust anchors are generated from certs/*.pem (plus TLS_TA=extra.pem, the check's
@@ -51,16 +54,16 @@ tls_ta.h: ../../tools/gen/tls-ta.py $(wildcard certs/*.pem) $(TLS_TA)
 browser.o: browser.c tls.h ../../drivers/net.h ../../drivers/http.h
 	$(NETCC) -c $< -o $@
 tls.o: tls.c tls.h tls_ta.h ../../drivers/net.h ../../drivers/http.h
-	$(NETCC) -I$(BSSL)/inc -I$(BSSL)/shim -I../../lib -DBUILD_UTC=$(shell date +%s)UL -c tls.c -o $@
+	$(NETCC) -I$(BSSL)/inc -I$(BSSL)/shim -I../../lib -c tls.c -o $@
 claude_cfg.h: claude_cfg.sh FORCE
 	@./claude_cfg.sh
 wifi_cfg.h: wifi_cfg.sh FORCE
 	@./wifi_cfg.sh
-ask.o: ask.c claude_cfg.h ../../drivers/http.h ../../drivers/net.h
+ask.o: ask.c claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
 	$(NETCC) -c ask.c -o $@
 # A Pi image carries the relay token only on the dev card (JT_WIFI_DEV=1, the same flag that carries the Wi-Fi key);
 # a release build has no relay config at all. tools/checks/pi-release-notoken-check.sh proves it. QEMU builds are unchanged.
-pi-ask.o: ask.c claude_cfg.h ../../drivers/http.h ../../drivers/net.h
+pi-ask.o: ask.c claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
 	$(NETCC) -DPI_BUILD $(if $(filter 1,$(JT_WIFI_DEV)),,-DCLAUDE_RELEASE) -c ask.c -o $@
 ttf.o: ../../drivers/ttf.c
 	$(FPCC) -c $< -o $@

@@ -114,7 +114,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang lld qemu-system-x86 python3-pil librsvg2-bin mtools dosfstools ccache xorriso
+            clang lld qemu-system-x86 qemu-system-arm openssl python3-pil librsvg2-bin mtools dosfstools ccache xorriso
+      - name: Verify ARM tools and report runner CPU count
+        run: |
+          nproc
+          qemu-system-aarch64 --version
+          openssl version
       # The old cache step pointed at /var/cache/apt/archives, which apt on
       # the runner empties after a successful install, so it restored an
       # empty directory every run and saved an empty one back: a cache that
@@ -129,7 +134,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-ubuntu-24.04-${{ hashFiles('kernel/**', 'drivers/**', 'boot/**', 'lib/**', 'Makefile') }}
+          key: ccache-ubuntu-24.04-${{ hashFiles('kernel/**', 'drivers/**', 'boot/**', 'lib/**', 'arch/arm64/**', 'third_party/bearssl/**', 'Makefile') }}
           restore-keys: |
             ccache-ubuntu-24.04-
       - name: Build
@@ -209,7 +214,7 @@ jobs:
       - name: Landing demo shows Samantha's face and plays her voice (retries once)
         run: node tools/checks/facespeak-demo-check.mjs || (sleep 10 && node tools/checks/facespeak-demo-check.mjs)
       - name: Phone audio unlocks on a real tap (retries once)
-        run: node tools/checks/mobile-audio-check.mjs || (sleep 10 && node tools/checks/mobile-audio-check.mjs)
+        run: timeout 120s node tools/checks/mobile-audio-check.mjs || (sleep 10 && timeout 120s node tools/checks/mobile-audio-check.mjs)
       # Landing-only PR: the suite is skipped, so its landing checks run here.
       - name: Landing checks (landing-only PR, suite skipped)
         if: needs.changes.outputs.kernel == 'false'
@@ -306,7 +311,7 @@ jobs:
       - name: Install clang, lld, qemu
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 python3-pil librsvg2-bin curl
+          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 qemu-system-arm openssl python3-pil librsvg2-bin curl
       - name: Build
         run: make kernel.elf
       # Real one-off transient failures (a ConnectionResetError from

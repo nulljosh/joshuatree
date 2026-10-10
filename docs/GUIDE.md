@@ -47,8 +47,9 @@ your router for a local address, such as `192.168.1.20`.
 
 The menu bar shows Wi-Fi progress and signal bars. Open Console for the
 `wifi` status lines if joining fails. A network clock is fetched after the
-Pi gets an address. That clock currently comes from plain HTTP, so it is
-not yet a trusted source for security decisions.
+Pi gets an address. That clock comes from a verified HTTPS reply and cannot move behind the
+build date or an already accepted time. The initial check still relies on
+the build date; [the TLS setup](RELAY-TLS.md) explains that limit.
 
 Without a configured network, the Pi scans but does not join. Without a
 successful join, Samantha cannot reach the relay. The desktop still works.
@@ -72,10 +73,10 @@ whether the relay answered last time. `/clear` starts a new conversation.
 `/effort low` requests a shorter, cheaper API answer. In Claude Code relay
 mode the effort setting is ignored. `/help` lists these controls.
 
-The Pi-to-relay connection is still plain HTTP. Wi-Fi encryption does not
-make that connection end-to-end encrypted. Use the development relay only
-on a trusted network until relay TLS ships. Do not expose its port to the
-public internet.
+The Pi-to-relay connection requires HTTPS. Follow [the TLS setup](RELAY-TLS.md)
+to give the Mac a certificate and include its public CA on the card. An old
+HTTP relay will fail until updated. Keep the relay on your trusted network;
+do not expose its port to the public internet.
 
 ### If something goes wrong
 
@@ -97,7 +98,8 @@ public internet.
 | `tools/wifi-fw.sh` | Fetches the Wi-Fi chip's firmware for the build. |
 | `arch/arm64/wifi.c` | Talks to the chip, scans and joins the network. |
 | `drivers/net.c` | Handles addresses and moves packets between machines. |
-| `arch/arm64/ip.c` | Connects that shared network code to the Pi and sets its clock. |
+| `arch/arm64/ip.c` | Connects the shared network code to the Pi. |
+| `arch/arm64/clock.c` | Sets the clock from verified HTTPS and refuses time rollback. |
 | `drivers/http.c` | Sends plain web requests and reads their replies. |
 | `arch/arm64/tls.c` | Checks certificates and encrypts HTTPS web requests. |
 | `arch/arm64/browser.c` | Turns a web page into readable text and numbered links. |

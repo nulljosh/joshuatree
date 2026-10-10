@@ -8,8 +8,8 @@
     a password for your account. Anyone holding it can make Claude read the files under
     --cwd (the repo by default) and spend your plan's usage.
 
-Joshua Tree has no TLS and no Node, so it cannot run Claude Code itself. It can send one
-plain HTTP POST (SYS_HTTP_POST). This relay takes that POST and does the Claude part:
+Joshua Tree cannot run Claude Code itself. The i386 app defaults to a loopback HTTP POST
+(SYS_HTTP_POST); the Pi Terminal uses HTTPS. This relay handles the Claude part:
 
     POST /api/claude
     Authorization: Bearer <token>
@@ -28,8 +28,8 @@ plain HTTP POST (SYS_HTTP_POST). This relay takes that POST and does the Claude 
 What it locks down, and why:
   - Binds 127.0.0.1 unless --lan is given. QEMU's user network reaches the host's loopback
     at 10.0.2.2, so the emulator needs no LAN exposure at all. --lan (a Pi or a second
-    machine) binds 0.0.0.0 and prints a warning, because the token then crosses the LAN in
-    plain HTTP and anyone who can sniff it can replay it.
+    machine) binds 0.0.0.0 and requires --tls-cert and --tls-key. The Pi verifies that
+    certificate against its embedded trust anchors and never falls back to HTTP.
   - Refuses to start without a token of 16 to 63 characters (Joshua Tree keeps it in a
     64-byte kernel buffer; the app never sees it, the kernel adds the header itself).
     The token comes from --token-file or the CLAUDE_RELAY_TOKEN environment variable,
@@ -58,7 +58,7 @@ Then in Joshua Tree: Settings > Assistant > Claude relay = 10.0.2.2:8765, Claude
 Python standard library only. tools/checks/claude-relay-check.py proves the rules above
 against a stub `claude`.
 """
-import argparse, hmac, http.server, json, os, re, signal, stat, subprocess, sys, threading, time, urllib.request, urllib.error, uuid
+import argparse, hmac, http.server, json, os, re, signal, ssl, stat, subprocess, sys, threading, time, urllib.request, urllib.error, uuid
 
 DEFAULT_PORT = 8765
 DEFAULT_TIMEOUT = 150          # seconds; the kernel waits up to 240 s (JT_HTTP_POST_TICKS_CLAUDE), so the relay's 504 lands first
@@ -358,7 +358,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="HTTP relay from Joshua Tree's Claude app to headless Claude Code. "
                                  "Command-capable: guard the token.")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT)
-    ap.add_argument("--lan", action="store_true", help="listen on every interface (Pi/LAN). Plain HTTP: the token can be sniffed.")
+    ap.add_argument("--lan", action="store_true", help="listen on every interface (Pi/LAN); requires TLS")
+    ap.add_argument("--tls-cert", help="PEM server certificate, including its chain")
+    ap.add_argument("--tls-key", help="PEM private key for --tls-cert")
     ap.add_argument("--token-file", help="file holding the shared token (else CLAUDE_RELAY_TOKEN)")
     ap.add_argument("--cwd", default=ROOT, help="where Claude Code runs and the only place it may read (default: this repo)")
     ap.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="hard limit per request, seconds")
@@ -372,6 +374,13 @@ def main(argv=None):
     ap.add_argument("--tools", default=",".join(READ_ONLY_TOOLS),
                     help="comma-separated built-in tools (default Read,Grep,Glob: read-only)")
     args = ap.parse_args(argv)
+    if bool(args.tls_cert) != bool(args.tls_key): ap.error("--tls-cert and --tls-key must be supplied together")
+    if args.lan and not args.tls_cert: ap.error("--lan requires --tls-cert and --tls-key; refusing a cleartext bearer")
+    context = None
+    if args.tls_cert:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(os.path.expanduser(args.tls_cert), os.path.expanduser(args.tls_key))
     args.tools = [t for t in args.tools.split(",") if t]
     args.cwd = os.path.abspath(os.path.expanduser(args.cwd))
     token = read_token(args)
@@ -379,11 +388,16 @@ def main(argv=None):
         sys.stderr.write("claude-relay: WARNING tools %s are not read-only. Claude can change files or run "
                          "commands for anyone with the token.\n" % ",".join(args.tools))
     host = "0.0.0.0" if args.lan else "127.0.0.1"
-    if args.lan:
-        sys.stderr.write("claude-relay: WARNING --lan: listening on every interface over plain HTTP. Anyone on this "
-                         "network who sees one request can replay the token.\n")
     Handler.relay = Relay(args, token)
-    srv = http.server.ThreadingHTTPServer((host, args.port), Handler)
+    class Server(http.server.ThreadingHTTPServer):
+        def get_request(self):
+            conn, address = super().get_request()
+            conn.settimeout(15)   # a stalled handshake/body must not hold a handler forever
+            return conn, address
+    srv = Server((host, args.port), Handler)
+    if context:
+        # Handshake in the handler thread, so one slow peer cannot block accept().
+        srv.socket = context.wrap_socket(srv.socket, server_side=True, do_handshake_on_connect=False)
     srv.daemon_threads = True
     sys.stderr.write("claude-relay: listening on %s:%d, cwd %s, tools %s, timeout %ds\n"
                      % (host, srv.server_address[1], args.cwd, ",".join(args.tools), args.timeout))
