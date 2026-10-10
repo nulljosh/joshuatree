@@ -1,10 +1,10 @@
 # Where input lives on the Pi
 
-The ARM desktop has two text windows in the same spot. One is in front at a time.
+The ARM desktop has a Console and two Terminal sessions in the same spot. One is in front at a time.
 
 **Console: logs only.** Boot messages, Wi-Fi and errors. It has no input row, and typing with it in front does nothing (the key echoes go to the UART only). It opens at boot, because on a Pi with no serial cable it is the only debug view. Page Up, Page Down, Home and End scroll it.
 
-**Terminal: the command line.** Its bottom row is the `ask>` prompt. Type, Backspace, Enter. Every command runs here and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too.
+**Terminal: the command line.** Its bottom row is the `ask>` prompt. Type, Backspace, Enter. Every command runs here and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window; side-by-side panes remain future work.
 
 | Command | What it does |
 |---|---|
@@ -31,6 +31,7 @@ No mouse is needed. The desktop's keys, in `arch/arm64/main.c` (`ui_key`); `tool
 | A letter or digit | With no pane holding the keys, Spotlight with that character already typed |
 | Enter, Space, Tab | With no pane holding the keys and no dock label, Spotlight, empty |
 | F2, Ctrl+T | The Terminal, at once, closing Spotlight if open; it has the keyboard |
+| F3 | Switch Terminal session when no request is running |
 | Left, Right | With no pane holding the keys, move the dock's label along the tiles |
 | Enter | Open the labelled tile |
 | Esc | Clear the label; with the Terminal in front, back to the Console. While a question runs it stops the agent instead. With nothing open it does nothing |
@@ -49,4 +50,4 @@ A release build has no relay token. Claude then answers `claude: no token`, and 
 - `tools/checks/arm64-claude-console-check.py`: typing at the Console asks nothing, the Terminal answers, and the answer is not in the Console.
 - `tools/checks/arm64-mouse-check.py`: the Terminal tile opens the Terminal with its prompt.
 
-Next: panes (several Terminals side by side) and the Claude-model prompt (`Claude Sonnet 5.5 $`).
+Next: several Terminals side by side. Browser navigation state is still shared; AI conversation state is separate. Sessions live in memory and reset on reboot.

@@ -492,7 +492,9 @@ struct pane {
     int scrolled;             /* the keyboard moved the view back: new output is only logged until End */
     unsigned vtop, vlast;     /* while scrolled: the first line shown (0 based) and the last (1 based) */
 };
-static struct pane con_p, term_p, *cp = &con_p;
+static struct pane con_p, terminals[2], *cp = &con_p;
+static unsigned term_index;
+#define term_p terminals[term_index]
 static int con_wx, con_wy, con_ww;
 static int con_live;    /* the framebuffer is up: draw as we go */
 static int con_x, con_y, con_cw, con_ch, con_base, con_cols, con_rows, con_px10;
@@ -987,7 +989,7 @@ static int cur_hold(void) {   /* the Console is about to draw: take the arrow of
 static void cur_release(int held) { if (held) cur_show(); }
 static void console_frame(void) {   /* the i386 window frame, and a white well for the text */
     int s = (int)window_scale();
-    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? "Terminal" : "Console");
+    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? (term_index ? "Terminal 2" : "Terminal 1") : "Console");
     fb_rect((win_lx + 8) * s, (win_ly + 30) * s, (win_lw - 16) * s, (win_lh - 38) * s, CON_BG);
 }
 static int term_front(void) { return cp == &term_p && (con_live || !fb); }   /* with no screen at all, the UART is the Terminal */
@@ -1122,6 +1124,7 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
    dock's hover label, Enter opens that tile, Esc clears it. F2 or Ctrl+T opens the Terminal at once; Esc with the
    Terminal in front and no question running hands the keys back to the desktop (the Console). ---- */
 int ask_pending(void);
+int ask_select(unsigned pane);
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 #define SPOT_W 300
 #define SPOT_ROW 22
@@ -1200,6 +1203,15 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
     if (code == 60 || (ctrl_held && code == 20)) { spot_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
     if (spot_live) return spot_key(code);
     if (calc_live) return 0;
+    if (code == 61 && term_front()) {   /* F3: the other Terminal session; never move a running request. */
+        unsigned next = term_index ^ 1;
+        if (ask_select(next)) {
+            term_index = next;
+            pane_open(&term_p);
+            uart_puts(next ? "terminal session 2\n" : "terminal session 1\n");
+        }
+        return 1;
+    }
     if (term_front()) { if (code == 1 && !ask_pending()) { console_open(); return 1; } return 0; }   /* Esc: the keys back to the desktop */
     if (!fb) return 0;
     if (code == 105 || code == 106) { dock_select(dock_sel < 0 ? (code == 106 ? 0 : GUI_ICON_COUNT - 1) : (dock_sel + (code == 106 ? 1 : GUI_ICON_COUNT - 1)) % GUI_ICON_COUNT); return 1; }

@@ -14,7 +14,7 @@ From real framebuffer dumps it checks:
   3. Week view draws its six column separators, and an event saved from
      week view shows up as the accent bar in the selected (Saturday) column.
   4. Year view draws twelve mini months: three rows of mini grids, each
-     holding week rows of day dots (digits only fit when a week row is 16px tall, which a 345px window never gives), and today's accent disc sits in August (column 4,
+     holding small antialiased date numbers, and today's accent disc sits in August (column 4,
      row 2 of the 4x3 layout).
   5. Month view is still the default and still fits six weeks (the
      apptop-check.py contract), after visiting the other views.
@@ -155,19 +155,27 @@ try:
     print(f"Year: segment {seg}, today disc accent px in August {aug}, in January {other}")
     if aug < 30: fails.append(f"Year: today's disc not in August's mini month ({aug} px)")
     if other > 10: fails.append(f"Year: accent ink in January's mini month ({other} px)")
-    # user/calendar.c draw_year: a 345px ring-3 window leaves ~10px per week
-    # row, under the 16px a digit needs, so each day is a 3x3 dot instead of
-    # a glyph. Every mini-month row must still show its week rows as separate
-    # bands of dot ink (a month has 4 to 6 weeks and each row of four months
-    # always has at least 5 somewhere), not a blank grid.
-    for row in range(3):
-        bands, prev = 0, False
-        for ly in range(top + row * mh + 20, top + (row + 1) * mh):
-            hit = any(sum(px(img, vx(x), vy(ly))) < 450 for x in range(24, 780, 2))
-            if hit and not prev: bands += 1
-            prev = hit
-        print(f"Year: mini-month row {row} shows {bands} week bands of day dots")
-        if bands < 5: fails.append(f"Year: mini-month row {row} has only {bands} week bands (day dots missing?)")
+    # Read two date shapes in every mini month: identical 3x3 dots cannot pass.
+    import calendar
+    col_w = (mw - 16) // 7
+    for mo in range(1, 13):
+        gx = 20 + ((mo - 1) % 4) * mw
+        gy = top + ((mo - 1) // 4) * mh
+        gx0 = gx + (mw - col_w * 7) // 2
+        row_h = (mh - 24) // 6
+        first = (calendar.weekday(2026, mo, 1) + 1) % 7
+        masks = []
+        for day in (26, 27):
+            row, col = divmod(first + day - 1, 7)
+            cx = gx0 + col * col_w + col_w // 2
+            cy = gy + 20 + row * row_h + row_h // 2
+            ink = {(x, y) for y in range(8) for x in range(12)
+                   if sum(px(img, vx(cx - 6 + x), vy(cy - 4 + y))) < 600}
+            masks.append(ink)
+            if not ink or max(x for x,y in ink) - min(x for x,y in ink) < 4 or max(y for x,y in ink) - min(y for x,y in ink) < 4:
+                fails.append(f"Year: month {mo} date {day} is not a readable two-digit glyph")
+        if masks[0] == masks[1]: fails.append(f"Year: month {mo} dates 26 and 27 have identical shapes")
+    print("Year: distinct date numbers checked in all twelve months")
     key("right"); img = dump("year-next")
     if accent_count(img, vx(20 + 3 * mw), vy(top + mh + 18), vx(20 + 4 * mw), vy(top + 2 * mh)) > 10:
         fails.append("Year: right did not step to the next year (today's disc still drawn)")

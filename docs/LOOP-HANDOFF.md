@@ -1,30 +1,17 @@
-# Joshua Tree loop handoff (2026-10-09, afternoon)
+# Joshua Tree handoff (2026-10-09, evening)
 
-## What the loop is
+## Current scope
 
-Finish Pi relay TLS and HTTPS clock validation in PR #490, then merge on green. Joshua explicitly approved merging these changes when safe. Keep usage low: no new features, agents or background automation.
+Joshua asked for hardware randomness, independent Terminal AI settings and readable Calendar Year dates while he makes dinner. He will flash the SD card himself. No card writes. The Mac relay was migrated to TLS using the already merged relay implementation.
 
-## Where things stand
+Main is 2.33.5 at ab90b912. PR #490 passed all GitHub checks and merged. The new branch is fix/pi-rng-terminal-calendar, version 2.34.0. It replaces Pi timer entropy with the RNG200 hardware FIFO, refuses TLS on health faults or a one-second timeout, and wipes seed buffers. Virt keeps its existing timer provider for QEMU tests only. Two Terminal sessions switch with F3, keep separate typing, scrollback, conversation, model, effort and status, and cannot switch during a running request. Calendar Year view halves the existing antialiased face instead of drawing dots at the normal size.
 
-Main is 2.33.4 at 755e3f73. PR #488 shipped landing signup/mobile fixes and the redesigned welcome email, with actual delivery confirmed in Apple Mail. PR #489 shipped relay shared-file race protection, CI balancing and the Wi-Fi guide; full local checks and GitHub CI passed before merge.
+## Validation
 
-Draft PR #490 is on fix/pi-relay-tls-clock, rebased onto main. It requires TLS for Pi relay traffic without an HTTP fallback, requires certificate/key configuration for a LAN relay, and accepts clock dates only over verified HTTPS with strict parsing and rollback protection. Focused host and QEMU checks pass, including wrong-host, expired, future and untrusted certificates, session resume and proof that a plaintext endpoint receives no bearer.
+Focused checks passed: sanitized RNG register harness; real QEMU TLS with forced entropy failure, trusted and rejected certificates; Terminal session isolation and busy-switch refusal; all four Calendar views with distinct dates in twelve months. Calendar screenshot inspected at /tmp/jt-calviews-year.png. All 218 suite commands passed without retries, logged in /tmp/jt-evening-ci.log. All four demo checks also passed; the full local run finished in 2337 seconds. Mark PR #491 ready and verify actual GitHub checks. Joshua must explicitly approve the PR before merge. Do not bypass failures.
 
-The first full local run exposed ARM checks cleaning the same build directory from different shards. ARM build checks now share shard 6. Final local validation is running in /tmp/jt-pi-security-final-ci.log, with shard logs /tmp/jt-ci-local-92797-shard*.log. The head was rebased without changing its source tree. Mark ready only after a full local pass, then require actual GitHub CI, not draft skips. This checkpoint only updates documentation.
+## Physical limits and flash setup
 
-No new card was flashed and no live relay restarted. TLS migration needs the relay certificate, matching host name or IP and development card updated together; read docs/RELAY-TLS.md. Initial certificate validation uses build time, so a certificate expired since the build can pass the first clock handshake. Persistent or signed fresh time and hardware entropy remain open. Physical Pi verification remains required.
+Hardware RNG and the new Terminal sessions need a real Pi test. Clock bootstrap still uses build time and has the documented stale-certificate window. Browser navigation is shared across Terminal sessions, and neither persists through reboot. Side-by-side layout remains open. Calendar is the i386 ring-3 app, not a new Pi Calendar app.
 
-Minesweeper #478 is draft with conflicts and outside the current security scope. There are zero open issues and no orphaned remote branches. Benchmarks are deferred while CI or QEMU runs. Checkpoint issue sync cannot locate this repo's docs/roadmap.md because the current script only accepts a root roadmap.
-
-## Next, in order
-
-1. Read the final local log and all shard results. Investigate any failure; do not bypass checks or run another suite in parallel.
-2. Update #490 validation, mark ready on local green and wait for actual GitHub CI, including ARM tests. Merge safely using the verified head once green; Joshua has approved this.
-3. Verify the normal release and landing deployment. Coordinate the relay certificate and card setup before a flash; verify keyboard, Wi-Fi, clock, relay and USB mouse on the board.
-4. Run clean benchmarks only after all CI and QEMU work is quiet. Keep clock bootstrap and hardware randomness gaps explicit.
-
-## Restart prompt
-
-```text
-Continue Joshua Tree PR #490 on fix/pi-relay-tls-clock. Read docs/LOOP-HANDOFF.md and /tmp/jt-pi-security-final-ci.log first. Complete the full local gate, then actual GitHub checks, then merge safely as Joshua approved. No bypasses, new features, subagents or background automation. No card flash or live relay restart without coordinated certificate/card setup. Keep replies and usage lean. Defer benchmarks until the Mac is quiet.
-```
+The card was backed up privately under the chat's work/card-before-tls directory. It has not been flashed. TLS certificate files exist under ~/.config/joshuatree/relay-tls; private keys stay on the Mac. The Mac relay on port 8765 now serves TLS. Strict CA verification, GET rejection and wrong-token refusal passed without a paid Claude call. Follow docs/RELAY-TLS.md. The Mac address was 10.0.0.116; recheck before using its matching certificate. Flash from the reviewed branch with CLAUDE_RELAY_HOST set to that address and TLS_TA pointing to ca.pem, never from the stale primary checkout. Joshua handles the card.

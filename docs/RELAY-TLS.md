@@ -85,8 +85,14 @@ This is a bootstrap improvement, not a battery clock. Before the first sync,
 a certificate valid at build time can still be accepted even if it has
 expired since then. A stale image can also reject a newer time-server
 certificate and need rebuilding. A persistent trusted clock or signed fresh
-time is still needed to remove that bootstrap window. TLS's current timer
-entropy also remains a separate security limitation.
+time is still needed to remove that bootstrap window.
+
+Pi TLS seeds come from the BCM2711 RNG200 hardware FIFO. A health fault or
+one-second timeout wipes the seed and refuses the connection. There is no
+timer fallback on the Pi. QEMU virt keeps a timer provider for tests only;
+it is not a secure deployment target. `tools/checks/arm64-rng-check.py`
+checks the driver with fake registers. Register definitions follow the
+[upstream RNG200 register map](https://github.com/torvalds/linux/blob/master/drivers/char/hw_random/iproc-rng200.c); the implementation is independent. Hardware output still needs a board test.
 
 ## Checks
 

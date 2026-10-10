@@ -4,6 +4,8 @@ Status: M0, M1a, M1b and M1c (a framebuffer with a drawn desktop and the boot lo
 
 If this is accepted it replaces the x86 board in `docs/HARDWARE.md` as the 3.0 reference. The OS stays free; the board is what we sell around it.
 
+For the current app list, see [Apps currently implemented on ARM](RASPBERRY-PI.md#apps-currently-implemented-on-arm). The dock artwork is shared with i386; most of its apps are not ported yet.
+
 ## Why a Pi and not the Mac mini
 
 The kernel is 32-bit x86. The Mac mini M4 is Apple Silicon: no UEFI, a custom boot chain, and USB, storage and sound behind Apple-only controllers. Bare-metal there means an Asahi-sized effort. A Raspberry Pi boots a plain `kernel8.img` from its firmware, has a documented framebuffer, UART and interrupt controller, and QEMU models parts of it. Start with a Pi 4B. The Pi 5 hangs every peripheral off the RP1 chip over PCIe, which makes first bring-up harder; move to it second.
