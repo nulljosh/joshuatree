@@ -989,7 +989,7 @@ static int cur_hold(void) {   /* the Console is about to draw: take the arrow of
 static void cur_release(int held) { if (held) cur_show(); }
 static void console_frame(void) {   /* the i386 window frame, and a white well for the text */
     int s = (int)window_scale();
-    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? (term_index ? "Terminal 2 (F3)" : "Terminal 1 (F3)") : "Console");
+    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? (term_index ? "Terminal 2" : "Terminal 1") : "Console");
     fb_rect((win_lx + 8) * s, (win_ly + 30) * s, (win_lw - 16) * s, (win_lh - 38) * s, CON_BG);
 }
 static int term_front(void) { return cp == &term_p && (con_live || !fb); }   /* with no screen at all, the UART is the Terminal */
