@@ -25,7 +25,7 @@ It runs in your browser, in an emulator on a Mac, and on a real Raspberry Pi 4.
 
 ## On a Raspberry Pi
 
-It boots on a Pi 4 with a USB keyboard and an HDMI screen: the desktop, the dock, the console and the Claude prompt. It joins Wi-Fi, sets its clock from the network, and answers questions at the console through Samantha. The steps to flash a card are in [the Pi guide](docs/RASPBERRY-PI.md); one script, `tools/flash-pi.sh`, does the work.
+It boots on a Pi 4 with a USB keyboard and an HDMI screen. The ARM apps are Calculator, Terminal, Console and a read-only Clock; the browser demo has a larger app collection. F1 opens Spotlight, F2 opens Terminal, and F3 switches between two independent Terminal conversations. Search Clock in Spotlight for Vancouver time and date. The Calendar icon shows the month and day number. Samantha’s dock tile opens the assistant Terminal. Wi-Fi and the Mac relay provide network time and AI replies over HTTPS. The new Clock and date icon still need a physical-board check. The steps to flash a card are in [the Pi guide](docs/RASPBERRY-PI.md); one script, `tools/flash-pi.sh`, does the work.
 
 ## Boot it
 
@@ -63,7 +63,7 @@ On the real Pi 4: memcpy 1109 MB/s, alloc 30 ns/op, Wi-Fi joined in 6.4 s; the f
 
 ## Read more
 
-[Our story](docs/STORY.md): who we are and how it went. [User guide](docs/GUIDE.md): Wi-Fi setup and troubleshooting in plain words. [The docs](docs/README.md): whitepaper, architecture, the design rules, hardware, the Raspberry Pi guide and the roadmap.
+[Current pickup](docs/LOOP-HANDOFF.md) and [priorities](docs/roadmap.md): what is being tested and what comes next. [Our story](docs/STORY.md): who we are and how it went. [User guide](docs/GUIDE.md): Wi-Fi setup and troubleshooting in plain words. [The docs](docs/README.md): whitepaper, architecture, the design rules, hardware, the Raspberry Pi guide and the roadmap.
 
 ## License
 

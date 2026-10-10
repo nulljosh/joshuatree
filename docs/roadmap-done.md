@@ -144,3 +144,7 @@ The relay now opens shared files relative to a pinned directory, refuses symlink
 ### Evening improvements (2.34.0)
 - [x] [Sonnet] ARM Terminal has two sessions, switched with F3, with separate model, effort, conversation, typed line and scrollback. A running request cannot move sessions. Check: `tools/checks/arm64-model-check.py` uses a stub relay to prove separation and the busy gate. Side-by-side layout remains open.
 - [x] [Sonnet] Calendar Year view uses small antialiased date numbers instead of dots at the normal window size. Check: `tools/checks/calviews-check.py` verifies distinct two-digit shapes in all twelve months and keeps the Today highlight and other views checked.
+
+## 2.35.0: Pi date and Clock
+
+Calendar now shows a month and large day number, including December. Clock opens from Spotlight and shows Vancouver time and date, or waits for network time. Samantha’s dock tile opens the assistant Terminal. Check: `tools/checks/arm64-calicon-check.py`; real-board verification remains.

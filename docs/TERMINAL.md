@@ -4,7 +4,7 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 
 **Console: logs only.** Boot messages, Wi-Fi and errors. It has no input row, and typing with it in front does nothing (the key echoes go to the UART only). It opens at boot, because on a Pi with no serial cable it is the only debug view. Page Up, Page Down, Home and End scroll it.
 
-**Terminal: the command line.** Its bottom row is the `ask>` prompt. Type, Backspace, Enter. Every command runs here and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window; side-by-side panes remain future work.
+**Terminal: the command line.** Its bottom row names the assistant model that last answered, for example `Claude Haiku 5.5 $`. Type, Backspace, Enter. Every command runs here and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window; side-by-side panes remain future work.
 
 | Command | What it does |
 |---|---|
@@ -15,8 +15,8 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 
 ## Getting there
 
-- Click the Terminal tile in the dock, or press F2 (or Ctrl+T). Esc, with no question running, goes back to the Console.
-- Any other dock tile brings the Console back. The red dot closes whichever window is open.
+- Click the Terminal or Samantha tile in the dock, or press F2 (or Ctrl+T). Esc, with no question running, goes back to the Console.
+- Calculator opens its own window; Clock opens through Spotlight. Other placeholder dock apps bring the Console back. The red dot closes the window in front.
 - With no screen at all, F2 still moves the keyboard to the Terminal, and the UART shows everything.
 
 The UART gets every line from both windows, unchanged. The QEMU checks read it there.
@@ -27,7 +27,7 @@ No mouse is needed. The desktop's keys, in `arch/arm64/main.c` (`ui_key`); `tool
 
 | Key | Does |
 |---|---|
-| F1, Cmd+Space, Ctrl+Space, Alt+Space | Toggle Spotlight: press again to close. Type to filter the dock's names (prefix or any part), Up and Down choose, Enter opens, Esc closes |
+| F1, Cmd+Space, Ctrl+Space, Alt+Space | Toggle Spotlight: press again to close. Type to filter app names, including Clock (prefix or any part), Up and Down choose, Enter opens, Esc closes |
 | A letter or digit | With no pane holding the keys, Spotlight with that character already typed |
 | Enter, Space, Tab | With no pane holding the keys and no dock label, Spotlight, empty |
 | F2, Ctrl+T | The Terminal, at once, closing Spotlight if open; it has the keyboard |

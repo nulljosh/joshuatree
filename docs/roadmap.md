@@ -12,14 +12,17 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Next priorities (reviewed 2026-10-09)
+## Next priorities (reviewed 2026-10-10)
 
 The ordered list below is the near-term queue. The topic sections keep the longer plan. Completed work is in [roadmap-done.md](roadmap-done.md); `VERSION` and the GitHub releases are the source for release numbers.
 
 **On the real Pi:** the desktop, USB keyboard, Wi-Fi, network clock and Samantha relay work. Joshua confirmed an HTTPS fetch on the board. The merged Terminal, bounded agent loop, browser navigation and model controls have QEMU checks; the latest keyboard fixes still need another board pass.
 
+**In review:** PR #491 contains the RNG, Terminal and Calendar fixes (2.34.0, booted on the board). Draft PR #492 adds the readable Calendar icon, Clock and Samantha dock launch (2.35.0, focused QEMU checks passed; full local suite running). Neither PR is merged. The new Clock and icon still need a board check. Current validation and pickup details are in [LOOP-HANDOFF.md](LOOP-HANDOFF.md).
+
 **Next, in order**
 1. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
+   Research decision (2026-10-10): use the official Codex CLI on the Mac rather than building a bare-metal OAuth client. Official [authentication](https://learn.chatgpt.com/docs/auth) and [non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode) docs describe CLI device login and read-only exec; they do not establish permission for a custom client. Keep credentials on the Mac. Before implementation, verify repository-scoped read access, disabled writes/network and bounded requests. No Codex relay backend exists yet.
 2. Pi security: verify the TLS relay and HTTPS clock on the board, then replace the build-time clock bootstrap. RNG200 hardware entropy is implemented with health checks and fail-closed TLS, pending board verification. The code now refuses plaintext Pi relay requests and time rollback; a certificate valid at build time but expired today can still pass the first clock handshake. Setup and checks: [RELAY-TLS.md](RELAY-TLS.md).
 3. SD card writes (MBR and FAT32) and the self-update path with a fallback kernel. Why: nothing can be saved on the board, and a new build still needs a card swap. Check: write a file under QEMU, read it back after reboot; then a fake release that boots once and falls back.
 4. The local model with real weights read from the SD card. Why: the kernel runs the forward pass, but release builds carry no weights. Check: `tools/checks/arm64-llm-check.py` with the model loaded from a FAT image instead of the link.
@@ -27,7 +30,7 @@ The ordered list below is the near-term queue. The topic sections keep the longe
 6. Split `kernel/kernel.c` in slices. Why: it is too big to work in. Check: `make` and `./check.sh` after every slice, `tools/checks/check-refs.sh` after each move.
 7. Trademark check before any rename (Folio, Mirage). Why: a rename on a box with a taken name is a redo. Check: the search result written in this file.
 
-Notes and Clock on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AUTONOMY.md) stay open below.
+Notes on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AUTONOMY.md) stay open below.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, fewer get it onto a real board. Lean into that:
 - **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`), film the first ugly print and every fix, then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
@@ -37,7 +40,7 @@ Notes and Clock on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AU
 - **Show it in person.** A live Pi on a table at Vancouver maker meetups and the UBC and SFU computing clubs; a Show HN with the 30-second boot video (`docs/LAUNCH.md`).
 - **Later, our own board.** A carrier board for the Raspberry Pi compute module with the mark on it, so the kit is ours down to the copper.
 
-**A guide for everyone (Joshua 2026-10-07).** Documentation a person can read without knowing code: a plain-words user guide where every part of the OS, and every file behind it, is explained so a curious reader understands what each piece does and why it is there. Plan: the guide ([docs/GUIDE.md](GUIDE.md), Wi-Fi chapter written), one chapter per area (boot, memory, screen, apps, network, Wi-Fi, Samantha), each file in `docs/ARCHITECTURE.md` gets a one-line "in plain words" summary, and a check keeps the two in step. Written a chapter at a time, Wi-Fi first because it is freshest.
+**A guide for everyone (Joshua 2026-10-07).** Documentation a person can read without knowing code: a plain-words user guide where every part of the OS, and every file behind it, is explained so a curious reader understands what each piece does and why it is there. Plan: the guide ([docs/GUIDE.md](GUIDE.md), boot, Wi-Fi and Pi desktop/Clock/Terminal chapters written), one chapter per area (boot, memory, screen, apps, network, Wi-Fi, Samantha), each file in `docs/ARCHITECTURE.md` gets a one-line "in plain words" summary, and a check keeps the two in step. Written a chapter at a time, Wi-Fi first because it is freshest.
 
 ## Next few weeks
 

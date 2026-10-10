@@ -867,10 +867,7 @@ static void menu_mark_paint(int cx, int cy, int T, unsigned ink) {
         window_pixel_phys(ox + col, oy + row, out);
     }
 }
-/* The live Calendar tile. The authored art (art/icons/calendar.svg, a page with a terracotta binding and a 4 x 3 grid)
-   is the picture when the clock is not set. Once the network has set it, the grid is painted over as this month: seven
-   columns, a square per day from the first's weekday on, today's in the accent. No digits (pictures only). The art's
-   128-unit page runs x 20..108, the binding ends at y 46, the page at y 104; the grid sits in x 25..103, y 50..102. */
+/* The live Calendar tile shows a month and day once network time is available. */
 unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
 static unsigned long civil_days(long y, unsigned m, unsigned d);
 static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day);
@@ -884,21 +881,21 @@ static int cal_shown = -1;   /* the day the tile shows, as a y/m/d number; -1 is
 static int cal_today(void) {   /* today's y/m/d number, or -1 with no clock */
     unsigned long u = cal_utc(); if (!u) return -1;
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
-    return (int)(clock_year * 12 + (long)mo) * 32 + (int)dd;
+    return (int)(clock_year * 12 + (long)mo - 1) * 32 + (int)dd;
 }
 static void cal_overlay(unsigned *tile, int pw, int today) {
-    long y = today / 32 / 12; unsigned mo = (unsigned)(today / 32 % 12), d = (unsigned)(today % 32);
-    unsigned long first = civil_days(y, mo, 1), next = civil_days(mo == 12 ? y + 1 : y, mo == 12 ? 1 : mo + 1, 1);
-    unsigned dow1 = (unsigned)((first + 4) % 7), n = (unsigned)(next - first);   /* 1970-01-01 was a Thursday; 0 = Sunday */
-    for (int py = pw * 49 / 128; py < pw * 103 / 128; py++) for (int px = pw * 24 / 128; px < pw * 104 / 128; px++) tile[py * pw + px] = 0x00F3F3F6;   /* the page, over the art's grid */
-    for (unsigned k = 0; k < n; k++) {
-        unsigned c = (dow1 + k) % 7, r = (dow1 + k) / 7, col = k + 1 == d ? 0x00b5502c : 0x00C7C8CE;
-        int x0 = pw * (int)(175 + 78 * c) / 896, x1 = pw * (int)(175 + 78 * c + 57) / 896;   /* 7 columns of 78/7 units from x 25, squares 57/7 wide */
-        int y0 = pw * (int)(300 + 52 * r) / 768, y1 = pw * (int)(300 + 52 * r + 40) / 768;   /* 6 rows of 52/6 units from y 50, squares 40/6 tall */
-        if (x1 == x0) x1++;
-        if (y1 == y0) y1++;
-        for (int py = y0; py < y1; py++) for (int px = x0; px < x1; px++) tile[py * pw + px] = col;
-    }
+    static const char *const months[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
+    unsigned mo = (unsigned)(today / 32 % 12), d = (unsigned)(today % 32);
+    char day[3]; int n = 0;
+    if (d >= 10) day[n++] = '0' + d / 10;
+    day[n++] = '0' + d % 10; day[n] = 0;
+    for (int y = pw * 49 / 128; y < pw * 103 / 128; y++)
+        for (int x = pw * 24 / 128; x < pw * 104 / 128; x++) tile[y * pw + x] = 0x00F3F3F6;
+    int month_size = pw * 16 / 10, day_size = pw * 38 / 10;
+    text_draw(1, months[mo], (pw - text_width(1, months[mo], month_size)) / 2,
+              pw * 44 / 128, month_size, 0x00FFFFFF, tile, pw, pw, pw);
+    text_draw(1, day, (pw - text_width(1, day, day_size)) / 2,
+              pw * 96 / 128, day_size, 0x001C1C1E, tile, pw, pw, pw);
 }
 static int dock_tile(int slot, int shadow) {   /* one slot's art onto the dock; shadow 0 repaints the tile alone, its corners keep the old shadow */
     static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
@@ -1036,6 +1033,9 @@ const char *calc_input(void);
 const char *calc_output(void);
 int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
 static int calc_live;
+static int clock_live;
+static void clock_open(void);
+static void clock_close(void);
 #define CALC_TOP 36      /* the display's top, under the title band */
 #define CALC_DISP 46     /* the display's height */
 static void calc_cell(int i, int *x, int *y, int *w, int *h) {   /* key i's box on the logical grid */
@@ -1069,6 +1069,7 @@ static void calc_paint(void) {
     cur_show();
 }
 static void calc_open(void) {
+    clock_close();
     if (calc_live || !con_under) return;   /* no saved wallpaper (a full heap): nothing to close it back to */
     console_close();
     calc_live = 1;
@@ -1107,13 +1108,17 @@ static void pointer_click(void) {   /* the left button went down */
             int x, y, w, h; calc_cell(i, &x, &y, &w, &h);
             if (lx >= x && lx < x + w && ly >= y && ly < y + h) { calc_did(calc_press(calc_key(i))); return; }
         }
+    } else if (clock_live && slot < 0) {
+        if (dx * dx + dy * dy <= 8 * 8) clock_close();
     } else if (slot >= 0) dock_activate(slot);
     else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
 }
 static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key or Spotlight: slot 0 is handled by the caller's calc_open */
     if (slot == 0) { calc_open(); return; }
+    if (slot == GUI_ICON_COUNT) { clock_open(); return; }
+    clock_close();
     calc_close();
-    if (slot == 6) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line */
+    if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line */
     console_open();
     uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
 }
@@ -1130,7 +1135,7 @@ int ask_char(unsigned code);                  /* ask.c: a key code as the charac
 #define SPOT_ROW 22
 #define SPOT_MAX 5                    /* matches shown at most */
 static char spot_text[24]; static unsigned spot_len;
-static int spot_live, spot_sel, spot_hits[GUI_ICON_COUNT], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
+static int spot_live, spot_sel, spot_hits[GUI_ICON_COUNT + 1], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
 static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
 static int spot_lx, spot_ly, spot_lh;   /* the bar on the logical grid; its height is what is drawn now */
 static int spot_match(const char *name) {   /* the typed text, case folded, anywhere in the name */
@@ -1142,11 +1147,12 @@ static int spot_match(const char *name) {   /* the typed text, case folded, anyw
     }
     return 0;
 }
+static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : dock_names[slot]; }
 static int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
 static void spot_paint(void) {
     int s = (int)window_scale();
     spot_n = 0;
-    for (int i = 0; i < GUI_ICON_COUNT && spot_n < SPOT_MAX; i++) if (spot_match(dock_names[i])) spot_hits[spot_n++] = i;
+    for (int i = 0; i <= GUI_ICON_COUNT && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
     if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
     cur_hide();
     int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;
@@ -1159,7 +1165,7 @@ static void spot_paint(void) {
     for (int r = 0; r < spot_n; r++) {
         int ry = spot_ly + 37 + r * SPOT_ROW, on = r == spot_sel;
         if (on) window_rect(spot_lx + 8, ry, SPOT_W - 16, SPOT_ROW - 2, 0x00b5502c);
-        gui_text(dock_names[spot_hits[r]], spot_lx + 22, ry + 2, on ? 0x00FFFFFF : 0x001C1C1E);
+        gui_text(spot_name(spot_hits[r]), spot_lx + 22, ry + 2, on ? 0x00FFFFFF : 0x001C1C1E);
     }
     fb_flush(x, y, w, h);
     cur_show();
@@ -1200,8 +1206,9 @@ static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hov
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
     int chord = ctrl_held || gui_held || alt_held;
     if (code == 59 || (chord && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1, Cmd/Ctrl/Alt+Space toggle */
-    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
+    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); clock_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
     if (spot_live) return spot_key(code);
+    if (clock_live) { if (code == 1) clock_close(); return 1; }
     if (calc_live) return 0;
     if (code == 61 && term_front()) {   /* F3: the other Terminal session; never move a running request. */
         unsigned next = term_index ^ 1;
@@ -1322,8 +1329,7 @@ unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has t
 static unsigned *mb_save; static int mb_h, mb_x0;
 static int mb_wifi = -1;   /* the Wi-Fi state last shown (0 off, 1 working, 2 connected), so the clock can redraw alone each minute */
 static int clock_minute = -1;
-/* Pacific time (Vancouver) from UTC: 8 hours back, 7 in daylight time, which runs from the second Sunday of March to the
-   first Sunday of November (the change itself is at 2 am local, 10:00 and 09:00 UTC). */
+/* Vancouver stays UTC-7 from March 8, 2026. Earlier dates retain the seasonal rule. */
 static unsigned long civil_days(long y, unsigned m, unsigned d) {
     y -= m <= 2; long era = (y >= 0 ? y : y - 399) / 400; unsigned yoe = (unsigned)(y - era * 400);
     unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1, doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
@@ -1342,12 +1348,14 @@ static unsigned long nth_sunday_utc(long y, unsigned mon, unsigned nth, unsigned
 }
 static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day) {
     long y; unsigned m, d; civil_from_days(utc / 86400, &y, &m, &d);
-    int dst = utc >= nth_sunday_utc(y, 3, 2, 10) && utc < nth_sunday_utc(y, 11, 1, 9);
+    int dst = utc >= civil_days(2026, 3, 8) * 86400UL + 10 * 3600UL
+           || (utc >= nth_sunday_utc(y, 3, 2, 10) && utc < nth_sunday_utc(y, 11, 1, 9));
     unsigned long loc = utc - (dst ? 7 : 8) * 3600UL;
     civil_from_days(loc / 86400, &y, mon, day);
     clock_year = y;
     *hh = (unsigned)(loc % 86400) / 3600; *mm = (unsigned)(loc % 3600) / 60;
 }
+#include "clock_ui.h"
 int wifi_signal_level(void);   /* wifi.c: 1 to 3 from how loud our network was in the scan */
 /* The right end of the menu bar: the clock in 12-hour form, and left of it a three-bar signal icon, no name. Connected
    bars show in the same ink as the clock, as many as the signal earns; anything else (starting, joining, no network) is three
@@ -1392,6 +1400,7 @@ static void cal_tick(void) {   /* the day has changed (or the clock just arrived
 }
 void menubar_tick(void) {   /* the poll loop calls this; it redraws only when the minute has changed */
     cal_tick();
+    clock_tick();
     unsigned long u = net_clock_utc();
     if (!u || mb_wifi < 0) return;
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
@@ -1532,14 +1541,13 @@ static void m1_selftest(void) {
 #endif
 }
 
-/* ask.c's agent loop: [[open APP]] opens a dock app by name. Only the Calculator opens on ARM so far (the Console is
-   always open); any other name returns 0. */
+/* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console and Clock are available; other names return 0. */
 int app_open_name(const char *name) {
-    static const char *const openable[] = {"calculator", "console"};
-    for (unsigned a = 0; a < 2; a++) {
+    static const char *const openable[] = {"calculator", "console", "clock"};
+    for (unsigned a = 0; a < 3; a++) {
         const char *w = openable[a]; unsigned i = 0;
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
-        if (!w[i] && !name[i]) { if (a == 0) calc_open(); return 1; }
+        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); return 1; }
     }
     return 0;
 }

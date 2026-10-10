@@ -1,17 +1,38 @@
-# Joshua Tree handoff (2026-10-09, evening)
+# Joshua Tree handoff (2026-10-10)
 
-## Current scope
+## Current work
 
-Joshua asked for hardware randomness, independent Terminal AI settings and readable Calendar Year dates while he makes dinner. He will flash the SD card himself. No card writes. The Mac relay was migrated to TLS using the already merged relay implementation.
-
-Main is 2.33.5 at ab90b912. PR #490 passed all GitHub checks and merged. The new branch is fix/pi-rng-terminal-calendar, version 2.34.0. It replaces Pi timer entropy with the RNG200 hardware FIFO, refuses TLS on health faults or a one-second timeout, and wipes seed buffers. Virt keeps its existing timer provider for QEMU tests only. Two Terminal sessions switch with F3, keep separate typing, scrollback, conversation, model, effort and status, and cannot switch during a running request. Calendar Year view halves the existing antialiased face instead of drawing dots at the normal size.
+Branch feat/pi-clock-calendar, version 2.35.0, builds on PR #491 (fix/pi-rng-terminal-calendar, 2.34.0). Joshua asked for a readable Pi Calendar icon, a Clock app and Samantha QA in QEMU. Calendar now shows the month and large day number, with a zero-based month encoding that also handles December. Clock opens from Spotlight or Samantha's open action, displays Vancouver time and date, refreshes each minute and waits for network time when unset. Escape and the close button restore the previous pane. Samantha's dock tile now opens the existing assistant Terminal instead of the placeholder Console. Vancouver remains UTC-7 after March 8, 2026, per the B.C. time change.
 
 ## Validation
 
-Focused checks passed: sanitized RNG register harness; real QEMU TLS with forced entropy failure, trusted and rejected certificates; Terminal session isolation and busy-switch refusal; all four Calendar views with distinct dates in twelve months. Calendar screenshot inspected at /tmp/jt-calviews-year.png. All 218 suite commands passed without retries, logged in /tmp/jt-evening-ci.log. All four demo checks also passed; the full local run finished in 2337 seconds. Mark PR #491 ready and verify actual GitHub checks. Joshua must explicitly approve the PR before merge. Do not bypass failures.
+The prior session inspected a real QEMU screenshot and passed the focused Calendar/Clock/launch check after correcting Vancouver's winter offset. Temporary logs disappeared overnight. PR #492 is saved as draft. The first full process ended without a summary after 68 checks. The completed rerun (work/clock-ci-retry.log) passed 217 of 218 suite checks and all four demos; window snapping needed its one retry. The only failure was a fixed screenshot export path in arm64-calicon-check.py. That unnecessary export is removed and tmp-paths-check.py now passes. Calendar/Clock/Samantha checks passed after the removal. Ten additional host checks covered Vancouver transitions, New Year and leap day. A fresh two-job tools/ci-local.sh run must finish green before marking the PR ready; its log is work/clock-ci-final.log. No app source changed for this test correction. The suite includes the Calendar/Clock check, Samantha TLS/session/token checks and the bounded agent loop against fake responses. No paid Claude request is needed. Do not bypass a failing check. PR #491 was fully green and still open at resume; Joshua must explicitly approve PRs before merge.
 
-## Physical limits and flash setup
+## Physical state
 
-Hardware RNG and the new Terminal sessions need a real Pi test. Clock bootstrap still uses build time and has the documented stale-certificate window. Browser navigation is shared across Terminal sessions, and neither persists through reboot. Side-by-side layout remains open. Calendar is the i386 ring-3 app, not a new Pi Calendar app.
+The 2.34.0 development card was flashed, hash-verified and safely ejected at Joshua's request. Joshua confirmed it boots and Spotlight opens Terminal. He noticed the tiny calendar grid and has not yet tested Samantha. The new 2.35.0 changes have not been flashed. Physical Clock, icon and Samantha verification remain; no claim of API expiry is confirmed.
 
-The card was backed up privately under the chat's work/card-before-tls directory. It has not been flashed. TLS certificate files exist under ~/.config/joshuatree/relay-tls; private keys stay on the Mac. The Mac relay on port 8765 now serves TLS. Strict CA verification, GET rejection and wrong-token refusal passed without a paid Claude call. Follow docs/RELAY-TLS.md. The Mac address was 10.0.0.116; recheck before using its matching certificate. Flash from the reviewed branch with CLAUDE_RELAY_HOST set to that address and TLS_TA pointing to ca.pem, never from the stale primary checkout. Joshua handles the card.
+The previous Mac TLS relay stopped overnight. It was restored as a foreground process from approved main commit ab90b912, with the existing credentials. Strict TLS, GET rejection and wrong-token refusal passed without a model call. Its CA and server certificate live under ~/.config/joshuatree/relay-tls, with private keys on the Mac. Before another Pi test, recheck the Mac LAN address and start the reviewed relay with the existing token, API key file and TLS certificate flags as documented in docs/RELAY-TLS.md. Do not silently rotate credentials. Development card images and their backups contain credentials: keep them private.
+
+## Limits
+
+Clock is read-only: no alarms, timers or world clocks. Calendar is still an icon on ARM, not a full Calendar app. Clock bootstrap still uses build time. Terminal sessions reset on reboot and share browser navigation. The prior card boot proves boot only; RNG output and a real Samantha answer remain unverified on hardware.
+
+## Next pickup
+
+Joshua authorized more roadmap work and asked to keep README, loop pickup and roadmap current. Next is Codex access from the Pi. Official docs support device-code login in the official CLI and non-interactive read-only exec. A custom bare-metal OAuth client is not established by those docs; prefer the official CLI on the Mac, keep credentials off the card and establish tool isolation before wiring a relay. No Codex backend has been implemented or deployed yet. Do not change the current tested application source while the suite runs; use a separate branch/worktree for the next task.
+
+
+## Work while Joshua is away
+
+Boot and desktop/Clock/Terminal chapters are now in docs/GUIDE.md.
+The ARM milestone list no longer repeats M1/M2 or describes confirmed board
+boot and Wi-Fi joining as future work. Terminal
+notes now match the model prompt, Samantha dock launch and Clock search.
+Codex implementation is pending a specific approval: automatic approval
+review rejected a proposed opt-in relay because it could send repository
+contents through the logged-in Mac CLI. The question is pending in chat;
+no relay or Pi source was changed. A sandbox probe read VERSION and refused
+access to the private Codex config. That checks one boundary only; it does
+not prove the whole CLI integration safe. Branch feat/pi-codex-relay is an
+empty isolated worktree at work/pi-codex, based on the Clock branch.

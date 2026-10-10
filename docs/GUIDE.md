@@ -3,7 +3,86 @@
 Joshua Tree is an operating system built from scratch. On a Raspberry Pi 4,
 it draws its own desktop, reads a USB keyboard, joins Wi-Fi and lets you ask
 Samantha questions in Terminal. This guide explains one part at a time.
-Other chapters will cover boot, memory, the screen, apps and Samantha.
+The first chapters cover boot, the desktop, Clock, Terminal and Wi-Fi.
+Later chapters will explain memory, the screen and more apps.
+
+## Boot: from the card to the desktop
+
+The Pi starts with its own firmware, a small program supplied by Raspberry
+Pi. It reads `config.txt` on the card and loads Joshua Tree's `kernel8.img`
+into memory. Raspberry Pi OS is not involved.
+
+Joshua Tree's first instructions choose one CPU core to run the kernel,
+prepare its stack and clear the memory used by initially empty variables.
+The other cores wait. The kernel then sets up memory, the screen, input
+and networking, and draws the desktop. It talks to the hardware itself.
+
+Console shows what succeeded and what failed. A failed Wi-Fi join does
+not mean the entire OS failed: you can still use local apps. A desktop
+picture proves the screen and boot path work; it does not prove every
+app, key, network request or hardware driver works.
+
+The card holds the boot image. Terminal conversations are kept in memory
+and disappear when power is removed. Persistent SD saving and updates
+without moving the card back to the Mac are still roadmap work.
+
+| File | What it does |
+|---|---|
+| `tools/pi-config.txt` | Tells the Pi firmware how to load Joshua Tree. |
+| `arch/arm64/start.S` | Runs first and prepares the CPU for the C code. |
+| `arch/arm64/linker.ld` | Places the kernel's code, data and stack in memory. |
+| `arch/arm64/main.c` | Starts the drivers and draws the desktop. |
+
+## Desktop, Clock and Terminal
+
+This chapter describes the 2.35.0 development build in PR #492. Its new
+Clock and Calendar icon have QEMU checks; a real Pi check is still needed.
+The card Joshua already booted is 2.34.0 and does not have these changes.
+
+### Open an app with the keyboard
+
+Press F1 to open Spotlight, type an app name, then press Enter. Up and Down
+choose another match; Escape closes the search. Ctrl+Space, Cmd+Space and
+Alt+Space also open Spotlight. A Mac keyboard may need its Fn key for F1.
+Some dock tiles are placeholders on the Pi. Calculator, Clock, Terminal
+and Console are available; the web demo's larger app collection is separate.
+
+### Read the date and time
+
+The Calendar tile shows a short month name and a large day number. It is
+an icon, not a calendar you can open to add events on the Pi.
+
+To see the time clearly, open Spotlight and search for Clock. It shows the
+time, date and Vancouver label. The display refreshes each minute. When
+network time is unavailable, it shows `--:--` and `Waiting for network time`.
+Escape or the red close button returns to the previous pane. There are no
+alarms or timers yet. The timezone is fixed to Vancouver, including its
+permanent UTC-7 offset from March 8, 2026.
+
+### Keep two conversations
+
+Press F2 or Ctrl+T for Terminal. The Terminal and Samantha dock tiles also
+open it. Type a question and press Enter. The prompt names the assistant
+model that last answered; it does not prove the next request will succeed.
+
+Press F3 to switch between two Terminal sessions. Each remembers its typed
+line, scrollback and assistant conversation until reboot. Finish or stop
+a running request before switching. Browser history is shared between the
+two sessions. `/clear` starts the current conversation over.
+
+Console shows boot messages and network errors. It does not take questions.
+Escape from an idle Terminal returns to Console. While the assistant is
+working, Escape asks it to stop between action steps; it may have to wait
+for the current network request to finish.
+
+### The files behind the desktop
+
+| File | What it does |
+|---|---|
+| `arch/arm64/main.c` | Draws the desktop, date icon and app search; handles app switching. |
+| `arch/arm64/clock_ui.h` | Draws the Clock window and refreshes it each minute. |
+| `arch/arm64/clock.c` | Obtains trusted network time. |
+| `arch/arm64/ask.c` | Keeps the two assistant conversations and sends questions. |
 
 ## Wi-Fi: from switching on to asking a question
 
