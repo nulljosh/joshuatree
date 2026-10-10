@@ -67,4 +67,6 @@ static void brick_tick(void) {
     if (brick.paused || brick.state >= 2 || (!brick.state && !brick_left && !brick_right)) return;
     if (brick_left || brick_right) brick_move(&brick, brick.paddle + 7 * (brick_right - brick_left));
     brick_step(&brick); brick_paint();
+    if (brick.state == 2) menubar_notify("Brick: board cleared");
+    else if (brick.state == 3) menubar_notify("Brick: game over");
 }

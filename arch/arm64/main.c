@@ -1039,6 +1039,7 @@ static void brick_close(void);
 static int brick_key(unsigned code, unsigned value);
 static void brick_mouse(int lx, int ly);
 static void brick_tick(void);
+void menubar_notify(const char *message);
 static void clock_open(void);
 static void clock_close(void);
 #define CALC_TOP 36      /* the display's top, under the title band */
@@ -1346,6 +1347,13 @@ static void key_selftest(void) {
 #endif
 
 unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
+#include "notice.h"
+static unsigned notice_now(void) {
+    unsigned long f, c;
+    __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    return (unsigned)(c / ((f ? f : 54000000) / 100));
+}
+static struct menu_notice notice;
 static unsigned *mb_save; static int mb_h, mb_x0;
 static int mb_wifi = -1;   /* the Wi-Fi state last shown (0 off, 1 working, 2 connected), so the clock can redraw alone each minute */
 static int clock_minute = -1;
@@ -1405,7 +1413,15 @@ void menubar_wifi(int state) {
         else if (y < 0 && x <= -y && -x <= -y) for (int i = 1; i <= 3; i++) { int ro = sg(3 * i + 2), ri = ro - th; if (d2 <= ro * ro && d2 >= ri * ri) ring = i + 1; }   /* 45 degrees either side of straight up */
         if (ring) fb_rect(ox + x, oy + y, 1, 1, ring - 1 <= level && (ring > 1 || level) ? 0x001C1C1E : 0x00B8B4AC);
     }
+    int nx = mb_x0 + sg(12), nw = ox - R - sg(16) - nx;
+    if (notice.text[0] && nw > 0)
+        text_draw(2, notice.text, nx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, nx + nw, H);
     fb_flush(mb_x0, 0, W - mb_x0, mb);
+}
+void menubar_notify(const char *message) {
+    notice_set(&notice, message, notice_now());
+    cur_hide(); menubar_wifi(mb_wifi); cur_show();
+    uart_puts("notice: "); uart_puts(notice.text); uart_putc('\n');
 }
 static void cal_tick(void) {   /* the day has changed (or the clock just arrived): the Calendar tile again, the hover band's copy with it */
     if (!fb || cal_today() == cal_shown) return;
@@ -1420,6 +1436,10 @@ static void cal_tick(void) {   /* the day has changed (or the clock just arrived
     uart_puts("calendar tile redrawn\n");
 }
 void menubar_tick(void) {   /* the poll loop calls this; it redraws only when the minute has changed */
+    if (notice_expire(&notice, notice_now())) {
+        cur_hide(); menubar_wifi(mb_wifi); cur_show();
+        uart_puts("notice cleared\n");
+    }
     cal_tick();
     clock_tick();
     unsigned long u = net_clock_utc();
@@ -1915,8 +1935,11 @@ void main(void) {
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
     if (!wifi_init()) menubar_wifi(0);
 #ifdef PI_BUILD
-    if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }   /* the address from the router, then the time */
+    if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); menubar_notify("Wi-Fi joined"); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+#ifdef NOTICE_SELFTEST
+    menubar_notify("Note kept in memory");
+#endif
 #ifdef POWER_SELFTEST
     void hid_kbd(const unsigned char *, unsigned, unsigned char *);
     unsigned char previous[8] = {0};
@@ -1943,10 +1966,10 @@ void main(void) {
         for (;;) { usb_poll(); input_poll(); ask_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
-            if (usb_ok || brick_live) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live || notice.text[0]) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
-            usb_poll(); input_poll(); ask_poll(); brick_tick(); keydbg_tick();
+            usb_poll(); input_poll(); ask_poll(); brick_tick(); menubar_tick(); keydbg_tick();
         }
 #endif
     }

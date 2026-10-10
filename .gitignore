@@ -76,3 +76,6 @@ arch/arm64/poweroff-kernel8.img
 arch/arm64/poweroff-pi-kernel8.elf
 arch/arm64/restart-kernel8.img
 arch/arm64/restart-pi-kernel8.elf
+
+# Menu notice test build
+arch/arm64/notice-kernel8.elf

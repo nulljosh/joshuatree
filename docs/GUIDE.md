@@ -215,3 +215,7 @@ game over, Space starts again. Escape or the red button closes the game;
 opening another app closes it too. Spotlight temporarily suspends the
 animation while you search. Scores are not saved and the game is silent.
 QEMU checks pass; play on the real board is still pending.
+
+### Short messages in the Pi menu bar
+
+A Wi-Fi join and a Brick result appear beside the clock for four seconds. A new message replaces the old one. Messages do not take the keyboard or mouse away from your app. This is a development feature awaiting release and a board check.
