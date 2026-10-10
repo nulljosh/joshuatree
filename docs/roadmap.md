@@ -20,6 +20,8 @@ The ordered list below is the near-term queue. The topic sections keep the longe
 
 **Release candidate in preparation:** 2.39.0 combines the reviewed Pi RNG/Terminal/Calendar fixes, readable Clock/icon, confirmed keyboard power controls, Brick, menu notices, sharper app text, direct ISO downloads, the CI preflight/ARM affinity repair and the existing Mines app PR. Focused checks pass. Full combined validation and explicit PR approval are still required before release. Physical Pi verification remains for the new features; pickup details are in [LOOP-HANDOFF.md](LOOP-HANDOFF.md).
 
+The combined GitHub gate found an environment blocker: the Pi power check needs raspi4b, which the pinned Ubuntu 24.04 emulator lacks. A separate CI repair pins the ARM shard to Ubuntu 26.04 and verifies that machine before building. The candidate is not green or approved yet.
+
 **Next, in order**
 1. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
    Research decision (2026-10-10): use the official Codex CLI on the Mac rather than building a bare-metal OAuth client. Official [authentication](https://learn.chatgpt.com/docs/auth) and [non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode) docs describe CLI device login and read-only exec; they do not establish permission for a custom client. Keep credentials on the Mac. Before implementation, verify repository-scoped read access, disabled writes/network and bounded requests. No Codex relay backend exists yet.
