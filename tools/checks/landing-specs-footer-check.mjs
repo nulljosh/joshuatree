@@ -206,8 +206,8 @@ try {
 
     const footerLinks = page.locator('footer nav a');
     await footerLinks.first().focus();
-    // WebKit follows Safari's Option-Tab navigation for links.
-    await page.keyboard.press(engine === webkit ? 'Alt+Tab' : 'Tab');
+    // On macOS WebKit follows Safari's Option-Tab navigation for links.
+    await page.keyboard.press(engine === webkit && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
     const footerFocus = await page.evaluate(() => {
       const e = document.activeElement, cs = getComputedStyle(e);
       return { href: e.getAttribute('href'), width: parseFloat(cs.outlineWidth), style: cs.outlineStyle };
