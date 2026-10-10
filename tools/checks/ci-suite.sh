@@ -59,6 +59,7 @@ cd "$(dirname "$0")/../.."
 # retry?  shard  name                                                   command
 manifest() {
 cat <<'EOF'
+once |7|CI tooling preserves shared ARM shard affinity and rejects fixed test paths before builds (host only)|python3 ./tools/checks/ci-tooling-check.py
 once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
 once |7|No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
 once |5|docs/DESIGN.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static)|python3 ./tools/checks/design-doc-check.py

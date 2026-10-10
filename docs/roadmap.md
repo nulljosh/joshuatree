@@ -20,6 +20,8 @@ The ordered list below is the near-term queue. The topic sections keep the longe
 
 **In review:** PR #491 contains the RNG, Terminal and Calendar fixes (2.34.0, booted on the board). Draft PR #492 adds the readable Calendar icon, Clock and Samantha dock launch (2.35.0, focused QEMU checks passed; full local suite running). Neither PR is merged. The new Clock and icon still need a board check. Current validation and pickup details are in [LOOP-HANDOFF.md](LOOP-HANDOFF.md).
 
+**CI fixes in review preparation:** 2.35.1 rejects fixed test paths before builds and keeps shared ARM builders together when balancing. The offline host regression passes; full release validation remains pending.
+
 **Next, in order**
 1. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
    Research decision (2026-10-10): use the official Codex CLI on the Mac rather than building a bare-metal OAuth client. Official [authentication](https://learn.chatgpt.com/docs/auth) and [non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode) docs describe CLI device login and read-only exec; they do not establish permission for a custom client. Keep credentials on the Mac. Before implementation, verify repository-scoped read access, disabled writes/network and bounded requests. No Codex relay backend exists yet.
