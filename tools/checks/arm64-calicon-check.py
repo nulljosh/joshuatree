@@ -56,7 +56,6 @@ def boot_shot(utc):
         command({"execute": "screendump", "arguments": {"filename": tmp + "/clock.ppm"}})
         clock_image = open(tmp + "/clock.ppm", "rb").read()
         assert clock_image != open(tmp + "/shot.ppm", "rb").read(), "Clock did not draw"
-        if utc == 1791568800: shutil.copyfile(tmp + "/clock.ppm", "/tmp/jt-pi-clock.ppm")
         key("esc")
         assert "clock closed" in open(log, errors="replace").read()
         key("f1")
