@@ -9,7 +9,7 @@
 ![ci](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/check.yml?event=pull_request&label=ci)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A whole computer, built from scratch: its own windows, dock, fonts, sound, internet and 30 apps, from the first chip instruction to the last pixel. No libc, no dependencies.
+A whole computer, built from scratch: its own windows, dock, fonts, sound, internet and 31 apps, from the first chip instruction to the last pixel. No libc, no dependencies.
 
 Where it is going, and the picture of how it all fits: [Vision](docs/VISION.md).
 

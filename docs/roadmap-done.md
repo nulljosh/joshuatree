@@ -167,3 +167,7 @@ The relay now opens shared files relative to a pinned directory, refuses symlink
 ## 2.35.0: Pi date and Clock
 
 Calendar now shows a month and large day number, including December. Clock opens from Spotlight and shows Vancouver time and date, or waits for network time. Samantha’s dock tile opens the assistant Terminal. Check: `tools/checks/arm64-calicon-check.py`; real-board verification remains.
+## October 9 keyboard repair
+
+**Mac-style USB keyboard (2026-10-09).** On the board, F1, F2 and Cmd or Ctrl+Space did nothing. Cmd was never tracked, report-ID reports lost their modifier byte, and a Mac-mode top row sends media keys on an interface we never opened. Now all three are handled, any letter on the bare desktop opens Spotlight, and the dev card shows raw HID bytes in the menu bar. Check: `tools/checks/arm64-keydbg-check.py`.
+**Keyboard fix, 2026-10-09.** Spotlight shortcuts close it when pressed again, and F2 or Ctrl+T opens Terminal even while search is open. Search debug messages stay off the Console so they cannot repaint through the overlay. The keyboard-only check verifies these paths and that closing search restores the screen.
