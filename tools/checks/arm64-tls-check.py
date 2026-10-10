@@ -115,6 +115,16 @@ try:
         else: fails.append("%s: expected error %d, got %r, server saw %r" % (name, error, out[-500:], seen))
     leaf("10.0.2.2", -1, 2); ctx.load_cert_chain(cert, key)
     seen.clear()
+    # Replace only virt's seed provider: failed entropy must stop before any HTTP request.
+    bad_rng = tmp + "/no-entropy.c"
+    open(bad_rng, "w").write("int tls_entropy(unsigned char *p, unsigned n) {(void)p;(void)n;return 0;}\n")
+    subprocess.run(["clang", "-target", "aarch64-none-elf", "-ffreestanding", "-c", bad_rng,
+                    "-o", os.path.join(arch, "rng.o")], check=True)
+    subprocess.run(["make", "-C", arch, "kernel8.elf"], check=True, capture_output=True, timeout=600)
+    seen.clear()
+    out = boot("entropy-failure", 60)
+    if "tls FAIL -4" in out and not seen: print("  ok: failed entropy refuses TLS before HTTP")
+    else: fails.append("entropy failure did not fail closed: " + repr(out[-1000:]))
     build("")
     out = boot("untrusted", 60)
     lines = [l for l in out.splitlines() if l.startswith("tls ")]

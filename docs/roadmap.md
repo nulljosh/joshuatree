@@ -20,7 +20,7 @@ The ordered list below is the near-term queue. The topic sections keep the longe
 
 **Next, in order**
 1. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
-2. Pi security: verify the TLS relay and HTTPS clock on the board, then replace the build-time clock bootstrap and timer entropy. The code now refuses plaintext Pi relay requests and time rollback; a certificate valid at build time but expired today can still pass the first clock handshake. Setup and checks: [RELAY-TLS.md](RELAY-TLS.md).
+2. Pi security: verify the TLS relay and HTTPS clock on the board, then replace the build-time clock bootstrap. RNG200 hardware entropy is implemented with health checks and fail-closed TLS, pending board verification. The code now refuses plaintext Pi relay requests and time rollback; a certificate valid at build time but expired today can still pass the first clock handshake. Setup and checks: [RELAY-TLS.md](RELAY-TLS.md).
 3. SD card writes (MBR and FAT32) and the self-update path with a fallback kernel. Why: nothing can be saved on the board, and a new build still needs a card swap. Check: write a file under QEMU, read it back after reboot; then a fake release that boots once and falls back.
 4. The local model with real weights read from the SD card. Why: the kernel runs the forward pass, but release builds carry no weights. Check: `tools/checks/arm64-llm-check.py` with the model loaded from a FAT image instead of the link.
 5. A wired USB mouse on the Pi. Pointer and clicks work in QEMU; needs a mouse in a port on the board. Check: `tools/checks/arm64-m2-check.py` plus one board photo.
@@ -47,7 +47,6 @@ Notes and Clock on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AU
 - [ ] [Sonnet] Baseline JPEG decoder on the Pi build, then an MJPEG video path from the Mac relay. Silent first, sound after audio output. The i386 kernel already has `drivers/jpeg.c`; reuse it. Check: `tools/checks/jpeg-host-check.sh` plus an arm64 check that shows relayed frames.
 - [ ] [Sonnet] ElevenLabs text to speech for Samantha through the Mac relay. The key stays on the Mac. The relay enforces a per-request and a per-day character cap. Check: a relay test that refuses text over each cap and never returns the key.
 - [ ] [Joshua] Higgsfield video through the Mac relay, under Joshua's spending rule: never automatic, always an explicit yes from Joshua with the cost shown first, one clip at a time, nothing from Samantha on her own. Check: a relay test that a request without a fresh yes is refused and that Samantha's actions cannot start one.
-- [ ] [Sonnet] Model and effort controls per Terminal pane (`/model`, `/effort`). The single Terminal already has them; ARM panes still need separate settings. Check: a shell or pane test that the command changes the setting the next request sends.
 
 ## Now (set 2026-10-03)
 Samantha runs the machine, and Joshua is the face of the web portfolio. The phone demo, the OS and the landing all work on a phone. Everything below is what is left, in the order to pick it up. Merge one PR at a time, green first. `docs/LOOP-HANDOFF.md` has the restart prompt and the exact state. Full items live in the themed sections further down.
@@ -397,7 +396,6 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 ## Desktop and apps
 Desktop apps run as protected ring-3 programs. The Pi app port is separate; its current limits are in `docs/AGENT.md`.
 
-- [ ] [Sonnet] Calendar's Year view shows each day as a dot, not a number. A ring-3 window is 345px tall, which leaves about 10px per week row, and a digit needs 16. Either scale the digit font down for the mini months or let the year view use the full window height. `tools/checks/calviews-check.py` now proves the week bands of dots, so it should be tightened to digits when this lands.
 - [ ] [Fable] Per-window backing stores, not drawing straight into the shared framebuffer.
 - [ ] [Fable] A compositor with damage tracking, plus the back buffer this kernel still lacks.
 - [ ] [Fable] Input routing by focus instead of the current global key/click pull.
