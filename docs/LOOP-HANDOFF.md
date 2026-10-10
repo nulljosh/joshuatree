@@ -6,7 +6,7 @@ Branch feat/pi-clock-calendar, version 2.35.0, builds on PR #491 (fix/pi-rng-ter
 
 ## Validation
 
-The prior session inspected a real QEMU screenshot and passed the focused Calendar/Clock/launch check after correcting Vancouver's winter offset. Temporary logs disappeared overnight. Re-run tools/ci-local.sh once, with the usual two-job cap, before marking the new PR ready. The suite includes the Calendar/Clock check, Samantha TLS/session/token checks and the bounded agent loop against fake responses. No paid Claude request is needed. Do not bypass a failing check. PR #491 was fully green and still open at resume; Joshua must explicitly approve PRs before merge.
+The prior session inspected a real QEMU screenshot and passed the focused Calendar/Clock/launch check after correcting Vancouver's winter offset. Temporary logs disappeared overnight. PR #492 is saved as draft. The full tools/ci-local.sh run is active with two jobs; its durable main log is work/clock-ci.log in this chat, with shard logs /tmp/jt-ci-local-48760-shard*.log. One Tonchi timing failure passed its built-in retry. Let this run finish before marking the PR ready. The suite includes the Calendar/Clock check, Samantha TLS/session/token checks and the bounded agent loop against fake responses. No paid Claude request is needed. Do not bypass a failing check. PR #491 was fully green and still open at resume; Joshua must explicitly approve PRs before merge.
 
 ## Physical state
 
@@ -17,3 +17,7 @@ The previous Mac TLS relay stopped overnight. It was restored as a foreground pr
 ## Limits
 
 Clock is read-only: no alarms, timers or world clocks. Calendar is still an icon on ARM, not a full Calendar app. Clock bootstrap still uses build time. Terminal sessions reset on reboot and share browser navigation. The prior card boot proves boot only; RNG output and a real Samantha answer remain unverified on hardware.
+
+## Next pickup
+
+Joshua authorized more roadmap work and asked to keep README, loop pickup and roadmap current. Next is Codex access from the Pi. Official docs support device-code login in the official CLI and non-interactive read-only exec. A custom bare-metal OAuth client is not established by those docs; prefer the official CLI on the Mac, keep credentials off the card and establish tool isolation before wiring a relay. No Codex backend has been implemented or deployed yet. Do not change the current tested application source while the suite runs; use a separate branch/worktree for the next task.
