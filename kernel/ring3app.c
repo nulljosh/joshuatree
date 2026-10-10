@@ -81,6 +81,7 @@
 #include "user_windgate.h"
 #include "user_panes.h"
 #include "user_claude.h"
+#include "user_mines.h"
 #include "pmm.h"
 #include "brk.h"
 #include "app.h"
@@ -144,6 +145,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Windgate", user_windgate, USER_WINDGATE_LEN, USER_WINDGATE_CLEN, USER_WINDGATE_SUM, "WINDGATE.BIN"},
     {"Panes", user_panes, USER_PANES_LEN, USER_PANES_CLEN, USER_PANES_SUM, "PANES.BIN"},
     {"Claude", user_claude, USER_CLAUDE_LEN, USER_CLAUDE_CLEN, USER_CLAUDE_SUM, "CLAUDE.BIN"},
+    {"Mines", user_mines, USER_MINES_LEN, USER_MINES_CLEN, USER_MINES_SUM, "MINES.BIN"},
 };
 
 /* 2.7.1: the embedded binaries are stored compressed (tools/gen/gen_user_bin.py).
@@ -351,6 +353,7 @@ void hamurabi_ring3_open(void)   { ring3app_launch(&RING3_APPS[26]); } /* 2.7: A
 void windgate_ring3_open(void)   { ring3app_launch(&RING3_APPS[27]); } /* 2.8: Apps folder, open=wind */
 void panes_ring3_open(void)      { ring3app_launch(&RING3_APPS[28]); } /* 2.11: Apps folder, open=pane */
 void claude_ring3_open(void)     { ring3app_launch(&RING3_APPS[29]); } /* 2.14: Apps folder, open=claude */
+void mines_ring3_open(void)      { ring3app_launch(&RING3_APPS[30]); } /* Minesweeper: Apps folder, open=mine */
 void samantha_ring3_open(void)   { ring3app_launch(&RING3_APPS[23]); } /* 1.9.26: dock slot 6, the shell commands and phone mode */
 void notes_ring3_launch(void)    { ring3app_launch(&RING3_APPS[21]); } /* kernel.c's notes_ring3_open runs the legacy NOTES.TXT migration first */
 int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[17]); } 
@@ -439,6 +442,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='w' && pc[6]=='i' && pc[7]=='n' && pc[8]=='d') { ring3app_autoopen_slot = 27; serial_puts("autoopen=windgate\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='a' && pc[7]=='n' && pc[8]=='e') { ring3app_autoopen_slot = 28; serial_puts("autoopen=panes\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='l' && pc[7]=='a' && pc[8]=='u') { ring3app_autoopen_slot = 29; serial_puts("autoopen=claude\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='m' && pc[6]=='i' && pc[7]=='n' && pc[8]=='e') { ring3app_autoopen_slot = 30; serial_puts("autoopen=mines\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
         if (pc[0]=='b' && pc[1]=='r' && pc[2]=='k' && pc[3]=='p' && pc[4]=='o' && pc[5]=='k' && pc[6]=='e') { brkpoke_armed = 1; serial_puts("brkpoke armed\n"); }
     }

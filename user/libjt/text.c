@@ -1,8 +1,6 @@
-/* libjt antialiased text, see text.h. Each glyph is a 4-bit coverage bitmap
-   from aafont.h; a pixel's coverage is widened to 0..255, nudged up a little
-   (the same pre-boost the kernel's ttfr_blend_glyph applies to stb coverage),
-   and blended over the destination pixel per channel. */
+/* libjt antialiased text: the kernel ink curve over the 4-bit glyph atlas. */
 #include "text.h"
+#include "../../lib/text_ink.h"
 #include "aafont.h"
 
 struct face { const struct aa_glyph *g; int n, ascent, height; };
@@ -53,6 +51,7 @@ int jt_text_draw(struct jt_window_info *w, int face, int x, int y, unsigned rgb,
                 a = a > 224 ? 255 : a * 8 / 7;
                 unsigned *d = &w->pixels[(unsigned)py * w->width + (unsigned)px];
                 unsigned o = *d;
+                a = text_ink(a, rgb, o);
                 unsigned rr = (unsigned)(fr * a + (int)(o >> 16 & 255) * (255 - a)) / 255;
                 unsigned gg = (unsigned)(fg * a + (int)(o >> 8 & 255) * (255 - a)) / 255;
                 unsigned bb = (unsigned)(fb * a + (int)(o & 255) * (255 - a)) / 255;

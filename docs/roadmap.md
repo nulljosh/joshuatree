@@ -12,22 +12,25 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Next priorities (reviewed 2026-10-09)
+## Next priorities (reviewed 2026-10-10)
 
 The ordered list below is the near-term queue. The topic sections keep the longer plan. Completed work is in [roadmap-done.md](roadmap-done.md); `VERSION` and the GitHub releases are the source for release numbers.
 
 **On the real Pi:** the desktop, USB keyboard, Wi-Fi, network clock and Samantha relay work. Joshua confirmed an HTTPS fetch on the board. The merged Terminal, bounded agent loop, browser navigation and model controls have QEMU checks; the latest keyboard fixes still need another board pass.
 
+**Release candidate in preparation:** 2.39.0 combines the reviewed Pi RNG/Terminal/Calendar fixes, readable Clock/icon, confirmed keyboard power controls, Brick, menu notices, sharper app text, direct ISO downloads, the CI preflight/ARM affinity repair and the existing Mines app PR. Focused checks pass. Full combined validation and explicit PR approval are still required before release. Physical Pi verification remains for the new features; pickup details are in [LOOP-HANDOFF.md](LOOP-HANDOFF.md).
+
 **Next, in order**
 1. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
-2. Pi security: verify the TLS relay and HTTPS clock on the board, then replace the build-time clock bootstrap and timer entropy. The code now refuses plaintext Pi relay requests and time rollback; a certificate valid at build time but expired today can still pass the first clock handshake. Setup and checks: [RELAY-TLS.md](RELAY-TLS.md).
+   Research decision (2026-10-10): use the official Codex CLI on the Mac rather than building a bare-metal OAuth client. Official [authentication](https://learn.chatgpt.com/docs/auth) and [non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode) docs describe CLI device login and read-only exec; they do not establish permission for a custom client. Keep credentials on the Mac. Before implementation, verify repository-scoped read access, disabled writes/network and bounded requests. No Codex relay backend exists yet.
+2. Pi security: verify the TLS relay and HTTPS clock on the board, then replace the build-time clock bootstrap. RNG200 hardware entropy is implemented with health checks and fail-closed TLS, pending board verification. The code now refuses plaintext Pi relay requests and time rollback; a certificate valid at build time but expired today can still pass the first clock handshake. Setup and checks: [RELAY-TLS.md](RELAY-TLS.md).
 3. SD card writes (MBR and FAT32) and the self-update path with a fallback kernel. Why: nothing can be saved on the board, and a new build still needs a card swap. Check: write a file under QEMU, read it back after reboot; then a fake release that boots once and falls back.
 4. The local model with real weights read from the SD card. Why: the kernel runs the forward pass, but release builds carry no weights. Check: `tools/checks/arm64-llm-check.py` with the model loaded from a FAT image instead of the link.
 5. A wired USB mouse on the Pi. Pointer and clicks work in QEMU; needs a mouse in a port on the board. Check: `tools/checks/arm64-m2-check.py` plus one board photo.
 6. Split `kernel/kernel.c` in slices. Why: it is too big to work in. Check: `make` and `./check.sh` after every slice, `tools/checks/check-refs.sh` after each move.
 7. Trademark check before any rename (Folio, Mirage). Why: a rename on a box with a taken name is a redo. Check: the search result written in this file.
 
-Notes and Clock on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AUTONOMY.md) stay open below.
+Notes on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AUTONOMY.md) stay open below.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, fewer get it onto a real board. Lean into that:
 - **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`), film the first ugly print and every fix, then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
@@ -37,7 +40,7 @@ Notes and Clock on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AU
 - **Show it in person.** A live Pi on a table at Vancouver maker meetups and the UBC and SFU computing clubs; a Show HN with the 30-second boot video (`docs/LAUNCH.md`).
 - **Later, our own board.** A carrier board for the Raspberry Pi compute module with the mark on it, so the kit is ours down to the copper.
 
-**A guide for everyone (Joshua 2026-10-07).** Documentation a person can read without knowing code: a plain-words user guide where every part of the OS, and every file behind it, is explained so a curious reader understands what each piece does and why it is there. Plan: the guide ([docs/GUIDE.md](GUIDE.md), Wi-Fi chapter written), one chapter per area (boot, memory, screen, apps, network, Wi-Fi, Samantha), each file in `docs/ARCHITECTURE.md` gets a one-line "in plain words" summary, and a check keeps the two in step. Written a chapter at a time, Wi-Fi first because it is freshest.
+**A guide for everyone (Joshua 2026-10-07).** Documentation a person can read without knowing code: a plain-words user guide where every part of the OS, and every file behind it, is explained so a curious reader understands what each piece does and why it is there. Plan: the guide ([docs/GUIDE.md](GUIDE.md), boot, Wi-Fi and Pi desktop/Clock/Terminal chapters written), one chapter per area (boot, memory, screen, apps, network, Wi-Fi, Samantha), each file in `docs/ARCHITECTURE.md` gets a one-line "in plain words" summary, and a check keeps the two in step. Written a chapter at a time, Wi-Fi first because it is freshest.
 
 ## Next few weeks
 
@@ -47,7 +50,6 @@ Notes and Clock on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AU
 - [ ] [Sonnet] Baseline JPEG decoder on the Pi build, then an MJPEG video path from the Mac relay. Silent first, sound after audio output. The i386 kernel already has `drivers/jpeg.c`; reuse it. Check: `tools/checks/jpeg-host-check.sh` plus an arm64 check that shows relayed frames.
 - [ ] [Sonnet] ElevenLabs text to speech for Samantha through the Mac relay. The key stays on the Mac. The relay enforces a per-request and a per-day character cap. Check: a relay test that refuses text over each cap and never returns the key.
 - [ ] [Joshua] Higgsfield video through the Mac relay, under Joshua's spending rule: never automatic, always an explicit yes from Joshua with the cost shown first, one clip at a time, nothing from Samantha on her own. Check: a relay test that a request without a fresh yes is refused and that Samantha's actions cannot start one.
-- [ ] [Sonnet] Model and effort controls per Terminal pane (`/model`, `/effort`). The single Terminal already has them; ARM panes still need separate settings. Check: a shell or pane test that the command changes the setting the next request sends.
 
 ## Now (set 2026-10-03)
 Samantha runs the machine, and Joshua is the face of the web portfolio. The phone demo, the OS and the landing all work on a phone. Everything below is what is left, in the order to pick it up. Merge one PR at a time, green first. `docs/LOOP-HANDOFF.md` has the restart prompt and the exact state. Full items live in the themed sections further down.
@@ -156,7 +158,7 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
 - [ ] [Fable] The self-update loop (Joshua, 2026-10-06: "make tweaks to the OS from inside the OS, push changes and hot swap"): ask Claude in the Claude app, the relay's Claude Code edits the repo on the Mac and opens a draft PR, CI goes green, the Pi pulls the new `kernel8.img` over Wi-Fi from a release, writes it to the card and reboots into it. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror.
 - [ ] [Fable] A/B boot, so a bad self-update can never brick the Pi: keep the last good kernel on the card as `kernel8.old`, boot the new one once, and fall back to the old one if the new build never reaches the desktop (the Pi bootloader's `tryboot` is the likely mechanism; check it on the board).
 Also missing, added 2026-10-06 night, in order:
-- [ ] [Sonnet] Clean shutdown and reboot from the keyboard (the mailbox power-off and the watchdog reset), instead of pulling the plug.
+- [x] [Sonnet] Keyboard shutdown and reboot implemented in 2.36.0: Ctrl+Alt+End shuts down, Ctrl+Alt+Delete restarts, Enter confirms and Escape cancels. Host safety checks and actual HID-to-watchdog raspi4b shutdown/reboot pass in `tools/checks/arm64-power-check.py`. Physical Pi verification and release review remain.
 - [ ] [Fable] The other three cores: wake them from the spin table, give each a stack, run the desktop on one and the drivers on another.
 - [ ] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, a HID-over-GATT or classic HID mouse. After Wi-Fi stage 2.
 - [ ] [Sonnet] Heat and the fan: read the SoC temperature through the mailbox, show it, drive the fan pin.
@@ -186,7 +188,7 @@ From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal 
 - [ ] [Fable] A USB stick as the first disk: mass storage over the xHCI driver we have, likely faster to "files survive a reboot" than EMMC2.
 - [ ] [Fable] Doom: the classic proof a platform is real, and Joshua's chosen benchmark (2026-10-06: "if we can get doom working that's sort of a benchmark"). Full speed with sound on the Pi is the flag right after 3.0. Keyboard first, gamepad next.
 - [ ] [Sonnet] USB gamepad: a HID report parser beside the keyboard and mouse. Doom and Hamurapi on the couch.
-- [ ] [Sonnet] Brick, our own brick-breaker (Joshua, 2026-10-07: "Breakout would be a cool game to add"). Own code, own name, own art: the rules of a ball, a paddle and a wall of bricks are free to use, but "Breakout", "Pong" and "Atari" are not. Mouse moves the paddle, keys work too. First proof the mouse and keyboard make a real game on the Pi.
+- [x] [Sonnet] Brick implemented in the 2.37.0 development branch: original ARM game with 32 bricks, three lives, keys or mouse, pause, restart and win/game-over states. Open Brick from Spotlight. Host physics and QEMU keyboard/mouse/pixel checks pass in `tools/checks/arm64-brick-check.py`; release review and physical Pi play remain.
 - [ ] [Sonnet] Paddle, a two-player bounce game (the Pong idea under our own name), and Snake. Small, original, no third-party code or assets.
 - [ ] [Fable] An Atari-style console: our own 6502 core and a tiny TIA-like video chip. Only homebrew games whose authors allow redistribution, never original cartridges (the ROMs are copyrighted). Avoid Tetris-like and Space-Invaders-like designs.
 - [ ] [Sonnet] Drop files from the Mac over Wi-Fi: a tiny upload server on the Pi (plain HTTP PUT), no card swap.
@@ -199,7 +201,7 @@ Round 2, 2026-10-06 night (Raspberry Pi OS Trixie and RISC OS on the Pi 4). Smal
 - [ ] [Fable] Both HDMI ports: the Pi 4 drives two monitors; a second framebuffer through the mailbox display id, the desktop spanning or mirroring.
 - [ ] [Sonnet] A Screen settings page on the Pi: resolution, scale, which HDMI, saved on the card.
 - [ ] [Sonnet] Screen sleep: blank the picture after idle, wake on a key or the mouse, through the mailbox blank-screen tag.
-- [ ] [Sonnet] A notification strip: short messages from apps (Wi-Fi joined, file dropped, update ready) in the menu bar, the way the phone demo already toasts.
+- [x] [Sonnet] Pi notification strip implemented in 2.38.0: Wi-Fi joined and Brick results appear briefly in the menu bar, clear after four seconds and leave clock/status/input intact. Apps share `menubar_notify`; file drops and updates can use it when those features exist. Check: `tools/checks/arm64-notice-check.py`. Full release gate and board verification remain.
 - [ ] [Fable] Bluetooth audio: speakers and headphones over the same CYW43455 radio. After Bluetooth for the mouse.
 Note: RISC OS on the Pi 4 still lists USB 3 as unsupported (riscosopen.org port status); Joshua Tree got xHCI working on the board on 2026-10-06.
 Round 3, 2026-10-06 night (macOS Tahoe 26 and Windows 11 2026). Joshua Tree already has the glass look (v48); these are what the two big desktops added that we lack:
@@ -337,7 +339,7 @@ Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk)
 ## Apps after 2.2 (cheapest first, one agent and one PR each)
 
 - [ ] [Haiku] Photos: browse and view JPEG and PNG from Files, next and previous by arrow key. The decoders already exist.
-- [ ] [Haiku] Minesweeper, then Solitaire. One app each, each with a boot check that plays a scripted game.
+- [ ] [Haiku] Solitaire. Same shape: one app, one boot check that plays a scripted game.
 - [ ] [Sonnet] Voice Memos: record with `SYS_AUDIO_RECORD`, save a WAV to Files, play it back in Music.
 - [ ] [Sonnet] Samantha media tools: "play something", "pause", "what's playing", one check each.
 - [ ] [Sonnet] Movie trim: cut, split and join clips at frame boundaries and save a new AVI. The iMovie-lite step.
@@ -397,7 +399,6 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 ## Desktop and apps
 Desktop apps run as protected ring-3 programs. The Pi app port is separate; its current limits are in `docs/AGENT.md`.
 
-- [ ] [Sonnet] Calendar's Year view shows each day as a dot, not a number. A ring-3 window is 345px tall, which leaves about 10px per week row, and a digit needs 16. Either scale the digit font down for the mini months or let the year view use the full window height. `tools/checks/calviews-check.py` now proves the week bands of dots, so it should be tightened to digits when this lands.
 - [ ] [Fable] Per-window backing stores, not drawing straight into the shared framebuffer.
 - [ ] [Fable] A compositor with damage tracking, plus the back buffer this kernel still lacks.
 - [ ] [Fable] Input routing by focus instead of the current global key/click pull.
@@ -487,7 +488,6 @@ Joshua's call, 2026-09-21: Decided for 1.0, stated in the release notes: no Wi-F
 - [ ] [Joshua] Plugins system. Needs a design pass on what a plugin can touch first.
 - [ ] [Joshua] AI agent accounts: settings, bootstrapping, auth. Too undefined to scope yet.
 - [ ] [Joshua] Boot-to-disk install flow with install-speed numbers. Needs hardware boot support first.
-- [ ] [Sonnet] Ring-3 text stem darkening: libjt/text.c blends its 4-bit atlas with only the pre-boost, not the kernel text_ink curve, so ring-3 stems measure core 0.23-0.33 against the kernel text's 0.64 in textsharp-check.py. Port the curve into libjt and raise the check's bars back.
 
 Explicitly parked:
 - SMP: one CPU is plenty until everything above works (tracked as Multi-core above, but not scheduled).
@@ -509,7 +509,7 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 2. **Pi relay security** (plain: skip) [Fable]: the Terminal, bounded agent loop and browser controls are merged. Next: relay TLS and a trusted certificate clock, then a board retest.
 3. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
 4. **Every icon in one style** (plain: icons that match) [Sonnet]: the fleet icons keep their own tile colors.
-5. **Photos, Minesweeper, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.
+5. **Photos, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.
 6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after the Pi boots.
 
 ## Landing roadmap summary

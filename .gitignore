@@ -70,3 +70,12 @@ arch/arm64/wifi_cfg.h.tmp
 arch/arm64/llm.cfg
 arch/arm64/tls_ta.h
 arch/arm64/bearssl/
+
+# Pi power-control test builds
+arch/arm64/poweroff-kernel8.img
+arch/arm64/poweroff-pi-kernel8.elf
+arch/arm64/restart-kernel8.img
+arch/arm64/restart-pi-kernel8.elf
+
+# Menu notice test build
+arch/arm64/notice-kernel8.elf

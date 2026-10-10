@@ -845,7 +845,7 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-#define GUI_APP_COUNT   32 /* 30 real apps + the Apps folder + Trash; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurapi (26) to 27/28, 2.8 Windgate (27) to 28/29, 2.11 Panes (28) to 29/30, 2.14 Claude (29) to 30/31 */
+#define GUI_APP_COUNT   33 /* 31 real apps + the Apps folder + Trash; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurapi (26) to 27/28, 2.8 Windgate (27) to 28/29, 2.11 Panes (28) to 29/30, 2.14 Claude (29) to 30/31, Mines (30) to 31/32 */
 #define GUI_APP_PANES   28 /* the one app that gets Ctrl chords as KEY_CTL_* (kernel/app.h) */
 #define GUI_APP_PORTFOLIO 21 /* hidden from the Apps folder and phone home unless the boot line says "portfolio" (his site embed); the public OS ships without it */
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
@@ -1753,7 +1753,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
 static int wind_base_width = 0; void music_ring3_open(void); void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void tonchi_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void hikko_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
-void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void); void panes_ring3_open(void); void claude_ring3_open(void);
+void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void); void panes_ring3_open(void); void claude_ring3_open(void); void mines_ring3_open(void);
 
 static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
@@ -3668,45 +3668,7 @@ void gui_draw_app_titlebar(const char *title){
    Calendar year view draws its mini-month digits with it. */
 static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, unsigned int fg);
 static int wx_text_lw(const char *s, int size, int bold, int mul);
-/* Text ink curve, shared by every coverage-glyph path (gui_aa_char,
-   wx_text, the Notes editor's editor_draw_glyph). Owner feedback on the
-   AA text: "A-, sharpen them up a tad". Root cause of the softness: the
-   DejaVu coverage bitmaps (FreeType via PIL, tools/gen/gen_editor_fonts.py)
-   were blended as raw linear coverage in sRGB. A 24px vertical stem is
-   ~2.2 physical px, e.g. 'l' rasterises as 188,255,108, so on a light
-   surface only one column reaches full ink and the two flanking columns
-   read as mid grey: the stem looks thin and fuzzy rather than inked.
-   macOS gets its dense look from stem darkening plus a steep coverage
-   curve; this does the same thing with a lookup, no layout change:
-     dark on light:  a' = S(1 - (1-a)^1.3), S(x) = 128 + 1.2(x-128), clamped
-     light on dark:  a' = S(a) only
-   The first adds a little weight to thin dark stems so their cores hit
-   full ink (188 -> 226, 108 -> 130); the second only steepens edges, so
-   light-on-dark text (dock labels, dark chrome), which linear sRGB
-   blending already makes look heavier, does not bloat. Both still pass
-   through a smooth ramp of intermediate values: edges stay antialiased,
-   just a shorter ramp. Faint fringes below ~8% coverage drop to zero,
-   which is most of the visible "haze" around each glyph. */
-static const unsigned char text_ink_dark[256] = {
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,4,5,7,8,10,11,13,14,16,17,19,20,22,
-    23,25,26,28,29,31,32,34,35,37,38,40,41,43,44,46,47,49,50,51,53,54,56,57,59,60,62,63,64,66,67,69,
-    70,72,73,75,76,77,79,80,82,83,84,86,87,89,90,91,93,94,96,97,98,100,101,103,104,105,107,108,109,111,112,113,
-    115,116,118,119,120,122,123,124,126,127,128,130,131,132,134,135,136,137,139,140,141,143,144,145,147,148,149,150,152,153,154,155,
-    157,158,159,161,162,163,164,166,167,168,169,170,172,173,174,175,177,178,179,180,181,183,184,185,186,187,189,190,191,192,193,194,
-    196,197,198,199,200,201,203,204,205,206,207,208,209,210,211,213,214,215,216,217,218,219,220,221,222,223,224,226,227,228,229,230,
-    231,232,233,234,235,236,237,238,239,240,241,242,243,244,245,245,246,247,248,249,250,251,252,253,254,255,255,255,255,255,255,255,
-    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-};
-static int text_luma(unsigned int c){ return (int)(((c >> 16) & 0xFF) * 77 + ((c >> 8) & 0xFF) * 150 + (c & 0xFF) * 29) >> 8; }
-/* Coverage a (0..255) of a glyph pixel in colour fg over destination
-   colour dst -> the alpha to actually blend with. */
-static int text_ink(int a, unsigned int fg, unsigned int dst){
-    if (a <= 0) return 0;
-    if (a >= 255) return 255;
-    if (text_luma(fg) <= text_luma(dst)) return text_ink_dark[a];
-    a = 128 + (a - 128) * 6 / 5;
-    return a < 0 ? 0 : a > 255 ? 255 : a;
-}
+#include "../lib/text_ink.h"
 
 #include "ttf_render.h"
 #include "auth.h"
@@ -3945,19 +3907,6 @@ static void gui_apps_redraw_panel(const struct apps_geom *g, int scroll_offset, 
     gui_draw_hint(g->x0, g->py + APPS_PAD + 2, "arrow keys to move   enter opens   esc closes", 0x006A6064);
     gui_apps_draw_grid(g, scroll_offset, sel);
     serial_puts("appsgridrepaint\n");
-}
-/* The window frame's title while an app runs inside the Apps folder's
-   window. The frame is drawn once by gui_launch_from_dock with the folder's
-   own label; an app launched from the grid used to leave "Apps" up there.
-   The title sits outside the content viewport, so the viewport is lifted
-   just for this draw. */
-static void gui_app_frame_title(const char *label){
-    if (!gui_app_windowed) return;
-    int x = app_view_x - 8, y = app_view_y - 32;
-    window_clear_viewport();
-    window_rect(x + 90, y + 4, 320, 22, 0x00F5F0EB);
-    font_draw_string(label, x + 96, y + 8, 0x00403439, -1);
-    window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
 static int gui_multiwin_open(int icon); static void gui_refuse_open(int icon);
 /* 2.0 gate 5: the Apps folder has no window of its own to host an app, so a launch closes the folder and opens the app as a compositor window, exactly a dock click (full table: the same refusal notice). */
@@ -4420,6 +4369,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 27 */ {"Windgate",   0x000B1420, gui_icon_chat,       windgate_ring3_open,   0, 0}, /* 2.8: guided breathing, ring 3 (user/windgate.c), Apps folder only; authored art (art/icons/windgate.svg) covers the icon */
     /* 28 */ {"Panes",      0x00F5F5F8, gui_icon_chat,       panes_ring3_open,      0, 0}, /* 2.11: cmux-style tabs and split panes sharing the Terminal's shell engine, ring 3 (user/panes.c), Apps folder only; authored art (art/icons/panes.svg) covers the icon */
     /* 29 */ {"Claude",     0x00B5502C, gui_icon_chat,       claude_ring3_open,     0, 0}, /* 2.14: Claude Code through the relay (user/claude.c, tools/claude-relay/relay.py), ring 3, Apps folder only; authored art (art/icons/claude.svg) covers the icon */
+    /* 30 */ {"Mines",      0x00556B85, gui_icon_apps,       mines_ring3_open,      0, 0}, /* Minesweeper, ring 3 (user/mines.c), Apps folder only; authored art is art/icons/mines.svg, a cream mine on the accent */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
        tinted background like every real app above. 2026-09-27: this used

@@ -1,30 +1,33 @@
-# Joshua Tree loop handoff (2026-10-09, afternoon)
+# Joshua Tree handoff (2026-10-10)
 
-## What the loop is
+## Current task
 
-Finish Pi relay TLS and HTTPS clock validation in PR #490, then merge on green. Joshua explicitly approved merging these changes when safe. Keep usage low: no new features, agents or background automation.
+Release candidate branch release/2.39.0 in work/pi-notifications combines #478 and #491–498. It includes Mines, Pi RNG/Terminal/Calendar repairs, Clock, keyboard power controls, Brick, menu notices, app text contrast, fresh landing captures, the CI preflight/ARM affinity repair and direct ISO downloads. No merge or deployment has happened.
 
-## Where things stand
+Review reproduced Mines closing when its help panel was clicked. Off-board content clicks now do nothing; the new regression failed before the fix and passes with it. Escape closes, a scripted game wins and Mail opens afterwards. The unused old app-title painter was removed after verifying it had no callers, clearing the last normal-build warning.
 
-Main is 2.33.4 at 755e3f73. PR #488 shipped landing signup/mobile fixes and the redesigned welcome email, with actual delivery confirmed in Apple Mail. PR #489 shipped relay shared-file race protection, CI balancing and the Wi-Fi guide; full local checks and GitHub CI passed before merge.
+## Validation
 
-Draft PR #490 is on fix/pi-relay-tls-clock, rebased onto main. It requires TLS for Pi relay traffic without an HTTP fallback, requires certificate/key configuration for a LAN relay, and accepts clock dates only over verified HTTPS with strict parsing and rollback protection. Focused host and QEMU checks pass, including wrong-host, expired, future and untrusted certificates, session resume and proof that a plaintext endpoint receives no bearer.
+Focused checks passed for the individual drafts: sanitizer and real QEMU input/pixel checks for games/power/notices, text sharpness and Terminal spacing, normal Pi image build, i386 build/boot and pre-push. Notes captures now open a new editor before typing; all 14 app tiles were retaken and inspected. ISO CD-ROM, raw-USB and non-Bochs framebuffer boot pass; the actual release packaging block creates identical stable/versioned ISOs and verified checksums.
 
-The first full local run exposed ARM checks cleaning the same build directory from different shards. ARM build checks now share shard 6. Final local validation is running in /tmp/jt-pi-security-final-ci.log, with shard logs /tmp/jt-ci-local-92797-shard*.log. The head was rebased without changing its source tree. Mark ready only after a full local pass, then require actual GitHub CI, not draft skips. This checkpoint only updates documentation.
+The combined 2.39.0 full local gate and GitHub validation have not completed yet. Keep this candidate draft until they pass. #493 alone passed 219 checks plus four demos on exact head 5d2e99f; that does not validate the later additions. Latest main release/deploy runs were green. Draft/skipped checks are not green checks.
 
-No new card was flashed and no live relay restarted. TLS migration needs the relay certificate, matching host name or IP and development card updated together; read docs/RELAY-TLS.md. Initial certificate validation uses build time, so a certificate expired since the build can pass the first clock handshake. Persistent or signed fresh time and hardware entropy remain open. Physical Pi verification remains required.
+## Goal and approval
 
-Minesweeper #478 is draft with conflicts and outside the current security scope. There are zero open issues and no orphaned remote branches. Benchmarks are deferred while CI or QEMU runs. Checkpoint issue sync cannot locate this repo's docs/roadmap.md because the current script only accepts a root roadmap.
+Continue implementable roadmap tasks until five-hour usage has 25% or less remaining, then stop. The latest snapshot was 37% remaining. Do not start another feature before completing the current release validation. Keep markdown fresh. Target working CI/CD, version/tag/release updates, direct ISO links, zero unresolved PRs/issues/stale branches, and A+ QA before main. Never close real work just to make counts zero.
 
-## Next, in order
+Main has zero open issues. Every remote branch was main or belonged to an open PR. The unused local feat/pi-codex-relay branch was deleted after verifying it was an ancestor; no work was lost. Active worktrees and their local branches remain untouched.
 
-1. Read the final local log and all shard results. Investigate any failure; do not bypass checks or run another suite in parallel.
-2. Update #490 validation, mark ready on local green and wait for actual GitHub CI, including ARM tests. Merge safely using the verified head once green; Joshua has approved this.
-3. Verify the normal release and landing deployment. Coordinate the relay certificate and card setup before a flash; verify keyboard, Wi-Fi, clock, relay and USB mouse on the board.
-4. Run clean benchmarks only after all CI and QEMU work is quiet. Keep clock bootstrap and hardware randomness gaps explicit.
+Explicit PR approval is still required to merge or deploy. The release workflow has configured X keys and posts release announcements, so publishing also needs authorization for that side effect or an approved change to the release path. No paid model requests, reset credits or hardware flashes are authorized by this loop.
 
-## Restart prompt
+## PRs
 
-```text
-Continue Joshua Tree PR #490 on fix/pi-relay-tls-clock. Read docs/LOOP-HANDOFF.md and /tmp/jt-pi-security-final-ci.log first. Complete the full local gate, then actual GitHub checks, then merge safely as Joshua approved. No bypasses, new features, subagents or background automation. No card flash or live relay restart without coordinated certificate/card setup. Keep replies and usage lean. Defer benchmarks until the Mac is quiet.
-```
+#478 is the older Mines app. #491 is RNG/Terminal/Calendar (2.34.0, physically booted). #492 is readable Calendar/Clock/Samantha launch (2.35.0). #493 is CI preflight/affinity (2.35.1). #494 is power controls (2.36.0). #495 is Brick (2.37.0). #496 is app text and captures (2.37.1, head 14bca641). #497 is notifications (2.38.0, head 5df7be78). #498 is ISO links/packaging (2.38.1, head d75ab5c). The candidate contains all their code; do not close them until an approved candidate merge actually supersedes them.
+
+## Physical and release limits
+
+Only 2.34.0 was flashed, hash-verified and ejected. Joshua confirmed boot and Spotlight opening Terminal. Clock/icon, power controls, Brick, notices, mouse, RNG and Samantha still need the board pass. ISO is for BIOS PCs, not the Pi card; UEFI and real PC boot remain unverified. Latest published 2.33.5 has a versioned ISO only; the stable alias becomes available when the new release workflow runs.
+
+Clock bootstrap still uses build time. Conversations reset on reboot. Pi SD saving, local weights from card and fallback updates remain open. Card backups and dev images contain credentials; never commit or copy them to outputs.
+
+The Mac TLS relay must be checked using docs/RELAY-TLS.md before a board Samantha test. Credentials stay in their existing private files. Codex relay implementation is still blocked on specific repository-egress approval after automatic review rejected it; no backend exists. No user answer granted that approval.

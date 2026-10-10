@@ -1,5 +1,28 @@
 # Joshua Tree roadmap: done
 
+## 2.39.0 release candidate (2026-10-10)
+
+Combines the current review branches, including the older Mines app. Review caught Mines closing when its help panel was clicked. A QEMU regression reproduces that failure; off-board content clicks now stay in the game. The full combined gate and release approval remain.
+
+## 2.38.1 development branch (2026-10-10)
+
+The README and site link directly to the latest PC ISO and checksums. Releases now upload a stable `joshuatree.iso` name as well as the versioned image, and checksum both. The alias becomes available when this release workflow runs after approval/merge; the current 2.33.5 release predates it. Check: `tools/checks/iso-boot-check.sh` and the workflow packaging step.
+
+## 2.38.0 development branch (2026-10-10)
+
+The Pi has a short menu-bar notification strip. Wi-Fi joined and Brick win/game-over messages clear after four seconds; later messages replace earlier ones. Bounded-message sanitizer tests and real QEMU pixels/input/idle-expiry pass. Not merged, released or tested on the board. Check: `tools/checks/arm64-notice-check.py`.
+## 2.37.1 development branch (2026-10-10)
+
+Ring-3 app text now uses the kernel ink curve, including the Terminal mono face. Mail and Notes stem coverage rises from 23–33% to 44–52%, with six intermediate edge levels preserved. The stricter pixel check fails on the old renderer. Not merged or released. Check: `tools/checks/textsharp-check.py`.
+
+## 2.37.0 development branch (2026-10-10)
+
+Brick is implemented as an original native ARM game: 32 bricks, three lives, keyboard or mouse paddle, pause, restart, win and game over. Spotlight opens it. Sanitized host physics and QEMU input/pixel checks pass; not merged, flashed or physically verified. Check: `tools/checks/arm64-brick-check.py`.
+
+## 2.36.0 development branch (2026-10-10)
+
+Keyboard shutdown and restart are implemented for the Pi. Both require an explicit Enter after the chord; Escape cancels, a busy Samantha request refuses, and a hidden prompt cannot confirm. The host safety harness and real HID-to-watchdog shutdown/reboot pass on QEMU raspi4b. This is not merged or flashed; physical board verification remains. Check: `tools/checks/arm64-power-check.py`.
+
 Items ticked off in `docs/roadmap.md`, moved here on 2026-10-06 so the roadmap only shows open work. Nothing was deleted; each item sits under the heading it had. The full history is in `git log` and the GitHub releases.
 
 ### Landing and demo, to A+
@@ -140,3 +163,15 @@ The short list. Everything below is the long list; done items moved to [roadmap-
 ## 2026-10-09: relay file safety, CI balance and first guide chapter
 
 The relay now opens shared files relative to a pinned directory, refuses symlinks at open time and refuses non-regular files without blocking. Regression checks replace a listed file with a symlink, FIFO or missing file. CI was rebalanced using all 215 timings from green run 37983553844, with no checks removed and the two-job local limit unchanged. The Wi-Fi chapter in `docs/GUIDE.md` explains setup, commands, failures and the files behind them; the remaining guide chapters and coverage guard stay open.
+
+### Evening improvements (2.34.0)
+- [x] [Sonnet] ARM Terminal has two sessions, switched with F3, with separate model, effort, conversation, typed line and scrollback. A running request cannot move sessions. Check: `tools/checks/arm64-model-check.py` uses a stub relay to prove separation and the busy gate. Side-by-side layout remains open.
+- [x] [Sonnet] Calendar Year view uses small antialiased date numbers instead of dots at the normal window size. Check: `tools/checks/calviews-check.py` verifies distinct two-digit shapes in all twelve months and keeps the Today highlight and other views checked.
+
+## 2.35.0: Pi date and Clock
+
+Calendar now shows a month and large day number, including December. Clock opens from Spotlight and shows Vancouver time and date, or waits for network time. Samantha’s dock tile opens the assistant Terminal. Check: `tools/checks/arm64-calicon-check.py`; real-board verification remains.
+## October 9 keyboard repair
+
+**Mac-style USB keyboard (2026-10-09).** On the board, F1, F2 and Cmd or Ctrl+Space did nothing. Cmd was never tracked, report-ID reports lost their modifier byte, and a Mac-mode top row sends media keys on an interface we never opened. Now all three are handled, any letter on the bare desktop opens Spotlight, and the dev card shows raw HID bytes in the menu bar. Check: `tools/checks/arm64-keydbg-check.py`.
+**Keyboard fix, 2026-10-09.** Spotlight shortcuts close it when pressed again, and F2 or Ctrl+T opens Terminal even while search is open. Search debug messages stay off the Console so they cannot repaint through the overlay. The keyboard-only check verifies these paths and that closing search restores the screen.

@@ -131,10 +131,14 @@ def shoot(name):
             time.sleep(1.5)
 
         if name == "notes":
-            click(480, 300)                    # caret into the text area
+            key("n")                          # folder view -> a fresh note, before typing
+            for _ in range(40):
+                if "notes: edit=" in serial(): break
+                time.sleep(0.25)
+            else:
+                sys.exit("FAIL notes: new note never opened")
+            time.sleep(1.0)
             type_text("Sharp at every size now.")
-            for _ in range(4): key("f2")       # bigger
-            key("f3")                          # Bold; family stays Sans (house rule: no serif)
         elif name == "files":
             key("2")                           # Icons view
         elif name == "terminal":
