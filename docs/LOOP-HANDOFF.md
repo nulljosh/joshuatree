@@ -6,7 +6,7 @@ Branch feat/pi-clock-calendar, version 2.35.0, builds on PR #491 (fix/pi-rng-ter
 
 ## Validation
 
-The prior session inspected a real QEMU screenshot and passed the focused Calendar/Clock/launch check after correcting Vancouver's winter offset. Temporary logs disappeared overnight. PR #492 is saved as draft. The full tools/ci-local.sh run is active with two jobs; its durable main log is work/clock-ci.log in this chat, with shard logs /tmp/jt-ci-local-48760-shard*.log. One Tonchi timing failure passed its built-in retry. Let this run finish before marking the PR ready. The suite includes the Calendar/Clock check, Samantha TLS/session/token checks and the bounded agent loop against fake responses. No paid Claude request is needed. Do not bypass a failing check. PR #491 was fully green and still open at resume; Joshua must explicitly approve PRs before merge.
+The prior session inspected a real QEMU screenshot and passed the focused Calendar/Clock/launch check after correcting Vancouver's winter offset. Temporary logs disappeared overnight. PR #492 is saved as draft. The first full tools/ci-local.sh process ended without a final summary after 68 checks; shards 0 and 1 passed, with one Tonchi timing retry. That incomplete run is not a passing release gate. A fresh two-job run is active; its durable main log is work/clock-ci-retry.log in this chat. Let this run finish before marking the PR ready. The suite includes the Calendar/Clock check, Samantha TLS/session/token checks and the bounded agent loop against fake responses. No paid Claude request is needed. Do not bypass a failing check. PR #491 was fully green and still open at resume; Joshua must explicitly approve PRs before merge.
 
 ## Physical state
 
@@ -25,7 +25,9 @@ Joshua authorized more roadmap work and asked to keep README, loop pickup and ro
 
 ## Work while Joshua is away
 
-The desktop, Clock and Terminal chapter is now in docs/GUIDE.md. Terminal
+Boot and desktop/Clock/Terminal chapters are now in docs/GUIDE.md.
+The ARM milestone list no longer repeats M1/M2 or describes confirmed board
+boot and Wi-Fi joining as future work. Terminal
 notes now match the model prompt, Samantha dock launch and Clock search.
 Codex implementation is pending a specific approval: automatic approval
 review rejected a proposed opt-in relay because it could send repository

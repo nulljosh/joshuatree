@@ -3,8 +3,35 @@
 Joshua Tree is an operating system built from scratch. On a Raspberry Pi 4,
 it draws its own desktop, reads a USB keyboard, joins Wi-Fi and lets you ask
 Samantha questions in Terminal. This guide explains one part at a time.
-The first chapters cover the desktop, Clock, Terminal and Wi-Fi. Later
-chapters will explain boot, memory, the screen and more apps.
+The first chapters cover boot, the desktop, Clock, Terminal and Wi-Fi.
+Later chapters will explain memory, the screen and more apps.
+
+## Boot: from the card to the desktop
+
+The Pi starts with its own firmware, a small program supplied by Raspberry
+Pi. It reads `config.txt` on the card and loads Joshua Tree's `kernel8.img`
+into memory. Raspberry Pi OS is not involved.
+
+Joshua Tree's first instructions choose one CPU core to run the kernel,
+prepare its stack and clear the memory used by initially empty variables.
+The other cores wait. The kernel then sets up memory, the screen, input
+and networking, and draws the desktop. It talks to the hardware itself.
+
+Console shows what succeeded and what failed. A failed Wi-Fi join does
+not mean the entire OS failed: you can still use local apps. A desktop
+picture proves the screen and boot path work; it does not prove every
+app, key, network request or hardware driver works.
+
+The card holds the boot image. Terminal conversations are kept in memory
+and disappear when power is removed. Persistent SD saving and updates
+without moving the card back to the Mac are still roadmap work.
+
+| File | What it does |
+|---|---|
+| `tools/pi-config.txt` | Tells the Pi firmware how to load Joshua Tree. |
+| `arch/arm64/start.S` | Runs first and prepares the CPU for the C code. |
+| `arch/arm64/linker.ld` | Places the kernel's code, data and stack in memory. |
+| `arch/arm64/main.c` | Starts the drivers and draws the desktop. |
 
 ## Desktop, Clock and Terminal
 
