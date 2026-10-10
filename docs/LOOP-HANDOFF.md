@@ -2,13 +2,15 @@
 
 ## Current task
 
-Branch feat/pi-notifications, version 2.38.0, based on Brick #495. The Pi menu bar shows bounded, four-second messages for Wi-Fi joining and Brick win/game over. A newer message replaces the previous one. The clock and Wi-Fi retain their space; input stays with the app. The hardware counter drives expiry, including the virt desktop while no keys arrive.
+Branch fix/iso-download-links, version 2.38.1, builds on notifications #497. The release workflow uploads stable joshuatree.iso plus the versioned image, with both in SHA256SUMS. README and site now have direct ISO/checksum links. These become live after the workflow runs following an approved merge; latest published release 2.33.5 only has its versioned image. The ISO is for BIOS PCs, not the Pi card.
 
 ## Checks and review
 
-ASan/UBSan checks cover truncation, nonprintable bytes, replacement, empty messages and timer wrap. QEMU checks real visible/cleared pixels, idle expiry, Spotlight input and unchanged clock/Wi-Fi pixels. The first pixel test caught an oversized font; fixed by using the normal menu font and clipping to the free gap. Build and regression results are in the PR. Full release-wide validation and physical Pi checks remain; no merge, deployment or flash.
+ISO CD-ROM, raw-USB and non-Bochs framebuffer boot checks pass. Executing the actual workflow packaging block produces identical stable/versioned images and correct checksums for both. Pre-push passes. Notifications #497 passed sanitized bounds/replacement/wrap tests, QEMU real pixels/idle expiry/input/status preservation, Brick regression, normal Pi build and i386 build/boot. No full gate has run for the latest feature/release stack yet.
 
-The user authorized a roadmap loop until five-hour usage reaches 90%, and added CI/CD, release versions/tags, zero open issues/PRs/stale branches and ISO download links. GitHub currently has zero open issues. Do not close real work just to make the counts zero. Merge/deploy still requires explicit PR approval. No paid calls, resets or flashes; skip blocked work.
+The user authorized a roadmap loop until five-hour usage reaches 90%, with A+ QA before main, CI/CD, release versions/tags, zero open issues/PRs/stale branches, fresh markdown and ISO links. At last check: zero open issues; nine remote branches, all main or attached to an open PR, so none are stale. Existing release and deploy runs on main are green. Draft PRs have not run GitHub CI and must not be described as green.
+
+Merge/deploy still needs explicit PR approval. The release workflow has configured X keys and automatically posts release announcements; obtain authorization for that side effect or remove it from the intended release path before publishing. No paid calls, resets or flashes. Do not close real work merely to make counts zero.
 
 ## Parent branches
 

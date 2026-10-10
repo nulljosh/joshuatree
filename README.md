@@ -27,12 +27,12 @@ It runs in your browser, in an emulator on a Mac, and on a real Raspberry Pi 4.
 
 ## On a Raspberry Pi
 
-It boots on a Pi 4 with a USB keyboard and an HDMI screen. The ARM apps are Calculator, Terminal, Console and a read-only Clock; the browser demo has a larger app collection. F1 opens Spotlight, F2 opens Terminal, and F3 switches between two independent Terminal conversations. Search Clock in Spotlight for Vancouver time and date. The Calendar icon shows the month and day number. Samantha’s dock tile opens the assistant Terminal. Wi-Fi and the Mac relay provide network time and AI replies over HTTPS. The new Clock and date icon still need a physical-board check. The steps to flash a card are in [the Pi guide](docs/RASPBERRY-PI.md); one script, `tools/flash-pi.sh`, does the work.
+It boots on a Pi 4 with a USB keyboard and an HDMI screen. The ARM apps are Calculator, Terminal, Console, Brick and a read-only Clock; the browser demo has a larger app collection. F1 opens Spotlight, F2 opens Terminal, and F3 switches between two independent Terminal conversations. Search Clock in Spotlight for Vancouver time and date. The Calendar icon shows the month and day number. Samantha’s dock tile opens the assistant Terminal. Brick opens from Spotlight and plays with keys or a mouse. Ctrl+Alt+Delete restarts, Ctrl+Alt+End shuts down, Enter confirms and Escape cancels. Short Wi-Fi and game notices appear in the menu bar. Wi-Fi and the Mac relay provide network time and AI replies over HTTPS. The new Clock and date icon still need a physical-board check. The steps to flash a card are in [the Pi guide](docs/RASPBERRY-PI.md); one script, `tools/flash-pi.sh`, does the work.
 
 ## Boot it
 
 - **Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
-- **USB stick:** download the ISO from [Releases](https://github.com/nulljosh/joshuatree/releases). The release notes have the copy steps.
+- **PC USB stick:** [Download the latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) · [SHA-256 checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS). [Release notes](https://github.com/nulljosh/joshuatree/releases/latest) have the copy steps. BIOS boot is checked in QEMU; UEFI and real PC hardware are not verified. The Pi uses its own card image, as described above.
 - **Talk to her:** `make talk`, then hold **F2**. Needs real hardware and a mic (see `user/samantha.c`). She is built to answer out loud. Voice on the real Pi is not verified yet: no speaker has been tested there.
 - **Samantha on the Pi:** she answers questions at the Pi's console through a relay on your Mac that uses the Claude API. You need your own API key. It stays on the Mac and never goes on the Pi. See [the Pi guide](docs/RASPBERRY-PI.md).
 - **Ask Claude Code:** run the relay on your Mac and open Claude from the Launchpad. See [the Claude app](docs/CLAUDE-APP.md).

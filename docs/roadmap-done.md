@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.38.1 development branch (2026-10-10)
+
+The README and site link directly to the latest PC ISO and checksums. Releases now upload a stable `joshuatree.iso` name as well as the versioned image, and checksum both. The alias becomes available when this release workflow runs after approval/merge; the current 2.33.5 release predates it. Check: `tools/checks/iso-boot-check.sh` and the workflow packaging step.
+
 ## 2.38.0 development branch (2026-10-10)
 
 The Pi has a short menu-bar notification strip. Wi-Fi joined and Brick win/game-over messages clear after four seconds; later messages replace earlier ones. Bounded-message sanitizer tests and real QEMU pixels/input/idle-expiry pass. Not merged, released or tested on the board. Check: `tools/checks/arm64-notice-check.py`.
