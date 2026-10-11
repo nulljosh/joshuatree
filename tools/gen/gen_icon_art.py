@@ -84,9 +84,10 @@ ART = {
     27: "windgate",
     28: "panes",
     29: "claude",
-    # Apps and Trash are 30/31 (Homeqi and Plan are gone).
-    30: "apps",
-    31: "trash",
+    # 30 is Mines. Apps and Trash are 31/32.
+    30: "mines",
+    31: "apps",
+    32: "trash",
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by

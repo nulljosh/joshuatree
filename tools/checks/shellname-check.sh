@@ -57,10 +57,12 @@ send() {
 (
     sleep 3
     echo 'sendkey ctrl-alt-backspace'; sleep 1    # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
+    send "wc absent"; sleep 2                   # missing files report an error and return
     send "usertest"; sleep 4                       # seeds + runs HELLO.BIN once
     send "hello"; sleep 4                           # bare name: fallthrough must run it again
     send "notetest"; sleep 8                        # seeds NOTE.BIN, its own internal checks
     send "note argvtest hello there"; sleep 3        # bare name with argv, fresh file
+    send "wc argvtest"; sleep 2                     # one newline, two words, twelve bytes
     send "zzzznosuch"; sleep 2                       # bare name, no such program
     echo 'xp /4000xb 0x000b8000'
     sleep 1
@@ -89,6 +91,9 @@ with open(sys.argv[2], 'w') as f:
         if row: f.write(row + '\n')
 PYEOF
 vga=$(cat "$VGA" 2>/dev/null || true)
+
+have "1 *2 *12 argvtest" || fail "wc returned incorrect counts for hello there plus newline"
+have "wc: cannot open absent" || fail "wc did not report a missing file"
 
 # --- usertest seeded HELLO.BIN and ran it once -----------------------------
 have "usertest: ok" || fail "usertest did not seed/run HELLO.BIN; nothing to resolve by name"

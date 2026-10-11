@@ -19,7 +19,7 @@ PROGRAM = {
 # Headers a program includes that also change its picture (the sprite sheet and the rules and story the game shows).
 EXTRA = {"samantha-chat": ["user/samcaps.h"], "app-hamurapi": ["user/hamurabi_sprites.h", "user/hamurabi_rules.h", "user/hamurabi_story.h"]}
 # Shared drawing code every program links in. Changing it can change every tile.
-SHARED = ["user/jtsys.h", "user/libjt/text.c", "user/libjt/text.h", "user/libjt/aafont.h",
+SHARED = ["lib/text_ink.h", "user/libjt/mono.c", "user/libjt/aamono.h", "user/jtsys.h", "user/libjt/text.c", "user/libjt/text.h", "user/libjt/aafont.h",
           "user/libjt/stdio.c", "user/libjt/stdio.h", "user/libjt/string.c", "user/libjt/stdlib.c"]
 # The shot script itself: a new crop, size or clock changes every tile.
 SCRIPT = "tools/landing-shots.py"

@@ -99,7 +99,7 @@ static int fetch(const char *url, char *raw, unsigned max) {
         if (!http_resolve_host(u.host, &ip)) { kputs(net_last_error() == NET_ERR_DNS_TIMEOUT ? "browser: dns timeout\n" : "browser: no such host\n"); return -1; }
         kputs("browser: dns ok\n");
         if (u.tls) {
-            if (tls_connect(ip, u.port, u.host) < 0) { kputs("browser: connect timeout\n"); return -1; }
+            if (tls_connect(ip, u.port, u.host) < 0) { kputs(tls_last_error() == TLS_ERR_ENTROPY ? "browser: hardware randomness unavailable\n" : "browser: connect timeout\n"); return -1; }
             kputs("browser: tcp ok\n");
             if (tls_handshake() < 0) {
                 int e = tls_last_error();

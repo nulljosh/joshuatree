@@ -71,6 +71,10 @@ run_named() {
 echo "== tools/ci-local.sh: mirroring .github/workflows/check.yml locally =="
 echo
 
+echo "-- static preflight --"
+python3 ./tools/checks/tmp-paths-check.py || exit 1
+echo
+
 echo "-- build --"
 run_named "make kernel.elf" make kernel.elf
 echo

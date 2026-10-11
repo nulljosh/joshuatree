@@ -2,7 +2,7 @@
 // The developer specs (benchmarks, growth chart, documented %, architecture,
 // build) live in one <section id="specs"> of native <details>, collapsed by
 // default, so the page above the fold reads in plain words. The footer is a
-// four-column directory like apple.com. At 390, 768 and 1280 wide, in light
+// four-column directory with a decorative desert landscape. At 320, 390, 768 and 1280 wide, in light
 // and dark, this asserts:
 //   1. #specs exists with 5+ <details>, all collapsed on load. Nothing
 //      developer-flavoured (ns/op, MB/s, tools/bench.sh, the chart, the
@@ -21,7 +21,7 @@
 //      and Space from the keyboard.
 // LANDING_DIR points the check at another copy of landing/ (to prove it
 // fails on the old page); CHROMIUM_PATH at an installed Chromium.
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import { createServer } from 'http';
 import { readFile, stat } from 'fs/promises';
 import { extname, join } from 'path';
@@ -51,10 +51,13 @@ const DEV_WORDS = ['ns/op', 'MB/s', 'ns/switch', 'KB/s', 'tools/bench.sh'];
 const REPO_URL = 'https://github.com/nulljosh/joshuatree/';
 
 const launch = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {};
-const browser = await chromium.launch(launch);
+if (!await exists(join(ROOT, 'footer-landscape.svg'))) fail('footer landscape asset is missing');
 try {
-  for (const scheme of ['light', 'dark']) for (const w of [390, 768, 1280]) {
-    const tag = `${w}px ${scheme}`;
+for (const engine of [chromium, webkit]) {
+const browser = await engine.launch(engine === chromium ? launch : {});
+try {
+  for (const scheme of ['light', 'dark']) for (const w of [320, 390, 768, 1280]) {
+    const tag = `${engine.name()} ${w}px ${scheme}`;
     const ctx = await browser.newContext({ viewport: { width: w, height: 900 }, colorScheme: scheme });
     const page = await ctx.newPage();
     await page.goto(url, { waitUntil: 'load' });
@@ -161,12 +164,22 @@ try {
       return {
         anchors, missing: anchors.filter(h => !ids.has(decodeURIComponent(h.slice(1)))),
         specsFooter: nav ? [...nav.querySelectorAll('a')].some(a => a.getAttribute('href') === '#specs') : false,
+        badTargets: nav ? [...nav.querySelectorAll('a')].filter(a => {
+          const r = a.getBoundingClientRect();
+          return r.height < 44 || r.width < 44;
+        }).map(a => a.textContent.trim()) : [],
+        landscape: (() => {
+          const e = document.querySelector('footer .foot-landscape[aria-hidden="true"]');
+          return !!e && e.getBoundingClientRect().height >= 240 && getComputedStyle(e).maskImage.includes('footer-landscape.svg');
+        })(),
         hasNav: !!nav, hasRule: !!document.querySelector('footer .sheet-rule'),
         cols: cols.map(c => ({ h: c.querySelector('h3, h2, h4')?.textContent.trim(), n: c.querySelectorAll('a').length, x: Math.round(c.getBoundingClientRect().x), y: Math.round(c.getBoundingClientRect().y) })),
         hrefs, allHrefs,
         bar: document.querySelector('footer .foot-bar')?.textContent.replace(/\s+/g, ' ').trim() || '',
       };
     });
+    if (f.badTargets.length) fail(`${tag}: footer links under 44px: ${f.badTargets.join(', ')}`);
+    if (!f.landscape) fail(`${tag}: decorative landscape missing or collapsed`);
     if (!f.hasRule) fail(`${tag}: footer lost its .sheet-rule line`);
     if (!f.hasNav) fail(`${tag}: no <nav aria-label="Footer">`);
     if (f.cols.length !== 4) fail(`${tag}: footer has ${f.cols.length} columns, expected 4`);
@@ -191,13 +204,23 @@ try {
       if (!f.allHrefs.some(h => h.includes('docs/'))) fail('footer has no docs/ links at all');
     }
 
+    const footerLinks = page.locator('footer nav a');
+    await footerLinks.first().focus();
+    // On macOS WebKit follows Safari's Option-Tab navigation for links.
+    await page.keyboard.press(engine === webkit && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
+    const footerFocus = await page.evaluate(() => {
+      const e = document.activeElement, cs = getComputedStyle(e);
+      return { href: e.getAttribute('href'), width: parseFloat(cs.outlineWidth), style: cs.outlineStyle };
+    });
+    if (footerFocus.href !== await footerLinks.nth(1).getAttribute('href') || footerFocus.width < 2 || footerFocus.style === 'none') fail(`${tag}: footer keyboard order or focus ring failed: ${JSON.stringify(footerFocus)}`);
+
     // 6. footer contrast
     const bad = await page.evaluate(() => {
       const parse = (c) => { const m = c.match(/rgba?\(([^)]+)\)/); const p = m[1].split(/[ ,\/]+/).map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
       const lum = ({ r, g, b }) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
       const bg = (e) => { for (; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c.a > 0.99) return c; } return { r: 255, g: 255, b: 255, a: 1 }; };
       const out = [];
-      document.querySelectorAll('footer .foot-col h3, footer .foot-col a, footer .foot-meta, footer .foot-meta a').forEach(e => {
+      document.querySelectorAll('footer h2, footer .closing, footer .closing-name, footer .foot-col h3, footer .foot-col a, footer .foot-meta, footer .foot-meta a').forEach(e => {
         const fg = parse(getComputedStyle(e).color), b = bg(e);
         const [hi, lo] = [lum(fg), lum(b)].sort((x, y) => y - x);
         const ratio = (hi + 0.05) / (lo + 0.05);
@@ -210,8 +233,11 @@ try {
     console.log(`${tag}: ${s.count} accordions, footer ${f.cols.map(c => c.n).join('/')} links, ${f.anchors.length} anchors ok`);
     await ctx.close();
   }
-  if (!failed) console.log('PASS: specs collapsed and complete, footer directory has four columns of real links, keyboard and contrast hold');
+  if (!failed) console.log(`PASS: ${engine.name()} specs, footer landscape, 44px links, keyboard and contrast hold`);
 } finally {
   await browser.close();
+}
+}
+} finally {
   server.close();
 }

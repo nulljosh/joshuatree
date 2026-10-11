@@ -29,6 +29,9 @@ echo "pre-push: doc references..."
 echo "pre-push: VERSION bumped for a code change..."
 ./tools/checks/version-bump-check.sh origin/main
 
+echo "pre-push: no fixed test paths..."
+python3 ./tools/checks/tmp-paths-check.py
+
 echo "pre-push: kernel compiles..."
 make -s kernel.elf
 

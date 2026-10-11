@@ -43,18 +43,23 @@ void led_blink(unsigned times);      /* main.c, Pi only: the green light, throug
 #define ASK_TICKS 18000      /* 180 s at 100 Hz: past the relay's own 150 s limit, so its 504 lands first */
 #define REPLY_MAX 8192       /* the relay caps its answer at 8191 bytes */
 
-static char line[ASK_MAX + 1], question[ASK_MAX + 1];
-static unsigned len, qlen;
-static int shift, pending;
-static char session[37];     /* the relay's session uuid, "" before the first answer */
-/* Runtime model and effort (docs/AGENT.md): /model and /effort change these, post() sends them when not default. */
-static int model_i, effort_i = 1;                 /* index into models[] (0 auto) and efforts[] (1 medium, the default) */
+#define MODEL_MAX 32
+struct ask_context {
+    char line[ASK_MAX + 1], question[ASK_MAX + 1], session[37], last_name[MODEL_MAX + 1];
+    unsigned len, qlen, steps_total;
+    int pending, model_i, effort_i, relay_state;
+};
+static struct ask_context contexts[2] = {{.effort_i = 1}, {.effort_i = 1}};
+static struct ask_context *ac = &contexts[0];
+static int shift;
 static const char *const models[] = {"auto", "haiku", "sonnet", "opus"};
 static const char *const efforts[] = {"low", "medium", "high"};
-#define MODEL_MAX 32
-static char last_name[MODEL_MAX + 1];             /* the model that answered last, as the relay names it ("M Claude Opus 5.5"); "" before any answer */
-static unsigned steps_total;                      /* relay calls since /clear */
-static int relay_state;                           /* 0 not tried, 1 answered, 2 failed */
+/* A request keeps its session and output target until it finishes or is stopped. */
+int ask_select(unsigned pane) {
+    if (pane >= 2 || ac->pending) return 0;
+    ac = &contexts[pane];
+    return 1;
+}
 
 /* The prompt names the model that last answered: "Claude Sonnet 5.5 $ ". Before any answer, and whenever the relay
    cannot be reached, it names the relay's default model (--api-model, Haiku); a build with no relay token says "Claude".
@@ -65,10 +70,10 @@ static char prompt[MODEL_MAX + 16];
    shows only when it is not the default (/effort, docs/AGENT.md). */
 const char *ask_prompt(void) {   /* main.c draws it on the bottom row */
     unsigned k = 0;
-    const char *m = last_name[0] ? last_name : model_i ? "Claude" : CLAUDE_TOKEN_LEN ? ASK_DEFAULT_MODEL : "Claude";
+    const char *m = ac->last_name[0] ? ac->last_name : ac->model_i ? "Claude" : CLAUDE_TOKEN_LEN ? ASK_DEFAULT_MODEL : "Claude";
     for (; *m && k < MODEL_MAX; m++) prompt[k++] = *m;
-    if (!last_name[0] && model_i) { prompt[k++] = ' '; for (m = models[model_i]; *m; m++) prompt[k++] = *m; }
-    if (effort_i != 1) { prompt[k++] = ' '; for (m = efforts[effort_i]; *m; m++) prompt[k++] = *m; }
+    if (!ac->last_name[0] && ac->model_i) { prompt[k++] = ' '; for (m = models[ac->model_i]; *m; m++) prompt[k++] = *m; }
+    if (ac->effort_i != 1) { prompt[k++] = ' '; for (m = efforts[ac->effort_i]; *m; m++) prompt[k++] = *m; }
     prompt[k++] = ' '; prompt[k++] = '$'; prompt[k++] = ' '; prompt[k] = 0;
     return prompt;
 }
@@ -76,8 +81,8 @@ const char *ask_prompt(void) {   /* main.c draws it on the bottom row */
 static void take_model(const char *s, unsigned n) {
     if (n < 6 || n > MODEL_MAX || !(s[0] == 'C' && s[1] == 'l' && s[2] == 'a' && s[3] == 'u' && s[4] == 'd' && s[5] == 'e')) return;
     for (unsigned i = 0; i < n; i++) if (s[i] < 32 || s[i] > 126) return;
-    for (unsigned i = 0; i < n; i++) last_name[i] = s[i];
-    last_name[n] = 0;
+    for (unsigned i = 0; i < n; i++) ac->last_name[i] = s[i];
+    ac->last_name[n] = 0;
 }
 
 /* Linux key codes 0..57 to characters, plain and with Shift. 0 is a key the editor does not type. */
@@ -99,27 +104,27 @@ static const char shifted[58] = {
 #define KEY_ESC 1
 
 int ask_char(unsigned code) { return code < 58 ? (shift ? shifted[code] : plain[code]) : 0; }   /* main.c's Calculator: same map, same Shift */
-void ask_redraw(void) { con_prompt(line, len); }   /* main.c: the Terminal was reopened, put the line being typed back */
+void ask_redraw(void) { con_prompt(ac->line, ac->len); }   /* main.c: the Terminal was reopened, put the line being typed back */
 
 /* One key event from any keyboard. 1 when it is the editor's (the caller then keeps its echo line off the screen). */
 /* One key event, while the Terminal is in front (Shift always). 1 when it is the editor's. */
 static int stop_flag;        /* the kill switch: Esc, or "stop" and Enter, while the agent loop runs */
 static int is_stop(const char *s, unsigned n) { return n == 4 && s[0] == 's' && s[1] == 't' && s[2] == 'o' && s[3] == 'p'; }
-int ask_pending(void) { return pending; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
+int ask_pending(void) { return ac->pending; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
 int ask_key(unsigned code, unsigned value) {
     if (code == KEY_LSHIFT || code == KEY_RSHIFT) { shift = value != 0; return 1; }
-    if (code == KEY_ESC) { if (value && pending) stop_flag = 1; return 0; }
+    if (code == KEY_ESC) { if (value && ac->pending) stop_flag = 1; return 0; }
     int typed = code < 58 && plain[code];
     if (!typed && code != KEY_BACKSPACE && code != KEY_ENTER && code != KEY_KPENTER) return 0;
     if (!value) return 1;                      /* key up: nothing to do, but it is still ours */
-    if (typed) { if (len < ASK_MAX) line[len++] = shift ? shifted[code] : plain[code]; }
-    else if (code == KEY_BACKSPACE) { if (len) len--; }
-    else if (len && pending) { if (is_stop(line, len)) { stop_flag = 1; len = 0; } }   /* a question is running: only "stop" counts */
-    else if (len) {                            /* Enter: hand the line to ask_poll, outside the input handler */
-        for (unsigned i = 0; i < len; i++) question[i] = line[i];
-        qlen = len; len = 0; pending = 1;
+    if (typed) { if (ac->len < ASK_MAX) ac->line[ac->len++] = shift ? shifted[code] : plain[code]; }
+    else if (code == KEY_BACKSPACE) { if (ac->len) ac->len--; }
+    else if (ac->len && ac->pending) { if (is_stop(ac->line, ac->len)) { stop_flag = 1; ac->len = 0; } }   /* a question is running: only "stop" counts */
+    else if (ac->len) {                            /* Enter: hand the line to ask_poll, outside the input handler */
+        for (unsigned i = 0; i < ac->len; i++) ac->question[i] = ac->line[i];
+        ac->qlen = ac->len; ac->len = 0; ac->pending = 1;
     }
-    con_prompt(line, len);
+    con_prompt(ac->line, ac->len);
     return 1;
 }
 
@@ -281,21 +286,21 @@ static int slash(const char *q, unsigned n) {
     if (word_is(w, wn, "model") || word_is(w, wn, "effort")) {
         int is_model = w[0] == 'm';
         const char *const *list = is_model ? models : efforts; unsigned count = is_model ? 4 : 3, i;
-        if (!an) { choices(is_model ? "model" : "effort", list, count, is_model ? (unsigned)model_i : (unsigned)effort_i); return 1; }
+        if (!an) { choices(is_model ? "model" : "effort", list, count, is_model ? (unsigned)ac->model_i : (unsigned)ac->effort_i); return 1; }
         for (i = 0; i < count; i++) if (word_is(a, an, list[i])) break;
         if (i == count) { kputs(is_model ? "model: not one of auto, haiku, sonnet, opus\n" : "effort: not one of low, medium, high\n"); return 1; }
-        if (is_model) { model_i = (int)i; last_name[0] = 0; } else effort_i = (int)i;
+        if (is_model) { ac->model_i = (int)i; ac->last_name[0] = 0; } else ac->effort_i = (int)i;
         kputs(is_model ? "model: " : "effort: "); kputs(list[i]); kputs("\n");
         ask_redraw();                                      /* the prompt shows it */
     } else if (word_is(w, wn, "status")) {
-        kputs("status: model "); kputs(models[model_i]); kputs(", effort "); kputs(efforts[effort_i]); kputs("\n");
+        kputs("status: model "); kputs(models[ac->model_i]); kputs(", effort "); kputs(efforts[ac->effort_i]); kputs("\n");
         kputs("status: prompt "); kputs(ask_prompt()); kputs("\n");
         kputs("status: relay ");
-        kputs(!CLAUDE_TOKEN_LEN ? "no token" : !net_get_gateway() ? "no network" : relay_state == 1 ? "answered last time"
-              : relay_state == 2 ? "did not answer last time" : "not tried yet");
-        kputs("\nstatus: steps used "); kdec(steps_total); kputs("\n");
+        kputs(!CLAUDE_TOKEN_LEN ? "no token" : !net_get_gateway() ? "no network" : ac->relay_state == 1 ? "answered last time"
+              : ac->relay_state == 2 ? "did not answer last time" : "not tried yet");
+        kputs("\nstatus: steps used "); kdec(ac->steps_total); kputs("\n");
     } else if (word_is(w, wn, "clear")) {
-        session[0] = 0; last_name[0] = 0; steps_total = 0; relay_state = 0;
+        ac->session[0] = 0; ac->last_name[0] = 0; ac->steps_total = 0; ac->relay_state = 0;
         con_clear(); kputs("clear: new conversation\n"); ask_redraw();
     } else if (word_is(w, wn, "help")) {
         kputs("/model [auto|haiku|sonnet|opus]  pick the model\n/effort [low|medium|high]  how hard it thinks\n"
@@ -306,16 +311,16 @@ static int slash(const char *q, unsigned n) {
 
 #if defined(PI_BUILD) || CLAUDE_TLS
 /* The Pi never sends its bearer over HTTP. QEMU retains its existing HTTP path unless TLS is requested. */
-static int relay_post_tls(const char *body, unsigned len, const char *token, char *reply, int *status) {
+static int relay_post_tls(const char *body, unsigned body_len, const char *token, char *reply, int *status) {
     static char req[2 * RESULT_MAX + 512 + sizeof(CLAUDE_HOST)];
-    char digits[10]; unsigned n = 0, dn = 0, v = len;
+    char digits[10]; unsigned n = 0, dn = 0, v = body_len;
     do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
     const char *parts[] = {"POST /api/claude HTTP/1.0\r\nHost: ", CLAUDE_HOST, "\r\nAuthorization: Bearer ", token,
                           "\r\nContent-Type: application/json\r\nContent-Length: "};
     for (unsigned i = 0; i < 5; i++) for (const char *p = parts[i]; *p; p++) req[n++] = *p;
     while (dn) req[n++] = digits[--dn];
     for (const char *p = "\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
-    for (unsigned i = 0; i < len; i++) req[n++] = body[i];
+    for (unsigned i = 0; i < body_len; i++) req[n++] = body[i];
     char *raw = kmalloc(REPLY_MAX + 2048);
     int got = raw ? https_fetch_timeout(CLAUDE_HOST, CLAUDE_PORT, req, n, raw, REPLY_MAX + 2048, ASK_TICKS) : -1;
     for (unsigned i = 0; i < n; i++) ((volatile char *)req)[i] = 0;
@@ -342,9 +347,9 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
         else body[b++] = (unsigned char)c < 32 ? ' ' : c;
     }
     for (const char *p = "\",\"session\":\""; *p; p++) body[b++] = *p;
-    for (const char *p = session; *p; p++) body[b++] = *p;
-    if (model_i) { for (const char *p = "\",\"model\":\""; *p; p++) body[b++] = *p; for (const char *p = models[model_i]; *p; p++) body[b++] = *p; }
-    if (effort_i != 1) { for (const char *p = "\",\"effort\":\""; *p; p++) body[b++] = *p; for (const char *p = efforts[effort_i]; *p; p++) body[b++] = *p; }
+    for (const char *p = ac->session; *p; p++) body[b++] = *p;
+    if (ac->model_i) { for (const char *p = "\",\"model\":\""; *p; p++) body[b++] = *p; for (const char *p = models[ac->model_i]; *p; p++) body[b++] = *p; }
+    if (ac->effort_i != 1) { for (const char *p = "\",\"effort\":\""; *p; p++) body[b++] = *p; for (const char *p = efforts[ac->effort_i]; *p; p++) body[b++] = *p; }
     for (const char *p = "\",\"pi\":\""; *p; p++) body[b++] = *p;
     b += pi_status(body + b);                  /* the Pi's live status, so the answer can be about this machine */
     body[b++] = '"'; body[b++] = '}';
@@ -364,11 +369,12 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
 #endif
     heap_release(mark);
     for (int i = 0; i < 64; i++) token[i] = 0;
-    steps_total++;
+    ac->steps_total++;
     if (got < 0) {
-        relay_state = 2; last_name[0] = 0;     /* out of reach: the prompt goes back to the default model */
+        ac->relay_state = 2; ac->last_name[0] = 0;     /* out of reach: the prompt goes back to the default model */
         int e = net_last_error();
 #if defined(PI_BUILD) || CLAUDE_TLS
+        if (tls_last_error() == TLS_ERR_ENTROPY) { kputs("claude: hardware randomness unavailable\n"); return -1; }
         kputs("claude: TLS failed, no HTTP fallback\n");
 #endif
         if (e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) kputs("claude: timeout\n");
@@ -376,7 +382,7 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
         return -1;
     }
     reply[got] = 0;
-    relay_state = status == 200 ? 1 : 2;
+    ac->relay_state = status == 200 ? 1 : 2;
     if (status != 200) {                       /* the relay's own one-line reason follows its code */
         if (!status) { kputs("claude: error bad reply\n"); return -2; }
         kputs("claude: error -"); kdec((unsigned)status); kputs("\n");
@@ -387,8 +393,8 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
     if (got >= 2 && reply[0] == 'S' && reply[1] == ' ') {
         unsigned e = 2; while (e < (unsigned)got && reply[e] != '\n') e++;
         if (e - 2 >= 36 && is_session(reply + 2, 36)) {
-            for (unsigned i = 0; i < 36; i++) session[i] = reply[2 + i];
-            session[36] = 0;
+            for (unsigned i = 0; i < 36; i++) ac->session[i] = reply[2 + i];
+            ac->session[36] = 0;
         }
         start = e < (unsigned)got ? e + 1 : e;
     }
@@ -466,7 +472,7 @@ void ask_claude(const char *q, unsigned n) {   /* cmd.c sends here what is not a
 #else
         kputs("claude: no network\n");
 #endif
-        last_name[0] = 0;                      /* out of reach: the prompt goes back to the default model */
+        ac->last_name[0] = 0;                      /* out of reach: the prompt goes back to the default model */
         fallback(q, n);                        /* the relay is out of reach: the local model answers */
         return;
     }
@@ -492,11 +498,11 @@ void ask_claude(const char *q, unsigned n) {   /* cmd.c sends here what is not a
 
 /* Called from the main loop: runs a question Enter queued, so the keyboard handler never blocks on the network. */
 void ask_poll(void) {
-    if (!pending) return;
+    if (!ac->pending) return;
     term_output(1);
-    say_wrapped(ask_prompt(), question, qlen);
-    cmd_run(question, qlen, 0);                /* cmd.c: the one command line (help, /model, browse, llm, Claude), into the Terminal */
+    say_wrapped(ask_prompt(), ac->question, ac->qlen);
+    cmd_run(ac->question, ac->qlen, 0);                /* cmd.c: the one command line (help, /model, browse, llm, Claude), into the Terminal */
     term_output(0);
-    pending = 0;
-    con_prompt(line, len);
+    ac->pending = 0;
+    con_prompt(ac->line, ac->len);
 }

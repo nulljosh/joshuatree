@@ -32,9 +32,13 @@ def check(name, ok, detail=""):
     if not ok: fails.append(name)
 
 calls = []
+holding = threading.Event()
+release = threading.Event()
 class Relay(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length", "0")); calls.append(json.loads(self.rfile.read(n)))
+        if calls[-1]["prompt"] == "hold":
+            holding.set(); release.wait(10)
         body = ("S %s\nM Claude Opus 5.5\nANSWER%d" % (SID, len(calls))).encode(); self.send_response(200)
         self.send_header("Content-Type", "text/plain"); self.send_header("Content-Length", str(len(body)))
         self.send_header("Connection", "close"); self.end_headers(); self.wfile.write(body)
@@ -122,10 +126,32 @@ try:
         check("the session carries over", calls[1].get("session") == SID, repr(calls[1:]))
         out = say(b, "/clear", "clear: new conversation"); out = say(b, "third", "ANSWER3")
         check("/clear starts a new conversation (empty session)", len(calls) == 3 and calls[2].get("session") == "", repr(calls[2:]))
+        # Session 1 has auto/medium and a conversation. Session 2 starts independently.
+        b.key("f3"); check("F3 opens session 2", b.wait_for("terminal session 2", 10))
+        out = say(b, "/status", "steps used")
+        check("session 2 starts with default settings", "status: model auto, effort medium" in out and "steps used 0" in out, out[-400:])
+        say(b, "/model sonnet", "model: sonnet\n"); say(b, "/effort low", "effort: low\n")
+        say(b, "fourth", "ANSWER4")
+        check("session 2 sends its settings and an empty session", len(calls) == 4 and calls[3].get("session") == "" and calls[3].get("model") == "sonnet" and calls[3].get("effort") == "low", repr(calls[3:]))
+        b.key("f3"); check("F3 returns to session 1", b.wait_for("terminal session 1", 10))
+        say(b, "fifth", "ANSWER5")
+        check("session 1 keeps its conversation and defaults", len(calls) == 5 and calls[4].get("session") == SID and "model" not in calls[4] and "effort" not in calls[4], repr(calls[4:]))
+        # A partially typed command belongs to the session where it began.
+        for ch in "saved": b.key(ch)
+        b.key("f3"); say(b, "/clear", "clear: new conversation")
+        b.key("f3"); b.key("ret"); check("unfinished text survives switching", b.wait_for("ANSWER6", 30) and len(calls) == 6 and calls[5]["prompt"] == "saved")
+        out = say(b, "/status", "steps used")
+        check("clearing session 2 leaves session 1 alone", "steps used 3" in out, out[-400:])
+        before = b.uart().count("terminal session 2")
+        b.ask("hold"); check("slow request reaches relay", holding.wait(10))
+        b.key("f3"); time.sleep(0.4)
+        check("F3 cannot move a running request", b.uart().count("terminal session 2") == before)
+        release.set(); check("request finishes in its original session", b.wait_for("ANSWER7", 30))
         check("the token never appears on the UART", TOKEN not in b.uart())
     finally:
         b.close()
 finally:
+    release.set()
     relay.shutdown()
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True, timeout=120)
     shutil.rmtree(tmp, ignore_errors=True)

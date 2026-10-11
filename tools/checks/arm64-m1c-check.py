@@ -34,9 +34,12 @@ icon_h = open(os.path.join(root, "kernel/icon_art.h")).read()
 ART_SIZE = int(re.search(r"#define ICON_ART_SIZE (\d+)", icon_h).group(1))
 art_vars = re.findall(r"(icon_art_\w+),", re.search(r"ICON_ART\[\d+\] = \{(.*?)\};", icon_h, re.S).group(1))
 dock_order = re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", open(os.path.join(root, "kernel/gui_paint.h")).read()).group(1).replace(" ", "").split(",")
-def _slot(t): return {"GUI_APPS_FOLDER": 30, "GUI_TRASH": 31}.get(t) if not t.isdigit() else int(t)
+k = open(os.path.join(root, "kernel/kernel.c")).read()
+apps = re.findall(r'\{"([^\"]+)"', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", k, re.S).group(1))
+symbols = {"GUI_APPS_FOLDER": apps.index("Apps"), "GUI_TRASH": apps.index("Trash")}
+def _slot(t): return symbols[t] if t in symbols else int(t)
 DOCK_ART = [art_vars[_slot(t)] for t in dock_order]
-DOCK_NAMES = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
+DOCK_NAMES = [apps[_slot(t)] for t in dock_order]
 def art_tile(var, pw, under=(0xef, 0xeb, 0xe4)):
     body = re.search(r"%s\[\d+\] = \{(.*?)\};" % var, icon_h, re.S).group(1)
     png = Image.open(io.BytesIO(bytes(int(b) for b in body.replace("\n", "").split(",") if b.strip()))).convert("RGBA")
@@ -200,12 +203,8 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         q.kill(); q.wait()
         shutil.rmtree(tmp, ignore_errors=True)
 
-# The Pi's dock names follow APPS[] in kernel/kernel.c for GUI_DOCK_DEFAULT_ORDER: the label must say what i386 says.
-import re
-k = open(os.path.join(root, "kernel/kernel.c")).read()
-apps = re.findall(r'\{"([^"]+)",', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", k, re.S).group(1))
-order = re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", open(os.path.join(root, "kernel/gui_paint.h")).read()).group(1).replace(" ", "").split(",")
-i386_names = [apps[apps.index("Apps") if t == "GUI_APPS_FOLDER" else apps.index("Trash") if t == "GUI_TRASH" else int(t)] for t in order]
+# Compare the ARM labels with the same APPS[] mapping used for artwork above.
+i386_names = DOCK_NAMES
 arm_names = re.findall(r'"([^"]+)"', re.search(r"dock_names\[GUI_ICON_COUNT\] = \{(.*?)\};", main_c).group(1))
 if arm_names != i386_names: fails.append(f"main.c dock_names {arm_names} differ from the i386 dock {i386_names}")
 else: print("  ok: the ARM dock's names match APPS[] for the default order")

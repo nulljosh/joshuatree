@@ -16,6 +16,8 @@ if not args:
     sys.exit(__doc__)
 run_id = args[0]
 K = int(args[1]) if len(args) > 1 else 8
+if K <= 6:
+    sys.exit("need at least 7 shards: shard 6 holds shared ARM builds")
 SUITE = "tools/checks/ci-suite.sh"
 
 def gh(*a):
@@ -37,13 +39,19 @@ entries = []
 for i, l in enumerate(lines):
     m = re.match(r"^(once|retry)\s*\|\s*(\d+)\s*\|([^|]*)\|", l)
     if m:
-        entries.append((i, m.group(3), dur.get(m.group(3), 30)))   # a check with no timing gets 30 s
+        entries.append((i, m.group(3), dur.get(m.group(3), 30), int(m.group(2))))   # a check with no timing gets 30 s
 loads = [0] * K
 assign = {}
-for i, name, d in sorted(entries, key=lambda e: -e[2]):
+# Preserve the reserved ARM shard, including its host checks, before packing others.
+for i, name, d, old in entries:
+    if old == 6:
+        loads[6] += d; assign[i] = 6
+for i, name, d, old in sorted(entries, key=lambda e: -e[2]):
+    if old == 6:
+        continue
     s = loads.index(min(loads)); loads[s] += d; assign[i] = s
 before = {}
-for i, name, d in entries:
+for i, name, d, old in entries:
     s = int(re.match(r"^(?:once|retry)\s*\|\s*(\d+)", lines[i]).group(1)); before[s] = before.get(s, 0) + d
 print(f"{len(entries)} checks, {sum(e[2] for e in entries)} s of checks, {len(dur)} timed")
 print("before, seconds per shard:", dict(sorted(before.items())))

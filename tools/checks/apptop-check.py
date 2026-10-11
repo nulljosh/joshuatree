@@ -183,7 +183,7 @@ try:
         click_at(*CLOSE, 1.0)
         move(*PARK); time.sleep(0.5)
     def title(img):
-        # The folder window's frame title strip, x+90..x+410, y+4..y+26 (gui_app_frame_title).
+        # The folder window's frame title strip, x+90..x+410, y+4..y+26.
         return img.crop(((56 + 90) * SCALE, (30 + 4) * SCALE, (56 + 410) * SCALE, (30 + 26) * SCALE)).tobytes()
     def key(qc):
         cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qc}]}}); time.sleep(0.35)  # search-check.py: faster drops scancodes

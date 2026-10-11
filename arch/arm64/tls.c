@@ -8,6 +8,7 @@
 #include "../../drivers/net.h"
 #include "../../drivers/http.h"
 #include "tls.h"
+#include "rng.h"
 #include "tls_ta.h"
 
 unsigned int ticks(void);              /* ip.c */
@@ -39,25 +40,19 @@ static int sock_write(void *ctx, const unsigned char *buf, size_t len) {
     return tcp_write(buf, (unsigned)len) ? (int)len : -1;
 }
 
-/* shortcut: the DRBG is seeded from the generic timer, read between short, data-dependent spins. Weak against a
-   patient attacker on the same board; the Pi 4 has a hardware RNG at 0xFE104000 to use when this matters. */
-static void entropy(unsigned char *out, unsigned n) {
-    unsigned long c, mix = 0x9E3779B97F4A7C15UL;
-    for (unsigned i = 0; i < n; i++) {
-        __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c));
-        mix = (mix ^ c) * 0x100000001B3UL;
-        for (unsigned k = 0; k < (unsigned)(c & 63); k++) __asm__ volatile ("" ::: "memory");
-        out[i] = (unsigned char)(mix >> 56);
-    }
+static void wipe_seed(unsigned char *s, unsigned n) {
+    for (unsigned i = 0; i < n; i++) ((volatile unsigned char *)s)[i] = 0;
 }
-static int timer_seeder(const br_prng_class **ctx) {   /* ssl_engine.c links this; it is only called when nothing was injected */
-    unsigned char s[32]; entropy(s, sizeof s);
-    (*ctx)->update(ctx, s, sizeof s);
-    return 1;
+static int platform_seeder(const br_prng_class **ctx) {
+    unsigned char seed[32];
+    int ok = tls_entropy(seed, sizeof seed);
+    if (ok) (*ctx)->update(ctx, seed, sizeof seed);
+    wipe_seed(seed, sizeof seed);
+    return ok;
 }
-br_prng_seeder br_prng_seeder_system(const char **name) { if (name) *name = "timer"; return timer_seeder; }
+br_prng_seeder br_prng_seeder_system(const char **name) { if (name) *name = "platform"; return platform_seeder; }
 
-static void setup(const char *host) {
+static int setup(const char *host) {
     static const uint16_t suites[] = {
         BR_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, BR_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
         BR_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, BR_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
@@ -92,10 +87,13 @@ static void setup(const char *host) {
     br_ssl_engine_set_ghash(&sc.eng, &br_ghash_ctmul32);
     br_ssl_engine_set_gcm(&sc.eng, &br_sslrec_in_gcm_vtable, &br_sslrec_out_gcm_vtable);
     br_ssl_engine_set_buffer(&sc.eng, iobuf, sizeof iobuf, 1);
-    unsigned char seed[32]; entropy(seed, sizeof seed);
+    unsigned char seed[32];
+    if (!tls_entropy(seed, sizeof seed)) { wipe_seed(seed, sizeof seed); return 0; }
     br_ssl_engine_inject_entropy(&sc.eng, seed, sizeof seed);
-    br_ssl_client_reset(&sc, host, 0);
+    wipe_seed(seed, sizeof seed);
+    if (!br_ssl_client_reset(&sc, host, 0)) return 0;
     br_sslio_init(&ioc, &sc.eng, sock_read, 0, sock_write, 0);
+    return 1;
 }
 
 /* A fetch in three steps, so a caller can say where it got to (the Pi browser prints a line after each):
@@ -112,7 +110,7 @@ static int failed(void) {   /* -1, with the engine's error or the network's in t
 int tls_connect(unsigned ip, unsigned short port, const char *host) {
     tls_err = 0; read_ticks = TLS_READ_TICKS;
     if (!tcp_open(ip, port)) { tls_err = TLS_ERR_CONNECT; return -1; }
-    setup(host);
+    if (!setup(host)) { tls_err = TLS_ERR_ENTROPY; tcp_close(); return -1; }
     return 0;
 }
 int tls_handshake(void) {

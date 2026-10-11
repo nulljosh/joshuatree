@@ -27,8 +27,9 @@
  *
  * Layout: every y is written as T + offset with T = -32, the same numbers
  * calendar.h used inside a dock window, so tools/checks/calviews-check.py
- * and apptop-check.py probe the same pixels they always did. Glyphs are the
- * kernel's 8x16 VGA fallback font; the Year view halves it to 4x8.
+ * and apptop-check.py probe the same pixels they always did. Glyphs use the
+ * shared antialiased DejaVu face; the Year view halves its coverage to fit
+ * all six week rows.
  * tools/checks/ring3calendar-check.py drives all of it.
  */
 
@@ -428,6 +429,26 @@ static void draw_day(void){
     }
 }
 
+/* Half-size dates reuse the normal antialiased face, averaging each 2x2 coverage block. */
+static void small_date(const char *s, int cx, int cy, unsigned fg) {
+    unsigned pixels[32 * 16] = {0};
+    struct jt_window_info scratch = {32, 16, 32, pixels};
+    jt_text_draw(&scratch, JT_FACE_BODY, 0, 0, WHITE, s);
+    int w = (text_w(s) + 1) / 2;
+    for (int y = 0; y < 8; y++) for (int x = 0; x < w; x++) {
+        unsigned a = 0;
+        for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++)
+            a += pixels[(y * 2 + dy) * 32 + x * 2 + dx] & 255;
+        a /= 4;
+        int px = cx - w / 2 + x, py = cy - 4 + y;
+        if (!a || px < 0 || py < 0 || px >= (int)win.width || py >= (int)win.height) continue;
+        unsigned bg = win.pixels[(unsigned)py * win.width + (unsigned)px], rgb = 0;
+        for (unsigned shift = 0; shift < 24; shift += 8)
+            rgb |= ((((fg >> shift) & 255) * a + ((bg >> shift) & 255) * (255 - a)) / 255) << shift;
+        put(px, py, rgb);
+    }
+}
+
 static void draw_year(void){
     char title[8]; cal_put_num(title, 0, vy);
     draw_title(title);
@@ -455,6 +476,8 @@ static void draw_year(void){
             char num[4]; cal_put_num(num, 0, d);
             if (row_h >= 16 && text_w(num) + 2 <= col_w) {
                 text(num, cx - text_w(num) / 2, cy - 8, fg);
+            } else if (row_h >= 8 && (text_w(num) + 1) / 2 + 2 <= col_w) {
+                small_date(num, cx, cy, fg);
             } else if (!today) {
                 rect(cx - 1, cy - 1, 3, 3, fg);
             }

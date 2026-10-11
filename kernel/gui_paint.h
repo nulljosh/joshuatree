@@ -9,8 +9,9 @@
 /* The default dock, slot by slot: the Apps folder, Burrow, Mail, Calendar,
    Notes, Reminders, Terminal, Chat, Weather, Stocks, Trash. Indices are
    APPS[] and ICON_ART[] slots. */
-#define GUI_APPS_FOLDER 30 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       31
+#define GUI_APPS_FOLDER 31 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       32
+#define GUI_CALENDAR     2 /* APPS[] slot whose tile gets the live date face, gui_calendar_face */
 #define GUI_DOCK_DEFAULT_ORDER {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 18, GUI_TRASH}
 
 /* Channel-wise average and t/max interpolation of two 0x00RRGGBB colours. */
