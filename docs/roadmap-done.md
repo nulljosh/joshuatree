@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.55.0 development branch (2026-10-11)
+
+Notes saves itself. A changed note writes to disk 1 to 2 seconds after your last key and the title's star clears, so closing the window with the red dot (which kills the program, Esc never runs) no longer loses the edit, and a crash costs at most two seconds. The kernel has no close hook, so the timer is the whole fix. Checked by `tools/checks/notes-autosave-check.py`: no save per keystroke, one save by itself, a red-dot close, the text on the disk image and back on screen after reopening.
+
 ## 2.53.0 development branch (2026-10-11)
 
 The Pi reads its own SD card: `arch/arm64/emmc.c` brings the card up on EMMC2 and reads blocks, and the i386 kernel's `drivers/fat.c`, now able to read FAT32, mounts the boot partition read only for the Terminal's new `ls` and `cat NAME`. Files that stay are a third of the 3.0 gate, and reading comes before writing. Checked by `tools/checks/arm64-sd-check.py`, which plugs a FAT32 card into QEMU's EMMC2 at the board's own address.
@@ -42,6 +46,7 @@ Typing into apps on ARM, the last slice of M1d part two. The Calculator is now i
 ## 2.43.0 development branch (2026-10-11)
 
 The Pi can make sound. `beep` (or `beep 880 500`) in the Terminal plays a quiet tone out of the 3.5 mm jack: GPIO 40 and 41 go to PWM1, the PWM clock is set through the clock manager, and a ring buffer feeds the PWM FIFO by hand, with no DMA yet. Every hardware wait gives up and prints one line; nothing touches the jack or the green light at boot. `tools/checks/arm64-audio-check.py` proves the tone reaches the ring (checksum matches a tone computed in Python), the FIFO order and scaling on a fake PWM, and that stuck hardware cannot hang it. QEMU has no PWM, so the jack itself is unverified until Joshua tests the real board.
+
 ## 2.42.0 development branch (2026-10-11)
 
 The Samantha box: a printable desk case for a 7 inch HDMI screen, a Pi 4B, a round speaker and a mic hole, built by `docs/hardware/samantha_cad.py` with a stand that leans it back and a fit-test frame to print first. The screen, speaker and board numbers are stand-ins until the parts are in hand, and nothing has been printed. Checked by the script's own asserts (the tallest port clears the screen, the Pi stays inside the walls, the speaker leaves the card a channel).
