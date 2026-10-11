@@ -2,7 +2,7 @@
 
 ## The goal
 
-Joshua, 2026-10-11: "/loop until v3". Version 3.0.0 "Hold it" cuts when the desktop boots on a real Raspberry Pi 4 and you can type and click on it, mouse included (`DECISIONS.md`, item 4). Every major version also ships a refreshed logo and a visible UI step, then the landing page gets a QA pass (Joshua: "QA landing page when we hit v3!").
+Joshua, 2026-10-11: "/loop until v3" and, later that night from the board, "Focus on user mode by v3." Version 3.0.0 "Hold it" cuts when the desktop boots on a real Raspberry Pi 4, you can type and click on it, mouse included, and one app from the shared `user/` tree runs on the Pi in user mode (`DECISIONS.md`, item 4). Every major version also ships a refreshed logo and a visible UI step, then the landing page gets a QA pass (Joshua: "QA landing page when we hit v3!").
 
 ## Where it stands
 
@@ -22,10 +22,18 @@ The dev card carries a test build of 2.41.0 plus #506 and #507, flashed 2026-10-
 2. Pick the 3.0 mark from the three candidates (contact sheet in the session scratchpad), then ship it through `tools/gen/logo.py` with the UI step.
 3. Board pass from Joshua: `beep`, typing in the Calculator, a click moving focus. A USB mouse on the Pi closes the click half of the gate.
 
+## User mode on ARM (M3), the v3 centrepiece
+
+Today one EL0 test program writes and exits over `svc` (`arch/arm64/user.S`, `tools/checks/arm64-m3-check.py`). The 31 desktop apps are i386 ring-3 programs built against `user/jtsys.h` and `user/libjt`; on the Pi only Terminal, Samantha, Calculator, Clock and Brick exist, written again in C against the kernel. Slices, one agent and one PR each:
+
+1. M3b: `user/jtsys.h` gains an aarch64 `svc` path with the same numbers, `user/libjt` and `user/hello.c` build for aarch64 as a flat position-independent binary, and the ARM loader runs it: the EL0 handler answers `JT_SYS_WRITE` and `JT_SYS_EXIT`. Check: the UART shows hello's line and exit code.
+2. M3c: `JT_SYS_WINDOW_OPEN`, `WINDOW_POLL`, `TIME` and `TEXT` on ARM over the window code from #507, so `user/calendar.c` runs unchanged on the Pi as the first ported app, embedded in `kernel8.img` the way `drivers/user_*.h` embed on i386. Check: Calendar opens from its dock tile and draws the month.
+3. M3d: `OPEN`, `READ`, `WRITE`, `CLOSE` and `READDIR` over a RAM VFS seeded from the card, then Notes, Reminders and Weather. Check: a note typed on the Pi reads back.
+
 ## This week
 
 - Reflash the card from a merged build with the LAN relay and TLS (`RELAY-TLS.md`), so Samantha answers on the board.
-- The 3.0 logo and UI refresh, held to the retina bar.
+- M3b and M3c above. The 3.0 logo (option A, the crayon tree tightened with a terracotta ground, picked 2026-10-11) and UI refresh, held to the retina bar.
 - Cut 3.0.0 once the board pass is clean, then QA the landing page: every link, the demo boot, the phone layout, the new mark everywhere.
 
 ## This month

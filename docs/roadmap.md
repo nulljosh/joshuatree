@@ -16,7 +16,7 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 The ordered list below is the near-term queue. The topic sections keep the longer plan. Completed work is in [roadmap-done.md](roadmap-done.md); `VERSION` and the GitHub releases are the source for release numbers.
 
-**The road to 3.0 (Joshua, 2026-10-11: "/loop until v3").** The gate is in `DECISIONS.md`: the desktop boots on a real Pi 4 and you can type and click, mouse included. Tonight: the Samantha box case (#505), sound from the 3.5 mm jack (#506), typing into apps with click to focus (#507) and Samantha's voice through the relay (#508) merge one at a time, and the 3.0 mark is picked from three candidates. This week: the card reflashed with the LAN relay over TLS, the logo and UI refresh, then 3.0.0 and a QA pass of the landing page. This month: the first case print from `docs/hardware/`, SD card writes, the local model from the card. Rest of the year: 4.0 "Many windows", the box as a kit, and showing it in person. `LOOP-HANDOFF.md` has the exact state.
+**The road to 3.0 (Joshua, 2026-10-11: "/loop until v3").** The gate is in `DECISIONS.md`: the desktop boots on a real Pi 4 and you can type and click, mouse included. Tonight: the Samantha box case (#505), sound from the 3.5 mm jack (#506), typing into apps with click to focus (#507) and Samantha's voice through the relay (#508) merge one at a time, and the 3.0 mark is picked from three candidates. This week: the card reflashed with the LAN relay over TLS, the logo and UI refresh, then 3.0.0 and a QA pass of the landing page. This month: the first case print from `docs/hardware/`, SD card writes, the local model from the card. User mode on ARM (M3) is the centrepiece: the `svc` syscall layer under `user/jtsys.h`, then Calendar as the first shared app on the Pi, then files and Notes. Rest of the year: 4.0 "Many windows", the box as a kit, and showing it in person. `LOOP-HANDOFF.md` has the exact state and the M3 slices.
 
 **On the real Pi:** the desktop, USB keyboard, Wi-Fi, network clock and Samantha relay work. Joshua confirmed an HTTPS fetch on the board. The merged Terminal, bounded agent loop, browser navigation and model controls have QEMU checks; the latest keyboard fixes still need another board pass.
 
@@ -65,7 +65,7 @@ A guess at the shape, in Joshua's words as far as they are known. Each version h
 
 | Version | The idea | The gate that cuts it |
 |---|---|---|
-| **3.0 Hold it** | Joshua Tree runs on a real Raspberry Pi 4. | The desktop boots on a real board and you can type and click. |
+| **3.0 Hold it** | Joshua Tree runs on a real Raspberry Pi 4. | The desktop boots on a real board, you can type and click, and one shared `user/` app runs there in user mode. |
 | **4.0 Many windows** | Real multitasking. A window server (compositor), real processes, pipes, and a Terminal with tabs, splits and background sessions (the cmux idea). | Three apps run at once, one crashes, the other two do not notice. |
 | **5.0 Talk to it** | Samantha is the interface. Full-screen face with a coded mouth, speech in and out streamed, a small model that runs on the box, and "computer, build me a game" for real. | You hold a ten-minute spoken conversation and it opens and changes things on the machine. |
 | **6.0 Yours** | One machine, many people, and it keeps your stuff safe. Accounts, a locked disk, Time Machine snapshots, backups. | Delete a file, go back in time, get it back. Pull the plug mid-write, lose nothing. |
