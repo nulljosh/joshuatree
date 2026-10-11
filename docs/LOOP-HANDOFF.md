@@ -32,6 +32,13 @@ Today one EL0 test program writes and exits over `svc` (`arch/arm64/user.S`, `to
 2. M3c: `JT_SYS_WINDOW_OPEN`, `WINDOW_POLL`, `TIME` and `TEXT` on ARM over the window code from #507, so `user/calendar.c` runs unchanged on the Pi as the first ported app, embedded in `kernel8.img` the way `drivers/user_*.h` embed on i386. Check: Calendar opens from its dock tile and draws the month.
 3. M3d: `OPEN`, `READ`, `WRITE`, `CLOSE` and `READDIR` over a RAM VFS seeded from the card, then Notes, Reminders and Weather. Check: a note typed on the Pi reads back.
 
+## Bluetooth mouse, the click half of the gate
+
+Joshua has no USB mouse, only a Bluetooth one: the Incase version of the Microsoft Bluetooth Ergonomic mouse (three channels, a pairing button), which is Bluetooth Low Energy, so the path is HID over GATT, not classic. The radio is the same CYW43455 as Wi-Fi; Bluetooth talks HCI over the PL011 UART. Today `tools/pi-config.txt` has `dtoverlay=disable-bt` and the kernel's console sits on that PL011 (`UART_BASE 0xFE201000`), so slice 1 moves the console to the mini UART (or drops the serial console on the Pi build) and gives the PL011 to the radio. QEMU has no Bluetooth chip, so every check drives a fake controller over a chardev socket.
+
+1. BT1: HCI over the PL011 at the chip's rate, the BCM4345C0 `.hcd` patch loaded with the vendor download commands (vendored like the Wi-Fi firmware, licence noted in `docs/hardware/LICENSE-NOTICE.md`), HCI reset and read local version, LE scan, and `bt scan` printing what it hears. Check: a Python fake controller answers the scripted HCI and advertises a mouse.
+2. BT2: LE connect, SMP Just Works pairing and bonding (keys kept in RAM until SD writes land, so re-pair after a reboot), GATT discovery of the HID service, report notifications on, boot mouse reports into the existing pointer (`input_event` with REL_X, REL_Y, BTN_LEFT). Check: the fake controller sends reports and the cursor moves and clicks under QEMU.
+
 ## This week
 
 - Reflash the card from a merged build with the LAN relay and TLS (`RELAY-TLS.md`), so Samantha answers on the board.
