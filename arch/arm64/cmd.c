@@ -8,12 +8,13 @@ int ask_command(const char *q, unsigned n);                        /* ask.c: "st
 void ask_claude(const char *q, unsigned n);                        /* ask.c: `llm PROMPT` or the relay */
 int userrun(const char *name, unsigned n, unsigned long *status, int *faulted);   /* main.c: load an app from the table and run it at EL0 */
 
+int audio_tone(int freq_hz, int ms);                               /* audio.c: the 3.5 mm jack, polled PWM */
+
 void (*cmd_out)(const char *s) = kputs;
 void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (char)('0' + v % 10); while (v /= 10); cmd_out(t + n); }
 
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, llm PROMPT, userrun NAME, help. Anything else asks Claude.";
-
+                           "top, bottom, find WORD, beep [FREQ MS], llm PROMPT, userrun NAME, help. Anything else asks Claude.";
 /* userrun NAME: load the user program NAME (hello, calendar) from the image table and run it at EL0, its writes on the
    screen, then say how it ended. A program that needs a window says so and exits; the window calls come in M3c part 2. */
 static void userrun_command(const char *name, unsigned n) {
@@ -25,6 +26,22 @@ static void userrun_command(const char *name, unsigned n) {
     if (r) cmd_out(": would not load\n");
     else if (faulted) cmd_out(": stopped by a fault, the kernel carried on\n");
     else { cmd_out(": exit "); cmd_dec((unsigned)status); cmd_out("\n"); }
+static int num(const char *s, unsigned n, int *v) {   /* a plain decimal of 1 to 6 digits */
+    if (!n || n > 6) return 0;
+    *v = 0;
+    for (unsigned i = 0; i < n; i++) { if (s[i] < '0' || s[i] > '9') return 0; *v = *v * 10 + (s[i] - '0'); }
+    return 1;
+}
+static int beep_command(const char *q, unsigned n) {   /* `beep` is 440 Hz for 200 ms; `beep FREQ MS` picks both */
+    int f = 440, ms = 200;
+    if (n < 4 || q[0] != 'b' || q[1] != 'e' || q[2] != 'e' || q[3] != 'p' || (n > 4 && q[4] != ' ')) return 0;
+    if (n > 4) {
+        const char *a = q + 5; unsigned an = n - 5, i = 0;
+        while (i < an && a[i] != ' ') i++;
+        if (i == an || !num(a, i, &f) || !num(a + i + 1, an - i - 1, &ms)) { cmd_out("beep: use beep, or beep FREQ MS\n"); return 1; }
+    }
+    audio_tone(f, ms);
+    return 1;
 }
 
 void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
@@ -38,6 +55,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         while (m && name[0] == ' ') { name++; m--; }
         if (m) { userrun_command(name, m); return; }
     }
+    if (beep_command(q, n)) return;
     if (ask_command(q, n)) return;
     if (browse_command(q, n)) return;
     ask_claude(q, n);
