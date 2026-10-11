@@ -2,29 +2,19 @@
 
 ## Current task
 
-New bounded batch: fix/ci-pi-runner head cf0f9e7b is pushed. Full local gate log is work/ci-repaired-2.39.2.log; GitHub run 38114553099 checks the same head. The separate feat/shell-wc branch installs the existing PC/browser wc program on boot and fixes unsupported long-number formatting. Its shell regression checks exact counts and missing-file handling. User now authorizes safe merges and deletion of superseded branches after green CI; X release side effects need a separate answer. Stop at 10% remaining.
+The combined release is PR #502, feat/shell-wc, version 2.40.0. It contains every remote work branch: #478 and #491–501, plus the fresh-boot wc utility and supported integer formatting. The strict ARM dock-art check now derives Apps and Trash slots from APPS[] rather than stale numbers.
 
-The current worktree work/landing-footer is now on fix/ci-pi-runner (2.39.2), stacked on footer PR #500. Candidate GitHub run 38093213365 failed only the Pi power check because Ubuntu 24.04's QEMU has no raspi4b machine. Seven suite shards, demo and network passed. The ARM-reserved shard now uses Ubuntu 26.04 and fails early unless QEMU lists raspi4b; other shards stay on 24.04. Runner/cache versions are separated. Linux run 38094292007 proved Pi power now passes. Its only failure, also reproduced by the completed local gate, was stale Apps/Trash indexes in arm64-m1c-check.py. The check now derives artwork and labels from APPS[]; the focused QEMU run passes at virt, Pi 1080p and Pi 4K. Full validation of the repaired head remains. The footer suite also now installs WebKit, matching its new browser check.
-
-The footer branch fix/landing-footer (PR #500) adds a wide original desert illustration using the existing vector tree mark, a larger closing statement and accessible 44px directory links. It is based on release/2.39.0 but does not change that candidate or its running full gate. Footer version is 2.39.1; full gate and release approval remain required before it can reach main.
-
-Release candidate branch release/2.39.0 in work/pi-notifications combines #478 and #491–498. It includes Mines, Pi RNG/Terminal/Calendar repairs, Clock, keyboard power controls, Brick, menu notices, app text contrast, fresh landing captures, the CI preflight/ARM affinity repair and direct ISO downloads. No merge or deployment has happened.
-
-Review reproduced Mines closing when its help panel was clicked. Off-board content clicks now do nothing; the new regression failed before the fix and passes with it. Escape closes, a scripted game wins and Mail opens afterwards. The unused old app-title painter was removed after verifying it had no callers, clearing the last normal-build warning.
+Joshua explicitly authorized safe merge, release, deployment, X announcement and avatar update. Merge only after the full gates pass. Close superseded PRs and delete their remote branches only after their contents are confirmed in main. Preserve unrelated local worktrees and untracked work.
 
 ## Validation
 
-Focused checks passed for the individual drafts: sanitizer and real QEMU input/pixel checks for games/power/notices, text sharpness and Terminal spacing, normal Pi image build, i386 build/boot and pre-push. Notes captures now open a new editor before typing; all 14 app tiles were retaken and inspected. ISO CD-ROM, raw-USB and non-Bochs framebuffer boot pass; the actual release packaging block creates identical stable/versioned ISOs and verified checksums.
+The repaired ARM desktop check passes on virt, Pi 1080p and Pi 4K. The wc shell regression proves fresh-boot availability, a missing-file error, exact 1-line/2-word/12-byte counts, and existing hello/note/unknown-command behavior. Unsupported %ld output failed before the fix. Build, boot, references and pre-push checks pass. A fresh desktop screenshot was inspected.
 
-The combined 2.39.0 local gate completed with 11 groups passing and only the stale dock-art check failing. The repaired focused check passes; the next full gate must validate the final head. Keep this candidate draft until they pass. #493 alone passed 219 checks plus four demos on exact head 5d2e99f; that does not validate the later additions. Latest main release/deploy runs were green. Draft/skipped checks are not green checks.
+Full local gate: work/ci-final-2.40.0.log. GitHub run: 38114771523. Both verify code head 02d39cd; this subsequent update changes only markdown. Their final results belong in PR #502, not a claim made before they finish. The older local and GitHub CI runs were deliberately cancelled when this combined candidate superseded them.
 
-## Goal and approval
+## Goal and usage
 
-Current request: finish the CI repair and one small roadmap task, checking usage between tasks and stopping at 10% remaining. Initial snapshot: 99% five-hour usage remaining. No paid calls, hardware flashing or reset credits. Keep this batch bounded; do not spend quota merely to exhaust it.
-
-Main has zero open issues. Every remote branch was main or belonged to an open PR. The unused local feat/pi-codex-relay branch was deleted after verifying it was an ancestor; no work was lost. Active worktrees and their local branches remain untouched.
-
-Explicit PR approval is still required to merge or deploy. The release workflow has configured X keys and posts release announcements, so publishing also needs authorization for that side effect or an approved change to the release path. No paid model requests, reset credits or hardware flashes are authorized by this loop.
+Finish the CI repair and one additional small roadmap task, then safely merge and release the finished batch, remove superseded branches and leave GitHub green with zero open issues. Check usage between tasks and stop at 10% five-hour remaining. Last snapshot: 86% remaining. No paid model calls, reset credits or hardware flashing.
 
 ## PRs
 
