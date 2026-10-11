@@ -51,11 +51,12 @@ same address. Do not copy either private key onto the card or into git.
 From the repository root, start the reviewed relay with TLS:
 
 ```sh
-python3 tools/claude-relay/relay.py --lan --token-file ~/.claude-relay-token --tls-cert ~/.config/joshuatree/relay-tls/server.pem --tls-key ~/.config/joshuatree/relay-tls/server.key
+python3 tools/claude-relay/relay.py --lan --turing --token-file ~/.claude-relay-token --tls-cert ~/.config/joshuatree/relay-tls/server.pem --tls-key ~/.config/joshuatree/relay-tls/server.key
 ```
 
-Keep the existing `--api-key-file` option if your relay uses the Messages
-API. `--lan` without both certificate flags is refused. Default loopback
+`--turing` answers as Samantha from Turing's `app/serve.py`, so start that
+first. Leave it off to use `claude -p`. `--api-key-file` uses the Messages
+API and spends its credit, so it also needs `--allow-api-spend`. `--lan` without both certificate flags is refused. Default loopback
 HTTP still works for existing i386 and QEMU checks.
 
 Flash your development card with the same Mac address and the public CA:

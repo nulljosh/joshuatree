@@ -702,7 +702,7 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
     con_cols = (win_w - sc(12)) / con_cw;
     con_rows = (win_h - sc(46)) / con_ch - 1;   /* then one row: the Console's wifi and usb status, or the Terminal's ask> prompt */
 }
-const char *ask_prompt(void);   /* ask.c: "Claude Haiku 5.5 $ ", naming the model that last answered */
+const char *ask_prompt(void);   /* ask.c: "Samantha $ ", naming the model that last answered */
 /* The Terminal's bottom row: the prompt and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
 void con_clear(void) {         /* /clear: the Terminal's window empties, its text stays in the scrollback */
     if (!con_live) return;
