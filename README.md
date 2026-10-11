@@ -23,7 +23,7 @@ Pi development build: Brick, an original brick-breaker with keys or mouse, plus 
 
 A computer is a pile of chips and a pile of software on top. Most people never see the bottom of that pile. This project is the whole pile, written by one person: the code that wakes the chip, draws the screen, reads the keyboard, and runs the apps. You can read all of it.
 
-It runs in your browser, in an emulator on a Mac, and on a real Raspberry Pi 4.
+It runs in your browser, in an emulator on a Mac, and on a real Raspberry Pi 4. Version 3.0 is the Pi release: it cuts the day the board boots the desktop and you can type and click on it ([the plan](docs/LOOP-HANDOFF.md)).
 
 ## On a Raspberry Pi
 
