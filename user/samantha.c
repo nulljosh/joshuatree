@@ -953,6 +953,42 @@ static int keyword_fallback(const char *msg, char *tool, int toolsz) {
 }
 
 
+/* "what time is it" and "what's the date" from this machine's own clock: the server cannot see the visitor's time
+   zone, so it used to decline. SYS_TIME is local wall time (the demo shifts the RTC by the browser's offset). */
+static int clock_answer(const char *msg, char *out, int outsz) {
+    char lower[256]; int n = 0;
+    for (const char *s = msg; *s && n < (int)sizeof(lower) - 1; s++) { char c = *s; if (c >= 'A' && c <= 'Z') c += 32; lower[n++] = c; }
+    lower[n] = 0;
+    /* narrow on purpose: "what time does it open" and "what's on today" (her calendar tool) are not clock questions */
+    int t = has_word(lower, "what time is it") || has_word(lower, "what's the time") || has_word(lower, "what is the time") || has_word(lower, "current time") || has_word(lower, "time now");
+    int d = has_word(lower, "the date") || has_word(lower, "today's date") || has_word(lower, "what day is it") || has_word(lower, "what day is today") || has_word(lower, "what's today") || has_word(lower, "what is today");
+    if (!t && !d) return 0;
+    unsigned secs = 0;
+    if (jt_time(&secs) < 0 || !secs) return 0;
+    char buf[64]; int p = 0;
+    #define PUT(str) for (const char *q_ = (str); *q_ && p < 63; q_++) buf[p++] = *q_
+    #define NUM(v) do { int v_ = (v); char d_[12]; int k_ = 0; do { d_[k_++] = (char)('0' + v_ % 10); v_ /= 10; } while (v_); while (k_ && p < 63) buf[p++] = d_[--k_]; } while (0)
+    PUT("It's ");
+    if (t) {
+        int sod = (int)(secs % 86400u), h = sod / 3600, m = sod / 60 % 60, h12 = h % 12 ? h % 12 : 12;
+        NUM(h12); PUT(":"); if (m < 10) PUT("0"); NUM(m); PUT(h < 12 ? " AM" : " PM");
+    } else {
+        static const char *const WD[7] = {"Thursday", "Friday", "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"};
+        static const char *const MO[12] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+        int z = (int)(secs / 86400u), wd = z % 7;                 /* 1970-01-01 was a Thursday */
+        z += 719468; int era = z / 146097, doe = z - era * 146097;  /* days to civil date (Howard Hinnant's algorithm) */
+        int yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365, doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        int mp = (5 * doy + 2) / 153, day = doy - (153 * mp + 2) / 5 + 1, mon = mp < 10 ? mp + 3 : mp - 9, yr = yoe + era * 400 + (mon <= 2);
+        PUT(WD[wd]); PUT(", "); PUT(MO[mon - 1]); PUT(" "); NUM(day); PUT(", "); NUM(yr);
+    }
+    PUT(".");
+    #undef PUT
+    #undef NUM
+    buf[p] = 0;
+    scopy(out, buf, outsz);
+    return 1;
+}
+
 /* ---- AUDIO SLICES 6 and 7: speak her reply, hold F2 to talk ---- */
 
 #define JT_HTTP_PATH_MAX 128
@@ -1003,6 +1039,7 @@ static int *vm_seam JT_DATA = 0;   /* seam row down each column, 24.8 fixed poin
 static int vm_ex[2] JT_DATA, vm_ey[2] JT_DATA, vm_ew[2] JT_DATA, vm_eh JT_DATA = 0;   /* eye centres, half widths and the half height, window px */
 static int mouth_s JT_DATA = 0, mouth_last JT_DATA = -1;   /* smoothed opening 0..255, last value logged */
 static int uface_phone JT_DATA = 0;
+static int uface_pagebar JT_DATA = 0;   /* the page draws her input (phones, and the landing hero): no bar, no mic here */
 static int hist_open JT_DATA = 0, hist_off JT_DATA = 0;
 static unsigned open_t JT_DATA = 0;
 
@@ -1581,9 +1618,9 @@ static void draw_video_k(void) {
         if (vm_hd && step != mouth_last) { mouth_last = step; char d[40] = "samface: open="; int n = 14; n = face_num(d, n, step); d[n++] = '\n'; jt_write(1, d, (unsigned)n); }
     }
     /* the input panel: its glass, then the line, the mic and the caret */
-    if (!uface_phone) for (int dy = 0; dy < vm_ph; dy++) for (int x = 0; x < vm_pw; x++) backbuf[(vm_py + dy) * W + vm_px + x] = vm_panel[dy * vm_pw + x];   /* phones: the page's own bar under the demo is the one input */
+    if (!uface_pagebar) for (int dy = 0; dy < vm_ph; dy++) for (int x = 0; x < vm_pw; x++) backbuf[(vm_py + dy) * W + vm_px + x] = vm_panel[dy * vm_pw + x];   /* phones: the page's own bar under the demo is the one input */
     win.pixels = backbuf;
-    if (!uface_phone) {
+    if (!uface_pagebar) {
         int lx = vm_px + 24, iy = vm_py + (vm_ph - LINE) / 2, mx = vm_px + vm_pw - 34;
         const char *shown = ar->in;
         while (*shown && tw(shown) > vm_pw - 110) shown++;
@@ -1820,6 +1857,14 @@ static void send(void) {
     vt_start = now_ticks(); vt_pick = vt_chat = 0; vt_open = 1;
     draw();
     struct jt_event dummy; jt_window_poll(&dummy, JT_POLL_PRESENT); /* mark dirty so the desktop paints before the wait */
+    if (clock_answer(msg, ar->reply, TREPLY)) {   /* her own clock first: no server knows the visitor's time */
+        serial("chatclock=", ar->reply);
+        push(0, ar->reply);
+        talk_until = now_ticks() + 100u * 2u + 6u * (unsigned)slen(ar->reply); talk_t0 = now_ticks();
+        status = "ready";
+        speak_begin(ar->reply);
+        return;
+    }
     int picked = pick(msg, tool, sizeof tool, arg, sizeof arg);
     vt_pick = now_ticks() - vt_start;
     if (!picked) { arg[0] = 0; picked = keyword_fallback(msg, tool, sizeof tool); }
@@ -1845,7 +1890,10 @@ static void send(void) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "portfolio"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_portfolio = 1; }
-    for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "phone"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_phone = 1; }   /* the phone has its own back chevron: no red dot, no Esc hint */
+    for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "phone"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_phone = 1; }
+    for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "pagebar"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_pagebar = 1; }
+    if (uface_phone) uface_pagebar = 1;
+    if (uface_pagebar) serial("sampagebar=", "1");   /* tools/checks/samantha-clock-check.py: the page owns her input */   /* the phone has its own back chevron: no red dot, no Esc hint */
     for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "noblink"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_noblink = 1; }   /* checks that read exact pixels pass noblink */
     uface_full = 1; uface_n = UFACE_MAX;
     if (!uface_portfolio) uface_video = 1;   /* Samantha is full screen on the desktop and the phone alike; only Joshua's own face keeps its layout */
@@ -1900,7 +1948,7 @@ void _start(int argc, char **argv) {
             { char d[40] = "samface: click="; int n = 15; put_num(d, &n, cx); d[n++] = ','; put_num(d, &n, cy); d[n++] = '\n'; jt_write(1, d, (unsigned)n); }
             if (!uface_phone && (cx - 24) * (cx - 24) + (cy - 24) * (cy - 24) <= 14 * 14) break;   /* the red dot: close */
             int mx = vm_px + vm_pw - 34, my = vm_py + vm_ph / 2;
-            if (!uface_phone && (cx - mx) * (cx - mx) + (cy - my) * (cy - my) <= 15 * 15) { if (rec_on) listen_stop_and_send(); else listen_start(); }
+            if (!uface_pagebar && (cx - mx) * (cx - mx) + (cy - my) * (cy - my) <= 15 * 15) { if (rec_on) listen_stop_and_send(); else listen_start(); }
         } else if (ev.kind == JT_EV_WHEEL && hist_open) { hist_off += ev.a * LINE * 2; }
         else { flags = JT_POLL_PRESENT; continue; } /* other clicks and the wheel change nothing */
         draw();
