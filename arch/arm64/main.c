@@ -1526,6 +1526,10 @@ static void fb_init(void) {
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
     ok = ok && (!wall_ok || (w0 != 0x00203040 && (w0 != w1 || w1 != w2)));   /* a full heap leaves the flat fill, which is the fallback working */
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
+#ifdef AUDIO_TEST   /* the audiotest build: `beep` run at boot on virt, which has no PWM (arm64-audio-check.py) */
+    void cmd_run(const char *q, unsigned n, void (*out)(const char *));
+    cmd_run("beep", 4, 0);
+#endif
 #ifdef CALC_TEST   /* the calctest build: the Calculator open at boot, four sums typed into it (arm64-calc-check.py) */
     calc_open();
     static const char *const sums[] = {"sin(30deg)", "5!", "2^10", "1/0"};

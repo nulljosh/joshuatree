@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.43.0 development branch (2026-10-11)
+
+The Pi can make sound. `beep` (or `beep 880 500`) in the Terminal plays a quiet tone out of the 3.5 mm jack: GPIO 40 and 41 go to PWM1, the PWM clock is set through the clock manager, and a ring buffer feeds the PWM FIFO by hand, with no DMA yet. Every hardware wait gives up and prints one line; nothing touches the jack or the green light at boot. `tools/checks/arm64-audio-check.py` proves the tone reaches the ring (checksum matches a tone computed in Python), the FIFO order and scaling on a fake PWM, and that stuck hardware cannot hang it. QEMU has no PWM, so the jack itself is unverified until Joshua tests the real board.
+
 ## 2.41.0 development branch (2026-10-11)
 
 The boot splash draws the tree on, trunk first and spikes last, over 0.8 s before the bar fills, instead of showing it whole. `tools/gen/gen_boot_mark.py` re-renders `landing/logo.svg` as the pen's path grows and ships each pixel's first frame beside the coverage, so the kernel needs no animation data beyond one byte a pixel. Checked by `tools/checks/bootanim-check.py`, which samples the real framebuffer and wants a growing, never shrinking tree.
