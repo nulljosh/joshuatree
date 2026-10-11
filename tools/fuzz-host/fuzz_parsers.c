@@ -532,8 +532,10 @@ int main(void) {
     unsigned char *fat32_base = build_fat32_image(fat_base);
     fuzz_sample(run_fat, fat32_base, FAT_IMG_SIZE, "fat32_basic", regress_dir);
     /* FAT32 write nasties: a FAT size past the 2^28-cluster limit must not
-       mount (its sums would overflow), and at the limit, with a 4-billion-
-       sector claim, the free-cluster search must end at the image's edge. */
+       mount (its sums would overflow); one right at the limit, with a
+       4-billion-sector claim, mounts, and every write path (write, mkdir,
+       delete) still fails cleanly instead of hanging: its root lies past
+       the image, so each stops at the first sector it cannot read. */
     {
         unsigned char *img = malloc(FAT_IMG_SIZE); memcpy(img, fat32_base, FAT_IMG_SIZE);
         img[36] = 0xFF; img[37] = 0xFF; img[38] = 0xFF; img[39] = 0xFF;

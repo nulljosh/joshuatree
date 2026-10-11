@@ -178,7 +178,7 @@ The board test, after flashing with `tools/flash-pi.sh`:
 3. `cat config.txt` prints the lines of `tools/pi-config.txt`. `cat nothere.txt` says `cat: no file nothere.txt`.
 4. `write NOTE.TXT hello from the pi` says `wrote JT/NOTE.TXT, 18 bytes`, and `cat JT/NOTE.TXT` prints it. `write config.txt x` says `sd refused config.txt, the firmware boots from it`. Photograph all three.
 5. Pull the power, boot again, and `cat JT/NOTE.TXT` still prints `hello from the pi`. That is the photo that matters.
-6. `rm NOTE.TXT` says `removed JT/NOTE.TXT`. Then put the card in the Mac: it mounts, `JT` is there with `NOTE.TXT` gone, `fsck_msdos -n` on the card's partition finds nothing to fix, and the Pi still boots from it.
+6. `rm NOTE.TXT` says `removed JT/NOTE.TXT`. Then put the card in the Mac: it mounts, `JT` is there with `NOTE.TXT` gone, `config.txt` reads the same, and the Pi still boots from it.
 
 ## Mouse test on the real board (2.24.0)
 
