@@ -497,6 +497,7 @@ static unsigned term_index;
 #define term_p terminals[term_index]
 static int con_wx, con_wy, con_ww;
 static int con_live;    /* the framebuffer is up: draw as we go */
+static int calc_live, calc_front;   /* slice 5: the Calculator is open; calc_front, it is on top and has the keys, so the pane behind it only keeps its text */
 static int con_x, con_y, con_cw, con_ch, con_base, con_cols, con_rows, con_px10;
 static int con_vga;     /* 0: DejaVu Sans Mono; n: the 8x16 VGA font drawn n times its size */
 static int mono_w, mono_h, mono_adv, mono_ok;   /* the 'M' self-test, kept for the diagnostic line */
@@ -647,7 +648,7 @@ static void con_follow(void) {   /* End: back to the newest, the same picture th
 }
 static int con_key(unsigned code, unsigned value) {   /* Page Up 104, Page Down 109, Home 102, End 107: 1 if the console took the key */
     if (code != 104 && code != 109 && code != 102 && code != 107) return 0;
-    if (!con_live || !value) return 1;
+    if (!con_live || !value || calc_front) return 1;
     unsigned half = (unsigned)con_rows / 2 ? (unsigned)con_rows / 2 : 1, nl = con_nlines();
     if (code == 104 || code == 102) {
         unsigned cur = cp->scrolled ? cp->vtop : con_off_line(cp->anchor);
@@ -674,7 +675,7 @@ static void pane_putc(struct pane *p, char c) {
         p->vtop = p->vtop > gone ? p->vtop - gone : 0; p->vlast = p->vlast > gone ? p->vlast - gone : 0;
     }
     p->log[p->len++] = c;
-    if (!con_live || p != cp) return;   /* a window that is closed or behind only keeps its text */
+    if (!con_live || p != cp || calc_front) return;   /* a window that is closed or behind only keeps its text */
     int held = cur_hold();
     unsigned was = cp->anchor;
     if (!cp->scrolled) con_draw(cp->len - 1);
@@ -705,13 +706,13 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
 const char *ask_prompt(void);   /* ask.c: "Claude Haiku 5.5 $ ", naming the model that last answered */
 /* The Terminal's bottom row: the prompt and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
 void con_clear(void) {         /* /clear: the Terminal's window empties, its text stays in the scrollback */
-    if (!con_live) return;
+    if (!con_live || calc_front) return;
     int held = cur_hold();
     con_wipe(); cp->anchor = cp->len; cp->scrolled = 0; con_hint();
     cur_release(held);
 }
 void con_prompt(const char *s, unsigned n) {
-    if (!con_live || cp != &term_p) return;
+    if (!con_live || calc_front || cp != &term_p) return;
     int held = cur_hold();
     const char *p = ask_prompt();
     unsigned plen = 0; while (p[plen]) plen++;
@@ -989,10 +990,12 @@ static void console_frame(void) {   /* the i386 window frame, and a white well f
     gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? (term_index ? "Terminal 2" : "Terminal 1") : "Console");
     fb_rect((win_lx + 8) * s, (win_ly + 30) * s, (win_lw - 16) * s, (win_lh - 38) * s, CON_BG);
 }
-static int term_front(void) { return cp == &term_p && (con_live || !fb); }   /* with no screen at all, the UART is the Terminal */
+static int term_front(void) { return cp == &term_p && !calc_front && (con_live || !fb); }   /* with no screen at all, the UART is the Terminal */
 /* The red close button puts the wallpaper back where the window was. The log keeps every line (and the UART still
    prints them); a click on any dock tile opens it again with the newest lines, so the one debug view on a Pi can
-   never be lost for good. The Terminal (its tile, or F1) takes the same rectangle: one of the two is in front. */
+   never be lost for good. The Terminal (its tile, or F1) takes the same rectangle: one of the two is in front. With
+   the Calculator open behind it, the Calculator comes to the front. */
+static void calc_raise(void);
 static void console_close(void) {
     if (!con_live || !con_under) return;
     int s = (int)window_scale(), x = win_lx * s, y = win_ly * s, w = win_lw * s, h = win_lh * s;
@@ -1002,13 +1005,16 @@ static void console_close(void) {
     con_live = 0;
     uart_puts(cp == &term_p ? "terminal closed\n" : "console closed\n");
     cur_show();
+    if (calc_live) calc_raise();   /* the wallpaper just went back over the part of it the window covered */
 }
 void ask_redraw(void);   /* ask.c: the line being typed, back on the ask> row */
 static void pane_open(struct pane *p) {   /* the Console or the Terminal in front, its newest lines in view */
-    if (con_live && cp == p) return;
+    int raise = con_live && cp == p;   /* already open, behind the Calculator: bring it up and give it the keys */
+    if (raise && !calc_front) return;
     if (!fb) { cp = p; uart_puts(p == &term_p ? "terminal open\n" : "console open\n"); return; }   /* no screen: the keys still follow */
     int s = (int)window_scale();
     cur_hide();
+    calc_front = 0;   /* before any drawing: the pane's own draws are off while the Calculator is on top */
     cp = p;
     console_frame();
     con_live = 1; cp->scrolled = 0;
@@ -1018,13 +1024,16 @@ static void pane_open(struct pane *p) {   /* the Console or the Terminal in fron
     for (unsigned k = cp->anchor; k < cp->len; k++) con_draw(k);
     con_summary(); con_hint(); ask_redraw();
     fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
-    uart_puts(p == &term_p ? "terminal open\n" : "console open\n");
+    if (raise) { con_quiet = 1; uart_puts(p == &term_p ? "focus terminal\n" : "focus console\n"); }
+    else uart_puts(p == &term_p ? "terminal open\n" : "console open\n");
     cur_show();
 }
 static void console_open(void) { pane_open(&con_p); }
-/* The Calculator (calc.c holds the sums and the keypad; this draws it). One window at a time: it takes the Console's
-   place, so the Console's saved wallpaper is what closing it puts back, and the Console then comes back. The Apps
-   tile or F2 opens it; a click on a key or typing works it; Esc or the red dot closes it. */
+/* The Calculator (calc.c holds the sums and the keypad; this draws it). Slice 5: it is a second window, with its own
+   rectangle overlapping the right of the Console's, so the Console or the Terminal stays on screen beside it. The one
+   in front has the keys, as on the i386 desktop: a click on the window behind brings it up and gives it the keys
+   (calc_front says which). The window behind keeps its text but draws nothing until it is in front again. The Apps
+   tile opens it; a click on a key or typing works it; Esc or the red dot closes it and puts the wallpaper back. */
 int calc_keys(int *cols);
 const char *calc_key(int i);
 int calc_press(const char *k);
@@ -1032,7 +1041,8 @@ int calc_type(int ch);
 const char *calc_input(void);
 const char *calc_output(void);
 int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
-static int calc_live;
+static int calc_lx, calc_ly, calc_lw, calc_lh;   /* its frame on the logical grid, set in fb_init */
+static unsigned *calc_under;                    /* the wallpaper under it, saved at boot before any window was drawn */
 static int clock_live, brick_live, spot_live;
 static void brick_open(void);
 static void brick_close(void);
@@ -1046,14 +1056,14 @@ static void clock_close(void);
 #define CALC_DISP 46     /* the display's height */
 static void calc_cell(int i, int *x, int *y, int *w, int *h) {   /* key i's box on the logical grid */
     int cols, n = calc_keys(&cols), rows = (n + cols - 1) / cols, gap = 4;
-    int ax = win_lx + 12, ay = win_ly + CALC_TOP + CALC_DISP + 8, aw = win_lw - 24, ah = win_ly + win_lh - 10 - ay;
+    int ax = calc_lx + 12, ay = calc_ly + CALC_TOP + CALC_DISP + 8, aw = calc_lw - 24, ah = calc_ly + calc_lh - 10 - ay;
     *w = (aw - gap * (cols - 1)) / cols; *h = (ah - gap * (rows - 1)) / rows;
     *x = ax + (i % cols) * (*w + gap); *y = ay + (i / cols) * (*h + gap);
 }
 static void calc_paint(void) {
-    int s = (int)window_scale(), x0 = win_lx + 12, w0 = win_lw - 24, y0 = win_ly + CALC_TOP, f = calc_flags();
+    int s = (int)window_scale(), x0 = calc_lx + 12, w0 = calc_lw - 24, y0 = calc_ly + CALC_TOP, f = calc_flags();
     cur_hide();
-    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Calculator");
+    gui_draw_window_frame(calc_lx, calc_ly, calc_lw, calc_lh, "Calculator");
     window_rect(x0, y0, w0, CALC_DISP, 0x00DDD8CE);
     window_rect(x0 + 1, y0 + 1, w0 - 2, CALC_DISP - 2, 0x00FFFFFF);
     const char *in = calc_input(), *out = calc_output();
@@ -1071,24 +1081,35 @@ static void calc_paint(void) {
         if (!eq) window_rect(x + 1, y + 1, w - 2, h - 2, op ? 0x00EFEBE4 : 0x00FFFFFF);
         gui_text(k, x + (w - gui_text_width(k)) / 2, y + (h - 16) / 2, eq ? 0x00FFFFFF : 0x001C1C1E);
     }
-    fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
+    fb_flush(calc_lx * s, calc_ly * s, calc_lw * s, calc_lh * s);
     cur_show();
+}
+static void calc_raise(void) {   /* in front of the Console or the Terminal, with the keys */
+    if (!calc_live) return;
+    int was = calc_front;
+    calc_front = 1;
+    calc_paint();
+    if (!was) { con_quiet = 1; uart_puts("focus calc\n"); }
 }
 static void calc_open(void) {
     brick_close();
     clock_close();
-    if (calc_live || !con_under) return;   /* no saved wallpaper (a full heap): nothing to close it back to */
-    console_close();
-    calc_live = 1;
+    if (!calc_under) return;   /* no saved wallpaper (a full heap): nothing to close it back to */
+    if (calc_live) { calc_raise(); return; }
+    calc_live = calc_front = 1;
     calc_paint();
     uart_puts("calc open\n");
 }
 static void calc_close(void) {
     if (!calc_live) return;
-    calc_live = 0;
-    con_live = 1;   /* console_close puts the Console's saved wallpaper back over the same rectangle */
-    console_close();
-    pane_open(cp);   /* whichever of the Console and the Terminal was in front before */
+    int s = (int)window_scale(), x = calc_lx * s, y = calc_ly * s, w = calc_lw * s, h = calc_lh * s;
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = calc_under[j * w + i];
+    fb_flush(x, y, w, h);
+    calc_live = calc_front = 0;
+    uart_puts("calc closed\n");
+    if (con_live) { con_live = 0; pane_open(cp); }   /* the wallpaper went over its corner too: draw it whole, in front */
+    cur_show();
 }
 static void calc_did(int ran) {   /* after a key: redraw, and log a finished sum on the UART (what arm64-calc-check.py reads) */
     calc_paint();
@@ -1103,27 +1124,32 @@ static void pointer_moved(void) {   /* one report done: the arrow to its new pla
     if (slot != hover_slot) { hover_slot = slot; dock_hover(slot); }
     cur_show();
 }
+static int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx && x < bx + bw && y >= by && y < by + bh; }
+static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
 static void dock_activate(int slot);
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
-    int dx = lx - (win_lx + 24), dy = ly - (win_ly + 16);   /* the close button: gui_draw_window_frame's red dot, radius 7 */
+    if (spot_live && slot < 0) return;   /* the bar is over the windows: a raise under it would leave its saved pixels stale */
+    int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);
     if (slot == 0) calc_open();   /* Apps tile opens Calculator; Brick and Clock are in Spotlight. */
     else if (brick_live && slot < 0) {
         if (spot_live) return;
-        if (dx * dx + dy * dy <= 8 * 8) brick_close();
-        else if (lx >= win_lx && lx < win_lx + win_lw && ly >= win_ly + 32 && ly < win_ly + win_lh) brick_key(57, 1);
-    } else if (calc_live && slot < 0) {
-        if (dx * dx + dy * dy <= 8 * 8) { calc_close(); return; }
+        if (on_close_dot(lx, ly, win_lx, win_ly)) brick_close();
+        else if (on_win && ly >= win_ly + 32) brick_key(57, 1);
+    } else if (clock_live && slot < 0) {
+        if (on_close_dot(lx, ly, win_lx, win_ly)) clock_close();
+    } else if (slot >= 0) dock_activate(slot);
+    else if (on_calc && calc_front) {   /* the front window takes the click... */
+        if (on_close_dot(lx, ly, calc_lx, calc_ly)) { calc_close(); return; }
         int cols, n = calc_keys(&cols);
         for (int i = 0; i < n; i++) {
             int x, y, w, h; calc_cell(i, &x, &y, &w, &h);
-            if (lx >= x && lx < x + w && ly >= y && ly < y + h) { calc_did(calc_press(calc_key(i))); return; }
+            if (in_box(lx, ly, x, y, w, h)) { calc_did(calc_press(calc_key(i))); return; }
         }
-    } else if (clock_live && slot < 0) {
-        if (dx * dx + dy * dy <= 8 * 8) clock_close();
-    } else if (slot >= 0) dock_activate(slot);
-    else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
+    } else if (on_win && con_live && !calc_front) { if (on_close_dot(lx, ly, win_lx, win_ly)) console_close(); }
+    else if (on_calc) calc_raise();                    /* ...one behind it comes to the front with the keys */
+    else if (on_win && con_live) pane_open(cp);
 }
 static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key or Spotlight: slot 0 is handled by the caller's calc_open */
     if (slot == 0) { calc_open(); return; }
@@ -1131,14 +1157,13 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     if (slot == GUI_ICON_COUNT + 1) { brick_open(); return; }
     brick_close();
     clock_close();
-    calc_close();
-    if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line */
+    if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
     console_open();
     uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
 }
 
 /* ---- Keyboard only: the Pi has no mouse yet, and the Terminal (the agent's prompt) could only be opened by a click.
-   F1 or Ctrl+Space opens Spotlight, a small bar over the desktop: type to filter the dock's names, Up and Down to
+   F1 or Cmd+Space opens Spotlight, a small bar over the desktop: type to filter the dock's names, Up and Down to
    choose, Enter opens, Esc closes. With no pane holding the keys (the Console takes none), Left and Right move the
    dock's hover label, Enter opens that tile, Esc clears it. F2 or Ctrl+T opens the Terminal at once; Esc with the
    Terminal in front and no question running hands the keys back to the desktop (the Console). ---- */
@@ -1225,12 +1250,12 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
 #ifdef PI_BUILD
     if (power_key(code)) return 1;
 #endif
-    if (code == 59 || (chord && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1, Cmd/Ctrl/Alt+Space toggle */
-    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
+    if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
+    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
     if (spot_live) return spot_key(code);
     if (brick_live) return brick_key(code, 1);
     if (clock_live) { if (code == 1) clock_close(); return 1; }
-    if (calc_live) return 0;
+    if (calc_front) return 0;
     if (code == 61 && term_front()) {   /* F3: the other Terminal session; never move a running request. */
         unsigned next = term_index ^ 1;
         if (ask_select(next)) {
@@ -1245,10 +1270,9 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
     if (code == 105 || code == 106) { dock_select(dock_sel < 0 ? (code == 106 ? 0 : GUI_ICON_COUNT - 1) : (dock_sel + (code == 106 ? 1 : GUI_ICON_COUNT - 1)) % GUI_ICON_COUNT); return 1; }
     if ((code == 28 || code == 96) && dock_sel >= 0) { int slot = dock_sel; dock_select(-1); dock_activate(slot); return 1; }
     if (code == 1) { if (dock_sel >= 0) dock_select(-1); return 1; }   /* Esc with nothing open does nothing */
-    /* The bare desktop: no pane has the keys (the Console is logs only). Any letter or digit opens Spotlight with it
-       typed, and Enter, Space or Tab open it empty: a keyboard whose F-keys or modifiers never arrive still gets in. */
+    /* The bare desktop: no pane has the keys (the Console is logs only). A letter or digit opens Spotlight with it
+       typed, so a keyboard whose F-keys or Cmd never arrive still gets in. Space, Enter and Tab alone do nothing. */
     if (chord) return 0;
-    if (code == 28 || code == 96 || code == 57 || code == 15) { spot_open(); return 1; }
     int ch = ask_char(code);
     if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) { spot_open(); if (spot_live) spot_key(code); return 1; }
     return 0;
@@ -1332,10 +1356,12 @@ void hid_media(const unsigned char *r, unsigned len);
 static void key_selftest(void) {
     static unsigned char last[8];
     static const unsigned char id_ctrl_t[9] = { 2, 0x01, 0, 0x17 }, id_none[9] = { 2 }, id_esc[9] = { 2, 0, 0, 0x29 };   /* ID 2 reads as Shift if not skipped */
-    static const unsigned char ctrl_space[8] = { 0x01, 0, 0x2C }, none[8] = { 0 }, esc[8] = { 0, 0, 0x29 };
+    static const unsigned char cmd_space[8] = { 0x08, 0, 0x2C }, ctrl_space[8] = { 0x01, 0, 0x2C }, space[8] = { 0, 0, 0x2C }, none[8] = { 0 }, esc[8] = { 0, 0, 0x29 };
     uart_puts("keytest: id9 ctrl+t\n"); hid_kbd(id_ctrl_t, 9, last); hid_kbd(id_none, 9, last);
     uart_puts("keytest: id9 esc\n"); hid_kbd(id_esc, 9, last); hid_kbd(id_none, 9, last);
+    uart_puts("keytest: boot8 space\n"); hid_kbd(space, 8, last); hid_kbd(none, 8, last);                 /* a bare Space and Ctrl+Space must not open Spotlight */
     uart_puts("keytest: boot8 ctrl+space\n"); hid_kbd(ctrl_space, 8, last); hid_kbd(none, 8, last);
+    uart_puts("keytest: boot8 cmd+space\n"); hid_kbd(cmd_space, 8, last); hid_kbd(none, 8, last);
     uart_puts("keytest: boot8 esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
     static const unsigned char br_down[3] = { 3, 0x70, 0 }, br_up[3] = { 3, 0x6F, 0 };   /* a Mac-mode F1 and F2 */
     uart_puts("keytest: media f1\n"); hid_media(br_down, 3);
@@ -1482,6 +1508,12 @@ static void fb_init(void) {
     con_under = kmalloc((unsigned)(lw * s * lh * s) * 4);   /* slice 4: what the close button puts back */
     if (con_under) { for (int j = 0; j < lh * s; j++) for (int i = 0; i < lw * s; i++) con_under[j * lw * s + i] = fb[(unsigned)(ly * s + j) * fb_pitch + (unsigned)(lx * s + i)]; }
     else uart_puts("oom console close\n");                  /* the Console then just has no working close button */
+    /* Slice 5: the Calculator's own frame, over the right of the Console's so both show, clear of the line above the dock */
+    calc_lw = 280; calc_lx = lx + lw - 150; if (calc_lx + calc_lw > W / s - 8) calc_lx = W / s - 8 - calc_lw;
+    calc_ly = ly + 40; calc_lh = gui_dock_band_top() - 22 - calc_ly; if (calc_lh > 300) calc_lh = 300;
+    calc_under = kmalloc((unsigned)(calc_lw * s * calc_lh * s) * 4);
+    if (calc_under) { for (int j = 0; j < calc_lh * s; j++) for (int i = 0; i < calc_lw * s; i++) calc_under[j * calc_lw * s + i] = fb[(unsigned)(calc_ly * s + j) * fb_pitch + (unsigned)(calc_lx * s + i)]; }
+    else uart_puts("oom calculator\n");                    /* the Apps tile then opens nothing */
     console_frame();
     if (text_ok) {
         menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
@@ -1526,6 +1558,10 @@ static void fb_init(void) {
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
     ok = ok && (!wall_ok || (w0 != 0x00203040 && (w0 != w1 || w1 != w2)));   /* a full heap leaves the flat fill, which is the fallback working */
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
+#ifdef AUDIO_TEST   /* the audiotest build: `beep` run at boot on virt, which has no PWM (arm64-audio-check.py) */
+    void cmd_run(const char *q, unsigned n, void (*out)(const char *));
+    cmd_run("beep", 4, 0);
+#endif
 #ifdef CALC_TEST   /* the calctest build: the Calculator open at boot, four sums typed into it (arm64-calc-check.py) */
     calc_open();
     static const char *const sums[] = {"sin(30deg)", "5!", "2^10", "1/0"};
@@ -1616,7 +1652,7 @@ static void input_event(struct input_event e) {
         return;
     }
     if (e.type == 1 && brick_live && !spot_live) { brick_key(e.code, e.value); return; }
-    if (e.type == 1 && e.value && calc_live && e.code != 42 && e.code != 54) {                            /* a key for the open Calculator (Shift still goes to ask.c) */
+    if (e.type == 1 && e.value && calc_front && e.code != 42 && e.code != 54) {                           /* a key for the Calculator in front (Shift still goes to ask.c) */
         con_quiet = 1;
         uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
         if (e.code == 1) { calc_close(); return; }                                                          /* Esc */
@@ -1624,7 +1660,7 @@ static void input_event(struct input_event e) {
         if (ch) calc_did(calc_type(ch));
         return;
     }
-    if (e.type == 1 && calc_live && e.code != 42 && e.code != 54) return;                                  /* its key ups */
+    if (e.type == 1 && calc_front && e.code != 42 && e.code != 54) return;                                 /* its key ups */
     if (e.type == 1) {                                                                                     /* EV_KEY: keys */
         int held = cur_hold(), term = term_front();
         if (!con_key(e.code, e.value)) {   /* the scroll keys are not logged: that would add lines to the picture they move */
