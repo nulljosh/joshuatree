@@ -13,6 +13,7 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 | `beep [FREQ MS]` | Plays a tone out of the Pi's 3.5 mm jack |
 | `vol [0-100\|up\|down]` | Shows or sets the master volume (default 70); up and down step by 10 |
 | `llm PROMPT` | Runs the local model, if the image has one |
+| `bt`, `bt scan` | Bluetooth: where the radio is and its version; a 5 second scan listing what it hears ([RASPBERRY-PI.md](RASPBERRY-PI.md#bluetooth)) |
 | anything else | Asks Claude through the relay on the Mac |
 
 ## Getting there

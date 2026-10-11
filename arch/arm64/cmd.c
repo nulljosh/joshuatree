@@ -1,6 +1,7 @@
 /* The one command line. cmd_run takes a typed line and a sink for its output; everything the Terminal's prompt
    understands (help, the /model and /effort commands, the browser, the local model, Claude) is dispatched here and nowhere else.
    Another window can run the same commands by calling cmd_run with its own sink. browser.c and ask.c print through cmd_out. */
+#include "bt.h"
 void kputs(const char *s);   /* main.c: the UART and the log of the window in front */
 void say_wrapped(const char *prefix, const char *s, unsigned n);   /* ask.c */
 int browse_command(const char *q, unsigned n);                     /* browser.c */
@@ -21,8 +22,7 @@ void (*cmd_out)(const char *s) = kputs;
 void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (char)('0' + v % 10); while (v /= 10); cmd_out(t + n); }
 
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, help. Anything else asks Claude.";
-
+                           "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, bt, bt scan, help. Anything else asks Claude.";
 static int num(const char *s, unsigned n, int *v) {   /* a plain decimal of 1 to 6 digits */
     if (!n || n > 6) return 0;
     *v = 0;
@@ -79,6 +79,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     while (n && q[n - 1] == ' ') n--;
     if (!n) return;
     if (n == 4 && q[0] == 'h' && q[1] == 'e' && q[2] == 'l' && q[3] == 'p') { say_wrapped("", help, sizeof help - 1); return; }
+    if (bt_command(q, n)) return;
     if (beep_command(q, n)) return;
     if (vol_command(q, n)) return;
     if (ask_command(q, n)) return;
