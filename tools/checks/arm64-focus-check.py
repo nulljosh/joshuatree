@@ -111,8 +111,13 @@ try:
                 if px(c, cx + 90, cy + 15) != WHITE: fails.append(f"after the click the Terminal is not over the Calculator's corner ({px(c, cx + 90, cy + 15)})")
                 else: print("  ok: a click on the Terminal's body focuses it and draws it over the Calculator's corner")
                 before = ink(c, prompt)
-                keys("1", "2", "3"); time.sleep(0.4)
+                n = len(uart())
+                keys("1", "2", "3")
+                if not wait_for(has("key 4 up", n), 30): fails.append("the 3 key never reached the kernel")
                 d = shot()
+                for _ in range(20):
+                    if ink(d, prompt) >= before + 40: break
+                    time.sleep(0.1); d = shot()
                 if ink(d, prompt) < before + 40: fails.append(f"typing 123 with the Terminal in front put no text on its prompt row ({before} then {ink(d, prompt)} ink pixels)")
                 else: print(f"  ok: 123 lands on the Terminal's prompt row ({before} then {ink(d, prompt)} ink pixels)")
                 if click(cx + 200, cy + 15, "focus calc"):

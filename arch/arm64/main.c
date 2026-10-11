@@ -1130,6 +1130,7 @@ static void dock_activate(int slot);
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
+    if (spot_live && slot < 0) return;   /* the bar is over the windows: a raise under it would leave its saved pixels stale */
     int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);
     if (slot == 0) calc_open();   /* Apps tile opens Calculator; Brick and Clock are in Spotlight. */
     else if (brick_live && slot < 0) {
