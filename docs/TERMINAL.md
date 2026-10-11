@@ -14,8 +14,10 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 | `vol [0-100\|up\|down]` | Shows or sets the master volume (default 70); up and down step by 10 |
 | `llm PROMPT` | Runs the local model, if the image has one |
 | `bt`, `bt scan`, `bt pair` | Bluetooth: where the radio is and its version; a 5 second scan listing what it hears; pairing the mouse from that scan so it drives the pointer ([RASPBERRY-PI.md](RASPBERRY-PI.md#bluetooth)) |
-| `ls` | Lists the SD card's boot partition (its root, 8.3 names and sizes) |
-| `cat NAME` | Prints the first 4 KB of a file there as text |
+| `ls [DIR]` | Lists the SD card's boot partition (its root, or `ls JT`; 8.3 names and sizes) |
+| `cat NAME` | Prints the first 4 KB of a file there as text (`cat JT/NOTE.TXT` one folder down) |
+| `write NAME.EXT TEXT` | Makes or replaces `JT/NAME.EXT` holding TEXT; boot files are refused |
+| `rm NAME`, `mkdir NAME` | Deletes the file `JT/NAME`, or makes the folder `JT/NAME` |
 | anything else | Asks Claude through the relay on the Mac |
 
 ## Getting there

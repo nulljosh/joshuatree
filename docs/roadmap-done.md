@@ -3,6 +3,9 @@
 ## 2.55.0 development branch (2026-10-11)
 
 Notes saves itself. A changed note writes to disk 1 to 2 seconds after your last key and the title's star clears, so closing the window with the red dot (which kills the program, Esc never runs) no longer loses the edit, and a crash costs at most two seconds. The kernel has no close hook, so the timer is the whole fix. Checked by `tools/checks/notes-autosave-check.py`: no save per keystroke, one save by itself, a red-dot close, the text on the disk image and back on screen after reopening.
+## 2.57.0 development branch (2026-10-11)
+
+Files that stay: the Pi writes its SD card (CMD24 and CMD25 with busy waits in `arch/arm64/emmc.c`, FAT32 writes in `drivers/fat.c`), and the Terminal's `write`, `rm` and `mkdir` keep the OS's own files in `JT/` across a reboot. Every name the firmware boots from is refused, and so is a write onto the boot sectors. Checked by `tools/checks/arm64-sd-check.py`, which reboots QEMU on the same card and checks it from the host with mtools and `fsck.fat`.
 
 ## 2.53.0 development branch (2026-10-11)
 
@@ -18,6 +21,13 @@ Bluetooth, slice BT2: `bt pair` connects Joshua's LE mouse, pairs it with Just W
 ## 2.51.0 development branch (2026-10-11)
 
 Bluetooth, slice BT1: the Pi talks HCI to its radio over the PL011, loads the BCM4345C0 patch, prints the version, and `bt scan` lists what it hears, so Joshua's Bluetooth mouse can be found before BT2 connects it. The Pi console moved to the mini UART to free the PL011, and `disable-bt` left `config.txt`. Not yet seen on the board. Check: `tools/checks/arm64-bt-check.py`, against a fake controller.
+## 2.56.0 development branch (2026-10-11)
+
+M3c part 2, Calendar in user mode on the Pi's desktop. The dock tile runs the unchanged `user/calendar.c` at EL0 in its own window, under a small cooperative scheduler: yield parks the app and the desktop's loop resumes it, so its forever loop no longer freezes the screen. Window open, poll and present follow i386; Esc or the red dot closes it. Its file calls are still -38, so the month is empty. Check: `tools/checks/arm64-calendar-check.py`.
+
+## 2.50.0 development branch (2026-10-11)
+
+M3c part 1, a real app loader on ARM. A `{name, start, end}` table holds `user/hello.c` and `user/calendar.c`, built unchanged for aarch64; `user_load` copies one in, relocates it, maps code read-only and executable and data, a zeroed pool and the stack never executable, and `userrun NAME` runs it. `JT_SYS_TIME` and `JT_SYS_GETPID` answer; calendar's `JT_SYS_WINDOW_OPEN` gets -38 and it exits, which is where part 2 starts. Check: `tools/checks/arm64-m3c-check.py`.
 
 ## 2.49.0 development branch (2026-10-11)
 

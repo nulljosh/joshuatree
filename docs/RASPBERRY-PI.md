@@ -6,9 +6,9 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 
 ## Apps currently implemented on ARM
 
-The Pi does not have the i386 demo's full app collection. Its native windows are the Calculator, Terminal, Console, Clock and Brick (development branch). The Apps tile opens Calculator, beside the Terminal or Console; a click on either one gives it the keys. F2 opens Terminal. Vancouver stays UTC-7 after March 8, 2026, following [B.C. permanent Pacific time](https://news.gov.bc.ca/releases/2026AG0013-000209). Search Brick in Spotlight for the brick-breaker game. Search Clock in Spotlight to open its time/date window; Escape closes it. The Samantha dock tile opens the assistant Terminal; its prompt reads `Samantha $ `. Start the Mac's relay with `--turing` so Samantha answers from Joshua's own model in the turing repo, with no credit spent ([RELAY-TLS.md](RELAY-TLS.md) has the full command, [CLAUDE-APP.md](CLAUDE-APP.md) the three backends). Samantha and the text browser run as Terminal commands. The optional local model also runs there when weights are included in the image.
+The Pi does not have the i386 demo's full app collection. Its native windows are the Calculator, Calendar, Terminal, Console, Clock and Brick (development branch). The Apps tile opens Calculator, beside the Terminal or Console; a click on either one gives it the keys. F2 opens Terminal. Vancouver stays UTC-7 after March 8, 2026, following [B.C. permanent Pacific time](https://news.gov.bc.ca/releases/2026AG0013-000209). Search Brick in Spotlight for the brick-breaker game. Search Clock in Spotlight to open its time/date window; Escape closes it. The Samantha dock tile opens the assistant Terminal; its prompt reads `Samantha $ `. Start the Mac's relay with `--turing` so Samantha answers from Joshua's own model in the turing repo, with no credit spent ([RELAY-TLS.md](RELAY-TLS.md) has the full command, [CLAUDE-APP.md](CLAUDE-APP.md) the three backends). Samantha and the text browser run as Terminal commands. The optional local model also runs there when weights are included in the image. Calendar runs in user mode: the dock tile starts `user/calendar.c`, the same program the PC runs, in its own window.
 
-Burrow, Mail, Calendar, Notes, Reminders, Weather, Stocks and Trash dock tiles do not open their own ARM apps. They return to the Console and print `not on ARM yet`. The live Calendar icon shows the month and day number; it does not open a Calendar app. Samantha's `note` action prints text; it does not save a Notes document.
+Burrow, Mail, Notes, Reminders, Weather, Stocks and Trash dock tiles do not open their own ARM apps. They return to the Console and print `not on ARM yet`. The live Calendar icon shows the month and day number, and a click opens Calendar. Samantha's `note` action prints text; it does not save a Notes document.
 
 This is the dispatch in `arch/arm64/main.c` (`dock_activate` and `app_open_name`), not a claim that every feature has passed a physical-board test. The x86 user programs use a different syscall and window layer and still need ARM ports. The Calendar Year-view improvement is for the i386 app.
 
@@ -28,7 +28,7 @@ This is the dispatch in `arch/arm64/main.c` (`dock_activate` and `app_open_name`
 | Wi-Fi on the Pi (CYW43455) | Built in 2.16.0, waiting on a photo from the real board. Stage 1 lists nearby networks on screen as `wifi ap ...` lines; joining one is stage 2. QEMU has no SDIO card, so it only proves the failure path (`wifi FAIL cmd5`, boot carries on): `tools/checks/arm64-wifi-check.py`. |
 | Bluetooth (the same CYW43455) | **In 2.54.0, not yet seen on the board.** The radio loads its patch at boot, `bt scan` lists the devices it hears, and `bt pair` connects the mouse (Just Works, the key kept in RAM only) so it moves the arrow and clicks. See [Bluetooth](#bluetooth). |
 | Sound out of the 3.5 mm jack | **In 2.43.0, not yet heard on the board.** Run `beep` (or `beep 880 500`) in the Terminal with headphones in the jack. PWM1 on GPIO 40 and 41, fed by the CPU (no DMA yet). QEMU has no PWM, so `tools/checks/arm64-audio-check.py` proves only the tone, the buffer and the bounded waits. If it prints `audio:` and a reason, tell me the line. HDMI audio is not done. **Volume, in 2.48.0, not yet heard on the board:** `vol` shows it (0 to 100, default 70), `vol 40` sets it, `vol up` and `vol down` step by 10; F11 and F12 and a Mac keyboard's volume keys do the same, show "Volume N" in the menu bar and click once. The default level and the click are `AUDIO_DEFAULT_VOLUME` in `audio.h` and `TICK_HZ`, `TICK_MS` in `cmd.c`: tune them on the real speaker. |
-| Files on the SD card | **Read only in 2.53.0, not yet seen on the board.** The kernel reads the card it booted from, and `ls` and `cat` in the Terminal show its boot partition. See [Files on the card](#files-on-the-card). Proven on QEMU's Pi 4B model with a FAT32 card (`tools/checks/arm64-sd-check.py`). |
+| Files on the SD card | **Reads in 2.53.0, writes in 2.57.0, not yet seen on the board.** The kernel reads the card it booted from, `ls` and `cat` in the Terminal show its boot partition, and `write`, `rm` and `mkdir` change the OS's own `JT/` folder. The boot files are never written. See [Files on the card](#files-on-the-card). Proven on QEMU's Pi 4B model with a FAT32 card, across a reboot (`tools/checks/arm64-sd-check.py`). |
 | Wired Ethernet on the Pi | Not yet. M4. |
 
 So on day one, watch two things: the text in a serial terminal, and with a monitor plugged in, a simple desktop of plain boxes with the same boot lines written in its white window. If the serial cable is wrong, the monitor still tells you how far the kernel got. If both are blank, it is the SD card or `config.txt`.
@@ -156,23 +156,29 @@ If it still fails, send the exact lines you see, even if they look like garbage.
 
 ## Files on the card
 
-Since 2.53.0 the kernel reads the SD card it booted from. Read only for now. Writing files comes next.
+Since 2.53.0 the kernel reads the SD card it booted from. Since 2.57.0 it writes too, so a file you make is still there after a reboot.
 
-The card slot is wired to EMMC2, the Pi 4's own SD controller, so this never touches the Wi-Fi chip's controller. At boot the Console shows two lines. `sd card sdhc <size> MB, base clock <rate> MHz` gives the card's type and size, and the clock the firmware gave the controller. `sd fat32 partition at block <start>, <size> MB, read only` says where the boot partition starts and how big it is. With no card it says `sd no card`. Any other failure is one `sd FAIL <step>` line. Either way the boot carries on.
+The card slot is wired to EMMC2, the Pi 4's own SD controller, so this never touches the Wi-Fi chip's controller. At boot the Console shows two lines. `sd card sdhc <size> MB, base clock <rate> MHz` gives the card's type and size, and the clock the firmware gave the controller. `sd fat32 partition at block <start>, <size> MB, writes go in JT/` says where the boot partition starts and how big it is. With no card it says `sd no card`. Any other failure is one `sd FAIL <step>` line. Either way the boot carries on.
 
 In the Terminal (F2):
 
-- `ls` lists the boot partition's top folder: each file's short name and its size in bytes, folders with a slash.
-- `cat NAME` prints the first 4 KB of a file as text, for example `cat config.txt`.
+- `ls` lists the boot partition's top folder: each file's short name and its size in bytes, folders with a slash. `ls JT` lists the OS's own folder.
+- `cat NAME` prints the first 4 KB of a file as text, for example `cat config.txt` or `cat JT/NOTE.TXT`.
+- `write NAME.EXT TEXT` makes `JT/NAME.EXT` holding that line, or replaces it. The name needs a dot, so `write me a poem` still goes to Claude.
+- `rm NAME` deletes `JT/NAME`. `mkdir NAME` makes the folder `JT/NAME`.
 
-Names are the short 8.3 ones `ls` shows, so `bcm2711-rpi-4-b.dtb` is `BCM271~1.DTB`. Only the top folder for now.
+Names are the short 8.3 ones `ls` shows, so `bcm2711-rpi-4-b.dtb` is `BCM271~1.DTB`. One folder down at most.
+
+The OS writes only inside `JT/`, made on the first write. It never writes a file the firmware boots from: `bootcode.bin`, `start*.elf`, `fixup*.dat`, any `.dtb`, `config.txt`, `cmdline.txt`, `kernel*.img`, `armstub*` and the `overlays` folder are refused by name, with an `sd refused NAME, the firmware boots from it` line. A name that is not 8.3, like `../config.txt`, is refused too. Under that, the driver refuses any write past the boot partition or onto its boot sectors. A full `JT/` folder or root says no rather than grow: folders do not grow past their first cluster yet.
 
 The board test, after flashing with `tools/flash-pi.sh`:
 
-1. The Console shows `sd card sdhc` with about the card's size, then `sd fat32 partition ... read only`. Photograph both lines.
+1. The Console shows `sd card sdhc` with about the card's size, then `sd fat32 partition ... writes go in JT/`. Photograph both lines.
 2. `ls` lists what `tools/flash-pi.sh` copied: `BOOTCODE.BIN`, `START4.ELF`, `FIXUP4.DAT`, `BCM271~1.DTB`, `CONFIG.TXT`, `KERNEL8.IMG` and `OVERLAYS/`. The backups it kept show as `KERNEL~1.BAK` and `CONFIG~1.BAK`, and folders macOS left may show too. The sizes match what the Mac shows.
-3. `cat config.txt` prints the lines of `tools/pi-config.txt`.
-4. `cat nothere.txt` says `cat: no file nothere.txt`.
+3. `cat config.txt` prints the lines of `tools/pi-config.txt`. `cat nothere.txt` says `cat: no file nothere.txt`.
+4. `write NOTE.TXT hello from the pi` says `wrote JT/NOTE.TXT, 18 bytes`, and `cat JT/NOTE.TXT` prints it. `write config.txt x` says `sd refused config.txt, the firmware boots from it`. Photograph all three.
+5. Pull the power, boot again, and `cat JT/NOTE.TXT` still prints `hello from the pi`. That is the photo that matters.
+6. `rm NOTE.TXT` says `removed JT/NOTE.TXT`. Then put the card in the Mac: it mounts, `JT` is there with `NOTE.TXT` gone, `config.txt` reads the same, and the Pi still boots from it.
 
 ## Mouse test on the real board (2.24.0)
 
@@ -180,7 +186,7 @@ QEMU proves the arrow, the label and the clicks, but not real mice or the real c
 
 1. Plug a wired USB mouse into the Pi before power-on. The Console should show `usb mouse addr N port ...`. Move it: an arrow appears and follows, with no trail left behind at 1080p.
 2. Hover the dock: the tile's name shows above it and goes away when the pointer leaves. No arrow-shaped mark stays in the dock.
-3. Click the Console's red button: the window goes and the wallpaper is back. Click any dock tile: the Console is back with `dock <name>: not on ARM yet` as its newest line.
+3. Click the Console's red button: the window goes and the wallpaper is back. Click Mail: the Console is back with `dock Mail: not on ARM yet` as its newest line. Click Calendar: its window opens over the Console with this month; Right steps a month, and the red dot closes it.
 4. Unplug the mouse and plug it in again: `usb port ... disconnected`, then a new `usb mouse` line, and it moves the arrow again.
 5. Keyboard and mouse together, on the hub and on the Pi's own ports: typing at the Claude prompt still works while the arrow sits over the Console.
 6. A wireless keyboard and mouse receiver (one USB plug, two devices inside): both should show as `usb kbd` and `usb mouse` on one address.

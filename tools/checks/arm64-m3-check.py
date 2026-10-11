@@ -13,8 +13,8 @@ Boots arch/arm64 on QEMU's virt machine and reads the UART. Checks, in this orde
     page faults, and the kernel prints the fault.
   - "M3 kernel survived the fault", then a second EL0 task that prints and exits with status 7 ("M3 EL0 exit 7",
     "M3 userland ok"): the kernel kept running and can enter EL0 again.
-  - M3b, a C program: user/hello.c itself, built for aarch64 (hello_c.bin, position independent, no relocations left), is
-    loaded into the user page and runs at EL0 with jtsys.h's `svc #0` path and the Joshua Tree numbers. "jt-hello: start" is
+  - M3b, a C program: user/hello.c itself, built for aarch64 (uapp_hello.bin, a flat -pie image with no relocations), is
+    loaded into the app window (M3c's loader) and runs at EL0 with jtsys.h's `svc #0` path and the Joshua Tree numbers. "jt-hello: start" is
     its first write (JT_SYS_WRITE 4, fd 1). Only write and exit exist on ARM, so its open gets -ENOSYS: it prints
     "jt-hello: open failed -38" and exits 1 through JT_SYS_EXIT 1 ("M3 EL0 exit 1", "M3b userland C ok").
   - "EL0: reached code after the blocked access", "M3 userland FAIL" and "M3b userland C FAIL" must never appear.
