@@ -50,6 +50,7 @@ Today one EL0 test program writes and exits over `svc` (`arch/arm64/user.S`, `to
 
 ## Rules in force
 
+- Benchmarks stay current (Joshua, 2026-10-11). `docs/BENCHMARKS.md` and the README table are at 2.30.6; before each MINOR cut, rerun `tools/bench.sh` on a quiet Mac (no CI running) and paste both tables, and refresh the Pi table from the board (`[[bench]]` through Samantha today; a plain `bench` command in `arch/arm64/cmd.c` is the next small slice so it needs no relay).
 - One `tools/ci-local.sh` at a time. No Blender or other heavy job while it runs (it made frametime-check flaky once).
 - PRs open as drafts and go ready only on a green local gate. Joshua authorised merging on green for this loop.
 - Up to three agents, two if they are Opus or Fable. Stop an agent once its PR is pushed; the main session queues its gate.
