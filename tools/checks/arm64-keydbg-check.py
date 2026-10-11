@@ -5,7 +5,8 @@ through QEMU's usb-kbd behind an xHCI controller, the Pi's path (the other key c
 keydbg-kernel8.elf (make keydbgtest: the dev card's debug line, plus made-up reports at boot):
   1. a 9-byte report with report ID 2 in front, Ctrl held and T down, opens the Terminal; Esc in the same form hands the
      keys back. Reverting the report-ID skip reads the ID as Shift and drops the real Ctrl byte: T then opens Spotlight.
-  2. a plain 8-byte boot report with Ctrl+Space still opens it (the skip leaves boot reports alone).
+  2. plain 8-byte boot reports: a bare Space and Ctrl+Space do nothing, Cmd+Space opens it (the skip leaves boot
+     reports alone, and only Cmd+Space or F1 open Spotlight, like a Mac: Joshua hit Space on the board, 2026-10-11).
   3. Cmd+Space over USB (meta_l, the GUI modifier 0x08) opens Spotlight, and the debug line shows the raw report
      ("keydbg: key 08 00 2c ...") and the name ("Cmd+Space").
   4. made-up media reports (consumer page 0x70, 0x6F, a Mac-mode F1 and F2) open Spotlight and the Terminal.
@@ -62,7 +63,9 @@ def dev(uart, wait_for, key, expect):
     def between(a, b): i = out.find(a); j = out.find(b, i); return out[i:j] if i >= 0 and j >= 0 else ""
     step("a 9-byte report with a report ID: Ctrl+T opens the Terminal", "terminal open" in between("keytest: id9 ctrl+t", "keytest: id9 esc"))
     step("a 9-byte report with a report ID: Esc hands the keys back", "console open" in between("keytest: id9 esc", "keytest: boot8"))
-    step("a plain 8-byte boot report: Ctrl+Space opens Spotlight", "spotlight open" in between("keytest: boot8 ctrl+space", "keytest: boot8 esc"))
+    step("a plain 8-byte boot report: a bare Space does not open Spotlight", "spotlight" not in between("keytest: boot8 space", "keytest: boot8 ctrl+space"))
+    step("a plain 8-byte boot report: Ctrl+Space does not open Spotlight either", "spotlight" not in between("keytest: boot8 ctrl+space", "keytest: boot8 cmd+space"))
+    step("a plain 8-byte boot report: Cmd+Space opens Spotlight", "spotlight open" in between("keytest: boot8 cmd+space", "keytest: boot8 esc"))
     step("a plain 8-byte boot report: Esc closes it", "spotlight close" in between("keytest: boot8 esc", "keytest: media f1"))
     step("a media report, brightness down (a Mac-mode F1), opens Spotlight", "spotlight open" in between("keytest: media f1", "keytest: media esc"))
     step("a media report, brightness up (a Mac-mode F2), opens the Terminal", "terminal open" in between("keytest: media f2", "keytest: media esc2"))

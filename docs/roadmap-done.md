@@ -1,5 +1,10 @@
 # Joshua Tree roadmap: done
 
+## 2.44.0 development branch (2026-10-11)
+
+Spotlight opens only on F1 or Cmd+Space, like a Mac. A bare Space, Enter or Tab on the desktop and Ctrl or Alt+Space do nothing now (Joshua hit Space on the board). A letter still opens it with that letter typed. Checks: `tools/checks/arm64-keys-check.py` and `arm64-keydbg-check.py` press Space and Ctrl+Space and expect nothing.
+
+Typing into apps on ARM, the last slice of M1d part two. The Calculator is now its own window over the right of the Terminal or Console, so both show. A click on one brings it to the front, and only that one gets the keys, the same rule the i386 desktop uses. Before, any open Calculator took every key. Check: `tools/checks/arm64-focus-check.py`, which fails with the old routing. Framebuffer write-combining is split out as its own roadmap line. Needs a USB mouse and keyboard test on the board.
 ## 2.43.0 development branch (2026-10-11)
 
 The Pi can make sound. `beep` (or `beep 880 500`) in the Terminal plays a quiet tone out of the 3.5 mm jack: GPIO 40 and 41 go to PWM1, the PWM clock is set through the clock manager, and a ring buffer feeds the PWM FIFO by hand, with no DMA yet. Every hardware wait gives up and prints one line; nothing touches the jack or the green light at boot. `tools/checks/arm64-audio-check.py` proves the tone reaches the ring (checksum matches a tone computed in Python), the FIFO order and scaling on a fake PWM, and that stuck hardware cannot hang it. QEMU has no PWM, so the jack itself is unverified until Joshua tests the real board.
