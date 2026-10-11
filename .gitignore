@@ -80,3 +80,6 @@ arch/arm64/restart-pi-kernel8.elf
 
 # Menu notice test build
 arch/arm64/notice-kernel8.elf
+arch/arm64/audio-kernel8.elf
+arch/arm64/audio-pi-kernel8.elf
+arch/arm64/audio-kernel8.img
