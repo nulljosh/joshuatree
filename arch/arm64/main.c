@@ -1366,7 +1366,7 @@ static void kd_key(unsigned code) {   /* a key down: its name, with the modifier
     kd_cat(code >= 59 && code <= 68 ? fk[code - 59] : code == 87 ? "F11" : code == 88 ? "F12" : code == 57 ? "Space" :
            code == 28 || code == 96 ? "Enter" : code == 1 ? "Esc" : code == 15 ? "Tab" : code == 14 ? "Backspace" :
            code == 29 || code == 97 ? "Ctrl" : code == 125 || code == 126 ? "Cmd" : code == 56 || code == 100 ? "Alt" :
-           code == 42 || code == 54 ? "Shift" : code == 103 ? "Up" : code == 108 ? "Down" : code == 105 ? "Left" :
+           code == 42 || code == 54 ? "Shift" : code == 58 ? "Caps" : code == 103 ? "Up" : code == 108 ? "Down" : code == 105 ? "Left" :
            code == 106 ? "Right" : ch > ' ' && ch < 127 ? one : "?");
     if (kd_name[0] == '?') { kd_name[0] = 0; kd_cat("code "); char d[4] = { (char)('0' + code / 100 % 10), (char)('0' + code / 10 % 10), (char)('0' + code % 10), 0 }; kd_cat(d); }
     kd_dirty = 1;
@@ -1695,8 +1695,28 @@ struct input_event { unsigned short type, code; unsigned value; };
 int ask_key(unsigned code, unsigned value);   /* ask.c: the prompt's line editor */
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 void ask_poll(void);
+/* Key repeat. A USB keyboard (SET_IDLE(0)) reports only a change, so a held key sends one press and then nothing.
+   The last typed key down (a typed character or Backspace; not a function key, Brick's keys, a modifier or a chord)
+   is remembered with the generic counter's time. After KEY_REPEAT_DELAY_MS the main loop feeds it back through
+   input_event as value 2, which every handler treats as a press, so it lands wherever the first press went (Terminal,
+   Calculator, Spotlight), every KEY_REPEAT_RATE_MS, until its release or any other key or button goes down.
+   The counter, never `ticks`, which stops counting. */
+#define KEY_REPEAT_DELAY_MS 400
+#define KEY_REPEAT_RATE_MS 80
+static unsigned rep_code;            /* the key being repeated, 0 for none */
+static unsigned long rep_next;       /* when it repeats next, in counter milliseconds */
+static unsigned long key_ms(void) {
+    unsigned long f, c; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    return c / ((f ? f : 54000000) / 1000);
+}
 static void input_event(struct input_event e) {
-    if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                   /* BTN_LEFT, RIGHT, MIDDLE */
+    if (e.type == 1 && e.value < 2) {                                                                      /* a real press or release; value 2 is our own repeat */
+        if (!e.value) { if (e.code == rep_code) rep_code = 0; }
+        else if ((e.code == 14 || (e.code < 58 && ask_char(e.code))) && !(brick_live && !spot_live) && !ctrl_held && !gui_held && !alt_held) {
+            rep_code = e.code; rep_next = key_ms() + KEY_REPEAT_DELAY_MS;
+        } else rep_code = 0;
+    }
+    if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                 /* BTN_LEFT, RIGHT, MIDDLE */
         con_quiet = 1;   /* the UART only */
         uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
         if (e.code == 272 && e.value) pointer_click();
@@ -1705,8 +1725,15 @@ static void input_event(struct input_event e) {
     if (e.type == 1 && (e.code == 29 || e.code == 97)) ctrl_held = e.value != 0;                          /* Ctrl, either side; the key still echoes below */
     if (e.type == 1 && (e.code == 125 || e.code == 126)) gui_held = e.value != 0;   /* Cmd (left 0x08, right 0x80 in a boot report) */
     if (e.type == 1 && (e.code == 56 || e.code == 100)) alt_held = e.value != 0;    /* Alt, Option on a Mac board */
-    if (e.type == 1 && e.value) kd_key(e.code);
-    if (e.type == 1 && e.value && ui_key(e.code)) {                                                        /* Spotlight, the dock keys, F2 and Ctrl+T */
+    if (e.type == 1 && e.value == 1) kd_key(e.code);                                                       /* not our repeats: the debug line shows the real press */
+    if (e.type == 1 && (e.code == 42 || e.code == 54)) ask_key(e.code, e.value);   /* Shift, before ui_key: Spotlight and the Calculator read its state from ask.c too, and take every key */
+    if (e.type == 1 && e.code == 58) {                                                                     /* Caps Lock: flips ask.c's state, nothing else sees it */
+        ask_key(e.code, e.value);
+        con_quiet = 1;
+        uart_puts("key 58 "); uart_puts(e.value ? "down\n" : "up\n");
+        return;
+    }
+    if (e.type == 1 && e.value && ui_key(e.code)) {                                                      /* Spotlight, the dock keys, F2 and Ctrl+T */
         con_quiet = 1;
         uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
         return;
@@ -1747,6 +1774,11 @@ static void input_event(struct input_event e) {
     }
 }
 void kinput(unsigned type, unsigned code, int value) { input_event((struct input_event){ (unsigned short)type, (unsigned short)code, (unsigned)value }); }
+static void key_repeat_tick(void) {   /* the main loop, right after the polls: a release that queued while the loop was busy is seen first */
+    if (!rep_code || key_ms() < rep_next) return;
+    rep_next = key_ms() + KEY_REPEAT_RATE_MS;   /* from now, not from the last due time: a late loop never bursts */
+    input_event((struct input_event){ 1, (unsigned short)rep_code, 2 });
+}
 int usb_init(void);    /* xhci.c */
 int wifi_init(void);
 #ifdef PI_BUILD
@@ -2060,13 +2092,13 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
-            if (usb_ok || brick_live || notice.text[0] || bt_busy()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
-            usb_poll(); input_poll(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick();
+            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick();
         }
 #endif
     }
