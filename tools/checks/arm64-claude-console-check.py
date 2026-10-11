@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude in the ARM Terminal: open the Terminal (F1), type a question at its prompt (`Claude Haiku 5.5 $ `, naming the model) and Claude's answer is printed in
+"""Claude in the ARM Terminal: open the Terminal (F1), type a question at its prompt (`Samantha $ `, naming the model) and Claude's answer is printed in
 the Terminal, through the real relay on this machine and the shared IP stack on virtio-net. No app, no model, no
 internet. The Console is logs only: typing with it in front asks nothing, and the answer never lands in it
 (docs/TERMINAL.md). The file keeps its old name so the suite and the docs that point at it stay put.
@@ -18,13 +18,16 @@ Boot 1, virtio-net, ramfb, virtio keyboard:
      word for word, wrapped to lines of at most 53 columns, and the Terminal window gains ink. A reply at all proves the
      bearer was sent: the relay answers 401 without it. F1 back to the Console: the answer's ##### line is not there.
   3. follow-up: a second question reaches the stub with --resume <the session the first reply named>. The relay runs
-     with --model claude-sonnet-5-5, so the first question is echoed after the default prompt "Claude Haiku 5.5 $ "
-     and the follow-up after "Claude Sonnet 5.5 $ ", the model the relay said answered.
+     with --model claude-sonnet-5-5, so the first question is echoed after the default prompt "Samantha $ " (no
+     "Claude" prompt shows before a Claude backend has answered) and the follow-up after "Claude Sonnet 5.5 $ ",
+     the model the relay said answered.
+  3b. Turing: the relay restarts with --turing pointed at a stub of turing's app/serve.py (OpenAI chat shape) on
+     loopback; its answer prints and the next prompt reads "Samantha $ " again, so ask.c takes "M Samantha".
   4. wrong token: the relay restarts on the same port with another token; the next question prints "claude: error -401".
   The token never shows up on the UART.
-Boot 2, no network card: the prompt is the default "Claude Haiku 5.5 $ ", a question prints "claude: no network" and the
+Boot 2, no network card: the prompt is the default "Samantha $ ", a question prints "claude: no network" and the
 relay is never asked.
-Boot 3, built with no token file: the prompt is "Claude $ " (no relay, so no known model), a question prints
+Boot 3, built with no token file: the prompt is still "Samantha $ " (never Claude before Claude answers), a question prints
 "claude: no token" and the relay is never asked.
 
 Discriminating: point ask.c at another path ("/api/claudx") and step 2 fails with "claude: error -404": the stub is
@@ -34,7 +37,7 @@ Pass --tls to run the same end-to-end token/session/answer checks over HTTPS wit
 relay's fixed name, jt-relay (finding the relay by its LAN probe is tools/checks/arm64-relay-discovery-check.py).
 Usage: tools/checks/arm64-claude-console-check.py   (from the repo root)
 """
-import json, os, re, shutil, socket, subprocess, sys, tempfile, threading, time
+import http.server, json, os, re, shutil, socket, subprocess, sys, tempfile, threading, time
 TLS = "--tls" in sys.argv
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -52,9 +55,9 @@ QUESTION = "what is in version?"
 SECOND = "and again"
 ANSWER = ("The VERSION file holds the release number of Joshua Tree, and the Console wraps this answer "
           "at a space so that every line fits the fifty three columns of a Pi screen.")
-DEFAULT = "Claude Haiku 5.5 $ "    # ask.c's prompt before any answer
+DEFAULT = "Samantha $ "    # ask.c's prompt before any answer (Turing's name)
 SONNET = "Claude Sonnet 5.5 $ "    # after the relay (--model claude-sonnet-5-5) answered
-PROMPT_RE = re.compile(r"Claude(?: [A-Z][a-z]+ \d+\.\d+)? \$ ")
+PROMPT_RE = re.compile(r"(?:Samantha|Claude(?: [A-Z][a-z]+ \d+\.\d+)?) \$ ")
 MARK = "#" * 50   # the answer's last line: denser than any boot line, so a screendump can find it
 STUB = r'''#!/usr/bin/env python3
 import json, os, sys, uuid
@@ -63,6 +66,18 @@ with open(os.environ["STUB_LOG"], "a") as f: f.write(json.dumps({"argv": sys.arg
 sid = sys.argv[sys.argv.index("--resume") + 1] if "--resume" in sys.argv else str(uuid.uuid4())
 print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": os.environ["STUB_ANSWER"], "session_id": sid}))
 '''
+turing_seen = []   # a stub of turing's app/serve.py: POST /v1/chat/completions, the OpenAI chat shape
+class TuringStub(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_POST(self):
+        d = json.loads(self.rfile.read(int(self.headers.get("content-length") or 0)))
+        turing_seen.append([m["content"] for m in d["messages"] if m["role"] == "user"][-1])
+        body = json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": ANSWER + "\n" + MARK}}]}).encode()
+        self.send_response(200); self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(body))); self.end_headers(); self.wfile.write(body)
+turing_srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), TuringStub); turing_srv.daemon_threads = True
+threading.Thread(target=turing_srv.serve_forever, daemon=True).start()
+turing_url = "http://127.0.0.1:%d" % turing_srv.server_address[1]
 fails = []
 def check(name, ok, detail=""):
     print(("  ok: " if ok else "  FAIL: ") + name + (("  (" + detail + ")") if detail and not ok else ""))
@@ -98,14 +113,15 @@ def build(with_token):
     return r.stdout + r.stderr
 
 relay = None
-def start_relay(token):
+def start_relay(token, turing=None):
     global relay
     stop_relay()
     env = dict(base_env, PATH=tmp + "/bin" + os.pathsep + os.environ["PATH"], STUB_LOG=stub_log, STUB_ANSWER=ANSWER + "\n" + MARK,
                CLAUDE_RELAY_TOKEN=token)
     err = open(tmp + "/relay-%d.log" % time.time_ns(), "w+")
     relay = subprocess.Popen([sys.executable, relay_py, "--port", str(port), "--cwd", tmp, "--timeout", "20",
-                              "--model", "claude-sonnet-5-5", *(["--tls-cert", cert, "--tls-key", key] if TLS else [])],
+                              "--model", "claude-sonnet-5-5", *(["--turing", turing] if turing else []),
+                              *(["--tls-cert", cert, "--tls-key", key] if TLS else [])],
                              env=env, stdout=subprocess.DEVNULL, stderr=err)
     for _ in range(100):
         time.sleep(0.05)
@@ -215,7 +231,9 @@ try:
         check("the answer comes back word for word", " ".join(" ".join(lines).split()) == ANSWER + " " + MARK, repr(lines))
         check("it is wrapped to lines of at most 53 columns", len(lines) > 1 and all(len(l) <= 53 for l in lines),
               repr([len(l) for l in lines]))
-        check("the question is echoed after the default prompt, Claude Haiku 5.5 $", DEFAULT + QUESTION + "\n" in out, out[-400:])
+        check("the question is echoed after the default prompt, Samantha $", DEFAULT + QUESTION + "\n" in out, out[-400:])
+        before = out.split("claude: thinking")[0]
+        check("... and no Claude prompt shows before a Claude backend has answered", not re.search(r"Claude[^\n]*\$ ", before), before[-300:])
         check("... and the relay's model line is not printed as part of the answer", "M Claude" not in out)
         c = b.shot()
         dense_a, dense_c = densest_row(a, body), densest_row(c, body)
@@ -240,10 +258,21 @@ try:
               repr([c["argv"][-2:] for c in calls]))
         check("the follow-up is echoed after the model that answered: Claude Sonnet 5.5 $", SONNET + SECOND + "\n" in b.uart(),
               b.uart()[-400:])
+        # Turing: the relay answers as Samantha from a stub serve.py; the prompt must follow the M line back to Samantha
+        n_claude = len(stub_calls())
+        start_relay(TOKEN, turing_url)
+        b.type("turing"); b.key("ret")
+        b.wait_for("claude: thinking", 10, 3); b.wait_for(MARK, 30, 3)
+        out = b.uart()
+        check("turing: the stub serve.py got the question", turing_seen[-1:] == ["turing"], repr(turing_seen))
+        check("turing: its answer prints in the Terminal", " ".join(" ".join(answer_after(out, 3)).split()) == ANSWER + " " + MARK,
+              repr(answer_after(out, 3)) if out.count("claude: thinking") > 3 else out[-300:])
+        check("turing: no claude -p ran", len(stub_calls()) == n_claude)
         # the relay now wants another token
         start_relay(OTHER)
         b.type("hi"); b.key("ret")
         check("a wrong token prints claude: error -401", b.wait_for("claude: error -401", 20), b.uart()[-300:])
+        check("after Turing answered, the prompt reads Samantha $ (ask.c took M Samantha)", DEFAULT + "hi\n" in b.uart().split(MARK)[-1], b.uart()[-300:])
         check("the 401 never ran claude", len(stub_calls()) == 2)
         # the Terminal's own scrollback: five more refusals (3+ lines each) overflow its rows, then Page Up and End
         for k in range(2, 7): b.type("hi"); b.key("ret"); b.wait_for("claude: error -401", 20, k)
@@ -304,7 +333,7 @@ try:
     b = Boot("notoken", True)
     try:
         b.terminal(); b.type("hi"); b.key("ret")
-        check("with no token the prompt is Claude alone", b.wait_for("\nClaude $ hi\n", 10), b.uart()[-300:])
+        check("with no token the prompt is still Samantha $", b.wait_for("\n" + DEFAULT + "hi\n", 10) and not re.search(r"Claude[^\n]*\$ ", b.uart()), b.uart()[-300:])
         check("with no token: claude: no token", b.wait_for("claude: no token", 10), b.uart()[-300:])
     finally:
         b.close()
@@ -315,6 +344,6 @@ finally:
     shutil.rmtree(tmp, ignore_errors=True)
 if fails:
     print("FAIL: %d of the Claude Terminal checks failed" % len(fails)); sys.exit(1)
-print("PASS: the Console takes no input; typed at the ARM Terminal's prompt (Claude Haiku 5.5 $, then the model that answered), the question reaches the relay over virtio-net "
+print("PASS: the Console takes no input; typed at the ARM Terminal's prompt (Samantha $, then the model that answered, Samantha again after Turing), the question reaches the relay over virtio-net "
       "and the stub's answer is printed in the Terminal in 53-column lines, not the Console; a wrong token, no network and "
       "no token each print their own line")

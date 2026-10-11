@@ -38,7 +38,7 @@ Nothing in this list can change a file on the Pi or on the Mac. The relay's prom
 
 ## The relay side
 
-In `--api-key-file` mode the relay keeps the last 24 messages of each session, so a result turn lands in the conversation it belongs to. In `claude -p` mode the session resumes as before. The `SAMANTHA` prompt lists the actions, says when each helps (browse for a live page, calc for sums, status when asked about the Pi), and states the ask-before-changing-files rule.
+In `--turing` and `--api-key-file` mode the relay keeps the last 24 messages of each session, so a result turn lands in the conversation it belongs to. In `claude -p` mode the session resumes as before. The `SAMANTHA` prompt lists the actions, says when each helps (browse for a live page, calc for sums, status when asked about the Pi), and states the ask-before-changing-files rule.
 
 ## Model and effort
 

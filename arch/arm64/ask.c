@@ -1,4 +1,4 @@
-/* Claude in the Terminal. The bottom row of the Terminal window (its dock tile, or F1) is a one-line editor behind a prompt naming the model, `Claude Haiku 5.5 $ `:
+/* Claude in the Terminal. The bottom row of the Terminal window (its dock tile, or F1) is a one-line editor behind a prompt naming the model, `Samantha $ `:
    typed keys land there, Backspace takes one back, Enter runs the line. `browse`, `open N` and `llm` are commands;
    anything else goes to the Claude relay on the Mac (tools/claude-relay/relay.py) as one POST through the shared
    IP stack, HTTPS on the Pi and loopback HTTP by default in QEMU. Everything a command prints goes into the Terminal, above the prompt, wrapped to 53 columns (the house
@@ -62,25 +62,30 @@ int ask_select(unsigned pane) {
     return 1;
 }
 
-/* The prompt names the model that last answered: "Claude Sonnet 5.5 $ ". Before any answer, and whenever the relay
-   cannot be reached, it names the relay's default model (--api-model, Haiku); a build with no relay token says "Claude".
-   tools/checks/relay-api-check.py keeps ASK_DEFAULT_MODEL in step with relay.py's default. */
-#define ASK_DEFAULT_MODEL "Claude Haiku 5.5"
+/* The prompt names the model that last answered: "Samantha $ " for Turing, "Claude Sonnet 5.5 $ " for Claude. Before
+   any answer, and whenever the relay cannot be reached, it names Samantha (the relay's --turing backend), a build with
+   no relay token too. tools/checks/relay-api-check.py keeps ASK_DEFAULT_MODEL in step with relay.py's
+   TURING_NAME. */
+#define ASK_DEFAULT_MODEL "Samantha"
 static char prompt[MODEL_MAX + 16];
 /* "Claude Opus 5.5 high $ ": the model that last answered, else the one /model picked, else the default; the effort
    shows only when it is not the default (/effort, docs/AGENT.md). */
 const char *ask_prompt(void) {   /* main.c draws it on the bottom row */
     unsigned k = 0;
-    const char *m = ac->last_name[0] ? ac->last_name : ac->model_i ? "Claude" : CLAUDE_TOKEN_LEN ? ASK_DEFAULT_MODEL : "Claude";
+    const char *m = ac->last_name[0] ? ac->last_name : ac->model_i ? "Claude" : ASK_DEFAULT_MODEL;
     for (; *m && k < MODEL_MAX; m++) prompt[k++] = *m;
     if (!ac->last_name[0] && ac->model_i) { prompt[k++] = ' '; for (m = models[ac->model_i]; *m; m++) prompt[k++] = *m; }
     if (ac->effort_i != 1) { prompt[k++] = ' '; for (m = efforts[ac->effort_i]; *m; m++) prompt[k++] = *m; }
     prompt[k++] = ' '; prompt[k++] = '$'; prompt[k++] = ' '; prompt[k] = 0;
     return prompt;
 }
-/* The relay's "M <name>" line is network data: only a name that starts "Claude", short, printable ASCII, is used. */
+/* The relay's "M <name>" line is network data: only "Samantha" (Turing) or a short printable name that starts
+   "Claude" is used. */
 static void take_model(const char *s, unsigned n) {
-    if (n < 6 || n > MODEL_MAX || !(s[0] == 'C' && s[1] == 'l' && s[2] == 'a' && s[3] == 'u' && s[4] == 'd' && s[5] == 'e')) return;
+    static const char sam[] = "Samantha";
+    int is_sam = n == sizeof sam - 1;
+    for (unsigned i = 0; is_sam && i < n; i++) is_sam = s[i] == sam[i];
+    if (!is_sam && (n < 6 || n > MODEL_MAX || !(s[0] == 'C' && s[1] == 'l' && s[2] == 'a' && s[3] == 'u' && s[4] == 'd' && s[5] == 'e'))) return;
     for (unsigned i = 0; i < n; i++) if (s[i] < 32 || s[i] > 126) return;
     for (unsigned i = 0; i < n; i++) ac->last_name[i] = s[i];
     ac->last_name[n] = 0;

@@ -19,11 +19,11 @@ Joshua Tree cannot run Claude Code itself. The i386 app defaults to a loopback H
        second line is "M <name of the model that answered>".)
       (or text/plain: the whole body is the prompt, session from the X-Claude-Session header)
 
-    200 text/plain:   S <session uuid>\\nM <model that answered, e.g. Claude Haiku 5.5>\\n<reply text>
+    200 text/plain:   S <session uuid>\\nM <model that answered, e.g. Samantha or Claude Haiku 5.5>\\n<reply text>
     401 no or wrong token          404 any other path        405 not POST
     411 no Content-Length          413 body over the cap     400 bad JSON, empty prompt, bad session
-    429 a request is already running (one at a time)        504 claude ran past --timeout
-    502 claude failed or answered something unreadable
+    429 a request is already running (one at a time)        504 claude (or Turing) ran past --timeout
+    502 claude failed or answered something unreadable, or Turing is not running
 
     POST /api/tts   (same token, same TLS rules)
     Content-Type: application/json      {"text": "..."}      (or text/plain: the body is the text)
@@ -55,6 +55,8 @@ What it locks down, and why:
   - Bodies over --max-body bytes are refused before they are read. One request at a
     time; a second gets 429 instead of queueing. Each run has a hard --timeout, after which
     claude's whole process group is killed.
+  - --turing hands the question to Turing's serve.py, which can answer from Joshua's notes. The token is
+    still the only gate, so anyone holding it can ask Samantha what those notes say.
   - With TLS on (so always with --lan) it also answers the Pi's discovery probe: a 32-byte UDP
     broadcast "JT-RELAY? <8 hex>" to the relay's own port number. The answer is
     "JT-RELAY <port> <the same 8 hex>", shorter than the probe and with nothing secret in it.
@@ -63,9 +65,18 @@ What it locks down, and why:
   - The reply is cut to fit Joshua Tree's 8 KB reply buffer and turned into plain ASCII
     (its fonts have no curly quotes or dashes).
 
+Three backends, picked at start:
+  - default: `claude -p` (headless Claude Code on this user's plan), as above.
+  - --turing [URL]: Samantha, Joshua's own on-device model from the turing repo (its app/serve.py, default
+    http://127.0.0.1:8127). The relay posts the question in the OpenAI chat shape with the session's history and
+    answers "M Samantha", so the Pi's prompt reads "Samantha $ ". No account and no credit. It wins over
+    --api-key-file when both are given. Turing down is a 502 with a plain sentence.
+  - --api-key-file FILE: the Messages API, paid from a Claude Platform credit. It only starts with
+    --allow-api-spend as well, so an old script cannot spend a topped-up credit by accident.
+
 Run it (from the repo root):
     printf '%s' "$(openssl rand -hex 24)" > ~/.claude-relay-token && chmod 600 ~/.claude-relay-token
-    python3 tools/claude-relay/relay.py --token-file ~/.claude-relay-token
+    python3 tools/claude-relay/relay.py --token-file ~/.claude-relay-token --turing   (after app/serve.py in turing)
 Then in Joshua Tree: Settings > Assistant > Claude relay = 10.0.2.2:8765, Claude token = that file's text.
 
 Python standard library only. tools/checks/claude-relay-check.py proves the rules above
@@ -256,6 +267,41 @@ def run_api(cfg, prompt, pi="", history=None, want="auto", effort="medium"):
     return (200, text, display_name(model)) if text else (502, "The API returned no text.", "")
 
 
+TURING_URL = "http://127.0.0.1:8127"   # turing's app/serve.py default
+TURING_NAME = "Samantha"               # the name the Pi's prompt shows for Turing's answers, and ask.c's default
+TURING_DOWN = "Samantha is not running on the relay machine. Start app/serve.py in turing."
+
+
+def run_turing(cfg, prompt, pi="", history=None):
+    """--turing mode: POST the question to Turing's OpenAI-shaped /v1/chat/completions, with the SAMANTHA system text
+    and the session's earlier turns. Today serve.py answers the last user turn with its own persona; the rest rides
+    along for a server that can use it. `history` is extended in place. Returns (status, text)."""
+    system = SAMANTHA + (" Live status of the Pi you run on (ip, clock in UTC seconds since 1970, Wi-Fi bars): " + pi if pi else "")
+    messages = history if history is not None else []
+    messages.append({"role": "user", "content": prompt})
+    del messages[:-API_HISTORY_MAX]
+    body = json.dumps({"model": "samantha", "messages": [{"role": "system", "content": system}] + messages}).encode()
+    req = urllib.request.Request(cfg.turing.rstrip("/") + "/v1/chat/completions", data=body, method="POST",
+                                 headers={"content-type": "application/json"})
+    slow = "Samantha took longer than %d seconds. Try a smaller question." % cfg.timeout
+    try:
+        with urllib.request.urlopen(req, timeout=cfg.timeout) as r:
+            d = json.loads(r.read().decode("utf-8", "replace"))
+        text = d["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError as e:
+        return 502, "Samantha said %d." % e.code
+    except urllib.error.URLError as e:
+        return (504, slow) if isinstance(e.reason, (TimeoutError, socket.timeout)) else (502, TURING_DOWN)
+    except (TimeoutError, socket.timeout):   # not always the same class
+        return 504, slow
+    except OSError:
+        return 502, TURING_DOWN
+    except (ValueError, KeyError, IndexError, TypeError):
+        return 502, "Samantha answered something the relay cannot read."
+    if not isinstance(text, str) or not text.strip(): return 502, "Samantha returned no text."
+    if text.strip() == "UNKNOWN": text = "I don't know that one yet."   # serve.py's word for a decline
+    messages.append({"role": "assistant", "content": text})
+    return 200, text
 class TtsError(Exception):
     """A refusal or failure with a status and a fixed message. Never carries upstream text or the key."""
     def __init__(self, status, msg): super().__init__(msg); self.status, self.msg = status, msg
@@ -352,12 +398,16 @@ class Relay:
 
     def run_claude(self, prompt, session, pi="", model="auto", effort="medium"):
         """Returns (status, text). Kills claude's whole process group past the timeout."""
-        if self.cfg.api_key_file:
+        if self.cfg.turing or self.cfg.api_key_file:   # Turing wins when both are given
             if not session:
                 session = str(uuid.uuid4())
                 if len(self.sessions) >= SESSIONS_MAX: self.sessions.clear(); self.api_history.clear()
                 self.sessions.add(session)
-            status, text, name = run_api(self.cfg, prompt, pi, self.api_history.setdefault(session, []), model, effort)
+            history = self.api_history.setdefault(session, [])
+            if self.cfg.turing:   # model and effort are Claude knobs; Turing has one model
+                (status, text), name = run_turing(self.cfg, prompt, pi, history), TURING_NAME
+            else:
+                status, text, name = run_api(self.cfg, prompt, pi, history, model, effort)
             return status, ("S %s\nM %s\n%s" % (session, name, text)) if status == 200 else text
         p = subprocess.Popen(claude_argv(self.cfg, session, model), cwd=self.cfg.cwd, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
@@ -523,7 +573,10 @@ def main(argv=None):
     ap.add_argument("--max-body", type=int, default=DEFAULT_MAX_BODY, help="largest request body, bytes")
     ap.add_argument("--claude", default="claude", help="the claude executable")
     ap.add_argument("--model", default="", help="optional --model for claude")
-    ap.add_argument("--api-key-file", default="", help="answer with the Messages API as Samantha (Claude Platform credit) instead of claude -p")
+    ap.add_argument("--turing", nargs="?", const=TURING_URL, default="", metavar="URL",
+                    help="answer as Samantha from Turing's app/serve.py (default %s); wins over --api-key-file" % TURING_URL)
+    ap.add_argument("--api-key-file", default="", help="answer with the Messages API (Claude Platform credit) instead of claude -p; needs --allow-api-spend")
+    ap.add_argument("--allow-api-spend", action="store_true", help="let --api-key-file spend the Claude Platform credit")
     ap.add_argument("--api-model", default="claude-haiku-5-5", help="cheap model for short questions in --api-key-file mode")
     ap.add_argument("--api-model-top", default="claude-opus-5-5", help="strongest model, for design, proofs and security questions")
     ap.add_argument("--api-model-hard", default="claude-sonnet-5-5", help="stronger model for long or hard questions")
@@ -539,6 +592,9 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if bool(args.tls_cert) != bool(args.tls_key): ap.error("--tls-cert and --tls-key must be supplied together")
     if args.lan and not args.tls_cert: ap.error("--lan requires --tls-cert and --tls-key; refusing a cleartext bearer")
+    if args.api_key_file and not args.allow_api_spend:
+        ap.error("--api-key-file spends the Claude Platform credit; refusing to start without --allow-api-spend (or use --turing)")
+    if args.turing and not re.match(r"^https?://[^/\s]+", args.turing): ap.error("--turing takes an http:// or https:// URL")
     if not VOICE_RE.match(args.tts_voice): ap.error("--tts-voice must be 10 to 40 letters and digits")
     if not re.match(r"^[A-Za-z0-9_.-]{1,64}$", args.tts_model): ap.error("--tts-model has odd characters")
     if args.tts_max_chars < 1 or args.tts_daily_chars < 1: ap.error("the voice caps must be at least 1")
@@ -568,9 +624,10 @@ def main(argv=None):
         # Handshake in the handler thread, so one slow peer cannot block accept().
         srv.socket = context.wrap_socket(srv.socket, server_side=True, do_handshake_on_connect=False)
     srv.daemon_threads = True
+    backend = "turing " + args.turing if args.turing else "api" if args.api_key_file else "claude -p"
     if context: answer_probes(host, srv.server_address[1])
-    sys.stderr.write("claude-relay: listening on %s:%d, cwd %s, tools %s, timeout %ds%s\n"
-                     % (host, srv.server_address[1], args.cwd, ",".join(args.tools), args.timeout,
+    sys.stderr.write("claude-relay: listening on %s:%d, cwd %s, tools %s, timeout %ds, backend %s%s\n"
+                     % (host, srv.server_address[1], args.cwd, ",".join(args.tools), args.timeout, backend,
                         ", answering discovery" if context else ""))
     sys.stderr.flush()
     try: srv.serve_forever()
