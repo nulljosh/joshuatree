@@ -39,6 +39,18 @@ Joshua has no USB mouse, only a Bluetooth one: the Incase version of the Microso
 1. BT1: HCI over the PL011 at the chip's rate, the BCM4345C0 `.hcd` patch loaded with the vendor download commands (vendored like the Wi-Fi firmware, licence noted in `docs/hardware/LICENSE-NOTICE.md`), HCI reset and read local version, LE scan, and `bt scan` printing what it hears. Check: a Python fake controller answers the scripted HCI and advertises a mouse.
 2. BT2: LE connect, SMP Just Works pairing and bonding (keys kept in RAM until SD writes land, so re-pair after a reboot), GATT discovery of the HID service, report notifications on, boot mouse reports into the existing pointer (`input_event` with REL_X, REL_Y, BTN_LEFT). Check: the fake controller sends reports and the cursor moves and clicks under QEMU.
 
+## Driver queue (Joshua, 2026-10-11: "loop over those until we have full support")
+
+On the board today: HDMI framebuffer, USB keyboard and (in QEMU) mouse over xHCI, Wi-Fi over SDIO with WPA2, DHCP, DNS, TCP and TLS, the network clock, the RNG, the green light, reboot and shutdown through the PM block, and 3.5 mm sound (#506). What the box still needs, in the order the loop takes them, one agent and one PR each, every one with a QEMU check and a board test line:
+
+1. Bluetooth, BT1 then BT2 (above): the mouse.
+2. SD card through EMMC2, read then write, so files and settings survive a reboot and the local model's weights can load from the card. This is the "files that stay" third of 3.0. Reference: Circle's `lib/sdcard` and the BCM2711 EMMC2 register map; QEMU's raspi4b has an SD controller for the check.
+3. USB audio class over xHCI (the first isochronous transfers): the Yeti mic in, a USB speaker out. Needed for voice in (5.0) and the box's mic.
+4. PWM audio by DMA (the polled FIFO stalls the desktop on long sounds), then HDMI audio.
+5. USB mass storage (bulk only), as the second way to keep files.
+6. SoC temperature and throttle readout from the mailbox, with a notice; Ethernet through the Genet MAC as the wired backup.
+7. Touch (USB touchscreen first, DSI later), the camera over CSI, the V3D GPU: 4.0 and after.
+
 ## This week
 
 - Reflash the card from a merged build with the LAN relay and TLS (`RELAY-TLS.md`), so Samantha answers on the board.
