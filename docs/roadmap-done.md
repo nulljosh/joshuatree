@@ -1,5 +1,8 @@
 # Joshua Tree roadmap: done
 
+## 2.43.0 development branch (2026-10-11)
+
+The Pi can make sound. `beep` (or `beep 880 500`) in the Terminal plays a quiet tone out of the 3.5 mm jack: GPIO 40 and 41 go to PWM1, the PWM clock is set through the clock manager, and a ring buffer feeds the PWM FIFO by hand, with no DMA yet. Every hardware wait gives up and prints one line; nothing touches the jack or the green light at boot. `tools/checks/arm64-audio-check.py` proves the tone reaches the ring (checksum matches a tone computed in Python), the FIFO order and scaling on a fake PWM, and that stuck hardware cannot hang it. QEMU has no PWM, so the jack itself is unverified until Joshua tests the real board.
 ## 2.42.0 development branch (2026-10-11)
 
 The Samantha box: a printable desk case for a 7 inch HDMI screen, a Pi 4B, a round speaker and a mic hole, built by `docs/hardware/samantha_cad.py` with a stand that leans it back and a fit-test frame to print first. The screen, speaker and board numbers are stand-ins until the parts are in hand, and nothing has been printed. Checked by the script's own asserts (the tallest port clears the screen, the Pi stays inside the walls, the speaker leaves the card a channel).
