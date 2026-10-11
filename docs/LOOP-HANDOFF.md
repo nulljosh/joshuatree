@@ -52,6 +52,7 @@ Today one EL0 test program writes and exits over `svc` (`arch/arm64/user.S`, `to
 
 ## Rules in force
 
+- Graphs stay current (Joshua, 2026-10-11). After each MINOR merge, regenerate `progress.svg` (`tools/gen/progress.sh`), `docs/memory-map.svg` (`tools/gen/memory-map.py`, needs `make kernel.elf`) and `architecture.svg` (`tools/gen/map.py`, after the other two) and ship them in the next code PR or a `.1` patch; an SVG is not prose, so the bump check wants a version.
 - Benchmarks stay current (Joshua, 2026-10-11). `docs/BENCHMARKS.md` and the README table are at 2.30.6; before each MINOR cut, rerun `tools/bench.sh` on a quiet Mac (no CI running) and paste both tables, and refresh the Pi table from the board (`[[bench]]` through Samantha today; a plain `bench` command in `arch/arm64/cmd.c` is the next small slice so it needs no relay).
 - One `tools/ci-local.sh` at a time. No Blender or other heavy job while it runs (it made frametime-check flaky once).
 - PRs open as drafts and go ready only on a green local gate. Joshua authorised merging on green for this loop.
