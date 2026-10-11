@@ -2,9 +2,9 @@
 #define FAT_H
 /* FAT16, single fixed volume on the ATA primary master starting at sector 0
    (no partition table yet -- QEMU's raw disk image is the whole filesystem).
-   FAT32 mounts read only: the Pi's boot partition, through arch/arm64/emmc.c,
-   whose blockdev sector 0 is the partition's first sector; every write call
-   returns 0 on it. Call fat_mount() once at boot before any other fat_* call. Every fat_*
+   FAT32 too (2.53.0 reads, 2.57.0 writes): the Pi's boot partition, through
+   arch/arm64/emmc.c, whose blockdev sector 0 is the partition's first sector.
+   Call fat_mount() once at boot before any other fat_* call. Every fat_*
    call below operates on the current directory, root at mount time, moved
    by fat_chdir(). No long filenames -- 8.3 names exactly as FAT stores
    them. */
@@ -19,11 +19,10 @@ int fat_read_file(const char *name_8_3, void *buf, unsigned int bufsize);
    for each one ("." and ".." excluded). */
 void fat_list(void (*cb)(const char *name, unsigned int size, int is_dir));
 
-/* Marks the named file's directory entry deleted (0xE5) and writes that
-   sector back. Returns 1 on success, 0 if the file wasn't found or is a
-   directory. Doesn't free its clusters in the FAT -- ponytail: no
-   free-space reclaim yet, just enough to make a file stop showing up in
-   ls/cat. */
+/* Marks the named file's directory entry deleted (0xE5), writes that
+   sector back, then frees its clusters in the FAT (2.57.0; before, they
+   stayed allocated and fsck called them lost). Returns 1 on success, 0 if
+   the file wasn't found or is a directory. */
 int fat_delete(const char *name);
 
 /* Moves the current directory to the named subdirectory, ".." (parent,

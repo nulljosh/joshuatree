@@ -16,6 +16,8 @@
 #   calctest    calc-kernel8.elf: the Calculator open at boot with four sums typed into it
 #   caltest     cal-kernel8.elf: the clock fixed at CAL_UTC, so the Calendar tile shows that month with that day in the accent
 #   sdtest      sd-kernel8.img: the Terminal's ls and cat run at boot on the check's card, then a read past the card's end
+#   sdwtest     sdw-kernel8.img writes, replaces and deletes files in JT/ at boot and tries the boot files (refused), then a
+#               CMD25 at the card's end; sdr-kernel8.img, booted next on the same card, reads them back and deletes them
 # The Console's ask> prompt asks the Claude relay. claude_cfg.sh writes its address and token (gitignored) on every build
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token), but only when
 # JT_WIFI_DEV=1 (tools/flash-pi.sh) or CLAUDE_RELAY_TOKEN_FILE is set explicitly (the checks); a release build has neither.
@@ -113,8 +115,9 @@ gui_paint.o: ../../kernel/gui_paint.c ../../kernel/gui_paint.h ../../kernel/dock
 	$(CC) $(SHARED) -c $< -o $@
 dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 	$(CC) $(SHARED) -c $< -o $@
-# The SD card: emmc.c (EMMC2 on the Pi, stubs on virt) and the i386 kernel's own FAT code, drivers/fat.c, reading through
-# emmc.c's blockdev_read_sector. -mstrict-align, as for drivers/net.c. The Pi mounts the card read only.
+# The SD card: emmc.c (EMMC2 on the Pi, stubs on virt) and the i386 kernel's own FAT code, drivers/fat.c, reading and
+# writing through emmc.c's blockdev_read_sector and blockdev_write_sector. -mstrict-align, as for drivers/net.c.
+# The Pi writes only inside the card's JT folder, never a boot file.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
 SDOBJ = emmc.o fat.o
 PISDOBJ = pi-emmc.o fat.o
@@ -242,8 +245,11 @@ calctest: calc-kernel8.elf
 CAL_UTC ?= 1775000000
 $(eval $(call variant,cal,-DCAL_TEST_UTC=$(CAL_UTC)UL,,))
 caltest: cal-kernel8.elf
-$(eval $(call variant,sd,-DSD_SELFTEST,,))
+$(eval $(call variant,sd,-DSD_SELFTEST=1,,))
 sdtest: sd-kernel8.img
+$(eval $(call variant,sdw,-DSD_SELFTEST=2,,))
+$(eval $(call variant,sdr,-DSD_SELFTEST=3,,))
+sdwtest: sdw-kernel8.img sdr-kernel8.img
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
 run-pi: kernel8.img
@@ -251,7 +257,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest sdtest
+.PHONY: wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest sdtest sdwtest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))

@@ -2458,19 +2458,47 @@ void main(void) {
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
-#ifdef SD_SELFTEST   /* the sdtest build (arm64-sd-check.py): the Terminal's ls and cat on the check's own card, and two reads that must be refused */
+#ifdef SD_SELFTEST   /* the sd builds (arm64-sd-check.py) run the Terminal's own commands at boot on the check's card */
     {
         void cmd_run(const char *q, unsigned n, void (*out)(const char *));
-        int emmc_read(unsigned lba, unsigned count, void *buf); unsigned long emmc_blocks(void);
+        int emmc_read(unsigned lba, unsigned count, void *buf); int emmc_write(unsigned lba, unsigned count, const void *buf);
+        unsigned long emmc_blocks(void); int blockdev_write_sector(unsigned lba, const void *buf);
+        static char chain[1040] = "write CHAIN.TXT ";   /* 1020 digits: two one-sector clusters, linked */
+        for (unsigned i = 0; i < 1020; i++) chain[16 + i] = (char)('0' + i % 10);
+#if SD_SELFTEST == 1   /* sdtest: ls and cat, then two reads that must be refused */
         static const char *const line[] = { "ls", "cat config.txt", "cat BIG.TXT", "cat BAD.TXT", "cat NOPE.TXT" };
-        static unsigned char past[512];
+#elif SD_SELFTEST == 2   /* sdwtest: write, replace, delete, a folder, a chain and the refusals, then read it back */
+        static const char *const line[] = { "cat JT/NOTE.TXT", "write NOTE.TXT the first line", "write NOTE.TXT it survives a reboot",
+                                            "write GONE.TXT bye", "rm GONE.TXT", "mkdir LOGS", chain, "write config.txt hello",
+                                            "write kernel8.img x", "write ../config.txt x", "rm start4.elf", "mkdir overlays",
+                                            "ls JT", "cat JT/NOTE.TXT", "cat JT/GONE.TXT" };
+#else   /* sdrtest: the same card after a reboot */
+        static const char *const line[] = { "cat JT/NOTE.TXT", "rm NOTE.TXT", "rm CHAIN.TXT", "cat JT/NOTE.TXT", "ls JT" };
+#endif
         for (unsigned i = 0; i < sizeof line / sizeof line[0]; i++) {
             unsigned n = 0; while (line[i][n]) n++;
-            uart_puts("sdtest> "); uart_puts(line[i]); uart_puts("\n");
+            uart_puts("sdtest> "); uart_puts(line[i] == chain ? "write CHAIN.TXT (1020 digits)" : line[i]); uart_puts("\n");
             cmd_run(line[i], n, 0);
         }
+        static unsigned char blk[4096], back[4096];
+        unsigned last = (unsigned)emmc_blocks();
+#if SD_SELFTEST == 1
         uart_puts("sdtest> read past the card\n");
-        emmc_read((unsigned)emmc_blocks(), 1, past);
+        emmc_read(last, 1, blk);
+#elif SD_SELFTEST == 2   /* CMD25: eight blocks at the card's very end, past the partition, only on the check's own card */
+        uart_puts("sdtest> write past the card, and the boot sector\n");
+        emmc_write(last, 1, blk);
+        blockdev_write_sector(0, blk);
+        uart_puts("sdtest> multi-block write\n");
+        if (!emmc_read(2048, 1, blk) || blk[3] != 'J' || blk[4] != 'T' || blk[5] != 'C' || blk[6] != 'H') uart_puts("sdtest not the check's card, no raw write\n");
+        else {
+            for (unsigned i = 0; i < sizeof blk; i++) blk[i] = (unsigned char)(i * 7 + (i >> 9));
+            int ok = emmc_write(last - 8, 8, blk) && emmc_read(last - 8, 8, back);
+            for (unsigned i = 0; ok && i < sizeof blk; i++) if (back[i] != blk[i]) ok = 0;
+            uart_puts(ok ? "sdtest multi-block write ok\n" : "sdtest multi-block write FAIL\n");
+        }
+#endif
+        (void)last; (void)back;
         uart_puts("sdtest done\n");
     }
 #endif

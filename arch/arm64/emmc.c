@@ -4,12 +4,15 @@
    Bring-up: reset the host, bus power on at 3.3 V, the base clock from the firmware, 400 kHz, CMD0, CMD8 (a version 2
    card echoes 0x1AA), ACMD41 with HCS until the card is ready (its CCS bit then says SDHC or SDXC, block addressed),
    CMD2, CMD3, CMD9 (the size), CMD7, CMD16 512, then 25 MHz on a 1-bit bus. Reads are polled PIO, 32 bits at a time:
-   CMD17 for one block, CMD18 with Auto CMD12 for more. Every wait ends on the generic counter (never `ticks`), and any
-   failure prints one `sd ...` line and returns, so the boot carries on.
-   Then the MBR's first FAT partition is mounted through drivers/fat.c, the i386 kernel's own FAT code, which reads
-   through blockdev_read_sector below: sector numbers inside the partition, refused past its end. Read only for now:
-   blockdev_write_sector says no, and fat.c refuses every write on FAT32. QEMU's raspi4b models EMMC2 at the same
-   address; tools/checks/arm64-sd-check.py plugs a card into it. */
+   CMD17 for one block, CMD18 with Auto CMD12 for more. Writes (2.57.0) are the same shape the other way: CMD24 for one
+   block, CMD25 with Auto CMD12 for more, then a wait while the card is busy programming (transfer done, then CMD13
+   until it is back in the transfer state). Every wait ends on the generic counter (never `ticks`), and any failure
+   prints one `sd ...` line and returns, so the boot carries on.
+   Then the MBR's first FAT partition is mounted through drivers/fat.c, the i386 kernel's own FAT code, which reads and
+   writes through blockdev_read_sector and blockdev_write_sector below: sector numbers inside the partition, refused
+   past its end, and a write never lands on its boot sectors. The OS's own files go in a JT folder (sd_write, sd_remove,
+   sd_mkdir), and no name the firmware boots from is ever written. QEMU's raspi4b models EMMC2 at the same address;
+   tools/checks/arm64-sd-check.py plugs a card into it. */
 #include "emmc.h"
 struct vfs_ops;
 void vfs_register(const char *name, const struct vfs_ops *ops) { (void)name; (void)ops; }   /* fat_vfs_register's call: ARM has no VFS yet, cmd.c calls fat_* itself */
@@ -27,7 +30,7 @@ unsigned mbox_clock_rate(unsigned id);   /* main.c: a firmware clock's rate in H
 #define STATE   0x24   /* bit 0 command inhibit, bit 1 data inhibit */
 #define CTL0    0x28   /* host control (bus width, speed) and power: bit 8 on, 11:9 the voltage, 7 is 3.3 V */
 #define CTL1    0x2C   /* clock (15:0), data timeout (19:16), software resets (26:24) */
-#define INT     0x30   /* bit 0 command done, 1 transfer done, 5 read ready, 15 any error */
+#define INT     0x30   /* bit 0 command done, 1 transfer done, 4 write ready, 5 read ready, 15 any error */
 #define INTMASK 0x34
 #define INTEN   0x38
 #define CTL2    0x3C
@@ -163,19 +166,52 @@ bad:
     kputs("\n");
     return 0;
 }
+int emmc_write(unsigned lba, unsigned count, const void *buf) {
+    const unsigned char *p = buf;
+    if (!ready || !count || count > 0xFFFF) return 0;
+    if (lba >= blocks || count > blocks - lba) { kputs("sd refused write to block "); kdec(lba); kputs(", past the end of the card\n"); return 0; }
+    R32(EMMC + BLK) = count << 16 | 512;
+    if (!cmd(count > 1 ? 25 : 24, sdhc ? lba : lba * 512, R1 | DAT, count > 1 ? TM_MULTI : 0)) goto bad;
+    for (unsigned b = 0; b < count; b++, p += 512) {
+        if (!wait_int(0x10, 500)) goto bad;      /* write ready: room in the buffer for one block */
+        for (unsigned i = 0; i < 512; i += 4)     /* byte loads: the caller's buffer may be unaligned */
+            R32(EMMC + DATA) = p[i] | p[i + 1] << 8 | p[i + 2] << 16 | (unsigned)p[i + 3] << 24;
+    }
+    if (!wait_int(2, 1000)) goto bad;            /* transfer done: the host saw the card let go of DAT0 (and sent the CMD12 on a CMD25) */
+    unsigned long t0 = now(), d = ms(1000);
+    for (;;) {                                   /* CMD13 until the card is back in the transfer state, done programming */
+        if (!cmd(13, rca << 16, R1, 0)) goto bad;
+        if (resp[0] & 0xFDF80000u) { last_int = 0; kputs("sd FAIL write status "); kx(resp[0]); kputs("\n"); return 0; }
+        if ((resp[0] >> 9 & 15) == 4 && resp[0] & 0x100) return 1;
+        if (now() - t0 > d) goto bad;
+    }
+bad:
+    recover();
+    kputs("sd FAIL write block "); kdec(lba);
+    if (last_int) { kputs(" int "); kx(last_int); }
+    kputs("\n");
+    return 0;
+}
 
 /* ---- The FAT partition, as drivers/fat.c's block device ---- */
 static unsigned part_start, part_blocks;   /* in card blocks */
+static unsigned part_reserved, part_fsinfo;   /* the boot sectors fat.c never writes, and the one it may (FAT32's FSInfo) */
 static int mounted;
 int blockdev_read_sector(unsigned int lba, void *buf) {   /* fat.c's only way to the card: sector numbers inside the partition */
     if (lba >= part_blocks) { kputs("sd refused block "); kdec(lba); kputs(", past the end of the partition\n"); return 0; }
     return emmc_read(part_start + lba, 1, buf);
 }
-int blockdev_write_sector(unsigned int lba, const void *buf) { (void)lba; (void)buf; return 0; }   /* read only until the write slice */
+int blockdev_write_sector(unsigned int lba, const void *buf) {   /* the same bound, and never the boot sector or its backup */
+    if (lba >= part_blocks || (lba < part_reserved && lba != part_fsinfo)) {
+        kputs("sd refused write to block "); kdec(lba); kputs(lba >= part_blocks ? ", past the end of the partition\n" : ", a boot sector\n");
+        return 0;
+    }
+    return emmc_write(part_start + lba, 1, buf);
+}
 static unsigned rd32(const unsigned char *p) { return p[0] | p[1] << 8 | p[2] << 16 | (unsigned)p[3] << 24; }
 int sd_mount(void) {
     static unsigned char b[1024];
-    mounted = 0; part_blocks = 0;
+    mounted = 0; part_blocks = 0; part_reserved = 0xFFFFFFFFu;
     if (!emmc_init() || !emmc_read(0, 1, b)) return 0;
     if (b[510] != 0x55 || b[511] != 0xAA) { kputs("sd no partition table\n"); return 0; }
     unsigned start = 0, size = 0;
@@ -190,20 +226,82 @@ int sd_mount(void) {
     int f32 = !(b[22] | b[23]);
     if (f32 && b[48] == 1 && !b[49] && rd32(b + 512) != 0x41615252) { kputs("sd FAIL second block of a CMD18 (no FSInfo)\n"); return 0; }
     part_start = start; part_blocks = size;
+    part_reserved = b[14] | b[15] << 8;
+    part_fsinfo = f32 ? (unsigned)(b[48] | b[49] << 8) : 0xFFFFFFFFu;
+    if (!part_fsinfo) part_fsinfo = 0xFFFFFFFFu;  /* sector 0 is the boot sector, never FSInfo */
     if (!fat_mount()) { part_blocks = 0; kputs("sd FAIL fat mount\n"); return 0; }
     mounted = 1;
     kputs("sd "); kputs(f32 ? "fat32" : "fat16"); kputs(" partition at block "); kdec(start);
-    kputs(", "); kdec(size / 2048); kputs(" MB, read only\n");
+    kputs(", "); kdec(size / 2048); kputs(" MB, writes go in JT/\n");
     return 1;
 }
 int sd_ready(void) { return mounted; }
+
+/* ---- The OS's own files: JT/NAME, never a file the firmware needs ---- */
+static int lc(int c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }
+static int match(const char *p, const char *s) {   /* p may hold one '*', any run of characters; case does not matter */
+    for (; *p && *p != '*'; p++, s++) if (lc(*p) != lc(*s)) return 0;
+    if (!*p) return !*s;
+    unsigned np = 0, ns = 0;
+    while (p[1 + np]) np++;
+    while (s[ns]) ns++;
+    return ns >= np && match(p + 1, s + ns - np);
+}
+static const char *const boot_files[] = { "bootcode.bin", "start*.elf", "fixup*.dat", "*.dtb", "config.txt", "cmdline.txt",
+                                          "kernel*.img", "armstub*", "overlays" };
+static int sd_name_ok(const char *name) {   /* 1 for an 8.3 name that is not a boot file; else one `sd refused` line */
+    unsigned base = 0, ext = 0, dot = 0;
+    for (const char *c = name; *c; c++) {
+        int ok = (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '_' || *c == '-' || *c == '~';
+        if (*c == '.' && !dot) dot = 1;
+        else if (!ok) { base = 99; break; }
+        else if (dot) ext++;
+        else base++;
+    }
+    if (!base || base > 8 || ext > 3 || (dot && !ext)) { kputs("sd refused "); kputs(name); kputs(", not an 8.3 name\n"); return 0; }
+    for (unsigned i = 0; i < sizeof boot_files / sizeof boot_files[0]; i++)
+        if (match(boot_files[i], name)) { kputs("sd refused "); kputs(name); kputs(", the firmware boots from it\n"); return 0; }
+    return 1;
+}
+static int jt_open(int make) {   /* into JT/, made on the first write; fat.c works on its current directory */
+    if (fat_chdir("JT")) return 1;
+    return make && fat_mkdir("JT") && fat_chdir("JT");
+}
+int sd_write(const char *name, const void *data, unsigned len) {
+    if (!mounted) return 0;
+    if (!sd_name_ok(name)) return -1;
+    if (!jt_open(1)) return 0;
+    int ok = fat_replace_file(name, data, len);   /* creates it too */
+    fat_chdir("..");
+    return ok;
+}
+int sd_remove(const char *name) {
+    if (!mounted) return 0;
+    if (!sd_name_ok(name)) return -1;
+    if (!jt_open(0)) return 0;
+    int ok = fat_delete(name);
+    fat_chdir("..");
+    return ok;
+}
+int sd_mkdir(const char *name) {
+    if (!mounted) return 0;
+    if (!sd_name_ok(name)) return -1;
+    if (!jt_open(1)) return 0;
+    int ok = fat_mkdir(name);
+    fat_chdir("..");
+    return ok;
+}
 #else
 /* QEMU's virt machine has no SD host: no card, and fat.c's reads all fail. */
 int emmc_init(void) { return 0; }
 unsigned long emmc_blocks(void) { return 0; }
 int emmc_read(unsigned lba, unsigned count, void *buf) { (void)lba; (void)count; (void)buf; return 0; }
+int emmc_write(unsigned lba, unsigned count, const void *buf) { (void)lba; (void)count; (void)buf; return 0; }
 int blockdev_read_sector(unsigned int lba, void *buf) { (void)lba; (void)buf; return 0; }
 int blockdev_write_sector(unsigned int lba, const void *buf) { (void)lba; (void)buf; return 0; }
 int sd_mount(void) { return 0; }
 int sd_ready(void) { return 0; }
+int sd_write(const char *name, const void *data, unsigned len) { (void)name; (void)data; (void)len; return 0; }
+int sd_remove(const char *name) { (void)name; return 0; }
+int sd_mkdir(const char *name) { (void)name; return 0; }
 #endif
