@@ -92,7 +92,7 @@ def run(name, qemu_args, image, size=(800, 600)):
 
 run("virt ramfb", ["-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-device", "ramfb"], "crash-kernel8.elf")
 if "raspi4b" in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capture_output=True, text=True).stdout:
-    run("pi mailbox", ["-machine", "raspi4b"], "crash-kernel8.img")
+    run("pi mailbox", ["-machine", "raspi4b", "-serial", "null"], "crash-kernel8.img")
 else:
     print("  QEMU here has no raspi4b model (needs QEMU 9 or newer), Pi crash screen skipped")
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True)

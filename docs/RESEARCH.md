@@ -2,6 +2,10 @@
 
 **From memory, not checked online.** Written without web access, from what the author remembers of each project. Treat every line as a lead to verify, not a fact. No numbers about other projects are given on purpose.
 
+## 2026-10-11: the gap study
+
+Question: what do comparable projects do for usability, stability and polish that Joshua Tree does not, and which of it matters before 5.0? Method: five research agents (SerenityOS, Haiku, Circle, Omarchy, Apple's public iOS guidelines), each told to check every claim against this tree with a path and line before reporting; then the top nine gaps each went to a skeptic told to refute. Result: 48 findings, 2 confirmed, 7 refuted with reasons, 39 ranked but not re-checked. The confirmed two and the ranked list are in `roadmap.md` under "From the gap study". What the skeptics taught: a welcome card would hide the boot log that thirty checks read; "already have it" was the most common refutation, so the check-against-the-tree step is the one that earns its cost.
+
 ## The projects
 
 One line each: what it does well that Joshua Tree does not yet.

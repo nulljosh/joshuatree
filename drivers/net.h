@@ -50,6 +50,13 @@ int arp_resolve(unsigned int ip, unsigned char mac_out[6]);
 int udp_send(unsigned int dest_ip, unsigned short dest_port, unsigned short src_port,
              const void *data, unsigned int len);
 
+/* Broadcasts one UDP datagram to port on our subnet (dest MAC ff:ff:ff:ff:ff:ff, DHCP's frame path) and waits up
+   to wait_ticks for the first datagram back from that port to src_port. Copies at most max bytes into reply and the
+   sender into *from_ip; returns the length, -1 on a failed send or no reply. Untrusted: the Pi's relay discovery
+   (arch/arm64/ask.c) uses only the address, and TLS decides whether it is the relay. */
+int udp_broadcast_ask(unsigned short port, unsigned short src_port, const void *probe, unsigned int len,
+                      void *reply, unsigned int max, unsigned int *from_ip, unsigned int wait_ticks);
+
 /* Resolves hostname to an IPv4 address via a single-question A-record query
    to dns_server_ip (e.g. QEMU SLIRP's built-in resolver at 10.0.2.3), which
    forwards to whatever the host machine actually uses. Returns 1 and fills

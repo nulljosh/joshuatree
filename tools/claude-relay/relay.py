@@ -19,11 +19,19 @@ Joshua Tree cannot run Claude Code itself. The i386 app defaults to a loopback H
        second line is "M <name of the model that answered>".)
       (or text/plain: the whole body is the prompt, session from the X-Claude-Session header)
 
-    200 text/plain:   S <session uuid>\\nM <model that answered, e.g. Claude Haiku 5.5>\\n<reply text>
+    200 text/plain:   S <session uuid>\\nM <model that answered, e.g. Samantha or Claude Haiku 5.5>\\n<reply text>
     401 no or wrong token          404 any other path        405 not POST
     411 no Content-Length          413 body over the cap     400 bad JSON, empty prompt, bad session
-    429 a request is already running (one at a time)        504 claude ran past --timeout
-    502 claude failed or answered something unreadable
+    429 a request is already running (one at a time)        504 claude (or Turing) ran past --timeout
+    502 claude failed or answered something unreadable, or Turing is not running
+
+    POST /api/tts   (same token, same TLS rules)
+    Content-Type: application/json      {"text": "..."}      (or text/plain: the body is the text)
+    200 application/octet-stream: raw PCM, signed 16-bit little-endian, mono, 22050 Hz (ElevenLabs pcm_22050).
+        The header X-Sample-Rate says 22050. No WAV header.
+    413 text over the per-request character cap     429 the per-day cap is used up, or a voice request is running
+    400 empty text or bad JSON     503 no private key file     502 ElevenLabs failed (no detail is passed on)
+    The ElevenLabs key lives in a private file on this Mac (--tts-key-file) and is never in a request, a reply or a log.
 
 What it locks down, and why:
   - Binds 127.0.0.1 unless --lan is given. QEMU's user network reaches the host's loopback
@@ -47,18 +55,34 @@ What it locks down, and why:
   - Bodies over --max-body bytes are refused before they are read. One request at a
     time; a second gets 429 instead of queueing. Each run has a hard --timeout, after which
     claude's whole process group is killed.
+  - --turing hands the question to Turing's serve.py, which can answer from Joshua's notes. The token is
+    still the only gate, so anyone holding it can ask Samantha what those notes say.
+  - With TLS on (so always with --lan) it also answers the Pi's discovery probe: a 32-byte UDP
+    broadcast "JT-RELAY? <8 hex>" to the relay's own port number. The answer is
+    "JT-RELAY <port> <the same 8 hex>", shorter than the probe and with nothing secret in it.
+    The Pi only learns where to try; the certificate (DNS:jt-relay, signed by the private CA)
+    decides whether it is talking to this relay, so the Mac's address can change freely.
   - The reply is cut to fit Joshua Tree's 8 KB reply buffer and turned into plain ASCII
     (its fonts have no curly quotes or dashes).
 
+Three backends, picked at start:
+  - default: `claude -p` (headless Claude Code on this user's plan), as above.
+  - --turing [URL]: Samantha, Joshua's own on-device model from the turing repo (its app/serve.py, default
+    http://127.0.0.1:8127). The relay posts the question in the OpenAI chat shape with the session's history and
+    answers "M Samantha", so the Pi's prompt reads "Samantha $ ". No account and no credit. It wins over
+    --api-key-file when both are given. Turing down is a 502 with a plain sentence.
+  - --api-key-file FILE: the Messages API, paid from a Claude Platform credit. It only starts with
+    --allow-api-spend as well, so an old script cannot spend a topped-up credit by accident.
+
 Run it (from the repo root):
     printf '%s' "$(openssl rand -hex 24)" > ~/.claude-relay-token && chmod 600 ~/.claude-relay-token
-    python3 tools/claude-relay/relay.py --token-file ~/.claude-relay-token
+    python3 tools/claude-relay/relay.py --token-file ~/.claude-relay-token --turing   (after app/serve.py in turing)
 Then in Joshua Tree: Settings > Assistant > Claude relay = 10.0.2.2:8765, Claude token = that file's text.
 
 Python standard library only. tools/checks/claude-relay-check.py proves the rules above
 against a stub `claude`.
 """
-import argparse, hmac, http.server, json, os, re, signal, ssl, stat, subprocess, sys, threading, time, urllib.request, urllib.error, uuid
+import argparse, hmac, http.server, json, os, re, signal, socket, ssl, stat, subprocess, sys, threading, time, urllib.request, urllib.error, urllib.parse, uuid
 
 DEFAULT_PORT = 8765
 DEFAULT_TIMEOUT = 150          # seconds; the kernel waits up to 240 s (JT_HTTP_POST_TICKS_CLAUDE), so the relay's 504 lands first
@@ -66,6 +90,15 @@ DEFAULT_MAX_BODY = 4096        # the app's prompt is at most a few hundred bytes
 REPLY_MAX = 8191               # JT_HTTP_POST_REPLY_MAX (8192) minus the app's NUL
 TOKEN_MIN, TOKEN_MAX = 16, 63  # 63: the kernel keeps it in a 64-byte buffer
 SESSIONS_MAX = 64
+TTS_SAMPLE_RATE = 22050        # ElevenLabs output_format pcm_22050: 16-bit signed little-endian mono
+TTS_FORMAT = "pcm_22050"
+TTS_AUDIO_MAX = 4 << 20        # 4 MB: 400 characters is about 1.3 MB, so more than this is not our answer
+TTS_DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"   # Samantha's voice (~/.samantha/characters/samantha/character.json, tools/ad-audio.py)
+TTS_DEFAULT_MODEL = "eleven_flash_v2_5"
+TTS_DEFAULT_BASE = "https://api.elevenlabs.io"
+TTS_DEFAULT_KEY_FILE = "~/.config/joshuatree/elevenlabs.key"
+TTS_DEFAULT_USAGE_FILE = "~/.config/joshuatree/tts-usage.json"
+VOICE_RE = re.compile(r"^[A-Za-z0-9]{10,40}$")
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 READ_ONLY_TOOLS = ["Read", "Grep", "Glob"]
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -234,22 +267,147 @@ def run_api(cfg, prompt, pi="", history=None, want="auto", effort="medium"):
     return (200, text, display_name(model)) if text else (502, "The API returned no text.", "")
 
 
+TURING_URL = "http://127.0.0.1:8127"   # turing's app/serve.py default
+TURING_NAME = "Samantha"               # the name the Pi's prompt shows for Turing's answers, and ask.c's default
+TURING_DOWN = "Samantha is not running on the relay machine. Start app/serve.py in turing."
+
+
+def run_turing(cfg, prompt, pi="", history=None):
+    """--turing mode: POST the question to Turing's OpenAI-shaped /v1/chat/completions, with the SAMANTHA system text
+    and the session's earlier turns. Today serve.py answers the last user turn with its own persona; the rest rides
+    along for a server that can use it. `history` is extended in place. Returns (status, text)."""
+    system = SAMANTHA + (" Live status of the Pi you run on (ip, clock in UTC seconds since 1970, Wi-Fi bars): " + pi if pi else "")
+    messages = history if history is not None else []
+    messages.append({"role": "user", "content": prompt})
+    del messages[:-API_HISTORY_MAX]
+    body = json.dumps({"model": "samantha", "messages": [{"role": "system", "content": system}] + messages}).encode()
+    req = urllib.request.Request(cfg.turing.rstrip("/") + "/v1/chat/completions", data=body, method="POST",
+                                 headers={"content-type": "application/json"})
+    slow = "Samantha took longer than %d seconds. Try a smaller question." % cfg.timeout
+    try:
+        with urllib.request.urlopen(req, timeout=cfg.timeout) as r:
+            d = json.loads(r.read().decode("utf-8", "replace"))
+        text = d["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError as e:
+        return 502, "Samantha said %d." % e.code
+    except urllib.error.URLError as e:
+        return (504, slow) if isinstance(e.reason, (TimeoutError, socket.timeout)) else (502, TURING_DOWN)
+    except (TimeoutError, socket.timeout):   # not always the same class
+        return 504, slow
+    except OSError:
+        return 502, TURING_DOWN
+    except (ValueError, KeyError, IndexError, TypeError):
+        return 502, "Samantha answered something the relay cannot read."
+    if not isinstance(text, str) or not text.strip(): return 502, "Samantha returned no text."
+    if text.strip() == "UNKNOWN": text = "I don't know that one yet."   # serve.py's word for a decline
+    messages.append({"role": "assistant", "content": text})
+    return 200, text
+class TtsError(Exception):
+    """A refusal or failure with a status and a fixed message. Never carries upstream text or the key."""
+    def __init__(self, status, msg): super().__init__(msg); self.status, self.msg = status, msg
+
+
+def tts_read_key(cfg):
+    """The ElevenLabs key from its private file. Refuses a file that group or others can read."""
+    path = os.path.expanduser(cfg.tts_key_file)
+    try:
+        st = os.stat(path)
+        if st.st_mode & 0o077: raise TtsError(503, "The voice key file must be private. Run chmod 600 on it.")
+        with open(path, encoding="utf-8") as fh: key = fh.read().strip()
+    except OSError:
+        raise TtsError(503, "Voice is not set up on the relay Mac.")
+    if not key or any(ord(c) < 33 or ord(c) > 126 for c in key): raise TtsError(503, "Voice is not set up on the relay Mac.")
+    return key
+
+
+class TtsUsage:
+    """Characters spent today, kept in a small file so a restart does not reset the cap. The day is the local date."""
+    def __init__(self, path):
+        self.path, self.lock = os.path.expanduser(path), threading.Lock()
+
+    def _load(self, today):
+        try:
+            with open(self.path, encoding="utf-8") as fh: d = json.load(fh)
+            if isinstance(d, dict) and d.get("date") == today and isinstance(d.get("chars"), int) and d["chars"] >= 0: return d["chars"]
+        except (OSError, ValueError): pass
+        return 0
+
+    def _save(self, today, chars):
+        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+        tmp = self.path + ".tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh: json.dump({"date": today, "chars": chars}, fh)
+        os.replace(tmp, self.path)
+
+    def reserve(self, n, cap):
+        """Add n to today's count unless that passes cap. True if reserved."""
+        today = time.strftime("%Y-%m-%d")
+        with self.lock:
+            used = self._load(today)
+            if used + n > cap: return False
+            self._save(today, used + n)
+            return True
+
+    def refund(self, n):
+        today = time.strftime("%Y-%m-%d")
+        with self.lock: self._save(today, max(0, self._load(today) - n))
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k): return None   # the key header must never follow a redirect elsewhere
+
+
+TTS_OPENER = urllib.request.build_opener(NoRedirect)
+
+
+def run_tts(cfg, usage, text):
+    """Returns PCM bytes. Checks both caps first; ElevenLabs is called only when both pass."""
+    if len(text) > cfg.tts_max_chars:
+        raise TtsError(413, "That is %d characters. The limit is %d per voice request." % (len(text), cfg.tts_max_chars))
+    key = tts_read_key(cfg)
+    if not usage.reserve(len(text), cfg.tts_daily_chars):
+        raise TtsError(429, "The daily voice limit of %d characters is used up. It resets at midnight." % cfg.tts_daily_chars)
+    try:
+        url = "%s/v1/text-to-speech/%s?output_format=%s" % (cfg.tts_base.rstrip("/"), cfg.tts_voice, TTS_FORMAT)
+        body = json.dumps({"text": text, "model_id": cfg.tts_model}).encode()
+        req = urllib.request.Request(url, data=body, method="POST", headers={
+            "xi-api-key": key, "content-type": "application/json", "accept": "application/octet-stream"})
+        with TTS_OPENER.open(req, timeout=cfg.timeout) as r:
+            pcm = r.read(TTS_AUDIO_MAX + 1)
+    except urllib.error.HTTPError as e:
+        usage.refund(len(text))
+        raise TtsError(502, "The voice service said %d." % e.code)
+    except (urllib.error.URLError, OSError, ValueError):
+        usage.refund(len(text))
+        raise TtsError(502, "The voice service did not answer.")
+    if not pcm or len(pcm) > TTS_AUDIO_MAX or len(pcm) % 2:
+        usage.refund(len(text))
+        raise TtsError(502, "The voice service sent no usable audio.")
+    return pcm
+
+
 class Relay:
     def __init__(self, cfg, token):
         self.cfg = cfg
         self.token = token.encode()
         self.busy = threading.Lock()
+        self.tts_busy = threading.Lock()
+        self.tts_usage = TtsUsage(cfg.tts_usage_file)
         self.sessions = set()   # session ids this relay has handed out; --resume only accepts these
         self.api_history = {}   # --api-key-file mode: session id -> its messages, so an agent round can continue
 
     def run_claude(self, prompt, session, pi="", model="auto", effort="medium"):
         """Returns (status, text). Kills claude's whole process group past the timeout."""
-        if self.cfg.api_key_file:
+        if self.cfg.turing or self.cfg.api_key_file:   # Turing wins when both are given
             if not session:
                 session = str(uuid.uuid4())
                 if len(self.sessions) >= SESSIONS_MAX: self.sessions.clear(); self.api_history.clear()
                 self.sessions.add(session)
-            status, text, name = run_api(self.cfg, prompt, pi, self.api_history.setdefault(session, []), model, effort)
+            history = self.api_history.setdefault(session, [])
+            if self.cfg.turing:   # model and effort are Claude knobs; Turing has one model
+                (status, text), name = run_turing(self.cfg, prompt, pi, history), TURING_NAME
+            else:
+                status, text, name = run_api(self.cfg, prompt, pi, history, model, effort)
             return status, ("S %s\nM %s\n%s" % (session, name, text)) if status == 200 else text
         p = subprocess.Popen(claude_argv(self.cfg, session, model), cwd=self.cfg.cwd, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
@@ -300,13 +458,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.close_connection = True
         self.log_line(status, nin, len(body), t0 or time.time())
 
+    def reply_bytes(self, data, nin, t0):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("X-Sample-Rate", str(TTS_SAMPLE_RATE))
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(data)
+        self.close_connection = True
+        self.log_line(200, nin, len(data), t0)
+
+    def tts(self, raw, ctype, n, t0):
+        r = self.relay
+        if ctype == "application/json":
+            try: d = json.loads(raw.decode("utf-8"))
+            except ValueError: return self.reply(400, "Bad JSON.", n, t0)
+            text = d.get("text", "") if isinstance(d, dict) else None
+        else:
+            text = raw.decode("utf-8", "replace")
+        if not isinstance(text, str): return self.reply(400, "Bad JSON.", n, t0)
+        text = "".join(c for c in text if c == "\n" or c >= " ").strip()
+        if not text: return self.reply(400, "Empty text.", n, t0)
+        if not r.tts_busy.acquire(blocking=False): return self.reply(429, "A voice request is already running.", n, t0)
+        try: pcm = run_tts(r.cfg, r.tts_usage, text)
+        except TtsError as e: return self.reply(e.status, e.msg, n, t0)
+        finally: r.tts_busy.release()
+        return self.reply_bytes(pcm, n, t0)
+
     def do_GET(self): self.reply(405, "POST only.")
     do_PUT = do_DELETE = do_PATCH = do_HEAD = do_GET
 
     def do_POST(self):
         t0 = time.time()
         r = self.relay
-        if self.path != "/api/claude": return self.reply(404, "Not here. POST /api/claude.", 0, t0)
+        if self.path not in ("/api/claude", "/api/tts"): return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
         auth = self.headers.get("Authorization", "")
         given = auth[7:].strip().encode() if auth.startswith("Bearer ") else b""
         if not hmac.compare_digest(given, r.token): return self.reply(401, "Wrong or missing relay token.", 0, t0)  # TOKEN-CHECK
@@ -317,6 +503,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if n > r.cfg.max_body: return self.reply(413, "That prompt is too long for the relay.", n, t0)
         raw = self.rfile.read(n)
         ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        if self.path == "/api/tts": return self.tts(raw, ctype, n, t0)
         session = ""
         model, effort = "auto", "medium"
         if ctype == "application/json":
@@ -343,6 +530,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self.reply(status, text, n, t0)
 
 
+PROBE = re.compile(rb"JT-RELAY\? ([0-9a-f]{8}) *")
+
+def answer_probes(host, port):
+    """The Pi's relay discovery (arch/arm64/ask.c): one UDP socket on the relay's own port, answering only the exact
+    probe. Untrusted both ways: the reply says where the relay is, TLS proves it."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind((host, port))
+    def loop():
+        while True:
+            try: data, peer = s.recvfrom(64)
+            except OSError: return
+            m = PROBE.fullmatch(data)
+            if len(data) != 32 or not m: continue
+            try: s.sendto(b"JT-RELAY %d %s" % (port, m.group(1)), peer)
+            except OSError: pass
+    threading.Thread(target=loop, daemon=True).start()
+
+
 def read_token(args):
     if args.token_file:
         with open(os.path.expanduser(args.token_file), encoding="utf-8") as f: tok = f.read().strip()
@@ -367,15 +573,34 @@ def main(argv=None):
     ap.add_argument("--max-body", type=int, default=DEFAULT_MAX_BODY, help="largest request body, bytes")
     ap.add_argument("--claude", default="claude", help="the claude executable")
     ap.add_argument("--model", default="", help="optional --model for claude")
-    ap.add_argument("--api-key-file", default="", help="answer with the Messages API as Samantha (Claude Platform credit) instead of claude -p")
+    ap.add_argument("--turing", nargs="?", const=TURING_URL, default="", metavar="URL",
+                    help="answer as Samantha from Turing's app/serve.py (default %s); wins over --api-key-file" % TURING_URL)
+    ap.add_argument("--api-key-file", default="", help="answer with the Messages API (Claude Platform credit) instead of claude -p; needs --allow-api-spend")
+    ap.add_argument("--allow-api-spend", action="store_true", help="let --api-key-file spend the Claude Platform credit")
     ap.add_argument("--api-model", default="claude-haiku-5-5", help="cheap model for short questions in --api-key-file mode")
     ap.add_argument("--api-model-top", default="claude-opus-5-5", help="strongest model, for design, proofs and security questions")
     ap.add_argument("--api-model-hard", default="claude-sonnet-5-5", help="stronger model for long or hard questions")
+    ap.add_argument("--tts-key-file", default=TTS_DEFAULT_KEY_FILE, help="private file holding the ElevenLabs key (chmod 600); never sent anywhere but ElevenLabs")
+    ap.add_argument("--tts-voice", default=TTS_DEFAULT_VOICE, help="ElevenLabs voice id (default: Samantha's)")
+    ap.add_argument("--tts-model", default=TTS_DEFAULT_MODEL, help="ElevenLabs model id")
+    ap.add_argument("--tts-max-chars", type=int, default=400, help="most characters in one /api/tts request")
+    ap.add_argument("--tts-daily-chars", type=int, default=5000, help="most characters per local day, kept across restarts")
+    ap.add_argument("--tts-usage-file", default=TTS_DEFAULT_USAGE_FILE, help="where the day's character count is kept")
+    ap.add_argument("--tts-base", default=TTS_DEFAULT_BASE, help="ElevenLabs base URL (tests point it at a loopback stub)")
     ap.add_argument("--tools", default=",".join(READ_ONLY_TOOLS),
                     help="comma-separated built-in tools (default Read,Grep,Glob: read-only)")
     args = ap.parse_args(argv)
     if bool(args.tls_cert) != bool(args.tls_key): ap.error("--tls-cert and --tls-key must be supplied together")
     if args.lan and not args.tls_cert: ap.error("--lan requires --tls-cert and --tls-key; refusing a cleartext bearer")
+    if args.api_key_file and not args.allow_api_spend:
+        ap.error("--api-key-file spends the Claude Platform credit; refusing to start without --allow-api-spend (or use --turing)")
+    if args.turing and not re.match(r"^https?://[^/\s]+", args.turing): ap.error("--turing takes an http:// or https:// URL")
+    if not VOICE_RE.match(args.tts_voice): ap.error("--tts-voice must be 10 to 40 letters and digits")
+    if not re.match(r"^[A-Za-z0-9_.-]{1,64}$", args.tts_model): ap.error("--tts-model has odd characters")
+    if args.tts_max_chars < 1 or args.tts_daily_chars < 1: ap.error("the voice caps must be at least 1")
+    base = urllib.parse.urlparse(args.tts_base)
+    if not (base.scheme == "https" or (base.scheme == "http" and base.hostname in ("127.0.0.1", "localhost"))) or base.query or base.fragment:
+        ap.error("--tts-base must be https, or http on loopback")
     context = None
     if args.tls_cert:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -399,8 +624,11 @@ def main(argv=None):
         # Handshake in the handler thread, so one slow peer cannot block accept().
         srv.socket = context.wrap_socket(srv.socket, server_side=True, do_handshake_on_connect=False)
     srv.daemon_threads = True
-    sys.stderr.write("claude-relay: listening on %s:%d, cwd %s, tools %s, timeout %ds\n"
-                     % (host, srv.server_address[1], args.cwd, ",".join(args.tools), args.timeout))
+    backend = "turing " + args.turing if args.turing else "api" if args.api_key_file else "claude -p"
+    if context: answer_probes(host, srv.server_address[1])
+    sys.stderr.write("claude-relay: listening on %s:%d, cwd %s, tools %s, timeout %ds, backend %s%s\n"
+                     % (host, srv.server_address[1], args.cwd, ",".join(args.tools), args.timeout, backend,
+                        ", answering discovery" if context else ""))
     sys.stderr.flush()
     try: srv.serve_forever()
     except KeyboardInterrupt: pass

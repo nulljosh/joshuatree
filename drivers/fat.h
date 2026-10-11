@@ -2,7 +2,9 @@
 #define FAT_H
 /* FAT16, single fixed volume on the ATA primary master starting at sector 0
    (no partition table yet -- QEMU's raw disk image is the whole filesystem).
-   Call fat_mount() once at boot before any other fat_* call. Every fat_*
+   FAT32 mounts read only: the Pi's boot partition, through arch/arm64/emmc.c,
+   whose blockdev sector 0 is the partition's first sector; every write call
+   returns 0 on it. Call fat_mount() once at boot before any other fat_* call. Every fat_*
    call below operates on the current directory, root at mount time, moved
    by fat_chdir(). No long filenames -- 8.3 names exactly as FAT stores
    them. */

@@ -75,7 +75,9 @@ else:
         fail = 1; print(f"FAIL: first visible frame already shows {first / final:.0%} of the tree, not a draw-on")
     if len(stages) < 4:
         fail = 1; print(f"FAIL: only {len(stages)} distinct stages seen, the tree is not growing")
-    if any(b < a - final * 0.02 for a, b in zip(inks, inks[1:])):
+    grow = inks[:inks.index(final) + 1]   # only the draw-on: after the full tree the desktop paints over it (a slow
+                                          # runner catches one such frame before the menu bar shows, 1948 then 199)
+    if any(b < a - final * 0.02 for a, b in zip(grow, grow[1:])):
         fail = 1; print("FAIL: ink shrank between frames, the splash is flickering")
 if not fail:
     print("PASS: the boot splash draws the tree on")
