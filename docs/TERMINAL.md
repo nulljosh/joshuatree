@@ -10,6 +10,8 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 |---|---|
 | `browse URL` | Fetches a page and prints it as text with numbered links |
 | `open N` | Follows link N of the last page |
+| `beep [FREQ MS]` | Plays a tone out of the Pi's 3.5 mm jack |
+| `vol [0-100\|up\|down]` | Shows or sets the master volume (default 70); up and down step by 10 |
 | `llm PROMPT` | Runs the local model, if the image has one |
 | anything else | Asks Claude through the relay on the Mac |
 
@@ -31,6 +33,7 @@ No mouse is needed. The desktop's keys, in `arch/arm64/main.c` (`ui_key`); `tool
 | A letter or digit | With no pane holding the keys, Spotlight with that character already typed |
 | Enter, Space, Tab | With no pane holding the keys and no dock label, Spotlight, empty |
 | F2, Ctrl+T | The Terminal, at once, closing Spotlight if open; it has the keyboard |
+| F11, F12 | Volume down and up by 10 (0 to 100), before any pane. The menu bar says "Volume N" and the speaker clicks. The Mac media keys Volume Down, Volume Up and Mute do the same (Mute toggles 0 and the last level) |
 | F3 | Switch Terminal session when no request is running |
 | Left, Right | With no pane holding the keys, move the dock's label along the tiles |
 | Enter | Open the labelled tile |
