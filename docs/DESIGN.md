@@ -50,7 +50,7 @@ The Launchpad is `APPS_COLS = 5` columns of icons at most `APPS_TILE = 56` pixel
 
 ## Motion
 
-The shell barely moves. Windows do not animate open, close or snap. The dock only shows its label. What moves is Samantha's captions, on a clock of `TICK_HZ = 100` ticks a second. A new line rises into place over `CAP_IN = 0.28 s`, easing out as a square (`CAP_EASE = quadratic out`). Up to `CAP_SHOW = 3` lines show at once, each older one dimmer. When the talk has been quiet for `CAP_QUIET = 4 s` the whole stack fades together over `CAP_OUT = 0.6 s`. Her caption backdrop is black at `CAP_ALPHA = 150` out of 256.
+The shell barely moves. The one exception is the boot splash: the tree is drawn on, trunk first and spikes last, over `BOOT_DRAW = 0.8 s`, with the pen easing out, and the progress bar fills after it. Windows do not animate open, close or snap. The dock only shows its label. What moves is Samantha's captions, on a clock of `TICK_HZ = 100` ticks a second. A new line rises into place over `CAP_IN = 0.28 s`, easing out as a square (`CAP_EASE = quadratic out`). Up to `CAP_SHOW = 3` lines show at once, each older one dimmer. When the talk has been quiet for `CAP_QUIET = 4 s` the whole stack fades together over `CAP_OUT = 0.6 s`. Her caption backdrop is black at `CAP_ALPHA = 150` out of 256.
 
 Apps move only when the movement is the app: Windgate's breathing circle, Samantha's mouth. The tree photo wallpaper sways in the wind; the satellite default stands still.
 
