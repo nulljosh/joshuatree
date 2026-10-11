@@ -26,6 +26,7 @@ static void userrun_command(const char *name, unsigned n) {
     if (r) cmd_out(": would not load\n");
     else if (faulted) cmd_out(": stopped by a fault, the kernel carried on\n");
     else { cmd_out(": exit "); cmd_dec((unsigned)status); cmd_out("\n"); }
+}
 static int num(const char *s, unsigned n, int *v) {   /* a plain decimal of 1 to 6 digits */
     if (!n || n > 6) return 0;
     *v = 0;
