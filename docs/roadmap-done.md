@@ -18,6 +18,9 @@ Bluetooth, slice BT2: `bt pair` connects Joshua's LE mouse, pairs it with Just W
 ## 2.51.0 development branch (2026-10-11)
 
 Bluetooth, slice BT1: the Pi talks HCI to its radio over the PL011, loads the BCM4345C0 patch, prints the version, and `bt scan` lists what it hears, so Joshua's Bluetooth mouse can be found before BT2 connects it. The Pi console moved to the mini UART to free the PL011, and `disable-bt` left `config.txt`. Not yet seen on the board. Check: `tools/checks/arm64-bt-check.py`, against a fake controller.
+## 2.50.0 development branch (2026-10-11)
+
+M3c part 1, a real app loader on ARM. A `{name, start, end}` table holds `user/hello.c` and `user/calendar.c`, built unchanged for aarch64; `user_load` copies one in, relocates it, maps code read-only and executable and data, a zeroed pool and the stack never executable, and `userrun NAME` runs it. `JT_SYS_TIME` and `JT_SYS_GETPID` answer; calendar's `JT_SYS_WINDOW_OPEN` gets -38 and it exits, which is where part 2 starts. Check: `tools/checks/arm64-m3c-check.py`.
 
 ## 2.49.0 development branch (2026-10-11)
 

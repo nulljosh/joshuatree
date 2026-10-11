@@ -128,17 +128,30 @@ start.o: start.S
 	$(CC) -c $< -o $@
 user.o: user.S
 	$(CC) -c $< -o $@
-# M3b: user/hello.c, the same C source the i386 build runs in ring 3, built for EL0. Position independent (-fPIE, adrp/add,
-# no GOT), linked at 0 into one flat image (user_c.ld) and baked into the kernel by hello_c.S. It reaches the kernel through
-# jtsys.h's aarch64 `svc #0` path with the Joshua Tree numbers. -Os keeps it inside the one user code page.
-USEROBJ = user.o hello_c.o
-HELLOCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
-hello_cc.o: ../../user/hello.c ../../user/jtsys.h
-	$(HELLOCC) -c $< -o $@
-hello_c.bin: hello_cc.o user_c.ld
-	ld.lld -T user_c.ld --oformat binary -o $@ hello_cc.o
-hello_c.o: hello_c.S hello_c.bin
-	$(CC) -c hello_c.S -o $@
+# M3b and M3c: the user programs. Each one is the unchanged user/NAME.c (the source the i386 build runs in ring 3) built for
+# EL0: position independent (-fPIE, and -fdirect-access-external-data so an extern such as calendar's _user_end is adrp/add
+# and not a GOT slot), linked -pie at 0 by user_c.ld into one flat image, with the pointer tables it needs relocated by the
+# kernel's loader. They reach the kernel through jtsys.h's aarch64 `svc #0` path with the Joshua Tree numbers. libjt is
+# built here too, under arch/arm64 and under other names (text.o is the kernel's TTF blender), never next to its i386
+# objects in user/libjt; --start-lib pulls only the members a program uses (calendar: string.c and text.c). stdlib.c's
+# brk heap casts a pointer through a 32-bit int, so it is left out until a program on ARM malloc()s. -Os keeps images small.
+# userapps.S bakes the images in with .incbin and lists them; a new app is a name in UAPPS and a row there.
+UAPPS = hello calendar
+USEROBJ = user.o userapps.o
+UCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fdirect-access-external-data -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
+UJT = ../../user/libjt
+UJTOBJ = ujt_string.o ujt_text.o
+ujt_string.o: $(UJT)/string.c $(UJT)/string.h
+	$(UCC) -c $< -o $@
+ujt_text.o: $(UJT)/text.c $(UJT)/text.h $(UJT)/aafont.h ../../user/jtsys.h
+	$(UCC) -c $< -o $@
+uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h
+	$(UCC) -c $< -o $@
+uapp_%.bin: uapp_%.o $(UJTOBJ) user_c.ld
+	ld.lld -pie --no-dynamic-linker -z norelro -T user_c.ld --oformat binary -o $@ $< --start-lib $(UJTOBJ) --end-lib
+	@test "$$(tail -c 16 $@ | head -c 4)" = JTU1 || { rm -f $@; echo "$@: the JTU1 trailer is not the last 16 bytes (this linker added sections after it)"; exit 1; }
+userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
+	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
 MAINDEP = bt.h notice.h brick.h brick_ui.h power.h clock_ui.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
@@ -236,7 +249,7 @@ run: kernel8.elf
 run-pi: kernel8.img
 	qemu-system-aarch64 -machine raspi4b -nographic -serial null -serial mon:stdio -kernel kernel8.img   # serial 0 is the PL011 (the radio's), serial 1 the mini UART console
 clean:
-	rm -rf *.o *.a *.elf *.img hello_c.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
+	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
 .PHONY: wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest sdtest
 
