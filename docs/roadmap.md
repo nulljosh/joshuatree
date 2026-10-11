@@ -12,9 +12,11 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Next priorities (reviewed 2026-10-10)
+## Next priorities (reviewed 2026-10-11)
 
 The ordered list below is the near-term queue. The topic sections keep the longer plan. Completed work is in [roadmap-done.md](roadmap-done.md); `VERSION` and the GitHub releases are the source for release numbers.
+
+**The road to 3.0 (Joshua, 2026-10-11: "/loop until v3").** The gate is in `DECISIONS.md`: the desktop boots on a real Pi 4 and you can type and click, mouse included. Tonight: the Samantha box case (#505), sound from the 3.5 mm jack (#506), typing into apps with click to focus (#507) and Samantha's voice through the relay (#508) merge one at a time, and the 3.0 mark is picked from three candidates. This week: the card reflashed with the LAN relay over TLS, the logo and UI refresh, then 3.0.0 and a QA pass of the landing page. This month: the first case print from `docs/hardware/`, SD card writes, the local model from the card. Rest of the year: 4.0 "Many windows", the box as a kit, and showing it in person. `LOOP-HANDOFF.md` has the exact state.
 
 **On the real Pi:** the desktop, USB keyboard, Wi-Fi, network clock and Samantha relay work. Joshua confirmed an HTTPS fetch on the board. The merged Terminal, bounded agent loop, browser navigation and model controls have QEMU checks; the latest keyboard fixes still need another board pass.
 
