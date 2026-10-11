@@ -1,9 +1,18 @@
 /* M0: serial hello. QEMU's virt machine has a PL011 UART at 0x09000000. A Raspberry Pi 4 has one at
    0xFE201000 (make PI=1 sets UART_BASE and PI_BUILD) and needs its two GPIO pins and its baud rate
-   set first; QEMU's virt machine comes up ready. */
+   set first; QEMU's virt machine comes up ready. Since 2.51.0 the Pi image (CONSOLE_MINI_UART, set by the Makefile)
+   prints on the mini UART instead, on the same header pins: the PL011 belongs to the Bluetooth radio (bt.c). */
 #ifdef PI_BUILD
 #define UART_BASE 0xFE201000UL
 #define GPIO_BASE 0xFE200000UL
+#define AUX_ENABLES 0xFE215004UL   /* the mini UART (UART1): bit 0 of AUX_ENABLES turns it on */
+#define MU_IO       0xFE215040UL
+#define MU_IER      0xFE215044UL
+#define MU_LCR      0xFE21504CUL
+#define MU_MCR      0xFE215050UL
+#define MU_LSR      0xFE215054UL
+#define MU_CNTL     0xFE215060UL
+#define MU_BAUD     0xFE215068UL
 #define GICD_BASE 0xFF841000UL   /* the Pi 4's GIC-400, the same GICv2 programming model as QEMU's virt */
 #define GICC_BASE 0xFF842000UL
 #else
@@ -12,6 +21,7 @@
 #define GICC_BASE 0x08010000UL
 #endif
 #define REG(a) (*(volatile unsigned int *)(a))
+#include "bt.h"
 #define UART_DR   (UART_BASE + 0x00)
 #define UART_FR   (UART_BASE + 0x18)
 #define UART_IBRD (UART_BASE + 0x24)
@@ -25,8 +35,38 @@
 
 extern unsigned int boot_el;
 
+/* The console only ever sends. Every wait for room is bounded: a UART that never drains is given up on for good, so a
+   wedged one can never freeze the screen's console, which is the only channel on a Pi with no serial cable. */
+#if defined(PI_BUILD) && defined(CONSOLE_MINI_UART)
+#define CON_TX_FULL() (!(REG(MU_LSR) & 0x20))   /* LSR bit 5: the transmit FIFO can take a byte */
+#define CON_TX(c) (REG(MU_IO) = (unsigned char)(c))
+#else
+#define CON_TX_FULL() (REG(UART_FR) & TXFF)
+#define CON_TX(c) (REG(UART_DR) = (unsigned char)(c))
+#endif
+static int con_tx_dead;
+static void con_tx(char c) {
+    if (con_tx_dead) return;
+    for (unsigned n = 0; CON_TX_FULL(); n++) if (n > 2000000) { con_tx_dead = 1; return; }
+    CON_TX(c);
+}
 static void uart_init(void) {
-#ifdef PI_BUILD
+#if defined(PI_BUILD) && defined(CONSOLE_MINI_UART)
+    /* With Bluetooth on, the firmware's primary UART is the mini UART, and enable_uart=1 holds the core clock it counts
+       from steady (250 MHz on a Pi 4: the Raspberry Pi UART documentation). The firmware has already printed its own
+       lines through it at 115200, so its divisor is kept; 270 (250 MHz / (8 * 115200) - 1) only if it left none.
+       GPIO14 (TX) and GPIO15 (RX) to ALT5, pulls off. Nothing here touches the PL011 or GPIO 30-33 (bt.c's). */
+    REG(AUX_ENABLES) |= 1;
+    REG(MU_IER) = 0;
+    REG(MU_LCR) = 3;       /* 8 bits */
+    REG(MU_MCR) = 0;
+    if (!REG(MU_BAUD)) REG(MU_BAUD) = 270;
+    unsigned int f = REG(GPIO_BASE + 0x04);
+    f &= ~((7u << 12) | (7u << 15)); f |= (2u << 12) | (2u << 15);
+    REG(GPIO_BASE + 0x04) = f;
+    REG(GPIO_BASE + 0xE4) &= ~((3u << 28) | (3u << 30));
+    REG(MU_CNTL) = 3;      /* transmitter and receiver on */
+#elif defined(PI_BUILD)
     /* GPIO14 (TX) and GPIO15 (RX) to ALT0 (PL011), pulls off. BCM2711 registers: GPFSEL1 and GPIO_PUP_PDN_CNTRL_REG0. */
     unsigned int f = REG(GPIO_BASE + 0x04);
     f &= ~((7u << 12) | (7u << 15)); f |= (4u << 12) | (4u << 15);
@@ -48,8 +88,7 @@ static int con_line_start = 1;   /* the next character begins a line */
 static int con_to_term;          /* a Terminal command is running: what it prints goes to the Terminal, not the Console */
 void term_output(int on) { con_to_term = on; }   /* ask.c, around one command */
 static void uart_putc(char c) {
-    while (REG(UART_FR) & TXFF) {}
-    REG(UART_DR) = (unsigned char)c;
+    con_tx(c);
     if (!con_quiet) console_putc(c);
     if (c == '\n') con_quiet = 0;
     con_line_start = c == '\n';
@@ -61,11 +100,11 @@ static int con_noise(const char *s) {
 #ifdef CON_VERBOSE
     (void)s; return 0;   /* the scroll check builds with every line on the screen so there is a long log to scroll */
 #else
-    static const char *const skip[] = { "tick", "M0 ", "M1 ", "M1a ", "M1b ", "M1c fb ok", "M1d dock ", "M3 ", "EL0", "EL1", "booted at ",
+    static const char *const skip[] = { "tick", "M0 ", "M1 ", "M1a ", "M1b ", "M1c fb ok", "M1d dock ", "M3 ", "M3b ", "EL0", "EL1", "booted at ",
         "usb ", "wifi power", "wifi sdio", "wifi f1", "wifi alp", "wifi chip", "wifi cores", "wifi arm", "wifi fw ", "wifi ht ",
         "wifi bus", "wifi radio up", "wifi ver", "wifi mac", "wifi found", "wifi scan", "wifi joining", "wifi handshake", "wifi assoc",
         "Wi-Fi: found", "Wi-Fi: looked", "Wi-Fi: this Pi", "Wi-Fi: chip", "Wi-Fi: connecting", "Wi-Fi: the router", "Wi-Fi: we answered", "Wi-Fi: handshake",
-        "dhcp: lease", "net dhcp", "@", "Wi-Fi: connected", "Internet: online" };
+        "dhcp: lease", "net dhcp", "@", "Wi-Fi: connected", "Internet: online", "bt: no radio found" };
     for (unsigned i = 0; i < sizeof skip / sizeof skip[0]; i++) {
         const char *a = s, *b = skip[i];
         while (*b && *a == *b) { a++; b++; }
@@ -233,8 +272,10 @@ extern char _start[];
 extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[];
 extern unsigned long enter_user(unsigned long entry, unsigned long sp, unsigned long arg, unsigned long arg2);
 extern void leave_user(unsigned long status) __attribute__((noreturn));
-#define SYS_WRITE 64
+#define SYS_WRITE 64   /* the Linux numbers the user.S self-test uses */
 #define SYS_EXIT 93
+#define JT_SYS_EXIT 1    /* Joshua Tree's own, the ones user/jtsys.h and docs/SYSCALL-ABI.md give every program (M3b) */
+#define JT_SYS_WRITE 4
 static unsigned long user_status;
 static int user_in_range(unsigned long a, unsigned long n) {   /* wholly inside the code page or the stack page */
     if (n > 256) return 0;
@@ -245,12 +286,13 @@ void exc_el0_sync(struct frame *f) {
     unsigned ec = (unsigned)(f->esr >> 26);
     if (ec == 0x15) {   /* svc from EL0 */
         unsigned long n = f->x[8];
-        if (n == SYS_WRITE) {
+        if (n == SYS_WRITE || n == JT_SYS_WRITE) {
             const char *p = (const char *)f->x[1]; unsigned long len = f->x[2];
-            if (f->x[0] != 1 || !user_in_range((unsigned long)p, len)) { f->x[0] = (unsigned long)-14; return; }   /* -EFAULT */
+            if (f->x[0] != 1) { f->x[0] = (unsigned long)-9; return; }   /* -EBADF: only the console, fd 1 */
+            if (!user_in_range((unsigned long)p, len)) { f->x[0] = (unsigned long)-14; return; }   /* -EFAULT */
             for (unsigned long i = 0; i < len; i++) { if (con_line_start) con_quiet = 1; uart_putc(p[i]); }   /* the EL0 self-test talks to the UART only */
             f->x[0] = len;
-        } else if (n == SYS_EXIT) {
+        } else if (n == SYS_EXIT || n == JT_SYS_EXIT) {
             uart_puts("M3 EL0 exit "); uart_dec((unsigned)f->x[0]); uart_putc('\n');
             leave_user(f->x[0]);
         } else f->x[0] = (unsigned long)-38;   /* -ENOSYS */
@@ -272,7 +314,9 @@ void exc_el0_sync(struct frame *f) {
     } else { uart_puts("M3 EL0 fault: exception class "); uart_hex(ec); uart_puts(", address "); uart_hex(far); uart_putc('\n'); }
     leave_user((unsigned long)-1);
 }
-static void user_init(void) {
+/* Map the arena and load one program into the code page (it can run again with another: M3b loads the C program the same
+   way). The image must be position independent and fit the one page. */
+static void user_init(const char *img, unsigned long len) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);   /* valid page, normal memory, inner shareable, access flag */
     const unsigned long AP_EL0_RW = 1UL << 6, AP_RO = 3UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
     l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable for now, so the kernel can copy the program in */
@@ -280,17 +324,18 @@ static void user_init(void) {
     l3[UP_KERN >> 12] = (USER_BASE + UP_KERN) | PAGE | PXN | UXN;               /* AP=00: EL1 only */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
     char *code = (char *)(USER_BASE + UP_CODE);
-    for (unsigned long i = 0; i < (unsigned long)(user_end - user_start); i++) code[i] = user_start[i];
+    for (unsigned long i = 0; i < len; i++) code[i] = img[i];
     const char *secret = "KERNEL-ONLY-SECRET";
     for (int i = 0; secret[i]; i++) ((char *)(USER_BASE + UP_KERN))[i] = secret[i];
-    for (unsigned long a = (unsigned long)code & ~63UL; a < (unsigned long)code + (unsigned long)(user_end - user_start); a += 64)
+    for (unsigned long a = (unsigned long)code & ~63UL; a < (unsigned long)code + len; a += 64)
         __asm__ volatile ("dc cvau, %0" :: "r"(a) : "memory");
     __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
     l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_RO | PXN;             /* now read-only for everyone, executable by EL0 only */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
 }
+extern char hello_c_start[], hello_c_end[];   /* hello_c.S: user/hello.c built for EL0 */
 static void user_demo(void) {
-    user_init();
+    user_init(user_start, (unsigned long)(user_end - user_start));
     unsigned long code = USER_BASE + UP_CODE, sp = USER_BASE + UP_STACK + 4096, kpage = USER_BASE + UP_KERN;
     uart_puts("M3 EL0 task starts\n");
     enter_user(code + (unsigned long)(user_entry_a - user_start), sp, kpage, 0);
@@ -301,6 +346,15 @@ static void user_demo(void) {
     uart_puts("M3 EL0 second task starts\n");
     user_status = enter_user(code + (unsigned long)(user_entry_b - user_start), sp, kpage, 0);
     if (user_status == 7) uart_puts("M3 userland ok\n"); else uart_puts("M3 userland FAIL\n");
+#ifndef PI_BUILD
+    /* M3b: user/hello.c itself, built for aarch64 and talking Joshua Tree syscall numbers over svc. Only write and exit
+       exist on ARM so far: its open comes back -ENOSYS (-38), which hello.c reports and answers with exit 1. The kernel
+       takes that exit as the pass. M3d brings open and read, and the exit code becomes 9. */
+    user_init(hello_c_start, (unsigned long)(hello_c_end - hello_c_start));
+    uart_puts("M3b EL0 C task starts\n");
+    user_status = enter_user(code, sp, 0, 0);
+    if (user_status == 1) uart_puts("M3b userland C ok\n"); else uart_puts("M3b userland C FAIL\n");
+#endif
 }
 
 /* ---- M1c: a framebuffer. QEMU's virt machine has no display unless one is asked for; ramfb is a plain RAM
@@ -703,7 +757,7 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
     con_cols = (win_w - sc(12)) / con_cw;
     con_rows = (win_h - sc(46)) / con_ch - 1;   /* then one row: the Console's wifi and usb status, or the Terminal's ask> prompt */
 }
-const char *ask_prompt(void);   /* ask.c: "Claude Haiku 5.5 $ ", naming the model that last answered */
+const char *ask_prompt(void);   /* ask.c: "Samantha $ ", naming the model that last answered */
 /* The Terminal's bottom row: the prompt and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
 void con_clear(void) {         /* /clear: the Terminal's window empties, its text stays in the scrollback */
     if (!con_live || calc_front) return;
@@ -783,9 +837,8 @@ static void crash(const struct frame *f) {
     crash_nl();
     crash_s("halted: this core sleeps in a wfe loop"); crash_nl();
     for (unsigned r = 0; r < CRASH_ROWS && r < crash_row; r++) {   /* the UART first: it works whatever state the screen is in */
-        for (const char *p = crash_txt[r]; *p; p++) { while (REG(UART_FR) & TXFF) {} REG(UART_DR) = (unsigned char)*p; }
-        while (REG(UART_FR) & TXFF) {}
-        REG(UART_DR) = '\n';
+        for (const char *p = crash_txt[r]; *p; p++) con_tx(*p);
+        con_tx('\n');
     }
     if (fb) {
         int s = ((int)fb_h * 10 / 600 + 5) / 10; if (s < 1) s = 1;
@@ -1245,11 +1298,13 @@ static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hov
 #ifdef PI_BUILD
 #include "power.h"
 #endif
+int volume_key(unsigned code);   /* cmd.c: F11 and F12, Volume Down, Up and Mute */
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
     int chord = ctrl_held || gui_held || alt_held;
 #ifdef PI_BUILD
     if (power_key(code)) return 1;
 #endif
+    if (volume_key(code)) return 1;   /* before Spotlight and every pane, like the Spotlight shortcut */
     if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
     if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
     if (spot_live) return spot_key(code);
@@ -1368,6 +1423,11 @@ static void key_selftest(void) {
     uart_puts("keytest: media esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
     uart_puts("keytest: media f2\n"); hid_media(br_up, 3);
     uart_puts("keytest: media esc2\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
+    static const unsigned char vol_dn[3] = { 3, 0xEA, 0 }, vol_up[3] = { 3, 0xE9, 0 }, vol_mute[3] = { 3, 0xE2, 0 };
+    uart_puts("keytest: media vol down\n"); hid_media(vol_dn, 3);
+    uart_puts("keytest: media vol up\n"); hid_media(vol_up, 3);
+    uart_puts("keytest: media mute\n"); hid_media(vol_mute, 3);
+    uart_puts("keytest: media unmute\n"); hid_media(vol_mute, 3);
     uart_puts("keytest: done\n");
 }
 #endif
@@ -2005,6 +2065,7 @@ void main(void) {
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); menubar_notify("Wi-Fi joined"); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+    bt_init();   /* bt.c: powers the radio and returns; the main loop's bt_poll does the rest */
 #ifdef NOTICE_SELFTEST
     menubar_notify("Note kept in memory");
 #endif
@@ -2031,13 +2092,13 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
-            if (usb_ok || brick_live || notice.text[0] || rep_code) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
-            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); brick_tick(); menubar_tick(); keydbg_tick();
+            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick();
         }
 #endif
     }

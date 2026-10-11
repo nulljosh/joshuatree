@@ -89,7 +89,7 @@ fails = []
 def check(name, ok, detail=""):
     print(("  ok: " if ok else "  FAIL: ") + name + ("" if ok else "  " + repr(detail)[:600]))
     if not ok: fails.append(name)
-PROMPT_RE = re.compile(r"Claude(?: Haiku 5\.5)? \$ ")   # ask.c's prompt: the default model, or Claude alone in a build with no relay token
+PROMPT_RE = re.compile(r"(?:Samantha|Claude(?: [A-Z][a-z]+ \d+\.\d+)?) \$ ")   # ask.c's prompt: Samantha by default, a Claude model that answered, or Claude alone with no relay token
 def lines_after(out, n):   # the browser's output after the n-th "browser: fetching"
     return [l for l in PROMPT_RE.split(out.split("browser: fetching\n")[n])[0].splitlines() if l and not l.startswith("key ")]
 

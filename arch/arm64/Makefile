@@ -1,9 +1,10 @@
 # ARM64 port. Separate from the i386 Makefile on purpose: nothing in that build changes.
 #   make -C arch/arm64            kernel8.elf for QEMU's virt machine (image at 0x40000000)
 #   make -C arch/arm64 run        boots it headless and prints the UART
-#   make -C arch/arm64 pi         kernel8.img for a Raspberry Pi 4 (image at 0x80000, UART at 0xFE201000)
+#   make -C arch/arm64 pi         kernel8.img for a Raspberry Pi 4 (image at 0x80000, console on the mini UART at 0xFE215040)
 #   make -C arch/arm64 run-pi     boots that image on QEMU's raspi4b model
 #   make -C arch/arm64 NETPORT=8080   also POSTs to the host (10.0.2.2:8080) at boot, through the shared IP stack
+#   make -C arch/arm64 BT_HCD=f.hcd   embeds that Bluetooth patch instead of build/bt-fw/BCM4345C0.hcd (bt.c)
 # Test builds, never shipped (each is driven by a tools/checks/arm64-*-check.py; main.c and fptest.c hold the hooks):
 #   crashtest   crash-kernel8.elf / crash-kernel8.img: takes a kernel data abort right after the screen is up
 #   fpsave      fp-kernel8.elf: floating point registers held across timer interrupts whose handler wipes them
@@ -44,7 +45,8 @@ clock.o: clock.c tls.h ../../drivers/net.h ../../drivers/http.h
 ip.o: ip.c ../../drivers/nic.h tls.h
 	$(NETCC) -DNETPORT=$(NETPORT) -DTLSPORT=$(TLSPORT) -c $< -o $@
 # HTTPS (tls.c) over BearSSL. The trust anchors are generated from certs/*.pem (plus TLS_TA=extra.pem, the check's
-# throwaway server cert) into tls_ta.h, gitignored; nothing is fetched at run time. The whole vendored subset goes
+# throwaway server cert, or the relay's private CA) into tls_ta.h, gitignored; nothing is fetched at run time. The
+# Claude relay is trusted only through the TLS_TA anchors, never a public root. The whole vendored subset goes
 # behind --start-lib so the link pulls only what tls.c uses.
 TLS_TA ?=
 BSSL = ../../third_party/bearssl
@@ -54,7 +56,7 @@ bearssl/%.o: $(BSSL)/src/%.c $(BSSL)/src/inner.h $(BSSL)/src/config.h
 	@mkdir -p bearssl
 	$(BSSLCC) -c $< -o $@
 tls_ta.h: ../../tools/gen/tls-ta.py $(wildcard certs/*.pem) $(TLS_TA)
-	python3 ../../tools/gen/tls-ta.py $@ $(wildcard certs/*.pem) $(TLS_TA)
+	python3 ../../tools/gen/tls-ta.py $@ $(wildcard certs/*.pem) --private $(TLS_TA)
 browser.o: browser.c tls.h ../../drivers/net.h ../../drivers/http.h
 	$(NETCC) -c $< -o $@
 tls.o: tls.c rng.h tls.h tls_ta.h ../../drivers/net.h ../../drivers/http.h
@@ -76,7 +78,7 @@ text.o: text.c ../../drivers/ttf.h
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
 # The Calculator's evaluator: the FPU does the sums, so it is built like text.c; main.c draws its window.
-cmd.o: cmd.c
+cmd.o: cmd.c bt.h
 	$(CC) -c $< -o $@
 calc.o: calc.c
 	$(FPCC) -c $< -o $@
@@ -114,9 +116,20 @@ start.o: start.S
 	$(CC) -c $< -o $@
 user.o: user.S
 	$(CC) -c $< -o $@
+# M3b: user/hello.c, the same C source the i386 build runs in ring 3, built for EL0. Position independent (-fPIE, adrp/add,
+# no GOT), linked at 0 into one flat image (user_c.ld) and baked into the kernel by hello_c.S. It reaches the kernel through
+# jtsys.h's aarch64 `svc #0` path with the Joshua Tree numbers. -Os keeps it inside the one user code page.
+USEROBJ = user.o hello_c.o
+HELLOCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
+hello_cc.o: ../../user/hello.c ../../user/jtsys.h
+	$(HELLOCC) -c $< -o $@
+hello_c.bin: hello_cc.o user_c.ld
+	ld.lld -T user_c.ld --oformat binary -o $@ hello_cc.o
+hello_c.o: hello_c.S hello_c.bin
+	$(CC) -c hello_c.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = notice.h brick.h brick_ui.h power.h clock_ui.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = bt.h notice.h brick.h brick_ui.h power.h clock_ui.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
@@ -137,32 +150,49 @@ wifi_fw.o: wifi_fw.S
 	$(CC) -c -o $@ wifi_fw.S
 pi-xhci.o: xhci.c
 	$(CC) -DPI_BUILD -c $< -o $@
+# Bluetooth (bt.c, slice BT1): HCI over the PL011. The BCM4345C0 patch, BCM4345C0.hcd from RPi-Distro/bluez-firmware, is
+# fetched by tools/bt-fw.sh into build/bt-fw/ (gitignored, never committed, LICENSE.cypress alongside) and embedded by
+# bt_fw.S. BT_HCD= names another file (tools/checks/arm64-bt-check.py passes a small made-up one); with no file at all the
+# radio runs its own ROM firmware. bt_fw.S is rewritten only when the path or the file's presence changes.
+BT_HCD ?= ../../build/bt-fw/BCM4345C0.hcd
+bt.o: bt.c bt.h
+	$(CC) -c $< -o $@
+pi-bt.o: bt.c bt.h
+	$(CC) -DPI_BUILD $(PICON) -c $< -o $@
+bt-fw:
+	cd ../.. && tools/bt-fw.sh
+bt_fw.S: bt_fw_gen.sh FORCE
+	@./bt_fw_gen.sh $(BT_HCD)
+bt_fw.o: bt_fw.S $(wildcard $(BT_HCD))
+	$(CC) -c -o $@ bt_fw.S
 pi-start.o: start.S
 	$(CC) -c $< -o $@
 # JT_WIFI_DEV=1 (the dev card) also turns on the key debug line in the menu bar (main.c KEY_DEBUG); release builds never.
+# PICON: every Pi image prints its console on the mini UART (GPIO 14/15, ALT5); the PL011 is the Bluetooth radio's (bt.c).
+PICON = -DCONSOLE_MINI_UART
 pi-main.o: main.c $(MAINDEP)
-	$(CC) -DPI_BUILD $(if $(filter 1,$(JT_WIFI_DEV)),-DKEY_DEBUG) -c $< -o $@
-kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
-pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
+	$(CC) -DPI_BUILD $(PICON) $(if $(filter 1,$(JT_WIFI_DEV)),-DKEY_DEBUG) -c $< -o $@
+kernel8.elf: start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
+pi-kernel8.elf: pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
-pi: wifi-fw kernel8.img
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
+pi: wifi-fw bt-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
 $(1)-main.o: main.c $(MAINDEP)
 	$(CC) $(2) -c $$< -o $$@
 $(1)-pi-main.o: main.c $(MAINDEP)
-	$(CC) -DPI_BUILD $(2) -c $$< -o $$@
+	$(CC) -DPI_BUILD $(PICON) $(2) -c $$< -o $$@
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
-$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
-$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(3) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
+$(1)-kernel8.elf: start.o $(1)-vectors.o $(USEROBJ) $(1)-main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o $(USEROBJ) $(1)-main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
+$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
 $(1)-kernel8.img: $(1)-pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
 endef
 fptest.o: fptest.c
 	$(FPCC) -c $< -o $@
@@ -189,11 +219,11 @@ caltest: cal-kernel8.elf
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
 run-pi: kernel8.img
-	qemu-system-aarch64 -machine raspi4b -nographic -kernel kernel8.img
+	qemu-system-aarch64 -machine raspi4b -nographic -serial null -serial mon:stdio -kernel kernel8.img   # serial 0 is the PL011 (the radio's), serial 1 the mini UART console
 clean:
-	rm -rf *.o *.a *.elf *.img claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg
+	rm -rf *.o *.a *.elf *.img hello_c.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest
+.PHONY: wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
