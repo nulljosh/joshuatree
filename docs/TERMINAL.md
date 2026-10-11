@@ -11,6 +11,7 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 | `browse URL` | Fetches a page and prints it as text with numbered links |
 | `open N` | Follows link N of the last page |
 | `llm PROMPT` | Runs the local model, if the image has one |
+| `bt`, `bt scan` | Bluetooth: where the radio is and its version; a 5 second scan listing what it hears ([RASPBERRY-PI.md](RASPBERRY-PI.md#bluetooth)) |
 | anything else | Asks Claude through the relay on the Mac |
 
 ## Getting there

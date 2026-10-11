@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory(prefix="jt-power-") as tmp:
                    stdout=subprocess.DEVNULL)
     for name, action in [("poweroff", "shutdown"), ("restart", "restart")]:
         log = tmp / (name + ".log")
-        q = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-display", "none",
+        q = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-serial", "null", "-display", "none",
                               "-serial", "file:" + str(log), "-kernel",
                               str(ROOT / "arch/arm64" / (name + "-kernel8.img"))],
                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)

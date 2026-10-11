@@ -70,7 +70,7 @@ def run(name, heap, qemu_args, image, expect, screen):
 run("virt, no room for the framebuffer", 4524, VIRT, "oom-kernel8.elf", "oom fb", False)
 run("virt, no room for the fonts", FB_HEAP + 200, VIRT, "oom-kernel8.elf", "oom text", True)
 if "raspi4b" in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capture_output=True, text=True).stdout:
-    run("pi, no room for the fonts", 4224 + 300, ["-machine", "raspi4b"], "oom-kernel8.img", "oom text", True)
+    run("pi, no room for the fonts", 4224 + 300, ["-machine", "raspi4b", "-serial", "null"], "oom-kernel8.img", "oom text", True)
 else:
     print("  QEMU here has no raspi4b model (needs QEMU 9 or newer), Pi step skipped")
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True)

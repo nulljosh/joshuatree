@@ -26,6 +26,7 @@ This is the dispatch in `arch/arm64/main.c` (`dock_activate` and `app_open_name`
 
 | USB keyboard and mouse on the Pi | **Keyboard works on the real board, 2026-10-06** (see the Log). Mouse untested, no wired one yet. Since 2.24.0 a USB mouse moves an arrow over the desktop, the dock's label follows it, the Console's red button closes it and a dock click opens it again, all proven in QEMU (`tools/checks/arm64-mouse-check.py`); see the mouse test list below. Since 2.13.2 each hub port prints one status line and every port is rescanned once a second, so a keyboard plugged in after boot is found too. Proven end to end in QEMU (`tools/checks/arm64-usb-check.py`). Each step prints a short `usb ...` line on screen: `usb pcie link up`, `usb vl805 ok`, `usb xhci run`, `usb port N connected`, `usb kbd addr N`, then `usb key 0x04 a` for every key. The last line on the photo is where it stopped. |
 | Wi-Fi on the Pi (CYW43455) | Built in 2.16.0, waiting on a photo from the real board. Stage 1 lists nearby networks on screen as `wifi ap ...` lines; joining one is stage 2. QEMU has no SDIO card, so it only proves the failure path (`wifi FAIL cmd5`, boot carries on): `tools/checks/arm64-wifi-check.py`. |
+| Bluetooth (the same CYW43455) | **In 2.51.0, not yet seen on the board.** The radio loads its patch at boot and `bt scan` lists the devices it hears. Connecting the mouse is BT2. See [Bluetooth](#bluetooth). |
 | Disk, network on the Pi | Not yet. M4. |
 
 So on day one, watch two things: the text in a serial terminal, and with a monitor plugged in, a simple desktop of plain boxes with the same boot lines written in its white window. If the serial cable is wrong, the monitor still tells you how far the kernel got. If both are blank, it is the SD card or `config.txt`.
@@ -71,7 +72,7 @@ tools/flash-pi.sh                    # finds the one mounted FAT32 card
 tools/flash-pi.sh "/Volumes/NO NAME" # or name it
 ```
 
-It builds `kernel8.img`, downloads `bootcode.bin`, `start4.elf`, `fixup4.dat`, `bcm2711-rpi-4-b.dtb` and `overlays/disable-bt.dtbo` (cached in `build/pifw`), copies `tools/pi-config.txt` over as `config.txt` (an existing `kernel8.img` or `config.txt` is kept as `.bak` first), strips the macOS `._` files and ejects. With no argument it only picks a FAT volume on an external disk, and stops if it finds more than one. A card fresh out of the box is already FAT32. A used one: `diskutil eraseDisk FAT32 PI MBRFormat diskN` first (check `diskutil list` twice; the LaCie is also external).
+It builds `kernel8.img`, downloads `bootcode.bin`, `start4.elf`, `fixup4.dat` and `bcm2711-rpi-4-b.dtb` (cached in `build/pifw`), copies `tools/pi-config.txt` over as `config.txt` (an existing `kernel8.img` or `config.txt` is kept as `.bak` first), strips the macOS `._` files and ejects. With no argument it only picks a FAT volume on an external disk, and stops if it finds more than one. A card fresh out of the box is already FAT32. A used one: `diskutil eraseDisk FAT32 PI MBRFormat diskN` first (check `diskutil list` twice; the LaCie is also external).
 
 The `config.txt` it writes, from `tools/pi-config.txt`, the one copy:
 
@@ -81,11 +82,10 @@ kernel=kernel8.img
 kernel_address=0x80000
 disable_overscan=1
 enable_uart=1
-dtoverlay=disable-bt
 uart_2ndstage=1
 ```
 
-`kernel_address` puts the kernel where it is built to run; newer firmware would otherwise load it at 0x200000. `disable_overscan` stops the firmware shrinking the picture inside a black border. `disable-bt` matters. It gives the good UART (the PL011) to the pins on the header. `uart_2ndstage` makes the firmware print before our kernel does, so a blank serial line means wiring and a firmware-only line means the kernel.
+`kernel_address` puts the kernel where it is built to run; newer firmware would otherwise load it at 0x200000. `disable_overscan` stops the firmware shrinking the picture inside a black border. There is no `dtoverlay=disable-bt` any more (since 2.51.0): the good UART, the PL011, belongs to the Bluetooth radio, and the console prints on the mini UART, on the same header pins at 115200. `enable_uart=1` holds the core clock the mini UART counts from steady, so the console's speed never drifts. `uart_2ndstage` makes the firmware print before our kernel does, so a blank serial line means wiring and a firmware-only line means the kernel.
 
 If you would rather start from Raspberry Pi OS Lite (64-bit), flash it with Imager, replace `kernel8.img` on the boot partition with ours, and append the lines of `tools/pi-config.txt` to its `config.txt`. Same result, bigger card image.
 
@@ -154,7 +154,7 @@ If it still fails, send the exact lines you see, even if they look like garbage.
 
 ## Mouse test on the real board (2.24.0)
 
-QEMU proves the arrow, the label and the clicks, but not real mice or the real cache. Joshua's mouse is Bluetooth, and there is no Bluetooth stack, so this needs a wired USB mouse (or a wireless one with its own USB receiver).
+QEMU proves the arrow, the label and the clicks, but not real mice or the real cache. Joshua's mouse is Bluetooth, and Bluetooth only scans so far (see [Bluetooth](#bluetooth)), so this needs a wired USB mouse (or a wireless one with its own USB receiver) until BT2.
 
 1. Plug a wired USB mouse into the Pi before power-on. The Console should show `usb mouse addr N port ...`. Move it: an arrow appears and follows, with no trail left behind at 1080p.
 2. Hover the dock: the tile's name shows above it and goes away when the pointer leaves. No arrow-shaped mark stays in the dock.
@@ -174,7 +174,42 @@ Without it, every test is: build, swap the card, photograph the monitor, guess. 
 
 ## Wireless
 
-A Bluetooth dongle and a Logitech receiver are both USB devices, so they wait on the USB driver. The receiver then works as a plain USB mouse and keyboard with no extra code. The Pi's own Wi-Fi and Bluetooth chip (CYW43455) needs a closed firmware file and a full wireless stack. Stage 1 (listing networks) is built, see the table above; wired Ethernet still comes first.
+A Logitech receiver is a USB device: it works as a plain USB mouse and keyboard with no extra code. The Pi's own Wi-Fi and Bluetooth chip (CYW43455) needs closed firmware files: Wi-Fi joins a network (see the table above), and Bluetooth scans, below.
+
+## Bluetooth
+
+Joshua's mouse is the Incase version of the Microsoft Bluetooth Ergonomic Mouse. It is Bluetooth Low Energy, so the click half of the 3.0 gate waits on Bluetooth, and Bluetooth is the other half of the Wi-Fi chip. It talks HCI over a serial line, the PL011.
+
+**What works now (2.51.0): scanning only.** At boot the kernel powers the radio (BT_ON, through the firmware mailbox), loads its patch (`BCM4345C0.hcd`, about 6 seconds at 115200), switches the link to 921600 and prints:
+
+```
+bt: loading the radio's patch
+bt: patch loaded, 323 records
+bt: version hci 9 lmp 9 sub 0x.... rev 0x....
+bt: ready, type bt scan to look for devices
+```
+
+At the Terminal, `bt` says where it is and the version. `bt scan` listens for 5 seconds and prints one line per device, then a count:
+
+```
+bt: Microsoft Bluetooth Mouse  rssi -60  addr c4:8e:8f:65:43:21
+bt: scan done, 3 devices
+```
+
+If the radio stops answering, one line says so, `bt: no answer from the radio`, and the rest of the Pi carries on.
+
+**Why the console moved.** The radio receives in bursts while the kernel is busy drawing or fetching a page. On the PL011 it gets a 32-byte buffer and hardware flow control (GPIO 30 to 33, as Linux wires it), so a burst waits in the radio instead of getting lost. The console only ever sends, so it lost nothing by moving to the mini UART, on the same pins 8 and 10 at 115200: a serial cable is wired the same way. We weighed `dtoverlay=miniuart-bt`, which keeps the console on the PL011 and gives the radio the mini UART: its 8-byte buffer and core-clock baud rate are the wrong fit for the side that receives.
+
+**The board test.**
+
+1. Flash a 2.51.0 card and boot. Within about 10 seconds the Console shows the four `bt:` lines above.
+2. Put the mouse in pairing mode: switch it on with the switch underneath, then hold the pairing button underneath for about 5 seconds until the channel light flashes.
+3. F2 for the Terminal, type `bt scan`, Enter. A line with the mouse's name (an advert holds at most 29 letters, so a long name is cut) and an RSSI near -50 to -70 should print. Photograph it.
+4. If the four lines never come, photograph the last `bt:` line. `bt: no answer from the radio` straight after boot means the chip never answered at 115200: power or the pins.
+
+**What BT2 adds.** Connecting to the mouse, Just Works pairing with the keys kept in memory until SD writes land (so re-pair after a reboot), finding its HID service over GATT, turning its report notifications on, and feeding boot mouse reports into the same pointer the USB mouse drives. Then the arrow moves and clicks.
+
+The patch is `BCM4345C0.hcd` from RPi-Distro/bluez-firmware at the commit pinned in `tools/bt-fw.sh`, fetched into `build/bt-fw/` with `LICENSE.cypress` beside it and never committed, like the Wi-Fi firmware. QEMU has no Bluetooth chip, so `tools/checks/arm64-bt-check.py` runs the whole exchange against a fake controller on a second serial port.
 
 ## Time estimates (2026-10-06)
 

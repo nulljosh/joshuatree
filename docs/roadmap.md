@@ -165,7 +165,7 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
 Also missing, added 2026-10-06 night, in order:
 - [x] [Sonnet] Keyboard shutdown and reboot implemented in 2.36.0: Ctrl+Alt+End shuts down, Ctrl+Alt+Delete restarts, Enter confirms and Escape cancels. Host safety checks and actual HID-to-watchdog raspi4b shutdown/reboot pass in `tools/checks/arm64-power-check.py`. Physical Pi verification and release review remain.
 - [ ] [Fable] The other three cores: wake them from the spin table, give each a stack, run the desktop on one and the drivers on another.
-- [ ] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, a HID-over-GATT or classic HID mouse. After Wi-Fi stage 2.
+- [ ] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, HID over GATT (Joshua's mouse is Bluetooth Low Energy). BT1 (2.51.0): the patch, the version and `bt scan`, checked against a fake controller. BT2 left: LE connect, Just Works pairing, GATT HID, reports into the pointer.
 - [ ] [Sonnet] Heat and the fan: read the SoC temperature through the mailbox, show it, drive the fan pin.
 - [ ] [Fable] Update over Wi-Fi: the Pi fetches the newest kernel8.img from the GitHub release and writes it to the card, then reboots. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror (no TLS yet).
 - [ ] [Sonnet] A Wi-Fi settings screen on the Pi: name and password typed on the keyboard and saved on the card, so nothing is baked into the build.

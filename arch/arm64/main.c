@@ -1,9 +1,18 @@
 /* M0: serial hello. QEMU's virt machine has a PL011 UART at 0x09000000. A Raspberry Pi 4 has one at
    0xFE201000 (make PI=1 sets UART_BASE and PI_BUILD) and needs its two GPIO pins and its baud rate
-   set first; QEMU's virt machine comes up ready. */
+   set first; QEMU's virt machine comes up ready. Since 2.51.0 the Pi image (CONSOLE_MINI_UART, set by the Makefile)
+   prints on the mini UART instead, on the same header pins: the PL011 belongs to the Bluetooth radio (bt.c). */
 #ifdef PI_BUILD
 #define UART_BASE 0xFE201000UL
 #define GPIO_BASE 0xFE200000UL
+#define AUX_ENABLES 0xFE215004UL   /* the mini UART (UART1): bit 0 of AUX_ENABLES turns it on */
+#define MU_IO       0xFE215040UL
+#define MU_IER      0xFE215044UL
+#define MU_LCR      0xFE21504CUL
+#define MU_MCR      0xFE215050UL
+#define MU_LSR      0xFE215054UL
+#define MU_CNTL     0xFE215060UL
+#define MU_BAUD     0xFE215068UL
 #define GICD_BASE 0xFF841000UL   /* the Pi 4's GIC-400, the same GICv2 programming model as QEMU's virt */
 #define GICC_BASE 0xFF842000UL
 #else
@@ -12,6 +21,7 @@
 #define GICC_BASE 0x08010000UL
 #endif
 #define REG(a) (*(volatile unsigned int *)(a))
+#include "bt.h"
 #define UART_DR   (UART_BASE + 0x00)
 #define UART_FR   (UART_BASE + 0x18)
 #define UART_IBRD (UART_BASE + 0x24)
@@ -25,8 +35,38 @@
 
 extern unsigned int boot_el;
 
+/* The console only ever sends. Every wait for room is bounded: a UART that never drains is given up on for good, so a
+   wedged one can never freeze the screen's console, which is the only channel on a Pi with no serial cable. */
+#if defined(PI_BUILD) && defined(CONSOLE_MINI_UART)
+#define CON_TX_FULL() (!(REG(MU_LSR) & 0x20))   /* LSR bit 5: the transmit FIFO can take a byte */
+#define CON_TX(c) (REG(MU_IO) = (unsigned char)(c))
+#else
+#define CON_TX_FULL() (REG(UART_FR) & TXFF)
+#define CON_TX(c) (REG(UART_DR) = (unsigned char)(c))
+#endif
+static int con_tx_dead;
+static void con_tx(char c) {
+    if (con_tx_dead) return;
+    for (unsigned n = 0; CON_TX_FULL(); n++) if (n > 2000000) { con_tx_dead = 1; return; }
+    CON_TX(c);
+}
 static void uart_init(void) {
-#ifdef PI_BUILD
+#if defined(PI_BUILD) && defined(CONSOLE_MINI_UART)
+    /* With Bluetooth on, the firmware's primary UART is the mini UART, and enable_uart=1 holds the core clock it counts
+       from steady (250 MHz on a Pi 4: the Raspberry Pi UART documentation). The firmware has already printed its own
+       lines through it at 115200, so its divisor is kept; 270 (250 MHz / (8 * 115200) - 1) only if it left none.
+       GPIO14 (TX) and GPIO15 (RX) to ALT5, pulls off. Nothing here touches the PL011 or GPIO 30-33 (bt.c's). */
+    REG(AUX_ENABLES) |= 1;
+    REG(MU_IER) = 0;
+    REG(MU_LCR) = 3;       /* 8 bits */
+    REG(MU_MCR) = 0;
+    if (!REG(MU_BAUD)) REG(MU_BAUD) = 270;
+    unsigned int f = REG(GPIO_BASE + 0x04);
+    f &= ~((7u << 12) | (7u << 15)); f |= (2u << 12) | (2u << 15);
+    REG(GPIO_BASE + 0x04) = f;
+    REG(GPIO_BASE + 0xE4) &= ~((3u << 28) | (3u << 30));
+    REG(MU_CNTL) = 3;      /* transmitter and receiver on */
+#elif defined(PI_BUILD)
     /* GPIO14 (TX) and GPIO15 (RX) to ALT0 (PL011), pulls off. BCM2711 registers: GPFSEL1 and GPIO_PUP_PDN_CNTRL_REG0. */
     unsigned int f = REG(GPIO_BASE + 0x04);
     f &= ~((7u << 12) | (7u << 15)); f |= (4u << 12) | (4u << 15);
@@ -48,8 +88,7 @@ static int con_line_start = 1;   /* the next character begins a line */
 static int con_to_term;          /* a Terminal command is running: what it prints goes to the Terminal, not the Console */
 void term_output(int on) { con_to_term = on; }   /* ask.c, around one command */
 static void uart_putc(char c) {
-    while (REG(UART_FR) & TXFF) {}
-    REG(UART_DR) = (unsigned char)c;
+    con_tx(c);
     if (!con_quiet) console_putc(c);
     if (c == '\n') con_quiet = 0;
     con_line_start = c == '\n';
@@ -65,7 +104,7 @@ static int con_noise(const char *s) {
         "usb ", "wifi power", "wifi sdio", "wifi f1", "wifi alp", "wifi chip", "wifi cores", "wifi arm", "wifi fw ", "wifi ht ",
         "wifi bus", "wifi radio up", "wifi ver", "wifi mac", "wifi found", "wifi scan", "wifi joining", "wifi handshake", "wifi assoc",
         "Wi-Fi: found", "Wi-Fi: looked", "Wi-Fi: this Pi", "Wi-Fi: chip", "Wi-Fi: connecting", "Wi-Fi: the router", "Wi-Fi: we answered", "Wi-Fi: handshake",
-        "dhcp: lease", "net dhcp", "@", "Wi-Fi: connected", "Internet: online" };
+        "dhcp: lease", "net dhcp", "@", "Wi-Fi: connected", "Internet: online", "bt: no radio found" };
     for (unsigned i = 0; i < sizeof skip / sizeof skip[0]; i++) {
         const char *a = s, *b = skip[i];
         while (*b && *a == *b) { a++; b++; }
@@ -782,9 +821,8 @@ static void crash(const struct frame *f) {
     crash_nl();
     crash_s("halted: this core sleeps in a wfe loop"); crash_nl();
     for (unsigned r = 0; r < CRASH_ROWS && r < crash_row; r++) {   /* the UART first: it works whatever state the screen is in */
-        for (const char *p = crash_txt[r]; *p; p++) { while (REG(UART_FR) & TXFF) {} REG(UART_DR) = (unsigned char)*p; }
-        while (REG(UART_FR) & TXFF) {}
-        REG(UART_DR) = '\n';
+        for (const char *p = crash_txt[r]; *p; p++) con_tx(*p);
+        con_tx('\n');
     }
     if (fb) {
         int s = ((int)fb_h * 10 / 600 + 5) / 10; if (s < 1) s = 1;
@@ -1937,6 +1975,7 @@ void main(void) {
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); menubar_notify("Wi-Fi joined"); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+    bt_init();   /* bt.c: powers the radio and returns; the main loop's bt_poll does the rest */
 #ifdef NOTICE_SELFTEST
     menubar_notify("Note kept in memory");
 #endif
@@ -1963,13 +2002,13 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); ask_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
-            if (usb_ok || brick_live || notice.text[0]) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live || notice.text[0] || bt_busy()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
-            usb_poll(); input_poll(); ask_poll(); brick_tick(); menubar_tick(); keydbg_tick();
+            usb_poll(); input_poll(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick();
         }
 #endif
     }
