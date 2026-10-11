@@ -44,7 +44,8 @@ clock.o: clock.c tls.h ../../drivers/net.h ../../drivers/http.h
 ip.o: ip.c ../../drivers/nic.h tls.h
 	$(NETCC) -DNETPORT=$(NETPORT) -DTLSPORT=$(TLSPORT) -c $< -o $@
 # HTTPS (tls.c) over BearSSL. The trust anchors are generated from certs/*.pem (plus TLS_TA=extra.pem, the check's
-# throwaway server cert) into tls_ta.h, gitignored; nothing is fetched at run time. The whole vendored subset goes
+# throwaway server cert, or the relay's private CA) into tls_ta.h, gitignored; nothing is fetched at run time. The
+# Claude relay is trusted only through the TLS_TA anchors, never a public root. The whole vendored subset goes
 # behind --start-lib so the link pulls only what tls.c uses.
 TLS_TA ?=
 BSSL = ../../third_party/bearssl
@@ -54,7 +55,7 @@ bearssl/%.o: $(BSSL)/src/%.c $(BSSL)/src/inner.h $(BSSL)/src/config.h
 	@mkdir -p bearssl
 	$(BSSLCC) -c $< -o $@
 tls_ta.h: ../../tools/gen/tls-ta.py $(wildcard certs/*.pem) $(TLS_TA)
-	python3 ../../tools/gen/tls-ta.py $@ $(wildcard certs/*.pem) $(TLS_TA)
+	python3 ../../tools/gen/tls-ta.py $@ $(wildcard certs/*.pem) --private $(TLS_TA)
 browser.o: browser.c tls.h ../../drivers/net.h ../../drivers/http.h
 	$(NETCC) -c $< -o $@
 tls.o: tls.c rng.h tls.h tls_ta.h ../../drivers/net.h ../../drivers/http.h

@@ -14,6 +14,12 @@ Claude app (ring 3) -> kernel, SYS_HTTP_POST -> relay on your Mac -> claude -p -
 
 The relay keeps a session id for each conversation, so a follow-up question knows what came before. Type `/new` in the app to start over.
 
+The relay has three backends. Pick one when you start it.
+
+- No flag: `claude -p`, on your logged-in Claude plan.
+- `--turing`: Samantha, Joshua's own model from the turing repo. Start `./.venv/bin/python app/serve.py` there first; the relay talks to it at `http://127.0.0.1:8127` (or the URL after the flag). No account and no credit. The Pi's prompt reads `Samantha $ `. If Turing is not running, the relay answers 502: "Samantha is not running on the relay machine."
+- `--api-key-file FILE`: the Messages API, paid from a Claude Platform credit. It refuses to start unless `--allow-api-spend` is also given, so an old script cannot spend a topped-up credit. With both `--turing` and `--api-key-file`, Turing answers.
+
 ## Run it
 
 Make a token once and keep it private:
@@ -86,7 +92,7 @@ The relay can turn text into speech for the Pi. The Pi side that plays it comes 
 
 The Pi uses HTTPS for its relay requests. Certificate setup and the clock bootstrap limits are in [RELAY-TLS.md](RELAY-TLS.md). QEMU defaults to loopback HTTP; `CLAUDE_RELAY_TLS=1` exercises the HTTPS path.
 
-The ARM build has no apps yet, so it asks from its Terminal window instead (the dock tile or F1, see [TERMINAL.md](TERMINAL.md)). Type at the prompt on the bottom row (`Claude Haiku 5.5 $ `, which then names the model that last answered) and press Enter; the answer prints in the Terminal. It talks to the same relay with the same token, read at build time from the same token file (or the file named by `CLAUDE_RELAY_TOKEN_FILE`), with the host and port from `CLAUDE_RELAY_HOST` and `CLAUDE_RELAY_PORT`. The token is compiled into the image and kept out of git, so treat a built Pi image like the token itself. It works on QEMU's virt machine today. A real Pi says `claude: no network` until Wi-Fi joins. Details: the Claude section of [ARM64.md](ARM64.md).
+The ARM build has no apps yet, so it asks from its Terminal window instead (the dock tile or F1, see [TERMINAL.md](TERMINAL.md)). Type at the prompt on the bottom row (`Samantha $ `, which then names the model that last answered) and press Enter; the answer prints in the Terminal. It talks to the same relay with the same token, read at build time from the same token file (or the file named by `CLAUDE_RELAY_TOKEN_FILE`), with the host and port from `CLAUDE_RELAY_HOST` and `CLAUDE_RELAY_PORT`. The token is compiled into the image and kept out of git, so treat a built Pi image like the token itself. It works on QEMU's virt machine today. A real Pi says `claude: no network` until Wi-Fi joins. Details: the Claude section of [ARM64.md](ARM64.md).
 
 ## Checks
 

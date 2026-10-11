@@ -142,9 +142,9 @@ HTTPS. This is a text browser: pages that need JavaScript may not work.
 Use `links`, `open 1`, `back`, `forward` and `find WORD` to move around.
 
 For Samantha, the Mac must be on the same reachable network with its relay
-running. Before flashing, set `CLAUDE_RELAY_HOST` to the Mac's local address;
-QEMU's default `10.0.2.2` is an emulator address, not your Mac's Wi-Fi address.
-The relay port defaults to 8765. See [the relay setup](CLAUDE-APP.md) for the
+running. Before flashing, set `CLAUDE_RELAY_HOST` to the Mac's local address
+as a first guess; if the router moves the Mac, the Pi finds the relay on the
+LAN by itself ([RELAY-TLS.md](RELAY-TLS.md)). The relay port defaults to 8765. See [the relay setup](CLAUDE-APP.md) for the
 shared token and the choice of Claude Code or an API-backed relay.
 
 Type a question in Terminal. `/status` shows the selected model, effort and
