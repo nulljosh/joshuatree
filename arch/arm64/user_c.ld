@@ -26,4 +26,4 @@ SECTIONS {
 }
 ASSERT(SIZEOF(.got) == 0, "a GOT means the code was not built -fPIE -fdirect-access-external-data")
 ASSERT(_user_end <= 0x40000, "the user image must fit the 256 KiB app window (UP_APP..UP_ASTACK in main.c)")
-ASSERT(_user_bss_end - _user_end <= 0x4000, "the zeroed pool past the image is 16 KiB (APP_ZERO_PAGES in main.c)")
+ASSERT(_user_bss_end - _user_end <= 0x8000, "the zeroed pool past the image is 32 KiB (APP_ZERO_PAGES in main.c)")

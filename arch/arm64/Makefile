@@ -18,6 +18,8 @@
 #   sdtest      sd-kernel8.img: the Terminal's ls and cat run at boot on the check's card, then a read past the card's end
 #   sdwtest     sdw-kernel8.img writes, replaces and deletes files in JT/ at boot and tries the boot files (refused), then a
 #               CMD25 at the card's end; sdr-kernel8.img, booted next on the same card, reads them back and deletes them
+#   notestest   notesw-kernel8.img opens Notes from the dock with made-up USB key reports, types a note and saves it;
+#               notesr-kernel8.img, booted next on the same card, opens Notes and the note again (arm64-notes-check.py)
 # The Console's ask> prompt asks the Claude relay. claude_cfg.sh writes its address and token (gitignored) on every build
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token), but only when
 # JT_WIFI_DEV=1 (tools/flash-pi.sh) or CLAUDE_RELAY_TOKEN_FILE is set explicitly (the checks); a release build has neither.
@@ -115,13 +117,16 @@ gui_paint.o: ../../kernel/gui_paint.c ../../kernel/gui_paint.h ../../kernel/dock
 	$(CC) $(SHARED) -c $< -o $@
 dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 	$(CC) $(SHARED) -c $< -o $@
-# The SD card: emmc.c (EMMC2 on the Pi, stubs on virt) and the i386 kernel's own FAT code, drivers/fat.c, reading and
-# writing through emmc.c's blockdev_read_sector and blockdev_write_sector. -mstrict-align, as for drivers/net.c.
-# The Pi writes only inside the card's JT folder, never a boot file.
+# The SD card: emmc.c (EMMC2 on the Pi, the virtio disk on virt) and the i386 kernel's own FAT code, drivers/fat.c,
+# reading and writing through emmc.c's blockdev_read_sector and blockdev_write_sector. -mstrict-align, as for
+# drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
+# calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o
-PISDOBJ = pi-emmc.o fat.o
+SDOBJ = emmc.o fat.o ufile.o
+PISDOBJ = pi-emmc.o fat.o ufile.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
+	$(SDCC) -c $< -o $@
+ufile.o: ufile.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 emmc.o: emmc.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
@@ -136,20 +141,25 @@ user.o: user.S
 # and not a GOT slot), linked -pie at 0 by user_c.ld into one flat image, with the pointer tables it needs relocated by the
 # kernel's loader. They reach the kernel through jtsys.h's aarch64 `svc #0` path with the Joshua Tree numbers. libjt is
 # built here too, under arch/arm64 and under other names (text.o is the kernel's TTF blender), never next to its i386
-# objects in user/libjt; --start-lib pulls only the members a program uses (calendar: string.c and text.c). stdlib.c's
-# brk heap casts a pointer through a 32-bit int, so it is left out until a program on ARM malloc()s. -Os keeps images small.
+# objects in user/libjt; --start-lib pulls only the members a program uses (calendar: string.c and text.c; notes: text.c
+# and osk.c). stdlib.c's brk heap casts a pointer through a 32-bit int, so it is left out until a program on ARM
+# malloc()s; Notes does not. -Os keeps images small.
 # userapps.S bakes the images in with .incbin and lists them; a new app is a name in UAPPS and a row there.
-UAPPS = hello calendar
+UAPPS = hello calendar notes
 USEROBJ = user.o userapps.o
 UCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fdirect-access-external-data -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
 UJT = ../../user/libjt
-UJTOBJ = ujt_string.o ujt_text.o
+UJTOBJ = ujt_string.o ujt_text.o ujt_osk.o
 ujt_string.o: $(UJT)/string.c $(UJT)/string.h
 	$(UCC) -c $< -o $@
 ujt_text.o: $(UJT)/text.c $(UJT)/text.h $(UJT)/aafont.h ../../user/jtsys.h
 	$(UCC) -c $< -o $@
-uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h
+ujt_osk.o: $(UJT)/osk.c $(UJT)/osk.h $(UJT)/text.h ../../user/jtsys.h
 	$(UCC) -c $< -o $@
+uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h
+	$(UCC) -c $< -o $@
+# notes.c finds its arena with (unsigned)_user_end, a 32-bit cast that is still exact here: the app window sits below 4 GiB.
+uapp_notes.o: UCC += -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
 uapp_%.bin: uapp_%.o $(UJTOBJ) user_c.ld
 	ld.lld -pie --no-dynamic-linker -z norelro -T user_c.ld --oformat binary -o $@ $< --start-lib $(UJTOBJ) --end-lib
 	@test "$$(tail -c 16 $@ | head -c 4)" = JTU1 || { rm -f $@; echo "$@: the JTU1 trailer is not the last 16 bytes (this linker added sections after it)"; exit 1; }
@@ -250,6 +260,9 @@ sdtest: sd-kernel8.img
 $(eval $(call variant,sdw,-DSD_SELFTEST=2,,))
 $(eval $(call variant,sdr,-DSD_SELFTEST=3,,))
 sdwtest: sdw-kernel8.img sdr-kernel8.img
+$(eval $(call variant,notesw,-DNOTES_SELFTEST=1,,))
+$(eval $(call variant,notesr,-DNOTES_SELFTEST=2,,))
+notestest: notesw-kernel8.img notesr-kernel8.img
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
 run-pi: kernel8.img
@@ -257,7 +270,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest sdtest sdwtest
+.PHONY: wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest sdtest sdwtest notestest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))

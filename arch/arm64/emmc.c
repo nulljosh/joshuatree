@@ -12,14 +12,17 @@
    writes through blockdev_read_sector and blockdev_write_sector below: sector numbers inside the partition, refused
    past its end, and a write never lands on its boot sectors. The OS's own files go in a JT folder (sd_write, sd_remove,
    sd_mkdir), and no name the firmware boots from is ever written. QEMU's raspi4b models EMMC2 at the same address;
-   tools/checks/arm64-sd-check.py plugs a card into it. */
+   tools/checks/arm64-sd-check.py plugs a card into it. M3d: on QEMU's virt machine the four emmc_* calls go to the
+   virtio disk instead, and everything from the partition up is the same code; the apps' file calls (ufile.c) root
+   their paths in JT/ through sd_enter_jt. */
 #include "emmc.h"
+#include "../../drivers/fat.h"
 struct vfs_ops;
 void vfs_register(const char *name, const struct vfs_ops *ops) { (void)name; (void)ops; }   /* fat_vfs_register's call: ARM has no VFS yet, cmd.c calls fat_* itself */
-#ifdef PI_BUILD
-#include "../../drivers/fat.h"
-#define R32(a) (*(volatile unsigned *)(unsigned long)(a))
 void kputs(const char *s); void kdec(unsigned v); void kx(unsigned v);
+static unsigned long blocks;   /* the card's size in 512-byte blocks */
+#ifdef PI_BUILD
+#define R32(a) (*(volatile unsigned *)(unsigned long)(a))
 unsigned mbox_clock_rate(unsigned id);   /* main.c: a firmware clock's rate in Hz, 0 when the firmware does not answer */
 #define EMMC 0xFE340000UL
 #define BLK     0x04   /* block size (11:0) and count (31:16) */
@@ -91,7 +94,6 @@ static int set_clock(unsigned hz) {   /* the spec 3.0 10-bit divider: base / (2 
     mdelay(2);
     return 1;
 }
-static unsigned long blocks;   /* the card's size in 512-byte blocks */
 static unsigned rca, ready, sdhc;
 static int fail(const char *step) {
     kputs("sd FAIL "); kputs(step);
@@ -193,6 +195,29 @@ bad:
     return 0;
 }
 
+#else
+/* M3d: QEMU's virt machine has no SD host. Its card is the virtio disk (main.c's blk_*), with the same MBR and FAT
+   partition a Pi card has, so everything from here down (the partition bounds, the boot files never written, JT/) is
+   the code the Pi runs. With no disk every call answers 0 and nothing is printed. */
+int vblk_ready(void); unsigned long vblk_sectors(void); int vblk_rw(unsigned long sector, void *buf, int write);   /* main.c */
+int emmc_init(void) {
+    blocks = vblk_ready() ? vblk_sectors() : 0;
+    if (!blocks) return 0;
+    kputs("sd virtio disk "); kdec((unsigned)(blocks / 2048)); kputs(" MB\n");
+    return 1;
+}
+unsigned long emmc_blocks(void) { return blocks; }
+static int vblk_span(unsigned lba, unsigned count, unsigned char *p, int write) {
+    if (!blocks || !count) return 0;
+    if (lba >= blocks || count > blocks - lba) { kputs("sd refused block "); kdec(lba); kputs(", past the end of the card\n"); return 0; }
+    for (unsigned b = 0; b < count; b++)
+        if (!vblk_rw(lba + b, p + 512UL * b, write)) { kputs(write ? "sd FAIL write block " : "sd FAIL read block "); kdec(lba + b); kputs("\n"); return 0; }
+    return 1;
+}
+int emmc_read(unsigned lba, unsigned count, void *buf) { return vblk_span(lba, count, buf, 0); }
+int emmc_write(unsigned lba, unsigned count, const void *buf) { return vblk_span(lba, count, (unsigned char *)buf, 1); }
+#endif
+
 /* ---- The FAT partition, as drivers/fat.c's block device ---- */
 static unsigned part_start, part_blocks;   /* in card blocks */
 static unsigned part_reserved, part_fsinfo;   /* the boot sectors fat.c never writes, and the one it may (FAT32's FSInfo) */
@@ -267,6 +292,7 @@ static int jt_open(int make) {   /* into JT/, made on the first write; fat.c wor
     if (fat_chdir("JT")) return 1;
     return make && fat_mkdir("JT") && fat_chdir("JT");
 }
+int sd_enter_jt(int make) { return mounted && jt_open(make); }
 int sd_write(const char *name, const void *data, unsigned len) {
     if (!mounted) return 0;
     if (!sd_name_ok(name)) return -1;
@@ -291,17 +317,3 @@ int sd_mkdir(const char *name) {
     fat_chdir("..");
     return ok;
 }
-#else
-/* QEMU's virt machine has no SD host: no card, and fat.c's reads all fail. */
-int emmc_init(void) { return 0; }
-unsigned long emmc_blocks(void) { return 0; }
-int emmc_read(unsigned lba, unsigned count, void *buf) { (void)lba; (void)count; (void)buf; return 0; }
-int emmc_write(unsigned lba, unsigned count, const void *buf) { (void)lba; (void)count; (void)buf; return 0; }
-int blockdev_read_sector(unsigned int lba, void *buf) { (void)lba; (void)buf; return 0; }
-int blockdev_write_sector(unsigned int lba, const void *buf) { (void)lba; (void)buf; return 0; }
-int sd_mount(void) { return 0; }
-int sd_ready(void) { return 0; }
-int sd_write(const char *name, const void *data, unsigned len) { (void)name; (void)data; (void)len; return 0; }
-int sd_remove(const char *name) { (void)name; return 0; }
-int sd_mkdir(const char *name) { (void)name; return 0; }
-#endif
