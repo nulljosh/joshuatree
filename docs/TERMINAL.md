@@ -27,7 +27,7 @@ No mouse is needed. The desktop's keys, in `arch/arm64/main.c` (`ui_key`); `tool
 
 | Key | Does |
 |---|---|
-| F1, Cmd+Space, Ctrl+Space, Alt+Space | Toggle Spotlight: press again to close. Type to filter app names, including Clock (prefix or any part), Up and Down choose, Enter opens, Esc closes |
+| F1, Cmd+Space | Toggle Spotlight: press again to close. Type to filter app names, including Clock (prefix or any part), Up and Down choose, Enter opens, Esc closes |
 | A letter or digit | With no pane holding the keys, Spotlight with that character already typed |
 | Enter, Space, Tab | With no pane holding the keys and no dock label, Spotlight, empty |
 | F2, Ctrl+T | The Terminal, at once, closing Spotlight if open; it has the keyboard |

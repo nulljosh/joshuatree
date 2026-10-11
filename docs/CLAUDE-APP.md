@@ -76,6 +76,18 @@ This is phase 1. Claude Code runs on the host, through the relay. Joshua Tree is
 - **Up to 8 KB of answer.** Longer answers are cut. Curly quotes and dashes become plain ASCII, because the OS fonts are ASCII.
 - **Sessions live in the relay.** Restart the relay and the next question starts a fresh conversation.
 
+## Samantha's voice (text to speech)
+
+The relay can turn text into speech for the Pi. The Pi side that plays it comes later. The relay half works now.
+
+`POST /api/tts` takes the same `Authorization: Bearer` token and the same TLS rules as `/api/claude`. Send `{"text": "..."}` (or plain text). A good answer is raw audio: signed 16-bit little-endian, mono, 22050 Hz, no header. This is ElevenLabs' `pcm_22050`. The reply carries `X-Sample-Rate: 22050`.
+
+- **The key stays on the Mac.** Put it in `~/.config/joshuatree/elevenlabs.key` and run `chmod 600` on it. The relay refuses a key file that others can read. Use `--tts-key-file` for another path. The key is never in a request, a reply or a log. If ElevenLabs fails, the Pi only sees a status code.
+- **Caps.** 400 characters per request and 5000 per day by default (`--tts-max-chars`, `--tts-daily-chars`). Over the per-request cap is 413. Past the daily cap is 429. Neither calls ElevenLabs. The day is the Mac's local date. The count lives in `~/.config/joshuatree/tts-usage.json` (`--tts-usage-file`), so a restart does not reset it. A failed ElevenLabs call gives its characters back.
+- **Voice.** Samantha's voice id, `EXAVITQu4vr4xnSDxMaL`, is the default. Change it with `--tts-voice`. The model is `eleven_flash_v2_5` (`--tts-model`).
+- **Other statuses.** 400 for empty text, 503 when the key file is missing or not private, 502 when ElevenLabs fails, 429 while another voice request runs.
+- `--tts-base` points the relay at a stub for tests. It must be https, or http on loopback.
+
 ## On ARM64: Claude in Terminal
 
 The Pi uses HTTPS for its relay requests. Certificate setup and the clock bootstrap limits are in [RELAY-TLS.md](RELAY-TLS.md). QEMU defaults to loopback HTTP; `CLAUDE_RELAY_TLS=1` exercises the HTTPS path.
@@ -87,3 +99,4 @@ The ARM build has no apps yet, so it asks from its Terminal window instead (the 
 - `tools/checks/claude-relay-check.py` runs the relay against a stub `claude`: token refused and accepted, session resume, the exact read-only command line, the prompt on stdin, the timeout kill, the size cap, one at a time, and clean logs, and the second reply line, `M <model>`, that the Pi's prompt shows. It also runs a copy with the token check removed and proves a tokenless request then gets through.
 - `tools/checks/arm64-claude-console-check.py` boots the ARM build with the real relay and the stub: a question typed at the Terminal's prompt gets the answer printed in 53-column lines, a follow-up resumes the session and is echoed after `Claude Sonnet 5.5 $ `, the model the relay said answered, and a wrong token, no network and no token each print their own line.
 - `tools/checks/ring3claude-check.py` boots QEMU with the real relay and the stub: the answer is drawn, the session resumes, a wrong token, a stopped relay and no relay at all each show the red line.
+- `tools/checks/relay-tts-check.py` runs the voice endpoint against a stub ElevenLabs server: PCM returned, both caps refused without a call, the count kept across a restart, the key never in a response, header or log, and a tokenless request refused.

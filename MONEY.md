@@ -8,11 +8,13 @@ fleet-wide ledger is GTM.md in the Code root, outside this repo.
 ## In one paragraph
 
 The OS and its apps are free, Apache 2.0, forever. The money is the
-ready-made kit: a Raspberry Pi 4 board, an SD card with Joshua Tree
-already on it, a printed Neo case, built and tested, with support.
-Joshua set the kit price at $500 USD on 2026-10-07. The kit is not built,
-nothing is for sale, nobody has paid, and the waitlist has no count
-yet. The first dollar is still ahead of us.
+box: the Samantha box, a desk unit with a 7 inch screen, a speaker, a
+mic and a Raspberry Pi 4 inside, Joshua Tree on the card, built and
+tested, with support. You talk to it and it does things. Nothing
+underneath it but our code, and no cloud account to make.
+Joshua set the kit price at $500 USD on 2026-10-07. The box is drawn
+(2026-10-11), not printed. Nothing is for sale, nobody has paid, and the
+waitlist has no count yet. The first dollar is still ahead of us.
 
 ## What we sell and what stays free
 
@@ -20,8 +22,9 @@ yet. The first dollar is still ahead of us.
 |---|---|---|
 | The OS (kernel, desktop, drivers) | Free, Apache 2.0 | Shipped. Runs in the browser and on a real Pi 4 |
 | The apps (Notes, Clock, Samantha, the rest) | Free, Apache 2.0 | Shipped on x86 and in QEMU. Being rebuilt for the Pi |
-| The case designs (Neo, Neo Pi) | Free to build for yourself, CC BY-NC-SA 4.0 | Drawn, not printed |
-| The kit: board, SD card with the OS, case, built, supported | $500 USD | Not built. No waitlist count yet. No date promised |
+| Samantha, the assistant (from Turing, a separate project) | Free | Answers from a small model on the Mac today. On the box itself later, no key, no cloud |
+| The case designs (Neo, Neo Pi, the Samantha box) | Free to build for yourself, CC BY-NC-SA 4.0 | Drawn, not printed. The Samantha box CAD is `docs/hardware/samantha_cad.py` |
+| The Samantha box: Pi 4, 7 inch screen, speaker, mic, card with the OS, built, supported | $500 USD | Not built. No waitlist count yet. No date promised |
 
 The hardware licence is non-commercial on purpose. Anyone can print a
 case for themselves. Nobody can sell copies of the kit. That protects
@@ -32,11 +35,16 @@ purpose, and it stays that way.
 
 ## The bet
 
-An operating system you talk to. Ask it to open an app, take a note or
-blink the light and it does, out loud. The assistant is Samantha, from
-Turing, a separate project. Joshua Tree is the OS she runs the machine
-through. No Linux underneath. No libc. Every line is ours, so every line
-can be checked.
+A computer you talk to, with nothing underneath. Ask it to open an app,
+take a note or blink the light and it does, out loud, through its own
+speaker. The assistant is Samantha, from Turing, a separate project,
+and she is a small model, not a cloud: today she answers from the Mac
+on the desk, and the plan is to run her on the box. Joshua Tree is the
+OS she runs the machine through. No Linux underneath. No libc. No
+account. Every line is ours, so every line can be checked.
+
+Everyone else sells a screen for someone else's cloud. We sell the
+whole computer, and you can read it.
 
 The software is the demo. The money is in the thing it runs on.
 
@@ -85,9 +93,11 @@ quote.
 | Line | Amount (USD) | Real or estimate | Where it comes from |
 |---|---|---|---|
 | Raspberry Pi 4B board | no number yet | estimate needed | not priced in any doc yet; a retail listing goes here |
+| 7 inch HDMI screen (Waveshare 7inch HDMI LCD (C) class, the stand-in in the CAD) | about $60 | estimate, no listing checked | `docs/hardware/samantha_cad.py` PARTS block |
+| Round speaker, 40 mm, and a small USB mic | about $15 | estimate | same PARTS block; the mic is for 5.0's voice in |
 | Power supply, USB-C | no number yet | estimate needed | not in `docs/SHOPPING.md` yet |
 | microSD card, 32 GB, with the OS on it | about $10 | estimate (CAD, rough) | `docs/SHOPPING.md` |
-| Neo Pi case, printed | about $9 plastic at home; $40 to $75 from a print service | estimate | `docs/HARDWARE.md`, Prototype cost (sized for the bigger x86 case, so the Pi case should be less) |
+| The Samantha box, printed (shell, bezel, stand) | about $9 plastic at home; $40 to $75 from a print service | estimate | `docs/HARDWARE.md`, Prototype cost, sized for the bigger x86 case; the first real quote comes from the Vancouver computer shop |
 | Bolts and nuts | about $7 | estimate | `docs/HARDWARE.md`, hardware bag |
 | Card fees, about 3% of $500 | about $15 | estimate, standard processor rate | no processor picked |
 | Shipping, small box | about $15 to $25 | estimate, no carrier quote | same guess as the x86 kit |
@@ -184,10 +194,22 @@ $1, no subscriptions, no tips, and the Stripe account has zero charges
 ever. The kit is the one thing in the fleet priced above a dollar,
 because it is the one thing with real parts and real hours in it.
 
-## Bring your own AI key
+## Samantha without a key
 
-Samantha answers through an AI model over the network. Release builds of
-the OS carry no key and no network credentials. The card Joshua develops
+Since 2026-10-11 Samantha answers from Turing's own small model on the
+Mac, not from a paid API. The API credit ran out that night and the
+relay now refuses to spend one unless told to. For the box, that is the
+whole point: no key to type, no bill that grows with use, and nothing
+of the customer's on anyone's server. The road to Samantha on the box
+itself is in `docs/roadmap.md` (user mode, files on the card, the local
+model's weights read from the card). Until then the box talks to a Mac
+on the same network, which is fine for Joshua and not fine for a
+customer; the kit does not ship before she runs on the box or the
+hosted pack exists.
+
+The older bring-your-own-key path still works for anyone who wants a
+bigger model behind her. Release builds of the OS carry no key and no
+network credentials. The card Joshua develops
 on carries our Wi-Fi and our key, flashed with `tools/flash-pi.sh` and
 the `JT_WIFI_DEV=1` flag, and that card never ships. The relay's key
 lives outside the repo.
@@ -223,7 +245,8 @@ In order. Each one feeds the next.
 - **Cloud cost of anything hosted.** Step 3 above puts a server of ours between the customer and the model. That is a bill that grows with use, and the fleet's rule so far is no subscriptions. It is not built, and should not be until the bill is understood.
 - **The board is someone else's product.** The Raspberry Pi is made by a company we do not control. They can change it, raise the price or end it. The long-term answer in `docs/roadmap.md` is a carrier board of our own for the compute module. That is years away, not months.
 - **The kit price is ahead of the kit.** $500 was set before a parts list, a print or a build existed. The honest state is "a price and a plan," not "a product."
-- **Nothing to show for input yet.** On the real Pi there is no mouse, no browser and no HTTPS. A box you cannot click in is not a box people pay for.
+- **No click yet.** On the real Pi the keyboard, sound, Wi-Fi and HTTPS work, but the mouse is Bluetooth and the driver is being written. A box you cannot click in is not a box people pay for.
+- **The box is unmeasured.** Every size in the Samantha box CAD is a stand-in. One real print, measured against the real screen and board, comes before any quote.
 
 ## What would make us stop or change course
 
@@ -268,6 +291,7 @@ ships Joshua Tree on their device.
 
 ## Where we are
 
+- 2026-10-11: the Samantha box is drawn (`docs/hardware/samantha_cad.py`, 2.42.0): a desk unit with a 7 inch screen, speaker and mic, STLs and a STEP, nothing printed. The Pi made its first sound through the 3.5 mm jack (`beep`), typing into apps and volume keys are in review, Samantha answers from Turing's model with no API key, and the Bluetooth driver for Joshua's mouse is in progress. The 3.0 gate (boot, type, click, one shared app in user mode) is the next milestone the kit waits on. Still no waitlist count, no retail kit price, no print quote.
 - 2026-10-08: the OS runs on the real Pi 4. The kit is not built. The money plan now has a demand gate (50 on the waitlist, a guess), a retail check, and certification and the warranty reserve named as open costs. No waitlist count, no retail kit price, no certification quote yet.
 - 2026-10-07: on the real Pi 4, Wi-Fi joins and holds, DHCP and the network clock work, the menu bar shows the 12-hour clock and the three-bar Wi-Fi icon, and Samantha can act on the Pi (print a note, blink the green light). The desktop, dock, window frame and a USB keyboard work. No mouse, no browser, no HTTPS yet. The landing waitlist is live. The kit is not built and has no waitlist number. Joshua is buying a wired USB mouse and a 3.3V serial cable.
 - 2026-10-06: the first boot on real hardware, a Raspberry Pi 4, flashed in one command (`tools/flash-pi.sh`). Decided the same day: the first kit is Pi-based, because it is the board that boots, the one people already own, and its case is already drawn (`docs/hardware/PI-CASE.md`).
@@ -281,12 +305,14 @@ The demand gate and the retail check. Take a count from the "Notify me"
 form and write it here. Price a Pi 4 kit at a normal shop and write that
 number here too. Nothing gets bought for a batch until the gate is met.
 
-Alongside, on the build side: a wired USB mouse working on the real Pi,
-because a board you can click in is the first thing anyone would pay
-for. After that: the Pi parts total and power supply price, the Neo Pi
-fit test printed, a shipping and return quote, and an answer on
-certification. Then the price has numbers under it.
+Alongside, on the build side: the Bluetooth mouse clicking on the real
+Pi, because a board you can click in is the first thing anyone would
+pay for. After that: the Samantha box fit test printed in Vancouver and
+measured, the Pi parts total with the screen and power supply, a
+shipping and return quote, and an answer on certification. Then the
+price has numbers under it.
 
-*Set 2026-10-08: the demand gate and the retail check. Was: a wired USB
+*Set 2026-10-11: the demand gate, the retail check and the Bluetooth
+mouse. Was 2026-10-08: the demand gate and the retail check, and a wired USB
 mouse on the Pi, set 2026-10-08. Was: a USB keyboard on the Pi, set
 2026-10-06. Was: real drivers for one real board, set 2026-09-28.*

@@ -25,6 +25,14 @@ Joshua Tree cannot run Claude Code itself. The i386 app defaults to a loopback H
     429 a request is already running (one at a time)        504 claude (or Turing) ran past --timeout
     502 claude failed or answered something unreadable, or Turing is not running
 
+    POST /api/tts   (same token, same TLS rules)
+    Content-Type: application/json      {"text": "..."}      (or text/plain: the body is the text)
+    200 application/octet-stream: raw PCM, signed 16-bit little-endian, mono, 22050 Hz (ElevenLabs pcm_22050).
+        The header X-Sample-Rate says 22050. No WAV header.
+    413 text over the per-request character cap     429 the per-day cap is used up, or a voice request is running
+    400 empty text or bad JSON     503 no private key file     502 ElevenLabs failed (no detail is passed on)
+    The ElevenLabs key lives in a private file on this Mac (--tts-key-file) and is never in a request, a reply or a log.
+
 What it locks down, and why:
   - Binds 127.0.0.1 unless --lan is given. QEMU's user network reaches the host's loopback
     at 10.0.2.2, so the emulator needs no LAN exposure at all. --lan (a Pi or a second
@@ -69,7 +77,7 @@ Then in Joshua Tree: Settings > Assistant > Claude relay = 10.0.2.2:8765, Claude
 Python standard library only. tools/checks/claude-relay-check.py proves the rules above
 against a stub `claude`.
 """
-import argparse, hmac, http.server, json, os, re, signal, socket, ssl, stat, subprocess, sys, threading, time, urllib.request, urllib.error, uuid
+import argparse, hmac, http.server, json, os, re, signal, socket, ssl, stat, subprocess, sys, threading, time, urllib.request, urllib.error, urllib.parse, uuid
 
 DEFAULT_PORT = 8765
 DEFAULT_TIMEOUT = 150          # seconds; the kernel waits up to 240 s (JT_HTTP_POST_TICKS_CLAUDE), so the relay's 504 lands first
@@ -77,6 +85,15 @@ DEFAULT_MAX_BODY = 4096        # the app's prompt is at most a few hundred bytes
 REPLY_MAX = 8191               # JT_HTTP_POST_REPLY_MAX (8192) minus the app's NUL
 TOKEN_MIN, TOKEN_MAX = 16, 63  # 63: the kernel keeps it in a 64-byte buffer
 SESSIONS_MAX = 64
+TTS_SAMPLE_RATE = 22050        # ElevenLabs output_format pcm_22050: 16-bit signed little-endian mono
+TTS_FORMAT = "pcm_22050"
+TTS_AUDIO_MAX = 4 << 20        # 4 MB: 400 characters is about 1.3 MB, so more than this is not our answer
+TTS_DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"   # Samantha's voice (~/.samantha/characters/samantha/character.json, tools/ad-audio.py)
+TTS_DEFAULT_MODEL = "eleven_flash_v2_5"
+TTS_DEFAULT_BASE = "https://api.elevenlabs.io"
+TTS_DEFAULT_KEY_FILE = "~/.config/joshuatree/elevenlabs.key"
+TTS_DEFAULT_USAGE_FILE = "~/.config/joshuatree/tts-usage.json"
+VOICE_RE = re.compile(r"^[A-Za-z0-9]{10,40}$")
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 READ_ONLY_TOOLS = ["Read", "Grep", "Glob"]
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -280,6 +297,88 @@ def run_turing(cfg, prompt, pi="", history=None):
     if text.strip() == "UNKNOWN": text = "I don't know that one yet."   # serve.py's word for a decline
     messages.append({"role": "assistant", "content": text})
     return 200, text
+class TtsError(Exception):
+    """A refusal or failure with a status and a fixed message. Never carries upstream text or the key."""
+    def __init__(self, status, msg): super().__init__(msg); self.status, self.msg = status, msg
+
+
+def tts_read_key(cfg):
+    """The ElevenLabs key from its private file. Refuses a file that group or others can read."""
+    path = os.path.expanduser(cfg.tts_key_file)
+    try:
+        st = os.stat(path)
+        if st.st_mode & 0o077: raise TtsError(503, "The voice key file must be private. Run chmod 600 on it.")
+        with open(path, encoding="utf-8") as fh: key = fh.read().strip()
+    except OSError:
+        raise TtsError(503, "Voice is not set up on the relay Mac.")
+    if not key or any(ord(c) < 33 or ord(c) > 126 for c in key): raise TtsError(503, "Voice is not set up on the relay Mac.")
+    return key
+
+
+class TtsUsage:
+    """Characters spent today, kept in a small file so a restart does not reset the cap. The day is the local date."""
+    def __init__(self, path):
+        self.path, self.lock = os.path.expanduser(path), threading.Lock()
+
+    def _load(self, today):
+        try:
+            with open(self.path, encoding="utf-8") as fh: d = json.load(fh)
+            if isinstance(d, dict) and d.get("date") == today and isinstance(d.get("chars"), int) and d["chars"] >= 0: return d["chars"]
+        except (OSError, ValueError): pass
+        return 0
+
+    def _save(self, today, chars):
+        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+        tmp = self.path + ".tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh: json.dump({"date": today, "chars": chars}, fh)
+        os.replace(tmp, self.path)
+
+    def reserve(self, n, cap):
+        """Add n to today's count unless that passes cap. True if reserved."""
+        today = time.strftime("%Y-%m-%d")
+        with self.lock:
+            used = self._load(today)
+            if used + n > cap: return False
+            self._save(today, used + n)
+            return True
+
+    def refund(self, n):
+        today = time.strftime("%Y-%m-%d")
+        with self.lock: self._save(today, max(0, self._load(today) - n))
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k): return None   # the key header must never follow a redirect elsewhere
+
+
+TTS_OPENER = urllib.request.build_opener(NoRedirect)
+
+
+def run_tts(cfg, usage, text):
+    """Returns PCM bytes. Checks both caps first; ElevenLabs is called only when both pass."""
+    if len(text) > cfg.tts_max_chars:
+        raise TtsError(413, "That is %d characters. The limit is %d per voice request." % (len(text), cfg.tts_max_chars))
+    key = tts_read_key(cfg)
+    if not usage.reserve(len(text), cfg.tts_daily_chars):
+        raise TtsError(429, "The daily voice limit of %d characters is used up. It resets at midnight." % cfg.tts_daily_chars)
+    try:
+        url = "%s/v1/text-to-speech/%s?output_format=%s" % (cfg.tts_base.rstrip("/"), cfg.tts_voice, TTS_FORMAT)
+        body = json.dumps({"text": text, "model_id": cfg.tts_model}).encode()
+        req = urllib.request.Request(url, data=body, method="POST", headers={
+            "xi-api-key": key, "content-type": "application/json", "accept": "application/octet-stream"})
+        with TTS_OPENER.open(req, timeout=cfg.timeout) as r:
+            pcm = r.read(TTS_AUDIO_MAX + 1)
+    except urllib.error.HTTPError as e:
+        usage.refund(len(text))
+        raise TtsError(502, "The voice service said %d." % e.code)
+    except (urllib.error.URLError, OSError, ValueError):
+        usage.refund(len(text))
+        raise TtsError(502, "The voice service did not answer.")
+    if not pcm or len(pcm) > TTS_AUDIO_MAX or len(pcm) % 2:
+        usage.refund(len(text))
+        raise TtsError(502, "The voice service sent no usable audio.")
+    return pcm
 
 
 class Relay:
@@ -287,6 +386,8 @@ class Relay:
         self.cfg = cfg
         self.token = token.encode()
         self.busy = threading.Lock()
+        self.tts_busy = threading.Lock()
+        self.tts_usage = TtsUsage(cfg.tts_usage_file)
         self.sessions = set()   # session ids this relay has handed out; --resume only accepts these
         self.api_history = {}   # --api-key-file mode: session id -> its messages, so an agent round can continue
 
@@ -352,13 +453,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.close_connection = True
         self.log_line(status, nin, len(body), t0 or time.time())
 
+    def reply_bytes(self, data, nin, t0):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("X-Sample-Rate", str(TTS_SAMPLE_RATE))
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(data)
+        self.close_connection = True
+        self.log_line(200, nin, len(data), t0)
+
+    def tts(self, raw, ctype, n, t0):
+        r = self.relay
+        if ctype == "application/json":
+            try: d = json.loads(raw.decode("utf-8"))
+            except ValueError: return self.reply(400, "Bad JSON.", n, t0)
+            text = d.get("text", "") if isinstance(d, dict) else None
+        else:
+            text = raw.decode("utf-8", "replace")
+        if not isinstance(text, str): return self.reply(400, "Bad JSON.", n, t0)
+        text = "".join(c for c in text if c == "\n" or c >= " ").strip()
+        if not text: return self.reply(400, "Empty text.", n, t0)
+        if not r.tts_busy.acquire(blocking=False): return self.reply(429, "A voice request is already running.", n, t0)
+        try: pcm = run_tts(r.cfg, r.tts_usage, text)
+        except TtsError as e: return self.reply(e.status, e.msg, n, t0)
+        finally: r.tts_busy.release()
+        return self.reply_bytes(pcm, n, t0)
+
     def do_GET(self): self.reply(405, "POST only.")
     do_PUT = do_DELETE = do_PATCH = do_HEAD = do_GET
 
     def do_POST(self):
         t0 = time.time()
         r = self.relay
-        if self.path != "/api/claude": return self.reply(404, "Not here. POST /api/claude.", 0, t0)
+        if self.path not in ("/api/claude", "/api/tts"): return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
         auth = self.headers.get("Authorization", "")
         given = auth[7:].strip().encode() if auth.startswith("Bearer ") else b""
         if not hmac.compare_digest(given, r.token): return self.reply(401, "Wrong or missing relay token.", 0, t0)  # TOKEN-CHECK
@@ -369,6 +498,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if n > r.cfg.max_body: return self.reply(413, "That prompt is too long for the relay.", n, t0)
         raw = self.rfile.read(n)
         ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        if self.path == "/api/tts": return self.tts(raw, ctype, n, t0)
         session = ""
         model, effort = "auto", "medium"
         if ctype == "application/json":
@@ -426,6 +556,13 @@ def main(argv=None):
     ap.add_argument("--api-model", default="claude-haiku-5-5", help="cheap model for short questions in --api-key-file mode")
     ap.add_argument("--api-model-top", default="claude-opus-5-5", help="strongest model, for design, proofs and security questions")
     ap.add_argument("--api-model-hard", default="claude-sonnet-5-5", help="stronger model for long or hard questions")
+    ap.add_argument("--tts-key-file", default=TTS_DEFAULT_KEY_FILE, help="private file holding the ElevenLabs key (chmod 600); never sent anywhere but ElevenLabs")
+    ap.add_argument("--tts-voice", default=TTS_DEFAULT_VOICE, help="ElevenLabs voice id (default: Samantha's)")
+    ap.add_argument("--tts-model", default=TTS_DEFAULT_MODEL, help="ElevenLabs model id")
+    ap.add_argument("--tts-max-chars", type=int, default=400, help="most characters in one /api/tts request")
+    ap.add_argument("--tts-daily-chars", type=int, default=5000, help="most characters per local day, kept across restarts")
+    ap.add_argument("--tts-usage-file", default=TTS_DEFAULT_USAGE_FILE, help="where the day's character count is kept")
+    ap.add_argument("--tts-base", default=TTS_DEFAULT_BASE, help="ElevenLabs base URL (tests point it at a loopback stub)")
     ap.add_argument("--tools", default=",".join(READ_ONLY_TOOLS),
                     help="comma-separated built-in tools (default Read,Grep,Glob: read-only)")
     args = ap.parse_args(argv)
@@ -434,6 +571,12 @@ def main(argv=None):
     if args.api_key_file and not args.allow_api_spend:
         ap.error("--api-key-file spends the Claude Platform credit; refusing to start without --allow-api-spend (or use --turing)")
     if args.turing and not re.match(r"^https?://[^/\s]+", args.turing): ap.error("--turing takes an http:// or https:// URL")
+    if not VOICE_RE.match(args.tts_voice): ap.error("--tts-voice must be 10 to 40 letters and digits")
+    if not re.match(r"^[A-Za-z0-9_.-]{1,64}$", args.tts_model): ap.error("--tts-model has odd characters")
+    if args.tts_max_chars < 1 or args.tts_daily_chars < 1: ap.error("the voice caps must be at least 1")
+    base = urllib.parse.urlparse(args.tts_base)
+    if not (base.scheme == "https" or (base.scheme == "http" and base.hostname in ("127.0.0.1", "localhost"))) or base.query or base.fragment:
+        ap.error("--tts-base must be https, or http on loopback")
     context = None
     if args.tls_cert:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
