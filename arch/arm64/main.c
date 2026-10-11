@@ -61,7 +61,7 @@ static int con_noise(const char *s) {
 #ifdef CON_VERBOSE
     (void)s; return 0;   /* the scroll check builds with every line on the screen so there is a long log to scroll */
 #else
-    static const char *const skip[] = { "tick", "M0 ", "M1 ", "M1a ", "M1b ", "M1c fb ok", "M1d dock ", "M3 ", "M3b ", "EL0", "EL1", "booted at ",
+    static const char *const skip[] = { "tick", "M0 ", "M1 ", "M1a ", "M1b ", "M1c fb ok", "M1d dock ", "M3 ", "M3b ", "M3c ", "EL0", "EL1", "booted at ",
         "usb ", "wifi power", "wifi sdio", "wifi f1", "wifi alp", "wifi chip", "wifi cores", "wifi arm", "wifi fw ", "wifi ht ",
         "wifi bus", "wifi radio up", "wifi ver", "wifi mac", "wifi found", "wifi scan", "wifi joining", "wifi handshake", "wifi assoc",
         "Wi-Fi: found", "Wi-Fi: looked", "Wi-Fi: this Pi", "Wi-Fi: chip", "Wi-Fi: connecting", "Wi-Fi: the router", "Wi-Fi: we answered", "Wi-Fi: handshake",
@@ -162,6 +162,11 @@ static unsigned long l3[512] __attribute__((aligned(4096)));   /* ...and one of 
 #define UP_CODE  0x0000UL   /* EL0 code, read-only and executable */
 #define UP_STACK 0x2000UL   /* EL0 stack, one page; sp starts at its top */
 #define UP_KERN  0x4000UL   /* a page in the same arena that only EL1 may touch */
+#define UP_APP    0x10000UL /* M3c: the app window, where user_load puts a program from the app table: code pages, data pages, zeroed pages */
+#define UP_ASTACK 0x80000UL /* ...and the app's stack: 4 pages, with nothing mapped below or above them */
+#define APP_STACK_PAGES 4
+#define APP_ZERO_PAGES  4   /* zeroed pages after the image (and the rest of its last page): the pool user/calendar.c keeps its events in */
+#define UAPP_MAX 0x40000UL  /* the largest image user_load takes, and what user_c.ld asserts */
 static unsigned long heap_next;
 #ifndef HEAP_SIZE   /* the oomtest builds (arch/arm64/Makefile) shrink it so an allocation fails on purpose */
 #define HEAP_SIZE (16UL << 20)
@@ -224,41 +229,76 @@ static void m1b_selftest(void) {
 }
 
 /* ---- M3a: the first EL0 program, a syscall layer, and a page EL0 may not touch ----
-   The arena is four mapped 4 KiB pages inside the identity map: the program's code (EL0 read and execute, nobody writes),
-   its stack (EL0 read and write, never executable) and a kernel-only page (AP=00: EL1 only) holding a secret. The program
-   is user.S, copied in. Syscalls use svc #0 with the number in x8 (Linux's: write 64, exit 93), arguments in x0 to x2 and
-   the result in x0. A write only reads user memory that really is the program's own; anything else gets -EFAULT. A fault
-   in EL0 kills the program and the kernel carries on. */
+   The arena is mapped 4 KiB pages inside the identity map. M3a: the test program's code (EL0 read and execute, nobody
+   writes), its stack (EL0 read and write, never executable) and a kernel-only page (AP=00: EL1 only) holding a secret. The
+   program is user.S, copied in. Syscalls use svc #0 with the number in x8 (Linux's: write 64, exit 93, and since M3b the
+   Joshua Tree numbers of user/jtsys.h), arguments in x0 to x2 and the result in x0. A write only reads user memory that
+   really is the program's own; anything else gets -EFAULT. A fault in EL0 kills the program and the kernel carries on.
+   M3c: the same arena also holds the app window (UP_APP) and an app stack (UP_ASTACK). user_load puts a program from the app
+   table there: code pages read-only and executable, then data pages and a zeroed pool read-write and never executable. */
 extern char _start[];
-extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[];
+extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[];
 extern unsigned long enter_user(unsigned long entry, unsigned long sp, unsigned long arg, unsigned long arg2);
 extern void leave_user(unsigned long status) __attribute__((noreturn));
 #define SYS_WRITE 64   /* the Linux numbers the user.S self-test uses */
 #define SYS_EXIT 93
 #define JT_SYS_EXIT 1    /* Joshua Tree's own, the ones user/jtsys.h and docs/SYSCALL-ABI.md give every program (M3b) */
 #define JT_SYS_WRITE 4
+#define JT_SYS_TIME 13    /* M3c */
+#define JT_SYS_GETPID 20
+struct user_app { const char *name, *start, *end; };   /* userapps.S: one row per program, ended by a zero name */
+extern const struct user_app user_apps[];
 static unsigned long user_status;
-static int user_in_range(unsigned long a, unsigned long n) {   /* wholly inside the code page or the stack page */
-    if (n > 256) return 0;
-    unsigned long c = USER_BASE + UP_CODE, st = USER_BASE + UP_STACK;
-    return (a >= c && a <= c + 4096 - n) || (a >= st && a <= st + 4096 - n);   /* written so a + n can never wrap */
+static int user_faulted;    /* the last EL0 program ended on a fault, not an exit */
+static int user_loud;       /* userrun: what the program writes reaches the screen too; the boot self-test keeps it on the UART */
+static unsigned user_pid;   /* programs started so far, what JT_SYS_GETPID answers */
+static unsigned long app_len, app_code, app_img;   /* the loaded app: bytes of window mapped, how many of those are code, and the image's own length */
+static unsigned long cal_utc(void);   /* the clock the Calendar tile reads, further down: 0 until the network has told us the time */
+static int span(unsigned long a, unsigned long n, unsigned long base, unsigned long len) {   /* [a, a+n) inside [base, base+len), written so a + n can never wrap */
+    return n <= len && a >= base && a - base <= len - n;
+}
+static int user_in_range(unsigned long a, unsigned long n) {   /* memory the program may have the kernel read: the M3a code and stack pages, and the loaded app's whole window and stack */
+    return span(a, n, USER_BASE + UP_CODE, 4096) || span(a, n, USER_BASE + UP_STACK, 4096)
+        || span(a, n, USER_BASE + UP_APP, app_len) || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0);
+}
+static int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may store into for the program: data, zeroed pool and stacks, never code (read-only at EL1 too: a store there would be a kernel fault) */
+    return span(a, n, USER_BASE + UP_STACK, 4096) || span(a, n, USER_BASE + UP_APP + app_code, app_len - app_code)
+        || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0);
+}
+static void svc_log(unsigned long n, unsigned long a0, long r) {   /* the calls that are not write and exit, on the UART: how a program's progress shows with no debugger */
+    uart_puts("M3c svc "); uart_dec((unsigned)n); uart_puts(" a0="); uart_hex(a0); uart_puts(" -> ");
+    if (r < 0) { uart_putc('-'); r = -r; }
+    uart_dec((unsigned)r); uart_putc('\n');
 }
 void exc_el0_sync(struct frame *f) {
     unsigned ec = (unsigned)(f->esr >> 26);
     if (ec == 0x15) {   /* svc from EL0 */
-        unsigned long n = f->x[8];
+        unsigned long n = f->x[8], a0 = f->x[0];
         if (n == SYS_WRITE || n == JT_SYS_WRITE) {
             const char *p = (const char *)f->x[1]; unsigned long len = f->x[2];
-            if (f->x[0] != 1) { f->x[0] = (unsigned long)-9; return; }   /* -EBADF: only the console, fd 1 */
+            if (a0 != 1 && a0 != 2) { f->x[0] = (unsigned long)-9; return; }   /* -EBADF: the console is fd 1 and fd 2, nothing else yet */
             if (!user_in_range((unsigned long)p, len)) { f->x[0] = (unsigned long)-14; return; }   /* -EFAULT */
-            for (unsigned long i = 0; i < len; i++) { if (con_line_start) con_quiet = 1; uart_putc(p[i]); }   /* the EL0 self-test talks to the UART only */
+            for (unsigned long i = 0; i < len; i++) { if (con_line_start && !user_loud) con_quiet = 1; uart_putc(p[i]); }   /* the boot self-test talks to the UART only */
             f->x[0] = len;
         } else if (n == SYS_EXIT || n == JT_SYS_EXIT) {
             uart_puts("M3 EL0 exit "); uart_dec((unsigned)f->x[0]); uart_putc('\n');
             leave_user(f->x[0]);
-        } else f->x[0] = (unsigned long)-38;   /* -ENOSYS */
+        } else {
+            long r = -38;   /* -ENOSYS: every number the ARM kernel does not answer yet, and it says so */
+            if (n == JT_SYS_TIME) {   /* seconds since the epoch, 0 until the clock is set; a non-null pointer is also stored through */
+                unsigned long t = cal_utc();
+                r = (int)t;
+                if (a0) {
+                    if (!user_writable(a0, 4)) r = -14;   /* -EFAULT, like kernel/syscall.c's sys_time */
+                    else for (int i = 0; i < 4; i++) ((unsigned char *)a0)[i] = (unsigned char)(t >> (8 * i));
+                }
+            } else if (n == JT_SYS_GETPID) r = user_pid ? user_pid : 1;
+            svc_log(n, a0, r);
+            f->x[0] = (unsigned long)r;
+        }
         return;
     }
+    user_faulted = 1;
     unsigned long far; __asm__ volatile ("mrs %0, far_el1" : "=r"(far));
     if (ec == 0x24) {
         unsigned dfsc = (unsigned)(f->esr & 0x3f);
@@ -275,8 +315,8 @@ void exc_el0_sync(struct frame *f) {
     } else { uart_puts("M3 EL0 fault: exception class "); uart_hex(ec); uart_puts(", address "); uart_hex(far); uart_putc('\n'); }
     leave_user((unsigned long)-1);
 }
-/* Map the arena and load one program into the code page (it can run again with another: M3b loads the C program the same
-   way). The image must be position independent and fit the one page. */
+/* Map the M3a arena and load the test program (user.S) into its code page. Done once; the C programs of M3b and M3c go
+   through user_load into their own window and leave this page alone, so the test program is always there to probe them. */
 static void user_init(const char *img, unsigned long len) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);   /* valid page, normal memory, inner shareable, access flag */
     const unsigned long AP_EL0_RW = 1UL << 6, AP_RO = 3UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
@@ -294,7 +334,107 @@ static void user_init(const char *img, unsigned long len) {
     l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_RO | PXN;             /* now read-only for everyone, executable by EL0 only */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
 }
-extern char hello_c_start[], hello_c_end[];   /* hello_c.S: user/hello.c built for EL0 */
+
+/* ---- M3c: the app loader ----
+   The image table (userapps.S) holds each program as user_c.ld wrote it: a flat -pie image linked at 0, ending in a 16 byte
+   trailer { "JTU1", bytes of code (a page multiple), .rela.dyn start, .rela.dyn end }. user_load copies one image to the app
+   window and applies its R_AARCH64_RELATIVE entries (base + addend) to that copy only, never to the baked-in original, so a
+   program can be loaded again. A relocation of any other kind, or one that lands outside the image, refuses the load. The
+   code pages (everything before the trailer's code length) end up read-only and executable by EL0; the data pages after them,
+   and APP_ZERO_PAGES more that are zeroed (with the rest of the last data page), read-write and never executable. The stack is
+   APP_STACK_PAGES fresh zeroed pages; the pages around the window and the stack are unmapped, so running off either faults. */
+static unsigned rd32(const char *p) { const unsigned char *u = (const unsigned char *)p; return u[0] | (unsigned)u[1] << 8 | (unsigned)u[2] << 16 | (unsigned)u[3] << 24; }
+static unsigned long rd64(const char *p) { return rd32(p) | (unsigned long)rd32(p + 4) << 32; }
+static const struct user_app *user_find(const char *name, unsigned n) {
+    for (const struct user_app *a = user_apps; a->name; a++) {
+        unsigned i = 0;
+        while (i < n && a->name[i] == name[i]) i++;
+        if (i == n && !a->name[n]) return a;
+    }
+    return 0;
+}
+static void app_unmap(void) {
+    app_len = app_code = app_img = 0;
+    for (unsigned long i = UP_APP >> 12; i < (UP_ASTACK >> 12) + APP_STACK_PAGES; i++) l3[i] = 0;
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+}
+static unsigned long user_load(const struct user_app *a) {
+    const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);
+    const unsigned long AP_EL0_RW = 1UL << 6, AP_RO = 3UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
+    unsigned long len = (unsigned long)(a->end - a->start);
+    unsigned magic = 0, code_end = 0, rela_s = 0, rela_e = 0;
+    if (len >= 32 && len <= UAPP_MAX && !(len & 3)) { magic = rd32(a->end - 16); code_end = rd32(a->end - 12); rela_s = rd32(a->end - 8); rela_e = rd32(a->end - 4); }
+    if (magic != 0x3155544a || !code_end || (code_end & 4095) || code_end > len - 16 || rela_s > rela_e || rela_e > len - 16 || (rela_s & 7) || (rela_e - rela_s) % 24) {
+        uart_puts("M3c load FAIL "); uart_puts(a->name); uart_puts(": not a user image\n"); return 0;
+    }
+    unsigned long pages = (len + 4095) / 4096 + APP_ZERO_PAGES;
+    char *base = (char *)(USER_BASE + UP_APP);
+    app_unmap();
+    for (unsigned long i = 0; i < pages; i++) l3[(UP_APP >> 12) + i] = (USER_BASE + UP_APP + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable while the kernel fills it in */
+    for (unsigned long i = 0; i < APP_STACK_PAGES; i++) l3[(UP_ASTACK >> 12) + i] = (USER_BASE + UP_ASTACK + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    for (unsigned long i = 0; i < pages * 512; i++) ((unsigned long *)base)[i] = 0;   /* a stale program's bytes never reach this one */
+    for (unsigned long i = 0; i < APP_STACK_PAGES * 512; i++) ((unsigned long *)(USER_BASE + UP_ASTACK))[i] = 0;
+    for (unsigned long i = 0; i < len; i++) base[i] = a->start[i];
+    for (unsigned long r = rela_s; r < rela_e; r += 24) {
+        unsigned long off = rd64(base + r), info = rd64(base + r + 8), add = rd64(base + r + 16);
+        if (info != 1027 /* R_AARCH64_RELATIVE */ || (off & 7) || off + 8 > len - 16 || add > pages * 4096) {
+            uart_puts("M3c load FAIL "); uart_puts(a->name); uart_puts(": bad relocation\n"); app_unmap(); return 0;
+        }
+        *(unsigned long *)(base + off) = (unsigned long)base + add;
+    }
+    for (unsigned long p = (unsigned long)base & ~63UL; p < (unsigned long)base + code_end; p += 64) __asm__ volatile ("dc cvau, %0" :: "r"(p) : "memory");
+    __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
+    for (unsigned long i = 0; i < code_end / 4096; i++) l3[(UP_APP >> 12) + i] = (USER_BASE + UP_APP + i * 4096) | PAGE | AP_RO | PXN;   /* code: read-only, EL0 may execute */
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    app_len = pages * 4096; app_code = code_end; app_img = len;
+    uart_puts("M3c load "); uart_puts(a->name); uart_puts(": "); uart_dec((unsigned)len); uart_puts(" bytes, ");
+    uart_dec(code_end / 4096); uart_puts(" code pages, "); uart_dec((unsigned)((rela_e - rela_s) / 24)); uart_puts(" relocations, code ");
+    uart_hex((unsigned long)base); uart_puts(" data "); uart_hex((unsigned long)base + code_end);
+    uart_puts(" bss "); uart_hex((unsigned long)base + ((len + 15) & ~15UL)); uart_putc('\n');
+    return (unsigned long)base;
+}
+/* Load an app and run it at EL0 until it exits or faults. 0: it ran (user_status is its exit code, user_faulted says it was
+   a fault, not an exit); -1: it did not load. */
+static int user_run(const struct user_app *a) {
+    unsigned long entry = user_load(a);
+    if (!entry) return -1;
+    user_pid++; user_faulted = 0;
+    user_status = enter_user(entry, USER_BASE + UP_ASTACK + APP_STACK_PAGES * 4096UL, 0, 0);
+    return 0;
+}
+/* cmd.c's `userrun NAME`: 0 it ran (*status, *faulted), -1 no such app, -2 it would not load. Its writes go to the screen as well. */
+int userrun(const char *name, unsigned n, unsigned long *status, int *faulted) {
+    const struct user_app *a = user_find(name, n);
+    if (!a) return -1;
+    user_loud = 1;
+    int r = user_run(a);
+    user_loud = 0;
+    if (r) return -2;
+    *status = user_status; *faulted = user_faulted;
+    return 0;
+}
+#ifndef PI_BUILD
+/* Probe the pages of the app that is loaded, from EL0: user.S's entry D gets { bss word, data page, code base, window size }
+   in a block at the bottom of its own stack page and checks them (see user.S). It ends on a store to the code page, which must
+   fault; the kernel survives and says so. */
+static void user_probe(int pass) {
+    unsigned long base = USER_BASE + UP_APP, *args = (unsigned long *)(USER_BASE + UP_STACK);
+    args[0] = base + ((app_img + 15) & ~15UL); args[1] = base + app_code; args[2] = base; args[3] = UAPP_MAX;
+    uart_puts("M3c probe "); uart_dec((unsigned)pass); uart_puts(" starts\n");
+    user_faulted = 0;
+    enter_user(USER_BASE + UP_CODE + (unsigned long)(user_entry_d - user_start), USER_BASE + UP_STACK + 4096, (unsigned long)args, 0);
+    uart_puts(user_faulted ? "M3c probe survived the code write\n" : "M3c probe FAIL: the code write did not fault\n");
+}
+/* Branch to an address inside the loaded app that is not code: user.S's entry C does the `br`, which must be an instruction
+   abort (the pages are never executable), and the kernel carries on. */
+static void user_exec_probe(const char *what, unsigned long target) {
+    uart_puts("M3c exec "); uart_puts(what); uart_putc(' '); uart_hex(target); uart_putc('\n');
+    user_faulted = 0;
+    enter_user(USER_BASE + UP_CODE + (unsigned long)(user_entry_c - user_start), USER_BASE + UP_STACK + 4096, USER_BASE + UP_KERN, target);
+    uart_puts(user_faulted ? "M3c exec refused\n" : "M3c exec FAIL: it ran\n");
+}
+#endif
 static void user_demo(void) {
     user_init(user_start, (unsigned long)(user_end - user_start));
     unsigned long code = USER_BASE + UP_CODE, sp = USER_BASE + UP_STACK + 4096, kpage = USER_BASE + UP_KERN;
@@ -311,10 +451,23 @@ static void user_demo(void) {
     /* M3b: user/hello.c itself, built for aarch64 and talking Joshua Tree syscall numbers over svc. Only write and exit
        exist on ARM so far: its open comes back -ENOSYS (-38), which hello.c reports and answers with exit 1. The kernel
        takes that exit as the pass. M3d brings open and read, and the exit code becomes 9. */
-    user_init(hello_c_start, (unsigned long)(hello_c_end - hello_c_start));
+    const struct user_app *hello = user_find("hello", 5), *cal = user_find("calendar", 8);
     uart_puts("M3b EL0 C task starts\n");
-    user_status = enter_user(code, sp, 0, 0);
-    if (user_status == 1) uart_puts("M3b userland C ok\n"); else uart_puts("M3b userland C FAIL\n");
+    if (hello && !user_run(hello) && !user_faulted && user_status == 1) uart_puts("M3b userland C ok\n"); else uart_puts("M3b userland C FAIL\n");
+    /* M3c: user/calendar.c, about 34 KB with relocated pointer tables, a data page and a zeroed pool. It opens its window
+       first; that is -ENOSYS until M3c part 2, so it writes "calendar: no window" to fd 2 and exits 1, which is the pass. Then
+       user.S's probe runs against calendar's pages, twice with a reload between: the second time proves the loader zeroes
+       the pool again and puts the data back. */
+    uart_puts("M3c EL0 calendar starts\n");
+    if (cal && !user_run(cal) && !user_faulted && user_status == 1) uart_puts("M3c userland calendar ok\n"); else uart_puts("M3c userland calendar FAIL\n");
+    if (cal) {
+        user_probe(1);
+        if (user_load(cal)) user_probe(2); else uart_puts("M3c probe FAIL: calendar did not load again\n");
+        unsigned long base = USER_BASE + UP_APP;   /* never executable: a data page, the first whole page of the zeroed pool, the stack */
+        user_exec_probe("data", base + app_code);
+        user_exec_probe("pool", base + (app_img + 4095) / 4096 * 4096);
+        user_exec_probe("stack", USER_BASE + UP_ASTACK);
+    }
 #endif
 }
 
