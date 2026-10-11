@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (225 checks)
+## The suite (227 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -110,6 +110,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Panes: independent scrollback per tab, tab rail, activity dot on a background tab, close, split panes with their own shells | `tools/checks/panes-check.py` | retry |
 | Claude app: asks Claude Code through the relay (stub claude on the host), draws the reply, resumes the session, red error line on a wrong token, a stopped relay and no relay set (-EACCES at once) | `tools/checks/ring3claude-check.py` | retry |
 | Claude relay: token refused and accepted, session resume, exact read-only argv, prompt on stdin, timeout kills the process group, size cap, one request at a time, log hygiene, and a mutant without the token check lets a tokenless request in | `tools/checks/claude-relay-check.py` | once |
+| Relay voice: POST /api/tts against a stub ElevenLabs returns its PCM (22050 Hz mono); text over the per-request cap and requests past the per-day cap are refused with no upstream call; the day count survives a relay restart and resets on a new date; failures give characters back; the key never appears in a response, header or log, even when the upstream echoes it; a tokenless request is 401; a key file others can read is refused (no network) | `tools/checks/relay-tts-check.py` | once |
 | Relay API mode: file tools refuse ../, absolute paths, dot files, symlinks and unlisted names and cap reads at 20000 characters; model routing; the prompt names both actions; the reply's M line names the model that answered (Claude Haiku 5.5, Sonnet, Opus) and ask.c's default prompt matches the relay's default model (no network) | `tools/checks/relay-api-check.py` | once |
 | Apple-menu hover stays cheap, clock redraws on a minute change | `tools/checks/menuclock-check.sh` | retry |
 | Lock Screen: menu item locks, Esc cannot bypass, password unlocks | `tools/checks/lockscreen-check.py` | retry |
@@ -212,6 +213,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | ARM64 HTTPS: a TLS 1.2 page from a host server with a throwaway certificate built in as a trust anchor, refused (tls FAIL 62) when it is left out (skips where the tools are missing) | `tools/checks/arm64-tls-check.py` | retry |
 | ARM64 browser: browse URL typed at the Terminal's ask> row reads an HTTPS page through a redirect, prints readable text with numbered links, open N follows one, a redirect loop stops (skips where the tools are missing) | `tools/checks/arm64-browser-check.py` | retry |
 | ARM64 browser, dead server: a host that accepts and never answers, and a closed port, each end in one timeout line (tls, reply, connect) within 12 s with dns ok and tcp ok printed first, and the prompt still answers (skips where the tools are missing) | `tools/checks/arm64-browser-deadserver-check.py` | retry |
+| ARM64 audio: `beep` fills the ring with a tone whose checksum matches Python, the PWM FIFO gets it in order on a fake Pi, stuck hardware gives up with one line, GPIO 42 and the boot path stay untouched (QEMU part skips where the tools are missing; the real jack is unverified) | `tools/checks/arm64-audio-check.py` | once |
 | ARM64 green light: the Pi's activity LED is blinked through the firmware mailbox (pin 42), never at boot, on a wait that ends (static, no hardware) | `tools/checks/arm64-led-check.py` | once |
 | Pi actions: an answer's [[note]], [[say]], [[led blink]], [[open]], [[browse]] (http/https only), [[calc]] and [[status]] lines are stripped and recorded by ask.c's real parser (compiled on the host), four per turn, unknown ones recorded to ignore, the rest stays as text, and the relay prompt names them all | `tools/checks/pi-actions-check.py` | once |
 | Pi release image carries no relay token: pi-ask.o built without JT_WIFI_DEV=1 has none, the dev build does (host only) | `tools/checks/pi-release-notoken-check.sh` | once |
