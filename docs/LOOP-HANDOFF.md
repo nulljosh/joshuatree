@@ -2,7 +2,7 @@
 
 ## Current task
 
-The current worktree work/landing-footer is now on fix/ci-pi-runner (2.39.2), stacked on footer PR #500. Candidate GitHub run 38093213365 failed only the Pi power check because Ubuntu 24.04's QEMU has no raspi4b machine. Seven suite shards, demo and network passed. The ARM-reserved shard now uses Ubuntu 26.04 and fails early unless QEMU lists raspi4b; other shards stay on 24.04. Runner/cache versions are separated. Linux CI validation of this repair is still pending. The footer suite also now installs WebKit, matching its new browser check.
+The current worktree work/landing-footer is now on fix/ci-pi-runner (2.39.2), stacked on footer PR #500. Candidate GitHub run 38093213365 failed only the Pi power check because Ubuntu 24.04's QEMU has no raspi4b machine. Seven suite shards, demo and network passed. The ARM-reserved shard now uses Ubuntu 26.04 and fails early unless QEMU lists raspi4b; other shards stay on 24.04. Runner/cache versions are separated. Linux run 38094292007 proved Pi power now passes. Its only failure, also reproduced by the completed local gate, was stale Apps/Trash indexes in arm64-m1c-check.py. The check now derives artwork and labels from APPS[]; the focused QEMU run passes at virt, Pi 1080p and Pi 4K. Full validation of the repaired head remains. The footer suite also now installs WebKit, matching its new browser check.
 
 The footer branch fix/landing-footer (PR #500) adds a wide original desert illustration using the existing vector tree mark, a larger closing statement and accessible 44px directory links. It is based on release/2.39.0 but does not change that candidate or its running full gate. Footer version is 2.39.1; full gate and release approval remain required before it can reach main.
 
@@ -14,11 +14,11 @@ Review reproduced Mines closing when its help panel was clicked. Off-board conte
 
 Focused checks passed for the individual drafts: sanitizer and real QEMU input/pixel checks for games/power/notices, text sharpness and Terminal spacing, normal Pi image build, i386 build/boot and pre-push. Notes captures now open a new editor before typing; all 14 app tiles were retaken and inspected. ISO CD-ROM, raw-USB and non-Bochs framebuffer boot pass; the actual release packaging block creates identical stable/versioned ISOs and verified checksums.
 
-The combined 2.39.0 full local gate and GitHub validation have not completed yet. Keep this candidate draft until they pass. #493 alone passed 219 checks plus four demos on exact head 5d2e99f; that does not validate the later additions. Latest main release/deploy runs were green. Draft/skipped checks are not green checks.
+The combined 2.39.0 local gate completed with 11 groups passing and only the stale dock-art check failing. The repaired focused check passes; the next full gate must validate the final head. Keep this candidate draft until they pass. #493 alone passed 219 checks plus four demos on exact head 5d2e99f; that does not validate the later additions. Latest main release/deploy runs were green. Draft/skipped checks are not green checks.
 
 ## Goal and approval
 
-Continue implementable roadmap tasks until five-hour usage has 15% or less remaining, then stop. The latest snapshot was 17% remaining; stop at 15%. The user added a reference-inspired landing footer; it is isolated from the running release candidate. Keep markdown fresh. Target working CI/CD, version/tag/release updates, direct ISO links, zero unresolved PRs/issues/stale branches, and A+ QA before main. Never close real work just to make counts zero.
+Current request: finish the CI repair and one small roadmap task, checking usage between tasks and stopping at 10% remaining. Initial snapshot: 99% five-hour usage remaining. No paid calls, hardware flashing or reset credits. Keep this batch bounded; do not spend quota merely to exhaust it.
 
 Main has zero open issues. Every remote branch was main or belonged to an open PR. The unused local feat/pi-codex-relay branch was deleted after verifying it was an ancestor; no work was lost. Active worktrees and their local branches remain untouched.
 
