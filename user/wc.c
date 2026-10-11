@@ -12,19 +12,18 @@
 #include "libjt/string.h"
 #include "jtsys.h"
 
-static void put_counts(long lines, long words, long bytes, const char *name) {
+static void put_counts(int lines, int words, int bytes, const char *name) {
     char line[128];
-    int n = snprintf(line, sizeof line, "%7ld %7ld %7ld", lines, words, bytes);
-    if (name) n += snprintf(line + n, sizeof line - (unsigned)n, " %s", name);
-    n += snprintf(line + n, sizeof line - (unsigned)n, "\n");
-    jt_write(1, line, (unsigned)n);
+    int n = snprintf(line, sizeof line, "%7d %7d %7d%s%s\n", lines, words, bytes,
+                     name ? " " : "", name ? name : "");
+    jt_write(1, line, (unsigned)n < sizeof line ? (unsigned)n : sizeof line - 1);
 }
 
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     const char *path = argc > 1 ? argv[1] : 0;
 
-    long lines = 0, words = 0, bytes = 0;
+    int lines = 0, words = 0, bytes = 0;
     int in_word = 0;
     char buf[255];
 
@@ -34,7 +33,7 @@ void _start(int argc, char **argv) {
         if (fd < 0) {
             char line[80];
             int n = snprintf(line, sizeof line, "wc: cannot open %s, errno %d\n", path, -fd);
-            jt_write(2, line, (unsigned)n);
+            jt_write(2, line, (unsigned)n < sizeof line ? (unsigned)n : sizeof line - 1);
             jt_exit(1);
         }
     } else {

@@ -2,6 +2,8 @@
 
 ## Current task
 
+New bounded batch: fix/ci-pi-runner head cf0f9e7b is pushed. Full local gate log is work/ci-repaired-2.39.2.log; GitHub run 38114553099 checks the same head. The separate feat/shell-wc branch installs the existing PC/browser wc program on boot and fixes unsupported long-number formatting. Its shell regression checks exact counts and missing-file handling. User now authorizes safe merges and deletion of superseded branches after green CI; X release side effects need a separate answer. Stop at 10% remaining.
+
 The current worktree work/landing-footer is now on fix/ci-pi-runner (2.39.2), stacked on footer PR #500. Candidate GitHub run 38093213365 failed only the Pi power check because Ubuntu 24.04's QEMU has no raspi4b machine. Seven suite shards, demo and network passed. The ARM-reserved shard now uses Ubuntu 26.04 and fails early unless QEMU lists raspi4b; other shards stay on 24.04. Runner/cache versions are separated. Linux run 38094292007 proved Pi power now passes. Its only failure, also reproduced by the completed local gate, was stale Apps/Trash indexes in arm64-m1c-check.py. The check now derives artwork and labels from APPS[]; the focused QEMU run passes at virt, Pi 1080p and Pi 4K. Full validation of the repaired head remains. The footer suite also now installs WebKit, matching its new browser check.
 
 The footer branch fix/landing-footer (PR #500) adds a wide original desert illustration using the existing vector tree mark, a larger closing statement and accessible 44px directory links. It is based on release/2.39.0 but does not change that candidate or its running full gate. Footer version is 2.39.1; full gate and release approval remain required before it can reach main.

@@ -20,6 +20,7 @@
 #include "exec.h"
 #include "user_hello.h"
 #include "user_note.h"
+#include "user_wc.h"
 int ring3app_write_packed(const char *file, const unsigned char *packed, unsigned int clen, unsigned int len, unsigned int sum, int replace); /* ring3app.c: unpack + verify + vfs_write_file */
 #include "libc.h"
 #include "pci.h"
@@ -7871,6 +7872,12 @@ void kmain(unsigned int multiboot_info_addr){
         vfs_write_file("README.TXT", demo_readme, strlen(demo_readme));
         vfs_write_file("NOTES.TXT", demo_notes, strlen(demo_notes)); ramfs_seed_demo_docs(); if (boot_to_samantha) { u8 hh, mi, wd, dom, mon; cmos_read_time_stable(&hh, &mi, &wd, &dom, &mon); ramfs_seed_demo_events(cmos(9), mon, dom); } /* sample itinerary dated from the RTC; a real folder, so the tour's Burrow scene has something to open */
         klog("vfs: no FAT disk (v86 has none to mount), switched default backend to ramfs with demo files");
+    }
+    /* Install the shell utility on either the mounted disk or the RAM fallback. */
+    { unsigned char probe;
+      if (vfs_read_file("WC.BIN", &probe, 1) < 0 &&
+          ring3app_write_packed("WC.BIN", user_wc, USER_WC_CLEN, USER_WC_LEN, USER_WC_SUM, 0) < 0)
+          klog("wc: could not install WC.BIN");
     }
     settings_load(); /* v47: real settings, saved defaults if SETTINGS.TXT doesn't exist yet */
     /* 1.0.12: apply llmhost=/llmport= AFTER settings_load(), not before --
