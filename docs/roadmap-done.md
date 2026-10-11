@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.53.0 development branch (2026-10-11)
+
+The Pi reads its own SD card: `arch/arm64/emmc.c` brings the card up on EMMC2 and reads blocks, and the i386 kernel's `drivers/fat.c`, now able to read FAT32, mounts the boot partition read only for the Terminal's new `ls` and `cat NAME`. Files that stay are a third of the 3.0 gate, and reading comes before writing. Checked by `tools/checks/arm64-sd-check.py`, which plugs a FAT32 card into QEMU's EMMC2 at the board's own address.
+
 ## 2.52.0 development branch (2026-10-11)
 
 Caps Lock and key repeat on ARM. Caps Lock capitalises letters and Shift flips it, in the Terminal, the Calculator and Spotlight (Shift now reaches Spotlight too). A held typed key or Backspace types again after 400 ms and every 80 ms, where the first press went, until the release or another key. Before, Caps Lock did nothing and holding Backspace deleted one character: the USB keyboard sends a held key once. Check: `tools/checks/arm64-keys-check.py` holds keys with QMP and counts the repeats; `arm64-keydbg-check.py` does it over USB. Needs a real keyboard on the board; the Caps light stays off for now.

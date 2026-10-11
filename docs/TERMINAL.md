@@ -14,6 +14,8 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 | `vol [0-100\|up\|down]` | Shows or sets the master volume (default 70); up and down step by 10 |
 | `llm PROMPT` | Runs the local model, if the image has one |
 | `bt`, `bt scan` | Bluetooth: where the radio is and its version; a 5 second scan listing what it hears ([RASPBERRY-PI.md](RASPBERRY-PI.md#bluetooth)) |
+| `ls` | Lists the SD card's boot partition (its root, 8.3 names and sizes) |
+| `cat NAME` | Prints the first 4 KB of a file there as text |
 | anything else | Asks Claude through the relay on the Mac |
 
 ## Getting there

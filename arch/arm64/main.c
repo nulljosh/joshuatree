@@ -513,6 +513,11 @@ int mbox_notify_xhci_reset(unsigned dev_addr) {
     for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
     return mbox_call();
 }
+unsigned mbox_clock_rate(unsigned id) {   /* emmc.c: a firmware clock's rate in Hz (tag 0x00030002; EMMC2 is clock 12), 0 with no answer */
+    unsigned m[] = { 8 * 4, 0, 0x30002, 8, 0, id, 0, 0 };
+    for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
+    return mbox_call() && mbox[5] == id ? mbox[6] : 0;
+}
 #endif
 static void fb_rect(int x, int y, int w, int h, unsigned c) {
     if (fb_swap) c = (c & 0xFF00FF00u) | (c >> 16 & 0xFF) | (c & 0xFF) << 16;
@@ -1780,6 +1785,7 @@ static void key_repeat_tick(void) {   /* the main loop, right after the polls: a
     input_event((struct input_event){ 1, (unsigned short)rep_code, 2 });
 }
 int usb_init(void);    /* xhci.c */
+int sd_mount(void);    /* emmc.c */
 int wifi_init(void);
 #ifdef PI_BUILD
 #define WIFI_ON_PI 1
@@ -2061,6 +2067,23 @@ void main(void) {
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
+    sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
+#ifdef SD_SELFTEST   /* the sdtest build (arm64-sd-check.py): the Terminal's ls and cat on the check's own card, and two reads that must be refused */
+    {
+        void cmd_run(const char *q, unsigned n, void (*out)(const char *));
+        int emmc_read(unsigned lba, unsigned count, void *buf); unsigned long emmc_blocks(void);
+        static const char *const line[] = { "ls", "cat config.txt", "cat BIG.TXT", "cat BAD.TXT", "cat NOPE.TXT" };
+        static unsigned char past[512];
+        for (unsigned i = 0; i < sizeof line / sizeof line[0]; i++) {
+            unsigned n = 0; while (line[i][n]) n++;
+            uart_puts("sdtest> "); uart_puts(line[i]); uart_puts("\n");
+            cmd_run(line[i], n, 0);
+        }
+        uart_puts("sdtest> read past the card\n");
+        emmc_read((unsigned)emmc_blocks(), 1, past);
+        uart_puts("sdtest done\n");
+    }
+#endif
     if (!wifi_init()) menubar_wifi(0);
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); menubar_notify("Wi-Fi joined"); }   /* the address from the router, then the time */

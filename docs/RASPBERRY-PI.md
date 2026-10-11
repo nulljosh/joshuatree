@@ -28,7 +28,8 @@ This is the dispatch in `arch/arm64/main.c` (`dock_activate` and `app_open_name`
 | Wi-Fi on the Pi (CYW43455) | Built in 2.16.0, waiting on a photo from the real board. Stage 1 lists nearby networks on screen as `wifi ap ...` lines; joining one is stage 2. QEMU has no SDIO card, so it only proves the failure path (`wifi FAIL cmd5`, boot carries on): `tools/checks/arm64-wifi-check.py`. |
 | Bluetooth (the same CYW43455) | **In 2.51.0, not yet seen on the board.** The radio loads its patch at boot and `bt scan` lists the devices it hears. Connecting the mouse is BT2. See [Bluetooth](#bluetooth). |
 | Sound out of the 3.5 mm jack | **In 2.43.0, not yet heard on the board.** Run `beep` (or `beep 880 500`) in the Terminal with headphones in the jack. PWM1 on GPIO 40 and 41, fed by the CPU (no DMA yet). QEMU has no PWM, so `tools/checks/arm64-audio-check.py` proves only the tone, the buffer and the bounded waits. If it prints `audio:` and a reason, tell me the line. HDMI audio is not done. **Volume, in 2.48.0, not yet heard on the board:** `vol` shows it (0 to 100, default 70), `vol 40` sets it, `vol up` and `vol down` step by 10; F11 and F12 and a Mac keyboard's volume keys do the same, show "Volume N" in the menu bar and click once. The default level and the click are `AUDIO_DEFAULT_VOLUME` in `audio.h` and `TICK_HZ`, `TICK_MS` in `cmd.c`: tune them on the real speaker. |
-| Disk, network on the Pi | Not yet. M4. |
+| Files on the SD card | **Read only in 2.53.0, not yet seen on the board.** The kernel reads the card it booted from, and `ls` and `cat` in the Terminal show its boot partition. See [Files on the card](#files-on-the-card). Proven on QEMU's Pi 4B model with a FAT32 card (`tools/checks/arm64-sd-check.py`). |
+| Wired Ethernet on the Pi | Not yet. M4. |
 
 So on day one, watch two things: the text in a serial terminal, and with a monitor plugged in, a simple desktop of plain boxes with the same boot lines written in its white window. If the serial cable is wrong, the monitor still tells you how far the kernel got. If both are blank, it is the SD card or `config.txt`.
 
@@ -152,6 +153,26 @@ If it still fails, send the exact lines you see, even if they look like garbage.
 | M3 | Every app running on ARM. |
 | M4 | The same on the real Pi: SD card, USB, Ethernet. Sound last. |
 | M5 | The Pi 5. |
+
+## Files on the card
+
+Since 2.53.0 the kernel reads the SD card it booted from. Read only for now. Writing files comes next.
+
+The card slot is wired to EMMC2, the Pi 4's own SD controller, so this never touches the Wi-Fi chip's controller. At boot the Console shows two lines. `sd card sdhc <size> MB, base clock <rate> MHz` gives the card's type and size, and the clock the firmware gave the controller. `sd fat32 partition at block <start>, <size> MB, read only` says where the boot partition starts and how big it is. With no card it says `sd no card`. Any other failure is one `sd FAIL <step>` line. Either way the boot carries on.
+
+In the Terminal (F2):
+
+- `ls` lists the boot partition's top folder: each file's short name and its size in bytes, folders with a slash.
+- `cat NAME` prints the first 4 KB of a file as text, for example `cat config.txt`.
+
+Names are the short 8.3 ones `ls` shows, so `bcm2711-rpi-4-b.dtb` is `BCM271~1.DTB`. Only the top folder for now.
+
+The board test, after flashing with `tools/flash-pi.sh`:
+
+1. The Console shows `sd card sdhc` with about the card's size, then `sd fat32 partition ... read only`. Photograph both lines.
+2. `ls` lists what `tools/flash-pi.sh` copied: `BOOTCODE.BIN`, `START4.ELF`, `FIXUP4.DAT`, `BCM271~1.DTB`, `CONFIG.TXT`, `KERNEL8.IMG` and `OVERLAYS/`. The backups it kept show as `KERNEL~1.BAK` and `CONFIG~1.BAK`, and folders macOS left may show too. The sizes match what the Mac shows.
+3. `cat config.txt` prints the lines of `tools/pi-config.txt`.
+4. `cat nothere.txt` says `cat: no file nothere.txt`.
 
 ## Mouse test on the real board (2.24.0)
 
