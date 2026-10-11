@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (229 checks)
+## The suite (230 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -222,7 +222,8 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | ARM64 /model and /effort: two F3 sessions preserve separate settings, conversation and typing, block switching while busy; slash commands run on the Pi, model and effort reach a fake relay only when not default, a bad value is refused in one line and never sent, /status /help /clear (skips where the tools are missing) | `tools/checks/arm64-model-check.py` | retry |
 | ARM64 Claude in the Terminal: the Console takes no input; typed at the Terminal's Samantha $ prompt, a question reaches the real relay (stub claude, 127.0.0.1) over virtio-net and the answer prints in 53-column lines; after a stub Turing answers the prompt is Samantha again; wrong token -401, no network and no token each say so (skips where the tools are missing) | `tools/checks/arm64-claude-console-check.py` | retry |
 | ARM64 relay token gate: a 24-byte throwaway token is absent from kernel8.img with JT_WIFI_DEV unset and present with it set (skips where the tools are missing) | `tools/checks/arm64-token-gate-check.py` | retry |
-| ARM64 M3a: an unprivileged EL0 program prints through a write syscall, exits, and a direct access to a kernel-only page faults while the kernel survives (skips where the tools are missing) | `tools/checks/arm64-m3-check.py` | retry |
+| ARM64 M3a and M3b: an unprivileged EL0 program prints through a write syscall, exits, and a direct access to a kernel-only page faults while the kernel survives; then user/hello.c built for aarch64 runs over svc with the Joshua Tree numbers (skips where the tools are missing) | `tools/checks/arm64-m3-check.py` | retry |
+| ARM64 M3c app loader: user/calendar.c (34 KB, relocated pointer tables, a data page, a zeroed pool) loads and runs at EL0 next to user/hello.c; its window call gets -38 and its own failure line, the probe finds the relocated pointer, a zero pool, writable data and TIME stored through (and refused into code), a store to its code and a branch into data, pool or stack each fault, a reload re-zeroes and re-relocates, TIME answers the fixed clock, `userrun` and the Terminal keep answering (skips where the tools are missing) | `tools/checks/arm64-m3c-check.py` | retry |
 | ARM64 M4 Wi-Fi proto: wifi_proto.h packs and parses SDPCM, BCDC, escan and NVRAM on the host clang | `tools/checks/wifi-host-check.sh` | retry |
 | ARM64 Wi-Fi WPA2: wpa.h SHA-1, HMAC, the pairwise-key PRF and AES key unwrap match the RFC vectors | `tools/checks/wpa-test.c` | retry |
 | ARM64 M4 Wi-Fi: the Pi image powers the chip, finds no SDIO card under QEMU, prints wifi FAIL cmd5 and the boot carries on, with and without the firmware files (skips where the tools are missing) | `tools/checks/arm64-wifi-check.py` | retry |
@@ -251,10 +252,10 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 |---|---|
 | Burrow | `tools/checks/burrow-labels-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/filesview-check.py`, `tools/checks/ring3burrow-check.py` |
 | Mail | `tools/checks/arm64-led-check.py`, `tools/checks/esc-desktop-check.py`, `tools/checks/mailsend-check.py`, `tools/checks/mailtools-check.py`, `tools/checks/read-long-files-check.py` |
-| Calendar | `tools/checks/apptop-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/ring3calendar-check.py` |
+| Calendar | `tools/checks/apptop-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/ring3calendar-check.py` |
 | Notes | `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3resize-check.py`, `tools/checks/ring3window-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py`, `tools/checks/ring3window-check.py` |
-| Terminal | `tools/checks/arm64-browser-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/arm64-focus-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
+| Terminal | `tools/checks/arm64-browser-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/arm64-focus-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
 | Samantha | `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs` |
 | Curbfind | `tools/checks/ring3curbfind-check.py` |
@@ -272,7 +273,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Epiphany | `tools/checks/epiphany-cmdbar-check.py`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3epiphany-check.py` |
 | Portfolio | `tools/checks/portfolio-check.py`, `tools/checks/portfolio-mute-check.mjs`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3portfolio-check.py` |
 | Activity | `tools/checks/arm64-led-check.py`, `tools/checks/panes-check.py`, `tools/checks/ring3activity-check.py` |
-| Clock | `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-clock-check.py`, `tools/checks/clock-check.py`, `tools/checks/clockicon-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/movie-check.py`, `tools/checks/ring3clock-check.py`, `tools/checks/ring3windgate-check.py` |
+| Clock | `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-clock-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/clock-check.py`, `tools/checks/clockicon-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/movie-check.py`, `tools/checks/ring3clock-check.py`, `tools/checks/ring3windgate-check.py` |
 | Music | `tools/checks/music-check.py` |
 | Movies | `tools/checks/movie-check.py` |
 | Hamurapi | `tools/checks/ring3hamurabi-check.py` |
