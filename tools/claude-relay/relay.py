@@ -47,6 +47,8 @@ What it locks down, and why:
   - Bodies over --max-body bytes are refused before they are read. One request at a
     time; a second gets 429 instead of queueing. Each run has a hard --timeout, after which
     claude's whole process group is killed.
+  - --turing hands the question to Turing's serve.py, which can answer from Joshua's notes. The token is
+    still the only gate, so anyone holding it can ask Samantha what those notes say.
   - The reply is cut to fit Joshua Tree's 8 KB reply buffer and turned into plain ASCII
     (its fonts have no curly quotes or dashes).
 

@@ -27,7 +27,7 @@ Boot 1, virtio-net, ramfb, virtio keyboard:
   The token never shows up on the UART.
 Boot 2, no network card: the prompt is the default "Samantha $ ", a question prints "claude: no network" and the
 relay is never asked.
-Boot 3, built with no token file: the prompt is "Claude $ " (no relay, so no known model), a question prints
+Boot 3, built with no token file: the prompt is still "Samantha $ " (never Claude before Claude answers), a question prints
 "claude: no token" and the relay is never asked.
 
 Discriminating: point ask.c at another path ("/api/claudx") and step 2 fails with "claude: error -404": the stub is
@@ -332,7 +332,7 @@ try:
     b = Boot("notoken", True)
     try:
         b.terminal(); b.type("hi"); b.key("ret")
-        check("with no token the prompt is Claude alone", b.wait_for("\nClaude $ hi\n", 10), b.uart()[-300:])
+        check("with no token the prompt is still Samantha $", b.wait_for("\n" + DEFAULT + "hi\n", 10) and not re.search(r"Claude[^\n]*\$ ", b.uart()), b.uart()[-300:])
         check("with no token: claude: no token", b.wait_for("claude: no token", 10), b.uart()[-300:])
     finally:
         b.close()

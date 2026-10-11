@@ -62,8 +62,8 @@ int ask_select(unsigned pane) {
 }
 
 /* The prompt names the model that last answered: "Samantha $ " for Turing, "Claude Sonnet 5.5 $ " for Claude. Before
-   any answer, and whenever the relay cannot be reached, it names Samantha (the relay's --turing backend); a build with
-   no relay token says "Claude". tools/checks/relay-api-check.py keeps ASK_DEFAULT_MODEL in step with relay.py's
+   any answer, and whenever the relay cannot be reached, it names Samantha (the relay's --turing backend), a build with
+   no relay token too. tools/checks/relay-api-check.py keeps ASK_DEFAULT_MODEL in step with relay.py's
    TURING_NAME. */
 #define ASK_DEFAULT_MODEL "Samantha"
 static char prompt[MODEL_MAX + 16];
@@ -71,7 +71,7 @@ static char prompt[MODEL_MAX + 16];
    shows only when it is not the default (/effort, docs/AGENT.md). */
 const char *ask_prompt(void) {   /* main.c draws it on the bottom row */
     unsigned k = 0;
-    const char *m = ac->last_name[0] ? ac->last_name : ac->model_i ? "Claude" : CLAUDE_TOKEN_LEN ? ASK_DEFAULT_MODEL : "Claude";
+    const char *m = ac->last_name[0] ? ac->last_name : ac->model_i ? "Claude" : ASK_DEFAULT_MODEL;
     for (; *m && k < MODEL_MAX; m++) prompt[k++] = *m;
     if (!ac->last_name[0] && ac->model_i) { prompt[k++] = ' '; for (m = models[ac->model_i]; *m; m++) prompt[k++] = *m; }
     if (ac->effort_i != 1) { prompt[k++] = ' '; for (m = efforts[ac->effort_i]; *m; m++) prompt[k++] = *m; }
