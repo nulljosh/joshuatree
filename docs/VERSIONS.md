@@ -92,13 +92,15 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - 2.6.34: the menu bar stays put. Opening the full-screen Launchpad (Enter on the desktop, which the idle tour does) wiped the bar and left a dark strip, and it did not come back after Esc until the clock ticked over a minute. The bar now repaints with every full desktop repaint and inside the Launchpad.
 - 3.0: Hold it. Joshua Tree runs on a real Raspberry Pi 4: the desktop boots on the board and you can type and click on it, mouse included. Sound from the 3.5 mm jack, Samantha over Wi-Fi through the Mac relay, a new mark. The reference mini PC (UEFI, a real disk, a real network card) moves to a later 3.x.
 - 3.1: The Samantha box ships as a kit. The printed case from `docs/hardware/`, a Pi 4, a 7 inch screen, a speaker and the card, bring your own parts (MONEY.md has the math).
-- 4.0: True multitasking. A compositor, many windows, resize and minimize, apps that never freeze each other.
-- 5.0: The real internet. TLS built in, no proxy, and a web browser on top.
-- 6.0: The terminal. Epiphany streams prices, draws candlesticks, runs four panels, a news wire, alerts and P&L.
-- 7.0: Modern chips. 64-bit, every core.
-- 8.0: Samantha lives inside. Her model runs on the machine, no cloud needed.
-- 9.0: It builds itself. A compiler on Joshua Tree, and Samantha fixes her own bugs.
-- 10.0: Strata Complete ships. A finished machine with Joshua Tree on it, install to disk, updates.
+- 4.0: Many windows. Real multitasking: a window server, real processes, pipes, a Terminal with tabs and splits. Three apps run at once, one crashes, the other two do not notice. Doom is the proof. May go mobile first: one app full screen, a home grid, gestures.
+- 5.0: Talk to it. Samantha is the interface: a full-screen face, speech in and out, a small model on the box. A ten-minute spoken conversation that opens and changes things on the machine. The phone shape, if 4.0 started it, is finished here.
+- 6.0: Yours. Accounts, a locked disk, snapshots and backups. Delete a file, go back in time, get it back.
+- 7.0: Online. TLS 1.3, Wi-Fi, a real browser, mail and calendar that sync. A normal day of web, mail and calendar on it.
+- 8.0: Build things. The Plank compiler on the box, an SDK, apps as signed bundles, a store. Someone who is not Joshua ships an app without touching the kernel.
+- 9.0: The kit. The hardware is a product: Neo revisions, two displays, GPU, USB audio, storage and camera. A stranger builds one from the guide and it boots first try.
+- 10.0: Daily driver. A security audit against the threat model, accessibility, languages, long-term support. Joshua uses it as his only computer for a month.
+
+The one-line ideas and gates are the roadmap's long-road table (`roadmap.md`); this list stays in step with it. Order of work inside every version: usable, then stable, then polished.
 
 ## 11 to 20: a family of machines
 

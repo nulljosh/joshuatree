@@ -4,6 +4,8 @@
 
 Joshua, 2026-10-11: "/loop until v3" and, later that night from the board, "Focus on user mode by v3." Version 3.0.0 "Hold it" cuts when the desktop boots on a real Raspberry Pi 4, you can type and click on it, mouse included, and one app from the shared `user/` tree runs on the Pi in user mode (`DECISIONS.md`, item 4). Every major version also ships a refreshed logo and a visible UI step, then the landing page gets a QA pass (Joshua: "QA landing page when we hit v3!").
 
+Order of work (Joshua, 2026-10-11): usable first, then stability, then polish. 4.0 and 5.0 may go mobile first, copying iOS the way the desktop copies macOS.
+
 ## Where it stands
 
 Main is 2.41.0 (the boot splash draws the tree on). Open draft PRs, each with its own local gate queued one at a time:

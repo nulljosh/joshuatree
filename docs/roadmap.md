@@ -73,6 +73,8 @@ A guess at the shape, in Joshua's words as far as they are known. Each version h
 
 **Version 100** is not a plan, it is the point of the whole thing: a computer small enough to read end to end, that you can build yourself from open parts, and that talks to you like a person. Its test is a child with the guide, a Neo Kit and an afternoon, who ends the day with their own computer and understands every layer of it. Everything above is steps toward that.
 
+Order of work from 3.0 on (Joshua, 2026-10-11): usable first, then stable, then polished. Usable means a person can do a real thing on the board without the Mac: open an app, type, save, come back tomorrow. Stable means it does not crash, and when an app does the desktop stays. Polish is the last pass, never the first. 4.0 and 5.0 may go mobile first: a phone-shaped Joshua Tree that copies iOS the way the desktop copies macOS (one app full screen, a home grid, gestures, the on-screen keyboard from `user/libjt/osk.c`), on the 7 inch touch screen or a phone-sized one.
+
 How to use this: the Pickup list below stays the near-term queue. When a Pickup item belongs to one of these versions, tag it (for example `[4.0]`), so the road and the queue stay one list.
 
 ### [5.0] Talk to it: Claude Code in Joshua Tree
