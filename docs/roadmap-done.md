@@ -1,5 +1,8 @@
 # Joshua Tree roadmap: done
 
+## 2.49.0 development branch (2026-10-11)
+
+M3b, the first C program in user mode on ARM. `user/jtsys.h` gets an aarch64 `svc #0` path with the same `JT_SYS_*` numbers, `user/hello.c` builds unchanged as a flat position independent image baked into the ARM kernel, and the EL0 handler answers `JT_SYS_WRITE` and `JT_SYS_EXIT`. Unported calls return -ENOSYS, so hello prints its line, fails its `open` and exits 1. Check: `tools/checks/arm64-m3-check.py` (the old M3a lines and the three faults still pass).
 ## 2.48.0 development branch (2026-10-11)
 
 Volume controls for the Pi. A master volume, 0 to 100 and 70 by default, scales every sample as it enters the audio ring, so the PWM range is never exceeded and 0 is silence. `vol`, `vol N`, `vol up` and `vol down` in the Terminal; F11, F12 and a Mac keyboard's volume and mute keys step it by 10 before any pane, show "Volume N" in the menu bar and click through `beep`. Checked by `tools/checks/arm64-volume-check.py`: `vol 50` is half the ring sum of `vol 100`, `vol 0` is silent, scripted keys print the notice. The real speaker still needs tuning.
