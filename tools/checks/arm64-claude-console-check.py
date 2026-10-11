@@ -33,7 +33,8 @@ Boot 3, built with no token file: the prompt is still "Samantha $ " (never Claud
 Discriminating: point ask.c at another path ("/api/claudx") and step 2 fails with "claude: error -404": the stub is
 never asked, no answer on the UART and no ##### line on the screen.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
-Pass --tls to run the same end-to-end token/session/answer checks over HTTPS with a throwaway certificate.
+Pass --tls to run the same end-to-end token/session/answer checks over HTTPS with a throwaway certificate for the
+relay's fixed name, jt-relay (finding the relay by its LAN probe is tools/checks/arm64-relay-discovery-check.py).
 Usage: tools/checks/arm64-claude-console-check.py   (from the repo root)
 """
 import http.server, json, os, re, shutil, socket, subprocess, sys, tempfile, threading, time
@@ -94,7 +95,7 @@ port = free_port()
 cert, key = tmp + "/cert.pem", tmp + "/key.pem"
 if TLS:
     subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
-                    "-subj", "/CN=10.0.2.2", "-addext", "subjectAltName=DNS:10.0.2.2",
+                    "-subj", "/CN=jt-relay", "-addext", "subjectAltName=DNS:jt-relay",
                     "-keyout", key, "-out", cert], check=True, capture_output=True)
     subprocess.run(["make", "-C", arch, "clean"], check=True, capture_output=True)
 

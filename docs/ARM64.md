@@ -46,7 +46,7 @@ Since 2.21.0 there is a prompt. It lives on the bottom row of the Terminal windo
 
 The relay's address and token are set at build time, never in git: `CLAUDE_RELAY_HOST` (default 10.0.2.2), `CLAUDE_RELAY_PORT` (default 8765) and the token file named by `CLAUDE_RELAY_TOKEN_FILE` (default the same token file the Claude app uses). `arch/arm64/claude_cfg.sh` writes them into a gitignored header on every build. The token is never printed.
 
-It works end to end on QEMU's virt machine with virtio-net: `tools/checks/arm64-claude-console-check.py` types a question with QMP keys and reads the answer back from a stub Claude. A real Pi has no network until Wi-Fi joins (stage 2 below); if joining fails, it says `claude: no network, Wi-Fi has not joined yet`. Once Wi-Fi joins, run the relay with `--lan` and build with `CLAUDE_RELAY_HOST` set to the Mac's LAN address.
+It works end to end on QEMU's virt machine with virtio-net: `tools/checks/arm64-claude-console-check.py` types a question with QMP keys and reads the answer back from a stub Claude. A real Pi has no network until Wi-Fi joins (stage 2 below); if joining fails, it says `claude: no network, Wi-Fi has not joined yet`. Once Wi-Fi joins, run the relay with `--lan`. `CLAUDE_RELAY_HOST` is the Pi's first guess at the Mac; when it is wrong the Pi finds the relay with a LAN probe and checks its `jt-relay` certificate (docs/RELAY-TLS.md).
 
 ## Risks
 

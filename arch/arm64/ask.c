@@ -31,6 +31,7 @@ int con_columns(void);
 void con_prompt(const char *s, unsigned n);
 void term_output(int on);   /* main.c: what a command prints goes to the Terminal */
 void *kmalloc(unsigned n);
+unsigned int ticks(void);            /* ip.c: 100 a second */
 unsigned long heap_mark(void);
 unsigned long net_clock_utc(void);   /* ip.c: seconds since 1970, 0 until the network set it */
 int wifi_signal_level(void);         /* wifi.c: 1 to 3 */
@@ -315,19 +316,89 @@ static int slash(const char *q, unsigned n) {
 }
 
 #if defined(PI_BUILD) || CLAUDE_TLS
-/* The Pi never sends its bearer over HTTP. QEMU retains its existing HTTP path unless TLS is requested. */
+/* The Pi never sends its bearer over HTTP. QEMU retains its existing HTTP path unless TLS is requested.
+   Finding the relay (2.46): the Mac's LAN address can change under the card, so the address does not matter. The relay's
+   certificate names RELAY_NAME and chains to our private CA (TLS_TA), and that is what is checked, whatever the IP.
+   The Pi tries the address that answered last, else the baked CLAUDE_HOST; if that will not connect or will not prove
+   itself, it broadcasts one probe on the LAN (relay.py answers on its own port) and tries the address the reply came
+   from. The reply is untrusted and carries nothing secret: it only says where to try. The token goes out only after
+   a verified handshake, and nothing is retried once the request has been sent, so Claude never runs twice. */
+#define RELAY_NAME "jt-relay"
+#define RELAY_PROBE_SRC 53101        /* our side of the probe */
+#define RELAY_PROBE_TICKS 150        /* 1.5 s for an answer from the LAN */
+#define RELAY_CONNECT_TICKS 300      /* 3 s for a SYN-ACK: the relay is on the LAN, a dead address should fail fast */
+static unsigned relay_ip;            /* the relay that last proved itself, 0 until one has */
+static unsigned short relay_port;
+
+static void put_ip(unsigned ip) {
+    for (int s = 24; s >= 0; s -= 8) { kdec((ip >> s) & 255); if (s) kputs("."); }
+}
+
+/* "JT-RELAY? <8 hex>" padded to 32 bytes; the answer "JT-RELAY <port> <same 8 hex>" is never longer than the probe. */
+static int relay_discover(unsigned *ip, unsigned short *port) {
+    static unsigned salt;
+    char probe[32], nonce[8], rep[48];
+    unsigned v = ticks() ^ (++salt * 2654435761u) ^ (unsigned)net_get_ip();
+    for (int i = 0; i < 8; i++) nonce[i] = "0123456789abcdef"[(v >> (28 - 4 * i)) & 15];
+    unsigned n = 0;
+    for (const char *p = "JT-RELAY? "; *p; p++) probe[n++] = *p;
+    for (int i = 0; i < 8; i++) probe[n++] = nonce[i];
+    while (n < sizeof probe) probe[n++] = ' ';
+    for (int attempt = 0; attempt < 2; attempt++) {
+        unsigned from = 0;
+        int got = udp_broadcast_ask(CLAUDE_PORT, RELAY_PROBE_SRC, probe, n, rep, sizeof rep, &from, RELAY_PROBE_TICKS);
+        if (got < 0) continue;
+        unsigned i = 0, p = 0;
+        for (const char *m = "JT-RELAY "; *m; m++, i++) if (i >= (unsigned)got || rep[i] != *m) goto bad;
+        while (i < (unsigned)got && rep[i] >= '0' && rep[i] <= '9' && p <= 65535) p = p * 10 + (unsigned)(rep[i++] - '0');
+        if (p < 1 || p > 65535 || i >= (unsigned)got || rep[i++] != ' ' || (unsigned)got - i < 8) goto bad;
+        for (int k = 0; k < 8; k++) if (rep[i + k] != nonce[k]) goto bad;
+        unsigned mask = net_get_netmask() ? net_get_netmask() : 0xFFFFFF00u, me = net_get_ip();
+        if (((from ^ me) & mask) || from == me || !(from & ~mask) || (from & ~mask) == ~mask) goto bad;   /* a LAN host, not us or a broadcast */
+        *ip = from; *port = (unsigned short)p;
+        return 1;
+    bad:;
+    }
+    return 0;
+}
+
+/* A verified TLS connection to the relay, ready for the request: 0, or -1 with tls_last_error set. */
+static int relay_try(unsigned ip, unsigned short port) {
+    unsigned saved = net_connect_wait_ticks;
+    net_connect_wait_ticks = RELAY_CONNECT_TICKS;
+    int r = tls_connect_private(ip, port, RELAY_NAME) < 0 || tls_handshake() < 0 ? -1 : 0;
+    net_connect_wait_ticks = saved;
+    if (!r) { relay_ip = ip; relay_port = port; }
+    return r;
+}
+static int relay_open(void) {
+    unsigned ip = relay_ip; unsigned short port = relay_ip ? relay_port : CLAUDE_PORT;
+    if (!ip && CLAUDE_HOST[0] && !http_resolve_host(CLAUDE_HOST, &ip)) ip = 0;
+    if (ip && relay_try(ip, port) == 0) return 0;
+    relay_ip = 0;
+    if (ip && tls_last_error() == TLS_ERR_ENTROPY) return -1;   /* no randomness: another address would not help */
+    unsigned found; unsigned short fport;
+    if (!relay_discover(&found, &fport)) { kputs("claude: no relay answered on the LAN\n"); return -1; }
+    if ((found == ip && fport == port) || relay_try(found, fport) < 0) return -1;
+    kputs("claude: relay found at "); put_ip(found); kputs("\n");
+    return 0;
+}
+
 static int relay_post_tls(const char *body, unsigned body_len, const char *token, char *reply, int *status) {
-    static char req[2 * RESULT_MAX + 512 + sizeof(CLAUDE_HOST)];
+    static char req[2 * RESULT_MAX + 512 + sizeof(RELAY_NAME)];
     char digits[10]; unsigned n = 0, dn = 0, v = body_len;
+    *status = 0;
+    if (relay_open() < 0) return -1;          /* nothing sent: the token stays home */
     do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
-    const char *parts[] = {"POST /api/claude HTTP/1.0\r\nHost: ", CLAUDE_HOST, "\r\nAuthorization: Bearer ", token,
+    const char *parts[] = {"POST /api/claude HTTP/1.0\r\nHost: ", RELAY_NAME, "\r\nAuthorization: Bearer ", token,
                           "\r\nContent-Type: application/json\r\nContent-Length: "};
     for (unsigned i = 0; i < 5; i++) for (const char *p = parts[i]; *p; p++) req[n++] = *p;
     while (dn) req[n++] = digits[--dn];
     for (const char *p = "\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
     for (unsigned i = 0; i < body_len; i++) req[n++] = body[i];
     char *raw = kmalloc(REPLY_MAX + 2048);
-    int got = raw ? https_fetch_timeout(CLAUDE_HOST, CLAUDE_PORT, req, n, raw, REPLY_MAX + 2048, ASK_TICKS) : -1;
+    int got = raw ? tls_exchange_timeout(req, n, raw, REPLY_MAX + 2048, ASK_TICKS) : -1;
+    if (!raw) tcp_close();
     for (unsigned i = 0; i < n; i++) ((volatile char *)req)[i] = 0;
     *status = got > 0 ? http_status_of(raw, (unsigned)got) : 0;
     if (got <= 0) return -1;

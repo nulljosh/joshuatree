@@ -286,6 +286,7 @@ once |4|Pi card flasher: kernel, firmware and tools/pi-config.txt land on a stan
 once |6|ARM64 RNG200 full seeds, health faults, bounded waits and wiped failures (host harness)|python3 ./tools/checks/arm64-rng-check.py
 once |6|ARM64 clock accepts bounded HTTPS dates only, never before the build or an accepted clock (host harness)|python3 ./tools/checks/arm64-clock-check.py
 retry|6|ARM64 Terminal asks the real relay over TLS, with session resume and wrong-token refusal|python3 ./tools/checks/arm64-claude-console-check.py --tls
+retry|6|ARM64 relay discovery: with a dead baked relay address the Pi finds the relay by a LAN broadcast probe, verifies its jt-relay certificate from the private CA, and refuses a right-CA certificate for the wrong name before the token is sent (skips where the tools are missing)|python3 ./tools/checks/arm64-relay-discovery-check.py
 EOF
 }
 

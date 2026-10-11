@@ -3,6 +3,9 @@
 ## 2.47.0 development branch (2026-10-11)
 
 Samantha answers the Pi from Joshua's own model now. The credit ran out and the prompt still said Claude. The relay's new `--turing` backend posts to Turing's `app/serve.py` and answers "M Samantha". `--api-key-file` will not start without `--allow-api-spend`. The Pi's prompt reads `Samantha $ ` before any answer, and `ask.c` now accepts the Samantha name, which it used to drop. Checks: `tools/checks/claude-relay-check.py` (stub Turing) and `tools/checks/arm64-claude-console-check.py`.
+## 2.46.0 development branch (2026-10-11)
+
+The Pi finds the Claude relay by itself when the router moves the Mac: it tries the last good address, else the baked one, then broadcasts a small UDP probe that `relay.py` answers. TLS now checks the fixed name `jt-relay` against the private CA alone, so the address no longer matters and a probe reply can never get the token. Check: `tools/checks/arm64-relay-discovery-check.py`.
 ## 2.45.0 development branch (2026-10-11)
 
 The Mac relay can speak for Samantha. `POST /api/tts` takes text and returns raw 16-bit mono PCM at 22050 Hz from ElevenLabs. The key sits in a private file on the Mac and never leaves it. A per-request cap (400) and a per-day cap (5000), kept in a file across restarts, refuse before ElevenLabs is called. Pi playback is a separate open line. Check: `tools/checks/relay-tts-check.py`.

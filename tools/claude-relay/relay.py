@@ -57,6 +57,11 @@ What it locks down, and why:
     claude's whole process group is killed.
   - --turing hands the question to Turing's serve.py, which can answer from Joshua's notes. The token is
     still the only gate, so anyone holding it can ask Samantha what those notes say.
+  - With TLS on (so always with --lan) it also answers the Pi's discovery probe: a 32-byte UDP
+    broadcast "JT-RELAY? <8 hex>" to the relay's own port number. The answer is
+    "JT-RELAY <port> <the same 8 hex>", shorter than the probe and with nothing secret in it.
+    The Pi only learns where to try; the certificate (DNS:jt-relay, signed by the private CA)
+    decides whether it is talking to this relay, so the Mac's address can change freely.
   - The reply is cut to fit Joshua Tree's 8 KB reply buffer and turned into plain ASCII
     (its fonts have no curly quotes or dashes).
 
@@ -525,6 +530,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return self.reply(status, text, n, t0)
 
 
+PROBE = re.compile(rb"JT-RELAY\? ([0-9a-f]{8}) *")
+
+def answer_probes(host, port):
+    """The Pi's relay discovery (arch/arm64/ask.c): one UDP socket on the relay's own port, answering only the exact
+    probe. Untrusted both ways: the reply says where the relay is, TLS proves it."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind((host, port))
+    def loop():
+        while True:
+            try: data, peer = s.recvfrom(64)
+            except OSError: return
+            m = PROBE.fullmatch(data)
+            if len(data) != 32 or not m: continue
+            try: s.sendto(b"JT-RELAY %d %s" % (port, m.group(1)), peer)
+            except OSError: pass
+    threading.Thread(target=loop, daemon=True).start()
+
+
 def read_token(args):
     if args.token_file:
         with open(os.path.expanduser(args.token_file), encoding="utf-8") as f: tok = f.read().strip()
@@ -601,8 +625,10 @@ def main(argv=None):
         srv.socket = context.wrap_socket(srv.socket, server_side=True, do_handshake_on_connect=False)
     srv.daemon_threads = True
     backend = "turing " + args.turing if args.turing else "api" if args.api_key_file else "claude -p"
-    sys.stderr.write("claude-relay: listening on %s:%d, cwd %s, tools %s, timeout %ds, backend %s\n"
-                     % (host, srv.server_address[1], args.cwd, ",".join(args.tools), args.timeout, backend))
+    if context: answer_probes(host, srv.server_address[1])
+    sys.stderr.write("claude-relay: listening on %s:%d, cwd %s, tools %s, timeout %ds, backend %s%s\n"
+                     % (host, srv.server_address[1], args.cwd, ",".join(args.tools), args.timeout, backend,
+                        ", answering discovery" if context else ""))
     sys.stderr.flush()
     try: srv.serve_forever()
     except KeyboardInterrupt: pass
