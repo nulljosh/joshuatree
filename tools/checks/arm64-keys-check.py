@@ -2,7 +2,8 @@
 """Keyboard-only control of the ARM desktop (arch/arm64/main.c ui_key): no mouse or tablet is plugged in, only a
 virtio keyboard, and keys go in through QMP send-key, the path arm64-claude-console-check.py uses.
 
-  1. Ctrl+Space opens Spotlight ("spotlight open"); the bar is on the screen: its off-white surface and one accent mark.
+  1. a bare Space and Ctrl+Space do nothing; Cmd+Space opens Spotlight ("spotlight open"); the bar is on the screen:
+     its off-white surface and one accent mark.
   2. typing "term" narrows it to one name ("spotlight: term 1"); Enter opens the Terminal ("terminal open") and the
      Terminal has the keyboard: "hi" and Enter reach ask.c, which answers with a claude: line.
   3. Esc hands the keys back to the desktop ("console open"); Right three times moves the dock's label to Calendar
@@ -54,7 +55,9 @@ try:
         n = uart().count(text); return lambda: step(name, wait_for(text, tries, n + 1), uart()[-300:])
     step("no pointer device: the boot log has no mouse line", "mouse " not in uart())
     base = shot()
-    done = expect("spotlight open", "Ctrl+Space opens Spotlight"); key("ctrl", "spc"); done()
+    before = uart(); key("spc"); key("ctrl", "spc"); time.sleep(1.0)
+    step("a bare Space and Ctrl+Space do not open Spotlight", "spotlight" not in uart()[len(before):])
+    done = expect("spotlight open", "Cmd+Space opens Spotlight"); key("meta_l", "spc"); done()
     img = shot()
     step("the Spotlight bar is drawn: off-white surface and the accent mark appear",
          count(img, (0xfa, 0xf8, 0xf4)) > count(base, (0xfa, 0xf8, 0xf4)) + 2000 and count(img, (0xb5, 0x50, 0x2c)) > count(base, (0xb5, 0x50, 0x2c)))
@@ -70,7 +73,7 @@ try:
     done = expect("spotlight open", "F1 opens Spotlight too"); key("f1"); done()
     done = expect("spotlight close", "Esc closes it"); key("esc"); done()
     after = shot()
-    for shortcut in [("f1",), ("ctrl", "spc"), ("meta_l", "spc"), ("alt", "spc")]:
+    for shortcut in [("f1",), ("meta_l", "spc")]:
         before = shot()
         done = expect("spotlight open", "shortcut opens Spotlight: " + "+".join(shortcut)); key(*shortcut); done()
         done = expect("spotlight close", "same shortcut closes Spotlight: " + "+".join(shortcut)); key(*shortcut); done()

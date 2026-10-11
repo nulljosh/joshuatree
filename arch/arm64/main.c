@@ -1163,7 +1163,7 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
 }
 
 /* ---- Keyboard only: the Pi has no mouse yet, and the Terminal (the agent's prompt) could only be opened by a click.
-   F1 or Ctrl+Space opens Spotlight, a small bar over the desktop: type to filter the dock's names, Up and Down to
+   F1 or Cmd+Space opens Spotlight, a small bar over the desktop: type to filter the dock's names, Up and Down to
    choose, Enter opens, Esc closes. With no pane holding the keys (the Console takes none), Left and Right move the
    dock's hover label, Enter opens that tile, Esc clears it. F2 or Ctrl+T opens the Terminal at once; Esc with the
    Terminal in front and no question running hands the keys back to the desktop (the Console). ---- */
@@ -1250,7 +1250,7 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
 #ifdef PI_BUILD
     if (power_key(code)) return 1;
 #endif
-    if (code == 59 || (chord && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1, Cmd/Ctrl/Alt+Space toggle */
+    if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
     if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
     if (spot_live) return spot_key(code);
     if (brick_live) return brick_key(code, 1);
@@ -1270,10 +1270,9 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
     if (code == 105 || code == 106) { dock_select(dock_sel < 0 ? (code == 106 ? 0 : GUI_ICON_COUNT - 1) : (dock_sel + (code == 106 ? 1 : GUI_ICON_COUNT - 1)) % GUI_ICON_COUNT); return 1; }
     if ((code == 28 || code == 96) && dock_sel >= 0) { int slot = dock_sel; dock_select(-1); dock_activate(slot); return 1; }
     if (code == 1) { if (dock_sel >= 0) dock_select(-1); return 1; }   /* Esc with nothing open does nothing */
-    /* The bare desktop: no pane has the keys (the Console is logs only). Any letter or digit opens Spotlight with it
-       typed, and Enter, Space or Tab open it empty: a keyboard whose F-keys or modifiers never arrive still gets in. */
+    /* The bare desktop: no pane has the keys (the Console is logs only). A letter or digit opens Spotlight with it
+       typed, so a keyboard whose F-keys or Cmd never arrive still gets in. Space, Enter and Tab alone do nothing. */
     if (chord) return 0;
-    if (code == 28 || code == 96 || code == 57 || code == 15) { spot_open(); return 1; }
     int ch = ask_char(code);
     if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) { spot_open(); if (spot_live) spot_key(code); return 1; }
     return 0;
@@ -1357,10 +1356,12 @@ void hid_media(const unsigned char *r, unsigned len);
 static void key_selftest(void) {
     static unsigned char last[8];
     static const unsigned char id_ctrl_t[9] = { 2, 0x01, 0, 0x17 }, id_none[9] = { 2 }, id_esc[9] = { 2, 0, 0, 0x29 };   /* ID 2 reads as Shift if not skipped */
-    static const unsigned char ctrl_space[8] = { 0x01, 0, 0x2C }, none[8] = { 0 }, esc[8] = { 0, 0, 0x29 };
+    static const unsigned char cmd_space[8] = { 0x08, 0, 0x2C }, ctrl_space[8] = { 0x01, 0, 0x2C }, space[8] = { 0, 0, 0x2C }, none[8] = { 0 }, esc[8] = { 0, 0, 0x29 };
     uart_puts("keytest: id9 ctrl+t\n"); hid_kbd(id_ctrl_t, 9, last); hid_kbd(id_none, 9, last);
     uart_puts("keytest: id9 esc\n"); hid_kbd(id_esc, 9, last); hid_kbd(id_none, 9, last);
+    uart_puts("keytest: boot8 space\n"); hid_kbd(space, 8, last); hid_kbd(none, 8, last);                 /* a bare Space and Ctrl+Space must not open Spotlight */
     uart_puts("keytest: boot8 ctrl+space\n"); hid_kbd(ctrl_space, 8, last); hid_kbd(none, 8, last);
+    uart_puts("keytest: boot8 cmd+space\n"); hid_kbd(cmd_space, 8, last); hid_kbd(none, 8, last);
     uart_puts("keytest: boot8 esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
     static const unsigned char br_down[3] = { 3, 0x70, 0 }, br_up[3] = { 3, 0x6F, 0 };   /* a Mac-mode F1 and F2 */
     uart_puts("keytest: media f1\n"); hid_media(br_down, 3);
