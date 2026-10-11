@@ -31,6 +31,9 @@ Today one EL0 test program writes and exits over `svc` (`arch/arm64/user.S`, `to
 1. M3b: `user/jtsys.h` gains an aarch64 `svc` path with the same numbers, `user/libjt` and `user/hello.c` build for aarch64 as a flat position-independent binary, and the ARM loader runs it: the EL0 handler answers `JT_SYS_WRITE` and `JT_SYS_EXIT`. Check: the UART shows hello's line and exit code.
 2. M3c: `JT_SYS_WINDOW_OPEN`, `WINDOW_POLL`, `TIME` and `TEXT` on ARM over the window code from #507, so `user/calendar.c` runs unchanged on the Pi as the first ported app, embedded in `kernel8.img` the way `drivers/user_*.h` embed on i386. Check: Calendar opens from its dock tile and draws the month.
 3. M3d: `OPEN`, `READ`, `WRITE`, `CLOSE` and `READDIR` over a RAM VFS seeded from the card, then Notes, Reminders and Weather. Check: a note typed on the Pi reads back.
+4. M3e, Music on the Pi (Joshua, 2026-10-11: "get the music app working next, QA it too"): `JT_SYS_AUDIO` over the PWM driver from 2.43.0 (8-bit mono into the ring, the volume from 2.48.0 applied), `JT_SYS_BRK` for the track buffer, `JT_SYS_READDIR` and `JT_SYS_READFILE` over the SD read slice, so `user/music.c` runs unchanged and plays a WAV or MP3 from the card through the jack. Check: QEMU with a FAT image holding a short WAV, the UART `music:` lines and a ring sum that matches the file. Board test: a song out of the speaker.
+   QA, in parallel on i386: run Music headless, every key and mouse target in its header comment, screenshots at each state held to the retina bar, then fix what is found in the same PR. Known already: Music and Movies are not on the dock, only in Apps.
+M3b and M3c part 1 are PRs #511 and #515. Part 2 (the window calls) comes next; the loader runs EL0 synchronously with IRQs masked, so WINDOW_POLL and YIELD must pump input and present the frame themselves, or EL0 must become resumable. That design call is part 2's first line.
 
 ## Bluetooth mouse, the click half of the gate
 
