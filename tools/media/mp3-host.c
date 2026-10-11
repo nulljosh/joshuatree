@@ -88,6 +88,18 @@ int main(int argc, char **argv) {
       CHECK(mp3_seek(&b, 0) == MP3_OK && mp3_read8(&b, part, 2000) == 2000);
       CHECK(mp3_seek(&b, 99999999) == MP3_OK);               /* past the end clamps, no crash */
       long diff0 = 0; for (uint32_t i = 1200; i < 2000; i++) diff0 += abs((int)part[i] - (int)full[i]); CHECK(diff0 / 800 <= 2); }
+    /* a damaged frame mid-song must not stop the read: mp3_open's header scan counts it, and the player ends a song only
+       when it has sent `frames` samples, so a read that stopped short left the song hanging for ever (found in the Music QA) */
+    { struct mp3 a, b; static uint8_t sink[8192]; uint32_t got = 0, r, all = 0;
+      mp3_open(&a, mono22, n0);
+      while (got < 576 * 10 && (r = mp3_read8(&a, sink, 576 * 10 - got)) > 0) got += r;   /* a.pos is now the start of frame 10 */
+      uint8_t *bad = exact(mono22, n0);
+      for (uint32_t k = 4; k < 14 && a.pos + k < n0; k++) bad[a.pos + k] = 0xFF;   /* its side info */
+      CHECK(mp3_open(&b, bad, n0) == MP3_OK);
+      while ((r = mp3_read8(&b, sink, sizeof sink)) > 0) all += r;
+      CHECK(all == b.frames);
+      CHECK(mp3_seek(&b, 8000) == MP3_OK && mp3_read8(&b, sink, 2000) == 2000);          /* and a seek past it still lands */
+      mp3_close(&a); mp3_close(&b); free(bad); }
     /* stereo at 44100 Hz */
     uint8_t *stereo44 = slurp(dir, "stereo44.mp3", &n);
     CHECK(mp3_open(&m, stereo44, n) == MP3_OK);

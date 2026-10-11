@@ -105,19 +105,32 @@ int mp3_open(struct mp3 *m, const uint8_t *buf, uint32_t len) {
     return total ? MP3_OK : MP3_E_EMPTY;
 }
 
+/* Decodes the frame at m->pos into pend (and steps m->pos past it). Returns 0 or -1 at the end.
+   A frame minimp3 cannot decode (damaged side info, or main data that lived in frames we never had, as at the start
+   of a song cut out of a stream) comes back with no samples but a byte count to skip. mp3_open's header scan counted
+   that frame, so it plays as the silence its header says it lasts: the clock keeps matching `frames`, the song does
+   not stop there for good, and the frame is not decoded a second time after the decoder has already taken its bytes. */
+static int load_frame(struct mp3 *m, struct mp3_work *w) {
+    int samples = decode_at(w, m->buf, m->len, m->pos);
+    if (w->info.frame_bytes <= 0 || step_bytes(w) > m->len - m->pos) return -1;
+    if (w->info.hz < 4000 || w->info.hz > 44100) return -1;
+    if (samples <= 0) {
+        w->scan = 1; samples = decode_at(w, m->buf, m->len, m->pos); w->scan = 0;   /* header only: how long the frame lasts */
+        if (samples <= 0 || samples * 2 > MINIMP3_MAX_SAMPLES_PER_FRAME) return -1;
+        memset(w->pcm, 0, sizeof w->pcm);
+    }
+    m->pos += step_bytes(w);
+    w->pend_i = 0; w->pend_n = samples;
+    return 0;
+}
+
 uint32_t mp3_read8(struct mp3 *m, uint8_t *out, uint32_t n) {
     if (!m->decoder || !out || !n) return 0;
     struct mp3_work *w = (struct mp3_work *)m->decoder;
     uint32_t total = 0;
     while (total < n) {
         if (w->pend_i >= w->pend_n) {                      /* frame used up: decode the next one */
-            if (m->len - m->pos < 4) break;
-            int samples = decode_at(w, m->buf, m->len, m->pos);
-            if (samples <= 0) break;
-            if (w->info.hz < 4000 || w->info.hz > 44100) break;
-            if (w->info.frame_bytes <= 0 || step_bytes(w) > m->len - m->pos) break;
-            m->pos += step_bytes(w);
-            w->pend_i = 0; w->pend_n = samples;
+            if (m->len - m->pos < 4 || load_frame(m, w) != 0) break;
         }
         int i = w->pend_i++, v;                            /* a frame can straddle two calls: keep its tail */
         if (m->channels == 2) { int l = w->pcm[i * 2], r = w->pcm[i * 2 + 1]; v = ((l + r) / 2 >> 8) + 128; }
@@ -134,15 +147,6 @@ void mp3_rewind(struct mp3 *m) {
     mp3dec_init(&w->dec); w->pend_i = w->pend_n = 0;
     m->pos = id3v2_skip_size(m->buf, m->len);
     m->next = 0;
-}
-
-/* Decodes the frame at m->pos into pend (and steps m->pos past it). Returns 0 or -1 at the end. */
-static int load_frame(struct mp3 *m, struct mp3_work *w) {
-    int samples = decode_at(w, m->buf, m->len, m->pos);
-    if (samples <= 0 || w->info.frame_bytes <= 0 || step_bytes(w) > m->len - m->pos) return -1;
-    m->pos += step_bytes(w);
-    w->pend_i = 0; w->pend_n = samples;
-    return 0;
 }
 
 int mp3_seek(struct mp3 *m, uint32_t at) {

@@ -5177,6 +5177,7 @@ static void gui_run(void){
     gui_cursor_save(mx, my);
     gui_draw_cursor(mx, my);
     gui_dock_prewarm(); ring3app_autoopen_run(mx, my); /* `open=keyrate` / `open=toroid` boot flag, if set */
+    (void)mouse_get_wheel(); /* a wheel step banked while booting (the PS/2 wake-up packet) is not input: a window under the pointer must not open already scrolled */
     for (;;) {
         window_present(); r3stress_desktop_round(); pdestress_desktop_round(); __asm__ volatile ("hlt"); /* 1.9.23: stress=r3 hook, dead unless armed */
         /* v0.76.17: direct request ("time in top right needs live reload
@@ -5424,6 +5425,11 @@ static void gui_run(void){
         int win_hit_here = (menu_open || notif_open || weather_open) ? -1 : gui_multiwin_hit_test(mx, my); /* v0.73.6: real hit test against every open window, topmost first, see gui_multiwin_hit_test */
         int win_close_here = (win_hit_here >= 0 && win_hit_here == gui_window_count - 1) ? win_hit_here : -1; /* only the already-focused (topmost) window's own click-anywhere-closes contract; a click on a background window is click-to-focus, not close, handled below */
         int win_focus_changed = 0; /* set below when a click raises a background window; folded into `launched` once it's declared, so the z-order change gets a real full repaint this same frame */
+        {   /* The wheel goes to the ring-3 window under the pointer (JT_EV_WHEEL, +1 up, -1 down), the way a click does. Only the blocking launcher ever read it before, so no window app saw a wheel step. */
+            int wz = mouse_get_wheel();
+            if (wz && win_hit_here >= 0 && gui_windows[win_hit_here].task >= 0)
+                syscall_window_push_event(gui_windows[win_hit_here].task, JT_EV_WHEEL, wz > 0 ? 1 : -1, 0);
+        }
 
         if (just_pressed) {
             if (logo_here) { menu_open = 1; menu_opening = 1; }
