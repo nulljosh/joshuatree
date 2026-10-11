@@ -6,8 +6,10 @@
 #define TLS_ERR_TIMEOUT -3   /* connected, nothing came back in time */
 #define TLS_ERR_ENTROPY -4   /* hardware random generator unavailable or unhealthy */
 int tls_connect(unsigned ip, unsigned short port, const char *host);   /* the three steps of https_fetch, for a caller that reports progress */
+int tls_connect_private(unsigned ip, unsigned short port, const char *name);   /* the relay: name checked, TLS_TA anchors only */
 int tls_handshake(void);
 int tls_exchange(const void *request, unsigned request_len, char *out, unsigned max);
+int tls_exchange_timeout(const void *request, unsigned request_len, char *out, unsigned max, unsigned reply_ticks);
 int https_fetch(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max);
 int https_fetch_timeout(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max, unsigned reply_ticks);
 int https_get(const char *host, unsigned short port, const char *path, char *body, unsigned max);

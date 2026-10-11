@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.46.0 development branch (2026-10-11)
+
+The Pi finds the Claude relay by itself when the router moves the Mac: it tries the last good address, else the baked one, then broadcasts a small UDP probe that `relay.py` answers. TLS now checks the fixed name `jt-relay` against the private CA alone, so the address no longer matters and a probe reply can never get the token. Check: `tools/checks/arm64-relay-discovery-check.py`.
+
 ## 2.41.0 development branch (2026-10-11)
 
 The boot splash draws the tree on, trunk first and spikes last, over 0.8 s before the bar fills, instead of showing it whole. `tools/gen/gen_boot_mark.py` re-renders `landing/logo.svg` as the pen's path grows and ships each pixel's first frame beside the coverage, so the kernel needs no animation data beyond one byte a pixel. Checked by `tools/checks/bootanim-check.py`, which samples the real framebuffer and wants a growing, never shrinking tree.
