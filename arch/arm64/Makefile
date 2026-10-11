@@ -162,15 +162,16 @@ wifi_fw.o: wifi_fw.S
 	$(CC) -c -o $@ wifi_fw.S
 pi-xhci.o: xhci.c
 	$(CC) -DPI_BUILD -c $< -o $@
-# Bluetooth (bt.c, slice BT1): HCI over the PL011. The BCM4345C0 patch, BCM4345C0.hcd from RPi-Distro/bluez-firmware, is
-# fetched by tools/bt-fw.sh into build/bt-fw/ (gitignored, never committed, LICENSE.cypress alongside) and embedded by
-# bt_fw.S. BT_HCD= names another file (tools/checks/arm64-bt-check.py passes a small made-up one); with no file at all the
-# radio runs its own ROM firmware. bt_fw.S is rewritten only when the path or the file's presence changes.
+# Bluetooth (bt.c, slices BT1 and BT2): HCI over the PL011, then the mouse over LE. The BCM4345C0 patch, BCM4345C0.hcd from
+# RPi-Distro/bluez-firmware, is fetched by tools/bt-fw.sh into build/bt-fw/ (gitignored, never committed, LICENSE.cypress
+# alongside) and embedded by bt_fw.S. BT_HCD= names another file (tools/checks/arm64-bt-check.py passes a small made-up
+# one); with no file at all the radio runs its own ROM firmware. bt_fw.S is rewritten only when the path or the file's
+# presence changes. Pairing's AES-128 is BearSSL's aes_ct, pulled from the same --start-lib objects tls.c uses.
 BT_HCD ?= ../../build/bt-fw/BCM4345C0.hcd
-bt.o: bt.c bt.h
-	$(CC) -c $< -o $@
-pi-bt.o: bt.c bt.h
-	$(CC) -DPI_BUILD $(PICON) -c $< -o $@
+bt.o: bt.c bt.h rng.h
+	$(CC) -I$(BSSL)/inc -c $< -o $@
+pi-bt.o: bt.c bt.h rng.h
+	$(CC) -DPI_BUILD $(PICON) -I$(BSSL)/inc -c $< -o $@
 bt-fw:
 	cd ../.. && tools/bt-fw.sh
 bt_fw.S: bt_fw_gen.sh FORCE

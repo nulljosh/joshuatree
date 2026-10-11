@@ -26,7 +26,7 @@ This is the dispatch in `arch/arm64/main.c` (`dock_activate` and `app_open_name`
 
 | USB keyboard and mouse on the Pi | **Keyboard works on the real board, 2026-10-06** (see the Log). Mouse untested, no wired one yet. Since 2.24.0 a USB mouse moves an arrow over the desktop, the dock's label follows it, the Console's red button closes it and a dock click opens it again, all proven in QEMU (`tools/checks/arm64-mouse-check.py`); see the mouse test list below. Since 2.13.2 each hub port prints one status line and every port is rescanned once a second, so a keyboard plugged in after boot is found too. Proven end to end in QEMU (`tools/checks/arm64-usb-check.py`). Each step prints a short `usb ...` line on screen: `usb pcie link up`, `usb vl805 ok`, `usb xhci run`, `usb port N connected`, `usb kbd addr N`, then `usb key 0x04 a` for every key. The last line on the photo is where it stopped. |
 | Wi-Fi on the Pi (CYW43455) | Built in 2.16.0, waiting on a photo from the real board. Stage 1 lists nearby networks on screen as `wifi ap ...` lines; joining one is stage 2. QEMU has no SDIO card, so it only proves the failure path (`wifi FAIL cmd5`, boot carries on): `tools/checks/arm64-wifi-check.py`. |
-| Bluetooth (the same CYW43455) | **In 2.51.0, not yet seen on the board.** The radio loads its patch at boot and `bt scan` lists the devices it hears. Connecting the mouse is BT2. See [Bluetooth](#bluetooth). |
+| Bluetooth (the same CYW43455) | **In 2.54.0, not yet seen on the board.** The radio loads its patch at boot, `bt scan` lists the devices it hears, and `bt pair` connects the mouse (Just Works, the key kept in RAM only) so it moves the arrow and clicks. See [Bluetooth](#bluetooth). |
 | Sound out of the 3.5 mm jack | **In 2.43.0, not yet heard on the board.** Run `beep` (or `beep 880 500`) in the Terminal with headphones in the jack. PWM1 on GPIO 40 and 41, fed by the CPU (no DMA yet). QEMU has no PWM, so `tools/checks/arm64-audio-check.py` proves only the tone, the buffer and the bounded waits. If it prints `audio:` and a reason, tell me the line. HDMI audio is not done. **Volume, in 2.48.0, not yet heard on the board:** `vol` shows it (0 to 100, default 70), `vol 40` sets it, `vol up` and `vol down` step by 10; F11 and F12 and a Mac keyboard's volume keys do the same, show "Volume N" in the menu bar and click once. The default level and the click are `AUDIO_DEFAULT_VOLUME` in `audio.h` and `TICK_HZ`, `TICK_MS` in `cmd.c`: tune them on the real speaker. |
 | Files on the SD card | **Read only in 2.53.0, not yet seen on the board.** The kernel reads the card it booted from, and `ls` and `cat` in the Terminal show its boot partition. See [Files on the card](#files-on-the-card). Proven on QEMU's Pi 4B model with a FAT32 card (`tools/checks/arm64-sd-check.py`). |
 | Wired Ethernet on the Pi | Not yet. M4. |
@@ -176,7 +176,7 @@ The board test, after flashing with `tools/flash-pi.sh`:
 
 ## Mouse test on the real board (2.24.0)
 
-QEMU proves the arrow, the label and the clicks, but not real mice or the real cache. Joshua's mouse is Bluetooth, and Bluetooth only scans so far (see [Bluetooth](#bluetooth)), so this needs a wired USB mouse (or a wireless one with its own USB receiver) until BT2.
+QEMU proves the arrow, the label and the clicks, but not real mice or the real cache. Joshua's mouse is Bluetooth: since 2.54.0 pair it first (see [Bluetooth](#bluetooth)) and the steps below are the same, except step 4, where unplugging is switching it off and pairing again. A wired USB mouse (or a wireless one with its own USB receiver) works too.
 
 1. Plug a wired USB mouse into the Pi before power-on. The Console should show `usb mouse addr N port ...`. Move it: an arrow appears and follows, with no trail left behind at 1080p.
 2. Hover the dock: the tile's name shows above it and goes away when the pointer leaves. No arrow-shaped mark stays in the dock.
@@ -196,13 +196,13 @@ Without it, every test is: build, swap the card, photograph the monitor, guess. 
 
 ## Wireless
 
-A Logitech receiver is a USB device: it works as a plain USB mouse and keyboard with no extra code. The Pi's own Wi-Fi and Bluetooth chip (CYW43455) needs closed firmware files: Wi-Fi joins a network (see the table above), and Bluetooth scans, below.
+A Logitech receiver is a USB device: it works as a plain USB mouse and keyboard with no extra code. The Pi's own Wi-Fi and Bluetooth chip (CYW43455) needs closed firmware files: Wi-Fi joins a network (see the table above), and Bluetooth pairs a mouse, below.
 
 ## Bluetooth
 
 Joshua's mouse is the Incase version of the Microsoft Bluetooth Ergonomic Mouse. It is Bluetooth Low Energy, so the click half of the 3.0 gate waits on Bluetooth, and Bluetooth is the other half of the Wi-Fi chip. It talks HCI over a serial line, the PL011.
 
-**What works now (2.51.0): scanning only.** At boot the kernel powers the radio (BT_ON, through the firmware mailbox), loads its patch (`BCM4345C0.hcd`, about 6 seconds at 115200), switches the link to 921600 and prints:
+**What works now (2.54.0): scanning and pairing the mouse.** At boot the kernel powers the radio (BT_ON, through the firmware mailbox), loads its patch (`BCM4345C0.hcd`, about 6 seconds at 115200), switches the link to 921600 and prints:
 
 ```
 bt: loading the radio's patch
@@ -220,18 +220,37 @@ bt: scan done, 3 devices
 
 If the radio stops answering, one line says so, `bt: no answer from the radio`, and the rest of the Pi carries on.
 
+**How to pair the mouse.**
+
+1. Switch the mouse on with the switch underneath. Hold the pairing button underneath for 5 seconds, until the light flashes.
+2. F2 for the Terminal. Type `bt scan`, Enter. The mouse shows up by name.
+3. Type `bt pair`, Enter. It takes the first name with "mouse" in it, or the strongest signal if none has one; `bt pair NAME` picks by name. One line per stage:
+
+```
+bt: connecting to Microsoft Bluetooth Mouse
+bt: connected
+bt: paired
+bt: mouse ready
+```
+
+4. Move it. The arrow follows, and a click on a dock tile opens it.
+
+Any failure is one plain line, and the Terminal keeps answering. `bt: the mouse did not answer, hold its button 5 seconds and type bt pair again` means it was not in pairing mode. `bt: pairing failed, ...` says which step. `bt: no boot mouse report on this device` means the mouse only speaks report mode, which is the next slice. `bt: the mouse disconnected, reason 0x..` means it hung up or switched off.
+
+**The key lives in RAM only.** Pairing is Just Works: no code to type, which is all a mouse can do. The mouse hands over its long-term key, and it stays in memory, never printed. Nothing is written to the SD card yet, so after a reboot, or after the mouse switches off, pair again: hold its button 5 seconds, `bt scan`, `bt pair`. A mouse that still remembers the old pairing may refuse a new one until its button is held again. Reconnecting by itself waits on SD writes.
+
 **Why the console moved.** The radio receives in bursts while the kernel is busy drawing or fetching a page. On the PL011 it gets a 32-byte buffer and hardware flow control (GPIO 30 to 33, as Linux wires it), so a burst waits in the radio instead of getting lost. The console only ever sends, so it lost nothing by moving to the mini UART, on the same pins 8 and 10 at 115200: a serial cable is wired the same way. We weighed `dtoverlay=miniuart-bt`, which keeps the console on the PL011 and gives the radio the mini UART: its 8-byte buffer and core-clock baud rate are the wrong fit for the side that receives.
 
 **The board test.**
 
-1. Flash a 2.51.0 card and boot. Within about 10 seconds the Console shows the four `bt:` lines above.
+1. Flash a 2.54.0 card and boot. Within about 10 seconds the Console shows the four `bt:` lines above.
 2. Put the mouse in pairing mode: switch it on with the switch underneath, then hold the pairing button underneath for about 5 seconds until the channel light flashes.
 3. F2 for the Terminal, type `bt scan`, Enter. A line with the mouse's name (an advert holds at most 29 letters, so a long name is cut) and an RSSI near -50 to -70 should print. Photograph it.
-4. If the four lines never come, photograph the last `bt:` line. `bt: no answer from the radio` straight after boot means the chip never answered at 115200: power or the pins.
+4. Type `bt pair`, Enter. Photograph the `bt:` lines. All three stages should come within a few seconds.
+5. Move the mouse and click the Mail tile: the Console opens with `dock Mail: not on ARM yet`. Photograph the arrow on the dock.
+6. If it stops early, photograph the last `bt:` line. `bt: no answer from the radio` straight after boot means the chip never answered at 115200: power or the pins.
 
-**What BT2 adds.** Connecting to the mouse, Just Works pairing with the keys kept in memory until SD writes land (so re-pair after a reboot), finding its HID service over GATT, turning its report notifications on, and feeding boot mouse reports into the same pointer the USB mouse drives. Then the arrow moves and clicks.
-
-The patch is `BCM4345C0.hcd` from RPi-Distro/bluez-firmware at the commit pinned in `tools/bt-fw.sh`, fetched into `build/bt-fw/` with `LICENSE.cypress` beside it and never committed, like the Wi-Fi firmware. QEMU has no Bluetooth chip, so `tools/checks/arm64-bt-check.py` runs the whole exchange against a fake controller on a second serial port.
+The patch is `BCM4345C0.hcd` from RPi-Distro/bluez-firmware at the commit pinned in `tools/bt-fw.sh`, fetched into `build/bt-fw/` with `LICENSE.cypress` beside it and never committed, like the Wi-Fi firmware. QEMU has no Bluetooth chip, so `tools/checks/arm64-bt-check.py` runs the whole exchange against a fake controller and a fake mouse on a second serial port. The fake does the pairing math itself with its own AES, so a wrong byte order in the kernel's fails the check.
 
 ## Time estimates (2026-10-06)
 
