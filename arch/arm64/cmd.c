@@ -1,7 +1,8 @@
 /* The one command line. cmd_run takes a typed line and a sink for its output; everything the Terminal's prompt
    understands (help, the /model and /effort commands, the browser, the local model, Claude) is dispatched here and nowhere else.
    Another window can run the same commands by calling cmd_run with its own sink. browser.c and ask.c print through cmd_out.
-   ls and cat read the SD card's FAT partition (emmc.c, drivers/fat.c): the root directory, 8.3 names. */
+   ls and cat read the SD card's FAT partition (emmc.c, drivers/fat.c), 8.3 names, the root or one folder down (ls JT,
+   cat JT/NOTE.TXT). write, rm and mkdir change only the JT folder, through emmc.c's sd_write, sd_remove and sd_mkdir. */
 #include "bt.h"
 #include "emmc.h"
 #include "../../drivers/fat.h"
@@ -26,7 +27,8 @@ void (*cmd_out)(const char *s) = kputs;
 void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (char)('0' + v % 10); while (v /= 10); cmd_out(t + n); }
 
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, ls, cat NAME, userrun NAME, help. Anything else asks Claude.";
+                           "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
+                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), help. Anything else asks Claude.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;
@@ -37,16 +39,27 @@ static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line 
     cmd_out("\n");
     ls_count++;
 }
-static void cat_file(const char *q, unsigned n) {   /* the first 4 KB of a file in the root directory, as text */
+static unsigned word(const char *q, unsigned n, char *out, unsigned size) {   /* the first word of q into out; returns what it used */
+    unsigned k = 0, used = 0;
+    while (used < n && q[used] == ' ') used++;
+    while (used < n && q[used] != ' ') { if (k < size - 1) out[k++] = q[used]; used++; }
+    out[k] = 0;
+    return used;
+}
+static char *down(char *path) {   /* DIR/NAME: into DIR, then NAME; a bare NAME stays in the root. 0 when DIR is not there */
+    for (char *p = path; *p; p++)
+        if (*p == '/') { *p = 0; int in = fat_chdir(path); *p = '/'; return in ? p + 1 : 0; }
+    return path;
+}
+static void cat_file(const char *q, unsigned n) {   /* the first 4 KB of a file, as text */
     static char text[4097];
-    char name[64];
-    unsigned k = 0;
-    while (n && *q == ' ') { q++; n--; }
-    for (; k < n && k < sizeof name - 1; k++) name[k] = q[k];
-    name[k] = 0;
+    char path[64];
+    word(q, n, path, sizeof path);
     if (!sd_ready()) { cmd_out("cat: no SD card\n"); return; }
-    int got = fat_read_file(name, text, sizeof text);
-    if (got < 0) { cmd_out("cat: no file "); cmd_out(name); cmd_out("\n"); return; }
+    char *name = down(path);
+    int got = name ? fat_read_file(name, text, sizeof text) : -1;
+    if (name && name != path) fat_chdir("..");   /* back to the root */
+    if (got < 0) { cmd_out("cat: no file "); cmd_out(path); cmd_out("\n"); return; }
     unsigned shown = got > 4096 ? 4096 : (unsigned)got, m = 0;
     for (unsigned i = 0; i < shown; i++) if (text[i] != '\r') text[m++] = text[i];   /* DOS line ends print as one */
     if (m) say_wrapped("", text, m);
@@ -118,6 +131,32 @@ static void userrun_command(const char *name, unsigned n) {
     else if (faulted) cmd_out(": stopped by a fault, the kernel carried on\n");
     else { cmd_out(": exit "); cmd_dec((unsigned)status); cmd_out("\n"); }
 }
+static int is(const char *q, unsigned n, const char *w) {   /* the line starts with the word w and a space */
+    unsigned k = 0;
+    for (; w[k]; k++) if (k >= n || q[k] != w[k]) return 0;
+    return k < n && q[k] == ' ';
+}
+static void jt_command(const char *q, unsigned n, int op) {   /* 0 write NAME TEXT, 1 rm NAME, 2 mkdir NAME */
+    static char text[1024];
+    char name[64];
+    unsigned used = word(q, n, name, sizeof name), len = 0;
+    if (!sd_ready()) { cmd_out(op == 0 ? "write" : op == 1 ? "rm" : "mkdir"); cmd_out(": no SD card\n"); return; }
+    if (op == 0) {                                 /* the rest of the line, then a newline: a text file */
+        if (used < n) used++;
+        while (used < n && len < sizeof text - 1) text[len++] = q[used++];
+        text[len++] = '\n';
+    }
+    int ok = op == 0 ? sd_write(name, text, len) : op == 1 ? sd_remove(name) : sd_mkdir(name);
+    if (ok < 0) return;                            /* refused: emmc.c has said why */
+    if (op == 0) cmd_out(ok ? "wrote JT/" : "write: JT/");
+    else if (op == 1) cmd_out(ok ? "removed JT/" : "rm: no file JT/");
+    else cmd_out(ok ? "made JT/" : "mkdir: no folder made, JT/");
+    cmd_out(name);
+    if (op == 0 && ok) { cmd_out(", "); cmd_dec(len); cmd_out(" bytes"); }
+    if (op == 0 && !ok) cmd_out(" not written");
+    if (op == 2 && ok) cmd_out("/");
+    cmd_out("\n");
+}
 
 void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     cmd_out = out ? out : kputs;
@@ -125,13 +164,24 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     while (n && q[n - 1] == ' ') n--;
     if (!n) return;
     if (n == 4 && q[0] == 'h' && q[1] == 'e' && q[2] == 'l' && q[3] == 'p') { say_wrapped("", help, sizeof help - 1); return; }
-    if (n == 2 && q[0] == 'l' && q[1] == 's') {
+    if ((n == 2 && q[0] == 'l' && q[1] == 's') || is(q, n, "ls")) {
         if (!sd_ready()) { cmd_out("ls: no SD card\n"); return; }
+        char dir[64] = "";
+        if (n > 3) word(q + 3, n - 3, dir, sizeof dir);
+        if (*dir && !fat_chdir(dir)) { cmd_out("ls: no folder "); cmd_out(dir); cmd_out("\n"); return; }
         ls_count = 0; fat_list(ls_one);
+        if (*dir) fat_chdir("..");
         if (!ls_count) cmd_out("ls: no files\n");
         return;
     }
-    if (n > 4 && q[0] == 'c' && q[1] == 'a' && q[2] == 't' && q[3] == ' ') { cat_file(q + 4, n - 4); return; }
+    if (is(q, n, "cat")) { cat_file(q + 4, n - 4); return; }
+    if (is(q, n, "write")) {   /* NAME needs a dot (NOTE.TXT), so "write me a poem" still goes to Claude */
+        unsigned k = 6;
+        while (k < n && q[k] != ' ' && q[k] != '.') k++;
+        if (k < n && q[k] == '.') { jt_command(q + 6, n - 6, 0); return; }
+    }
+    if (is(q, n, "rm")) { jt_command(q + 3, n - 3, 1); return; }
+    if (is(q, n, "mkdir")) { jt_command(q + 6, n - 6, 2); return; }
     if (bt_command(q, n)) return;
     if (beep_command(q, n)) return;
     if (vol_command(q, n)) return;

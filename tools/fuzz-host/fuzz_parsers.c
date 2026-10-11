@@ -254,6 +254,11 @@ static int run_fat(const unsigned char *data, unsigned len) {
            which walks 2..total_clusters+2: total_clusters is derived from
            boot-sector fields a hostile image fully controls. */
         fat_write_file("NEW.TXT", "hi", 2);
+        /* 2.57.0: FAT32 writes too, so the Pi's write paths face the same
+           hostile images: a folder (a cluster and a slot) and a delete
+           (release_chain walks a chain the image controls). */
+        fat_mkdir("NEWDIR");
+        fat_delete("TEST.TXT");
     }
     alarm(0);
     return r;
@@ -526,6 +531,21 @@ int main(void) {
     fat_nasties(fat_base, regress_dir);
     unsigned char *fat32_base = build_fat32_image(fat_base);
     fuzz_sample(run_fat, fat32_base, FAT_IMG_SIZE, "fat32_basic", regress_dir);
+    /* FAT32 write nasties: a FAT size past the 2^28-cluster limit must not
+       mount (its sums would overflow), and at the limit, with a 4-billion-
+       sector claim, the free-cluster search must end at the image's edge. */
+    {
+        unsigned char *img = malloc(FAT_IMG_SIZE); memcpy(img, fat32_base, FAT_IMG_SIZE);
+        img[36] = 0xFF; img[37] = 0xFF; img[38] = 0xFF; img[39] = 0xFF;
+        g_regress_dir = regress_dir;
+        try_one(run_fat, img, FAT_IMG_SIZE, "fat32_huge_fat_size");
+        memcpy(img, fat32_base, FAT_IMG_SIZE);
+        img[36] = 0; img[37] = 0; img[38] = 0x20; img[39] = 0;              /* 2^21 FAT sectors */
+        img[32] = 0xFF; img[33] = 0xFF; img[34] = 0xFF; img[35] = 0xFF;     /* total_sectors_32 */
+        memset(img + 2 * FAT_SECTOR_SIZE, 0xAA, FAT_IMG_SIZE - 2 * FAT_SECTOR_SIZE);   /* nothing reads as free */
+        try_one(run_fat, img, FAT_IMG_SIZE, "fat32_alloc_cluster_dos");
+        free(img);
+    }
     free(fat32_base);
     free(fat_base);
 

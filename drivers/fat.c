@@ -4,8 +4,10 @@
    arch/arm64/emmc.c adds its partition's start), no long filenames (8.3
    exactly as FAT stores them). 2.53.0: FAT32 reads too, for the Pi's boot
    partition: 28-bit FAT entries, the root as a cluster chain, the high
-   half of each first cluster. Every write path refuses a FAT32 volume;
-   writes stay FAT16 until the Pi's write slice. */
+   half of each first cluster. 2.57.0: FAT32 writes as well, so the Pi's
+   files survive a reboot: u32 clusters, the top nibble of every FAT32
+   entry kept, every FAT copy written, first_cluster_high set, and the
+   FSInfo free count marked unknown on the first change. */
 #include "fat.h"
 #include "blockdev.h"
 #include "libc.h"
@@ -23,6 +25,10 @@ static u16 root_entry_count;
 static u32 fat_size_sectors;
 static int fat32;              /* FAT32: 4-byte FAT entries, and the root is a cluster chain */
 static u32 root_cluster, eoc;  /* FAT32's root cluster; the first end-of-chain value (0xFFF8 or 0x0FFFFFF8) */
+static u32 eoc_mark;           /* what a chain's last entry gets: 0xFFFF or 0x0FFFFFFF */
+static u32 fsinfo_lba;         /* FAT32's FSInfo sector, 0 for none */
+static int fsinfo_done;        /* its free count already marked unknown since the mount */
+static u32 alloc_hint;         /* where the last free-cluster search stopped; only a starting point */
 
 static u32 fat_start, root_dir_start, root_dir_sectors, data_start, total_clusters;
 static int mounted = 0;
@@ -63,9 +69,12 @@ int fat_mount(void) {
     if (fat32) {
         fat_size_sectors = rd32(&boot[36]);
         root_cluster = rd32(&boot[44]) & 0x0FFFFFFF;
-        if (root_entry_count || root_cluster < 2) return 0;
+        fsinfo_lba = rd16(&boot[48]);
+        if (root_entry_count || root_cluster < 2 || fat_size_sectors > (1u << 21)) return 0;   /* 2^28 clusters at most: nothing below overflows */
     }
     eoc = fat32 ? 0x0FFFFFF8 : 0xFFF8;
+    eoc_mark = fat32 ? 0x0FFFFFFF : 0xFFFF;
+    fsinfo_done = 0; alloc_hint = 0;
 
     if (bytes_per_sector != 512 || sectors_per_cluster == 0 || num_fats == 0 || fat_size_sectors == 0) return 0;
 
@@ -121,27 +130,64 @@ static u32 fat_entry_read(u32 cluster) {
     return fat32 ? rd32(&fatbuf[fat_byte_off % 512]) & 0x0FFFFFFF : rd16(&fatbuf[fat_byte_off % 512]);
 }
 
-static int fat_entry_write(u16 cluster, u16 value) {
-    u32 fat_byte_off = (u32)cluster * 2;
-    u32 row = fat_byte_off / 512;
+/* FAT32 keeps a free-cluster count and a next-free hint in its FSInfo
+   sector. Rather than keep them exact, the first FAT change after a mount
+   sets both to 0xFFFFFFFF, "unknown" in the spec, so no OS trusts a stale
+   count; fsck and every OS work it out again. */
+static void fsinfo_unknown(void) {
+    if (!fat32 || fsinfo_done) return;
+    fsinfo_done = 1;
+    u8 b[512];
+    if (fsinfo_lba < 1 || fsinfo_lba >= reserved_sectors || !blockdev_read_sector(fsinfo_lba, b)) return;
+    if (rd32(b) != 0x41615252 || rd32(&b[484]) != 0x61417272) return;
+    if (rd32(&b[488]) == 0xFFFFFFFF && rd32(&b[492]) == 0xFFFFFFFF) return;
+    memset(&b[488], 0xFF, 8);
+    blockdev_write_sector(fsinfo_lba, b);
+}
+
+/* FAT[cluster] = value in every FAT copy. Refuses a cluster past the
+   table, so a hostile chain can never aim a write past the FAT. FAT32
+   entries are 28 bits: the top four belong to the volume and are kept. */
+static int fat_entry_write(u32 cluster, u32 value) {
+    if (cluster < 2 || cluster >= total_clusters + 2) return 0;
+    u32 w = fat32 ? 4 : 2, fat_byte_off = cluster * w, row = fat_byte_off / 512;
     u8 fatbuf[512];
     if (!blockdev_read_sector(fat_start + row, fatbuf)) return 0;
-    fatbuf[fat_byte_off % 512]     = (u8)(value & 0xFF);
-    fatbuf[fat_byte_off % 512 + 1] = (u8)(value >> 8);
+    u8 *p = &fatbuf[fat_byte_off % 512];
+    if (fat32) value = (value & 0x0FFFFFFF) | (rd32(p) & 0xF0000000);
+    for (u32 i = 0; i < w; i++) p[i] = (u8)(value >> (8 * i));
+    fsinfo_unknown();
     for (u8 f = 0; f < num_fats; f++) {
         if (!blockdev_write_sector(fat_start + (u32)f * fat_size_sectors + row, fatbuf)) return 0;
     }
     return 1;
 }
 
-static u16 alloc_cluster(void) {
-    for (u32 c = 2; c < total_clusters + 2; c++) {
-        if (fat_entry_read((u16)c) == 0) {
-            if (!fat_entry_write((u16)c, 0xFFFF)) return 0;
-            return (u16)c;
-        }
+/* One read per FAT sector, not one per cluster: a Pi's boot partition has
+   thousands of used clusters before its first free one. Starts where the
+   last search stopped and wraps; stops at the first sector it cannot
+   read, so a hostile size never turns into a long search. */
+static u32 alloc_cluster(void) {
+    u32 w = fat32 ? 4 : 2, row = 0xFFFFFFFF;
+    u8 buf[512];
+    for (u32 k = 0; k < total_clusters; k++) {
+        u32 c = 2 + (alloc_hint + k) % total_clusters, off = c * w;
+        if (off / 512 != row) { row = off / 512; if (!blockdev_read_sector(fat_start + row, buf)) return 0; }
+        u32 v = fat32 ? rd32(&buf[off % 512]) & 0x0FFFFFFF : rd16(&buf[off % 512]);
+        if (v) continue;
+        if (!fat_entry_write(c, eoc_mark)) return 0;
+        alloc_hint = c - 1;   /* the next search starts at c + 1 */
+        return c;
     }
     return 0;
+}
+
+static void release_chain(u32 cluster) {
+    for (u32 count = 0; cluster >= 2 && cluster < eoc && count < total_clusters; count++) {
+        u32 next = fat_entry_read(cluster);
+        if (!fat_entry_write(cluster, 0)) return;
+        cluster = next;
+    }
 }
 
 /* Real bug, found by tracing what a corrupted FAT table (the honest result
@@ -225,6 +271,11 @@ static u32 entry_cluster(const struct dir_entry *e) {
     return e->first_cluster_low | (fat32 ? (u32)e->first_cluster_high << 16 : 0);
 }
 
+static void set_cluster(struct dir_entry *e, u32 c) {   /* FAT16 has no high half: it stays 0 there */
+    e->first_cluster_low = (u16)c;
+    e->first_cluster_high = fat32 ? (u16)(c >> 16) : 0;
+}
+
 static u32 matched_lba;
 static int matched_index;
 static struct dir_entry *find_entry_in(u32 dir_cluster, const char *name) {
@@ -289,7 +340,7 @@ int fat_read_file(const char *name, void *buf, unsigned int bufsize) {
 }
 
 int fat_delete(const char *name) {
-    if (!mounted || fat32) return 0;
+    if (!mounted) return 0;
     u8 want[11];
     to_fat_name(name, want);
     u8 sector[512];
@@ -304,8 +355,11 @@ int fat_delete(const char *name) {
             if (entries[i].name[0] == 0xE5) continue;
             if (entries[i].attr & (ATTR_VOLUME_ID | ATTR_DIRECTORY)) continue;
             if (names_eq(entries[i].name, want)) {
+                u32 first = entry_cluster(&entries[i]);
                 entries[i].name[0] = 0xE5;
-                return blockdev_write_sector(lba, sector);
+                if (!blockdev_write_sector(lba, sector)) return 0;
+                release_chain(first);   /* after the entry is gone: a stop in between loses clusters, never links one twice */
+                return 1;
             }
         }
     }
@@ -365,10 +419,12 @@ int fat_chdir(const char *name) {
 }
 
 int fat_mkdir(const char *name) {
-    if (!mounted || fat32 || !*name) return 0;
+    if (!mounted || !*name) return 0;
     if (find_entry_in(current_dir_cluster, name)) return 0; /* name taken */
+    u32 slot_lba; int slot_idx;   /* the slot first, so a full directory never costs a cluster */
+    if (!find_free_slot(current_dir_cluster, &slot_lba, &slot_idx)) return 0; /* directory full, ponytail: no growth yet, see fat.h */
 
-    u16 new_cluster = alloc_cluster();
+    u32 new_cluster = alloc_cluster();
     if (!new_cluster) return 0;
 
     u8 first[512];
@@ -377,60 +433,50 @@ int fat_mkdir(const char *name) {
     entries[0].name[0] = '.';
     for (int i = 1; i < 11; i++) entries[0].name[i] = ' ';
     entries[0].attr = ATTR_DIRECTORY;
-    entries[0].first_cluster_low = new_cluster;
+    set_cluster(&entries[0], new_cluster);
     entries[1].name[0] = '.'; entries[1].name[1] = '.';
     for (int i = 2; i < 11; i++) entries[1].name[i] = ' ';
     entries[1].attr = ATTR_DIRECTORY;
-    entries[1].first_cluster_low = current_dir_cluster; /* 0 (root) or a real parent cluster */
+    set_cluster(&entries[1], current_dir_cluster); /* 0 (root, on FAT32 too) or a real parent cluster */
 
     u32 lba = cluster_to_lba(new_cluster);
-    if (!blockdev_write_sector(lba, first)) return 0;
-
     u8 blank[512];
     memset(blank, 0, sizeof(blank));
+    if (!blockdev_write_sector(lba, first)) goto failed;
     for (u8 s = 1; s < sectors_per_cluster; s++) {
-        if (!blockdev_write_sector(lba + s, blank)) return 0;
+        if (!blockdev_write_sector(lba + s, blank)) goto failed;
     }
 
-    u32 slot_lba; int slot_idx;
-    if (!find_free_slot(current_dir_cluster, &slot_lba, &slot_idx)) return 0; /* directory full, ponytail: no growth yet, see fat.h */
-
     u8 sector[512];
-    if (!blockdev_read_sector(slot_lba, sector)) return 0;
+    if (!blockdev_read_sector(slot_lba, sector)) goto failed;
     struct dir_entry *slot = &((struct dir_entry *)sector)[slot_idx];
     to_fat_name(name, slot->name);
     slot->attr = ATTR_DIRECTORY;
     for (int i = 0; i < 8; i++) slot->reserved[i] = 0;
-    slot->first_cluster_high = 0;
     slot->write_time = 0;
     slot->write_date = 0;
-    slot->first_cluster_low = new_cluster;
+    set_cluster(slot, new_cluster);
     slot->file_size = 0;
-    return blockdev_write_sector(slot_lba, sector);
-}
-
-static void release_chain(u16 cluster) {
-    for (u32 count = 0; cluster >= 2 && cluster < 0xFFF8 && count < total_clusters; count++) {
-        u16 next = fat_entry_read(cluster);
-        if (!fat_entry_write(cluster, 0)) return;
-        cluster = next;
-    }
+    if (blockdev_write_sector(slot_lba, sector)) return 1;
+failed:
+    release_chain(new_cluster);
+    return 0;
 }
 
 static int write_file(const char *name, const void *data, unsigned int len, int replace) {
-    if (!mounted || fat32 || !*name) return 0;
+    if (!mounted || !*name) return 0;
     struct dir_entry *existing = find_entry_in(current_dir_cluster, name);
     if (existing && (!replace || (existing->attr & ATTR_DIRECTORY))) return 0;
-    u16 old_cluster = existing ? existing->first_cluster_low : 0;
+    u32 old_cluster = existing ? entry_cluster(existing) : 0;
     u32 slot_lba = matched_lba; int slot_idx = matched_index;
     if (!existing && !find_free_slot(current_dir_cluster, &slot_lba, &slot_idx)) return 0;
 
     const u8 *src = (const u8 *)data;
-    u16 first_cluster = 0, prev_cluster = 0;
+    u32 first_cluster = 0, prev_cluster = 0;
     u32 remaining = len;
 
     while (remaining > 0) {
-        u16 c = alloc_cluster();
+        u32 c = alloc_cluster();
         if (!c) goto failed;
         if (first_cluster == 0) first_cluster = c;
         else if (!fat_entry_write(prev_cluster, c)) { release_chain(c); goto failed; }
@@ -447,7 +493,7 @@ static int write_file(const char *name, const void *data, unsigned int len, int 
             remaining -= chunk;
         }
     }
-    if (prev_cluster && !fat_entry_write(prev_cluster, 0xFFFF)) goto failed;
+    if (prev_cluster && !fat_entry_write(prev_cluster, eoc_mark)) goto failed;
 
     u8 sector[512];
     if (!blockdev_read_sector(slot_lba, sector)) goto failed;
@@ -455,10 +501,9 @@ static int write_file(const char *name, const void *data, unsigned int len, int 
     to_fat_name(name, slot->name);
     slot->attr = 0;
     for (int i = 0; i < 8; i++) slot->reserved[i] = 0;
-    slot->first_cluster_high = 0;
     slot->write_time = 0;
     slot->write_date = 0;
-    slot->first_cluster_low = first_cluster;
+    set_cluster(slot, first_cluster);
     slot->file_size = len;
     if (!blockdev_write_sector(slot_lba, sector)) return 0;
     release_chain(old_cluster);
