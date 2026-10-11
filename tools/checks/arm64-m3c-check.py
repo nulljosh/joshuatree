@@ -11,8 +11,10 @@ pages twice (the second time after a reload). Two boots on QEMU's virt machine, 
 Boot 1, the default kernel (the clock is not set, so JT_SYS_TIME answers 0):
   - hello still loads and runs: "jt-hello: start", its open comes back -38 (M3b), exit 1.
   - calendar loads ("M3c load calendar: N bytes, 8 code pages, 30 relocations, code C data D bss B"), asks for its window
-    first: "M3c svc 384 ... -> -38" with the pointer it passed inside its own data page, then writes "calendar: no window" to fd 2
-    and exits 1 ("M3 EL0 exit 1", "M3c userland calendar ok"). That is calendar.c's real failure path, with nothing stubbed.
+    first: "M3c svc 384 ... -> -19" with the pointer it passed inside its own data page (-ENODEV: the boot self-test runs it
+    outside the scheduler, so there is no window to give, as i386 answers a program run from the text shell), then writes
+    "calendar: no window" to fd 2 and exits 1 ("M3 EL0 exit 1", "M3c userland calendar ok"). That is calendar.c's real
+    failure path, with nothing stubbed.
   - the probe runs at EL0 against those pages, in this order: the first data word is a relocated pointer that points
     into the image; the pool past the image reads zero; the data page and pool are writable; JT_SYS_TIME stores through a
     pointer into the pool and refuses one into a code page with -14 (the kernel must not store into a read-only page);
@@ -23,9 +25,11 @@ Boot 1, the default kernel (the clock is not set, so JT_SYS_TIME answers 0):
     abort, permission fault level 3, at the address branched to: data is never executable. The same boot keeps the M3a faults
     (kernel page, kernel text) from arm64-m3-check.py.
 Boot 2, the caltest kernel (the clock fixed at CAL_UTC): JT_SYS_TIME answers that exact number, in the program's return value and
-  through its pointer. Then, on the Terminal, over QMP keys: `userrun calendar` and `userrun hello` load and run again with
-  the program's own lines and "userrun NAME: exit 1"; `userrun nope` is refused in one line; `/help` after all of that still
-  answers, so the kernel is up after five EL0 programs, ten deliberate faults and two reloads.
+  through its pointer. Then, on the Terminal, over QMP keys: `userrun calendar` loads it again under the scheduler (M3c part 2),
+  so its window opens ("userrun calendar: running in its window") and Esc closes it ("calendar: closed", exit 0; the window
+  itself is arm64-calendar-check.py's); `userrun hello` loads and runs again with its own lines and "userrun hello: exit 1";
+  `userrun nope` is refused in one line; `/help` after all of that still answers, so the kernel is up after five EL0
+  programs, ten deliberate faults and two reloads.
 "EL0: reached code after the blocked access", "M3c probe FAIL", "M3c load FAIL", "M3c exec FAIL" and "M3c userland calendar FAIL" must never appear.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-m3c-check.py   (from the repo root)
@@ -110,7 +114,7 @@ def trace(out, want_time):
     want = ["M3b EL0 C task starts", re.compile(r"M3c load hello: \d+ bytes, 1 code pages, 0 relocations, "), "jt-hello: start",
             re.compile(r"M3c svc 5 a0=0x[0-9a-f]{16} -> -38$"), "jt-hello: open failed -38", "M3 EL0 exit 1", "M3b userland C ok",
             "M3c EL0 calendar starts", re.compile(r"M3c load calendar: "),
-            re.compile(r"M3c svc 384 a0=(0x[0-9a-f]{16}) -> -38$"), "calendar: no window", "M3 EL0 exit 1", "M3c userland calendar ok",
+            re.compile(r"M3c svc 384 a0=(0x[0-9a-f]{16}) -> -19$"), "calendar: no window", "M3 EL0 exit 1", "M3c userland calendar ok",
             "M3c probe 1 starts", *probe, re.compile(r"M3c load calendar: "), "M3c probe 2 starts", *probe]
     for what, addr in (("data", di), ("pool", ci + (int(size) + 4095) // 4096 * 4096), ("stack", ci + 0x70000)):   # 0x70000 is UP_ASTACK - UP_APP in main.c
         want += ["M3c exec %s 0x%016x" % (what, addr), "M3 EL0 fault: instruction abort, permission fault level 3, address 0x%016x" % addr, "M3c exec refused"]
@@ -121,7 +125,7 @@ def trace(out, want_time):
         if nxt < 0: check("serial line %r in order" % (w if isinstance(w, str) else w.pattern), False, out[-900:]); return
         at = nxt
     check("every line of the self-test came in order: hello, calendar's real failure path, the probe, the reload, the probe again", True)
-    win = re.search(r"M3c svc 384 a0=(0x[0-9a-f]{16}) -> -38", out)
+    win = re.search(r"M3c svc 384 a0=(0x[0-9a-f]{16}) -> -19", out)
     check("calendar's window argument is a full 64 bit pointer into its own data page", win and di <= int(win.group(1), 16) < bi, win.group(0) if win else out[-400:])
     for bad in ("EL0: reached code after the blocked access", "M3c probe FAIL", "M3c load FAIL", "M3c exec FAIL", "M3c userland calendar FAIL", "M3b userland C FAIL",
                 "M3 userland FAIL", "jt-hello: nosys=", "KERNEL CRASH"):
@@ -146,14 +150,18 @@ try:
         b.key("f2")
         if not b.wait_for("terminal open", 10): raise SystemExit("FAIL: F2 did not open the Terminal: %r" % b.uart()[-300:])
         time.sleep(0.5)
-        out = b.say("userrun calendar", "userrun calendar: exit")
-        check("userrun calendar loads it again and runs it: its own failure line, then exit 1",
-              re.search(r"M3c load calendar: .*\nM3c svc 384 .* -> -38\ncalendar: no window\nM3 EL0 exit 1\nuserrun calendar: exit 1\n", out), out[-500:])
+        out = b.say("userrun calendar", "userrun calendar: running in its window")
+        check("userrun calendar loads it again under the scheduler: now its window opens and it keeps running",
+              re.search(r"M3c load calendar: .*\nM3c app calendar starts\nM3c window calendar \d+x\d+ at \d+,\d+\nM3c svc 384 .* -> 0\n"
+                        r"calendar: ring-3 window \d+x\d+\n", out) and "userrun calendar: running in its window\n" in out, out[-500:])
+        n = len(b.uart()); b.key("esc")
+        check("Esc closes it: calendar says so and exits 0", b.wait_for("M3c app calendar exit 0", 10) and "calendar: closed\n" in b.uart()[n:], b.uart()[n:][-300:])
+        time.sleep(0.5)
         out = b.say("userrun hello", "userrun hello: exit")
         check("userrun hello runs hello again from the same window: open -38, exit 1",
-              re.search(r"M3c load hello: .*\njt-hello: start\n.*\njt-hello: open failed -38\nM3 EL0 exit 1\nuserrun hello: exit 1\n", out, re.S), out[-500:])
+              re.search(r"M3c load hello: .*\njt-hello: start\n.*\njt-hello: open failed -38\nM3 EL0 exit 1\nM3c app hello exit 1, ran 1 times\nuserrun hello: exit 1\n", out, re.S), out[-500:])
         out = b.say("userrun nope", "userrun: no program")
-        check("an unknown program is refused in one line", "userrun: no program called that, try hello or calendar\n" in out and "M3c load" not in out, out[-300:])
+        check("an unknown program is refused in one line", "userrun: no program called that, try hello, calendar or loop\n" in out and "M3c load" not in out, out[-300:])
         out = b.say("/help", "/clear  new conversation")
         check("the kernel still answers a command after all of that", "/model [auto|haiku|sonnet|opus]" in out and "/clear  new conversation" in out, out[-300:])
         check("no kernel crash and no oom after the Terminal runs", "KERNEL CRASH" not in b.uart() and "oom" not in b.uart().split("terminal open")[-1])
@@ -165,5 +173,5 @@ finally:
 if fails:
     print("FAIL: %d of the M3c checks failed" % len(fails)); sys.exit(1)
 print("PASS: the ARM kernel loads a 34 KB user/calendar.c image (code pages read-only and executable, data and a zeroed pool read-write, a stack, "
-      "relocated pointers) and runs it at EL0 with hello.c still passing; its window call gets -38, TIME answers the clock and refuses a "
+      "relocated pointers) and runs it at EL0 with hello.c still passing; its window call gets -19 outside the scheduler, TIME answers the clock and refuses a "
       "read-only pointer, a store to its code faults, a reload zeroes and relocates a fresh copy, and `userrun` and the kernel keep answering")

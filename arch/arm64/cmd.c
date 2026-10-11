@@ -102,15 +102,19 @@ int volume_key(unsigned code) {
     return 1;
 }
 
-/* userrun NAME: load the user program NAME (hello, calendar) from the image table and run it at EL0, its writes on the
-   screen, then say how it ended. A program that needs a window says so and exits; the window calls come in M3c part 2. */
+/* userrun NAME: load the user program NAME (hello, calendar, loop) from the image table and run it at EL0, its first writes
+   on the screen, then say how it ended, or that it is still running: an app that yields (one with a window does) carries on
+   from the desktop's loop (M3c part 2), and its red dot or its own Esc ends it. One app at a time. */
 static void userrun_command(const char *name, unsigned n) {
     unsigned long status = 0; int faulted = 0;
     int r = userrun(name, n, &status, &faulted);
-    if (r == -1) { cmd_out("userrun: no program called that, try hello or calendar\n"); return; }
+    if (r == -1) { cmd_out("userrun: no program called that, try hello, calendar or loop\n"); return; }
+    if (r == -3) { cmd_out("userrun: an app is already running, close it first\n"); return; }
     cmd_out("userrun ");
     for (unsigned i = 0; i < n; i++) { char c[2] = { name[i], 0 }; cmd_out(c); }
-    if (r) cmd_out(": would not load\n");
+    if (r == 2) cmd_out(": running in its window\n");
+    else if (r == 1) cmd_out(": running, it yields to the desktop\n");
+    else if (r) cmd_out(": would not load\n");
     else if (faulted) cmd_out(": stopped by a fault, the kernel carried on\n");
     else { cmd_out(": exit "); cmd_dec((unsigned)status); cmd_out("\n"); }
 }

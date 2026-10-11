@@ -14,12 +14,31 @@
     app hello
     app calendar
 
+/* M3c part 2: loop, the scheduler's test program, made by hand in the same image format: one code page, then the trailer
+   { "JTU1", 4096 bytes of code, an empty relocation list }. It asks for its window, then yields forever: it never polls,
+   never draws and never exits, so Esc does nothing and only its red dot ends it. The desktop must stay usable while it runs
+   (tools/checks/arm64-calendar-check.py). */
+    .balign 16
+loop_img:
+    sub sp, sp, #32
+    mov x0, sp                  /* a struct jt_window_info on its stack */
+    mov x8, #384                /* JT_SYS_WINDOW_OPEN */
+    svc #0
+1:  mov x8, #158                /* JT_SYS_SCHED_YIELD */
+    svc #0
+    b 1b
+    .skip 4096 - (. - loop_img)
+    .long 0x3155544a, 4096, 4096, 4096
+loop_img_end:
+
 .Lname_hello:    .asciz "hello"
 .Lname_calendar: .asciz "calendar"
+.Lname_loop:     .asciz "loop"
 
     .balign 8
     .global user_apps
 user_apps:
     .quad .Lname_hello, hello_img, hello_img_end
     .quad .Lname_calendar, calendar_img, calendar_img_end
+    .quad .Lname_loop, loop_img, loop_img_end
     .quad 0, 0, 0

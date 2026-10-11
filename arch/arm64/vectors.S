@@ -155,11 +155,12 @@ bad_entry:
 
 /* M3a: enter_user(entry, sp, arg, arg2) saves the kernel's callee-saved registers, stack and interrupt mask, then drops to EL0
    at entry with sp_el0 = sp, x0 = arg, x1 = arg2 and every other register cleared. leave_user(status) is how a program ends (exit or a
-   fault): it restores that state and returns from enter_user with status in x0. */
-.section .text
-.global enter_user
-enter_user:
-    mov x6, x3                  /* arg2 survives the context save below */
+   fault): it restores that state and returns from enter_user with status in x0. Interrupts are masked from the save to the eret: one
+   taken in between would overwrite elr_el1 and spsr_el1 and send the eret somewhere else. leave_user puts the mask back.
+   M3c part 2: resume_user(frame, sp) is enter_user for an app the scheduler parked (main.c app_park): the same save, then every
+   register, the pc (frame->elr) and sp_el0 exactly as they were at its svc, and the eret goes on from there. The frame is copied onto
+   this stack so restore_all can load it, which leaves sp where enter_user leaves it: the next trap from EL0 lands below it. */
+.macro save_kctx
     adrp x3, k_ctx
     add x3, x3, :lo12:k_ctx
     stp x19, x20, [x3]
@@ -171,6 +172,13 @@ enter_user:
     mov x4, sp
     mrs x5, daif
     stp x4, x5, [x3, #96]
+    msr daifset, #2
+.endm
+.section .text
+.global enter_user, resume_user
+enter_user:
+    mov x6, x3                  /* arg2 survives the context save below */
+    save_kctx
     msr elr_el1, x0
     msr sp_el0, x1
     mov x4, #0x3c0              /* EL0t, interrupts masked */
@@ -206,6 +214,20 @@ enter_user:
     mov x28, xzr
     mov x29, xzr
     mov x30, xzr
+    eret
+resume_user:                    /* x0 = the parked frame (x0-x30, elr: 32 words), x1 = its sp_el0 */
+    save_kctx
+    msr sp_el0, x1
+    sub sp, sp, #272
+    mov x2, #0
+1:  ldr x3, [x0, x2]
+    str x3, [sp, x2]
+    add x2, x2, #8
+    cmp x2, #256
+    b.lo 1b
+    mov x4, #0x3c0              /* EL0t, interrupts masked, as enter_user */
+    msr spsr_el1, x4
+    restore_all
     eret
 .global leave_user
 leave_user:
