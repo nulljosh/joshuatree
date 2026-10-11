@@ -54,11 +54,11 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 <!-- bench:start -->
 | Benchmark | Result |
 |---|---|
-| Boot to shell | 240 ms |
-| Alloc + free | 157 ns/op |
-| memcpy | 836 MB/s |
-| Context switch | 2831 ns/switch |
-| Disk read | 11351 KB/s |
+| Boot to shell | 250 ms |
+| Alloc + free | 165 ns/op |
+| memcpy | 803 MB/s |
+| Context switch | 2950 ns/switch |
+| Disk read | 10640 KB/s |
 <!-- bench:end -->
 
 On the real Pi 4: memcpy 1109 MB/s, alloc 30 ns/op, Wi-Fi joined in 6.4 s; the full table is in docs/BENCHMARKS.md.
