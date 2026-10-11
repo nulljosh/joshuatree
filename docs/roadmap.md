@@ -56,9 +56,6 @@ Notes on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AUTONOMY.md)
 - [ ] [Sonnet] Pi playback for Samantha's voice: the Terminal posts her `[[say]]` text to `/api/tts` over the TLS relay and plays the 22050 Hz mono 16-bit PCM through the PWM audio driver (needs PR #506). Check: an arm64 check against a stub relay that sees the samples reach the audio buffer.
 - [ ] [Joshua] Higgsfield video through the Mac relay, under Joshua's spending rule: never automatic, always an explicit yes from Joshua with the cost shown first, one clip at a time, nothing from Samantha on her own. Check: a relay test that a request without a fresh yes is refused and that Samantha's actions cannot start one.
 
-## Now (set 2026-10-03)
-Samantha runs the machine, and Joshua is the face of the web portfolio. The phone demo, the OS and the landing all work on a phone. Everything below is what is left, in the order to pick it up. Merge one PR at a time, green first. `docs/LOOP-HANDOFF.md` has the restart prompt and the exact state. Full items live in the themed sections further down.
-
 ## The long road: version 3 to 10, and 100 (proposal, 2026-10-05)
 
 A guess at the shape, in Joshua's words as far as they are known. Each version has one idea, so "what is 6.0" has a one-line answer. Nothing here is promised; pick, reorder or cut. Every version ships as small 2.x-style steps first, and the big number is cut only when its one gate is true.
@@ -167,7 +164,6 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
 - [ ] [Fable] The self-update loop (Joshua, 2026-10-06: "make tweaks to the OS from inside the OS, push changes and hot swap"): ask Claude in the Claude app, the relay's Claude Code edits the repo on the Mac and opens a draft PR, CI goes green, the Pi pulls the new `kernel8.img` over Wi-Fi from a release, writes it to the card and reboots into it. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror.
 - [ ] [Fable] A/B boot, so a bad self-update can never brick the Pi: keep the last good kernel on the card as `kernel8.old`, boot the new one once, and fall back to the old one if the new build never reaches the desktop (the Pi bootloader's `tryboot` is the likely mechanism; check it on the board).
 Also missing, added 2026-10-06 night, in order:
-- [x] [Sonnet] Keyboard shutdown and reboot implemented in 2.36.0: Ctrl+Alt+End shuts down, Ctrl+Alt+Delete restarts, Enter confirms and Escape cancels. Host safety checks and actual HID-to-watchdog raspi4b shutdown/reboot pass in `tools/checks/arm64-power-check.py`. Physical Pi verification and release review remain.
 - [ ] [Fable] The other three cores: wake them from the spin table, give each a stack, run the desktop on one and the drivers on another.
 - [ ] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, a HID-over-GATT or classic HID mouse. After Wi-Fi stage 2.
 - [ ] [Sonnet] Heat and the fan: read the SoC temperature through the mailbox, show it, drive the fan pin.
@@ -197,7 +193,6 @@ From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal 
 - [ ] [Fable] A USB stick as the first disk: mass storage over the xHCI driver we have, likely faster to "files survive a reboot" than EMMC2.
 - [ ] [Fable] Doom: the classic proof a platform is real, and Joshua's chosen benchmark (2026-10-06: "if we can get doom working that's sort of a benchmark"). Full speed with sound on the Pi is the flag right after 3.0. Keyboard first, gamepad next.
 - [ ] [Sonnet] USB gamepad: a HID report parser beside the keyboard and mouse. Doom and Hamurapi on the couch.
-- [x] [Sonnet] Brick implemented in the 2.37.0 development branch: original ARM game with 32 bricks, three lives, keys or mouse, pause, restart and win/game-over states. Open Brick from Spotlight. Host physics and QEMU keyboard/mouse/pixel checks pass in `tools/checks/arm64-brick-check.py`; release review and physical Pi play remain.
 - [ ] [Sonnet] Paddle, a two-player bounce game (the Pong idea under our own name), and Snake. Small, original, no third-party code or assets.
 - [ ] [Fable] An Atari-style console: our own 6502 core and a tiny TIA-like video chip. Only homebrew games whose authors allow redistribution, never original cartridges (the ROMs are copyrighted). Avoid Tetris-like and Space-Invaders-like designs.
 - [ ] [Sonnet] Drop files from the Mac over Wi-Fi: a tiny upload server on the Pi (plain HTTP PUT), no card swap.
@@ -210,7 +205,6 @@ Round 2, 2026-10-06 night (Raspberry Pi OS Trixie and RISC OS on the Pi 4). Smal
 - [ ] [Fable] Both HDMI ports: the Pi 4 drives two monitors; a second framebuffer through the mailbox display id, the desktop spanning or mirroring.
 - [ ] [Sonnet] A Screen settings page on the Pi: resolution, scale, which HDMI, saved on the card.
 - [ ] [Sonnet] Screen sleep: blank the picture after idle, wake on a key or the mouse, through the mailbox blank-screen tag.
-- [x] [Sonnet] Pi notification strip implemented in 2.38.0: Wi-Fi joined and Brick results appear briefly in the menu bar, clear after four seconds and leave clock/status/input intact. Apps share `menubar_notify`; file drops and updates can use it when those features exist. Check: `tools/checks/arm64-notice-check.py`. Full release gate and board verification remain.
 - [ ] [Fable] Bluetooth audio: speakers and headphones over the same CYW43455 radio. After Bluetooth for the mouse.
 Note: RISC OS on the Pi 4 still lists USB 3 as unsupported (riscosopen.org port status); Joshua Tree got xHCI working on the board on 2026-10-06.
 Round 3, 2026-10-06 night (macOS Tahoe 26 and Windows 11 2026). Joshua Tree already has the glass look (v48); these are what the two big desktops added that we lack:
@@ -304,12 +298,10 @@ The hardware is called Neo in the files (`docs/hardware/neo_cad.py`, the bluepri
 - [ ] [Sonnet] Music and Movies live in the Apps folder only, not on the dock.
 - [ ] [Sonnet] Silent movie clips play about twice too fast on this QEMU build.
 
-## Toward 2.0: apps leave the kernel
-- [ ] Window open takes about 640 ms for a ring-3 app (CI frametime check, 2.0.0): profile the seed, private page table and first draw; preseed binaries at boot and skip zeroing pages that get overwritten. [Sonnet]
-- [ ] [Sonnet] Port the remaining apps the same way, one PR each. Each PR: `user/<app>.c`, a row in `RING3_APPS`, the in-kernel copy deleted once the check passes.
-- [ ] [Fable] What the ports will need from the ABI: a font syscall (Keyrate carries its own 8x16 bitmap), a tick clock finer than `SYS_TIME`'s seconds, more than one program window at a time, and the framebuffer pages flipped back to supervisor-only on release (today they are zeroed and re-mapped on the next open).
+## Architecture to A+ (refreshed 2026-10-11)
 
-## Architecture to A+ (refreshed 2026-09-27)
+- [ ] Window open takes about 640 ms for a ring-3 app (CI frametime check, 2.0.0): profile the seed, private page table and first draw; preseed binaries at boot and skip zeroing pages that get overwritten. [Sonnet]
+- [ ] [Fable] What the ports will need from the ABI: a font syscall (Keyrate carries its own 8x16 bitmap), a tick clock finer than `SYS_TIME`'s seconds, more than one program window at a time, and the framebuffer pages flipped back to supervisor-only on release (today they are zeroed and re-mapped on the next open).
 Measured against the closest from-scratch peers: SerenityOS (the one-person-scale benchmark), ToaruOS (own compositor, own libc), KolibriOS (tiny, runs on real PCs), Haiku, and against macOS/Linux. Ranked; the loop works top down. Each line points at the section that closes it.
 
 1. **Real hardware.** Boots only in QEMU: no xHCI USB, no AHCI, no e1000; keyboard needs legacy BIOS mode, saving needs an old IDE disk. The hardware business depends on this. See Our own computer.
@@ -360,9 +352,6 @@ Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk)
 - [ ] [Haiku] Slides: a Markdown file becomes full-screen slides, arrow keys to move, one title and a few lines per slide.
 - [ ] [Fable] Stereo and 16-bit audio: a second `SYS_AUDIO` op so music stops sounding flat. Unblocks a real music studio (VERSIONS 54).
 - [ ] [Fable] A real video codec on this CPU class, only after 3.0 hardware shows what it can decode.
-
-## Toward 2.2: Media apps
-- [ ] [Sonnet] 2.2.0: Music and Video. Play WAV and MP3 songs from disk; play motion-JPEG AVI movies with sound in sync. Both are protected apps that cannot crash the desktop. Verified by `tools/checks/media-host-check.sh`, `tools/checks/avi-host-check.sh`, `tools/checks/fpu-check.sh`, plus boot checks music-check.py and movie-check.py (being added by concurrent agents).
 
 ## Our own computer
 The OS stays free. Monetization is custom hardware built to run it. Everything this kernel drives today runs on QEMU's emulated devices; porting to physical hardware comes first, not a coding task yet. 1.0 ships a USB-bootable ISO with a PS/2 fallback; USB is the 1.1 headline, built in this order.
@@ -516,7 +505,7 @@ Needs a call from Joshua before scoping:
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background, that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
 1. **One input bar and a talking tour** (plain: a demo that talks you through it) [Sonnet]: the phone shows two bars and the tour is silent after the intro.
-2. **Pi relay security** (plain: skip) [Fable]: the Terminal, bounded agent loop and browser controls are merged. Next: relay TLS and a trusted certificate clock, then a board retest.
+2. **Pi relay security** (plain: skip) [Fable]: relay TLS is merged. Next: the Pi finds the relay by itself and Turing answers (PRs open), then a board retest.
 3. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
 4. **Every icon in one style** (plain: icons that match) [Sonnet]: the fleet icons keep their own tile colors.
 5. **Photos, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.
