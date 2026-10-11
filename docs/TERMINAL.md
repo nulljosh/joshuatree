@@ -11,6 +11,8 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 | `browse URL` | Fetches a page and prints it as text with numbered links |
 | `open N` | Follows link N of the last page |
 | `llm PROMPT` | Runs the local model, if the image has one |
+| `ls` | Lists the SD card's boot partition (its root, 8.3 names and sizes) |
+| `cat NAME` | Prints the first 4 KB of a file there as text |
 | anything else | Asks Claude through the relay on the Mac |
 
 ## Getting there

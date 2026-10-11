@@ -14,6 +14,7 @@
 #   keydbgtest  keydbg-kernel8.elf: the dev card's key debug line on, plus made-up HID reports (a report ID) at boot
 #   calctest    calc-kernel8.elf: the Calculator open at boot with four sums typed into it
 #   caltest     cal-kernel8.elf: the clock fixed at CAL_UTC, so the Calendar tile shows that month with that day in the accent
+#   sdtest      sd-kernel8.img: the Terminal's ls and cat run at boot on the check's card, then a read past the card's end
 # The Console's ask> prompt asks the Claude relay. claude_cfg.sh writes its address and token (gitignored) on every build
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token), but only when
 # JT_WIFI_DEV=1 (tools/flash-pi.sh) or CLAUDE_RELAY_TOKEN_FILE is set explicitly (the checks); a release build has neither.
@@ -76,7 +77,7 @@ text.o: text.c ../../drivers/ttf.h
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
 # The Calculator's evaluator: the FPU does the sums, so it is built like text.c; main.c draws its window.
-cmd.o: cmd.c
+cmd.o: cmd.c emmc.h ../../drivers/fat.h
 	$(CC) -c $< -o $@
 calc.o: calc.c
 	$(FPCC) -c $< -o $@
@@ -105,6 +106,17 @@ gui_paint.o: ../../kernel/gui_paint.c ../../kernel/gui_paint.h ../../kernel/dock
 	$(CC) $(SHARED) -c $< -o $@
 dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 	$(CC) $(SHARED) -c $< -o $@
+# The SD card: emmc.c (EMMC2 on the Pi, stubs on virt) and the i386 kernel's own FAT code, drivers/fat.c, reading through
+# emmc.c's blockdev_read_sector. -mstrict-align, as for drivers/net.c. The Pi mounts the card read only.
+SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
+SDOBJ = emmc.o fat.o
+PISDOBJ = pi-emmc.o fat.o
+fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
+	$(SDCC) -c $< -o $@
+emmc.o: emmc.c emmc.h ../../drivers/fat.h
+	$(SDCC) -c $< -o $@
+pi-emmc.o: emmc.c emmc.h ../../drivers/fat.h
+	$(SDCC) -DPI_BUILD -c $< -o $@
 start.o: start.S
 	$(CC) -c $< -o $@
 user.o: user.S
@@ -137,12 +149,12 @@ pi-start.o: start.S
 # JT_WIFI_DEV=1 (the dev card) also turns on the key debug line in the menu bar (main.c KEY_DEBUG); release builds never.
 pi-main.o: main.c $(MAINDEP)
 	$(CC) -DPI_BUILD $(if $(filter 1,$(JT_WIFI_DEV)),-DKEY_DEBUG) -c $< -o $@
-kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
-pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
+kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
+pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
 pi: wifi-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
@@ -152,12 +164,12 @@ $(1)-pi-main.o: main.c $(MAINDEP)
 	$(CC) -DPI_BUILD $(2) -c $$< -o $$@
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
-$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
-$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(3) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
+$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
+$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
 $(1)-kernel8.img: $(1)-pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
 endef
 fptest.o: fptest.c
 	$(FPCC) -c $< -o $@
@@ -181,6 +193,8 @@ calctest: calc-kernel8.elf
 CAL_UTC ?= 1775000000
 $(eval $(call variant,cal,-DCAL_TEST_UTC=$(CAL_UTC)UL,,))
 caltest: cal-kernel8.elf
+$(eval $(call variant,sd,-DSD_SELFTEST,,))
+sdtest: sd-kernel8.img
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
 run-pi: kernel8.img
@@ -188,7 +202,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg
 FORCE:
-.PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest
+.PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest keydbgtest calctest caltest sdtest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
