@@ -10,6 +10,7 @@ void say_wrapped(const char *prefix, const char *s, unsigned n);   /* ask.c */
 int browse_command(const char *q, unsigned n);                     /* browser.c */
 int ask_command(const char *q, unsigned n);                        /* ask.c: "stop" and the /model, /effort, /status, /clear, /help commands */
 void ask_claude(const char *q, unsigned n);                        /* ask.c: `llm PROMPT` or the relay */
+int userrun(const char *name, unsigned n, unsigned long *status, int *faulted);   /* main.c: load an app from the table and run it at EL0 */
 
 int audio_tone(int freq_hz, int ms);                               /* audio.c: the 3.5 mm jack, polled PWM */
 int audio_volume(void);                                            /* audio.c: the master volume, 0 to 100 */
@@ -25,7 +26,7 @@ void (*cmd_out)(const char *s) = kputs;
 void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (char)('0' + v % 10); while (v /= 10); cmd_out(t + n); }
 
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, ls, cat NAME, help. Anything else asks Claude.";
+                           "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, ls, cat NAME, userrun NAME, help. Anything else asks Claude.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;
@@ -101,6 +102,23 @@ int volume_key(unsigned code) {
     return 1;
 }
 
+/* userrun NAME: load the user program NAME (hello, calendar, loop) from the image table and run it at EL0, its first writes
+   on the screen, then say how it ended, or that it is still running: an app that yields (one with a window does) carries on
+   from the desktop's loop (M3c part 2), and its red dot or its own Esc ends it. One app at a time. */
+static void userrun_command(const char *name, unsigned n) {
+    unsigned long status = 0; int faulted = 0;
+    int r = userrun(name, n, &status, &faulted);
+    if (r == -1) { cmd_out("userrun: no program called that, try hello, calendar or loop\n"); return; }
+    if (r == -3) { cmd_out("userrun: an app is already running, close it first\n"); return; }
+    cmd_out("userrun ");
+    for (unsigned i = 0; i < n; i++) { char c[2] = { name[i], 0 }; cmd_out(c); }
+    if (r == 2) cmd_out(": running in its window\n");
+    else if (r == 1) cmd_out(": running, it yields to the desktop\n");
+    else if (r) cmd_out(": would not load\n");
+    else if (faulted) cmd_out(": stopped by a fault, the kernel carried on\n");
+    else { cmd_out(": exit "); cmd_dec((unsigned)status); cmd_out("\n"); }
+}
+
 void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     cmd_out = out ? out : kputs;
     while (n && q[0] == ' ') { q++; n--; }
@@ -117,6 +135,11 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (bt_command(q, n)) return;
     if (beep_command(q, n)) return;
     if (vol_command(q, n)) return;
+    if (n > 8 && q[0] == 'u' && q[1] == 's' && q[2] == 'e' && q[3] == 'r' && q[4] == 'r' && q[5] == 'u' && q[6] == 'n' && q[7] == ' ') {
+        const char *name = q + 8; unsigned m = n - 8;
+        while (m && name[0] == ' ') { name++; m--; }
+        if (m) { userrun_command(name, m); return; }
+    }
     if (ask_command(q, n)) return;
     if (browse_command(q, n)) return;
     ask_claude(q, n);

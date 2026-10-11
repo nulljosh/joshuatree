@@ -7,7 +7,8 @@ virtio keyboard, and keys go in through QMP send-key, the path arm64-claude-cons
   2. typing "term" narrows it to one name ("spotlight: term 1"); Enter opens the Terminal ("terminal open") and the
      Terminal has the keyboard: "hi" and Enter reach ask.c, which answers with a claude: line.
   3. Esc hands the keys back to the desktop ("console open"); Right three times moves the dock's label to Calendar
-     ("M1d hover 2 Mail" on the way) and Enter opens that tile ("dock Calendar: not on ARM yet").
+     ("M1d hover 2 Mail" on the way) and Enter opens that tile: Calendar, user/calendar.c in its own window ("M3c window
+     calendar first frame"), which takes the keys, so Esc closes it ("M3c app calendar exit 0").
   4. F2 opens the Terminal at once; Esc back; F1 opens Spotlight and Esc closes it ("spotlight close").
   5. Every Spotlight shortcut toggles it closed and restores the covered pixels exactly. F2 and Ctrl+T also dismiss
      an open Spotlight before giving the Terminal the keyboard.
@@ -73,7 +74,8 @@ try:
     done = expect("console open", "Esc hands the keys back to the desktop"); key("esc"); done()
     done = expect("M1d hover 2 Mail", "Right moves the dock's label along"); key("right", "right", "right"); done()
     done = expect("M1d hover 3 Calendar", "to Calendar"); key("right"); done()
-    done = expect("dock Calendar: not on ARM yet", "Enter opens the selected dock tile"); key("ret"); done()
+    done = expect("M3c window calendar first frame", "Enter opens the selected dock tile: Calendar, at EL0 in its own window"); key("ret"); done()
+    done = expect("M3c app calendar exit 0", "Esc goes to Calendar, which closes itself"); key("esc"); done()
     done = expect("terminal open", "F2 opens the Terminal at once"); key("f2"); done()
     done = expect("console open", "Esc again"); key("esc"); done()
     done = expect("spotlight open", "F1 opens Spotlight too"); key("f1"); done()
