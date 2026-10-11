@@ -1,9 +1,18 @@
 /* M0: serial hello. QEMU's virt machine has a PL011 UART at 0x09000000. A Raspberry Pi 4 has one at
    0xFE201000 (make PI=1 sets UART_BASE and PI_BUILD) and needs its two GPIO pins and its baud rate
-   set first; QEMU's virt machine comes up ready. */
+   set first; QEMU's virt machine comes up ready. Since 2.51.0 the Pi image (CONSOLE_MINI_UART, set by the Makefile)
+   prints on the mini UART instead, on the same header pins: the PL011 belongs to the Bluetooth radio (bt.c). */
 #ifdef PI_BUILD
 #define UART_BASE 0xFE201000UL
 #define GPIO_BASE 0xFE200000UL
+#define AUX_ENABLES 0xFE215004UL   /* the mini UART (UART1): bit 0 of AUX_ENABLES turns it on */
+#define MU_IO       0xFE215040UL
+#define MU_IER      0xFE215044UL
+#define MU_LCR      0xFE21504CUL
+#define MU_MCR      0xFE215050UL
+#define MU_LSR      0xFE215054UL
+#define MU_CNTL     0xFE215060UL
+#define MU_BAUD     0xFE215068UL
 #define GICD_BASE 0xFF841000UL   /* the Pi 4's GIC-400, the same GICv2 programming model as QEMU's virt */
 #define GICC_BASE 0xFF842000UL
 #else
@@ -12,6 +21,7 @@
 #define GICC_BASE 0x08010000UL
 #endif
 #define REG(a) (*(volatile unsigned int *)(a))
+#include "bt.h"
 #define UART_DR   (UART_BASE + 0x00)
 #define UART_FR   (UART_BASE + 0x18)
 #define UART_IBRD (UART_BASE + 0x24)
@@ -25,8 +35,38 @@
 
 extern unsigned int boot_el;
 
+/* The console only ever sends. Every wait for room is bounded: a UART that never drains is given up on for good, so a
+   wedged one can never freeze the screen's console, which is the only channel on a Pi with no serial cable. */
+#if defined(PI_BUILD) && defined(CONSOLE_MINI_UART)
+#define CON_TX_FULL() (!(REG(MU_LSR) & 0x20))   /* LSR bit 5: the transmit FIFO can take a byte */
+#define CON_TX(c) (REG(MU_IO) = (unsigned char)(c))
+#else
+#define CON_TX_FULL() (REG(UART_FR) & TXFF)
+#define CON_TX(c) (REG(UART_DR) = (unsigned char)(c))
+#endif
+static int con_tx_dead;
+static void con_tx(char c) {
+    if (con_tx_dead) return;
+    for (unsigned n = 0; CON_TX_FULL(); n++) if (n > 2000000) { con_tx_dead = 1; return; }
+    CON_TX(c);
+}
 static void uart_init(void) {
-#ifdef PI_BUILD
+#if defined(PI_BUILD) && defined(CONSOLE_MINI_UART)
+    /* With Bluetooth on, the firmware's primary UART is the mini UART, and enable_uart=1 holds the core clock it counts
+       from steady (250 MHz on a Pi 4: the Raspberry Pi UART documentation). The firmware has already printed its own
+       lines through it at 115200, so its divisor is kept; 270 (250 MHz / (8 * 115200) - 1) only if it left none.
+       GPIO14 (TX) and GPIO15 (RX) to ALT5, pulls off. Nothing here touches the PL011 or GPIO 30-33 (bt.c's). */
+    REG(AUX_ENABLES) |= 1;
+    REG(MU_IER) = 0;
+    REG(MU_LCR) = 3;       /* 8 bits */
+    REG(MU_MCR) = 0;
+    if (!REG(MU_BAUD)) REG(MU_BAUD) = 270;
+    unsigned int f = REG(GPIO_BASE + 0x04);
+    f &= ~((7u << 12) | (7u << 15)); f |= (2u << 12) | (2u << 15);
+    REG(GPIO_BASE + 0x04) = f;
+    REG(GPIO_BASE + 0xE4) &= ~((3u << 28) | (3u << 30));
+    REG(MU_CNTL) = 3;      /* transmitter and receiver on */
+#elif defined(PI_BUILD)
     /* GPIO14 (TX) and GPIO15 (RX) to ALT0 (PL011), pulls off. BCM2711 registers: GPFSEL1 and GPIO_PUP_PDN_CNTRL_REG0. */
     unsigned int f = REG(GPIO_BASE + 0x04);
     f &= ~((7u << 12) | (7u << 15)); f |= (4u << 12) | (4u << 15);
@@ -48,8 +88,7 @@ static int con_line_start = 1;   /* the next character begins a line */
 static int con_to_term;          /* a Terminal command is running: what it prints goes to the Terminal, not the Console */
 void term_output(int on) { con_to_term = on; }   /* ask.c, around one command */
 static void uart_putc(char c) {
-    while (REG(UART_FR) & TXFF) {}
-    REG(UART_DR) = (unsigned char)c;
+    con_tx(c);
     if (!con_quiet) console_putc(c);
     if (c == '\n') con_quiet = 0;
     con_line_start = c == '\n';
@@ -61,11 +100,11 @@ static int con_noise(const char *s) {
 #ifdef CON_VERBOSE
     (void)s; return 0;   /* the scroll check builds with every line on the screen so there is a long log to scroll */
 #else
-    static const char *const skip[] = { "tick", "M0 ", "M1 ", "M1a ", "M1b ", "M1c fb ok", "M1d dock ", "M3 ", "EL0", "EL1", "booted at ",
+    static const char *const skip[] = { "tick", "M0 ", "M1 ", "M1a ", "M1b ", "M1c fb ok", "M1d dock ", "M3 ", "M3b ", "EL0", "EL1", "booted at ",
         "usb ", "wifi power", "wifi sdio", "wifi f1", "wifi alp", "wifi chip", "wifi cores", "wifi arm", "wifi fw ", "wifi ht ",
         "wifi bus", "wifi radio up", "wifi ver", "wifi mac", "wifi found", "wifi scan", "wifi joining", "wifi handshake", "wifi assoc",
         "Wi-Fi: found", "Wi-Fi: looked", "Wi-Fi: this Pi", "Wi-Fi: chip", "Wi-Fi: connecting", "Wi-Fi: the router", "Wi-Fi: we answered", "Wi-Fi: handshake",
-        "dhcp: lease", "net dhcp", "@", "Wi-Fi: connected", "Internet: online" };
+        "dhcp: lease", "net dhcp", "@", "Wi-Fi: connected", "Internet: online", "bt: no radio found" };
     for (unsigned i = 0; i < sizeof skip / sizeof skip[0]; i++) {
         const char *a = s, *b = skip[i];
         while (*b && *a == *b) { a++; b++; }
@@ -233,8 +272,10 @@ extern char _start[];
 extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[];
 extern unsigned long enter_user(unsigned long entry, unsigned long sp, unsigned long arg, unsigned long arg2);
 extern void leave_user(unsigned long status) __attribute__((noreturn));
-#define SYS_WRITE 64
+#define SYS_WRITE 64   /* the Linux numbers the user.S self-test uses */
 #define SYS_EXIT 93
+#define JT_SYS_EXIT 1    /* Joshua Tree's own, the ones user/jtsys.h and docs/SYSCALL-ABI.md give every program (M3b) */
+#define JT_SYS_WRITE 4
 static unsigned long user_status;
 static int user_in_range(unsigned long a, unsigned long n) {   /* wholly inside the code page or the stack page */
     if (n > 256) return 0;
@@ -245,12 +286,13 @@ void exc_el0_sync(struct frame *f) {
     unsigned ec = (unsigned)(f->esr >> 26);
     if (ec == 0x15) {   /* svc from EL0 */
         unsigned long n = f->x[8];
-        if (n == SYS_WRITE) {
+        if (n == SYS_WRITE || n == JT_SYS_WRITE) {
             const char *p = (const char *)f->x[1]; unsigned long len = f->x[2];
-            if (f->x[0] != 1 || !user_in_range((unsigned long)p, len)) { f->x[0] = (unsigned long)-14; return; }   /* -EFAULT */
+            if (f->x[0] != 1) { f->x[0] = (unsigned long)-9; return; }   /* -EBADF: only the console, fd 1 */
+            if (!user_in_range((unsigned long)p, len)) { f->x[0] = (unsigned long)-14; return; }   /* -EFAULT */
             for (unsigned long i = 0; i < len; i++) { if (con_line_start) con_quiet = 1; uart_putc(p[i]); }   /* the EL0 self-test talks to the UART only */
             f->x[0] = len;
-        } else if (n == SYS_EXIT) {
+        } else if (n == SYS_EXIT || n == JT_SYS_EXIT) {
             uart_puts("M3 EL0 exit "); uart_dec((unsigned)f->x[0]); uart_putc('\n');
             leave_user(f->x[0]);
         } else f->x[0] = (unsigned long)-38;   /* -ENOSYS */
@@ -272,7 +314,9 @@ void exc_el0_sync(struct frame *f) {
     } else { uart_puts("M3 EL0 fault: exception class "); uart_hex(ec); uart_puts(", address "); uart_hex(far); uart_putc('\n'); }
     leave_user((unsigned long)-1);
 }
-static void user_init(void) {
+/* Map the arena and load one program into the code page (it can run again with another: M3b loads the C program the same
+   way). The image must be position independent and fit the one page. */
+static void user_init(const char *img, unsigned long len) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);   /* valid page, normal memory, inner shareable, access flag */
     const unsigned long AP_EL0_RW = 1UL << 6, AP_RO = 3UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
     l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable for now, so the kernel can copy the program in */
@@ -280,17 +324,18 @@ static void user_init(void) {
     l3[UP_KERN >> 12] = (USER_BASE + UP_KERN) | PAGE | PXN | UXN;               /* AP=00: EL1 only */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
     char *code = (char *)(USER_BASE + UP_CODE);
-    for (unsigned long i = 0; i < (unsigned long)(user_end - user_start); i++) code[i] = user_start[i];
+    for (unsigned long i = 0; i < len; i++) code[i] = img[i];
     const char *secret = "KERNEL-ONLY-SECRET";
     for (int i = 0; secret[i]; i++) ((char *)(USER_BASE + UP_KERN))[i] = secret[i];
-    for (unsigned long a = (unsigned long)code & ~63UL; a < (unsigned long)code + (unsigned long)(user_end - user_start); a += 64)
+    for (unsigned long a = (unsigned long)code & ~63UL; a < (unsigned long)code + len; a += 64)
         __asm__ volatile ("dc cvau, %0" :: "r"(a) : "memory");
     __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
     l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_RO | PXN;             /* now read-only for everyone, executable by EL0 only */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
 }
+extern char hello_c_start[], hello_c_end[];   /* hello_c.S: user/hello.c built for EL0 */
 static void user_demo(void) {
-    user_init();
+    user_init(user_start, (unsigned long)(user_end - user_start));
     unsigned long code = USER_BASE + UP_CODE, sp = USER_BASE + UP_STACK + 4096, kpage = USER_BASE + UP_KERN;
     uart_puts("M3 EL0 task starts\n");
     enter_user(code + (unsigned long)(user_entry_a - user_start), sp, kpage, 0);
@@ -301,6 +346,15 @@ static void user_demo(void) {
     uart_puts("M3 EL0 second task starts\n");
     user_status = enter_user(code + (unsigned long)(user_entry_b - user_start), sp, kpage, 0);
     if (user_status == 7) uart_puts("M3 userland ok\n"); else uart_puts("M3 userland FAIL\n");
+#ifndef PI_BUILD
+    /* M3b: user/hello.c itself, built for aarch64 and talking Joshua Tree syscall numbers over svc. Only write and exit
+       exist on ARM so far: its open comes back -ENOSYS (-38), which hello.c reports and answers with exit 1. The kernel
+       takes that exit as the pass. M3d brings open and read, and the exit code becomes 9. */
+    user_init(hello_c_start, (unsigned long)(hello_c_end - hello_c_start));
+    uart_puts("M3b EL0 C task starts\n");
+    user_status = enter_user(code, sp, 0, 0);
+    if (user_status == 1) uart_puts("M3b userland C ok\n"); else uart_puts("M3b userland C FAIL\n");
+#endif
 }
 
 /* ---- M1c: a framebuffer. QEMU's virt machine has no display unless one is asked for; ramfb is a plain RAM
@@ -502,6 +556,7 @@ static unsigned term_index;
 #define term_p terminals[term_index]
 static int con_wx, con_wy, con_ww;
 static int con_live;    /* the framebuffer is up: draw as we go */
+static int calc_live, calc_front;   /* slice 5: the Calculator is open; calc_front, it is on top and has the keys, so the pane behind it only keeps its text */
 static int con_x, con_y, con_cw, con_ch, con_base, con_cols, con_rows, con_px10;
 static int con_vga;     /* 0: DejaVu Sans Mono; n: the 8x16 VGA font drawn n times its size */
 static int mono_w, mono_h, mono_adv, mono_ok;   /* the 'M' self-test, kept for the diagnostic line */
@@ -652,7 +707,7 @@ static void con_follow(void) {   /* End: back to the newest, the same picture th
 }
 static int con_key(unsigned code, unsigned value) {   /* Page Up 104, Page Down 109, Home 102, End 107: 1 if the console took the key */
     if (code != 104 && code != 109 && code != 102 && code != 107) return 0;
-    if (!con_live || !value) return 1;
+    if (!con_live || !value || calc_front) return 1;
     unsigned half = (unsigned)con_rows / 2 ? (unsigned)con_rows / 2 : 1, nl = con_nlines();
     if (code == 104 || code == 102) {
         unsigned cur = cp->scrolled ? cp->vtop : con_off_line(cp->anchor);
@@ -679,7 +734,7 @@ static void pane_putc(struct pane *p, char c) {
         p->vtop = p->vtop > gone ? p->vtop - gone : 0; p->vlast = p->vlast > gone ? p->vlast - gone : 0;
     }
     p->log[p->len++] = c;
-    if (!con_live || p != cp) return;   /* a window that is closed or behind only keeps its text */
+    if (!con_live || p != cp || calc_front) return;   /* a window that is closed or behind only keeps its text */
     int held = cur_hold();
     unsigned was = cp->anchor;
     if (!cp->scrolled) con_draw(cp->len - 1);
@@ -707,16 +762,16 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
     con_cols = (win_w - sc(12)) / con_cw;
     con_rows = (win_h - sc(46)) / con_ch - 1;   /* then one row: the Console's wifi and usb status, or the Terminal's ask> prompt */
 }
-const char *ask_prompt(void);   /* ask.c: "Claude Haiku 5.5 $ ", naming the model that last answered */
+const char *ask_prompt(void);   /* ask.c: "Samantha $ ", naming the model that last answered */
 /* The Terminal's bottom row: the prompt and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
 void con_clear(void) {         /* /clear: the Terminal's window empties, its text stays in the scrollback */
-    if (!con_live) return;
+    if (!con_live || calc_front) return;
     int held = cur_hold();
     con_wipe(); cp->anchor = cp->len; cp->scrolled = 0; con_hint();
     cur_release(held);
 }
 void con_prompt(const char *s, unsigned n) {
-    if (!con_live || cp != &term_p) return;
+    if (!con_live || calc_front || cp != &term_p) return;
     int held = cur_hold();
     const char *p = ask_prompt();
     unsigned plen = 0; while (p[plen]) plen++;
@@ -787,9 +842,8 @@ static void crash(const struct frame *f) {
     crash_nl();
     crash_s("halted: this core sleeps in a wfe loop"); crash_nl();
     for (unsigned r = 0; r < CRASH_ROWS && r < crash_row; r++) {   /* the UART first: it works whatever state the screen is in */
-        for (const char *p = crash_txt[r]; *p; p++) { while (REG(UART_FR) & TXFF) {} REG(UART_DR) = (unsigned char)*p; }
-        while (REG(UART_FR) & TXFF) {}
-        REG(UART_DR) = '\n';
+        for (const char *p = crash_txt[r]; *p; p++) con_tx(*p);
+        con_tx('\n');
     }
     if (fb) {
         int s = ((int)fb_h * 10 / 600 + 5) / 10; if (s < 1) s = 1;
@@ -994,10 +1048,12 @@ static void console_frame(void) {   /* the i386 window frame, and a white well f
     gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? (term_index ? "Terminal 2" : "Terminal 1") : "Console");
     fb_rect((win_lx + 8) * s, (win_ly + 30) * s, (win_lw - 16) * s, (win_lh - 38) * s, CON_BG);
 }
-static int term_front(void) { return cp == &term_p && (con_live || !fb); }   /* with no screen at all, the UART is the Terminal */
+static int term_front(void) { return cp == &term_p && !calc_front && (con_live || !fb); }   /* with no screen at all, the UART is the Terminal */
 /* The red close button puts the wallpaper back where the window was. The log keeps every line (and the UART still
    prints them); a click on any dock tile opens it again with the newest lines, so the one debug view on a Pi can
-   never be lost for good. The Terminal (its tile, or F1) takes the same rectangle: one of the two is in front. */
+   never be lost for good. The Terminal (its tile, or F1) takes the same rectangle: one of the two is in front. With
+   the Calculator open behind it, the Calculator comes to the front. */
+static void calc_raise(void);
 static void console_close(void) {
     if (!con_live || !con_under) return;
     int s = (int)window_scale(), x = win_lx * s, y = win_ly * s, w = win_lw * s, h = win_lh * s;
@@ -1007,13 +1063,16 @@ static void console_close(void) {
     con_live = 0;
     uart_puts(cp == &term_p ? "terminal closed\n" : "console closed\n");
     cur_show();
+    if (calc_live) calc_raise();   /* the wallpaper just went back over the part of it the window covered */
 }
 void ask_redraw(void);   /* ask.c: the line being typed, back on the ask> row */
 static void pane_open(struct pane *p) {   /* the Console or the Terminal in front, its newest lines in view */
-    if (con_live && cp == p) return;
+    int raise = con_live && cp == p;   /* already open, behind the Calculator: bring it up and give it the keys */
+    if (raise && !calc_front) return;
     if (!fb) { cp = p; uart_puts(p == &term_p ? "terminal open\n" : "console open\n"); return; }   /* no screen: the keys still follow */
     int s = (int)window_scale();
     cur_hide();
+    calc_front = 0;   /* before any drawing: the pane's own draws are off while the Calculator is on top */
     cp = p;
     console_frame();
     con_live = 1; cp->scrolled = 0;
@@ -1023,13 +1082,16 @@ static void pane_open(struct pane *p) {   /* the Console or the Terminal in fron
     for (unsigned k = cp->anchor; k < cp->len; k++) con_draw(k);
     con_summary(); con_hint(); ask_redraw();
     fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
-    uart_puts(p == &term_p ? "terminal open\n" : "console open\n");
+    if (raise) { con_quiet = 1; uart_puts(p == &term_p ? "focus terminal\n" : "focus console\n"); }
+    else uart_puts(p == &term_p ? "terminal open\n" : "console open\n");
     cur_show();
 }
 static void console_open(void) { pane_open(&con_p); }
-/* The Calculator (calc.c holds the sums and the keypad; this draws it). One window at a time: it takes the Console's
-   place, so the Console's saved wallpaper is what closing it puts back, and the Console then comes back. The Apps
-   tile or F2 opens it; a click on a key or typing works it; Esc or the red dot closes it. */
+/* The Calculator (calc.c holds the sums and the keypad; this draws it). Slice 5: it is a second window, with its own
+   rectangle overlapping the right of the Console's, so the Console or the Terminal stays on screen beside it. The one
+   in front has the keys, as on the i386 desktop: a click on the window behind brings it up and gives it the keys
+   (calc_front says which). The window behind keeps its text but draws nothing until it is in front again. The Apps
+   tile opens it; a click on a key or typing works it; Esc or the red dot closes it and puts the wallpaper back. */
 int calc_keys(int *cols);
 const char *calc_key(int i);
 int calc_press(const char *k);
@@ -1037,7 +1099,8 @@ int calc_type(int ch);
 const char *calc_input(void);
 const char *calc_output(void);
 int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
-static int calc_live;
+static int calc_lx, calc_ly, calc_lw, calc_lh;   /* its frame on the logical grid, set in fb_init */
+static unsigned *calc_under;                    /* the wallpaper under it, saved at boot before any window was drawn */
 static int clock_live, brick_live, spot_live;
 static void brick_open(void);
 static void brick_close(void);
@@ -1051,14 +1114,14 @@ static void clock_close(void);
 #define CALC_DISP 46     /* the display's height */
 static void calc_cell(int i, int *x, int *y, int *w, int *h) {   /* key i's box on the logical grid */
     int cols, n = calc_keys(&cols), rows = (n + cols - 1) / cols, gap = 4;
-    int ax = win_lx + 12, ay = win_ly + CALC_TOP + CALC_DISP + 8, aw = win_lw - 24, ah = win_ly + win_lh - 10 - ay;
+    int ax = calc_lx + 12, ay = calc_ly + CALC_TOP + CALC_DISP + 8, aw = calc_lw - 24, ah = calc_ly + calc_lh - 10 - ay;
     *w = (aw - gap * (cols - 1)) / cols; *h = (ah - gap * (rows - 1)) / rows;
     *x = ax + (i % cols) * (*w + gap); *y = ay + (i / cols) * (*h + gap);
 }
 static void calc_paint(void) {
-    int s = (int)window_scale(), x0 = win_lx + 12, w0 = win_lw - 24, y0 = win_ly + CALC_TOP, f = calc_flags();
+    int s = (int)window_scale(), x0 = calc_lx + 12, w0 = calc_lw - 24, y0 = calc_ly + CALC_TOP, f = calc_flags();
     cur_hide();
-    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Calculator");
+    gui_draw_window_frame(calc_lx, calc_ly, calc_lw, calc_lh, "Calculator");
     window_rect(x0, y0, w0, CALC_DISP, 0x00DDD8CE);
     window_rect(x0 + 1, y0 + 1, w0 - 2, CALC_DISP - 2, 0x00FFFFFF);
     const char *in = calc_input(), *out = calc_output();
@@ -1076,24 +1139,35 @@ static void calc_paint(void) {
         if (!eq) window_rect(x + 1, y + 1, w - 2, h - 2, op ? 0x00EFEBE4 : 0x00FFFFFF);
         gui_text(k, x + (w - gui_text_width(k)) / 2, y + (h - 16) / 2, eq ? 0x00FFFFFF : 0x001C1C1E);
     }
-    fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
+    fb_flush(calc_lx * s, calc_ly * s, calc_lw * s, calc_lh * s);
     cur_show();
+}
+static void calc_raise(void) {   /* in front of the Console or the Terminal, with the keys */
+    if (!calc_live) return;
+    int was = calc_front;
+    calc_front = 1;
+    calc_paint();
+    if (!was) { con_quiet = 1; uart_puts("focus calc\n"); }
 }
 static void calc_open(void) {
     brick_close();
     clock_close();
-    if (calc_live || !con_under) return;   /* no saved wallpaper (a full heap): nothing to close it back to */
-    console_close();
-    calc_live = 1;
+    if (!calc_under) return;   /* no saved wallpaper (a full heap): nothing to close it back to */
+    if (calc_live) { calc_raise(); return; }
+    calc_live = calc_front = 1;
     calc_paint();
     uart_puts("calc open\n");
 }
 static void calc_close(void) {
     if (!calc_live) return;
-    calc_live = 0;
-    con_live = 1;   /* console_close puts the Console's saved wallpaper back over the same rectangle */
-    console_close();
-    pane_open(cp);   /* whichever of the Console and the Terminal was in front before */
+    int s = (int)window_scale(), x = calc_lx * s, y = calc_ly * s, w = calc_lw * s, h = calc_lh * s;
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = calc_under[j * w + i];
+    fb_flush(x, y, w, h);
+    calc_live = calc_front = 0;
+    uart_puts("calc closed\n");
+    if (con_live) { con_live = 0; pane_open(cp); }   /* the wallpaper went over its corner too: draw it whole, in front */
+    cur_show();
 }
 static void calc_did(int ran) {   /* after a key: redraw, and log a finished sum on the UART (what arm64-calc-check.py reads) */
     calc_paint();
@@ -1108,27 +1182,32 @@ static void pointer_moved(void) {   /* one report done: the arrow to its new pla
     if (slot != hover_slot) { hover_slot = slot; dock_hover(slot); }
     cur_show();
 }
+static int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx && x < bx + bw && y >= by && y < by + bh; }
+static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
 static void dock_activate(int slot);
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
-    int dx = lx - (win_lx + 24), dy = ly - (win_ly + 16);   /* the close button: gui_draw_window_frame's red dot, radius 7 */
+    if (spot_live && slot < 0) return;   /* the bar is over the windows: a raise under it would leave its saved pixels stale */
+    int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);
     if (slot == 0) calc_open();   /* Apps tile opens Calculator; Brick and Clock are in Spotlight. */
     else if (brick_live && slot < 0) {
         if (spot_live) return;
-        if (dx * dx + dy * dy <= 8 * 8) brick_close();
-        else if (lx >= win_lx && lx < win_lx + win_lw && ly >= win_ly + 32 && ly < win_ly + win_lh) brick_key(57, 1);
-    } else if (calc_live && slot < 0) {
-        if (dx * dx + dy * dy <= 8 * 8) { calc_close(); return; }
+        if (on_close_dot(lx, ly, win_lx, win_ly)) brick_close();
+        else if (on_win && ly >= win_ly + 32) brick_key(57, 1);
+    } else if (clock_live && slot < 0) {
+        if (on_close_dot(lx, ly, win_lx, win_ly)) clock_close();
+    } else if (slot >= 0) dock_activate(slot);
+    else if (on_calc && calc_front) {   /* the front window takes the click... */
+        if (on_close_dot(lx, ly, calc_lx, calc_ly)) { calc_close(); return; }
         int cols, n = calc_keys(&cols);
         for (int i = 0; i < n; i++) {
             int x, y, w, h; calc_cell(i, &x, &y, &w, &h);
-            if (lx >= x && lx < x + w && ly >= y && ly < y + h) { calc_did(calc_press(calc_key(i))); return; }
+            if (in_box(lx, ly, x, y, w, h)) { calc_did(calc_press(calc_key(i))); return; }
         }
-    } else if (clock_live && slot < 0) {
-        if (dx * dx + dy * dy <= 8 * 8) clock_close();
-    } else if (slot >= 0) dock_activate(slot);
-    else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
+    } else if (on_win && con_live && !calc_front) { if (on_close_dot(lx, ly, win_lx, win_ly)) console_close(); }
+    else if (on_calc) calc_raise();                    /* ...one behind it comes to the front with the keys */
+    else if (on_win && con_live) pane_open(cp);
 }
 static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key or Spotlight: slot 0 is handled by the caller's calc_open */
     if (slot == 0) { calc_open(); return; }
@@ -1136,14 +1215,13 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     if (slot == GUI_ICON_COUNT + 1) { brick_open(); return; }
     brick_close();
     clock_close();
-    calc_close();
-    if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line */
+    if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
     console_open();
     uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
 }
 
 /* ---- Keyboard only: the Pi has no mouse yet, and the Terminal (the agent's prompt) could only be opened by a click.
-   F1 or Ctrl+Space opens Spotlight, a small bar over the desktop: type to filter the dock's names, Up and Down to
+   F1 or Cmd+Space opens Spotlight, a small bar over the desktop: type to filter the dock's names, Up and Down to
    choose, Enter opens, Esc closes. With no pane holding the keys (the Console takes none), Left and Right move the
    dock's hover label, Enter opens that tile, Esc clears it. F2 or Ctrl+T opens the Terminal at once; Esc with the
    Terminal in front and no question running hands the keys back to the desktop (the Console). ---- */
@@ -1225,17 +1303,19 @@ static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hov
 #ifdef PI_BUILD
 #include "power.h"
 #endif
+int volume_key(unsigned code);   /* cmd.c: F11 and F12, Volume Down, Up and Mute */
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
     int chord = ctrl_held || gui_held || alt_held;
 #ifdef PI_BUILD
     if (power_key(code)) return 1;
 #endif
-    if (code == 59 || (chord && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1, Cmd/Ctrl/Alt+Space toggle */
-    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
+    if (volume_key(code)) return 1;   /* before Spotlight and every pane, like the Spotlight shortcut */
+    if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
+    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
     if (spot_live) return spot_key(code);
     if (brick_live) return brick_key(code, 1);
     if (clock_live) { if (code == 1) clock_close(); return 1; }
-    if (calc_live) return 0;
+    if (calc_front) return 0;
     if (code == 61 && term_front()) {   /* F3: the other Terminal session; never move a running request. */
         unsigned next = term_index ^ 1;
         if (ask_select(next)) {
@@ -1250,10 +1330,9 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
     if (code == 105 || code == 106) { dock_select(dock_sel < 0 ? (code == 106 ? 0 : GUI_ICON_COUNT - 1) : (dock_sel + (code == 106 ? 1 : GUI_ICON_COUNT - 1)) % GUI_ICON_COUNT); return 1; }
     if ((code == 28 || code == 96) && dock_sel >= 0) { int slot = dock_sel; dock_select(-1); dock_activate(slot); return 1; }
     if (code == 1) { if (dock_sel >= 0) dock_select(-1); return 1; }   /* Esc with nothing open does nothing */
-    /* The bare desktop: no pane has the keys (the Console is logs only). Any letter or digit opens Spotlight with it
-       typed, and Enter, Space or Tab open it empty: a keyboard whose F-keys or modifiers never arrive still gets in. */
+    /* The bare desktop: no pane has the keys (the Console is logs only). A letter or digit opens Spotlight with it
+       typed, so a keyboard whose F-keys or Cmd never arrive still gets in. Space, Enter and Tab alone do nothing. */
     if (chord) return 0;
-    if (code == 28 || code == 96 || code == 57 || code == 15) { spot_open(); return 1; }
     int ch = ask_char(code);
     if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) { spot_open(); if (spot_live) spot_key(code); return 1; }
     return 0;
@@ -1292,7 +1371,7 @@ static void kd_key(unsigned code) {   /* a key down: its name, with the modifier
     kd_cat(code >= 59 && code <= 68 ? fk[code - 59] : code == 87 ? "F11" : code == 88 ? "F12" : code == 57 ? "Space" :
            code == 28 || code == 96 ? "Enter" : code == 1 ? "Esc" : code == 15 ? "Tab" : code == 14 ? "Backspace" :
            code == 29 || code == 97 ? "Ctrl" : code == 125 || code == 126 ? "Cmd" : code == 56 || code == 100 ? "Alt" :
-           code == 42 || code == 54 ? "Shift" : code == 103 ? "Up" : code == 108 ? "Down" : code == 105 ? "Left" :
+           code == 42 || code == 54 ? "Shift" : code == 58 ? "Caps" : code == 103 ? "Up" : code == 108 ? "Down" : code == 105 ? "Left" :
            code == 106 ? "Right" : ch > ' ' && ch < 127 ? one : "?");
     if (kd_name[0] == '?') { kd_name[0] = 0; kd_cat("code "); char d[4] = { (char)('0' + code / 100 % 10), (char)('0' + code / 10 % 10), (char)('0' + code % 10), 0 }; kd_cat(d); }
     kd_dirty = 1;
@@ -1337,16 +1416,23 @@ void hid_media(const unsigned char *r, unsigned len);
 static void key_selftest(void) {
     static unsigned char last[8];
     static const unsigned char id_ctrl_t[9] = { 2, 0x01, 0, 0x17 }, id_none[9] = { 2 }, id_esc[9] = { 2, 0, 0, 0x29 };   /* ID 2 reads as Shift if not skipped */
-    static const unsigned char ctrl_space[8] = { 0x01, 0, 0x2C }, none[8] = { 0 }, esc[8] = { 0, 0, 0x29 };
+    static const unsigned char cmd_space[8] = { 0x08, 0, 0x2C }, ctrl_space[8] = { 0x01, 0, 0x2C }, space[8] = { 0, 0, 0x2C }, none[8] = { 0 }, esc[8] = { 0, 0, 0x29 };
     uart_puts("keytest: id9 ctrl+t\n"); hid_kbd(id_ctrl_t, 9, last); hid_kbd(id_none, 9, last);
     uart_puts("keytest: id9 esc\n"); hid_kbd(id_esc, 9, last); hid_kbd(id_none, 9, last);
+    uart_puts("keytest: boot8 space\n"); hid_kbd(space, 8, last); hid_kbd(none, 8, last);                 /* a bare Space and Ctrl+Space must not open Spotlight */
     uart_puts("keytest: boot8 ctrl+space\n"); hid_kbd(ctrl_space, 8, last); hid_kbd(none, 8, last);
+    uart_puts("keytest: boot8 cmd+space\n"); hid_kbd(cmd_space, 8, last); hid_kbd(none, 8, last);
     uart_puts("keytest: boot8 esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
     static const unsigned char br_down[3] = { 3, 0x70, 0 }, br_up[3] = { 3, 0x6F, 0 };   /* a Mac-mode F1 and F2 */
     uart_puts("keytest: media f1\n"); hid_media(br_down, 3);
     uart_puts("keytest: media esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
     uart_puts("keytest: media f2\n"); hid_media(br_up, 3);
     uart_puts("keytest: media esc2\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
+    static const unsigned char vol_dn[3] = { 3, 0xEA, 0 }, vol_up[3] = { 3, 0xE9, 0 }, vol_mute[3] = { 3, 0xE2, 0 };
+    uart_puts("keytest: media vol down\n"); hid_media(vol_dn, 3);
+    uart_puts("keytest: media vol up\n"); hid_media(vol_up, 3);
+    uart_puts("keytest: media mute\n"); hid_media(vol_mute, 3);
+    uart_puts("keytest: media unmute\n"); hid_media(vol_mute, 3);
     uart_puts("keytest: done\n");
 }
 #endif
@@ -1487,6 +1573,12 @@ static void fb_init(void) {
     con_under = kmalloc((unsigned)(lw * s * lh * s) * 4);   /* slice 4: what the close button puts back */
     if (con_under) { for (int j = 0; j < lh * s; j++) for (int i = 0; i < lw * s; i++) con_under[j * lw * s + i] = fb[(unsigned)(ly * s + j) * fb_pitch + (unsigned)(lx * s + i)]; }
     else uart_puts("oom console close\n");                  /* the Console then just has no working close button */
+    /* Slice 5: the Calculator's own frame, over the right of the Console's so both show, clear of the line above the dock */
+    calc_lw = 280; calc_lx = lx + lw - 150; if (calc_lx + calc_lw > W / s - 8) calc_lx = W / s - 8 - calc_lw;
+    calc_ly = ly + 40; calc_lh = gui_dock_band_top() - 22 - calc_ly; if (calc_lh > 300) calc_lh = 300;
+    calc_under = kmalloc((unsigned)(calc_lw * s * calc_lh * s) * 4);
+    if (calc_under) { for (int j = 0; j < calc_lh * s; j++) for (int i = 0; i < calc_lw * s; i++) calc_under[j * calc_lw * s + i] = fb[(unsigned)(calc_ly * s + j) * fb_pitch + (unsigned)(calc_lx * s + i)]; }
+    else uart_puts("oom calculator\n");                    /* the Apps tile then opens nothing */
     console_frame();
     if (text_ok) {
         menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
@@ -1531,6 +1623,10 @@ static void fb_init(void) {
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
     ok = ok && (!wall_ok || (w0 != 0x00203040 && (w0 != w1 || w1 != w2)));   /* a full heap leaves the flat fill, which is the fallback working */
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
+#ifdef AUDIO_TEST   /* the audiotest build: `beep` run at boot on virt, which has no PWM (arm64-audio-check.py) */
+    void cmd_run(const char *q, unsigned n, void (*out)(const char *));
+    cmd_run("beep", 4, 0);
+#endif
 #ifdef CALC_TEST   /* the calctest build: the Calculator open at boot, four sums typed into it (arm64-calc-check.py) */
     calc_open();
     static const char *const sums[] = {"sin(30deg)", "5!", "2^10", "1/0"};
@@ -1604,8 +1700,28 @@ struct input_event { unsigned short type, code; unsigned value; };
 int ask_key(unsigned code, unsigned value);   /* ask.c: the prompt's line editor */
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 void ask_poll(void);
+/* Key repeat. A USB keyboard (SET_IDLE(0)) reports only a change, so a held key sends one press and then nothing.
+   The last typed key down (a typed character or Backspace; not a function key, Brick's keys, a modifier or a chord)
+   is remembered with the generic counter's time. After KEY_REPEAT_DELAY_MS the main loop feeds it back through
+   input_event as value 2, which every handler treats as a press, so it lands wherever the first press went (Terminal,
+   Calculator, Spotlight), every KEY_REPEAT_RATE_MS, until its release or any other key or button goes down.
+   The counter, never `ticks`, which stops counting. */
+#define KEY_REPEAT_DELAY_MS 400
+#define KEY_REPEAT_RATE_MS 80
+static unsigned rep_code;            /* the key being repeated, 0 for none */
+static unsigned long rep_next;       /* when it repeats next, in counter milliseconds */
+static unsigned long key_ms(void) {
+    unsigned long f, c; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    return c / ((f ? f : 54000000) / 1000);
+}
 static void input_event(struct input_event e) {
-    if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                   /* BTN_LEFT, RIGHT, MIDDLE */
+    if (e.type == 1 && e.value < 2) {                                                                      /* a real press or release; value 2 is our own repeat */
+        if (!e.value) { if (e.code == rep_code) rep_code = 0; }
+        else if ((e.code == 14 || (e.code < 58 && ask_char(e.code))) && !(brick_live && !spot_live) && !ctrl_held && !gui_held && !alt_held) {
+            rep_code = e.code; rep_next = key_ms() + KEY_REPEAT_DELAY_MS;
+        } else rep_code = 0;
+    }
+    if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                 /* BTN_LEFT, RIGHT, MIDDLE */
         con_quiet = 1;   /* the UART only */
         uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
         if (e.code == 272 && e.value) pointer_click();
@@ -1614,14 +1730,21 @@ static void input_event(struct input_event e) {
     if (e.type == 1 && (e.code == 29 || e.code == 97)) ctrl_held = e.value != 0;                          /* Ctrl, either side; the key still echoes below */
     if (e.type == 1 && (e.code == 125 || e.code == 126)) gui_held = e.value != 0;   /* Cmd (left 0x08, right 0x80 in a boot report) */
     if (e.type == 1 && (e.code == 56 || e.code == 100)) alt_held = e.value != 0;    /* Alt, Option on a Mac board */
-    if (e.type == 1 && e.value) kd_key(e.code);
-    if (e.type == 1 && e.value && ui_key(e.code)) {                                                        /* Spotlight, the dock keys, F2 and Ctrl+T */
+    if (e.type == 1 && e.value == 1) kd_key(e.code);                                                       /* not our repeats: the debug line shows the real press */
+    if (e.type == 1 && (e.code == 42 || e.code == 54)) ask_key(e.code, e.value);   /* Shift, before ui_key: Spotlight and the Calculator read its state from ask.c too, and take every key */
+    if (e.type == 1 && e.code == 58) {                                                                     /* Caps Lock: flips ask.c's state, nothing else sees it */
+        ask_key(e.code, e.value);
+        con_quiet = 1;
+        uart_puts("key 58 "); uart_puts(e.value ? "down\n" : "up\n");
+        return;
+    }
+    if (e.type == 1 && e.value && ui_key(e.code)) {                                                      /* Spotlight, the dock keys, F2 and Ctrl+T */
         con_quiet = 1;
         uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
         return;
     }
     if (e.type == 1 && brick_live && !spot_live) { brick_key(e.code, e.value); return; }
-    if (e.type == 1 && e.value && calc_live && e.code != 42 && e.code != 54) {                            /* a key for the open Calculator (Shift still goes to ask.c) */
+    if (e.type == 1 && e.value && calc_front && e.code != 42 && e.code != 54) {                           /* a key for the Calculator in front (Shift still goes to ask.c) */
         con_quiet = 1;
         uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
         if (e.code == 1) { calc_close(); return; }                                                          /* Esc */
@@ -1629,7 +1752,7 @@ static void input_event(struct input_event e) {
         if (ch) calc_did(calc_type(ch));
         return;
     }
-    if (e.type == 1 && calc_live && e.code != 42 && e.code != 54) return;                                  /* its key ups */
+    if (e.type == 1 && calc_front && e.code != 42 && e.code != 54) return;                                 /* its key ups */
     if (e.type == 1) {                                                                                     /* EV_KEY: keys */
         int held = cur_hold(), term = term_front();
         if (!con_key(e.code, e.value)) {   /* the scroll keys are not logged: that would add lines to the picture they move */
@@ -1656,6 +1779,11 @@ static void input_event(struct input_event e) {
     }
 }
 void kinput(unsigned type, unsigned code, int value) { input_event((struct input_event){ (unsigned short)type, (unsigned short)code, (unsigned)value }); }
+static void key_repeat_tick(void) {   /* the main loop, right after the polls: a release that queued while the loop was busy is seen first */
+    if (!rep_code || key_ms() < rep_next) return;
+    rep_next = key_ms() + KEY_REPEAT_RATE_MS;   /* from now, not from the last due time: a late loop never bursts */
+    input_event((struct input_event){ 1, (unsigned short)rep_code, 2 });
+}
 int usb_init(void);    /* xhci.c */
 int sd_mount(void);    /* emmc.c */
 int wifi_init(void);
@@ -1960,6 +2088,7 @@ void main(void) {
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); menubar_notify("Wi-Fi joined"); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+    bt_init();   /* bt.c: powers the radio and returns; the main loop's bt_poll does the rest */
 #ifdef NOTICE_SELFTEST
     menubar_notify("Note kept in memory");
 #endif
@@ -1986,13 +2115,13 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); ask_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
-            if (usb_ok || brick_live || notice.text[0]) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
-            usb_poll(); input_poll(); ask_poll(); brick_tick(); menubar_tick(); keydbg_tick();
+            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick();
         }
 #endif
     }

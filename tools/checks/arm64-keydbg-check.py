@@ -5,16 +5,18 @@ through QEMU's usb-kbd behind an xHCI controller, the Pi's path (the other key c
 keydbg-kernel8.elf (make keydbgtest: the dev card's debug line, plus made-up reports at boot):
   1. a 9-byte report with report ID 2 in front, Ctrl held and T down, opens the Terminal; Esc in the same form hands the
      keys back. Reverting the report-ID skip reads the ID as Shift and drops the real Ctrl byte: T then opens Spotlight.
-  2. a plain 8-byte boot report with Ctrl+Space still opens it (the skip leaves boot reports alone).
+  2. plain 8-byte boot reports: a bare Space and Ctrl+Space do nothing, Cmd+Space opens it (the skip leaves boot
+     reports alone, and only Cmd+Space or F1 open Spotlight, like a Mac: Joshua hit Space on the board, 2026-10-11).
   3. Cmd+Space over USB (meta_l, the GUI modifier 0x08) opens Spotlight, and the debug line shows the raw report
      ("keydbg: key 08 00 2c ...") and the name ("Cmd+Space").
   4. made-up media reports (consumer page 0x70, 0x6F, a Mac-mode F1 and F2) open Spotlight and the Terminal.
      QEMU's usb-kbd has no media interface, so the walk that opens one on a real board is not covered here.
   5. a plain letter on the bare desktop opens Spotlight with it typed ("spotlight: j"); Esc closes it; Esc again does nothing.
-kernel8.elf (release): Cmd+Space works too, and pi-main.o has the line only with JT_WIFI_DEV=1, and there is no debug line: no "keydbg:" on the UART or in the image.
+kernel8.elf (release): Cmd+Space works too; a held j repeats (8 to 14 times in 1.3 s, none after the release, a tap gives one) and Caps Lock
+makes Caps, j, t type "JT" with Shift+j giving "j", all over USB, where the keyboard sends one report per change; and pi-main.o has the line only with JT_WIFI_DEV=1, and there is no debug line: no "keydbg:" on the UART or in the image.
 Skips (exit 0) when the tools are missing. QEMU runs headless and every step has a timeout.
 """
-import json, os, shutil, socket, subprocess, sys, tempfile, time
+import json, os, re, shutil, socket, subprocess, sys, tempfile, time
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."); arch = os.path.join(root, "arch", "arm64")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
@@ -53,16 +55,21 @@ def boot(elf, body):
         def key(*qcodes): cmd("send-key", keys=[{"type": "qcode", "data": k} for k in qcodes]); time.sleep(0.3)
         def expect(text, name, tries=60):
             n = uart().count(text); return lambda: step(name, wait_for(text, tries, n + 1), uart())
-        body(uart, wait_for, key, expect)
+        def hold(qcode, secs):   # send-key taps for 100 ms; a held key is a press, a wait, a release (the keyboard sends no repeats itself)
+            ev = lambda down: [{"type": "key", "data": {"down": down, "key": {"type": "qcode", "data": qcode}}}]
+            cmd("input-send-event", events=ev(True)); time.sleep(secs); cmd("input-send-event", events=ev(False)); time.sleep(0.3)
+        body(uart, wait_for, key, expect, hold)
     finally:
         q.kill(); q.wait(); shutil.rmtree(tmp, ignore_errors=True)
 
-def dev(uart, wait_for, key, expect):
+def dev(uart, wait_for, key, expect, hold):
     wait_for("keytest: done", 100); out = uart()
     def between(a, b): i = out.find(a); j = out.find(b, i); return out[i:j] if i >= 0 and j >= 0 else ""
     step("a 9-byte report with a report ID: Ctrl+T opens the Terminal", "terminal open" in between("keytest: id9 ctrl+t", "keytest: id9 esc"))
     step("a 9-byte report with a report ID: Esc hands the keys back", "console open" in between("keytest: id9 esc", "keytest: boot8"))
-    step("a plain 8-byte boot report: Ctrl+Space opens Spotlight", "spotlight open" in between("keytest: boot8 ctrl+space", "keytest: boot8 esc"))
+    step("a plain 8-byte boot report: a bare Space does not open Spotlight", "spotlight" not in between("keytest: boot8 space", "keytest: boot8 ctrl+space"))
+    step("a plain 8-byte boot report: Ctrl+Space does not open Spotlight either", "spotlight" not in between("keytest: boot8 ctrl+space", "keytest: boot8 cmd+space"))
+    step("a plain 8-byte boot report: Cmd+Space opens Spotlight", "spotlight open" in between("keytest: boot8 cmd+space", "keytest: boot8 esc"))
     step("a plain 8-byte boot report: Esc closes it", "spotlight close" in between("keytest: boot8 esc", "keytest: media f1"))
     step("a media report, brightness down (a Mac-mode F1), opens Spotlight", "spotlight open" in between("keytest: media f1", "keytest: media esc"))
     step("a media report, brightness up (a Mac-mode F2), opens the Terminal", "terminal open" in between("keytest: media f2", "keytest: media esc2"))
@@ -75,10 +82,36 @@ def dev(uart, wait_for, key, expect):
     before = uart(); key("esc"); time.sleep(1.0); extra = uart()[len(before):]
     step("Esc with Spotlight closed does nothing", "spotlight" not in extra and "console open" not in extra, extra)
 
-def release(uart, wait_for, key, expect):
+def release(uart, wait_for, key, expect, hold):
     done = expect("spotlight open", "release build: Cmd+Space over USB opens Spotlight"); key("meta_l", "spc"); done()
     time.sleep(0.5)
     step("release build: no debug line on the UART", "keydbg:" not in uart())
+    # Key repeat and Caps Lock over USB, the Pi's path: the keyboard sends one report for the press (SET_IDLE(0)) and
+    # none until the release, so every repeat is main.c's key_repeat_tick. The Spotlight text is on the UART as typed.
+    def text(since):
+        t = re.findall(r"spotlight: (\S*) \d+", uart()[since:]); return t[-1] if t else None
+    def text_is(since, want):
+        for _ in range(30):
+            if text(since) == want: return True
+            time.sleep(0.1)
+        return False
+    m = len(uart()); hold("j", 1.3); held = text(m) or ""
+    step("USB: a held j in Spotlight repeats 8 to 14 times (9 to 15 j in all; got %d)" % len(held), set(held) == {"j"} and 9 <= len(held) <= 15, held)
+    time.sleep(0.6); m = len(uart()); time.sleep(0.6)
+    step("USB: nothing repeats after the release", text(m) is None and "key 36 down" not in uart()[m:], uart()[m:])
+    done = expect("spotlight close", "Esc closes it"); key("esc"); done()
+    done = expect("spotlight open", "F1 opens it again, empty"); key("f1"); done()
+    m = len(uart()); key("j"); time.sleep(0.8)
+    step("USB: a short tap types exactly one j", text(m) == "j" and uart()[m:].count("key 36 down") == 1, uart()[m:])
+    done = expect("spotlight close", "Esc closes it again"); key("esc"); done()
+    done = expect("spotlight open", "F1 opens it again, empty"); key("f1"); done()
+    m = len(uart()); key("caps_lock"); key("j"); key("t")
+    step("USB: Caps Lock, j, t types JT", text_is(m, "JT"), repr(text(m)))
+    key("shift", "j")
+    step("USB: Shift+j under Caps Lock types a lowercase j", text_is(m, "JTj"), repr(text(m)))
+    key("caps_lock"); key("j")
+    step("USB: Caps Lock again gives lowercase", text_is(m, "JTjj"), repr(text(m)))
+    done = expect("spotlight close", "Esc closes it for the last time"); key("esc"); done()
 
 boot("keydbg-kernel8.elf", dev)
 boot("kernel8.elf", release)
@@ -94,4 +127,4 @@ def pi_main(dev):
 step("Pi dev build (JT_WIFI_DEV=1) has the debug line", pi_main(True))
 step("Pi release build does not", not pi_main(False))
 if fails: print("FAIL: " + "; ".join(fails)); sys.exit(1)
-print("PASS: arm64-keydbg-check: report IDs, Cmd+Space, letter-opens-Spotlight, and the dev-only key debug line")
+print("PASS: arm64-keydbg-check: report IDs, Cmd+Space, letter-opens-Spotlight, key repeat and Caps Lock over USB, and the dev-only key debug line")

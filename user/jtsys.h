@@ -170,14 +170,35 @@ struct jt_dirent { char name[JT_DIRENT_NAME]; unsigned int size, is_dir; };
 #define JT_DATA
 #endif
 
+/* One argument register's worth: 32 bits on i386, 64 on aarch64, so a pointer
+   passed to the kernel is never cut short. */
+#if defined(__aarch64__) && defined(__ELF__)
+typedef unsigned long jt_arg;
+#else
+typedef unsigned jt_arg;
+#endif
+
 #if defined(__i386__)
-static inline int jt_syscall(int n, unsigned a, unsigned b, unsigned c) {
+static inline int jt_syscall(int n, jt_arg a, jt_arg b, jt_arg c) {
     int r;
     __asm__ volatile ("int $0x80"
                       : "=a"(r)
                       : "a"(n), "b"(a), "c"(b), "d"(c)
                       : "memory");
     return r;
+}
+#elif defined(__aarch64__) && defined(__ELF__)
+/* ARM64 (docs/ARM64.md, M3b): the same numbers and the same -errno results,
+   reached with `svc #0` instead of `int $0x80`. x8 = call number, x0 to x2 =
+   arguments 1-3 (x3 to x5 are free for calls that grow more), x0 = result.
+   Built position independent, no libc, no relocations, like the i386 ones. */
+static inline int jt_syscall(int n, jt_arg a, jt_arg b, jt_arg c) {
+    register long x8 __asm__("x8") = n;
+    register jt_arg x0 __asm__("x0") = a;
+    register jt_arg x1 __asm__("x1") = b;
+    register jt_arg x2 __asm__("x2") = c;
+    __asm__ volatile ("svc #0" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2) : "memory");
+    return (int)x0;
 }
 #else
 /* Host builds (tools/checks/libjt-host-check.sh) compile libjt's
@@ -186,56 +207,56 @@ static inline int jt_syscall(int n, unsigned a, unsigned b, unsigned c) {
    exercises actually needs a real trap, so this stands in for it. It is
    never linked into a ring-3 program: every real build of user/ passes
    -target i386-unknown-none, which takes the branch above. */
-static inline int jt_syscall(int n, unsigned a, unsigned b, unsigned c) {
+static inline int jt_syscall(int n, jt_arg a, jt_arg b, jt_arg c) {
     (void)n; (void)a; (void)b; (void)c;
     return -1;
 }
 #endif
 
 static inline void jt_exit(int code) {
-    jt_syscall(JT_SYS_EXIT, (unsigned)code, 0, 0);
+    jt_syscall(JT_SYS_EXIT, (jt_arg)code, 0, 0);
     for (;;) { } /* SYS_EXIT never returns; the loop only tells the compiler that too */
 }
-static inline int jt_read(int fd, void *buf, unsigned len)        { return jt_syscall(JT_SYS_READ,  (unsigned)fd, (unsigned)buf, len); }
-static inline int jt_write(int fd, const void *buf, unsigned len) { return jt_syscall(JT_SYS_WRITE, (unsigned)fd, (unsigned)buf, len); }
-static inline int jt_open(const char *path, int flags)            { return jt_syscall(JT_SYS_OPEN,  (unsigned)path, (unsigned)flags, 0); }
+static inline int jt_read(int fd, void *buf, unsigned len)        { return jt_syscall(JT_SYS_READ,  (jt_arg)fd, (jt_arg)buf, len); }
+static inline int jt_write(int fd, const void *buf, unsigned len) { return jt_syscall(JT_SYS_WRITE, (jt_arg)fd, (jt_arg)buf, len); }
+static inline int jt_open(const char *path, int flags)            { return jt_syscall(JT_SYS_OPEN,  (jt_arg)path, (jt_arg)flags, 0); }
 /* Whole file into buf (at most max bytes): the byte count, 0 for an empty file, -ENOENT, -EFBIG (too big, nothing copied), -EFAULT. */
-static inline int jt_close(int fd)                                { return jt_syscall(JT_SYS_CLOSE, (unsigned)fd, 0, 0); }
-static inline int jt_time(unsigned *out)                          { return jt_syscall(JT_SYS_TIME,  (unsigned)out, 0, 0); }
+static inline int jt_close(int fd)                                { return jt_syscall(JT_SYS_CLOSE, (jt_arg)fd, 0, 0); }
+static inline int jt_time(unsigned *out)                          { return jt_syscall(JT_SYS_TIME,  (jt_arg)out, 0, 0); }
 static inline int jt_brk(unsigned top)                            { return jt_syscall(JT_SYS_BRK, top, 0, 0); }
 static inline int jt_getpid(void)                                 { return jt_syscall(JT_SYS_GETPID, 0, 0, 0); }
 static inline int jt_sched_yield(void)                            { return jt_syscall(JT_SYS_SCHED_YIELD, 0, 0, 0); }
-static inline int jt_lseek(int fd, int off, int whence)           { return jt_syscall(JT_SYS_LSEEK, (unsigned)fd, (unsigned)off, (unsigned)whence); }
-static inline int jt_window_open(struct jt_window_info *info)     { return jt_syscall(JT_SYS_WINDOW_OPEN, (unsigned)info, 0, 0); }
-static inline int jt_tasks(struct jt_tasks *t, int kill)          { return jt_syscall(JT_SYS_TASKS, (unsigned)t, (unsigned)kill, 0); }
+static inline int jt_lseek(int fd, int off, int whence)           { return jt_syscall(JT_SYS_LSEEK, (jt_arg)fd, (jt_arg)off, (jt_arg)whence); }
+static inline int jt_window_open(struct jt_window_info *info)     { return jt_syscall(JT_SYS_WINDOW_OPEN, (jt_arg)info, 0, 0); }
+static inline int jt_tasks(struct jt_tasks *t, int kill)          { return jt_syscall(JT_SYS_TASKS, (jt_arg)t, (jt_arg)kill, 0); }
 /* Body bytes on HTTP 200 (at most len), minus the status on any other reply
    (-100..-599), or -errno: -EINVAL bad path, -EFAULT bad pointer, -ENODEV no
    NIC, -EIO no answer. The host is fixed in the kernel; only the path is ours. */
-static inline int jt_http_get(const char *path, void *buf, unsigned len) { return jt_syscall(JT_SYS_HTTP_GET, (unsigned)path, (unsigned)buf, len); }
+static inline int jt_http_get(const char *path, void *buf, unsigned len) { return jt_syscall(JT_SYS_HTTP_GET, (jt_arg)path, (jt_arg)buf, len); }
 /* One POST of application/json to the chat host. Body at most 6144 bytes, out clamped to 8192,
    reply_ticks 0 = 15s, clamped to 45s. Reply body bytes on HTTP 200, -status on any other reply,
    or -errno (-EBUSY a fetch is already in flight). */
 struct jt_http_post { const char *path; const char *body; unsigned int body_len; char *out; unsigned int out_len; unsigned int reply_ticks; };
-static inline int jt_http_post(struct jt_http_post *a) { return jt_syscall(JT_SYS_HTTP_POST, (unsigned)a, 0, 0); }
+static inline int jt_http_post(struct jt_http_post *a) { return jt_syscall(JT_SYS_HTTP_POST, (jt_arg)a, 0, 0); }
 #define JT_POST_WORKER 1u /* post to the fixed joshuatree Worker host instead of the chat host */
 #define JT_POST_BIG    2u /* body and reply up to JT_HTTP_BIG_MAX, straight from/to the caller buffers */
-static inline int jt_http_post_ex(struct jt_http_post *a, unsigned flags) { return jt_syscall(JT_SYS_HTTP_POST, (unsigned)a, flags, 0); }
-static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (unsigned)path, (unsigned)out, max); }
+static inline int jt_http_post_ex(struct jt_http_post *a, unsigned flags) { return jt_syscall(JT_SYS_HTTP_POST, (jt_arg)a, flags, 0); }
+static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (jt_arg)path, (jt_arg)out, max); }
 /* Bytes read (at most cap), -ENOENT missing or empty, -EINVAL, -EFAULT. */
-static inline int jt_readfile(const char *path, void *buf, unsigned cap) { return jt_syscall(JT_SYS_READFILE, (unsigned)path, (unsigned)buf, cap); }
-static inline int jt_mkdir(const char *path)                      { return jt_syscall(JT_SYS_MKDIR, (unsigned)path, 0, 0); }
-static inline int jt_unlink(const char *path)                     { return jt_syscall(JT_SYS_UNLINK, (unsigned)path, 0, 0); }
-static inline int jt_shell_run(const char *line, char *out, unsigned outlen) { return jt_syscall(JT_SYS_SHELL_RUN, (unsigned)line, (unsigned)out, outlen); }
+static inline int jt_readfile(const char *path, void *buf, unsigned cap) { return jt_syscall(JT_SYS_READFILE, (jt_arg)path, (jt_arg)buf, cap); }
+static inline int jt_mkdir(const char *path)                      { return jt_syscall(JT_SYS_MKDIR, (jt_arg)path, 0, 0); }
+static inline int jt_unlink(const char *path)                     { return jt_syscall(JT_SYS_UNLINK, (jt_arg)path, 0, 0); }
+static inline int jt_shell_run(const char *line, char *out, unsigned outlen) { return jt_syscall(JT_SYS_SHELL_RUN, (jt_arg)line, (jt_arg)out, outlen); }
 /* Fills at most size bytes (pass sizeof *si); returns bytes written, -EINVAL under 8, -EFAULT bad pointer.
    si->version is first so the struct can grow; check si->size for what the kernel really wrote. */
-static inline int jt_sysinfo(struct jt_sysinfo *si)               { return jt_syscall(JT_SYS_SYSINFO, (unsigned)si, sizeof *si, 0); }
+static inline int jt_sysinfo(struct jt_sysinfo *si)               { return jt_syscall(JT_SYS_SYSINFO, (jt_arg)si, sizeof *si, 0); }
 /* 0 queued, -EINVAL no app by that exact name, -EBUSY one is already pending. The desktop opens it on its next pass. */
-static inline int jt_refresh(int kind, int arg)                   { return jt_syscall(JT_SYS_REFRESH, (unsigned)kind, (unsigned)arg, 0); }
-static inline int jt_launch(const char *app)                      { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (unsigned)app, 0, 0); }
+static inline int jt_refresh(int kind, int arg)                   { return jt_syscall(JT_SYS_REFRESH, (jt_arg)kind, (jt_arg)arg, 0); }
+static inline int jt_launch(const char *app)                      { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (jt_arg)app, 0, 0); }
 /* Replace the system clipboard with len bytes (0 clears). Returns len, -EINVAL over JT_CLIP_MAX, -EFAULT. */
-static inline int jt_clip_set(const void *buf, unsigned len)      { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_SET, (unsigned)buf, len); }
+static inline int jt_clip_set(const void *buf, unsigned len)      { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_SET, (jt_arg)buf, len); }
 /* Copy out at most len bytes of the clipboard; returns bytes copied (0 when empty), -EFAULT. A short len clips the paste. */
-static inline int jt_clip_get(void *buf, unsigned len)            { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_GET, (unsigned)buf, len); }
+static inline int jt_clip_get(void *buf, unsigned len)            { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_GET, (jt_arg)buf, len); }
 struct jt_audio_play { const void *pcm; unsigned int len; unsigned int rate; unsigned int flags; };
 struct jt_audio_status { unsigned int version, size, playing, queued, space, rate, played; };
 /* Queues up to JT_AUDIO_CHUNK_MAX bytes of 8-bit unsigned mono PCM at rate Hz. Returns bytes taken
@@ -243,17 +264,17 @@ struct jt_audio_status { unsigned int version, size, playing, queued, space, rat
    the clip's last bytes; if a chunk is cut short the flag is dropped, so resend it with the rest. */
 static inline int jt_audio_play(const void *pcm, unsigned len, unsigned rate, unsigned flags) {
     struct jt_audio_play p = { pcm, len, rate, flags };
-    return jt_syscall(JT_SYS_AUDIO, JT_AUDIO_PLAY, (unsigned)&p, sizeof p);
+    return jt_syscall(JT_SYS_AUDIO, JT_AUDIO_PLAY, (jt_arg)&p, sizeof p);
 }
 /* played is in samples: mouth time in ms = played * 1000 / rate. */
-static inline int jt_audio_status(struct jt_audio_status *st)    { return jt_syscall(JT_SYS_AUDIO, JT_AUDIO_STATUS, (unsigned)st, sizeof *st); }
+static inline int jt_audio_status(struct jt_audio_status *st)    { return jt_syscall(JT_SYS_AUDIO, JT_AUDIO_STATUS, (jt_arg)st, sizeof *st); }
 static inline int jt_audio_stop(void)                            { return jt_syscall(JT_SYS_AUDIO, JT_AUDIO_STOP, 0, 0); }
 /* Arms capture at rate Hz: 0, -ENODEV no card, -EBUSY playback owns it (or the last take is still landing; retry). */
 static inline int jt_rec_start(unsigned rate)                    { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_START, rate, 0); }
 /* Copies up to n (max JT_REC_CHUNK_MAX) banked bytes, oldest first; returns the count, 0 = none yet. Never blocks. */
-static inline int jt_rec_read(void *buf, unsigned n)             { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_READ, (unsigned)buf, n); }
+static inline int jt_rec_read(void *buf, unsigned n)             { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_READ, (jt_arg)buf, n); }
 static inline int jt_rec_stop(void)                              { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_STOP, 0, 0); }
-static inline int jt_text(const char *s, int x, int y, unsigned fg, int op) { struct jt_text t = { x, y, fg, s }; return jt_syscall(JT_SYS_TEXT, (unsigned)&t, (unsigned)op, 0); }
+static inline int jt_text(const char *s, int x, int y, unsigned fg, int op) { struct jt_text t = { x, y, fg, s }; return jt_syscall(JT_SYS_TEXT, (jt_arg)&t, (jt_arg)op, 0); }
 static inline void jt_text_clear(void) { jt_syscall(JT_SYS_TEXT, 0, JT_TEXT_CLEAR, 0); }
 /* n bytes of s as one SYS_TEXT run (op DRAW or MEASURE); the width, or -1. */
 static inline int jt_text_n(const char *s, int n, int x, int y, unsigned fg, int op) {
@@ -291,7 +312,7 @@ static inline int jt_wrap(const char *s, int x, int y, int max_w, int line_h, in
     }
     return lines;
 }
-static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
+static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (jt_arg)ev, flags, 0); }
 /* Resize helper, the app's two lines: after a poll, `if (r == 1 && jt_window_resized(&ev, &win)) { draw(); flags = JT_POLL_PRESENT; continue; }`.
    Returns 1 when ev was JT_EV_RESIZE and re-opening the window gave *info a buffer
    of the new size (the app must redraw all of it: the new buffer starts zeroed), else 0.

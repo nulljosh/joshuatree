@@ -4,6 +4,41 @@
 
 The Pi reads its own SD card: `arch/arm64/emmc.c` brings the card up on EMMC2 and reads blocks, and the i386 kernel's `drivers/fat.c`, now able to read FAT32, mounts the boot partition read only for the Terminal's new `ls` and `cat NAME`. Files that stay are a third of the 3.0 gate, and reading comes before writing. Checked by `tools/checks/arm64-sd-check.py`, which plugs a FAT32 card into QEMU's EMMC2 at the board's own address.
 
+## 2.52.0 development branch (2026-10-11)
+
+Caps Lock and key repeat on ARM. Caps Lock capitalises letters and Shift flips it, in the Terminal, the Calculator and Spotlight (Shift now reaches Spotlight too). A held typed key or Backspace types again after 400 ms and every 80 ms, where the first press went, until the release or another key. Before, Caps Lock did nothing and holding Backspace deleted one character: the USB keyboard sends a held key once. Check: `tools/checks/arm64-keys-check.py` holds keys with QMP and counts the repeats; `arm64-keydbg-check.py` does it over USB. Needs a real keyboard on the board; the Caps light stays off for now.
+
+## 2.51.0 development branch (2026-10-11)
+
+Bluetooth, slice BT1: the Pi talks HCI to its radio over the PL011, loads the BCM4345C0 patch, prints the version, and `bt scan` lists what it hears, so Joshua's Bluetooth mouse can be found before BT2 connects it. The Pi console moved to the mini UART to free the PL011, and `disable-bt` left `config.txt`. Not yet seen on the board. Check: `tools/checks/arm64-bt-check.py`, against a fake controller.
+
+## 2.49.0 development branch (2026-10-11)
+
+M3b, the first C program in user mode on ARM. `user/jtsys.h` gets an aarch64 `svc #0` path with the same `JT_SYS_*` numbers, `user/hello.c` builds unchanged as a flat position independent image baked into the ARM kernel, and the EL0 handler answers `JT_SYS_WRITE` and `JT_SYS_EXIT`. Unported calls return -ENOSYS, so hello prints its line, fails its `open` and exits 1. Check: `tools/checks/arm64-m3-check.py` (the old M3a lines and the three faults still pass).
+## 2.48.0 development branch (2026-10-11)
+
+Volume controls for the Pi. A master volume, 0 to 100 and 70 by default, scales every sample as it enters the audio ring, so the PWM range is never exceeded and 0 is silence. `vol`, `vol N`, `vol up` and `vol down` in the Terminal; F11, F12 and a Mac keyboard's volume and mute keys step it by 10 before any pane, show "Volume N" in the menu bar and click through `beep`. Checked by `tools/checks/arm64-volume-check.py`: `vol 50` is half the ring sum of `vol 100`, `vol 0` is silent, scripted keys print the notice. The real speaker still needs tuning.
+
+## 2.43.0 development branch (2026-10-11)
+
+The Pi can make sound. `beep` (or `beep 880 500`) in the Terminal plays a quiet tone out of the 3.5 mm jack: GPIO 40 and 41 go to PWM1, the PWM clock is set through the clock manager, and a ring buffer feeds the PWM FIFO by hand, with no DMA yet. Every hardware wait gives up and prints one line; nothing touches the jack or the green light at boot. `tools/checks/arm64-audio-check.py` proves the tone reaches the ring (checksum matches a tone computed in Python), the FIFO order and scaling on a fake PWM, and that stuck hardware cannot hang it. QEMU has no PWM, so the jack itself is unverified until Joshua tests the real board.
+## 2.47.0 development branch (2026-10-11)
+
+Samantha answers the Pi from Joshua's own model now. The credit ran out and the prompt still said Claude. The relay's new `--turing` backend posts to Turing's `app/serve.py` and answers "M Samantha". `--api-key-file` will not start without `--allow-api-spend`. The Pi's prompt reads `Samantha $ ` before any answer, and `ask.c` now accepts the Samantha name, which it used to drop. Checks: `tools/checks/claude-relay-check.py` (stub Turing) and `tools/checks/arm64-claude-console-check.py`.
+## 2.46.0 development branch (2026-10-11)
+
+The Pi finds the Claude relay by itself when the router moves the Mac: it tries the last good address, else the baked one, then broadcasts a small UDP probe that `relay.py` answers. TLS now checks the fixed name `jt-relay` against the private CA alone, so the address no longer matters and a probe reply can never get the token. Check: `tools/checks/arm64-relay-discovery-check.py`.
+## 2.45.0 development branch (2026-10-11)
+
+The Mac relay can speak for Samantha. `POST /api/tts` takes text and returns raw 16-bit mono PCM at 22050 Hz from ElevenLabs. The key sits in a private file on the Mac and never leaves it. A per-request cap (400) and a per-day cap (5000), kept in a file across restarts, refuse before ElevenLabs is called. Pi playback is a separate open line. Check: `tools/checks/relay-tts-check.py`.
+## 2.44.0 development branch (2026-10-11)
+
+Spotlight opens only on F1 or Cmd+Space, like a Mac. A bare Space, Enter or Tab on the desktop and Ctrl or Alt+Space do nothing now (Joshua hit Space on the board). A letter still opens it with that letter typed. Checks: `tools/checks/arm64-keys-check.py` and `arm64-keydbg-check.py` press Space and Ctrl+Space and expect nothing.
+
+Typing into apps on ARM, the last slice of M1d part two. The Calculator is now its own window over the right of the Terminal or Console, so both show. A click on one brings it to the front, and only that one gets the keys, the same rule the i386 desktop uses. Before, any open Calculator took every key. Check: `tools/checks/arm64-focus-check.py`, which fails with the old routing. Framebuffer write-combining is split out as its own roadmap line. Needs a USB mouse and keyboard test on the board.
+## 2.43.0 development branch (2026-10-11)
+
+The Pi can make sound. `beep` (or `beep 880 500`) in the Terminal plays a quiet tone out of the 3.5 mm jack: GPIO 40 and 41 go to PWM1, the PWM clock is set through the clock manager, and a ring buffer feeds the PWM FIFO by hand, with no DMA yet. Every hardware wait gives up and prints one line; nothing touches the jack or the green light at boot. `tools/checks/arm64-audio-check.py` proves the tone reaches the ring (checksum matches a tone computed in Python), the FIFO order and scaling on a fake PWM, and that stuck hardware cannot hang it. QEMU has no PWM, so the jack itself is unverified until Joshua tests the real board.
 ## 2.42.0 development branch (2026-10-11)
 
 The Samantha box: a printable desk case for a 7 inch HDMI screen, a Pi 4B, a round speaker and a mic hole, built by `docs/hardware/samantha_cad.py` with a stand that leans it back and a fit-test frame to print first. The screen, speaker and board numbers are stand-ins until the parts are in hand, and nothing has been printed. Checked by the script's own asserts (the tallest port clears the screen, the Pi stays inside the walls, the speaker leaves the card a channel).

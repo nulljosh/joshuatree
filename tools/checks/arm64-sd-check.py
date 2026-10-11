@@ -133,7 +133,7 @@ def make(*targets):
 
 def boot(img, with_card, done):
     log = os.path.join(TMP, "uart-%d.log" % time.monotonic_ns())
-    cmd = ["qemu-system-aarch64", "-machine", "raspi4b", "-display", "none", "-serial", "file:" + log, "-kernel", img]
+    cmd = ["qemu-system-aarch64", "-machine", "raspi4b", "-display", "none", "-serial", "null", "-serial", "file:" + log, "-kernel", img]   # serial 0 is the PL011, the Bluetooth radio's; the console is the mini UART, serial 1
     if with_card: cmd += ["-drive", f"if=none,id=card,file={card},format=raw", "-device", "sd-card,drive=card,bus=/generic-sdhci/sd-bus"]
     q = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     out = ""

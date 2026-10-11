@@ -160,24 +160,22 @@ struct dhcp_packet {
     u8  options[64];
 } __attribute__((packed));
 
-/* Sends one DHCP message as a broadcast frame: dest MAC ff:ff:ff:ff:ff:ff,
-   src IP 0.0.0.0 (we don't have one yet, or are just confirming an offer),
-   dest IP 255.255.255.255. Bypasses udp_send/resolve_next_hop entirely --
-   both assume a real our_ip and a real ARP-resolvable next hop, neither of
-   which exist yet during DISCOVER. */
-static int dhcp_send(const struct dhcp_packet *pkt, u32 opt_len) {
+/* One UDP datagram as a broadcast frame: dest MAC ff:ff:ff:ff:ff:ff, no ARP. Bypasses udp_send/resolve_next_hop
+   entirely -- both assume a real our_ip and a real ARP-resolvable next hop, neither of which exist yet during DHCP's
+   DISCOVER. DHCP sends from 0.0.0.0 to 255.255.255.255; the Pi's relay probe (udp_broadcast_ask) from our lease to
+   the subnet's broadcast address. */
+static int udp_broadcast_frame(u32 src_ip, u32 dst_ip, u16 src_port, u16 dst_port, const void *data, u32 len) {
     u8 frame[sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header) + sizeof(struct dhcp_packet)];
+    if (len > sizeof(struct dhcp_packet)) return 0;
     struct eth_header *eth = (struct eth_header *)frame;
     struct ip_header  *ip  = (struct ip_header *)(frame + sizeof(*eth));
     struct udp_header *udp = (struct udp_header *)(frame + sizeof(*eth) + sizeof(*ip));
     u8 *payload = frame + sizeof(*eth) + sizeof(*ip) + sizeof(*udp);
 
-    u32 dhcp_len = (u32)(sizeof(struct dhcp_packet) - sizeof(((struct dhcp_packet *)0)->options)) + opt_len;
-
     for (int i = 0; i < 6; i++) { eth->dest[i] = 0xFF; eth->src[i] = our_mac[i]; }
     eth->ethertype = htons(ETHERTYPE_IP);
 
-    u16 udp_len = (u16)(sizeof(*udp) + dhcp_len);
+    u16 udp_len = (u16)(sizeof(*udp) + len);
     u16 ip_len  = (u16)(sizeof(*ip) + udp_len);
 
     ip->version_ihl = 0x45;
@@ -188,21 +186,28 @@ static int dhcp_send(const struct dhcp_packet *pkt, u32 opt_len) {
     ip->ttl = 64;
     ip->protocol = 17;
     ip->checksum = 0;
-    ip->src_ip = 0; /* 0.0.0.0 */
-    ip->dst_ip = 0xFFFFFFFFu; /* 255.255.255.255 */
+    ip->src_ip = htonl(src_ip);
+    ip->dst_ip = htonl(dst_ip);
     ip->checksum = checksum16(ip, sizeof(*ip));
 
-    udp->src_port = htons(DHCP_CLIENT_PORT);
-    udp->dst_port = htons(DHCP_SERVER_PORT);
+    udp->src_port = htons(src_port);
+    udp->dst_port = htons(dst_port);
     udp->length = htons(udp_len);
     udp->checksum = 0;
 
-    const u8 *src = (const u8 *)pkt;
-    for (u32 i = 0; i < dhcp_len; i++) payload[i] = src[i];
+    const u8 *src = (const u8 *)data;
+    for (u32 i = 0; i < len; i++) payload[i] = src[i];
 
     u32 frame_len = sizeof(*eth) + ip_len;
     if (frame_len < 60) frame_len = 60;
     return active_send(frame, frame_len);
+}
+
+/* Sends one DHCP message: src IP 0.0.0.0 (we don't have one yet, or are just confirming an offer), dest IP
+   255.255.255.255. */
+static int dhcp_send(const struct dhcp_packet *pkt, u32 opt_len) {
+    u32 dhcp_len = (u32)(sizeof(struct dhcp_packet) - sizeof(((struct dhcp_packet *)0)->options)) + opt_len;
+    return udp_broadcast_frame(0, 0xFFFFFFFFu, DHCP_CLIENT_PORT, DHCP_SERVER_PORT, pkt, dhcp_len);
 }
 
 /* Scans a received DHCP packet's options for tag, returns a pointer to its
@@ -527,6 +532,44 @@ static int resolve_next_hop(u32 dest_ip, u8 mac_out[6]) {
     u32 gw = dhcp_gateway_ip ? dhcp_gateway_ip : DEFAULT_GATEWAY_IP;
     u32 next_hop = ((dest_ip ^ our_ip) & LOCAL_SUBNET_MASK) ? gw : dest_ip;
     return arp_resolve(next_hop, mac_out);
+}
+
+/* Broadcasts one UDP datagram to port on our subnet and returns the first reply that comes back from that port to
+   src_port (2.46: how the Pi finds the Claude relay when the Mac's address changed). Copies at most max bytes into
+   reply and the sender's address into *from_ip; -1 when the send failed or nothing answered in wait_ticks. Answers ARP
+   while it waits: the replier learned our address from a broadcast, not from an ARP request, so it has to ask. The
+   reply is whatever the network sent: the caller must not trust it. */
+int udp_broadcast_ask(u16 port, u16 src_port, const void *probe, u32 len, void *reply, u32 max, u32 *from_ip, u32 wait_ticks) {
+    net_err = NET_ERR_NONE;
+    u32 mask = dhcp_netmask ? dhcp_netmask : LOCAL_SUBNET_MASK;
+    if (!active_send || !udp_broadcast_frame(our_ip, our_ip | ~mask, src_port, port, probe, len)) { net_err = NET_ERR_SEND; return -1; }
+    u8 rx[1514];
+    u32 deadline = ticks() + wait_ticks;
+    while (ticks() < deadline) {
+        u32 n = active_receive(rx, sizeof(rx));
+        if (!n) continue;
+        arp_maybe_reply(rx, n);
+        if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header)) continue;
+        struct eth_header *eth = (struct eth_header *)rx;
+        if (eth->ethertype != htons(ETHERTYPE_IP)) continue;
+        struct ip_header *ip = (struct ip_header *)(rx + sizeof(*eth));
+        u32 ip_hlen = (u32)(ip->version_ihl & 0x0F) * 4;
+        if (ip->protocol != 17 || ip_hlen < sizeof(struct ip_header)) continue;
+        if (n < sizeof(*eth) + ip_hlen + sizeof(struct udp_header)) continue;
+        if (ip->dst_ip != htonl(our_ip)) continue;
+        struct udp_header *udp = (struct udp_header *)(rx + sizeof(*eth) + ip_hlen);
+        if (udp->src_port != htons(port) || udp->dst_port != htons(src_port)) continue;
+        u32 ulen = htons(udp->length);
+        if (ulen < sizeof(*udp) || sizeof(*eth) + ip_hlen + ulen > n) continue;
+        u32 got = ulen - (u32)sizeof(*udp);
+        if (got > max) got = max;
+        const u8 *body = rx + sizeof(*eth) + ip_hlen + sizeof(*udp);
+        for (u32 i = 0; i < got; i++) ((u8 *)reply)[i] = body[i];
+        *from_ip = htonl(ip->src_ip);
+        return (int)got;
+    }
+    net_err = NET_ERR_REPLY_TIMEOUT;
+    return -1;
 }
 
 int udp_send(u32 dest_ip, u16 dest_port, u16 src_port, const void *data, u32 len) {
