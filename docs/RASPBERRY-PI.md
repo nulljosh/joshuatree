@@ -6,7 +6,7 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 
 ## Apps currently implemented on ARM
 
-The Pi does not have the i386 demo's full app collection. Its native windows are the Calculator, Calendar, Notes, Terminal, Console, Clock and Brick (development branch). Calendar and Notes run in user mode: each dock tile starts `user/calendar.c` or `user/notes.c`, the same program the PC runs, in its own window, one at a time. Their files are on the card in `JT/` (see [Files on the card](#files-on-the-card)). In Calendar, arrows step the month. In Notes, n makes a note, Enter opens one, Esc saves it and goes back, and Esc again closes Notes. Its red dot closes it too, without saving an open note. The Apps tile opens Calculator, beside the Terminal or Console; a click on either one gives it the keys. F2 opens Terminal. Vancouver stays UTC-7 after March 8, 2026, following [B.C. permanent Pacific time](https://news.gov.bc.ca/releases/2026AG0013-000209). Search Brick in Spotlight for the brick-breaker game. Search Clock in Spotlight to open its time/date window; Escape closes it. The Samantha dock tile opens the assistant Terminal. Claude/Samantha and the text browser run as Terminal commands. The optional local model also runs there when weights are included in the image.
+The Pi does not have the i386 demo's full app collection. Its native windows are the Calculator, Calendar, Notes, Music, Terminal, Console, Clock and Brick (development branch). Calendar, Notes and Music run in user mode: the dock tile starts `user/calendar.c` or `user/notes.c`, and Spotlight (type music) starts `user/music.c`, the same programs the PC runs, each in its own window, one at a time. Music has no dock tile, a decision; see [Music on the Pi](#music-on-the-pi). Their files are on the card in `JT/` (see [Files on the card](#files-on-the-card)). In Calendar, arrows step the month. In Notes, n makes a note, Enter opens one, Esc saves it and goes back, and Esc again closes Notes. Its red dot closes it too, without saving an open note. The Apps tile opens Calculator, beside the Terminal or Console; a click on either one gives it the keys. F2 opens Terminal. Vancouver stays UTC-7 after March 8, 2026, following [B.C. permanent Pacific time](https://news.gov.bc.ca/releases/2026AG0013-000209). Search Brick in Spotlight for the brick-breaker game. Search Clock in Spotlight to open its time/date window; Escape closes it. The Samantha dock tile opens the assistant Terminal. Claude/Samantha and the text browser run as Terminal commands. The optional local model also runs there when weights are included in the image.
 
 Burrow, Mail, Reminders, Weather, Stocks and Trash dock tiles do not open their own ARM apps. They return to the Console and print `not on ARM yet`. The live Calendar icon shows the month and day number, and a click opens Calendar. Samantha's `note` action prints text; it does not save a Notes document yet.
 
@@ -27,7 +27,7 @@ This is the dispatch in `arch/arm64/main.c` (`dock_activate` and `app_open_name`
 | USB keyboard and mouse on the Pi | **Keyboard works on the real board, 2026-10-06** (see the Log). Mouse untested, no wired one yet. Since 2.24.0 a USB mouse moves an arrow over the desktop, the dock's label follows it, the Console's red button closes it and a dock click opens it again, all proven in QEMU (`tools/checks/arm64-mouse-check.py`); see the mouse test list below. Since 2.13.2 each hub port prints one status line and every port is rescanned once a second, so a keyboard plugged in after boot is found too. Proven end to end in QEMU (`tools/checks/arm64-usb-check.py`). Each step prints a short `usb ...` line on screen: `usb pcie link up`, `usb vl805 ok`, `usb xhci run`, `usb port N connected`, `usb kbd addr N`, then `usb key 0x04 a` for every key. The last line on the photo is where it stopped. |
 | Wi-Fi on the Pi (CYW43455) | Built in 2.16.0, waiting on a photo from the real board. Stage 1 lists nearby networks on screen as `wifi ap ...` lines; joining one is stage 2. QEMU has no SDIO card, so it only proves the failure path (`wifi FAIL cmd5`, boot carries on): `tools/checks/arm64-wifi-check.py`. |
 | Bluetooth (the same CYW43455) | **In 2.54.0, not yet seen on the board.** The radio loads its patch at boot, `bt scan` lists the devices it hears, and `bt pair` connects the mouse (Just Works, the key kept in RAM only) so it moves the arrow and clicks. See [Bluetooth](#bluetooth). |
-| Sound out of the 3.5 mm jack | **In 2.43.0, not yet heard on the board.** Run `beep` (or `beep 880 500`) in the Terminal with headphones in the jack. PWM1 on GPIO 40 and 41, fed by the CPU (no DMA yet). QEMU has no PWM, so `tools/checks/arm64-audio-check.py` proves only the tone, the buffer and the bounded waits. If it prints `audio:` and a reason, tell me the line. HDMI audio is not done. |
+| Sound out of the 3.5 mm jack | **In 2.43.0, not yet heard on the board.** Run `beep` (or `beep 880 500`) in the Terminal with headphones in the jack. PWM1 on GPIO 40 and 41, fed by the CPU (no DMA yet). QEMU has no PWM, so `tools/checks/arm64-audio-check.py` proves only the tone, the buffer and the bounded waits. If it prints `audio:` and a reason, tell me the line. HDMI audio is not done. **Volume, in 2.48.0, not yet heard on the board:** `vol` shows it (0 to 100, default 70), `vol 40` sets it, `vol up` and `vol down` step by 10; F11 and F12 and a Mac keyboard's volume keys do the same, show "Volume N" in the menu bar and click once. The default level and the click are `AUDIO_DEFAULT_VOLUME` in `audio.h` and `TICK_HZ`, `TICK_MS` in `cmd.c`: tune them on the real speaker. **Music, in 2.59.0, not yet heard on the board:** an app's sound goes out through DMA, so the desktop never waits on it. See [Music on the Pi](#music-on-the-pi). |
 | Files on the SD card | **Reads in 2.53.0, writes in 2.57.0, apps in 2.58.0, not yet seen on the board.** The kernel reads the card it booted from, `ls` and `cat` in the Terminal show its boot partition, and `write`, `rm` and `mkdir` change the OS's own `JT/` folder. Since 2.58.0 Notes keeps its notes in `JT/` too, and Calendar its events. The boot files are never written. See [Files on the card](#files-on-the-card). Proven on QEMU's Pi 4B model with a FAT32 card, across a reboot (`tools/checks/arm64-sd-check.py`, `tools/checks/arm64-notes-check.py`). |
 | Wired Ethernet on the Pi | Not yet. M4. |
 
@@ -169,7 +169,7 @@ In the Terminal (F2):
 
 Names are the short 8.3 ones `ls` shows, so `bcm2711-rpi-4-b.dtb` is `BCM271~1.DTB`. One folder down at most.
 
-Apps see `JT/` as their whole disk (2.58.0). Notes asks for `NOTES/NOTES/N0000001.TXT` and gets `JT/NOTES/NOTES/N0000001.TXT`; Calendar's `EVENTS.TXT` is `JT/EVENTS.TXT`. An app's path has no leading slash and no `..`, so nothing outside `JT/` is reachable from an app, the boot files least of all. The first time Notes opens, the kernel makes `JT/NOTES/NOTES`, its default folder. A file an app opens is 8 KB at most, and one app runs at a time.
+Apps see `JT/` as their whole disk (2.58.0). Notes asks for `NOTES/NOTES/N0000001.TXT` and gets `JT/NOTES/NOTES/N0000001.TXT`; Calendar's `EVENTS.TXT` is `JT/EVENTS.TXT`. An app's path has no leading slash and no `..`, so nothing outside `JT/` is reachable from an app, the boot files least of all. The first time Notes opens, the kernel makes `JT/NOTES/NOTES`, its default folder, and the first time Music opens, `JT/MUSIC`. A file an app opens is 8 KB at most (a whole-file read, as Music's, takes up to 6 MB), and one app runs at a time.
 
 The OS writes only inside `JT/`, made on the first write. It never writes a file the firmware boots from: `bootcode.bin`, `start*.elf`, `fixup*.dat`, any `.dtb`, `config.txt`, `cmdline.txt`, `kernel*.img`, `armstub*` and the `overlays` folder are refused by name, with an `sd refused NAME, the firmware boots from it` line. A name that is not 8.3, like `../config.txt`, is refused too. Under that, the driver refuses any write past the boot partition or onto its boot sectors. A full `JT/` folder or root says no rather than grow: folders do not grow past their first cluster yet.
 
@@ -182,6 +182,31 @@ The board test, after flashing with `tools/flash-pi.sh`:
 5. Pull the power, boot again, and `cat JT/NOTE.TXT` still prints `hello from the pi`. That is the photo that matters.
 6. `rm NOTE.TXT` says `removed JT/NOTE.TXT`. Then put the card in the Mac: it mounts, `JT` is there with `NOTE.TXT` gone, `config.txt` reads the same, and the Pi still boots from it.
 7. Notes (2.58.0): click the Notes tile, or press Right until its label shows and then Enter. Press n, type `hello from the pi`, then Esc. The list shows the line. Esc again closes Notes. Pull the power, boot, open Notes: the line is still listed, and Enter opens it. On the Mac the card has `JT/NOTES/NOTES/N0000001.TXT` with that line. Photograph the list after the reboot.
+
+## Music on the Pi
+
+Since 2.59.0 the Pi plays songs from its card out of the 3.5 mm jack. Music is the PC's own `user/music.c`, unchanged, in user mode. It has no dock tile: press F1 (or just start typing), type music, Enter.
+
+Put songs on the card from the Mac:
+
+1. Put the card in the Mac and open it in Finder.
+2. Make the folder `JT/MUSIC` if it is not there. Music makes it the first time it opens.
+3. Copy WAV or MP3 files into it. Short names read best, like `SONG.MP3`: the Pi lists 8.3 names, so a long one shows as `MYLONG~1`.
+4. In Terminal, `dot_clean /Volumes/<card>/JT/MUSIC` removes the `._` files Finder leaves. Otherwise each one shows in the list as a song that will not play. `cp -X` copies without them.
+5. Eject the card and boot the Pi.
+
+What it plays: WAV (8 or 16 bit, mono or stereo) and MP3, from 4000 to 44100 Hz. A 48 kHz file is refused. A song is read whole into memory, so 3 MB is the most; a three minute MP3 at 128 kbps fits. The sound is mono, out of both sides.
+
+Keys: Space plays and pauses, Left and Right seek 5 seconds, Up and Down are Music's own volume, n and p change song, s shuffles, r repeats, Esc closes. F11 and F12 are the Pi's master volume, on top of Music's.
+
+The board test, with headphones in the jack:
+
+1. `beep` in the Terminal first. If you hear it, the PWM, its clock and the pins work.
+2. Open Music. The list shows your songs. Space plays the first: the time under the bar counts up a second a second, and you hear the song.
+3. F11 makes it quieter and F12 louder; the menu bar says `Volume N`.
+4. n goes to the next song. Esc stops and closes Music, and the Console says `audio: app stream N frames at R Hz, ... played P`. Photograph that line.
+
+If `beep` is heard but Music is silent while its clock runs, the DMA side is the suspect: channel 5, PWM1's DREQ (1) and the buffer's bus address (RAM at 0xC0000000). Tell me the `audio:` lines. `tools/checks/arm64-music-check.py` proves Music on QEMU, which has no PWM, and the Pi build's DMA setup against fake registers on the Mac; the jack itself is unverified.
 
 ## Mouse test on the real board (2.24.0)
 

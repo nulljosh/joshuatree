@@ -142,22 +142,31 @@ user.o: user.S
 # kernel's loader. They reach the kernel through jtsys.h's aarch64 `svc #0` path with the Joshua Tree numbers. libjt is
 # built here too, under arch/arm64 and under other names (text.o is the kernel's TTF blender), never next to its i386
 # objects in user/libjt; --start-lib pulls only the members a program uses (calendar: string.c and text.c; notes: text.c
-# and osk.c). stdlib.c's brk heap casts a pointer through a 32-bit int, so it is left out until a program on ARM
-# malloc()s; Notes does not. -Os keeps images small.
+# and osk.c; music, M3e: string.c, text.c, stdlib.c's malloc over JT_SYS_BRK, wav.c and mp3.c). -Os keeps images small.
+# mp3.c (minimp3) does its sums in floating point, so it alone is built without -mgeneral-regs-only (UFPCC); EL0 may use
+# the FPU and vectors.S keeps an app's FP registers across every call and park. The kernel stays integer-only.
 # userapps.S bakes the images in with .incbin and lists them; a new app is a name in UAPPS and a row there.
-UAPPS = hello calendar notes
+UAPPS = hello calendar notes music
 USEROBJ = user.o userapps.o
 UCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fdirect-access-external-data -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
+UFPCC = $(filter-out -mgeneral-regs-only,$(UCC))
 UJT = ../../user/libjt
-UJTOBJ = ujt_string.o ujt_text.o ujt_osk.o
+UJTOBJ = ujt_string.o ujt_text.o ujt_osk.o ujt_stdlib.o ujt_wav.o ujt_mp3.o
 ujt_string.o: $(UJT)/string.c $(UJT)/string.h
 	$(UCC) -c $< -o $@
 ujt_text.o: $(UJT)/text.c $(UJT)/text.h $(UJT)/aafont.h ../../user/jtsys.h
 	$(UCC) -c $< -o $@
 ujt_osk.o: $(UJT)/osk.c $(UJT)/osk.h $(UJT)/text.h ../../user/jtsys.h
 	$(UCC) -c $< -o $@
+ujt_stdlib.o: $(UJT)/stdlib.c $(UJT)/stdlib.h $(UJT)/ctype.h $(UJT)/string.h ../../user/jtsys.h
+	$(UCC) -c $< -o $@
+ujt_wav.o: $(UJT)/wav.c $(UJT)/wav.h
+	$(UCC) -c $< -o $@
+ujt_mp3.o: $(UJT)/mp3.c $(UJT)/mp3.h $(UJT)/stdlib.h $(UJT)/string.h ../../third_party/minimp3/minimp3.h
+	$(UFPCC) -I../../third_party/minimp3 -c $< -o $@
 uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h
 	$(UCC) -c $< -o $@
+uapp_music.o: $(UJT)/wav.h $(UJT)/mp3.h $(UJT)/stdlib.h $(UJT)/string.h
 # notes.c finds its arena with (unsigned)_user_end, a 32-bit cast that is still exact here: the app window sits below 4 GiB.
 uapp_notes.o: UCC += -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
 uapp_%.bin: uapp_%.o $(UJTOBJ) user_c.ld
@@ -167,7 +176,7 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = bt.h notice.h brick.h brick_ui.h power.h clock_ui.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = bt.h notice.h brick.h brick_ui.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
@@ -282,3 +291,10 @@ $(eval $(call variant,notice,-DNOTICE_SELFTEST,,))
 $(eval $(call variant,audio,-DAUDIO_TEST,,))
 audiotest: audio-kernel8.elf
 .PHONY: audiotest
+# musictest: Music's clock (JT_SYS_TIME) ticks from MUSIC_UTC with the generic counter, so its `music: at` lines come once a
+# second on virt, which has no network time, and fptest.c's fp_clobber wipes the FPU inside every app call and before every
+# resume, so `userrun fpkeep` proves vectors.S keeps an app's FP registers (tools/checks/arm64-music-check.py).
+MUSIC_UTC ?= 1775000000
+$(eval $(call variant,music,-DMUSIC_TEST_UTC=$(MUSIC_UTC)UL,fptest.o,))
+musictest: music-kernel8.elf
+.PHONY: musictest

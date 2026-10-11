@@ -193,7 +193,7 @@ try:
         check("userrun hello reads JT/HELLO.TXT through open, read and close (fd 3, 20 bytes, then end of file, a double close refused), "
               "its own abuse is -14 and -9, and it exits 9", ok and "M3c app hello exit 9, ran " in out and "M3 EL0 fault" not in out, out[-900:])
         out = b.say("userrun nope", "userrun: no program")
-        check("an unknown program is refused in one line", "userrun: no program called that, try hello, calendar, notes or loop\n" in out and "M3c load" not in out, out[-300:])
+        check("an unknown program is refused in one line", "userrun: no program called that, try hello, calendar, notes, music or loop\n" in out and "M3c load" not in out, out[-300:])
         out = b.say("/help", "/clear  new conversation")
         check("the kernel still answers a command after all of that", "/model [auto|haiku|sonnet|opus]" in out and "/clear  new conversation" in out, out[-300:])
         check("no kernel crash and no oom after the Terminal runs", "KERNEL CRASH" not in b.uart() and "oom" not in b.uart().split("terminal open")[-1])

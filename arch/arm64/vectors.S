@@ -73,27 +73,30 @@
     str x1, [sp, #512]
     str x2, [sp, #520]
 .endm
+.macro load_fp base                 /* q0-q31, FPCR and FPSR from the 528-byte block at \base (save_fp's layout); x9, x10 scratch */
+    ldr x9, [\base, #512]
+    ldr x10, [\base, #520]
+    msr fpcr, x9
+    msr fpsr, x10
+    ldp q0, q1, [\base, #0]
+    ldp q2, q3, [\base, #32]
+    ldp q4, q5, [\base, #64]
+    ldp q6, q7, [\base, #96]
+    ldp q8, q9, [\base, #128]
+    ldp q10, q11, [\base, #160]
+    ldp q12, q13, [\base, #192]
+    ldp q14, q15, [\base, #224]
+    ldp q16, q17, [\base, #256]
+    ldp q18, q19, [\base, #288]
+    ldp q20, q21, [\base, #320]
+    ldp q22, q23, [\base, #352]
+    ldp q24, q25, [\base, #384]
+    ldp q26, q27, [\base, #416]
+    ldp q28, q29, [\base, #448]
+    ldp q30, q31, [\base, #480]
+.endm
 .macro restore_fp
-    ldr x1, [sp, #512]
-    ldr x2, [sp, #520]
-    msr fpcr, x1
-    msr fpsr, x2
-    ldp q0, q1, [sp, #0]
-    ldp q2, q3, [sp, #32]
-    ldp q4, q5, [sp, #64]
-    ldp q6, q7, [sp, #96]
-    ldp q8, q9, [sp, #128]
-    ldp q10, q11, [sp, #160]
-    ldp q12, q13, [sp, #192]
-    ldp q14, q15, [sp, #224]
-    ldp q16, q17, [sp, #256]
-    ldp q18, q19, [sp, #288]
-    ldp q20, q21, [sp, #320]
-    ldp q22, q23, [sp, #352]
-    ldp q24, q25, [sp, #384]
-    ldp q26, q27, [sp, #416]
-    ldp q28, q29, [sp, #448]
-    ldp q30, q31, [sp, #480]
+    load_fp sp
     add sp, sp, #528
 .endm
 .macro ventry target
@@ -128,10 +131,17 @@ sync_entry:
     bl exc_sync
     restore_all
     eret
+/* M3e: an app's floating point registers are its own. Music's MP3 decoder (minimp3) runs on them at EL0, and a call can run
+   kernel code that uses them too (the TrueType text a window frame draws), so every trap from EL0 keeps q0-q31, FPCR and
+   FPSR below its frame and puts them back before the eret. exc_el0_sync(frame, fp) gets the block too: a yield that parks the
+   app (main.c app_park) copies it out, and resume_user loads it back on the way in. */
 el0_sync_entry:
     save_all
     mov x0, sp
+    save_fp
+    mov x1, sp
     bl exc_el0_sync
+    restore_fp
     restore_all
     eret
 irq_entry:
@@ -157,9 +167,12 @@ bad_entry:
    at entry with sp_el0 = sp, x0 = arg, x1 = arg2 and every other register cleared. leave_user(status) is how a program ends (exit or a
    fault): it restores that state and returns from enter_user with status in x0. Interrupts are masked from the save to the eret: one
    taken in between would overwrite elr_el1 and spsr_el1 and send the eret somewhere else. leave_user puts the mask back.
-   M3c part 2: resume_user(frame, sp) is enter_user for an app the scheduler parked (main.c app_park): the same save, then every
+   M3c part 2: resume_user(frame, sp, fp) is enter_user for an app the scheduler parked (main.c app_park): the same save, then every
    register, the pc (frame->elr) and sp_el0 exactly as they were at its svc, and the eret goes on from there. The frame is copied onto
-   this stack so restore_all can load it, which leaves sp where enter_user leaves it: the next trap from EL0 lands below it. */
+   this stack so restore_all can load it, which leaves sp where enter_user leaves it: the next trap from EL0 lands below it.
+   M3e: floating point. resume_user also loads the app's q0-q31, FPCR and FPSR from fp (the block app_park kept), and enter_user
+   starts a program with all of them zero, so no kernel value reaches EL0. The kernel's own d8-d15 are callee-saved in AAPCS64,
+   so save_kctx keeps them with x19-x30 and leave_user puts them back. */
 .macro save_kctx
     adrp x3, k_ctx
     add x3, x3, :lo12:k_ctx
@@ -172,6 +185,10 @@ bad_entry:
     mov x4, sp
     mrs x5, daif
     stp x4, x5, [x3, #96]
+    stp d8, d9, [x3, #112]
+    stp d10, d11, [x3, #128]
+    stp d12, d13, [x3, #144]
+    stp d14, d15, [x3, #160]
     msr daifset, #2
 .endm
 .section .text
@@ -181,9 +198,12 @@ enter_user:
     save_kctx
     msr elr_el1, x0
     msr sp_el0, x1
+    mov x0, x2
+    adrp x7, fp_zero
+    add x7, x7, :lo12:fp_zero
+    load_fp x7                  /* every FP register 0, FPCR 0 (round to nearest): nothing of the kernel's */
     mov x4, #0x3c0              /* EL0t, interrupts masked */
     msr spsr_el1, x4
-    mov x0, x2
     mov x1, x6
     mov x2, xzr
     mov x3, xzr
@@ -215,9 +235,10 @@ enter_user:
     mov x29, xzr
     mov x30, xzr
     eret
-resume_user:                    /* x0 = the parked frame (x0-x30, elr: 32 words), x1 = its sp_el0 */
+resume_user:                    /* x0 = the parked frame (x0-x30, elr: 32 words), x1 = its sp_el0, x2 = its FP block */
     save_kctx
     msr sp_el0, x1
+    load_fp x2
     sub sp, sp, #272
     mov x2, #0
 1:  ldr x3, [x0, x2]
@@ -240,9 +261,14 @@ leave_user:
     ldp x27, x28, [x3, #64]
     ldp x29, x30, [x3, #80]
     ldp x4, x5, [x3, #96]
+    ldp d8, d9, [x3, #112]
+    ldp d10, d11, [x3, #128]
+    ldp d12, d13, [x3, #144]
+    ldp d14, d15, [x3, #160]
     mov sp, x4
     msr daif, x5
     ret
 .section .bss
 .balign 16
-k_ctx: .skip 112
+k_ctx: .skip 176
+fp_zero: .skip 528
