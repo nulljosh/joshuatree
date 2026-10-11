@@ -247,6 +247,70 @@ try:
     check("API: auto + low -> pick_model's cheap model, no thinking, 300 max", sent[1] == ("claude-haiku-5-5", (0, 300)), repr(sent[1]))
     check("API: no fields -> pick_model and medium, as before", sent[2] == ("claude-sonnet-5-5", (0, 600)), repr(sent[2]))
 
+    # --turing: a stub of turing's app/serve.py (OpenAI chat shape) on loopback; no real model, no network
+    import http.server
+    turing_seen = []
+    class TuringStub(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def do_POST(self):
+            d = json.loads(self.rfile.read(int(self.headers.get("content-length") or 0)))
+            turing_seen.append((self.path, d))
+            q = [m["content"] for m in d["messages"] if m["role"] == "user"][-1]
+            if "SLEEP" in q: time.sleep(4)
+            text = "UNKNOWN" if "IDK" in q else "Hi.\n[[note hello]]"
+            body = json.dumps({"object": "chat.completion", "model": "samantha",
+                               "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}]}).encode()
+            try:
+                self.send_response(200); self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(body))); self.end_headers(); self.wfile.write(body)
+            except OSError: pass   # the relay gave up on a SLEEP
+    ts = http.server.ThreadingHTTPServer(("127.0.0.1", 0), TuringStub); ts.daemon_threads = True
+    threading.Thread(target=ts.serve_forever, daemon=True).start()
+    turl = "http://127.0.0.1:%d" % ts.server_address[1]
+    n_claude = len(stub_calls(tmp))
+    tp2, _, sport, slog = start_relay(RELAY, tmp, extra_args=("--turing", turl, "--timeout", "2")); procs.append(tp2)
+    st, data = req(sport, {"prompt": "leave a note", "session": ""})
+    text = data.decode("latin-1"); parts = text.split("\n", 2)
+    check("turing: 200 and the M line names Samantha", st == 200 and parts[0].startswith("S ") and parts[1:2] == ["M Samantha"], repr(text[:80]))
+    check("turing: an answer with a [[note]] line reaches the Pi unchanged", parts[2:] == ["Hi.\n[[note hello]]"], repr(parts[2:]))
+    path0, sent0 = turing_seen[0] if turing_seen else ("", {})
+    msgs0 = sent0.get("messages", [])
+    check("turing: posted to /v1/chat/completions with the SAMANTHA system text, then the question",
+          path0 == "/v1/chat/completions" and msgs0[:1] == [{"role": "system", "content": rm.SAMANTHA}] and msgs0[1:] == [{"role": "user", "content": "leave a note"}],
+          repr((path0, msgs0[1:])))
+    sid = parts[0][2:]
+    st, data = req(sport, {"prompt": "and again", "session": sid})
+    msgs1 = turing_seen[-1][1]["messages"] if turing_seen else []
+    check("turing: a follow-up keeps the session and sends the earlier turns",
+          st == 200 and data.decode("latin-1").startswith("S " + sid + "\nM Samantha\n")
+          and [m["role"] for m in msgs1] == ["system", "user", "assistant", "user"] and msgs1[2]["content"] == "Hi.\n[[note hello]]", repr(msgs1[1:]))
+    st, data = req(sport, {"prompt": "IDK this one"})
+    check("turing: a decline (UNKNOWN) becomes a plain sentence", st == 200 and data.decode("latin-1").endswith("I don't know that one yet."), repr(data[-60:]))
+    res = {}
+    def slow_t(): res["t"] = req(sport, {"prompt": "SLEEP now"}, timeout=30)
+    t0 = time.time(); th = threading.Thread(target=slow_t); th.start()
+    for _ in range(100):
+        time.sleep(0.05)
+        if any("SLEEP" in str(s[1]) for s in turing_seen): break
+    st2, _ = req(sport, {"prompt": "me too"})
+    check("turing: a second request while one runs -> 429", st2 == 429, str(st2))
+    th.join(30)
+    check("turing: past --timeout -> 504", res.get("t", (0,))[0] == 504 and time.time() - t0 < 8, repr(res.get("t")))
+    check("turing: no claude -p ever ran", len(stub_calls(tmp)) == n_claude, str(len(stub_calls(tmp)) - n_claude))
+    slog.seek(0); check("turing: the log names the backend and never a prompt", "backend turing" in slog.read() and "leave a note" not in open(slog.name).read())
+    dead = socket.socket(); dead.bind(("127.0.0.1", 0)); dport = dead.getsockname()[1]; dead.close()
+    tp3, _, dport2, _ = start_relay(RELAY, tmp, extra_args=("--turing", "http://127.0.0.1:%d" % dport)); procs.append(tp3)
+    st, data = req(dport2, {"prompt": "anyone home"})
+    check("turing down -> 502 with a plain sentence", st == 502 and data == b"Samantha is not running on the relay machine. Start app/serve.py in turing.", repr((st, data)))
+    tp4, _, bport, _ = start_relay(RELAY, tmp, extra_args=("--turing", turl, "--api-key-file", kf, "--allow-api-spend")); procs.append(tp4)
+    st, data = req(bport, {"prompt": "both given"})
+    check("--turing wins over --api-key-file", st == 200 and data.split(b"\n")[1] == b"M Samantha", repr(data[:80]))
+    ts.shutdown(); ts.server_close()
+    for extra in (("--api-key-file", kf), ("--api-key-file", kf, "--turing", turl)):
+        r = subprocess.run([sys.executable, RELAY, "--port", "0", *extra], env={**os.environ, "CLAUDE_RELAY_TOKEN": TOKEN},
+                           capture_output=True, text=True, timeout=10)
+        check("refuses %r without --allow-api-spend" % (extra,), r.returncode != 0 and "--allow-api-spend" in r.stderr and "listening" not in r.stderr, r.stderr[-200:])
+
 
     # discrimination: the same request with the token check removed must get through
     mutant = os.path.join(tmp, "relay_mutant.py")

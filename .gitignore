@@ -58,6 +58,7 @@ arch/arm64/kernel8.img
 arch/arm64/pi-kernel8.elf
 arch/arm64/kernel8.elf
 arch/arm64/keydbg-kernel8.elf
+arch/arm64/hello_c.bin
 arch/arm64/wifi_fw.S
 arch/arm64/bt_fw.S
 arch/arm64/bt_fw.S.tmp

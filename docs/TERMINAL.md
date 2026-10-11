@@ -4,12 +4,14 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 
 **Console: logs only.** Boot messages, Wi-Fi and errors. It has no input row, and typing with it in front does nothing (the key echoes go to the UART only). It opens at boot, because on a Pi with no serial cable it is the only debug view. Page Up, Page Down, Home and End scroll it.
 
-**Terminal: the command line.** Its bottom row names the assistant model that last answered, for example `Claude Haiku 5.5 $`. Type, Backspace, Enter. Every command runs here and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window; side-by-side panes remain future work.
+**Terminal: the command line.** Its bottom row names the assistant model that last answered, for example `Samantha $`. Type, Backspace, Enter. Every command runs here and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window; side-by-side panes remain future work.
 
 | Command | What it does |
 |---|---|
 | `browse URL` | Fetches a page and prints it as text with numbered links |
 | `open N` | Follows link N of the last page |
+| `beep [FREQ MS]` | Plays a tone out of the Pi's 3.5 mm jack |
+| `vol [0-100\|up\|down]` | Shows or sets the master volume (default 70); up and down step by 10 |
 | `llm PROMPT` | Runs the local model, if the image has one |
 | `bt`, `bt scan` | Bluetooth: where the radio is and its version; a 5 second scan listing what it hears ([RASPBERRY-PI.md](RASPBERRY-PI.md#bluetooth)) |
 | anything else | Asks Claude through the relay on the Mac |
@@ -32,6 +34,7 @@ No mouse is needed. The desktop's keys, in `arch/arm64/main.c` (`ui_key`); `tool
 | A letter or digit | With no pane holding the keys, Spotlight with that character already typed |
 | Enter, Space, Tab | With no pane holding the keys and no dock label, Spotlight, empty |
 | F2, Ctrl+T | The Terminal, at once, closing Spotlight if open; it has the keyboard |
+| F11, F12 | Volume down and up by 10 (0 to 100), before any pane. The menu bar says "Volume N" and the speaker clicks. The Mac media keys Volume Down, Volume Up and Mute do the same (Mute toggles 0 and the last level) |
 | F3 | Switch Terminal session when no request is running |
 | Left, Right | With no pane holding the keys, move the dock's label along the tiles |
 | Enter | Open the labelled tile |
