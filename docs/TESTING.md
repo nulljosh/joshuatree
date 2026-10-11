@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (224 checks)
+## The suite (225 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -26,6 +26,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | The landing logo rebuilds byte for byte from tools/gen/logo.py | `tools/checks/logo-check.sh` | once |
 | Landing app tiles are not older than the app code that draws them (source hashes, no QEMU) | `tools/checks/landing-shots-fresh-check.py` | once |
 | The landing demo downloads the kernel once, gzipped | `tools/checks/kernel-gz-check.sh` | once |
+| Samantha box CAD: every fit assert holds (bosses clear the Pi, ports and screen, one-piece shell, the box drops into its stand) and all five files are written; the old stand slot stops it (skips without uv and build123d) | `tools/checks/samantha-box-check.py` | once |
 | Boot check | `check.sh` | retry |
 | DHCP client leases real SLIRP config, DNS+HTTP still work, nodhcp keeps the old fixed path | `tools/checks/dhcp-check.sh` | retry |
 | Benchmarks run and report every number | `tools/checks/bench-check.sh` | retry |
@@ -250,7 +251,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Notes | `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3resize-check.py`, `tools/checks/ring3window-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py`, `tools/checks/ring3window-check.py` |
 | Terminal | `tools/checks/arm64-browser-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
-| Samantha | `tools/checks/arm64-calicon-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
+| Samantha | `tools/checks/arm64-calicon-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-box-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs` |
 | Curbfind | `tools/checks/ring3curbfind-check.py` |
 | Keyrate | `tools/checks/ring3app-check.py` |

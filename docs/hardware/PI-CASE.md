@@ -13,7 +13,7 @@ The port positions come from the Raspberry Pi 4B mechanical drawing, and they ha
 1. Build the files (below).
 2. Print `fit_test.stl`. It is a flat plate with a thin lip the size of the board and four holes.
 3. Drop the Pi in. The board should sit inside the lip and the four mounting holes should line up with the plate's holes.
-4. If it is off by half a millimetre or more, change `BOARD_L`, `BOARD_S` or `HOLES` at the top of `neo_pi_cad.py` and rebuild.
+4. If it is off by half a millimetre or more, change `BOARD_L`, `BOARD_S` or `HOLES` in `pi4b.py` and rebuild. The [Samantha box](SAMANTHA-BOX.md) reads the same file, so it gets the fix too.
 
 The port windows are cut bigger than the connectors on purpose, so small errors still fit. The mounting holes are the part that has to be right.
 

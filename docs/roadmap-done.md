@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.42.1 development branch (2026-10-11)
+
+The Samantha box now goes together: the bezel screws moved to a 9 mm band outside the screen and clear of the Pi and its port windows, the grille stopped cutting its own centre loose, the stand became two cradles the box really drops into, and the fit test is a pocket the screen drops into. Every assert now runs before a file is written, and the Pi 4B numbers live in `docs/hardware/pi4b.py` for both cases. Checked by `tools/checks/samantha-box-check.py`, which builds the CAD and wants the old stand slot to stop it.
+
 ## 2.42.0 development branch (2026-10-11)
 
 The Samantha box: a printable desk case for a 7 inch HDMI screen, a Pi 4B, a round speaker and a mic hole, built by `docs/hardware/samantha_cad.py` with a stand that leans it back and a fit-test frame to print first. The screen, speaker and board numbers are stand-ins until the parts are in hand, and nothing has been printed. Checked by the script's own asserts (the tallest port clears the screen, the Pi stays inside the walls, the speaker leaves the card a channel).
