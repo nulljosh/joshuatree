@@ -103,7 +103,13 @@ static const char shifted[58] = {
 #define KEY_RSHIFT 54
 #define KEY_ESC 1
 
-int ask_char(unsigned code) { return code < 58 ? (shift ? shifted[code] : plain[code]) : 0; }   /* main.c's Calculator: same map, same Shift */
+#define KEY_CAPSLOCK 58
+static int caps;   /* Caps Lock: letters only, and Shift inverts it. No keyboard LED yet. */
+int ask_char(unsigned code) {   /* main.c's Calculator and Spotlight: same map, same Shift, same Caps */
+    if (code >= 58) return 0;
+    int up = plain[code] >= 'a' && plain[code] <= 'z' ? shift != caps : shift;
+    return up ? shifted[code] : plain[code];
+}
 void ask_redraw(void) { con_prompt(ac->line, ac->len); }   /* main.c: the Terminal was reopened, put the line being typed back */
 
 /* One key event from any keyboard. 1 when it is the editor's (the caller then keeps its echo line off the screen). */
@@ -113,11 +119,12 @@ static int is_stop(const char *s, unsigned n) { return n == 4 && s[0] == 's' && 
 int ask_pending(void) { return ac->pending; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
 int ask_key(unsigned code, unsigned value) {
     if (code == KEY_LSHIFT || code == KEY_RSHIFT) { shift = value != 0; return 1; }
+    if (code == KEY_CAPSLOCK) { if (value) caps = !caps; return 1; }   /* one flip per press */
     if (code == KEY_ESC) { if (value && ac->pending) stop_flag = 1; return 0; }
     int typed = code < 58 && plain[code];
     if (!typed && code != KEY_BACKSPACE && code != KEY_ENTER && code != KEY_KPENTER) return 0;
     if (!value) return 1;                      /* key up: nothing to do, but it is still ours */
-    if (typed) { if (ac->len < ASK_MAX) ac->line[ac->len++] = shift ? shifted[code] : plain[code]; }
+    if (typed) { if (ac->len < ASK_MAX) ac->line[ac->len++] = (char)ask_char(code); }
     else if (code == KEY_BACKSPACE) { if (ac->len) ac->len--; }
     else if (ac->len && ac->pending) { if (is_stop(ac->line, ac->len)) { stop_flag = 1; ac->len = 0; } }   /* a question is running: only "stop" counts */
     else if (ac->len) {                            /* Enter: hand the line to ask_poll, outside the input handler */

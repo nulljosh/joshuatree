@@ -35,6 +35,8 @@ No mouse is needed. The desktop's keys, in `arch/arm64/main.c` (`ui_key`); `tool
 | Left, Right | With no pane holding the keys, move the dock's label along the tiles |
 | Enter | Open the labelled tile |
 | Esc | Clear the label; with the Terminal in front, back to the Console. While a question runs it stops the agent instead. With nothing open it does nothing |
+| Caps Lock | Letters come out capital until you press it again, and Shift flips them back; digits and punctuation ignore it. It works in the Terminal, the Calculator and Spotlight. No keyboard light yet |
+| A key held down | A letter, digit, Space or Backspace types again after 400 ms, then every 80 ms, in whatever got the first press, until you let go or press another key. F-keys, Enter, Esc, arrows and Ctrl, Cmd or Alt chords never repeat. A USB keyboard sends a held key once, so `main.c` does the repeating |
 | Page Up, Page Down, Home, End | Scroll the window in front |
 
 Mac-style USB keyboards: Cmd is the GUI modifier (0x08 left, 0x80 right in the boot report). A top row in Mac mode sends F1 and F2 as brightness down and up on a second HID interface; `xhci.c` listens there and turns those into F1 and F2. A keyboard that sends a report ID in front of its report (9 bytes) is read past the ID. `tools/checks/arm64-keydbg-check.py` covers all of it over USB.

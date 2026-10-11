@@ -11,9 +11,15 @@ virtio keyboard, and keys go in through QMP send-key, the path arm64-claude-cons
   4. F2 opens the Terminal at once; Esc back; F1 opens Spotlight and Esc closes it ("spotlight close").
   5. Every Spotlight shortcut toggles it closed and restores the covered pixels exactly. F2 and Ctrl+T also dismiss
      an open Spotlight before giving the Terminal the keyboard.
+  6. Key repeat (main.c key_repeat_tick). A key held with QMP input-send-event for 1.3 s types its character once, then
+     again after 400 ms and every 80 ms: 12 repeats, so 9 to 15 characters in all (8 to 14 repeats), and none after the
+     release. A 100 ms tap types exactly one. It holds in Spotlight, the Terminal's line ("$ jjjj" echoed on Enter) and
+     the Calculator ("calc: 9999 = ..."); Backspace repeats too. The virtio keyboard has no repeat of its own.
+  7. Caps Lock (ask.c): Caps, j, t types "JT"; Shift+j under Caps types "j"; Caps again gives lowercase; Shift alone still
+     capitalises, in Spotlight and on the Terminal's line.
 Every step proves the Terminal is reachable with no mouse. Skips (exit 0) when the tools are missing.
 """
-import json, os, shutil, socket, subprocess, sys, tempfile, time
+import json, os, re, shutil, socket, subprocess, sys, tempfile, time
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."); arch = os.path.join(root, "arch", "arm64")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
@@ -90,7 +96,65 @@ try:
         key("esc")
     step("closing Spotlight puts the desktop back (no accent mark left where the bar was)",
          count(after, (0xb5, 0x50, 0x2c)) <= count(base, (0xb5, 0x50, 0x2c)))
+
+    # ---- 6 and 7: key repeat and Caps Lock ----
+    def hold(qcode, secs):   # send-key taps for only 100 ms; this presses, waits, then releases
+        ev = lambda down: [{"type": "key", "data": {"down": down, "key": {"type": "qcode", "data": qcode}}}]
+        cmd("input-send-event", events=ev(True)); time.sleep(secs); cmd("input-send-event", events=ev(False)); time.sleep(0.3)
+    def fresh(text, *qcodes, tries=30):   # press the keys, then wait for one more `text` line on the UART
+        n = uart().count(text); key(*qcodes); return wait_for(text, tries, n + 1)
+    def spot_text(since):    # Spotlight's text after UART offset `since`: the last "spotlight: TEXT N" line, or None
+        t = re.findall(r"spotlight: (\S*) \d+", uart()[since:]); return t[-1] if t else None
+    def downs(code, since): return len(re.findall(r"key %d down" % code, uart()[since:]))
+    def text_is(since, want):
+        for _ in range(30):
+            if spot_text(since) == want: return True
+            time.sleep(0.1)
+        return False
+    HOLD = 1.3   # 400 ms, then every 80 ms: 12 repeats, so 13 characters; the check allows 8 to 14 repeats, 9 to 15 characters
+    def settled(code, name):   # nothing more arrives once the key is up
+        time.sleep(0.6); mark = len(uart())
+        time.sleep(0.6); step(name, downs(code, mark) == 0 and spot_text(mark) is None, uart()[mark:])
+    fresh("spotlight open", "f1")
+    m = len(uart()); hold("j", HOLD); txt = spot_text(m) or ""
+    step("a held j in Spotlight types j and repeats it 8 to 14 times (9 to 15 j in all; got %d)" % len(txt), set(txt) == {"j"} and 9 <= len(txt) <= 15 and downs(36, m) == len(txt), "%r, %d downs" % (txt, downs(36, m)))
+    settled(36, "no j repeats after the release")
+    hold("j", HOLD); n0 = len(spot_text(m) or "")   # 23 at most: Spotlight's text stops there
+    m = len(uart()); hold("backspace", HOLD); left = spot_text(m) or ""; d = downs(14, m)
+    step("a held Backspace deletes one character, then repeats 8 to 14 times (9 to 15 in all; got %d)" % d, 9 <= d <= 15 and len(left) == n0 - d, "%d downs, %d chars before, %d after" % (d, n0, len(left)))
+    key("esc"); fresh("spotlight open", "f1")
+    m = len(uart()); key("j"); time.sleep(0.8)
+    step("a short tap types exactly one j", spot_text(m) == "j" and downs(36, m) == 1, "%r, %d downs" % (spot_text(m), downs(36, m)))
+    key("esc"); fresh("spotlight open", "f1")
+    m = len(uart()); key("caps_lock"); key("j"); key("t")
+    step("Caps Lock, j, t types JT", text_is(m, "JT"), repr(spot_text(m)))
+    key("shift", "j")
+    step("Shift+j under Caps Lock types a lowercase j", text_is(m, "JTj"), repr(spot_text(m)))
+    key("caps_lock"); key("j"); key("t")
+    step("Caps Lock again gives lowercase", text_is(m, "JTjjt"), repr(spot_text(m)))
+    key("shift", "j")
+    step("Shift alone still capitalises", text_is(m, "JTjjtJ"), repr(spot_text(m)))
+    key("esc")
+    # the Terminal's line is read back from the UART when Enter sends it ("Claude ... $ jjjj")
+    def sent(since):
+        s = re.findall(r"\$ (\w+)", uart()[since:]); return s[0] if s else None
+    def answered(since, name):   # the question went to ask.c's relay path and came back; then the prompt takes the next line
+        step(name, wait_for("claude:", 150, uart()[:since].count("claude:") + 1), uart()[since:]); time.sleep(0.5)
+    fresh("terminal open", "f2")
+    m = len(uart()); key("caps_lock"); key("j"); key("t"); key("shift", "j"); key("ret"); time.sleep(0.5)
+    step("the Terminal's line follows Caps Lock and Shift: JTj", sent(m) == "JTj", repr(sent(m)))
+    answered(m, "that question is answered"); key("caps_lock")
+    m = len(uart()); hold("j", HOLD); key("ret"); time.sleep(0.5); line = sent(m) or ""
+    step("a held j on the Terminal's line repeats there too (9 to 15 j; got %d)" % len(line), set(line) == {"j"} and 9 <= len(line) <= 15, repr(line))
+    answered(m, "that question is answered too"); key("esc")
+    fresh("spotlight open", "f1")
+    for c in "apps": key(c)
+    done = expect("calc open", "Enter opens the Calculator"); key("ret"); done()
+    m = len(uart()); hold("9", HOLD); key("ret"); time.sleep(0.5)
+    sums = re.findall(r"calc: (9+) =", uart()[m:]); s = sums[0] if sums else ""
+    step("a held 9 in the Calculator repeats there too (9 to 15 nines; got %d)" % len(s), 9 <= len(s) <= 15, repr(s))
+    key("esc")
 finally:
     q.kill(); q.wait(); shutil.rmtree(tmp, ignore_errors=True)
 if fails: print("FAIL: " + "; ".join(fails)); sys.exit(1)
-print("PASS: arm64-keys-check: Spotlight, dock keys, F2 and Esc reach the Terminal with no mouse")
+print("PASS: arm64-keys-check: Spotlight, dock keys, F2 and Esc reach the Terminal with no mouse; held keys repeat; Caps Lock")

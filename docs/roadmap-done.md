@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.52.0 development branch (2026-10-11)
+
+Caps Lock and key repeat on ARM. Caps Lock capitalises letters and Shift flips it, in the Terminal, the Calculator and Spotlight (Shift now reaches Spotlight too). A held typed key or Backspace types again after 400 ms and every 80 ms, where the first press went, until the release or another key. Before, Caps Lock did nothing and holding Backspace deleted one character: the USB keyboard sends a held key once. Check: `tools/checks/arm64-keys-check.py` holds keys with QMP and counts the repeats; `arm64-keydbg-check.py` does it over USB. Needs a real keyboard on the board; the Caps light stays off for now.
+
 ## 2.44.0 development branch (2026-10-11)
 
 Spotlight opens only on F1 or Cmd+Space, like a Mac. A bare Space, Enter or Tab on the desktop and Ctrl or Alt+Space do nothing now (Joshua hit Space on the board). A letter still opens it with that letter typed. Checks: `tools/checks/arm64-keys-check.py` and `arm64-keydbg-check.py` press Space and Ctrl+Space and expect nothing.
