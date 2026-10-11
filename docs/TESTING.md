@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (223 checks)
+## The suite (224 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -157,6 +157,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Asking Samantha for the weather fetches it, no "open Weather first" | `tools/checks/samweather-check.py` | retry |
 | Boot logo AA (no false interior seams at overlapping capsule joints) | `tools/checks/bootlogo-check.py` | retry |
 | Boot splash draws the real landing/logo.svg mark, not the old stick tree | `tools/checks/bootmark-check.py` | retry |
+| Boot splash draws the tree on stroke by stroke, never pops in whole | `tools/checks/bootanim-check.py` | retry |
 | Landing eyebrow tracks roadmap Latest, H1 stays the brand line | `tools/checks/landing-headline-check.sh` | once |
 | Idle tour still cycles all 8 real dock apps | `tools/checks/tourappcount-check.mjs` | once |
 | Idle tour autoplay fix is in place (tourArmed reset) | `tools/checks/idletour-arm-reset-check.mjs` | once |

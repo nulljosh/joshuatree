@@ -4648,7 +4648,10 @@ static int gui_multiwin_key_nonblock(void){
    its rasterized 8-bit coverage; blended at PHYSICAL resolution via
    window_pixel_phys, the same pattern gui_aa_char uses for text. cx,cy are
    LOGICAL center coords, converted to physical here. */
-static void gui_blend_cov(const unsigned char *cov, int cw, int ch, int cx, int cy, int size, unsigned int ink){
+static void gui_blend_cov(const unsigned char *cov, int cw, int ch, int cx, int cy, int size, unsigned int ink,
+                          const unsigned char *rev, int lo, int hi){
+    /* rev (boot_mark_rev) is the draw-on map: only pixels whose first frame is in (lo, hi] are blended, so the
+       splash paints each pixel once as the pen reaches it. NULL draws everything. */
     int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
     int T = size * sc; /* box-filtered from the stored coverage; T == the stored size is a straight copy */
     int ox = cx * sc - T / 2, oy = cy * sc - T / 2;
@@ -4661,6 +4664,11 @@ static void gui_blend_cov(const unsigned char *cov, int cw, int ch, int cx, int 
             for (int yy = r0; yy < r1; yy++) for (int xx = c0; xx < c1; xx++) sum += cov[yy * cw + xx];
             int a = sum / n;
             if (!a) continue;
+            if (rev) { /* a scaled pixel appears with the earliest source pixel under it */
+                int t = 0;
+                for (int yy = r0; yy < r1; yy++) for (int xx = c0; xx < c1; xx++){ int v = rev[yy * cw + xx]; if (v && (!t || v < t)) t = v; }
+                if (t <= lo || t > hi) continue;
+            }
             int x = ox + col, y = oy + row;
             unsigned int d = window_get_pixel_phys(x, y);
             unsigned int r = (((ink >> 16) & 0xFF) * a + ((d >> 16) & 0xFF) * (255 - a)) / 255;
@@ -4673,34 +4681,42 @@ static void gui_blend_cov(const unsigned char *cov, int cw, int ch, int cx, int 
 /* 2.25: small sizes (menu bar, About) take the bold copy, the tree drawn down its middle; the splash's thin
    one-line copy would fade to a grey smudge at 20 px. */
 static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink){
-    if (size <= 48) gui_blend_cov(menu_mark_cov, MENU_MARK_W, MENU_MARK_H, cx, cy, size, ink);
-    else gui_blend_cov(boot_mark_cov, BOOT_MARK_W, BOOT_MARK_H, cx, cy, size, ink);
+    if (size <= 48) gui_blend_cov(menu_mark_cov, MENU_MARK_W, MENU_MARK_H, cx, cy, size, ink, 0, 0, 0);
+    else gui_blend_cov(boot_mark_cov, BOOT_MARK_W, BOOT_MARK_H, cx, cy, size, ink, 0, 0, 0);
 }
-static void gui_draw_boot_mark(int cx, int cy, unsigned int ink){
+/* Draws the splash mark's pixels first shown in steps (lo, hi] of the draw-on. */
+static void gui_draw_boot_mark_steps(int cx, int cy, unsigned int ink, int lo, int hi){
     int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
-    gui_draw_mark_sized(cx, cy, BOOT_MARK_W / sc, ink);
+    gui_blend_cov(boot_mark_cov, BOOT_MARK_W, BOOT_MARK_H, cx, cy, BOOT_MARK_W / sc, ink, boot_mark_rev, lo, hi);
 }
 
+/* 2.41: the splash draws the tree on, trunk first and spikes last, the way a pen would, over BOOT_DRAW_TICKS,
+   then the bar fills over BOOT_BAR_TICKS (the old 1.0 s splash plus 0.2 s). The pen eases out (fast then slow),
+   and each frame blends only the pixels it newly reaches, so there is no per-frame clear. */
+#define BOOT_DRAW_TICKS 80
+#define BOOT_BAR_TICKS  40
 static void gui_draw_boot_screen(void){
     unsigned int bg = 0x00000000; /* pure black boot background, direct request */
     window_clear(bg);
     int cx = (int)window_width() / 2, cy = (int)window_height() / 2; /* v45.2: centred on the real window; 400 was the 800-wide centre and sat left of centre at 960 */
-    gui_draw_boot_mark(cx, cy - 10, 0x00FFFFFF); /* v1.6.20: the real landing/logo.svg brand mark, replacing the old stick-tree gui_draw_logo primitive here -- white ink to match the plain-black boot screen, same as the primitive it replaces */
 
     unsigned int start = ticks();
-    unsigned int logo_only = 60; /* 0.6s: just the logo and wordmark, no bar yet */
-    unsigned int bar_span  = 40; /* 0.4s: bar fills once shown, ~1s total */
     int bar_w = 160, bar_h = 6, bar_x = (int)window_width() / 2 - bar_w / 2, bar_y = (int)window_height() / 2 + 70;
-    int bar_track_drawn = 0;
+    int bar_track_drawn = 0, drawn = 0;
     for (;;) {
         unsigned int elapsed = ticks() - start;
-        if (elapsed >= logo_only) {
+        unsigned int p = elapsed >= BOOT_DRAW_TICKS ? 1000 : elapsed * 1000 / BOOT_DRAW_TICKS; /* 0..1000 */
+        int step = (int)((2 * p - p * p / 1000) * BOOT_MARK_STEPS / 1000); /* quadratic ease-out */
+        if (step > drawn) { /* v1.6.20: the real landing/logo.svg mark, white ink on the plain black screen */
+            gui_draw_boot_mark_steps(cx, cy - 10, 0x00FFFFFF, drawn, step); drawn = step;
+        }
+        if (elapsed >= BOOT_DRAW_TICKS) {
             if (!bar_track_drawn) { window_rect(bar_x, bar_y, bar_w, bar_h, gui_blend(bg, 0x00FFFFFF)); bar_track_drawn = 1; }
-            unsigned int since_bar = elapsed - logo_only;
-            int fill = since_bar >= bar_span ? bar_w : (int)(bar_w * since_bar / bar_span);
+            unsigned int since_bar = elapsed - BOOT_DRAW_TICKS;
+            int fill = since_bar >= BOOT_BAR_TICKS ? bar_w : (int)(bar_w * since_bar / BOOT_BAR_TICKS);
             window_rect(bar_x, bar_y, fill, bar_h, 0x00FFFFFF); /* v0.76.48: was the same hardcoded maroon as the old logo, direct report, white to match the boot screen */
         }
-        if (elapsed >= logo_only + bar_span) break;
+        if (elapsed >= BOOT_DRAW_TICKS + BOOT_BAR_TICKS) break;
         window_present(); __asm__ volatile ("hlt");
     }
 }

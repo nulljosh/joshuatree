@@ -1,29 +1,27 @@
-# Joshua Tree handoff (2026-10-10)
+# Joshua Tree handoff (2026-10-11)
 
 ## Current task
 
-The combined release is PR #502, feat/shell-wc, version 2.40.0. It contains every remote work branch: #478 and #491–501, plus the fresh-boot wc utility and supported integer formatting. The strict ARM dock-art check now derives Apps and Trash slots from APPS[] rather than stale numbers.
+The 2.40.0 combined release (#502) is merged and every branch it carried is deleted. The loop's goal, set by Joshua on 2026-10-11: all PRs safely merged, zero GitHub issues, no stale branches, and a clean repo and folder layout with no loose files or folders. Joshua authorised merging PRs that pass their gates for this loop.
 
-Joshua explicitly authorized safe merge, release, deployment, X announcement and avatar update. Merge only after the full gates pass. Close superseded PRs and delete their remote branches only after their contents are confirmed in main. Preserve unrelated local worktrees and untracked work.
+Open now: the boot animation on `feat/boot-draw-animation` (2.41.0, not yet pushed: the splash draws the tree on over 0.8 s, `tools/checks/bootanim-check.py` proves it). Its full `tools/ci-local.sh` run was still going. When it passes, commit, open a draft PR, mark it ready, and merge once GitHub is green. PR #503 (`feat/pi-screen-sleep`) belongs to another session; leave it unless Joshua says otherwise.
 
-## Validation
+## Loop checklist
 
-The repaired ARM desktop check passes on virt, Pi 1080p and Pi 4K. The wc shell regression proves fresh-boot availability, a missing-file error, exact 1-line/2-word/12-byte counts, and existing hello/note/unknown-command behavior. Unsupported %ld output failed before the fix. Build, boot, references and pre-push checks pass. A fresh desktop screenshot was inspected.
+1. Push the boot animation, open the PR as a draft, run `tools/ci-local.sh`, then `gh pr ready` and merge on green.
+2. Fast-forward local `main` to `origin/main`.
+3. Branches: keep `main`, `feat/pi-screen-sleep` (open PR) and `fix/ci-preflight-affinity` (its worktree in `~/Documents/Codex/.../pi-security` has one unsaved change; ask before touching it). Delete any other branch once its PR is merged on GitHub.
+4. Issues: zero open now. Keep it that way; fix a real bug instead of mirroring it into an issue.
+5. Layout: audit the repo root for loose files and the folder above it for stray `jt-*` checkouts. Move or delete only what is untracked or ignored build output. Run `bash tools/checks/check-refs.sh` after any move.
 
-Full local gate: work/ci-final-2.40.0.log. GitHub run: 38114771523. Both verify code head 02d39cd; this subsequent update changes only markdown. Their final results belong in PR #502, not a claim made before they finish. The older local and GitHub CI runs were deliberately cancelled when this combined candidate superseded them.
+## Usage
 
-## Goal and usage
-
-Finish the CI repair and one additional small roadmap task, then safely merge and release the finished batch, remove superseded branches and leave GitHub green with zero open issues. Check usage between tasks and stop at 10% five-hour remaining. Last snapshot: 86% remaining. No paid model calls, reset credits or hardware flashing.
-
-## PRs
-
-#478 is the older Mines app. #491 is RNG/Terminal/Calendar (2.34.0, physically booted). #492 is readable Calendar/Clock/Samantha launch (2.35.0). #493 is CI preflight/affinity (2.35.1). #494 is power controls (2.36.0). #495 is Brick (2.37.0). #496 is app text and captures (2.37.1, head 14bca641). #497 is notifications (2.38.0, head 5df7be78). #498 is ISO links/packaging (2.38.1, head d75ab5c). The candidate contains all their code; do not close them until an approved candidate merge actually supersedes them.
+Check `~/.claude/scripts/usage.sh` between tasks. At 5 to 10 percent remaining, run `/checkpoint` and stop. Last snapshot: session 3 percent, weekly 1 percent used.
 
 ## Physical and release limits
 
-Only 2.34.0 was flashed, hash-verified and ejected. Joshua confirmed boot and Spotlight opening Terminal. Clock/icon, power controls, Brick, notices, mouse, RNG and Samantha still need the board pass. ISO is for BIOS PCs, not the Pi card; UEFI and real PC boot remain unverified. Latest published 2.33.5 has a versioned ISO only; the stable alias becomes available when the new release workflow runs.
+Only 2.34.0 was flashed, hash-verified and ejected. Joshua confirmed boot and Spotlight opening Terminal. Clock/icon, power controls, Brick, notices, mouse, RNG and Samantha still need the board pass. ISO is for BIOS PCs, not the Pi card; UEFI and real PC boot remain unverified.
 
 Clock bootstrap still uses build time. Conversations reset on reboot. Pi SD saving, local weights from card and fallback updates remain open. Card backups and dev images contain credentials; never commit or copy them to outputs.
 
-The Mac TLS relay must be checked using docs/RELAY-TLS.md before a board Samantha test. Credentials stay in their existing private files. Codex relay implementation is still blocked on specific repository-egress approval after automatic review rejected it; no backend exists. No user answer granted that approval.
+The Mac TLS relay must be checked using docs/RELAY-TLS.md before a board Samantha test. Credentials stay in their existing private files.
