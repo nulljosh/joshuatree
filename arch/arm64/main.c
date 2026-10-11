@@ -1220,11 +1220,13 @@ static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hov
 #ifdef PI_BUILD
 #include "power.h"
 #endif
+int volume_key(unsigned code);   /* cmd.c: F11 and F12, Volume Down, Up and Mute */
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
     int chord = ctrl_held || gui_held || alt_held;
 #ifdef PI_BUILD
     if (power_key(code)) return 1;
 #endif
+    if (volume_key(code)) return 1;   /* before Spotlight and every pane, like the Spotlight shortcut */
     if (code == 59 || (chord && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1, Cmd/Ctrl/Alt+Space toggle */
     if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); calc_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T */
     if (spot_live) return spot_key(code);
@@ -1342,6 +1344,11 @@ static void key_selftest(void) {
     uart_puts("keytest: media esc\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
     uart_puts("keytest: media f2\n"); hid_media(br_up, 3);
     uart_puts("keytest: media esc2\n"); hid_kbd(esc, 8, last); hid_kbd(none, 8, last);
+    static const unsigned char vol_dn[3] = { 3, 0xEA, 0 }, vol_up[3] = { 3, 0xE9, 0 }, vol_mute[3] = { 3, 0xE2, 0 };
+    uart_puts("keytest: media vol down\n"); hid_media(vol_dn, 3);
+    uart_puts("keytest: media vol up\n"); hid_media(vol_up, 3);
+    uart_puts("keytest: media mute\n"); hid_media(vol_mute, 3);
+    uart_puts("keytest: media unmute\n"); hid_media(vol_mute, 3);
     uart_puts("keytest: done\n");
 }
 #endif

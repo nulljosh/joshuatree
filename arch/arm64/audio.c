@@ -28,6 +28,12 @@ static short ring[RING_FRAMES * 2];
 static unsigned ring_head, ring_tail, ring_count;   /* frames */
 static unsigned sum_hash;                           /* FNV-1a over every sample pushed, low byte first */
 static unsigned sum_frames, drained, range;
+static unsigned sum_abs;                            /* sum of |sample| over every sample pushed (wraps at 2^32): halves when the volume halves */
+static int volume = AUDIO_DEFAULT_VOLUME, last_volume = AUDIO_DEFAULT_VOLUME;   /* percent; last_volume is the level mute returns to */
+
+int audio_volume(void) { return volume; }
+void audio_set_volume(int percent) { volume = percent < 0 ? 0 : percent > 100 ? 100 : percent; if (volume) last_volume = volume; }
+int audio_mute(void) { audio_set_volume(volume ? 0 : last_volume); return volume; }
 
 static void put_str(const char *s) { kputs(s); }
 static void put_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (char)('0' + v % 10); while (v /= 10); kputs(t + n); }
@@ -38,7 +44,10 @@ static void hash_short(short s) {
     sum_hash = (sum_hash ^ ((unsigned)s & 0xFF)) * 16777619u;
     sum_hash = (sum_hash ^ ((unsigned)s >> 8 & 0xFF)) * 16777619u;
 }
+static short scale(short s) { return (short)((int)s * volume / 100); }   /* toward zero, never past the input: the PWM range cannot be exceeded */
 static void ring_push(short l, short r) {
+    l = scale(l); r = scale(r);
+    sum_abs += (unsigned)(l < 0 ? -l : l) + (unsigned)(r < 0 ? -r : r);
     ring[ring_head * 2] = l; ring[ring_head * 2 + 1] = r;
     ring_head = (ring_head + 1) % RING_FRAMES; ring_count++;
     hash_short(l); hash_short(r); sum_frames++;
@@ -95,7 +104,7 @@ static int drain(void) {   /* the ring into the sink, a frame at a time */
 static int stream(const short *src, int frames, int rate, int freq) {
     unsigned phase = 0, step = freq ? (unsigned)(((unsigned long)freq << 32) / (unsigned)rate) : 0;
     int bad = 0;
-    ring_head = ring_tail = ring_count = 0; sum_hash = 2166136261u; sum_frames = drained = 0;
+    ring_head = ring_tail = ring_count = 0; sum_hash = 2166136261u; sum_abs = 0; sum_frames = drained = 0;
     range = 27000000u / (unsigned)rate;
     if (hw_open()) { hw_close(); return -1; }
     for (int i = 0; i < frames && !bad; ) {
@@ -114,7 +123,8 @@ static int stream(const short *src, int frames, int rate, int freq) {
     }
     if (!bad && hw_finish()) bad = -1;
     hw_close();
-    put_str("audio: "); put_dec(sum_frames); put_str(" frames, ring sum 0x"); put_hex(sum_hash); put_str("\n");
+    put_str("audio: "); put_dec(sum_frames); put_str(" frames, ring sum 0x"); put_hex(sum_hash);
+    put_str(", abs "); put_dec(sum_abs); put_str(", volume "); put_dec((unsigned)volume); put_str("\n");
     if (bad) return -1;
 #ifndef PI_BUILD
     fail("no PWM on this machine, samples went nowhere");
