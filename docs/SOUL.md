@@ -1,6 +1,6 @@
 # Soul
 
-The two ideas under every decision here, and where each one shows up in the software. Joshua set them on 2026-10-07. They are not slogans for a landing page; they are the tie-breaker when two designs both work.
+The two ideas under every decision here, and where each one shows up in the software. Joshua set them on 2026-10-07 and this page was reread on 2026-10-11, on the road to 3.0. They are not slogans for a landing page; they are the tie-breaker when two designs both work.
 
 ## The pro and the rebel
 
@@ -21,6 +21,7 @@ Steve Jobs was both at once: the professional who shipped finished things, and t
 - Claude lives inside it and can rebuild it from the inside. No other OS invites that.
 - The logo is a marker scribble, not a corporate mark.
 - When the industry says "you need a cloud for that", the answer is a 595 KB firmware upload done by hand over a serial line.
+- 3.0 is the proof: the same desktop on a real Pi 4 with nothing underneath, in a case we print ourselves.
 
 ## Seduce, ignore, vilify
 
