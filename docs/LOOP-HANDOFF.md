@@ -1,29 +1,19 @@
 # Joshua Tree handoff (2026-10-10)
 
+## Released
+
+2.40.0 merged in PR #502 as 264c01d9. Full local gate: 223 checks plus four demos, all passed. Final GitHub run 38116180960 passed; release 38117167441 and deploy 38117167431 passed. Live Chromium/WebKit phone/desktop light/dark QA, signup, browser boot and actual wc counts passed. Stable ISO download matches SHA-256 4cabd69fdb9c55b2c28dcbcb9da244b328cf129a8ca47183df1aee158ee6f137. All superseded PRs closed; only main remained on the remote. No open GitHub issues.
+
 ## Current task
 
-The combined release is PR #502, feat/shell-wc, version 2.40.0. It contains every remote work branch: #478 and #491–501, plus the fresh-boot wc utility and supported integer formatting. The strict ARM dock-art check now derives Apps and Trash slots from APPS[] rather than stale numbers.
+Joshua requested one more roadmap feature before flashing tomorrow. Branch feat/pi-screen-sleep, 2.41.0: HDMI blank after five idle minutes, keyboard/mouse wake, active Brick and assistant requests stay awake. USB, apps and networking continue. Focused host timing, wrap, mailbox refusal, broken-wake control and raspi4b mailbox/input checks pass. QEMU acknowledges blanking but does not hide pixels; physical HDMI sleep/wake still needs the board. Run the required full local gate before readying the draft PR; review final GitHub checks before merge. Prior authorization covers safely merging and releasing finished work.
 
-Joshua explicitly authorized safe merge, release, deployment, X announcement and avatar update. Merge only after the full gates pass. Close superseded PRs and delete their remote branches only after their contents are confirmed in main. Preserve unrelated local worktrees and untracked work.
+## Limits and next board pass
 
-## Validation
+The card has not been flashed since 2.34.0. Tomorrow check the new Calendar date, Clock, Samantha, Brick, notices, power controls and screen sleep, plus wired mouse and Wi-Fi/HTTPS. The ISO is for BIOS PCs, not the Pi card. Physical PC/UEFI boot remains unverified.
 
-The repaired ARM desktop check passes on virt, Pi 1080p and Pi 4K. The wc shell regression proves fresh-boot availability, a missing-file error, exact 1-line/2-word/12-byte counts, and existing hello/note/unknown-command behavior. Unsupported %ld output failed before the fix. Build, boot, references and pre-push checks pass. A fresh desktop screenshot was inspected.
+Clock bootstrap still uses build time. Conversations reset on reboot. SD saving, local weights from card and fallback updates remain open. Card backups and dev images contain credentials; never publish them. Verify the private TLS relay using docs/RELAY-TLS.md before a board Samantha test.
 
-Full local gate: work/ci-final-2.40.0.log. GitHub run: 38114771523. Both verify code head 02d39cd; this subsequent update changes only markdown. Their final results belong in PR #502, not a claim made before they finish. The older local and GitHub CI runs were deliberately cancelled when this combined candidate superseded them.
+Codex relay backend does not exist; automatic review previously rejected repository egress without specific approval. No later answer approved that access. Preserve unrelated local worktrees and untracked plans.
 
-## Goal and usage
-
-Finish the CI repair and one additional small roadmap task, then safely merge and release the finished batch, remove superseded branches and leave GitHub green with zero open issues. Check usage between tasks and stop at 10% five-hour remaining. Last snapshot: 86% remaining. No paid model calls, reset credits or hardware flashing.
-
-## PRs
-
-#478 is the older Mines app. #491 is RNG/Terminal/Calendar (2.34.0, physically booted). #492 is readable Calendar/Clock/Samantha launch (2.35.0). #493 is CI preflight/affinity (2.35.1). #494 is power controls (2.36.0). #495 is Brick (2.37.0). #496 is app text and captures (2.37.1, head 14bca641). #497 is notifications (2.38.0, head 5df7be78). #498 is ISO links/packaging (2.38.1, head d75ab5c). The candidate contains all their code; do not close them until an approved candidate merge actually supersedes them.
-
-## Physical and release limits
-
-Only 2.34.0 was flashed, hash-verified and ejected. Joshua confirmed boot and Spotlight opening Terminal. Clock/icon, power controls, Brick, notices, mouse, RNG and Samantha still need the board pass. ISO is for BIOS PCs, not the Pi card; UEFI and real PC boot remain unverified. Latest published 2.33.5 has a versioned ISO only; the stable alias becomes available when the new release workflow runs.
-
-Clock bootstrap still uses build time. Conversations reset on reboot. Pi SD saving, local weights from card and fallback updates remain open. Card backups and dev images contain credentials; never commit or copy them to outputs.
-
-The Mac TLS relay must be checked using docs/RELAY-TLS.md before a board Samantha test. Credentials stay in their existing private files. Codex relay implementation is still blocked on specific repository-egress approval after automatic review rejected it; no backend exists. No user answer granted that approval.
+Check usage between tasks and stop at 10% five-hour remaining. No paid model calls, reset credits or hardware flashing. Last snapshot: 41% remaining, before screen-sleep work.

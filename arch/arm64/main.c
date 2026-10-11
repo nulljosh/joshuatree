@@ -459,6 +459,11 @@ int mbox_notify_xhci_reset(unsigned dev_addr) {
     for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
     return mbox_call();
 }
+static int screen_blank(unsigned blank) {
+    unsigned m[] = { 7 * 4, 0, 0x40002, 4, 0, blank, 0 };
+    for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
+    return mbox_call() && mbox[4] == 0x80000004u && (mbox[5] & 1u) == blank;
+}
 #endif
 static void fb_rect(int x, int y, int w, int h, unsigned c) {
     if (fb_swap) c = (c & 0xFF00FF00u) | (c >> 16 & 0xFF) | (c & 0xFF) << 16;
@@ -1599,7 +1604,13 @@ struct input_event { unsigned short type, code; unsigned value; };
 int ask_key(unsigned code, unsigned value);   /* ask.c: the prompt's line editor */
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 void ask_poll(void);
+#ifdef PI_BUILD
+#include "screen_idle.h"
+#endif
 static void input_event(struct input_event e) {
+#ifdef PI_BUILD
+    if (e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) screen_activity();
+#endif
     if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                   /* BTN_LEFT, RIGHT, MIDDLE */
         con_quiet = 1;   /* the UART only */
         uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
@@ -1954,6 +1965,16 @@ void main(void) {
 #ifdef KEY_SELFTEST
     key_selftest();
 #endif
+#ifdef PI_BUILD
+    screen_last = notice_now();
+#ifdef SCREEN_SELFTEST
+    screen_last -= SCREEN_IDLE_CS; screen_tick();
+    kinput(1, 42, 1); kinput(1, 42, 0);
+    screen_last -= SCREEN_IDLE_CS; screen_tick();
+    kinput(2, 0, 1); kinput(0, 0, 0);
+    uart_puts("screen: input selftest done\n");
+#endif
+#endif
     if (usb_ok || inputs) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
@@ -1963,7 +1984,7 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); ask_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); ask_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); screen_tick(); }   /* only the display sleeps: USB stays polled */
 #else
         for (;;) {
             if (usb_ok || brick_live || notice.text[0]) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
