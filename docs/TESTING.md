@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (230 checks)
+## The suite (231 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -227,6 +227,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | ARM64 Wi-Fi WPA2: wpa.h SHA-1, HMAC, the pairwise-key PRF and AES key unwrap match the RFC vectors | `tools/checks/wpa-test.c` | retry |
 | ARM64 M4 Wi-Fi: the Pi image powers the chip, finds no SDIO card under QEMU, prints wifi FAIL cmd5 and the boot carries on, with and without the firmware files (skips where the tools are missing) | `tools/checks/arm64-wifi-check.py` | retry |
 | ARM64 Bluetooth BT1: HCI over a second UART against a fake controller: the patch records in file order, version, baud, LE Meta on, an active scan listing the mouse by its scan-response name, and a silent or out-of-order radio ends in one plain line with the kernel up (skips where the tools are missing) | `tools/checks/arm64-bt-check.py` | retry |
+| ARM64 M4 SD card: the Pi image reads a FAT32 SDHC card through EMMC2 at 0xFE340000 under QEMU, ls lists the root through a two-cluster chain, cat prints config.txt and the first 4 KB of a file, reads past the partition and the card are refused, and with no card it prints sd no card and boots on (skips where the tools are missing) | `tools/checks/arm64-sd-check.py` | retry |
 | ARM64 M4 USB: the aarch64 kernel finds an xHCI controller behind a PCIe root port, enumerates a hub, a keyboard behind it and a mouse, and reads key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-usb-check.py` | retry |
 | ARM64 mouse: a USB mouse behind a hub moves the shared arrow over the ARM desktop, the dock label follows it and leaves no ghost, the Console's close button and a dock click work, a hot-plugged mouse moves it, and the scale-2 arrow at 1080p (skips where the tools are missing) | `tools/checks/arm64-mouse-check.py` | retry |
 | ARM64 focus: with the Terminal and the Calculator both open, a click focuses one and typed keys land only in it (the sum in the Calculator, digits on the Terminal's prompt row), the clicked window comes to the front, and closing the Calculator puts the wallpaper back (skips where the tools are missing) | `tools/checks/arm64-focus-check.py` | retry |
