@@ -1,5 +1,8 @@
 # Joshua Tree roadmap: done
 
+## 2.60.0 development branch (2026-10-11)
+
+The 3.0 mark, option A from Joshua's contact sheet: the crayon tree with steadier, heavier lines, denser tufts and a terracotta ground, the one accent. `tools/gen/logo.py` writes every SVG, the PNGs and the README copies are regenerated, and the kernel blends the ground in terracotta on the splash (drawn last), the menu bar and About. Checks: `logo-check.sh`, `bootanim-check.py` (ground last) and `bootlogo-check.py` (ground in the menu bar).
 ## 2.45.0 development branch (2026-10-11)
 
 The Mac relay can speak for Samantha. `POST /api/tts` takes text and returns raw 16-bit mono PCM at 22050 Hz from ElevenLabs. The key sits in a private file on the Mac and never leaves it. A per-request cap (400) and a per-day cap (5000), kept in a file across restarts, refuse before ElevenLabs is called. Pi playback is a separate open line. Check: `tools/checks/relay-tts-check.py`.

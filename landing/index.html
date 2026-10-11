@@ -487,7 +487,8 @@
   .hero-logo { display: block; width: 96px; height: 96px; margin: 0 auto; }
   .closing-name { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; text-align: center; text-wrap: balance; }
   .seal { display: block; width: 120px; height: 120px; margin: 0 auto 8px; }
-  @media (prefers-color-scheme: dark) { .hero-logo, .seal { filter: invert(0.93); } }
+  /* 3.0: the hue turn puts the inverted terracotta ground back to terracotta (about #de8869, next to the dark --accent); invert alone made it teal. */
+  @media (prefers-color-scheme: dark) { .hero-logo, .seal { filter: invert(0.93) hue-rotate(180deg); } }
   .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .plate-cap a#desktop-boot-link { color: var(--accent2); text-decoration: none; font-weight: 600; }
   .plate-cap a#desktop-boot-link:hover { text-decoration: underline; }
@@ -623,7 +624,7 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">31</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">2.45.0</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">2.60.0</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
@@ -885,7 +886,7 @@
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.45.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.60.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"></div>
 </footer>

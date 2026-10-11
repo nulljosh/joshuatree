@@ -8,6 +8,10 @@ It never shows a pixel. The desktop is laid out at `DESKTOP = 960x540` and drawn
 
 It never draws an emoji. UI text covers `UI_GLYPH_RANGE = 32-126`, plain ASCII, plus the degree sign. It never shows purple or teal in an icon or in the window chrome, and never puts a border, stripe or card edge on something just to decorate it. Super simple wins: one window frame, one dock, one light.
 
+## Brand mark
+
+The 3.0 mark is one Joshua tree drawn in crayon: steady ink lines for a leaning trunk that swells where the marker pressed, three arms ending in dense looping tufts with paper showing through, and a light grain. The ground under it is a single terracotta stroke, the mark's only colour, kept in the bold copy that carries it from 16 to 48 px; every copy comes from `tools/gen/logo.py`.
+
 ## Icons
 
 Every icon is one picture on one tile. The tile is a superellipse, `SQUIRCLE_N = 4.8`, over the whole 128 unit canvas, and an icon's edge must land within `TOL_SQUIRCLE = 1.0` unit of that curve at every angle, with a soft anti-aliased edge. A plain rounded rectangle fails.
@@ -50,7 +54,7 @@ The Launchpad is `APPS_COLS = 5` columns of icons at most `APPS_TILE = 56` pixel
 
 ## Motion
 
-The shell barely moves. The one exception is the boot splash: the tree is drawn on, trunk first and spikes last, over `BOOT_DRAW = 0.8 s`, with the pen easing out, and the progress bar fills after it. Windows do not animate open, close or snap. The dock only shows its label. What moves is Samantha's captions, on a clock of `TICK_HZ = 100` ticks a second. A new line rises into place over `CAP_IN = 0.28 s`, easing out as a square (`CAP_EASE = quadratic out`). Up to `CAP_SHOW = 3` lines show at once, each older one dimmer. When the talk has been quiet for `CAP_QUIET = 4 s` the whole stack fades together over `CAP_OUT = 0.6 s`. Her caption backdrop is black at `CAP_ALPHA = 150` out of 256.
+The shell barely moves. The one exception is the boot splash: the tree is drawn on, trunk first and the terracotta ground last, over `BOOT_DRAW = 0.8 s`, with the pen easing out, and the progress bar fills after it. Windows do not animate open, close or snap. The dock only shows its label. What moves is Samantha's captions, on a clock of `TICK_HZ = 100` ticks a second. A new line rises into place over `CAP_IN = 0.28 s`, easing out as a square (`CAP_EASE = quadratic out`). Up to `CAP_SHOW = 3` lines show at once, each older one dimmer. When the talk has been quiet for `CAP_QUIET = 4 s` the whole stack fades together over `CAP_OUT = 0.6 s`. Her caption backdrop is black at `CAP_ALPHA = 150` out of 256.
 
 Apps move only when the movement is the app: Windgate's breathing circle, Samantha's mouth. The tree photo wallpaper sways in the wind; the satellite default stands still.
 
