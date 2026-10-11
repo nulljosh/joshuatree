@@ -6,17 +6,23 @@ Joshua, 2026-10-11: "/loop until v3" and, later that night from the board, "Focu
 
 Order of work (Joshua, 2026-10-11): usable first, then stability, then polish. 4.0 and 5.0 may go mobile first, copying iOS the way the desktop copies macOS.
 
-## Where it stands
+## Where it stands (03:50, 2026-10-11)
 
-Main is 2.41.0 (the boot splash draws the tree on). Open draft PRs, each with its own local gate queued one at a time:
+Main is 2.43.0 (sound out of the jack merged). Draft PRs, each queued for its local gate one at a time in a scratch worktree (`scratchpad/ciq/<pr>.log`), then merged to main the house way, readied, and squash-merged when GitHub is green, with a push to Joshua's phone per merge:
 
-- #505, 2.42.0: the Samantha box, a printable desk case (`docs/hardware/samantha_cad.py`). Local gate green, marked ready, waiting on GitHub CI.
-- #506, 2.43.0: sound out of the 3.5 mm jack, `beep` and `beep FREQ MS`.
-- #507, 2.44.0: typing into apps on ARM, a click focuses a window. This is the typing half of the 3.0 gate.
-- #508, 2.45.0: Samantha's voice through the Mac relay (ElevenLabs, capped per request and per day).
-- Coming, 2.46.0: the Pi finds the relay on the LAN by itself and TLS verifies a fixed name, so the Mac's address no longer has to match the card.
+- #507, 2.44.0: typing into apps, click to focus, Spotlight on F1 or Cmd+Space only. Local gate green, on GitHub CI.
+- #508, 2.45.0: Samantha's voice through the Mac relay (ElevenLabs, capped). Gate running.
+- #509: the docs branch this file lives on. Prose only.
+- #510, 2.48.0: volume, `vol`, F11/F12 and the Mac media keys. Stacks on #506.
+- #511, 2.49.0 and #515, 2.50.0: user mode slices 1 and 2; hello.c and Calendar's image run at EL0 on ARM.
+- #512, 2.47.0: Samantha answers from Turing; the Pi says `Samantha $`; `--api-key-file` needs `--allow-api-spend`.
+- #513, 2.46.0: the Pi finds the relay by a UDP probe; TLS pinned to our CA and the name `jt-relay`. Needs a new server cert (bridge SAN with the old IP until the card is reflashed).
+- #514, 2.42.1: the Samantha box geometry fixed, 24 asserts, a check in the suite. Print nothing before this merges.
+- #516, 2.51.0: Bluetooth radio up, `bt scan`; the console moved to the mini UART.
+- #517, 2.52.0: Caps Lock and key repeat on the Pi.
+- Coming: BT2 pairing and the pointer (2.54.0), SD card read (2.53.0), Notes autosave (2.55.0).
 
-The dev card carries a test build of 2.41.0 plus #506 and #507, flashed 2026-10-11 02:05 before their gates ran. A glitch on the board may not be a real bug; rerun it on a merged build before filing anything.
+The dev card carries a test build (main plus #506, #507, #510, #512) flashed 2026-10-11 02:55 with the Mac's address and our CA; Turing's `serve.py` and the relay (`--lan --turing`, TLS) run on the Mac from the #512 worktree. Beep, typing and Samantha from Turing were seen on the board.
 
 ## Tonight
 
