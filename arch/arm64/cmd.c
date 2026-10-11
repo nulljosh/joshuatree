@@ -25,7 +25,7 @@ void (*cmd_out)(const char *s) = kputs;
 void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (char)('0' + v % 10); while (v /= 10); cmd_out(t + n); }
 
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, bt, bt scan, ls, cat NAME, help. Anything else asks Claude.";
+                           "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, ls, cat NAME, help. Anything else asks Claude.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;

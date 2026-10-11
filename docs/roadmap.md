@@ -181,7 +181,7 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
 - [ ] [Fable] A/B boot, so a bad self-update can never brick the Pi: keep the last good kernel on the card as `kernel8.old`, boot the new one once, and fall back to the old one if the new build never reaches the desktop (the Pi bootloader's `tryboot` is the likely mechanism; check it on the board).
 Also missing, added 2026-10-06 night, in order:
 - [ ] [Fable] The other three cores: wake them from the spin table, give each a stack, run the desktop on one and the drivers on another.
-- [ ] [Fable] Bluetooth for the mouse: in progress. BT1 (HCI over the PL011, the BCM4345C0 patch, LE scan) and BT2 (pairing, HID over GATT, the pointer) are the two slices in `LOOP-HANDOFF.md`. Joshua's mouse is Bluetooth Low Energy.
+- [ ] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, HID over GATT (Joshua's mouse is Bluetooth Low Energy). BT1 (2.51.0): the patch, the version and `bt scan`, checked against a fake controller. BT2 (2.54.0): `bt pair`, Just Works, GATT HID, boot reports into the pointer, checked against a fake mouse. Left: the board test, report mode for a mouse with no boot report, and the key on the SD card so it reconnects by itself.
 - [ ] [Sonnet] Heat and the fan: read the SoC temperature through the mailbox, show it, drive the fan pin.
 - [ ] [Fable] Update over Wi-Fi: the Pi fetches the newest kernel8.img from the GitHub release and writes it to the card, then reboots. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror (no TLS yet).
 - [ ] [Sonnet] A Wi-Fi settings screen on the Pi: name and password typed on the keyboard and saved on the card, so nothing is baked into the build.
