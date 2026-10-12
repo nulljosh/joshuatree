@@ -23,6 +23,7 @@
 #endif
 
 void kputs(const char *s);                     /* main.c */
+static void (*const real_puts)(const char *) = kputs;   /* the Terminal's own printer, before kputs means cmd_out below */
 extern void (*cmd_out)(const char *s);         /* cmd.c: where this line's output goes */
 void cmd_dec(unsigned v);
 void cmd_run(const char *q, unsigned n, void (*out)(const char *));
@@ -179,7 +180,8 @@ void say_wrapped(const char *prefix, const char *s, unsigned n) {   /* browser.c
 /* pi-actions begin: pure, no kernel calls, so tools/checks/pi-actions-check.py compiles this block on the host.
    Samantha may end an answer with actions, each alone on its line, 80 characters at most (docs/AGENT.md):
    [[note TEXT]] [[say TEXT]] [[led blink]] [[open APP]] [[browse URL]] (http or https only) [[calc EXPR]] [[status]]
-   [[save NAME]] (the answer's first ``` block into JT/NAME, only when the question itself named NAME).
+   [[save NAME]] (the answer's first ``` block into JT/NAME, only when the question itself named NAME), [[list]] (the
+   files in JT/) and [[read NAME]] (JT/NAME, the first 4 KB): both read only.
    take_actions removes those lines from s in place, records at most ACT_MAX of them, and returns the new length.
    A [[ ]] line it does not know is recorded as ACT_UNKNOWN (the kernel logs and ignores it); a long one, a fifth one,
    or one inside a sentence stays as plain text. */
@@ -194,6 +196,8 @@ void say_wrapped(const char *prefix, const char *s, unsigned n) {   /* browser.c
 #define ACT_CALC 6
 #define ACT_STATUS 7
 #define ACT_SAVE 8
+#define ACT_LIST 9
+#define ACT_READ 10
 static int act_kind[ACT_MAX];
 static char act_text[ACT_MAX][ACT_LEN + 1];
 static unsigned act_n;
@@ -220,12 +224,13 @@ static unsigned take_actions(char *s, unsigned n) {
             const char *p = s + i + 2; unsigned m = z - i - 4, skip = 0; int kind = ACT_UNKNOWN;
             if (m == 9 && starts(p, m, "led blink")) kind = ACT_LED;
             else if (m == 6 && starts(p, m, "status")) kind = ACT_STATUS;
+            else if (m == 4 && starts(p, m, "list")) kind = ACT_LIST;
             else if (!(kind = act_word(p, m, "note", ACT_NOTE, &skip)) && !(kind = act_word(p, m, "say", ACT_SAY, &skip))
                      && !(kind = act_word(p, m, "open", ACT_OPEN, &skip)) && !(kind = act_word(p, m, "calc", ACT_CALC, &skip))
-                     && !(kind = act_word(p, m, "save", ACT_SAVE, &skip))
+                     && !(kind = act_word(p, m, "save", ACT_SAVE, &skip)) && !(kind = act_word(p, m, "read", ACT_READ, &skip))
                      && (kind = act_word(p, m, "browse", ACT_BROWSE, &skip))
                      && !starts(p + skip, m - skip, "http://") && !starts(p + skip, m - skip, "https://")) kind = ACT_UNKNOWN;
-            if (kind == ACT_LED || kind == ACT_STATUS) skip = m;   /* no text */
+            if (kind == ACT_LED || kind == ACT_STATUS || kind == ACT_LIST) skip = m;   /* no text */
             if (kind == ACT_UNKNOWN) skip = 0;           /* keep the whole marker, so the log says what was ignored */
             unsigned k = 0;
             for (; skip + k < m; k++) act_text[act_n][k] = p[skip + k];
@@ -523,9 +528,10 @@ int calc_eval_str(const char *src, int deg, char *out);   /* calc.c: 0 ok, out h
 void input_drain(void);                      /* main.c: the keys that queued during a request */
 
 /* Runs the recorded actions, printing each outcome, and writes the same outcomes into `result` for the next turn. */
-static const char *said; static unsigned said_n;   /* the answer whose actions run, for [[save]] */
+static const char *said; static unsigned said_n; static unsigned rlen_before;
+static void tee(const char *s) { real_puts(s); result_puts(s); }   /* a command's line to the Terminal and into the result */   /* the answer whose actions run, for [[save]] */
 static void run_actions(void) {
-    static const char *const names[] = {"", "note", "led blink", "say", "open", "browse", "calc", "status", "save"};
+    static const char *const names[] = {"", "note", "led blink", "say", "open", "browse", "calc", "status", "save", "list", "read"};
     rlen = 0; capturing = 1;
     result_puts("The Pi ran your actions. Results:\n");
     for (unsigned a = 0; a < act_n; a++) {
@@ -566,6 +572,21 @@ static void run_actions(void) {
             ok = sd_write(t, said + at, len) == 1;
             kputs(ok ? "save: wrote JT/" : "save: could not write "); kputs(t); kputs(ok ? ", cat JT/" : "\n"); if (ok) { kputs(t); kputs(" to read it\n"); }
             result_puts(ok ? "saved\n" : "not saved\n");
+            break; }
+        case ACT_LIST: {                       /* what is in JT/: the same lines `ls JT` prints, sent back to her too */
+            rlen_before = rlen;
+            cmd_run("ls JT", 5, tee);
+            if (rlen == rlen_before) result_puts("nothing in JT/\n");
+            break; }
+        case ACT_READ: {                       /* JT/NAME as text, through cat; an 8.3 name only, so no path can be built */
+            char cmd[ACT_LEN + 8]; unsigned o = 0, okname = k > 0 && k <= 12;
+            for (unsigned i = 0; i < k; i++) okname = okname && ((t[i] >= 'a' && t[i] <= 'z') || (t[i] >= 'A' && t[i] <= 'Z') || (t[i] >= '0' && t[i] <= '9') || t[i] == '_' || t[i] == '-' || t[i] == '.');
+            if (!okname) { kputs("read: not a file name\n"); result_puts("not a file name\n"); break; }
+            for (const char *p = "cat JT/"; *p; p++) cmd[o++] = *p;
+            for (unsigned i = 0; i < k; i++) cmd[o++] = t[i];
+            rlen_before = rlen;
+            cmd_run(cmd, o, real_puts);   /* cat prints through say_wrapped, which the result buffer already sees */
+            if (rlen == rlen_before) result_puts("no such file\n");
             break; }
         case ACT_BROWSE: {                     /* browser.c prints the page through say_wrapped, so it lands in result */
             char cmd[ACT_LEN + 8]; unsigned o = 0;
