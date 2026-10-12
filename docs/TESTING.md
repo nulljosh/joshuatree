@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (237 checks)
+## The suite (239 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -54,6 +54,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Chat mail tools: "read my email" lists a real message, "email <someone> <text>" lands one in Mail | `tools/checks/mailtools-check.py` | retry |
 | Chat notes/reminders tools: list_reminders and read_notes work via the local keyword fallback when the picker doesn't know them | `tools/checks/notestools-check.py` | retry |
 | "samantha" boot flag opens Chat's full-screen avatar view, input focused, before the desktop | `tools/checks/samantha-boot-check.py` | retry |
+| Samantha tells the time and the date from her own clock; pagebar hides only her bar | `tools/checks/samantha-clock-check.py` | retry |
 | "phone" boot flag opens a real 430x932 portrait frame straight into Samantha's view | `tools/checks/phone-boot-check.py` | retry |
 | Phone Samantha back chevron exits her view and F2/Esc hints are hidden on phones | `tools/checks/phone-samantha-back-check.py` | retry |
 | Samantha is full screen: room around her (her wall in the side bands, eyes 40 percent down), glass input, fading captions that stay off her lips and eyes, scrollback, the typing bugs, a mouth drawn from her voice, Esc and the red dot | `tools/checks/samantha-fullscreen-check.py` | retry |
@@ -203,6 +204,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Landing: Tech specs accordions hold every developer number collapsed, and the footer is a four-column directory of real links | `tools/checks/landing-specs-footer-check.mjs` | once |
 | Landing demo: no keyboard trap, one main landmark, Full screen top right on phones | `tools/checks/landing-demo-ui-check.mjs` | once |
 | Landing on a phone: exactly one visible "Message Samantha" input, focusable and typeable | `tools/checks/phone-one-input-check.mjs` | once |
+| Landing on a desktop: her input is one sharp page field over her face, focusable and typeable | `tools/checks/desktop-pagebar-check.mjs` | once |
 | App switcher: Ctrl+Tab cycles open windows and focuses the highlighted one | `tools/checks/appswitcher-check.py` | retry |
 | Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files | `tools/checks/screenshot-check.py` | retry |
 | Drunk mode easter egg: horizontal sway applied to framebuffer rows | `tools/checks/drunk-mode-check.py` | retry |
@@ -263,7 +265,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Notes | `tools/checks/arm64-notes-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notes-autosave-check.py`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3resize-check.py`, `tools/checks/ring3window-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py`, `tools/checks/ring3window-check.py` |
 | Terminal | `tools/checks/arm64-browser-check.py`, `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/arm64-focus-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-music-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
-| Samantha | `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-box-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
+| Samantha | `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-box-check.py`, `tools/checks/samantha-clock-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs` |
 | Curbfind | `tools/checks/ring3curbfind-check.py` |
 | Keyrate | `tools/checks/ring3app-check.py` |
@@ -280,7 +282,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Epiphany | `tools/checks/epiphany-cmdbar-check.py`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3epiphany-check.py` |
 | Portfolio | `tools/checks/portfolio-check.py`, `tools/checks/portfolio-mute-check.mjs`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3portfolio-check.py` |
 | Activity | `tools/checks/arm64-led-check.py`, `tools/checks/panes-check.py`, `tools/checks/ring3activity-check.py` |
-| Clock | `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-clock-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-music-check.py`, `tools/checks/clock-check.py`, `tools/checks/clockicon-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/movie-check.py`, `tools/checks/ring3clock-check.py`, `tools/checks/ring3windgate-check.py` |
+| Clock | `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-clock-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-music-check.py`, `tools/checks/clock-check.py`, `tools/checks/clockicon-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/movie-check.py`, `tools/checks/ring3clock-check.py`, `tools/checks/ring3windgate-check.py`, `tools/checks/samantha-clock-check.py` |
 | Music | `tools/checks/arm64-music-check.py`, `tools/checks/music-check.py` |
 | Movies | `tools/checks/movie-check.py` |
 | Hamurapi | `tools/checks/ring3hamurabi-check.py` |

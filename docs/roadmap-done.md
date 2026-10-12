@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.48.1 development branch (2026-10-11)
+
+On the landing page, Samantha tells the time and the date from the machine's own clock ("It's 3:07 PM."): the server cannot see a visitor's time zone, so she used to say she couldn't find anything. Her input on a desktop is now the page's own field over her face, sharp at any size; the kernel's bar was a small bitmap font scaled up with the screen and read pixelated. `pagebar` on the boot line tells her to draw none. Checks: `tools/checks/samantha-clock-check.py`, `tools/checks/desktop-pagebar-check.mjs`.
+
 ## 2.42.1 development branch (2026-10-11)
 
 The Samantha box now goes together: the bezel screws moved to a 9 mm band outside the screen and clear of the Pi and its port windows, the grille stopped cutting its own centre loose, the stand became two cradles the box really drops into, and the fit test is a pocket the screen drops into. Every assert now runs before a file is written, and the Pi 4B numbers live in `docs/hardware/pi4b.py` for both cases. Checked by `tools/checks/samantha-box-check.py`, which builds the CAD and wants the old stand slot to stop it.
