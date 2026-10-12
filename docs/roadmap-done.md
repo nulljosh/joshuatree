@@ -1,6 +1,6 @@
 # Joshua Tree roadmap: done
 
-## 3.6.1 development branch (2026-10-12)
+## 3.6.3 development branch (2026-10-12)
 
 The user guide gains a chapter for each Pi app and tool: Terminal and the shell, Browser, Books, Music, Notes, Calendar, Clock, Samantha and Bluetooth. The Pi row of `architecture.svg` now lists them, solid only where the board has seen it. Browser bookmarks are on the roadmap. Check: `tools/checks/check-refs.sh`.
 
