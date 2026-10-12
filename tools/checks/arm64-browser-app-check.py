@@ -20,7 +20,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[2]
 arch = root / "arch/arm64"
 try:
-    from PIL import Image
+    from PIL import Image, ImageChops
     from scratch import scratch_dir
 except ImportError:
     print("SKIP: PIL is not installed"); sys.exit(0)
@@ -143,7 +143,7 @@ try:
     check("Page Down scrolls", first.crop(WIN).tobytes() != second.crop(WIN).tobytes())
     key("end"); end = shot("long-end")
     key("pgdn"); again = shot("long-end2")
-    check("scrolling stops at the end", end.crop(WIN).tobytes() == again.crop(WIN).tobytes())
+    check("scrolling stops at the end", end.crop(WIN).tobytes() == again.crop(WIN).tobytes(), ImageChops.difference(end.crop(WIN), again.crop(WIN)).getbbox())
     check("the page stays inside its well", count(again, (PAGE[0], PAGE[3] + 2, PAGE[2], PAGE[3] + 6), (250, 248, 244), 1) == 0)
     key("home"); top = shot("long-home")
     check("Home brings the first screen back", top.crop(PAGE).tobytes() == first.crop(PAGE).tobytes())
