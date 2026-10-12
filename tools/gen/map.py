@@ -50,10 +50,10 @@ chain(330, [('You type', '"call Mom at 5"'), ('Turing', 'picks the tool'), ('Jos
 # The Pi, on the real board. done = seen working on the board (docs/LOOP-HANDOFF.md, docs/roadmap-done.md); the rest is proven in QEMU only.
 sec(400, 'The Pi, on the real board')
 pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi', 'WPA2, joined', 1),
-      ('Internet', 'DHCP and DNS', 1), ('Clock', 'from the net', 1), ('Terminal', 'zsh style, sam', 0),
+      ('Internet', 'DHCP and DNS', 1), ('Clock', 'from the net', 1), ('Terminal', 'zsh style, sam', 1),
       ('Samantha', 'chat on the Pi', 1), ('Pi actions', 'note, green light', 1), ('HTTPS', 'Browser, 37 roots', 1),
-      ('Browser', 'window, links', 0), ('Books', 'plain text', 0), ('Music', 'wav, mp3, covers', 0),
-      ('Notes', 'saved to the card', 0), ('Calendar', 'four views', 0), ('Bluetooth', 'mouse, saved pairing', 0),
+      ('Browser', 'window, links', 1), ('Books', 'plain text', 1), ('Music', 'wav, mp3, covers', 1),
+      ('Notes', 'saved to the card', 1), ('Calendar', 'four views', 1), ('Bluetooth', 'mouse pairs', 1),
       ('Power', 'reboot, shutdown', 0), ('Sound', 'headphone jack', 0), ('Mic', 'Yeti, USB', 0)]
 pw = (W - 40 - 5 * 8) / 6
 for i, (a, b, done) in enumerate(pi):
