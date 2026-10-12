@@ -63,6 +63,54 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 - 4.0 stability: a fallback kernel through the Pi firmware's tryboot; chain-boot a downloaded kernel from RAM; a `sendlog` command that posts the boot log to the Mac over TLS; network fuzzing on the host under the sanitizers; a crash restart with a strike limit.
 - 4.0 polish and mobile: one theme header for every app's colours and controls; sound by DMA so the desktop never stalls; a day and night palette on the Pi; touch from a USB touchscreen; an on-screen keyboard on the Pi.
 
+## Daily driver gaps (Joshua, 2026-10-12: "keep identifying gaps and check them off as we go")
+
+The Pi against what Joshua uses today: macOS, Omarchy, Kali and Ubuntu. One line per gap, ticked in the PR that closes it with the version. Never deleted. Closed on 2026-10-12: [x] a zsh-style Terminal with `sam` as a non-blocking command (3.3.0), [x] `reboot` and `shutdown` (3.4.0), [x] a Bluetooth mouse that remembers its pairing (3.5.0), [x] a Browser window over HTTPS (3.0.0), [x] Books (3.2.0), [x] Samantha lists and reads the card (3.1.0).
+
+Broken on the board now (fix first):
+- [ ] [Sonnet] The Browser flickers on the Pi. A half-drawn repaint reaches the live screen. Draw off-screen, copy once (PR 559). Check: `arm64-browser-flicker-check.py`.
+- [ ] [Sonnet] `reboot` stays refused after a Samantha error reply, and `sam` takes about a minute for 5+5. Check: a fake relay that errors, then `reboot` runs.
+- [ ] [Sonnet] The mouse needs a scan on a fresh card and should reconnect alone after a reboot or when it wakes from sleep. Check: the fake mouse sleeps, the link drops, the board reconnects with no command.
+
+Like macOS:
+- [ ] [Sonnet] Drag every window by its title bar (Console, Terminal, Browser, Clock and Brick in 3.6.0; Calculator and the app windows next, using the off-screen buffer so nothing flashes).
+- [ ] [Sonnet] Resize, minimise and zoom a window from the three dots. Check: a press on each dot at 800x600 and 1080p.
+- [ ] [Sonnet] Cmd shortcuts and one clipboard: Cmd C, X, V, A, Z, W, Q, Tab between apps. Check: type, select, copy, paste across Notes and the Terminal.
+- [ ] [Fable] A login screen with a boot splash and user accounts, so the Pi has an owner before it has a file tree.
+- [ ] [Sonnet] Spotlight finds files on the card, not only apps.
+- [ ] [Sonnet] A Settings app: Wi-Fi, Bluetooth (list, forget), display, sound, about. Why: today these are Terminal commands.
+- [ ] [Sonnet] Menu bar icons for Wi-Fi, Bluetooth and the clock, with the mouse battery if the radio reports it.
+- [ ] [Sonnet] Notifications: a banner for a finished `sam` answer, a lost link and a low card.
+- [ ] [Sonnet] Quick Look: Space on a file shows it. Screenshot: a key saves the screen to `JT/`.
+- [ ] [Sonnet] Finder, Mail, Weather, Stocks and Reminders on ARM (today they say "not on ARM yet"). Order: Finder, Weather, Reminders, Stocks, Mail.
+- [ ] [Sonnet] A beep that is heard on the 3.5 mm jack (it reports played and is silent on the board).
+- [ ] [Joshua] Software update from the desktop with a fallback kernel (the self-update item above).
+
+Like Omarchy (a developer's machine):
+- [ ] [Fable] A JavaScript engine in the Browser, so google.com, GitHub and docs sites work. The biggest single gap. Start with a tiny interpreter for the DOM that sites need to render at all.
+- [ ] [Sonnet] A shell that is a shell: pipes, redirects, variables, `$?`, tab completion, history with the up arrow and Ctrl R, scripts from `JT/`, `man` and `help NAME`. Check: a `.sh` file that runs.
+- [ ] [Sonnet] An editor on the device (a small vi or nano) that opens a file from `JT/`.
+- [ ] [Fable] A compiler on the device: Plank (Joshua's own language) first, a build and run from the Terminal.
+- [ ] [Sonnet] `git clone` of a small public repo over HTTPS, then `git log` and `git diff`.
+- [ ] [Sonnet] Terminal tabs, a scrollback you can page, and a tiling layout (two windows side by side on a key).
+- [ ] [Sonnet] ssh client, then an ssh server so the Mac can reach the Pi (key login only, off by default).
+
+Like Kali (safe tools for your own network only, no attack tooling):
+- [ ] [Sonnet] `ping`, `traceroute`, `nslookup`, `curl`, `whois`, `nc` on the Pi stack. Check: each against a local fake host.
+- [ ] [Sonnet] `wifi scan` lists the networks around with signal strength, and `arp` lists the neighbours.
+- [ ] [Sonnet] `portscan` of the Pi's own subnet with a hard rate limit and a refusal outside the local range.
+- [ ] [Sonnet] `sha256sum`, `md5sum`, `hexdump`, `base64` and `strings` on a file.
+
+Like Ubuntu:
+- [ ] [Fable] USB mass storage read, then FAT32 and later ext4, so a stick holds files (also under 4.0 usable above).
+- [ ] [Fable] Users and file permissions: owner, mode, `su`. Ring 3 already isolates apps; this isolates people.
+- [ ] [Sonnet] A package manager: `pkg install NAME` downloads a signed Ring-3 app from a release index, checks the hash and puts it in the Launchpad.
+- [ ] [Sonnet] Activity Monitor: `top` and an app showing tasks, memory, temperature and network. Check: a task list that matches the loaded apps.
+- [ ] [Sonnet] A log viewer for the boot and network log, and a `df` and `du` for the card.
+- [ ] [Sonnet] An office suite, small: Notes with bold and headings, a grid app, one PDF reader.
+- [ ] [Joshua] Services: a few things that start at boot and restart if they stop (the relay client, the clock), without a general daemon framework.
+- [ ] [Joshua] Printing, and a real GPU driver path for video. Both after 5.0.
+
 ## Next few weeks
 
 - [ ] [Fable] The browser grows up, after the text browser ships (Joshua, 2026-10-12: "then we'll get JS working etcetera"). In order: images (the Pi already has a PNG decoder, JPEG next), CSS layout (block and inline flow, colours, fonts, a box model, no floats at first), forms and cookies, then a small JavaScript engine (an embeddable one such as QuickJS, ported freestanding, with a DOM just big enough for the pages Joshua actually reads). Each step is its own PR with its own check against a local test page.
