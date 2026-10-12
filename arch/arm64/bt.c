@@ -240,6 +240,7 @@ static void adv_reports(const unsigned char *p, unsigned n) {
 
 /* ---- The link to the mouse ---- */
 static int conn, closing;                /* a link is up; we are hanging it up after a failure */
+static int tries;                        /* connection attempts this `bt pair` */
 static unsigned handle;                  /* its connection handle */
 static unsigned char me[6], peer[6], peer_type;   /* our address and the mouse's, little endian, as the radio gives them */
 static char peer_name[30];
@@ -476,6 +477,10 @@ static void disconnected(const unsigned char *p, unsigned n) {   /* Disconnectio
     conn = 0; aqh = aqt; pend_op = 0;
     if (held) { for (unsigned b = 0; b < 3; b++) if (held >> b & 1) kinput(1, 272 + b, 0); held = 0; kinput(0, 0, 0); }
     if (st == PAIRING && closing) { st = READY; closing = 0; until = FOREVER; return; }   /* the line was printed by fail */
+    if (st == PAIRING && p[3] == 0x3E && smp == 0 && tries < 3) {   /* connection failed to be established: the mouse never heard our first packets, call again */
+        tries++; put("bt: the mouse missed the call, trying again"); say();
+        pc = 33; until = 0; return;   /* from the address step, so the Create Connection is built fresh */
+    }
     if (st == PAIRING) { put(smp < 4 ? "bt: pairing failed, the mouse hung up, reason " : "bt: the mouse hung up, reason "); put_hex(p[3]); fail(0); return; }
     if (st == MOUSE) { put("bt: the mouse disconnected, reason "); put_hex(p[3]); say(); st = READY; }
 }
@@ -621,10 +626,12 @@ static void step(void) {
         pc = 34; cmd(OP_BDADDR, 0, 0); return;
     case 34: {
         for (int i = 0; i < 6; i++) me[i] = ret[1 + i];
-        /* scan interval 60 ms and window 30 ms, no filter, the mouse, our public address, interval 7.5 to 15 ms,
-           no latency, supervision timeout 2 s, no connection event lengths */
+        /* scan interval 60 ms and window 30 ms, no filter, the mouse, our public address, interval 30 to 50 ms (Linux's
+           defaults; on the Pi 4 the radio shares its antenna with Wi-Fi, and at 7.5 ms the first packets to a real mouse
+           never got through: the link dropped with 0x3e, connection failed to be established), no latency, supervision
+           timeout 2 s, no connection event lengths */
         unsigned char c[25] = { 0x60, 0, 0x30, 0, 0, peer_type, peer[0], peer[1], peer[2], peer[3], peer[4], peer[5], 0,
-                                6, 0, 12, 0, 0, 0, 200, 0, 0, 0, 0, 0 };
+                                24, 0, 40, 0, 0, 0, 200, 0, 0, 0, 0, 0 };
         cmd(OP_CONNECT, c, 25); return;
     }
     case 35: until = now() + ms(LINK_MS); return;   /* Command Status came back: now wait for the link */
@@ -734,7 +741,7 @@ int bt_command(const char *q, unsigned n) {
         for (int j = 0; j < 6; j++) peer[j] = dev[k].a[j];
         peer_type = dev[k].type;
         unsigned m = 0; for (; dev[k].name[m] && m < sizeof peer_name - 1; m++) peer_name[m] = dev[k].name[m]; peer_name[m] = 0;
-        conn = closing = smp = gs = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
+        conn = closing = smp = gs = tries = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
         wipe(ltk, 16); wipe(krand, 8);
         to_term = 1; st = PAIRING; pc = 30; until = now();
         put("bt: connecting to "); put(peer_name[0] ? peer_name : kind_word((unsigned)k) ? kind_word((unsigned)k) : "the strongest device"); put(", keep it in pairing mode"); say_now(); return 1;
