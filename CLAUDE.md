@@ -9,7 +9,7 @@ A from-scratch OS: a freestanding i386 kernel plus an ARM64 build that runs on a
 - `make` links `kernel.elf`. `make run` boots it. `./check.sh` is the boot test.
 - Build with stock Apple clang (`-target i386-unknown-none`). Do not add a cross-toolchain.
 - `check.sh` reads VGA memory through the QEMU monitor. It proves the kernel boots, nothing more. Check paging, disk and task switches against real artifacts.
-- `tools/ci-local.sh` runs the full suite locally (one run at a time). `.github/workflows/check.yml` runs it on push; keep it current.
+- `tools/ci-local.sh` runs the full suite locally (one run at a time). `.github/workflows/check.yml` runs it on pull requests only (never on push); keep it current.
 - Every shipped feature gets a permanent test that fails when the fix is reverted: a shell command in `kernel/kernel.c` (like `heaptest`) or a `tools/checks/` script.
 - After any rename, move or delete, run `bash tools/checks/check-refs.sh`. `make hooks` installs the pre-push hook once per clone.
 

@@ -228,3 +228,13 @@ A Wi-Fi join and a Brick result appear beside the clock for four seconds. A new 
 In 2.41.0, five minutes without keyboard or mouse activity blanks the HDMI picture. Press a key or move the mouse to wake it; that input still reaches the app. Brick and an active Samantha request keep the screen awake. Apps, USB and networking keep running; this does not suspend the computer or save your files.
 
 QEMU checks the idle timer, refused requests and both input paths through the firmware mailbox. QEMU acknowledges blanking without hiding its pixels, so HDMI sleep and wake still need a physical Pi test after flashing. The browser demo keeps its existing behavior.
+
+## Other ways to run it
+
+- **PC USB stick:** download the latest ISO and `SHA256SUMS` from the [release page](https://github.com/nulljosh/joshuatree/releases/latest), which has the copy steps. BIOS boot is checked in QEMU. UEFI and real PC hardware are not verified.
+- **Talk to Samantha on a Mac:** run `make talk`, then hold F2. It needs a mic (see `user/samantha.c`). Voice on the real Pi is not verified: no speaker has been tested there.
+- **Samantha on the Pi:** she answers at the console through a relay on your Mac that uses the Claude API. You need your own API key. It stays on the Mac and never goes on the Pi. See [the Pi guide](RASPBERRY-PI.md).
+- **Ask Claude Code:** run the relay on your Mac and open Claude from the Launchpad. See [the Claude app](CLAUDE-APP.md).
+- **Other make targets:** `make samantha`, `make talk`, `make iso`.
+- **Real Pi 4 numbers:** memcpy 1109 MB/s, alloc 30 ns/op, Wi-Fi joined in 6.4 s. The full table is in [BENCHMARKS.md](BENCHMARKS.md).
+- **Version 3.0** is the Pi release. It cuts the day the board boots the desktop and you can type and click on it ([the plan](LOOP-HANDOFF.md)).
