@@ -49,7 +49,7 @@ print('PASS: five-minute boundary, activity reset, wrap, active apps, refused re
 subprocess.run(['make','-s','-C',str(ROOT/'arch/arm64'),'screen-kernel8.img'],check=True)
 log, sock = TMP/'uart', TMP/'qmp'
 q = subprocess.Popen(['qemu-system-aarch64','-machine','raspi4b','-display','none',
-    '-serial','file:'+str(log),'-qmp','unix:'+str(sock)+',server,nowait',
+    '-serial','null','-serial','file:'+str(log),'-qmp','unix:'+str(sock)+',server,nowait',
     '-kernel',str(ROOT/'arch/arm64/screen-kernel8.img')],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
 s = f = None
 try:
