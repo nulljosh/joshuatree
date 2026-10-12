@@ -63,6 +63,10 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 - 4.0 stability: a fallback kernel through the Pi firmware's tryboot; chain-boot a downloaded kernel from RAM; a `sendlog` command that posts the boot log to the Mac over TLS; network fuzzing on the host under the sanitizers; a crash restart with a strike limit.
 - 4.0 polish and mobile: one theme header for every app's colours and controls; sound by DMA so the desktop never stalls; a day and night palette on the Pi; touch from a USB touchscreen; an on-screen keyboard on the Pi.
 
+## Daily driver gaps (Joshua, 2026-10-12: "keep identifying gaps and check them off as we go")
+
+- [ ] [Sonnet] Browser bookmarks. A star in the address bar saves the open page to `JT/BOOKMARKS.TXT`, one line a page (address, then title). The empty Browser screen, where the address bar waits today, lists the saved pages, and Tab then Enter opens one. A star on a saved page takes it off the list. Check: an arm64 check that stars a page, reads `BOOKMARKS.TXT` back off the card image, reopens the Browser empty and finds the line.
+
 ## Next few weeks
 
 - [ ] [Fable] The browser grows up, after the text browser ships (Joshua, 2026-10-12: "then we'll get JS working etcetera"). In order: images (the Pi already has a PNG decoder, JPEG next), CSS layout (block and inline flow, colours, fonts, a box model, no floats at first), forms and cookies, then a small JavaScript engine (an embeddable one such as QuickJS, ported freestanding, with a DOM just big enough for the pages Joshua actually reads). Each step is its own PR with its own check against a local test page.
