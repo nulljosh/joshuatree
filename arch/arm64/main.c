@@ -1213,11 +1213,53 @@ int dock_scale_pct = 7;   /* the i386 default (Settings can change it there; not
 unsigned int window_scale(void) { return fb_h >= 1080 ? 2 : 1; }
 unsigned int window_width(void) { return fb_w / window_scale(); }
 unsigned int window_height(void) { return fb_h / window_scale(); }
+/* Offscreen painting. On the Pi the framebuffer is the live scanout: a window repainted in place shows every half-drawn
+   state (the cleared well, then the text going back) as flicker. off_begin copies the window's rectangle into a
+   window-sized buffer and points fb at it, shifted so the same screen coordinates land inside it (fb_pitch becomes the
+   window's width); the painters then draw as usual. off_end points fb back and copies the finished rectangle to the real
+   screen row by row, top to bottom, in one pass. The buffer is one bump-heap block (2.3 MB for the 900x630 window at
+   1080p), taken on first use and kept; if the heap cannot give it, off_begin says 0 and the caller paints in place. */
+static unsigned *off_buf, *off_real;
+static unsigned off_cap, off_real_pitch, off_x, off_y, off_w, off_h;
+static int off_on;
+static int clip_x0, clip_y0, clip_x1 = 1 << 30, clip_y1 = 1 << 30;   /* window_pixel_phys stays inside the buffer while it is the target */
+static void off_copy_row(unsigned *d, const unsigned *s, unsigned n) {
+    unsigned long *dl = (unsigned long *)d; const unsigned long *sl = (const unsigned long *)s;
+    unsigned i = 0;
+    if ((((unsigned long)d | (unsigned long)s) & 7) == 0) for (; i + 2 <= n; i += 2) *dl++ = *sl++;
+    for (d += i, s += i; i < n; i++) *d++ = *s++;
+}
+static int off_begin(int x, int y, int w, int h) {   /* physical pixels */
+    if (off_on || !fb) return 0;
+    if (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > (int)fb_w || y + h > (int)fb_h) return 0;
+    if (!off_buf) { off_buf = kmalloc((unsigned)(w * h) * 4); off_cap = off_buf ? (unsigned)(w * h) : 0; }
+    if (!off_buf || (unsigned)(w * h) > off_cap) return 0;
+    off_x = (unsigned)x; off_y = (unsigned)y; off_w = (unsigned)w; off_h = (unsigned)h;
+    for (unsigned j = 0; j < off_h; j++) off_copy_row(off_buf + j * off_w, fb + (off_y + j) * fb_pitch + off_x, off_w);
+    off_real = fb; off_real_pitch = fb_pitch;
+    fb = (unsigned *)((unsigned long)off_buf - ((unsigned long)off_y * off_w + off_x) * 4);
+    fb_pitch = off_w;
+    clip_x0 = x; clip_y0 = y; clip_x1 = x + w; clip_y1 = y + h;
+    off_on = 1;
+    return 1;
+}
+static void off_end(void) {
+    if (!off_on) return;
+    fb = off_real; fb_pitch = off_real_pitch; off_on = 0;
+    clip_x0 = clip_y0 = 0; clip_x1 = clip_y1 = 1 << 30;
+    for (unsigned j = 0; j < off_h; j++) off_copy_row(fb + (off_y + j) * fb_pitch + off_x, off_buf + j * off_w, off_w);
+    fb_flush((int)off_x, (int)off_y, (int)off_w, (int)off_h);
+}
+static unsigned long off_screen_hash(int x, int y, int w, int h) {   /* FNV-1a over a rectangle of the REAL screen, whichever buffer fb points at (the trace build's proof) */
+    unsigned *r = off_on ? off_real : fb; unsigned p = off_on ? off_real_pitch : fb_pitch; unsigned long v = 1469598103934665603UL;
+    for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) v = (v ^ r[(unsigned)j * p + (unsigned)i]) * 1099511628211UL;
+    return v;
+}
 void window_pixel_phys(int px, int py, unsigned int color) {
-    if (px >= 0 && py >= 0 && px < (int)fb_w && py < (int)fb_h) fb[(unsigned)py * fb_pitch + (unsigned)px] = fb_color(color);
+    if (px >= clip_x0 && py >= clip_y0 && px < clip_x1 && py < clip_y1 && px >= 0 && py >= 0 && px < (int)fb_w && py < (int)fb_h) fb[(unsigned)py * fb_pitch + (unsigned)px] = fb_color(color);
 }
 unsigned int window_get_pixel_phys(int px, int py) {
-    return px >= 0 && py >= 0 && px < (int)fb_w && py < (int)fb_h ? fb_color(fb[(unsigned)py * fb_pitch + (unsigned)px]) : 0;
+    return px >= clip_x0 && py >= clip_y0 && px < clip_x1 && py < clip_y1 && px >= 0 && py >= 0 && px < (int)fb_w && py < (int)fb_h ? fb_color(fb[(unsigned)py * fb_pitch + (unsigned)px]) : 0;
 }
 void window_fill_rect_phys(int px, int py, int w, int h, unsigned int color) {
     for (int y = py; y < py + h; y++) for (int x = px; x < px + w; x++) window_pixel_phys(x, y, color);
