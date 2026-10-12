@@ -86,4 +86,4 @@ A Pi image carries the relay token only when built with `JT_WIFI_DEV=1`, the sam
 - `tools/checks/arm64-model-check.py`: `/model`, `/effort`, `/status`, `/clear` under QEMU against a fake relay, including a refused value that is never sent.
 - `tools/checks/claude-relay-check.py`: also the relay's model and effort whitelist and the thinking budget it sends.
 - `tools/checks/pi-release-notoken-check.sh`: the release rule.
-- `tools/checks/arm64-claude-console-check.py`: the plain question path still works.
+- `tools/checks/arm64-claude-console-check.py`: the `sam QUESTION` path still works.

@@ -1097,7 +1097,7 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
     con_cols = (win_w - sc(12)) / con_cw;
     con_rows = (win_h - sc(46)) / con_ch - 1;   /* then one row: the Console's wifi and usb status, or the Terminal's ask> prompt */
 }
-const char *ask_prompt(void);   /* ask.c: "Samantha $ ", naming the model that last answered */
+const char *ask_prompt(void);   /* ask.c: "joshua@tree % " */
 /* The Terminal's bottom row: the prompt and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
 void con_clear(void) {         /* /clear: the Terminal's window empties, its text stays in the scrollback */
     if (!con_live || calc_front || app_front) return;
@@ -2601,7 +2601,7 @@ static void blk_probe(void) {}
 void net_stack_demo(void);
 void net_clock_sync(void);
 void tls_demo(void);
-void input_drain(void) { usb_poll(); input_poll(); audio_pump(); }   /* ask.c, between agent steps: the keys that queued during a request, and the sound */
+void input_drain(void) { usb_poll(); input_poll(); key_repeat_tick(); audio_pump(); }   /* ask.c, between agent steps and in every wait while `sam` thinks: the keys that queued, a held key repeating, and the sound */
 
 void main(void) {
     unsigned long el;

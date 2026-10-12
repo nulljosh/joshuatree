@@ -100,7 +100,7 @@ def run(name, lines, question, settle):
     b = Boot(name)
     try:
         if not b.wait_for("net dhcp 10.0.2.15", 20): check(name + ": DHCP leased an address", False, b.uart()[-300:])
-        b.ask(question)
+        b.ask("sam " + question)
         b.wait_for(settle, 60)
         time.sleep(1.5)
         return b, b.uart()
@@ -136,7 +136,7 @@ try:
     check("each result turn fits the relay's body cap", all(len(c["prompt"]) <= 1200 for c in calls[1:]), repr([len(c["prompt"]) for c in calls]))
     # Esc during a loop: typed while step 1's request is in flight, read between steps
     del calls[:]; delay[0] = 1.5
-    b.ask("again"); b.key("esc")
+    b.ask("sam again"); b.key("esc")
     b.wait_for("agent: stopped", 30); time.sleep(1)
     out2 = b.uart()[len(out):]
     b.close()

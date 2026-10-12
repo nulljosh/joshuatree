@@ -4,7 +4,7 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 
 **Console: logs only.** Boot messages, Wi-Fi and errors. It has no input row, and typing with it in front does nothing (the key echoes go to the UART only). It opens at boot, because on a Pi with no serial cable it is the only debug view. Page Up, Page Down, Home and End scroll it.
 
-**Terminal: the command line.** Its bottom row names the assistant model that last answered, for example `Samantha $`. Type, Backspace, Enter. Every command runs here and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window; side-by-side panes remain future work.
+**Terminal: the command line.** Its bottom row is a zsh style prompt, `joshua@tree % `. Type, Backspace, Enter. Every command runs here and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window; side-by-side panes remain future work.
 
 | Command | What it does |
 |---|---|
@@ -18,7 +18,10 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 | `cat NAME` | Prints the first 4 KB of a file there as text (`cat JT/NOTE.TXT` one folder down) |
 | `write NAME.EXT TEXT` | Makes or replaces `JT/NAME.EXT` holding TEXT; boot files are refused |
 | `rm NAME`, `mkdir NAME` | Deletes the file `JT/NAME`, or makes the folder `JT/NAME` |
-| anything else | Asks Claude through the relay on the Mac |
+| `sam QUESTION` | Asks Samantha through the relay on the Mac and returns at once; her answer prints as `sam: ...` when it lands. Only one at a time (`sam: still thinking`); `sam` alone prints the usage. While she thinks, other commands run, except `browse`, `open`, `back`, `forward`, `reload`, `llm`, `bt` and `userrun`, which wait for her |
+| anything else | Prints `zsh: command not found: WORD` |
+
+The Samantha dock tile and Spotlight's Samantha entry open this same Terminal on the ARM build; type `sam` there. The chat view on the i386 build is unchanged.
 
 ## Getting there
 

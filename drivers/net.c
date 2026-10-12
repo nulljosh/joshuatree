@@ -5,6 +5,11 @@
    splitting them now would just be more files to keep in sync for no
    present benefit; split later if any one of them grows real complexity. */
 #include "net.h"
+
+/* A kernel may point this at a function that keeps its keyboard alive: every client wait loop calls it once a pass
+   (arch/arm64/ask.c sets it while `sam` waits for the relay, so the prompt stays usable). Null on i386 and in host builds. */
+void (*net_idle)(void);
+#define NET_IDLE() do { if (net_idle) net_idle(); } while (0)
 #ifdef NET_NIC   /* a build that brings its own card (ARM64): nic.h is the whole hardware interface */
 #include "nic.h"
 #else
@@ -546,6 +551,7 @@ int udp_broadcast_ask(u16 port, u16 src_port, const void *probe, u32 len, void *
     u8 rx[1514];
     u32 deadline = ticks() + wait_ticks;
     while (ticks() < deadline) {
+        NET_IDLE();
         u32 n = active_receive(rx, sizeof(rx));
         if (!n) continue;
         arp_maybe_reply(rx, n);
@@ -697,6 +703,7 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
     u8 rx[1514];
     u32 deadline = ticks() + net_dns_wait_ticks;
     while (ticks() < deadline) {
+        NET_IDLE();
         u32 n = active_receive(rx, sizeof(rx));
         if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header)) continue;
 
@@ -967,6 +974,7 @@ int tcp_get_timeout(u32 dest_ip, u16 dest_port, const void *request, u32 request
     int got_synack = 0;
     u32 synack_deadline = ticks() + net_connect_wait_ticks;
     while (ticks() < synack_deadline && !got_synack) {
+        NET_IDLE();
         u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
@@ -1005,6 +1013,7 @@ int tcp_get_timeout(u32 dest_ip, u16 dest_port, const void *request, u32 request
     int got_fin = 0;
     u32 data_deadline = ticks() + (reply_timeout_ticks ? reply_timeout_ticks : SLOW_REPLY_TIMEOUT_TICKS);
     while (ticks() < data_deadline && !got_fin && total < response_maxlen) {
+        NET_IDLE();
         u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
@@ -1057,6 +1066,7 @@ int tcp_open(u32 dest_ip, u16 dest_port) {
     struct tcp_header *tcp; u8 *payload; u32 paylen;
     u32 deadline = ticks() + net_connect_wait_ticks;
     while (ticks() < deadline) {
+        NET_IDLE();
         u32 n = active_receive(st.rx, sizeof st.rx);
         if (!n || !tcp_match(st.ip, st.lport, st.rport, st.rx, n, &tcp, &payload, &paylen)) continue;
         if (tcp->flags & TCP_RST) break;
@@ -1095,6 +1105,7 @@ int tcp_read(void *buf, u32 max, u32 timeout_ticks) {
     struct tcp_header *tcp; u8 *payload; u32 paylen;
     u32 deadline = ticks() + timeout_ticks;
     while (ticks() < deadline) {
+        NET_IDLE();
         u32 n = active_receive(st.rx, sizeof st.rx);
         if (!n || !tcp_match(st.ip, st.lport, st.rport, st.rx, n, &tcp, &payload, &paylen)) continue;
         if (tcp->flags & TCP_RST) { st.fin = 1; return 0; }

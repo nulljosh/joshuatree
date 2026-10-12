@@ -5,7 +5,7 @@ virtio keyboard, and keys go in through QMP send-key, the path arm64-claude-cons
   1. a bare Space and Ctrl+Space do nothing; Cmd+Space opens Spotlight ("spotlight open"); the bar is on the screen:
      its off-white surface and one accent mark.
   2. typing "term" narrows it to one name ("spotlight: term 1"); Enter opens the Terminal ("terminal open") and the
-     Terminal has the keyboard: "hi" and Enter reach ask.c, which answers with a samantha: line.
+     Terminal has the keyboard: "sam hi" and Enter reach ask.c, which answers with a samantha: line.
   3. Esc hands the keys back to the desktop ("console open"); Right three times moves the dock's label to Calendar
      ("M1d hover 2 Mail" on the way) and Enter opens that tile: Calendar, user/calendar.c in its own window ("M3c window
      calendar first frame"), which takes the keys, so Esc closes it ("M3c app calendar exit 0").
@@ -14,7 +14,7 @@ virtio keyboard, and keys go in through QMP send-key, the path arm64-claude-cons
      an open Spotlight before giving the Terminal the keyboard.
   6. Key repeat (main.c key_repeat_tick). A key held with QMP input-send-event for 1.3 s types its character once, then
      again after 400 ms and every 80 ms: 12 repeats, so 9 to 15 characters in all (8 to 14 repeats), and none after the
-     release. A 100 ms tap types exactly one. It holds in Spotlight, the Terminal's line ("$ jjjj" echoed on Enter) and
+     release. A 100 ms tap types exactly one. It holds in Spotlight, the Terminal's line ("% jjjj" echoed on Enter) and
      the Calculator ("calc: 9999 = ..."); Backspace repeats too. The virtio keyboard has no repeat of its own.
   7. Caps Lock (ask.c): Caps, j, t types "JT"; Shift+j under Caps types "j"; Caps again gives lowercase; Shift alone still
      capitalises, in Spotlight and on the Terminal's line.
@@ -78,7 +78,7 @@ try:
          count(img, (0xfa, 0xf8, 0xf4)) > count(base, (0xfa, 0xf8, 0xf4)) + 2000 and mark_edges(img) > mark_edges(base) + 10)
     done = expect("spotlight: term 1", "typing 'term' leaves one match"); key("t", "e", "r", "m"); done()
     done = expect("terminal open", "Enter opens the Terminal"); key("ret"); done()
-    done = expect("samantha:", "the Terminal has the keyboard: 'hi' and Enter get a samantha: line", 150); key("h", "i", "ret"); done()
+    done = expect("samantha:", "the Terminal has the keyboard: 'sam hi' and Enter get a samantha: line", 150); key("s", "a", "m", "spc", "h", "i", "ret"); done()
     done = expect("console open", "Esc hands the keys back to the desktop"); key("esc"); done()
     done = expect("M1d hover 2 Mail", "Right moves the dock's label along"); key("right", "right", "right"); done()
     done = expect("M1d hover 3 Calendar", "to Calendar"); key("right"); done()
@@ -145,18 +145,18 @@ try:
     key("shift", "j")
     step("Shift alone still capitalises", text_is(m, "JTjjtJ"), repr(spot_text(m)))
     key("esc")
-    # the Terminal's line is read back from the UART when Enter sends it ("Claude ... $ jjjj")
+    # the Terminal's line is read back from the UART when Enter runs it ("joshua@tree % jjjj"); a word that is no command comes back as zsh: command not found
     def sent(since):
-        s = re.findall(r"\$ (\w+)", uart()[since:]); return s[0] if s else None
-    def answered(since, name):   # the question went to ask.c's relay path and came back; then the prompt takes the next line
-        step(name, wait_for("samantha:", 150, uart()[:since].count("samantha:") + 1), uart()[since:]); time.sleep(0.5)
+        s = re.findall(r"% (\w+)", uart()[since:]); return s[0] if s else None
+    def answered(since, name):   # the line ran: zsh said the word is no command, then the prompt takes the next line
+        step(name, wait_for("zsh: command not found:", 150, uart()[:since].count("zsh: command not found:") + 1), uart()[since:]); time.sleep(0.5)
     fresh("terminal open", "f2")
     m = len(uart()); key("caps_lock"); key("j"); key("t"); key("shift", "j"); key("ret"); time.sleep(0.5)
     step("the Terminal's line follows Caps Lock and Shift: JTj", sent(m) == "JTj", repr(sent(m)))
-    answered(m, "that question is answered"); key("caps_lock")
+    answered(m, "that line is run (command not found)"); key("caps_lock")
     m = len(uart()); hold("j", HOLD); key("ret"); time.sleep(0.5); line = sent(m) or ""
     step("a held j on the Terminal's line repeats there too (9 to 15 j; got %d)" % len(line), set(line) == {"j"} and 9 <= len(line) <= 15, repr(line))
-    answered(m, "that question is answered too"); key("esc")
+    answered(m, "that line is run too (command not found)"); key("esc")
     fresh("spotlight open", "f1")
     for c in "apps": key(c)
     done = expect("calc open", "Enter opens the Calculator"); key("ret"); done()

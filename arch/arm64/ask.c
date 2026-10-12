@@ -1,6 +1,6 @@
-/* Claude in the Terminal. The bottom row of the Terminal window (its dock tile, or F1) is a one-line editor behind a prompt naming the model, `Samantha $ `:
-   typed keys land there, Backspace takes one back, Enter runs the line. `browse`, `open N` and `llm` are commands;
-   anything else goes to the Claude relay on the Mac (tools/claude-relay/relay.py) as one POST through the shared
+/* Claude in the Terminal. The bottom row of the Terminal window (its dock tile, or F1) is a one-line editor behind a zsh style prompt, `joshua@tree % `:
+   typed keys land there, Backspace takes one back, Enter runs the line. `browse`, `open N` and `llm` are commands, and so is
+   `sam QUESTION`: it goes to the Claude relay on the Mac (tools/claude-relay/relay.py) as one POST through the shared
    IP stack, HTTPS on the Pi and loopback HTTP by default in QEMU. Everything a command prints goes into the Terminal, above the prompt, wrapped to 53 columns (the house
    rule, so a photo of the Pi screen and the UART log read the same); the Console only keeps logs (docs/TERMINAL.md).
    No app, no ring 3: the kernel asks.
@@ -11,7 +11,13 @@
    network` (no DHCP lease: on a Pi that means Wi-Fi has not joined yet), `claude: error -401` for a relay refusal,
    `claude: timeout`. The relay keeps a session per conversation, so a follow-up question knows what came before.
    An answer may end with actions for the Pi ([[note TEXT]], [[browse URL]] and the rest: see take_actions); the Pi
-   runs them and sends what they printed back as the next turn, up to AGENT_STEPS times (docs/AGENT.md). */
+   runs them and sends what they printed back as the next turn, up to AGENT_STEPS times (docs/AGENT.md).
+
+   `sam` never blocks the prompt. The command only queues the question; ask_poll starts it on the next pass of the main
+   loop, and while it waits on the network (drivers/net.c calls net_idle once a pass in every client wait loop) ask_service
+   polls the keyboard and runs any line typed meanwhile at once, so the answer lands on a fresh line above the prompt
+   whenever it arrives. Only one request flies at a time. Commands that need the one TCP connection or the heap (browse,
+   open, llm, ...) are refused with a short line until she answers (cmd.c). */
 #include "../../drivers/net.h"
 #include "../../drivers/http.h"
 #include "tls.h"
@@ -41,6 +47,8 @@ void heap_release(unsigned long m);
 void http_post_set_bearer(const char *token);
 void led_blink(unsigned times);      /* main.c, Pi only: the green light, through the firmware mailbox */
 
+static void ask_service(void);
+extern void (*net_idle)(void);   /* drivers/net.c */
 #define ASK_MAX 200          /* one question; the relay takes up to 4 KB, this keeps the JSON body small */
 #define ASK_WIDTH 53         /* the Pi console rule: every printed line fits a 53-column row */
 #define ASK_TICKS 18000      /* 180 s at 100 Hz: past the relay's own 150 s limit, so its 504 lands first */
@@ -58,29 +66,20 @@ static int shift;
 static const char *const models[] = {"auto", "haiku", "sonnet", "opus"};
 static const char *const efforts[] = {"low", "medium", "high"};
 /* A request keeps its session and output target until it finishes or is stopped. */
+static int sam_state;        /* 0 idle, 1 queued by `sam`, 2 waiting on the relay */
+static char sam_q[ASK_MAX + 1];
+static unsigned sam_qn;
 int ask_select(unsigned pane) {
-    if (pane >= 2 || ac->pending) return 0;
+    if (pane >= 2 || ac->pending || sam_state) return 0;
     ac = &contexts[pane];
     return 1;
 }
 
-/* The prompt names the model that last answered: "Samantha $ " for Turing, "Claude Sonnet 5.5 $ " for Claude. Before
-   any answer, and whenever the relay cannot be reached, it names Samantha (the relay's --turing backend), a build with
-   no relay token too. tools/checks/relay-api-check.py keeps ASK_DEFAULT_MODEL in step with relay.py's
-   TURING_NAME. */
+/* The prompt is zsh style and never changes: `joshua@tree % `. The model that last answered shows in /status, not on the
+   prompt (Samantha is a command now, not the shell). tools/checks/relay-api-check.py keeps ASK_DEFAULT_MODEL in step
+   with relay.py's TURING_NAME. */
 #define ASK_DEFAULT_MODEL "Samantha"
-static char prompt[MODEL_MAX + 16];
-/* "Claude Opus 5.5 high $ ": the model that last answered, else the one /model picked, else the default; the effort
-   shows only when it is not the default (/effort, docs/AGENT.md). */
-const char *ask_prompt(void) {   /* main.c draws it on the bottom row */
-    unsigned k = 0;
-    const char *m = ac->last_name[0] ? ac->last_name : ac->model_i ? "Claude" : ASK_DEFAULT_MODEL;
-    for (; *m && k < MODEL_MAX; m++) prompt[k++] = *m;
-    if (!ac->last_name[0] && ac->model_i) { prompt[k++] = ' '; for (m = models[ac->model_i]; *m; m++) prompt[k++] = *m; }
-    if (ac->effort_i != 1) { prompt[k++] = ' '; for (m = efforts[ac->effort_i]; *m; m++) prompt[k++] = *m; }
-    prompt[k++] = ' '; prompt[k++] = '$'; prompt[k++] = ' '; prompt[k] = 0;
-    return prompt;
-}
+const char *ask_prompt(void) { return "joshua@tree % "; }   /* main.c draws it on the bottom row */
 /* The relay's "M <name>" line is network data: only "Samantha" (Turing) or a short printable name that starts
    "Claude" is used. */
 static void take_model(const char *s, unsigned n) {
@@ -124,11 +123,11 @@ void ask_redraw(void) { con_prompt(ac->line, ac->len); }   /* main.c: the Termin
 /* One key event, while the Terminal is in front (Shift always). 1 when it is the editor's. */
 static int stop_flag;        /* the kill switch: Esc, or "stop" and Enter, while the agent loop runs */
 static int is_stop(const char *s, unsigned n) { return n == 4 && s[0] == 's' && s[1] == 't' && s[2] == 'o' && s[3] == 'p'; }
-int ask_pending(void) { return ac->pending; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
+int ask_pending(void) { return ac->pending || sam_state; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
 int ask_key(unsigned code, unsigned value) {
     if (code == KEY_LSHIFT || code == KEY_RSHIFT) { shift = value != 0; return 1; }
     if (code == KEY_CAPSLOCK) { if (value) caps = !caps; return 1; }   /* one flip per press */
-    if (code == KEY_ESC) { if (value && ac->pending) stop_flag = 1; return 0; }
+    if (code == KEY_ESC) { if (value && (ac->pending || sam_state)) stop_flag = 1; return 0; }
     int typed = code < 58 && plain[code];
     if (!typed && code != KEY_BACKSPACE && code != KEY_ENTER && code != KEY_KPENTER) return 0;
     if (!value) return 1;                      /* key up: nothing to do, but it is still ours */
@@ -339,7 +338,7 @@ static int slash(const char *q, unsigned n) {
         ask_redraw();                                      /* the prompt shows it */
     } else if (word_is(w, wn, "status")) {
         kputs("status: model "); kputs(models[ac->model_i]); kputs(", effort "); kputs(efforts[ac->effort_i]); kputs("\n");
-        kputs("status: prompt "); kputs(ask_prompt()); kputs("\n");
+        kputs("status: last answer "); kputs(ac->last_name[0] ? ac->last_name : ASK_DEFAULT_MODEL); kputs("\n");
         kputs("status: relay ");
         kputs(!CLAUDE_TOKEN_LEN ? "no token" : !net_get_gateway() ? "no network" : ac->relay_state == 1 ? "answered last time"
               : ac->relay_state == 2 ? "did not answer last time" : "not tried yet");
@@ -566,7 +565,7 @@ static void run_actions(void) {
             break; }
         case ACT_SAVE: {                       /* asked-for files only, into JT/ (emmc.c refuses boot files and non 8.3 names) */
             unsigned at = 0, len = code_block(said, said_n, &at); int ok = 0;
-            if (!named_in(ac->question, ac->qlen, t)) { kputs("save: "); kputs(t); kputs(" was not in your question, not saved\n"); result_puts("refused, not named by the person\n"); break; }
+            if (!named_in(sam_q, sam_qn, t)) { kputs("save: "); kputs(t); kputs(" was not in your question, not saved\n"); result_puts("refused, not named by the person\n"); break; }
             if (!len) { kputs("save: no code block to save\n"); result_puts("no code block\n"); break; }
             if (!sd_ready()) { kputs("save: no SD card\n"); result_puts("no SD card\n"); break; }
             ok = sd_write(t, said + at, len) == 1;
@@ -602,12 +601,27 @@ static void run_actions(void) {
 }
 
 int ask_command(const char *q, unsigned n) {   /* cmd.c, before the browser: "stop" with nothing running, and the slash commands */
-    if (is_stop(q, n)) { kputs("agent: nothing running\n"); return 1; }
+    if (is_stop(q, n)) {
+        if (sam_state) { stop_flag = 1; kputs("sam: stopping after this step\n"); }
+        else kputs("agent: nothing running\n");
+        return 1;
+    }
     return slash(q, n);
 }
-void ask_claude(const char *q, unsigned n) {   /* cmd.c sends here what is not a command or a browser line */
+void ask_claude(const char *q, unsigned n) {   /* cmd.c: `llm PROMPT` */
+    if (n > 4 && q[0] == 'l' && q[1] == 'l' && q[2] == 'm' && q[3] == ' ') local(q + 4, n - 4);
+}
+int ask_busy(void) { return sam_state != 0; }   /* cmd.c: `sam` is waiting on the relay, so the network and the heap are taken */
+void sam_command(const char *q, unsigned n) {   /* cmd.c: `sam QUESTION` queues the question and returns; ask_poll sends it */
+    while (n && q[0] == ' ') { q++; n--; }
+    if (!n) { kputs("usage: sam QUESTION\n"); return; }
+    if (sam_state) { kputs("sam: still thinking\n"); return; }
+    if (n > ASK_MAX) n = ASK_MAX;
+    for (unsigned i = 0; i < n; i++) sam_q[i] = q[i];
+    sam_qn = n; sam_state = 1;
+}
+static void ask_relay(const char *q, unsigned n) {   /* the whole exchange for one question, run from sam_run */
     static char reply[REPLY_MAX + 1];
-    if (n > 4 && q[0] == 'l' && q[1] == 'l' && q[2] == 'm' && q[3] == ' ') { local(q + 4, n - 4); return; }
     if (!CLAUDE_TOKEN_LEN) { kputs("samantha: no token\n"); fallback(q, n); return; }
     if (!net_get_gateway()) {                  /* no DHCP lease, or no card at all */
 #ifdef PI_BUILD
@@ -630,7 +644,7 @@ void ask_claude(const char *q, unsigned n) {   /* cmd.c sends here what is not a
         if (got == -1 && step == 1) fallback(q, n);   /* the relay never answered the question: the local model does */
         if (got < 0) return;
         said_n = take_actions(ans, (unsigned)got); said = ans;
-        say_wrapped("", ans, said_n);   /* the answer first, then what she asked the Pi to do */
+        say_wrapped("sam: ", ans, said_n);   /* the answer first, then what she asked the Pi to do */
         if (!act_n) return;
         run_actions();
         if (step == AGENT_STEPS) { kputs("agent: step limit\n"); return; }
@@ -640,13 +654,37 @@ void ask_claude(const char *q, unsigned n) {   /* cmd.c sends here what is not a
     }
 }
 
-/* Called from the main loop: runs a question Enter queued, so the keyboard handler never blocks on the network. */
-void ask_poll(void) {
-    if (!ac->pending) return;
-    term_output(1);
+/* Called from the main loop: runs a line Enter queued, so the keyboard handler never blocks. Also called from ask_service
+   while a `sam` request waits on the network, which is why term_output nests and nothing here may touch the network. */
+static unsigned poll_depth;
+static void run_typed(void) {
+    poll_depth++; term_output(1);
     say_wrapped(ask_prompt(), ac->question, ac->qlen);
-    cmd_run(ac->question, ac->qlen, 0);                /* cmd.c: the one command line (help, /model, browse, llm, Claude), into the Terminal */
-    term_output(0);
+    void (*saved)(const char *) = cmd_out;
+    cmd_run(ac->question, ac->qlen, 0);                /* cmd.c: the one command line (help, /model, browse, llm, sam), into the Terminal */
+    cmd_out = saved;
+    poll_depth--; term_output(poll_depth ? 1 : 0);
     ac->pending = 0;
     con_prompt(ac->line, ac->len);
+}
+static void sam_run(void) {   /* the queued question, on a main loop pass of its own */
+    poll_depth++; term_output(1);
+    cmd_out = real_puts;
+    sam_state = 2; stop_flag = 0;
+    net_idle = ask_service;
+    ask_relay(sam_q, sam_qn);
+    net_idle = 0;
+    sam_state = 0;
+    poll_depth--; term_output(poll_depth ? 1 : 0);
+    con_prompt(ac->line, ac->len);
+}
+void ask_poll(void) {
+    if (ac->pending) run_typed();
+    else if (sam_state == 1) sam_run();
+}
+/* net_idle, while `sam` waits: the keys that arrived, and a line Enter completed runs now. Not while an action is
+   capturing its output for the next turn (that output must be Samantha's alone): the line waits for the next pass. */
+static void ask_service(void) {
+    input_drain();
+    if (ac->pending && !capturing) run_typed();
 }

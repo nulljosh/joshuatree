@@ -65,8 +65,9 @@ permanent UTC-7 offset from March 8, 2026.
 ### Keep two conversations
 
 Press F2 or Ctrl+T for Terminal. The Terminal and Samantha dock tiles also
-open it. Type a question and press Enter. The prompt names the assistant
-model that last answered; it does not prove the next request will succeed.
+open it. The prompt is `joshua@tree % `, like a zsh shell. Type a command and
+press Enter; a word that is not a command prints `zsh: command not found`.
+Ask Samantha with `sam QUESTION`.
 
 Press F3 to switch between two Terminal sessions. Each remembers its typed
 line, scrollback and assistant conversation until reboot. Finish or stop
@@ -149,7 +150,11 @@ as a first guess; if the router moves the Mac, the Pi finds the relay on the
 LAN by itself ([RELAY-TLS.md](RELAY-TLS.md)). The relay port defaults to 8765. See [the relay setup](CLAUDE-APP.md) for the
 shared token and the choice of Claude Code or an API-backed relay.
 
-Type a question in Terminal. `/status` shows the selected model, effort and
+Type `sam QUESTION` in Terminal. `sam` hands the question over and gives the
+prompt back at once, so you can keep typing commands while she thinks; her
+answer prints as `sam: ...` above the prompt when it lands. One question
+flies at a time (`sam: still thinking`), and `browse` waits for her answer.
+`/status` shows the selected model, effort and
 whether the relay answered last time. `/clear` starts a new conversation.
 `/model haiku` selects the smaller model; `/model auto` restores routing.
 `/effort low` requests a shorter, cheaper API answer. In Claude Code relay

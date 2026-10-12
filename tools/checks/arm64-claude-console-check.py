@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Claude in the ARM Terminal: open the Terminal (F1), type a question at its prompt (`Samantha $ `, naming the model) and Claude's answer is printed in
-the Terminal, through the real relay on this machine and the shared IP stack on virtio-net. No app, no model, no
+"""Claude in the ARM Terminal: open the Terminal (F1), type `sam QUESTION` at its zsh style prompt (`joshua@tree % `) and Claude's answer is printed in
+the Terminal as `sam: ...`, through the real relay on this machine and the shared IP stack on virtio-net. No app, no model, no
 internet. The Console is logs only: typing with it in front asks nothing, and the answer never lands in it
 (docs/TERMINAL.md). The file keeps its old name so the suite and the docs that point at it stay put.
 
@@ -14,21 +14,19 @@ Boot 1, virtio-net, ramfb, virtio keyboard:
   0. the Console has no input: "hi" and Enter with it in front reach nobody. Then F1 opens the Terminal.
   1. typing: the letters land on the prompt row (its pixels change), Backspace takes one back, and the per-key echo
      lines stay on the UART only.
-  2. ask: Enter sends; "samantha: thinking", the stub got exactly the typed text on stdin, and the stub's answer comes back
-     word for word, wrapped to lines of at most 53 columns, and the Terminal window gains ink. A reply at all proves the
+  2. ask: Enter sends; "samantha: thinking", the stub got exactly the question (without `sam `) on stdin, and the stub's answer
+     comes back after `sam: ` word for word, wrapped to lines of at most 53 columns, and the Terminal window gains ink. A reply at all proves the
      bearer was sent: the relay answers 401 without it. F1 back to the Console: the answer's ##### line is not there.
   3. follow-up: a second question reaches the stub with --resume <the session the first reply named>. The relay runs
-     with --model claude-sonnet-5-5, so the first question is echoed after the default prompt "Samantha $ " (no
-     "Claude" prompt shows before a Claude backend has answered) and the follow-up after "Claude Sonnet 5.5 $ ",
-     the model the relay said answered.
+     with --model claude-sonnet-5-5. The prompt is always "joshua@tree % ": no model name ever shows on it. /status names
+     the model that last answered ("Claude Sonnet 5.5").
   3b. Turing: the relay restarts with --turing pointed at a stub of turing's app/serve.py (OpenAI chat shape) on
-     loopback; its answer prints and the next prompt reads "Samantha $ " again, so ask.c takes "M Samantha".
+     loopback; its answer prints and /status says "Samantha", so ask.c takes "M Samantha".
   4. wrong token: the relay restarts on the same port with another token; the next question prints "samantha: error -401".
   The token never shows up on the UART.
-Boot 2, no network card: the prompt is the default "Samantha $ ", a question prints "samantha: no network" and the
-relay is never asked.
-Boot 3, built with no token file: the prompt is still "Samantha $ " (never Claude before Claude answers), a question prints
-"samantha: no token" and the relay is never asked.
+Boot 2, no network card: a `sam` question prints "samantha: no network" and the relay is never asked.
+Boot 3, built with no token file: a `sam` question prints "samantha: no token" and the relay is never asked.
+The non-blocking part (a second command typed while she thinks) is tools/checks/arm64-zsh-check.py.
 
 Discriminating: point ask.c at another path ("/api/claudx") and step 2 fails with "samantha: error -404": the stub is
 never asked, no answer on the UART and no ##### line on the screen.
@@ -55,9 +53,8 @@ QUESTION = "what is in version?"
 SECOND = "and again"
 ANSWER = ("The VERSION file holds the release number of Joshua Tree, and the Console wraps this answer "
           "at a space so that every line fits the fifty three columns of a Pi screen.")
-DEFAULT = "Samantha $ "    # ask.c's prompt before any answer (Turing's name)
-SONNET = "Claude Sonnet 5.5 $ "    # after the relay (--model claude-sonnet-5-5) answered
-PROMPT_RE = re.compile(r"(?:Samantha|Claude(?: [A-Z][a-z]+ \d+\.\d+)?) \$ ")
+DEFAULT = "joshua@tree % "    # ask.c's prompt, always
+PROMPT_RE = re.compile(r"joshua@tree % ")
 MARK = "#" * 50   # the answer's last line: denser than any boot line, so a screendump can find it
 STUB = r'''#!/usr/bin/env python3
 import json, os, sys, uuid
@@ -169,6 +166,7 @@ class Boot:
         for ch in text:
             if ch == " ": self.key("spc")
             elif ch == "?": self.key("shift", "slash")
+            elif ch == "/": self.key("slash")
             else: self.key(ch)
     def shot(self):
         self.n += 1; path = "%s.shot%d.ppm" % (self.log, self.n)
@@ -216,7 +214,7 @@ try:
               "samantha: thinking" not in b.uart() and DEFAULT + "hi" not in b.uart() and not stub_calls(), b.uart()[-300:])
         b.terminal()
         a = b.shot(); body, prompt = bands(a)
-        b.type(QUESTION + "x"); b.key("backspace"); time.sleep(0.4)
+        b.type("sam " + QUESTION + "x"); b.key("backspace"); time.sleep(0.4)
         t = b.shot()
         check("typed letters show on the prompt row", ink(t, *prompt) > ink(a, *prompt) + 60,
               "%d -> %d dark pixels" % (ink(a, *prompt), ink(t, *prompt)))
@@ -228,12 +226,12 @@ try:
         check("Enter sent the question: the stub got exactly the typed text, Backspace applied",
               len(calls) == 1 and calls[0]["stdin"] == QUESTION, repr([c["stdin"] for c in calls]))
         lines = answer_after(out, 1) if got else []
-        check("the answer comes back word for word", " ".join(" ".join(lines).split()) == ANSWER + " " + MARK, repr(lines))
+        check("the answer comes back as sam: and then the words", " ".join(" ".join(lines).split()) == "sam: " + ANSWER + " " + MARK, repr(lines))
         check("it is wrapped to lines of at most 53 columns", len(lines) > 1 and all(len(l) <= 53 for l in lines),
               repr([len(l) for l in lines]))
-        check("the question is echoed after the default prompt, Samantha $", DEFAULT + QUESTION + "\n" in out, out[-400:])
+        check("the line is echoed after the zsh prompt, joshua@tree % sam ...", DEFAULT + "sam " + QUESTION + "\n" in out, out[-400:])
         before = out.split("samantha: thinking")[0]
-        check("... and no Claude prompt shows before a Claude backend has answered", not re.search(r"Claude[^\n]*\$ ", before), before[-300:])
+        check("... and no model name shows on the prompt", not re.search(r"Claude[^\n]*[$%] ", before), before[-300:])
         check("... and the relay's model line is not printed as part of the answer", "M Claude" not in out)
         c = b.shot()
         dense_a, dense_c = densest_row(a, body), densest_row(c, body)
@@ -248,7 +246,7 @@ try:
               "%d vs %d in the Terminal" % (densest_row(d, body), dense_c))
         b.terminal()
         # a follow-up resumes the relay's session
-        b.type(SECOND); b.key("ret")
+        b.type("sam " + SECOND); b.key("ret")
         b.wait_for("samantha: thinking", 10, 2); b.wait_for(MARK, 30, 2)
         calls = stub_calls()
         sid = None
@@ -256,26 +254,29 @@ try:
             sid = calls[1]["argv"][calls[1]["argv"].index("--resume") + 1] if "--resume" in calls[1]["argv"] else None
         check("the follow-up resumes the first answer's session", len(calls) == 2 and calls[1]["stdin"] == SECOND and sid,
               repr([c["argv"][-2:] for c in calls]))
-        check("the follow-up is echoed after the model that answered: Claude Sonnet 5.5 $", SONNET + SECOND + "\n" in b.uart(),
+        check("the follow-up is echoed after the same prompt: joshua@tree %", DEFAULT + "sam " + SECOND + "\n" in b.uart(),
               b.uart()[-400:])
+        b.type("/status"); b.key("ret")
+        check("/status names the model that answered: Claude Sonnet 5.5", b.wait_for("status: last answer Claude Sonnet 5.5", 10), b.uart()[-300:])
         # Turing: the relay answers as Samantha from a stub serve.py; the prompt must follow the M line back to Samantha
         n_claude = len(stub_calls())
         start_relay(TOKEN, turing_url)
-        b.type("turing"); b.key("ret")
+        b.type("sam turing"); b.key("ret")
         b.wait_for("samantha: thinking", 10, 3); b.wait_for(MARK, 30, 3)
         out = b.uart()
         check("turing: the stub serve.py got the question", turing_seen[-1:] == ["turing"], repr(turing_seen))
-        check("turing: its answer prints in the Terminal", " ".join(" ".join(answer_after(out, 3)).split()) == ANSWER + " " + MARK,
+        check("turing: its answer prints in the Terminal", " ".join(" ".join(answer_after(out, 3)).split()) == "sam: " + ANSWER + " " + MARK,
               repr(answer_after(out, 3)) if out.count("samantha: thinking") > 3 else out[-300:])
         check("turing: no claude -p ran", len(stub_calls()) == n_claude)
         # the relay now wants another token
         start_relay(OTHER)
-        b.type("hi"); b.key("ret")
+        b.type("sam hi"); b.key("ret")
         check("a wrong token prints samantha: error -401", b.wait_for("samantha: error -401", 20), b.uart()[-300:])
-        check("after Turing answered, the prompt reads Samantha $ (ask.c took M Samantha)", DEFAULT + "hi\n" in b.uart().split(MARK)[-1], b.uart()[-300:])
+        b.type("/status"); b.key("ret")
+        check("after Turing answered, /status says Samantha (ask.c took M Samantha)", b.wait_for("status: last answer Samantha", 10), b.uart()[-300:])
         check("the 401 never ran claude", len(stub_calls()) == 2)
         # the Terminal's own scrollback: five more refusals (3+ lines each) overflow its rows, then Page Up and End
-        for k in range(2, 7): b.type("hi"); b.key("ret"); b.wait_for("samantha: error -401", 20, k)
+        for k in range(2, 7): b.type("sam hi"); b.key("ret"); b.wait_for("samantha: error -401", 20, k)
         time.sleep(0.4)
         region = lambda s, r: [s[2][(y * s[0] + r[0]) * 3:(y * s[0] + r[2]) * 3] for y in range(r[1], r[3])]
         e = b.shot(); b.key("pgup"); time.sleep(0.4); f = b.shot(); b.key("end"); time.sleep(0.4); g = b.shot()
@@ -284,7 +285,7 @@ try:
         check("... and End brings back the newest picture, pixel for pixel", region(e, body) == region(g, body))
         out = b.uart()
         check("the token never appears on the UART", TOKEN not in out and OTHER not in out)
-        long_lines = [l for l in out.split(DEFAULT + QUESTION)[-1].splitlines() if len(l) > 53]
+        long_lines = [l for l in out.split(DEFAULT + "sam " + QUESTION)[-1].splitlines() if len(l) > 53]
         check("every line after the first question fits 53 columns", not long_lines, repr(long_lines))
     finally:
         b.close()
@@ -306,7 +307,7 @@ try:
         th = threading.Thread(target=sniff); th.start()
         b = Boot("plaintext", True)
         try:
-            b.terminal(); b.type("hi"); b.key("ret")
+            b.terminal(); b.type("sam hi"); b.key("ret")
             check("a plaintext relay fails closed", b.wait_for("TLS failed, no HTTP fallback", 25), b.uart()[-300:])
             time.sleep(0.5)
             sent = b"".join(wire)
@@ -318,8 +319,8 @@ try:
     n0 = len(stub_calls())
     b = Boot("nonet", False)
     try:
-        b.terminal(); b.type("hi"); b.key("ret")
-        check("with no network card the prompt is the default model", b.wait_for(DEFAULT + "hi\n", 10), b.uart()[-300:])
+        b.terminal(); b.type("sam hi"); b.key("ret")
+        check("with no network card the line is echoed after the zsh prompt", b.wait_for(DEFAULT + "sam hi\n", 10), b.uart()[-300:])
         check("with no network card: samantha: no network", b.wait_for("samantha: no network", 10), b.uart()[-300:])
         time.sleep(1)
         check("... and with no model baked in, no local-model line follows", "llm:" not in b.uart(), b.uart()[-300:])
@@ -332,8 +333,8 @@ try:
     start_relay(TOKEN)
     b = Boot("notoken", True)
     try:
-        b.terminal(); b.type("hi"); b.key("ret")
-        check("with no token the prompt is still Samantha $", b.wait_for("\n" + DEFAULT + "hi\n", 10) and not re.search(r"Claude[^\n]*\$ ", b.uart()), b.uart()[-300:])
+        b.terminal(); b.type("sam hi"); b.key("ret")
+        check("with no token the prompt is still joshua@tree %", b.wait_for("\n" + DEFAULT + "sam hi\n", 10) and not re.search(r"Claude[^\n]*[$%] ", b.uart()), b.uart()[-300:])
         check("with no token: samantha: no token", b.wait_for("samantha: no token", 10), b.uart()[-300:])
     finally:
         b.close()
@@ -344,6 +345,6 @@ finally:
     shutil.rmtree(tmp, ignore_errors=True)
 if fails:
     print("FAIL: %d of the Claude Terminal checks failed" % len(fails)); sys.exit(1)
-print("PASS: the Console takes no input; typed at the ARM Terminal's prompt (Samantha $, then the model that answered, Samantha again after Turing), the question reaches the relay over virtio-net "
+print("PASS: the Console takes no input; `sam QUESTION` typed at the ARM Terminal's joshua@tree % prompt reaches the relay over virtio-net "
       "and the stub's answer is printed in the Terminal in 53-column lines, not the Console; a wrong token, no network and "
       "no token each print their own line")

@@ -1,6 +1,8 @@
 /* The one command line. cmd_run takes a typed line and a sink for its output; everything the Terminal's prompt
    understands (help, the /model and /effort commands, the browser, the local model, Claude) is dispatched here and nowhere else.
    Another window can run the same commands by calling cmd_run with its own sink. browser.c and ask.c print through cmd_out.
+   The prompt is zsh style (`joshua@tree % `): a word that is no command prints `zsh: command not found: WORD`, and Samantha
+   is the command `sam QUESTION`, which returns at once and prints her answer when it lands (ask.c).
    ls and cat read the SD card's FAT partition (emmc.c, drivers/fat.c), 8.3 names, the root or one folder down (ls JT,
    cat JT/NOTE.TXT). write, rm and mkdir change only the JT folder, through emmc.c's sd_write, sd_remove and sd_mkdir. */
 #include "bt.h"
@@ -10,7 +12,9 @@ void kputs(const char *s);   /* main.c: the UART and the log of the window in fr
 void say_wrapped(const char *prefix, const char *s, unsigned n);   /* ask.c */
 int browse_command(const char *q, unsigned n);                     /* browser.c */
 int ask_command(const char *q, unsigned n);                        /* ask.c: "stop" and the /model, /effort, /status, /clear, /help commands */
-void ask_claude(const char *q, unsigned n);                        /* ask.c: `llm PROMPT` or the relay */
+void ask_claude(const char *q, unsigned n);                        /* ask.c: `llm PROMPT` */
+void sam_command(const char *q, unsigned n);                       /* ask.c: `sam QUESTION`, queued and answered without blocking the prompt */
+int ask_busy(void);                                                /* ask.c: a `sam` request is waiting on the relay */
 int userrun(const char *name, unsigned n, unsigned long *status, int *faulted);   /* main.c: load an app from the table and run it at EL0 */
 
 int audio_tone(int freq_hz, int ms);                               /* audio.c: the 3.5 mm jack, polled PWM */
@@ -28,7 +32,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
-                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), help. Anything else asks Claude.";
+                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), sam QUESTION (ask Samantha), help.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;
@@ -158,11 +162,28 @@ static void jt_command(const char *q, unsigned n, int op) {   /* 0 write NAME TE
     cmd_out("\n");
 }
 
+static int blocked_while_sam(const char *q, unsigned n) {   /* the one TCP connection and the heap are in use: these would collide */
+    static const char *const names[] = {"browse", "open", "back", "forward", "reload", "llm", "bt", "userrun"};
+    for (unsigned a = 0; a < sizeof names / sizeof *names; a++) {
+        unsigned k = 0;
+        while (names[a][k] && k < n && q[k] == names[a][k]) k++;
+        if (!names[a][k] && (k == n || q[k] == ' ')) return 1;
+    }
+    return 0;
+}
+static void not_found(const char *q, unsigned n) {   /* zsh: command not found: WORD */
+    char w[40];
+    word(q, n, w, sizeof w);
+    cmd_out("zsh: command not found: "); cmd_out(w); cmd_out("\n");
+}
 void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     cmd_out = out ? out : kputs;
     while (n && q[0] == ' ') { q++; n--; }
     while (n && q[n - 1] == ' ') n--;
     if (!n) return;
+    if (ask_busy() && blocked_while_sam(q, n)) { cmd_out("zsh: sam is using the network, try again when she answers\n"); return; }
+    if (n == 3 && q[0] == 's' && q[1] == 'a' && q[2] == 'm') { sam_command(q + 3, 0); return; }
+    if (is(q, n, "sam")) { sam_command(q + 4, n - 4); return; }
     if (n == 4 && q[0] == 'h' && q[1] == 'e' && q[2] == 'l' && q[3] == 'p') { say_wrapped("", help, sizeof help - 1); return; }
     if ((n == 2 && q[0] == 'l' && q[1] == 's') || is(q, n, "ls")) {
         if (!sd_ready()) { cmd_out("ls: no SD card\n"); return; }
@@ -175,10 +196,11 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         return;
     }
     if (is(q, n, "cat")) { cat_file(q + 4, n - 4); return; }
-    if (is(q, n, "write")) {   /* NAME needs a dot (NOTE.TXT), so "write me a poem" still goes to Claude */
+    if (is(q, n, "write")) {   /* NAME needs a dot (NOTE.TXT) */
         unsigned k = 6;
         while (k < n && q[k] != ' ' && q[k] != '.') k++;
         if (k < n && q[k] == '.') { jt_command(q + 6, n - 6, 0); return; }
+        cmd_out("write: use write NAME.EXT TEXT\n"); return;
     }
     if (is(q, n, "rm")) { jt_command(q + 3, n - 3, 1); return; }
     if (is(q, n, "mkdir")) { jt_command(q + 6, n - 6, 2); return; }
@@ -192,5 +214,6 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     }
     if (ask_command(q, n)) return;
     if (browse_command(q, n)) return;
-    ask_claude(q, n);
+    if (is(q, n, "llm")) { ask_claude(q, n); return; }
+    not_found(q, n);
 }

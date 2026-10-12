@@ -9,8 +9,8 @@ that pass (float64, no numpy), and the kernel's text and token count must match 
 pick wins by a clear margin, so float32 against float64 rounding cannot flip a token.
 
   1. net, relay not listening: `llm once upon a time` prints the reference text and "llm: N tokens, X tok/s";
-     a plain question gets "samantha: error ..." (the relay is unreachable) and then the local model's answer to it.
-  2. no network card: a plain question prints "samantha: no network", then the local model's answer. This build pads the
+     `sam QUESTION` gets "samantha: error ..." (the relay is unreachable) and then the local model's answer to it.
+  2. no network card: `sam QUESTION` prints "samantha: no network", then the local model's answer. This build pads the
      checkpoint with 64 MiB of zeros, so the image and heap reach past the EL0 arena's usual place (RAM + 64 MiB):
      without main.c moving the arena past the heap, this build stops booting right after "M1 vectors set".
   3. the LLM_BREAK build (llm.c without its rotary position step) must NOT match: the check can tell.
@@ -190,7 +190,7 @@ try:
         check("`llm %s` writes the reference model's text, token for token" % PROMPT, same(got, refs[PROMPT]),
               "kernel %r (%d) vs reference %r (%d)" % (got[0][:80], got[1], refs[PROMPT][0][:80], refs[PROMPT][1]))
         check("it prints tokens and tokens per second", got[1] > 0 and got[2] != "", got[2])
-        b.ask(QUESTION)
+        b.ask("sam " + QUESTION)
         b.wait_for(DONE, 60, 2)
         out = b.uart()
         check("a question with the relay not listening: claude reports the error", re.search(r"samantha: (error|timeout)", out) is not None, out[-300:])
@@ -201,7 +201,7 @@ try:
     build(pad=64 << 20)
     b = Boot("nonet", False)
     try:
-        b.ask(QUESTION)
+        b.ask("sam " + QUESTION)
         b.wait_for(DONE, 60)
         out = b.uart()
         check("no network card: \"samantha: no network\" first", "samantha: no network\nllm: thinking" in out, out[-300:])
