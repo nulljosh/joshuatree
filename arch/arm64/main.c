@@ -596,6 +596,8 @@ static int app_start(const struct user_app *a) {   /* 0 started (it runs on the 
         ufile_mkdirs("NOTES/NOTES");   /* M3d: Notes' default folder in JT/, made before it looks, as i386's notes_check_support does */
     if (a->name[0] == 'm' && a->name[1] == 'u' && a->name[2] == 's' && a->name[3] == 'i' && a->name[4] == 'c' && !a->name[5])
         ufile_mkdirs("MUSIC");         /* M3e: Music's library, JT/MUSIC/, there for songs dropped onto the card from a Mac */
+    if (a->name[0] == 'b' && a->name[1] == 'o' && a->name[2] == 'o' && a->name[3] == 'k' && a->name[4] == 's' && !a->name[5])
+        ufile_mkdirs("BOOKS");         /* 2.66: Books' library, JT/BOOKS/, the books the card ships with and the ones dropped there */
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
     app_frame.elr = entry; app_sp = USER_BASE + UP_ASTACK + APP_STACK_PAGES * 4096UL;
@@ -1655,6 +1657,7 @@ static int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx
 static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
 static void dock_activate(int slot);
 #define SPOT_MUSIC (GUI_ICON_COUNT + 2)   /* M3e: Music is in Spotlight (and the app table) but not on the dock, a decision */
+#define SPOT_BOOKS (GUI_ICON_COUNT + 3)   /* 2.66: Books, the same: Spotlight only, not on the dock */
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
@@ -1693,7 +1696,7 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     if (slot == GUI_ICON_COUNT + 1) { brick_open(); return; }
     brick_close();
     clock_close();
-    if (app_dock(slot == SPOT_MUSIC ? "Music" : dock_names[slot])) return;   /* Calendar, Notes and Music: user/NAME.c at EL0, in its own window */
+    if (app_dock(slot == SPOT_MUSIC ? "Music" : slot == SPOT_BOOKS ? "Books" : dock_names[slot])) return;   /* Calendar, Notes and Music: user/NAME.c at EL0, in its own window */
     if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
     console_open();
     uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
@@ -1711,7 +1714,7 @@ int ask_char(unsigned code);                  /* ask.c: a key code as the charac
 #define SPOT_ROW 22
 #define SPOT_MAX 5                    /* matches shown at most */
 static char spot_text[24]; static unsigned spot_len;
-static int spot_sel, spot_hits[SPOT_MUSIC + 1], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
+static int spot_sel, spot_hits[SPOT_BOOKS + 1], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
 static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
 static int spot_lx, spot_ly, spot_lh;   /* the bar on the logical grid; its height is what is drawn now */
 static int spot_match(const char *name) {   /* the typed text, case folded, anywhere in the name */
@@ -1723,12 +1726,12 @@ static int spot_match(const char *name) {   /* the typed text, case folded, anyw
     }
     return 0;
 }
-static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : dock_names[slot]; }
+static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : slot == SPOT_BOOKS ? "Books" : dock_names[slot]; }
 static int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
 static void spot_paint(void) {
     int s = (int)window_scale();
     spot_n = 0;
-    for (int i = 0; i <= SPOT_MUSIC && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
+    for (int i = 0; i <= SPOT_BOOKS && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
     if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
     cur_hide();
     int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;

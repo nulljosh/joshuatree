@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 2.66.0 development branch (2026-10-11)
+
+Books, a plain-text reader as a ring-3 app (`user/books.c`) in the Apps folder and Spotlight. It lists the `.TXT` files in `BOOKS/` (the card's `JT/BOOKS/`), turns one page at a time with Right, Space and Left, and saves the page per book in `NAME.POS`. Books over 3 MB are refused; the card ships with one public domain sample. Check: `tools/checks/books-check.py`.
+
 ## 2.61.3 development branch (2026-10-11)
 
 Music artwork. A cover comes from the picture in an MP3's ID3 tag (JPEG or PNG), else a `COVER`, `FOLDER` or `ALBUM` file (`.JPG` or `.PNG`) beside the song, which also covers WAVs; anything else keeps the note tile. A non-square picture is cropped to its centre square and scaled to the 96 px tile. PNG needed the kernel's decoder in ring 3 (`user/libjt/png.c`). The transport row is Apple Music's: Shuffle at the left, Previous Play Next centred under the bar, Repeat at the right, and the right-hand time counts down. Checks: `tools/checks/music-qa-check.py` boot E reads a pixel off each kind of cover.

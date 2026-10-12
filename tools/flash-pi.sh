@@ -57,6 +57,11 @@ for f in kernel8.img config.txt; do [ -f "$CARD/$f" ] && cp "$CARD/$f" "$CARD/$f
 cp -R "$FW"/. "$CARD"/
 cp arch/arm64/kernel8.img "$CARD"/kernel8.img
 cp tools/pi-config.txt "$CARD"/config.txt
+# 2.66: Books' library, JT/BOOKS/ on the card. One public domain sample, The Yellow Wallpaper, with its
+# Project Gutenberg licence inside the file. Make Something Wonderful is not bundled (not public domain):
+# drop your own copy on the card as JT/BOOKS/JOBS.TXT (docs/BOARD-TEST.md).
+mkdir -p "$CARD"/JT/BOOKS
+cp tools/books/YELLOW.TXT "$CARD"/JT/BOOKS/YELLOW.TXT
 
 command -v dot_clean >/dev/null && dot_clean -m "$CARD"
 if [ "${FLASH_PI_NO_EJECT:-}" = 1 ]; then :

@@ -535,6 +535,18 @@ drivers/user_mines.h: user/mines.bin tools/gen/gen_user_bin.py
 
 kernel/ring3app.o: drivers/user_mines.h
 
+# Books (2.66): the plain-text reader, Apps folder only. Reads BOOKS/ (JT/BOOKS/ on the card).
+user/books.o: user/books.c user/jtsys.h user/libjt/text.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/books.bin: user/books.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/books.o user/libjt.a
+
+drivers/user_books.h: user/books.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/books.bin drivers/user_books.h user_books
+
+kernel/ring3app.o: drivers/user_books.h
+
 drivers/user_mail.h: user/mail.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/mail.bin drivers/user_mail.h user_mail
 
@@ -597,6 +609,7 @@ clean:
 	rm -f user/panes.o user/panes.bin drivers/user_panes.h
 	rm -f user/claude.o user/claude.bin drivers/user_claude.h
 	rm -f user/mines.o user/mines.bin drivers/user_mines.h
+	rm -f user/books.o user/books.bin drivers/user_books.h
 	rm -f joshuatree.iso boot/memmap.ld
 	rm -rf build/iso_root
 

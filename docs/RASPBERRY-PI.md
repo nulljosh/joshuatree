@@ -286,6 +286,12 @@ Any failure is one plain line, and the Terminal keeps answering. `bt: the mouse 
 
 The patch is `BCM4345C0.hcd` from RPi-Distro/bluez-firmware at the commit pinned in `tools/bt-fw.sh`, fetched into `build/bt-fw/` with `LICENSE.cypress` beside it and never committed, like the Wi-Fi firmware. QEMU has no Bluetooth chip, so `tools/checks/arm64-bt-check.py` runs the whole exchange against a fake controller and a fake mouse on a second serial port. The fake does the pairing math itself with its own AES, so a wrong byte order in the kernel's fails the check.
 
+**The Books step (2.66).** Books reads the `.TXT` files in `JT/BOOKS/` on the card. The card ships with one public domain sample, The Yellow Wallpaper. Make Something Wonderful is not public domain, so it is not bundled: drop your own copy on the card as `JT/BOOKS/JOBS.TXT`.
+
+1. Boot the card. Books is not on the dock. Press F1, type `books`, Enter.
+2. The library lists The Yellow Wallpaper. Enter opens it, Right or Space turns the page, Left goes back, Esc returns to the library.
+3. Turn to page 3 or so, Esc, Esc to close Books, then power off and boot again. Open the book: it should open on the same page.
+
 ## Time estimates (2026-10-06)
 
 Guesses, not measurements. Updated as each one lands.
