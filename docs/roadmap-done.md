@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 3.7.9 development branch (2026-10-12)
+
+Closing a window leaves no residue. The board photo on 3.6.3 showed a tall thin white bar, a dark glyph fragment and stray letters on the wallpaper after a window closed. Cause: Brick's playfield is 456 px wide in a frame that is 450 wide at 1080p and its hint line runs 5 px past the bottom edge, and every close cleared the frame rectangle only. Now the Console, Terminal, Browser, Brick, Clock, Calculator and app windows all leave through one `wall_vacate` that wipes the frame plus a 6 px ring and repaints the tribute line over the dock, a drag clears the same ring, and a window behind a closed one is wiped and drawn again whole. Check: `tools/checks/arm64-closeglitch-check.py` (new `glitchtest` build at 1080p).
+
 ## 3.7.3 development branch (2026-10-12)
 
 The Bluetooth mouse comes back by itself. Before, a saved pairing got one 20 second try at boot and nothing after, so a mouse that was asleep, or that slept later, stayed gone until `bt reconnect`. Now the reconnect is a run of tries (12 seconds each, then a pause of 2, 4, 8, 15 and 30 seconds, up to 30), it starts at boot, when the link drops and on `bt reconnect`, and it re-encrypts with the saved key and turns the mouse's reports on again each time. `bt status` shows searching, connected or idle, the saved address with only its last byte, the tries and the last error. A mouse that ignores boot protocol now has its report map read and its button, X, Y and wheel fields placed from it (12 bit packed X and Y checked), and `bt status` shows the last report's bytes. Proven in QEMU only against a fake mouse, not yet on the Pi. Check: `tools/checks/arm64-bt-check.py`.

@@ -215,7 +215,7 @@ card has not been updated.
 
 ## Drag a window
 
-Press on a window's title bar between the dots and move the mouse: the Console, Terminal, Browser, Clock and Brick windows follow the pointer and stop at the menu bar, the screen edges and the dock. The Calculator and app windows stay where they open. Released in 3.6.0.
+Press on a window's title bar between the dots and move the mouse: the Console, Terminal, Browser, Clock and Brick windows follow the pointer and stop at the menu bar, the screen edges and the dock. The Calculator and app windows stay where they open. Released in 3.6.0. Closing a window puts the wallpaper back under everything it drew, including anything that stuck out past its frame (3.7.9; before, Brick left a thin white bar and a few letters behind).
 
 ## Play Brick
 
