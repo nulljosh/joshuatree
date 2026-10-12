@@ -865,6 +865,9 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
    lines are shown, and a pinned row under the text keeps the latest wifi and usb status in view wherever you are. ---- */
 #include "../../drivers/vgafont.h"
 #define LOG_MAX 16384
+#if defined(PI_BUILD) && !defined(QUIET_BOOT)
+#define QUIET_BOOT   /* the desktop comes up bare: the boot log is kept but its window is not drawn (a dock click or the Terminal's Esc brings it up) */
+#endif
 #define CON_FG 0x00202020
 #define CON_BG 0x00ffffff
 int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);   /* arch/arm64/wall.c: the flat Navy wallpaper */
@@ -1123,6 +1126,9 @@ void con_prompt(const char *s, unsigned n) {
 }
 int con_columns(void) { return con_live ? con_cols : 0; }
 static void con_start(void) {   /* the screen is ready: replay what was printed before it */
+#ifdef QUIET_BOOT
+    return;   /* the log stays in the buffer with its window closed; pane_open draws every line when it is asked for */
+#endif
     con_live = 1;
     cp->col = cp->row = 0;
     for (unsigned i = 0; i < cp->len; i++) con_draw(i);
@@ -2105,15 +2111,17 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
 #include "clock_ui.h"
 #include "brick_ui.h"
 #include "browser_ui.h"
-int wifi_signal_level(void);   /* wifi.c: 1 to 3 from how loud our network was in the scan */
-/* The right end of the menu bar: the clock in 12-hour form, and left of it a three-bar signal icon, no name. Connected
-   bars show in the same ink as the clock, as many as the signal earns; anything else (starting, joining, no network) is three
-   quiet grey bars. Each call puts the saved bare bar back first, so old pixels never show through. */
+/* The right end of the menu bar: the clock in 12-hour form, and left of it the Wi-Fi fan, no name. Joined, the fan is flat
+   ink, the same 0x001C1C1E as the clock; anything else (starting, joining, no network) is the same fan dimmed to a neutral grey.
+   Each arc is anti-aliased (4x4 samples a pixel, blended onto the bar), so it stays crisp at scale 1 and 2. Each call puts the
+   saved bare bar back first, so old pixels never show through. */
+#define WIFI_INK 0x001C1C1E
+#define WIFI_DIM 0x00909090
 void menubar_wifi(int state) {
+    mb_wifi = state;   /* kept even before the desktop exists (the boot splash), so its first paint shows the right fan */
     if (!fb || !text_ok) return;
     int W = (int)fb_w, H = (int)fb_h, mb = sg(MENUBAR_H);
     if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = mb_save[y * (W - mb_x0) + (x - mb_x0)];
-    mb_wifi = state;
     char clkbuf[12] = "--:--"; const char *clk = clkbuf;   /* the clock slot: dashes until the network has told us the time */
     unsigned long u = net_clock_utc();
     if (u) {
@@ -2125,14 +2133,23 @@ void menubar_wifi(int state) {
     }
     int cx = W - sg(16) - text_width(2, clk, sg(120));
     text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
-    int R = sg(11), th = sg(3) / 2, dr = sg(3) / 2, ox = cx - sg(16) - R, oy = mb / 2 + sg(5);   /* the classic fan: a dot, then three arcs above it */
-    int level = state == 2 ? wifi_signal_level() : 0;
-    for (int y = -R; y <= dr; y++) for (int x = -R; x <= R; x++) {
-        int d2 = x * x + y * y, ring = 0;
-        if (d2 <= dr * dr) ring = 1;   /* the dot */
-        else if (y < 0 && x <= -y && -x <= -y) for (int i = 1; i <= 3; i++) { int ro = sg(3 * i + 2), ri = ro - th; if (d2 <= ro * ro && d2 >= ri * ri) ring = i + 1; }   /* 45 degrees either side of straight up */
-        if (ring) fb_rect(ox + x, oy + y, 1, 1, ring - 1 <= level && (ring > 1 || level) ? 0x001C1C1E : 0x00B8B4AC);
+    int R = sg(11), th = sg(3) / 2 < 2 ? 2 : sg(3) / 2, dr = sg(3) / 2, ox = cx - sg(16) - R, oy = mb / 2 + sg(5);   /* the classic fan: a dot, then three arcs above it */
+    unsigned ink = fb_color(state == 2 ? WIFI_INK : WIFI_DIM);
+    for (int y = -R - 1; y <= dr + 1; y++) for (int x = -R - 1; x <= R + 1; x++) {
+        int hit = 0;
+        for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {   /* a sample's offset from the dot's centre, in eighths of a pixel */
+            int X = 8 * x + 2 * i - 3, Y = 8 * y + 2 * j - 3, d2 = X * X + Y * Y, in = d2 <= 64 * dr * dr;
+            if (!in && Y < 0 && X <= -Y && -X <= -Y) for (int k = 1; k <= 3; k++) { int ro = 8 * sg(3 * k + 2) - 4, ri = ro - 8 * th; if (d2 <= ro * ro && d2 >= ri * ri) in = 1; }   /* 45 degrees either side of straight up */
+            hit += in;
+        }
+        if (!hit) continue;
+        unsigned *d = fb + (unsigned)(oy + y) * fb_pitch + (unsigned)(ox + x), o = 0;
+        for (int b = 0; b <= 16; b += 8) o |= (((ink >> b & 0xFF) * (unsigned)hit + (*d >> b & 0xFF) * (16u - (unsigned)hit)) / 16) << b;
+        *d = o;
     }
+#ifdef WIFI_ICON_TEST   /* the wifiicon check's builds: where the fan is, for arm64-quietboot-check.py to look at its pixels */
+    uart_puts("wifi icon "); uart_dec((unsigned)ox); uart_putc(','); uart_dec((unsigned)oy); uart_putc(','); uart_dec((unsigned)R); uart_putc('\n');
+#endif
     int nx = mb_x0 + sg(12), nw = ox - R - sg(16) - nx;
     if (notice.text[0] && nw > 0)
         text_draw(2, notice.text, nx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, nx + nw, H);
@@ -2167,12 +2184,42 @@ void menubar_tick(void) {   /* the poll loop calls this; it redraws only when th
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
     if ((int)(h * 60 + m) != clock_minute) menubar_wifi(mb_wifi);
 }
-static void fb_init(void) {
-    if (!fb_setup()) return;
+/* The Pi's boot splash (QUIET_BOOT): from the first frame a solid terracotta screen with the tree mark centred and a thin
+   line under it, one sixth longer as each stage of boot finishes (fb, sd, wifi, clock, bt, desktop). Nothing else is drawn,
+   not the desktop, not the Console, until splash_finish: Wi-Fi joined or given up, the clock synced or given up, Bluetooth
+   up or given up. Then fb_desktop paints the desktop once. The UART says `splash step N name` and `boot done`. */
+#ifdef QUIET_BOOT
+static int splash_on;
+static void splash_step(int n, const char *name) {
+    if (!splash_on) return;
+    int W = (int)fb_w, H = (int)fb_h, bw = sg(140), bh = sg(4) > 2 ? sg(4) : 2, bx = (W - bw) / 2, by = H / 2 + sg(50);
+    fb_rect(bx, by, bw, bh, 0x00923F20);              /* the track, a darker terracotta */
+    fb_rect(bx, by, bw * n / 6, bh, 0x001C1C1E);      /* the stages done, in ink */
+    fb_flush(bx, by, bw, bh);
+    uart_puts("splash step "); uart_dec((unsigned)n); uart_putc(' '); uart_puts(name); uart_putc('\n');
+#ifdef SPLASH_STEP_MS   /* the splash checks: hold each step so a screendump can catch it */
+    unsigned long f, c, end; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    end = c + (f ? f : 54000000) / 1000 * SPLASH_STEP_MS;
+    do __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); while (c < end);
+#endif
+}
+static void splash_begin(void) {
     int W = (int)fb_w, H = (int)fb_h;
-    mouse_x = fb_w / 2; mouse_y = fb_h / 2;               /* the pointer starts in the middle of the screen */
+    fb_rect(0, 0, W, H, 0x00B5502C);
+    menu_mark_paint(W / 2, H / 2 - sg(30), sg(110), 0x001C1C1E);
+    splash_on = 1;
+    uart_puts("splash up\n");
+    splash_step(1, "fb");
+}
+#define SPLASH(n, name) splash_step(n, name)
+#else
+#define SPLASH(n, name) ((void)0)
+#endif
+static void fb_desktop(void) {
+    int W = (int)fb_w, H = (int)fb_h;
     int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
     int mb = sg(MENUBAR_H);                               /* the menu bar's height on this screen: 26 on the 960x540 grid */
+#ifndef QUIET_BOOT
     {   /* the boot screen while the photo decodes (the slow part): the tree on off-white and a thin bar a third full,
            one of three steps done (screen up; the photo and the desktop follow). The wallpaper paints straight over it. */
         fb_rect(0, 0, W, H, 0x00faf8f4);
@@ -2182,6 +2229,7 @@ static void fb_init(void) {
         fb_rect(bx, by, bw / 3, bh, 0x001C1C1E);
         fb_flush(0, 0, W, H);
     }
+#endif
     int wall_ok = wall_paint(fb, fb_pitch, W, H, fb_swap);
     if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* Navy (clrs.cc), see wall.c; this fallback is now unreachable */
     for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {   /* menu bar: half wallpaper, half white, per pixel */
@@ -2224,11 +2272,13 @@ static void fb_init(void) {
     app_under = kmalloc((unsigned)(app_lw * s * app_lh * s) * 4);
     if (app_under) { for (int j = 0; j < app_lh * s; j++) for (int i = 0; i < app_lw * s; i++) app_under[j * app_lw * s + i] = fb[(unsigned)(app_ly * s + j) * fb_pitch + (unsigned)(app_lx * s + i)]; }
     else uart_puts("oom app window\n");                    /* an app then gets -ENODEV for its window and says so */
+#ifndef QUIET_BOOT
     console_frame();
+#endif
     if (text_ok) {
         menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
         text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
-        menubar_wifi(1);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
+        menubar_wifi(mb_wifi < 0 ? 1 : mb_wifi);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
         const char *thanks = "Seduce. Vilify. Ignore.";
@@ -2266,11 +2316,20 @@ static void fb_init(void) {
     /* Blank spots, clear of any text: the bottom of the window's white well, the menu bar's rule, and the wallpaper (the
        design system's dark fill at three corners, not the old 0x203040 fallback). Grey and white read the same either
        byte order; the rule and the fill are checked in fb_color order. */
-    int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == 0x00ffffff && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
+#ifdef QUIET_BOOT
+    unsigned well = fb_color(0x00B5502C);   /* no window was drawn: the spot where its well would end is bare wallpaper */
+#else
+    unsigned well = 0x00ffffff;
+#endif
+    int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == well && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
     ok = ok && wall_ok && w0 == fb_color(0x00B5502C) && w1 == w0 && w2 == w0;
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
+#ifdef QUIET_BOOT
+    uart_puts("console quiet\n");
+#endif
 #ifdef DRAG_TEST   /* the dragtest build: a drag of 100 right and 60 down at boot, clamped like a real one, for arm64-drag-check.py at 1080p (scale 2) */
+    pane_open(&con_p);   /* the Console is not up at boot: bring it up to be dragged */
     drag_on = 1; win_move_to(win_lx + 100, win_ly + 60); drag_end();
 #endif
 #ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with) */
@@ -2287,6 +2346,26 @@ static void fb_init(void) {
     calc_press("Sci"); calc_press("M+"); calc_did(0);   /* end on the scientific pad, memory held, for the screendump */
 #endif
 }
+static void fb_init(void) {
+    if (!fb_setup()) return;
+    mouse_x = fb_w / 2; mouse_y = fb_h / 2;               /* the pointer starts in the middle of the screen */
+#ifdef QUIET_BOOT
+    splash_begin();                                       /* the desktop waits for splash_finish */
+#else
+    fb_desktop();
+#endif
+}
+#ifdef QUIET_BOOT
+static void fb_diag(void);
+static void splash_finish(void) {   /* everything boot waits for is done: the one desktop paint */
+    uart_puts("boot done\n");
+    if (!splash_on) return;
+    splash_step(6, "desktop");
+    splash_on = 0;
+    fb_desktop();
+    fb_diag();
+}
+#endif
 /* One line that turns a photo of the screen into a measurement: where the firmware really put the kernel, the monitor
    size it reported, the buffer we got and its pitch in bytes, and the console font's self-test ('M': width x height,
    advance, verdict). For example "@0x80000 fb 1920x1080>1920x1080 p7680 M13x18 a14 ok". */
@@ -2739,6 +2818,7 @@ static void blk_probe(void) {}
 
 void net_stack_demo(void);
 void net_clock_sync(void);
+int bt_starting(void);   /* bt.c: the radio is still loading its patch */
 void tls_demo(void);
 void input_drain(void) { usb_poll(); input_poll(); key_repeat_tick(); audio_pump(); }   /* ask.c, between agent steps and in every wait while `sam` thinks: the keys that queued, a held key repeating, and the sound */
 
@@ -2757,11 +2837,14 @@ void main(void) {
     if (blk_init()) blk_probe();
     net_stack_demo();   /* ip.c: DHCP and an HTTP POST through the shared stack, silent with no card */
     tls_demo();         /* ip.c: the HTTPS proof, only in a TLSPORT= build */
+#ifndef QUIET_BOOT
     fb_diag();   /* last, so it is the newest line on the screen */
+#endif   /* quiet boot: splash_finish prints it, once text_init has measured the font */
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
+    SPLASH(2, "sd");
 #ifdef SD_SELFTEST   /* the sd builds (arm64-sd-check.py) run the Terminal's own commands at boot on the check's card */
     {
         void cmd_run(const char *q, unsigned n, void (*out)(const char *));
@@ -2814,9 +2897,22 @@ void main(void) {
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); menubar_notify("Wi-Fi joined"); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+    SPLASH(3, "wifi");
+    SPLASH(4, "clock");   /* net_clock_sync ran inside the join above, or there was no network to ask */
     bt_init();   /* bt.c: powers the radio and returns; the main loop's bt_poll does the rest */
+#ifdef QUIET_BOOT
+    if (splash_on) {   /* the splash waits for the radio to load its patch (about half a minute on a Pi), or to say it will not: 60 s at most */
+        unsigned long t0 = key_ms();
+        while (bt_starting() && key_ms() - t0 < 60000) bt_poll();
+    }
+    SPLASH(5, "bt");
+    splash_finish();
+#endif
 #ifdef NOTICE_SELFTEST
     menubar_notify("Note kept in memory");
+#endif
+#if defined(WIFI_ICON_TEST) && WIFI_ICON_TEST == 2
+    menubar_wifi(2);   /* a joined fan, which QEMU never reaches on its own */
 #endif
 #ifdef POWER_SELFTEST
     void hid_kbd(const unsigned char *, unsigned, unsigned char *);
@@ -2844,19 +2940,6 @@ void main(void) {
 #endif
 #if defined(NOTES_SELFTEST) || defined(APP_BOOT)
     usb_ok |= !inputs;   /* QEMU's raspi4b has no USB to find: the loop runs anyway, for notes_tick's made-up keys */
-#endif
-#ifdef PI_BUILD
-    {   /* The desktop is up: the boot log steps aside, so the board boots to a clean desktop (it stays one dock click away, and
-           the Terminal opens as its own window). Anything that went wrong keeps it on screen: a FAIL or an oom line in the log. */
-        int trouble = 0;
-        for (unsigned i = 0, ls = 0; i + 4 <= con_p.len; i++) {   /* ls: where this line began; a Wi-Fi line is skipped, the menu bar says when Wi-Fi is down */
-            if (con_p.log[i] == '\n') { ls = i + 1; continue; }
-            const char *q = con_p.log + i;
-            int wifi = con_p.log[ls] == 'w' || con_p.log[ls] == 'W';
-            if (!wifi && ((q[0] == 'F' && q[1] == 'A' && q[2] == 'I' && q[3] == 'L') || (q[0] == 'o' && q[1] == 'o' && q[2] == 'm' && q[3] == ' '))) { trouble = 1; break; }
-        }
-        if (!trouble) console_close();
-    }
 #endif
     if (usb_ok || inputs) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay

@@ -37,7 +37,7 @@ def run(name, heap, qemu_args, image, expect, screen):
         for _ in range(150):
             time.sleep(0.1)
             out = open(log, errors="replace").read() if os.path.exists(log) else ""
-            if "M3 userland ok" in out or "CRASH" in out: break
+            if "CRASH" in out or ("M3 userland ok" in out and ("M1c fb" in out or "oom fb" in out)): break   # the Pi image paints its desktop after the boot splash, so after userland
         lines = out.splitlines()
         if "KERNEL CRASH" in out or "M3 userland ok" not in out: fails.append(f"{name}: the kernel did not survive the failed allocation: {out[-400:]!r}"); return
         if expect not in lines: fails.append(f"{name}: no {expect!r} line, got {out[-400:]!r}"); return
@@ -60,7 +60,10 @@ def run(name, heap, qemu_args, image, expect, screen):
         win = [tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3]) for y in range(win_y + 32 * h // 600, win_y + win_h - 14 * h // 600) for x in range(win_x + 8 * h // 600, win_x + win_w - 4 * h // 600)]
         ink = sum(1 for c in win if max(c) < 0x90)
         soft = sum(1 for c in win if 0x30 < c[0] < 0xd0 and c[0] == c[1] == c[2])
-        if ink < 300: fails.append(f"{name}: the boot log is not on screen ({ink} text pixels)")
+        if name.startswith("pi"):   # 3.6.2: the Pi image draws no Console at boot, even with a bad heap; the log waits in its buffer (the virt run above checks the fallback font draws)
+            if "console quiet" not in lines or any(c != (0xb5, 0x50, 0x2c) for c in win): fails.append(f"{name}: the desktop is not quiet ({ink} text pixels where the Console would be)")
+            else: print(f"  ok: {name} desktop up with no Console window (the log is kept for a dock click)")
+        elif ink < 300: fails.append(f"{name}: the boot log is not on screen ({ink} text pixels)")
         elif soft: fails.append(f"{name}: {soft} anti-aliased pixels: the smooth font drew although its allocation failed")
         else: print(f"  ok: {name} desktop up, console in the VGA fallback font ({ink} text pixels, no anti-aliased edges)")
     finally:

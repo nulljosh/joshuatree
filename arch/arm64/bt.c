@@ -909,6 +909,7 @@ void bt_poll(void) {
     step();
 }
 
+int bt_starting(void) { return st == STARTING; }
 int bt_busy(void) { return st == STARTING || st == SCANNING || st == PAIRING || st == MOUSE || st == RETRY; }
 
 static int has(const char *name, const char *w, unsigned wn) {   /* name contains the wn letters of w, any case */
