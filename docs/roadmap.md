@@ -68,7 +68,7 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 The Pi against what Joshua uses today: macOS, Omarchy, Kali and Ubuntu. One line per gap, ticked in the PR that closes it with the version. Never deleted. Closed on 2026-10-12: [x] a zsh-style Terminal with `sam` as a non-blocking command (3.3.0), [x] `reboot` and `shutdown` (3.4.0), [x] a Bluetooth mouse that remembers its pairing (3.5.0), [x] a Browser window over HTTPS (3.0.0), [x] Books (3.2.0), [x] Samantha lists and reads the card (3.1.0).
 
 Broken on the board now (fix first):
-- [ ] [Sonnet] The Browser flickers on the Pi. A half-drawn repaint reaches the live screen. Draw off-screen, copy once (PR 559). Check: `arm64-browser-flicker-check.py`.
+- [ ] [Sonnet] The Browser flickers on the Pi. A half-drawn repaint reaches the live screen. Draw off-screen, copy once (PR 559). Check: a browser-flicker check that fails if the off-screen draw is removed.
 - [ ] [Sonnet] `reboot` stays refused after a Samantha error reply, and `sam` takes about a minute for 5+5. Check: a fake relay that errors, then `reboot` runs.
 - [ ] [Sonnet] The mouse needs a scan on a fresh card and should reconnect alone after a reboot or when it wakes from sleep. Check: the fake mouse sleeps, the link drops, the board reconnects with no command.
 
