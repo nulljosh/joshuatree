@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (242 checks)
+## The suite (243 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -250,6 +250,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | ARM64 FP state: q0-q31, FPCR and FPSR survive timer interrupts whose handler wipes them, and the build without the save fails the same test (skips where the tools are missing) | `tools/checks/arm64-fp-check.py` | retry |
 | ARM64 out of memory: a full heap prints oom fb or oom text and the kernel carries on (no screen, or the VGA fallback font) on virt and the Pi 4B model (skips where the tools are missing) | `tools/checks/arm64-oom-check.py` | retry |
 | ARM64 boot health: the Pi image boots on QEMU's raspi4b with no FAIL line beyond the listed expected ones, no oom, no crash, and the desktop up (skips where the tools are missing) | `tools/checks/arm64-boot-health-check.py` | retry |
+| ARM64 quiet boot: the Pi image's boot log steps aside, no dock label plays by itself (raspi4b at 1080p) | `tools/checks/arm64-boot-quiet-check.py` | retry |
 | Pi card flasher: kernel, firmware and tools/pi-config.txt land on a stand-in card, and what was there is kept as .bak (skips where the tools are missing) | `tools/checks/flash-pi-check.sh` | once |
 | ARM64 RNG200 full seeds, health faults, bounded waits and wiped failures (host harness) | `tools/checks/arm64-rng-check.py` | once |
 | ARM64 clock accepts bounded HTTPS dates only, never before the build or an accepted clock (host harness) | `tools/checks/arm64-clock-check.py` | once |
