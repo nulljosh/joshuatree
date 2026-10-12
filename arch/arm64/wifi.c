@@ -581,12 +581,32 @@ unsigned wifi_nic_recv(void *buf, unsigned max) {
     for (unsigned i = 0; i < len; i++) ((unsigned char *)buf)[i] = bd[skip + i];
     return len;
 }
+/* Bluetooth pairing holds the radio. The chip has one antenna for both, and with Wi-Fi up a mouse's first packets
+   never reached us (the board, 2026-10-12: 0x3e at 48, 30 and 15 ms alike; with Wi-Fi off the same mouse paired first
+   try). WLC_DOWN (3) idles the chip for the seconds of pairing; release brings it up (WLC_UP, 2) and joins again. */
+static int held;
+void wifi_hold(void) {
+    unsigned st;
+    if (held || !link_up) return;
+    held = 1; link_up = 0; menubar_wifi(1);
+    wlc_ioctl(3, 0, 0, &st);
+    kputs("wifi held for Bluetooth\n");
+}
+void wifi_release(void) {
+    unsigned st;
+    if (!held) return;
+    held = 0;
+    if (!wlc_ioctl(2, 0, 0, &st) || st) { kputs("wifi up again, status "); kdec(st); kputs("\n"); }
+    if (join()) kputs("wifi back after Bluetooth\n"); else menubar_wifi(0);
+}
 #else
 int wifi_nic_up(void) { return 0; }
 void wifi_nic_mac(unsigned char mac[6]) { for (int i = 0; i < 6; i++) mac[i] = 0; }
 int wifi_nic_send(const void *fr, unsigned len) { (void)fr; (void)len; return 0; }
 unsigned wifi_nic_recv(void *buf, unsigned max) { (void)buf; (void)max; return 0; }
 static int join(void) { kputs("wifi: no network configured, scan only\n"); return 1; }
+void wifi_hold(void) {}
+void wifi_release(void) {}
 #endif
 
 /* WLAN power. On the Pi 4 the chip's WL_ON line is pin 1 of the firmware's GPIO expander (expander pins are numbered
@@ -675,4 +695,6 @@ int wifi_init(void) {
 #else
 int wifi_init(void) { return 0; }
 int wifi_signal_level(void) { return 1; }
+void wifi_hold(void) {}
+void wifi_release(void) {}
 #endif

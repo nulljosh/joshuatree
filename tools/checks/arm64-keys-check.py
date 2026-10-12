@@ -5,7 +5,7 @@ virtio keyboard, and keys go in through QMP send-key, the path arm64-claude-cons
   1. a bare Space and Ctrl+Space do nothing; Cmd+Space opens Spotlight ("spotlight open"); the bar is on the screen:
      its off-white surface and one accent mark.
   2. typing "term" narrows it to one name ("spotlight: term 1"); Enter opens the Terminal ("terminal open") and the
-     Terminal has the keyboard: "hi" and Enter reach ask.c, which answers with a claude: line.
+     Terminal has the keyboard: "hi" and Enter reach ask.c, which answers with a samantha: line.
   3. Esc hands the keys back to the desktop ("console open"); Right three times moves the dock's label to Calendar
      ("M1d hover 2 Mail" on the way) and Enter opens that tile: Calendar, user/calendar.c in its own window ("M3c window
      calendar first frame"), which takes the keys, so Esc closes it ("M3c app calendar exit 0").
@@ -58,6 +58,14 @@ try:
         parts = open(p, "rb").read().split(b"\n", 3); w, h = map(int, parts[1].split()); return w, h, parts[3]
     def count(img, rgb):
         w, h, b = img; return sum(1 for i in range(0, len(b), 3) if b[i:i + 3] == bytes(rgb))
+    def mark_edges(img):   # accent pixels with the bar's off-white 3 px to their left: the Spotlight caret mark. The wallpaper is the accent
+        w, h, b = img                       # itself since 3.0.0, so counting accent pixels would see the bar cover them and fall.
+        acc, off = bytes((0xb5, 0x50, 0x2c)), bytes((0xfa, 0xf8, 0xf4)); n = 0
+        for y in range(h):
+            row = y * w * 3
+            for x in range(3, w):
+                if b[row + x * 3:row + x * 3 + 3] == acc and b[row + (x - 3) * 3:row + (x - 3) * 3 + 3] == off: n += 1
+        return n
     def expect(text, name, tries=60):
         n = uart().count(text); return lambda: step(name, wait_for(text, tries, n + 1), uart()[-300:])
     step("no pointer device: the boot log has no mouse line", "mouse " not in uart())
@@ -67,10 +75,10 @@ try:
     done = expect("spotlight open", "Cmd+Space opens Spotlight"); key("meta_l", "spc"); done()
     img = shot()
     step("the Spotlight bar is drawn: off-white surface and the accent mark appear",
-         count(img, (0xfa, 0xf8, 0xf4)) > count(base, (0xfa, 0xf8, 0xf4)) + 2000 and count(img, (0xb5, 0x50, 0x2c)) > count(base, (0xb5, 0x50, 0x2c)))
+         count(img, (0xfa, 0xf8, 0xf4)) > count(base, (0xfa, 0xf8, 0xf4)) + 2000 and mark_edges(img) > mark_edges(base) + 10)
     done = expect("spotlight: term 1", "typing 'term' leaves one match"); key("t", "e", "r", "m"); done()
     done = expect("terminal open", "Enter opens the Terminal"); key("ret"); done()
-    done = expect("claude:", "the Terminal has the keyboard: 'hi' and Enter get a claude: line", 150); key("h", "i", "ret"); done()
+    done = expect("samantha:", "the Terminal has the keyboard: 'hi' and Enter get a samantha: line", 150); key("h", "i", "ret"); done()
     done = expect("console open", "Esc hands the keys back to the desktop"); key("esc"); done()
     done = expect("M1d hover 2 Mail", "Right moves the dock's label along"); key("right", "right", "right"); done()
     done = expect("M1d hover 3 Calendar", "to Calendar"); key("right"); done()
@@ -141,7 +149,7 @@ try:
     def sent(since):
         s = re.findall(r"\$ (\w+)", uart()[since:]); return s[0] if s else None
     def answered(since, name):   # the question went to ask.c's relay path and came back; then the prompt takes the next line
-        step(name, wait_for("claude:", 150, uart()[:since].count("claude:") + 1), uart()[since:]); time.sleep(0.5)
+        step(name, wait_for("samantha:", 150, uart()[:since].count("samantha:") + 1), uart()[since:]); time.sleep(0.5)
     fresh("terminal open", "f2")
     m = len(uart()); key("caps_lock"); key("j"); key("t"); key("shift", "j"); key("ret"); time.sleep(0.5)
     step("the Terminal's line follows Caps Lock and Shift: JTj", sent(m) == "JTj", repr(sent(m)))

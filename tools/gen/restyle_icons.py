@@ -203,17 +203,8 @@ DOCK = {
         <path d="M61 76 H84"/>
       </g>"""),
 
-    # Chat (Samantha): a voice orb, not a speech bubble and not an engraving. She is voice first
-    # (hold F2 to talk), so the icon is a cream disc with five rounded waveform bars, the tallest
-    # in the middle. Tile is the landing design system's --accent #b5502c lit from the top, disc
-    # and bars its --bg #faf8f4 and --accent. Her engraved portrait (art/samantha-icon.svg) is too
-    # fine to read at dock size, so it stays in her window and the Turing mark.
-    "chat": ("#C65E37", "#A24526", "",
-             """
-      <circle cx="64" cy="62" r="38" fill="#FAF8F4"/>
-      <g stroke="#B5502C" stroke-width="8" stroke-linecap="round">
-        <path d="M43 56 V68"/><path d="M53.5 46 V78"/><path d="M64 38 V86"/><path d="M74.5 46 V78"/><path d="M85 56 V68"/>
-      </g>"""),
+    # Chat (Samantha): no authored icon here any more. art/icons/chat.svg is imported from Turing's web/icon.svg by
+    # import_fleet_icons.py (her engraved portrait), the face she wears in every other place she appears.
 
     # Weather: a sun half behind a cloud, on a sky-blue tile.
     "weather": ("#47A8F8", "#2A86EC",

@@ -78,7 +78,7 @@ pi-ask.o: ask.c claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
 	$(NETCC) -DPI_BUILD $(if $(filter 1,$(JT_WIFI_DEV)),,-DCLAUDE_RELEASE) -c ask.c -o $@
 ttf.o: ../../drivers/ttf.c
 	$(FPCC) -c $< -o $@
-text.o: text.c ../../drivers/ttf.h
+text.o: text.c ../../drivers/ttf.h ../../lib/text_ink.h
 	$(FPCC) -c $< -o $@
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
@@ -219,11 +219,11 @@ bt_fw.o: bt_fw.S $(wildcard $(BT_HCD))
 	$(CC) -c -o $@ bt_fw.S
 pi-start.o: start.S
 	$(CC) -c $< -o $@
-# JT_WIFI_DEV=1 (the dev card) also turns on the key debug line in the menu bar (main.c KEY_DEBUG); release builds never.
+# JT_KEY_DEBUG=1 turns on the key debug line in the menu bar (main.c KEY_DEBUG). It used to ride on JT_WIFI_DEV=1, so the dev card showed raw reports; release builds and the dev card never do now.
 # PICON: every Pi image prints its console on the mini UART (GPIO 14/15, ALT5); the PL011 is the Bluetooth radio's (bt.c).
 PICON = -DCONSOLE_MINI_UART
 pi-main.o: main.c $(MAINDEP)
-	$(CC) -DPI_BUILD $(PICON) $(if $(filter 1,$(JT_WIFI_DEV)),-DKEY_DEBUG) -c $< -o $@
+	$(CC) -DPI_BUILD $(PICON) $(if $(filter 1,$(JT_KEY_DEBUG)),-DKEY_DEBUG) -c $< -o $@
 kernel8.elf: start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
 	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
 pi-kernel8.elf: pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(LLMOBJ) linker.ld

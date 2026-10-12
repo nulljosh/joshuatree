@@ -4,7 +4,7 @@
 # is the Mac as QEMU's user network sees it, and 8765, the relay's own default). The token comes from the file in
 # CLAUDE_RELAY_TOKEN_FILE, default ~/.claude-relay-token, the same file docs/CLAUDE-APP.md has you make. No file, or a
 # token the relay would refuse (16 to 63 printable characters), and the header holds an empty token: the build still
-# links and the Console says `claude: no token`. The token and the relay host go in only on a dev build: JT_WIFI_DEV=1
+# links and the Console says `samantha: no token`. The token and the relay host go in only on a dev build: JT_WIFI_DEV=1
 # (set by tools/flash-pi.sh, the same flag that gates the Wi-Fi key) or an explicit CLAUDE_RELAY_TOKEN_FILE (the QEMU
 # checks, with a throwaway token). A plain `make` on the Mac that holds ~/.claude-relay-token carries neither.
 # The token goes in as bytes, never as a string or on a command line,

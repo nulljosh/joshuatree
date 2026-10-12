@@ -149,7 +149,8 @@ try:
                 img = screendump(cmd, tmp)
                 well = [px(img, x, y) for y in range(wy + 60, wy + win_h - 20, 7) for x in range(wx + 30, wx + win_w - 30, 7)]
                 white = sum(1 for c in well if c == (255, 255, 255))
-                if white * 10 > len(well) or len(set(well)) < 100: fails.append(f"the window is still there after closing ({white} of {len(well)} white, {len(set(well))} colours)")
+                # 2.65.0: the wallpaper is flat terracotta 0x00B5502C, so a closed window leaves exactly one colour, not a gradient
+                if white * 10 > len(well) or set(well) != {(0xB5, 0x50, 0x2C)}: fails.append(f"the window is still there after closing ({white} of {len(well)} white, {len(set(well))} colours)")
                 else: print(f"  ok: closing the Console puts the wallpaper back ({len(set(well))} colours where the window was)")
         tx, ty = slot_centre(W, H, 2)
         if not move_to(tx, ty): fails.append("could not move onto the Mail tile")

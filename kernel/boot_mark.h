@@ -3,7 +3,7 @@
 #define BOOT_MARK_HDR
 
 /* The ground's colour, terracotta (tools/gen/logo.py's accent); the rest of the mark takes the caller's ink. */
-#define MARK_GROUND 0x00B5502C
+#define MARK_GROUND 0x001C1C1E   /* 3.0.0: flat ink, the terracotta ground is gone */
 
 /* The splash: landing/logo.svg, the 3.0 crayon tree. _acc is the part of each pixel's coverage that is the ground. */
 #define BOOT_MARK_W 160

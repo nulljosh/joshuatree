@@ -412,9 +412,9 @@ static int relay_open(void) {
     relay_ip = 0;
     if (ip && tls_last_error() == TLS_ERR_ENTROPY) return -1;   /* no randomness: another address would not help */
     unsigned found; unsigned short fport;
-    if (!relay_discover(&found, &fport)) { kputs("claude: no relay answered on the LAN\n"); return -1; }
+    if (!relay_discover(&found, &fport)) { kputs("samantha: no relay answered on the LAN\n"); return -1; }
     if ((found == ip && fport == port) || relay_try(found, fport) < 0) return -1;
-    kputs("claude: relay found at "); put_ip(found); kputs("\n");
+    kputs("samantha: relay found at "); put_ip(found); kputs("\n");
     return 0;
 }
 
@@ -463,7 +463,7 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
     for (const char *p = "\",\"pi\":\""; *p; p++) body[b++] = *p;
     b += pi_status(body + b);                  /* the Pi's live status, so the answer can be about this machine */
     body[b++] = '"'; body[b++] = '}';
-    kputs("claude: thinking\n");
+    kputs("samantha: thinking\n");
     static char token[64];
     for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
     token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
@@ -484,18 +484,18 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
         ac->relay_state = 2; ac->last_name[0] = 0;     /* out of reach: the prompt goes back to the default model */
         int e = net_last_error();
 #if defined(PI_BUILD) || CLAUDE_TLS
-        if (tls_last_error() == TLS_ERR_ENTROPY) { kputs("claude: hardware randomness unavailable\n"); return -1; }
-        kputs("claude: TLS failed, no HTTP fallback\n");
+        if (tls_last_error() == TLS_ERR_ENTROPY) { kputs("samantha: hardware randomness unavailable\n"); return -1; }
+        kputs("samantha: TLS failed, no HTTP fallback\n");
 #endif
-        if (e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) kputs("claude: timeout\n");
-        else { kputs("claude: error "); kputs(e == NET_ERR_NONE ? "busy" : net_error_name(e)); kputs("\n"); }
+        if (e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) kputs("samantha: timeout\n");
+        else { kputs("samantha: error "); kputs(e == NET_ERR_NONE ? "busy" : net_error_name(e)); kputs("\n"); }
         return -1;
     }
     reply[got] = 0;
     ac->relay_state = status == 200 ? 1 : 2;
     if (status != 200) {                       /* the relay's own one-line reason follows its code */
-        if (!status) { kputs("claude: error bad reply\n"); return -2; }
-        kputs("claude: error -"); kdec((unsigned)status); kputs("\n");
+        if (!status) { kputs("samantha: error bad reply\n"); return -2; }
+        kputs("samantha: error -"); kdec((unsigned)status); kputs("\n");
         say_wrapped("", reply, (unsigned)got);
         return -2;
     }
@@ -585,12 +585,12 @@ int ask_command(const char *q, unsigned n) {   /* cmd.c, before the browser: "st
 void ask_claude(const char *q, unsigned n) {   /* cmd.c sends here what is not a command or a browser line */
     static char reply[REPLY_MAX + 1];
     if (n > 4 && q[0] == 'l' && q[1] == 'l' && q[2] == 'm' && q[3] == ' ') { local(q + 4, n - 4); return; }
-    if (!CLAUDE_TOKEN_LEN) { kputs("claude: no token\n"); fallback(q, n); return; }
+    if (!CLAUDE_TOKEN_LEN) { kputs("samantha: no token\n"); fallback(q, n); return; }
     if (!net_get_gateway()) {                  /* no DHCP lease, or no card at all */
 #ifdef PI_BUILD
-        kputs("claude: no network, Wi-Fi has not joined yet\n");
+        kputs("samantha: no network, Wi-Fi has not joined yet\n");
 #else
-        kputs("claude: no network\n");
+        kputs("samantha: no network\n");
 #endif
         ac->last_name[0] = 0;                      /* out of reach: the prompt goes back to the default model */
         fallback(q, n);                        /* the relay is out of reach: the local model answers */

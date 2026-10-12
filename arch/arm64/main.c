@@ -864,7 +864,7 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
 #define LOG_MAX 16384
 #define CON_FG 0x00202020
 #define CON_BG 0x00ffffff
-int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);   /* arch/arm64/wall.c: the Satellite photo scaled onto the screen */
+int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);   /* arch/arm64/wall.c: the flat Navy wallpaper */
 #define MENUBAR_H 26             /* docs/DESIGN.md: GUI_MENUBAR_H, on the 960x540 grid */
 #define MENUBAR_RULE 0x00BDB8B0  /* docs/DESIGN.md: MENUBAR_RULE */
 int text_init(void);   /* arch/arm64/text.c: the DejaVu faces through drivers/ttf.c */
@@ -1636,7 +1636,11 @@ static int app_dock(const char *name) {
         while (name[i] && (name[i] | 32) == a->name[i]) i++;
         if (name[i] || a->name[i]) continue;
         if (app_cur == a) app_raise();
-        else if (app_cur) { con_quiet = 1; uart_puts("M3c app busy: "); uart_puts(app_cur->name); uart_puts(" is running\n"); }
+        else if (app_cur) {   /* one app at a time: a tile for another app swaps to it (the one in front is closed, its files written back), as clicking a second app does on any desktop */
+            con_quiet = 1; uart_puts("M3c app swap: "); uart_puts(app_cur->name); uart_puts(" closed for "); uart_puts(a->name); uart_putc('\n');
+            app_kill("closed for another app");
+            if (!app_cur) app_start(a);
+        }
         else app_start(a);
         return 1;
     }
@@ -1818,7 +1822,7 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
     return 0;
 }
 
-/* The dev card's key debug line (KEY_DEBUG, set by JT_WIFI_DEV=1 builds only): for 3 seconds after a key, the menu bar
+/* The dev card's key debug line (KEY_DEBUG, set by JT_KEY_DEBUG=1 builds only): for 3 seconds after a key, the menu bar
    shows the last raw HID report in hex ("m" in front for a media interface) and the decoded key, so a real-board test
    shows exactly what the keyboard sends. The UART gets the same line ("keydbg: ..."). Release builds compile it out. */
 #ifdef KEY_DEBUG
@@ -2034,7 +2038,7 @@ static void fb_init(void) {
         fb_flush(0, 0, W, H);
     }
     int wall_ok = wall_paint(fb, fb_pitch, W, H, fb_swap);
-    if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* the Satellite photo; flat only if it will not decode */
+    if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* Navy (clrs.cc), see wall.c; this fallback is now unreachable */
     for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {   /* menu bar: half wallpaper, half white, per pixel */
         unsigned c = fb[(unsigned)y * fb_pitch + (unsigned)x];
         fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
@@ -2078,18 +2082,29 @@ static void fb_init(void) {
         menubar_wifi(1);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
-        const char *thanks = "Steve Jobs, 1955 to 2011. Make something wonderful.";
-        int ar = sc(5), gapx = sc(6), tw = text_width(2, thanks, sc(110)), tx = (W - tw + 2 * ar + gapx) / 2, ty = band_y - sc(4), sh = sc(1) > 1 ? sc(1) : 1;
-        {   /* a small apple to the left of the line: a round fruit with a dip on top and a leaf, no bite, so it is a fruit and not a logo */
-            int acx = tx - gapx - ar, acy = ty - sc(4);
-            for (int pass = 0; pass < 2; pass++) for (int y = -2 * ar; y <= ar; y++) for (int x = -ar - 1; x <= ar + 1; x++) {
-                int body = x * x + y * y <= ar * ar && !(x * x + (y + ar) * (y + ar) <= (ar / 3) * (ar / 3));
-                int lx2 = x - ar / 3, ly2 = y + ar + ar / 2, leaf = 4 * lx2 * lx2 + 9 * ly2 * ly2 - 4 * lx2 * ly2 <= ar * ar && y < -ar + 1 && x > 0;
-                if (body || leaf) fb_rect(acx + x + (pass ? 0 : sh), acy + y + (pass ? 0 : sh), 1, 1, pass ? 0x00f0f4f8 : 0x00101010);
+        const char *thanks = "Seduce. Vilify. Ignore.";
+        int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 2 * ar - gapx) / 2, ty = band_y - sc(4);
+        text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
+        {   /* a small apple after the line, antialiased (4x4 samples a pixel) onto the flat fill: a round fruit, a dip on
+               top, a short stem and one leaf, no bite, so it is a fruit and not a logo. Integer only: q is 1/1024 of ar. */
+            int acx = tx + tw + gapx + ar, acy = ty - sc(4); unsigned ink = fb_color(0x00f0f4f8);
+            for (int y = -2 * ar; y <= ar + 1; y++) for (int x = -ar - 1; x <= ar + 1; x++) {
+                int hit = 0;
+                for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
+                    int qx = ((x * 4 + i) * 2 + 1) * 128 / ar, qy = ((y * 4 + j) * 2 + 1) * 128 / ar;   /* sample centre, in q */
+                    long long body = (long long)qx * qx + (long long)qy * qy * 1024 / 829;             /* a 1 : 0.9 ellipse */
+                    long long dip = (long long)qx * qx + (long long)(qy + 920) * (qy + 920);
+                    int stem = qx > -110 && qx < 110 && qy < -760 && qy > -1300;
+                    long long lx = qx - 520, ly = qy + 1080, u = (lx * 53 - ly * 37) / 64, v = (lx * 37 + ly * 53) / 64;   /* the leaf, tilted */
+                    long long leaf = u * u * 1024 / 300 + v * v * 1024 / 60;
+                    if ((body <= 1048576 && dip > 92160) || stem || leaf <= 1048576) hit++;
+                }
+                if (!hit) continue;
+                unsigned d = fb[(unsigned)(acy + y) * fb_pitch + (unsigned)(acx + x)], out = 0;
+                for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * hit + ((d >> b) & 0xFF) * (16 - hit)) / 16) << b;
+                fb[(unsigned)(acy + y) * fb_pitch + (unsigned)(acx + x)] = out;
             }
         }
-        text_draw(2, thanks, tx + sh, ty + sh, sc(110), fb_color(0x00101010), fb, fb_pitch, W, H);   /* a dark shadow so it reads on the busy photo */
-        text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
     con_layout(win_x, win_y, win_w, win_h);
     {   /* keep the log inside the frame's white well: under the title band's hairline, clear of the cream margins */
@@ -2108,12 +2123,12 @@ static void fb_init(void) {
     pointer_moved();
 #endif
     dcache_clean(fb, (unsigned long)fb_pitch * fb_h * 4);   /* the whole still picture out to RAM; con_glyph cleans as it goes from here */
-    /* Blank spots, clear of any text: the bottom of the window's white well, the menu bar's rule, and the wallpaper (not
-       the old flat fill, and not one colour everywhere). Grey and white read the same either byte order; the rule is
-       checked in fb_color order. */
+    /* Blank spots, clear of any text: the bottom of the window's white well, the menu bar's rule, and the wallpaper (the
+       design system's dark fill at three corners, not the old 0x203040 fallback). Grey and white read the same either
+       byte order; the rule and the fill are checked in fb_color order. */
     int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == 0x00ffffff && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
-    ok = ok && (!wall_ok || (w0 != 0x00203040 && (w0 != w1 || w1 != w2)));   /* a full heap leaves the flat fill, which is the fallback working */
+    ok = ok && wall_ok && w0 == fb_color(0x00B5502C) && w1 == w0 && w2 == w0;
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
 #ifdef AUDIO_TEST   /* the audiotest build: `beep` run at boot on virt, which has no PWM (arm64-audio-check.py) */
     void cmd_run(const char *q, unsigned n, void (*out)(const char *));
@@ -2304,24 +2319,6 @@ int wifi_init(void);
 #define WIFI_ON_PI 0
 #endif   /* wifi.c: M4 Wi-Fi stage 1, polled, every wait bounded */
 void usb_poll(void);
-/* The boot demo: the Pi has no mouse yet, so one lap of the dock labels plays by itself, Apps to Trash, a beat each,
-   and then stops. Joshua's request for the first video of it booting (2026-10-07). */
-#ifdef PI_BUILD
-static void demo_tick(void) {
-    static unsigned next; static int slot = -1;
-    if (slot > GUI_ICON_COUNT) return;
-    unsigned long f, c;
-    __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
-    unsigned t = (unsigned)(c / ((f ? f : 54000000) / 100));   /* 100 a second, like ip.c's ticks() */
-    if (!next) next = t + 300;   /* three seconds after the loop starts: the console has settled */
-    if (t < next) return;
-    next = t + 80;
-    if (slot < 0) slot = 0;
-    hover_slot = slot < GUI_ICON_COUNT ? slot : -1;
-    dock_hover(hover_slot);
-    slot++;
-}
-#endif
 #ifdef NOTES_SELFTEST
 /* notesw-kernel8.img and notesr-kernel8.img only (arm64-notes-check.py). QEMU's raspi4b has no USB, so made-up boot
    keyboard reports go through xhci.c's hid_kbd, the parser a real keyboard's reports take, one key every 150 ms of the
@@ -2659,7 +2656,11 @@ void main(void) {
         uart_puts("sdtest done\n");
     }
 #endif
+#ifdef BT_NOWIFI   /* the radio test build: Wi-Fi stays off so Bluetooth has the shared antenna to itself */
+    menubar_wifi(0);
+#else
     if (!wifi_init()) menubar_wifi(0);
+#endif
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); menubar_notify("Wi-Fi joined"); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
@@ -2694,8 +2695,21 @@ void main(void) {
 #ifdef NOTES_SELFTEST
     usb_ok |= !inputs;   /* QEMU's raspi4b has no USB to find: the loop runs anyway, for notes_tick's made-up keys */
 #endif
+#ifdef PI_BUILD
+    {   /* The desktop is up: the boot log steps aside, so the board boots to a clean desktop (it stays one dock click away, and
+           the Terminal opens as its own window). Anything that went wrong keeps it on screen: a FAIL or an oom line in the log. */
+        int trouble = 0;
+        for (unsigned i = 0, ls = 0; i + 4 <= con_p.len; i++) {   /* ls: where this line began; a Wi-Fi line is skipped, the menu bar says when Wi-Fi is down */
+            if (con_p.log[i] == '\n') { ls = i + 1; continue; }
+            const char *q = con_p.log + i;
+            int wifi = con_p.log[ls] == 'w' || con_p.log[ls] == 'W';
+            if (!wifi && ((q[0] == 'F' && q[1] == 'A' && q[2] == 'I' && q[3] == 'L') || (q[0] == 'o' && q[1] == 'o' && q[2] == 'm' && q[3] == ' '))) { trouble = 1; break; }
+        }
+        if (!trouble) console_close();
+    }
+#endif
     if (usb_ok || inputs) {
-        /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
+        /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
            so its handler never runs; the short unmask is for the virtio devices, whose handler acknowledges them. */
         *(volatile unsigned char *)(GICD_BASE + 0x400 + 27) = 0x80;
@@ -2704,7 +2718,7 @@ void main(void) {
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); app_tick(); audio_pump(); screen_tick();   /* only the display sleeps: USB stays polled */
+            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); audio_pump(); screen_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
