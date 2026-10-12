@@ -13,6 +13,11 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 | `beep [FREQ MS]` | Plays a tone out of the Pi's 3.5 mm jack |
 | `vol [0-100\|up\|down]` | Shows or sets the master volume (default 70); up and down step by 10 |
 | `llm PROMPT` | Runs the local model, if the image has one |
+| `bt`, `bt scan`, `bt pair` | Bluetooth: where the radio is and its version; a 5 second scan listing what it hears; pairing the mouse from that scan so it drives the pointer ([RASPBERRY-PI.md](RASPBERRY-PI.md#bluetooth)) |
+| `ls [DIR]` | Lists the SD card's boot partition (its root, or `ls JT`; 8.3 names and sizes) |
+| `cat NAME` | Prints the first 4 KB of a file there as text (`cat JT/NOTE.TXT` one folder down) |
+| `write NAME.EXT TEXT` | Makes or replaces `JT/NAME.EXT` holding TEXT; boot files are refused |
+| `rm NAME`, `mkdir NAME` | Deletes the file `JT/NAME`, or makes the folder `JT/NAME` |
 | anything else | Asks Claude through the relay on the Mac |
 
 ## Getting there
@@ -38,6 +43,8 @@ No mouse is needed. The desktop's keys, in `arch/arm64/main.c` (`ui_key`); `tool
 | Left, Right | With no pane holding the keys, move the dock's label along the tiles |
 | Enter | Open the labelled tile |
 | Esc | Clear the label; with the Terminal in front, back to the Console. While a question runs it stops the agent instead. With nothing open it does nothing |
+| Caps Lock | Letters come out capital until you press it again, and Shift flips them back; digits and punctuation ignore it. It works in the Terminal, the Calculator and Spotlight. No keyboard light yet |
+| A key held down | A letter, digit, Space or Backspace types again after 400 ms, then every 80 ms, in whatever got the first press, until you let go or press another key. F-keys, Enter, Esc, arrows and Ctrl, Cmd or Alt chords never repeat. A USB keyboard sends a held key once, so `main.c` does the repeating |
 | Page Up, Page Down, Home, End | Scroll the window in front |
 
 Mac-style USB keyboards: Cmd is the GUI modifier (0x08 left, 0x80 right in the boot report). A top row in Mac mode sends F1 and F2 as brightness down and up on a second HID interface; `xhci.c` listens there and turns those into F1 and F2. A keyboard that sends a report ID in front of its report (9 bytes) is read past the ID. `tools/checks/arm64-keydbg-check.py` covers all of it over USB.

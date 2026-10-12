@@ -48,6 +48,17 @@ JT_DATA static unsigned char jt_arena[JT_ARENA_SIZE];
 JT_DATA static unsigned char *heap_lo = 0, *heap_hi = 0;
 JT_DATA static int heap_is_arena = 0;
 static unsigned long jt_align_up(unsigned long n) { return (n + (JT_ALIGN - 1)) & ~(unsigned long)(JT_ALIGN - 1); }
+/* The heap top crosses the syscall as a number. On i386 a pointer is 32 bits, so the casts below are exact. On aarch64 (the
+   ARM build, LP64) the new top goes to the kernel whole in a 64-bit register, and its answer comes back through jt_syscall's
+   int: exact because the ARM kernel keeps an app's heap below 2 GiB (arch/arm64/main.c, M3e), so (unsigned) then
+   (unsigned long) puts the pointer back. The i386 expansions are the expressions this file always had. */
+#if defined(__aarch64__) && defined(__ELF__)   /* as jtsys.h: a macOS host build is aarch64 but not the ARM kernel's */
+#define BRK_PTR(top) ((unsigned char *)(unsigned long)(unsigned)(top))
+#define BRK_GROW(hi, step) jt_syscall(JT_SYS_BRK, (jt_arg)((hi) + (step)), 0, 0)
+#else
+#define BRK_PTR(top) ((unsigned char *)(unsigned)(top))
+#define BRK_GROW(hi, step) jt_brk((unsigned)hi + (unsigned)step)
+#endif
 
 static int brk_grow(unsigned long need) {
     if (heap_is_arena) return 0;
@@ -55,11 +66,11 @@ static int brk_grow(unsigned long need) {
         int top = jt_brk(0);
         if (top == 0 || (top < 0 && top > -4096)) { heap_lo = jt_arena; heap_hi = jt_arena + sizeof jt_arena; heap_is_arena = 1;
                         ((struct jt_block *)heap_lo)->size = sizeof jt_arena - sizeof(struct jt_block); ((struct jt_block *)heap_lo)->free = 1; return 1; }
-        heap_lo = heap_hi = (unsigned char *)(unsigned)top;
+        heap_lo = heap_hi = BRK_PTR(top);
     }
     unsigned long step = (need + sizeof(struct jt_block) + JT_GROW - 1) / JT_GROW * JT_GROW;
-    int top = jt_brk((unsigned)heap_hi + (unsigned)step);
-    if ((top < 0 && top > -4096) || top == 0 || (unsigned char *)(unsigned)top != heap_hi + step) {
+    int top = BRK_GROW(heap_hi, step);
+    if ((top < 0 && top > -4096) || top == 0 || BRK_PTR(top) != heap_hi + step) {
         if (heap_lo == heap_hi) { heap_lo = jt_arena; heap_hi = jt_arena + sizeof jt_arena; heap_is_arena = 1;
                                   ((struct jt_block *)heap_lo)->size = sizeof jt_arena - sizeof(struct jt_block); ((struct jt_block *)heap_lo)->free = 1; return 1; }
         return 0;

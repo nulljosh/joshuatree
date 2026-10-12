@@ -287,9 +287,11 @@ try:
     time.sleep(0.3)
     row = dict(x0=TEXT_LEFT - 4, x1=WIN_CONTENT_RIGHT, y0=TEXT_TOP - 2, y1=ROW_BOTTOM + 2)
     if not find_color(dump(), HILITE, **row): fail("select-all drew no highlight band before the Esc test")
+    time.sleep(2.6)   # let the autosave that follows the last typed key land first
+    saves_before = serial_text().count("notes: saved=")   # 2.55.0: Notes autosaves two seconds after typing, so a save no longer means "closed"
     keys("esc"); time.sleep(0.5)
     if find_color(dump(), HILITE, **row): fail("highlight still present after Esc")
-    elif "notes: closed" in serial_text() or serial_text().count("notes: saved=") > 0: fail("Esc with a selection closed the editor instead of just clearing the selection")
+    elif "notes: closed" in serial_text() or serial_text().count("notes: saved=") > saves_before: fail("Esc with a selection closed the editor instead of just clearing the selection")
     else: ok("Esc cleared the selection and left the editor open")
     keys("ctrl-a"); time.sleep(0.2)
     if not vm.wait(expect_all, 10, count=2): fail("Ctrl+A after Esc did not select everything again")

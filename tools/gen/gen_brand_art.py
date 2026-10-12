@@ -8,6 +8,10 @@
                           part, the title and tagline below it are kept from the file as it is
   docs/brand/mark-ink.png    480x480 transparent, ink on nothing, what README shows on a light page
   docs/brand/mark-paper.png  480x480 transparent, paper ink, what README shows on a dark page
+                             (README loads both from a GitHub release, which release.yml uploads them to)
+
+3.0: the mark has two colours, ink and the terracotta ground, so every copy is the SVG's own colour render laid
+on the page, not one ink poured through its alpha. On a dark page only the ink turns to paper.
 
 Run after tools/gen/logo.py, from the repo root:  python3 tools/gen/gen_brand_art.py
 Uses rsvg-convert (ImageMagick draws this SVG blank on this box) and Pillow.
@@ -21,40 +25,37 @@ from PIL import Image
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 SVG = os.path.join(ROOT, "landing", "logo.svg")
 BOLD = os.path.join(ROOT, "landing", "mark-bold.svg")
-INK = (22, 21, 19)          # #161513, the ink the mark is drawn in
-PAPER_INK = (245, 245, 243)  # the ink on a dark page
-MARK_BG = (250, 248, 244)  # #faf8f4, the page
+INK = "#161513"              # the ink the mark is drawn in
+PAPER_INK = "#f5f5f3"        # the ink on a dark page
+MARK_BG = (250, 248, 244)    # #faf8f4, the page
 OG_BG = (250, 248, 244)
-OG_MARK = 324               # px the mark is rasterized at on the share card
-OG_X, OG_Y = 438, 52        # top-left of that square, centred on the card
+OG_MARK = 324                # px the mark is rasterized at on the share card
+OG_X, OG_Y = 438, 52         # top-left of that square, centred on the card
 
 
-def alpha(px, svg=SVG):
-    png = subprocess.run(["rsvg-convert", "-w", str(px), "-h", str(px), svg], check=True, capture_output=True).stdout
-    return Image.open(io.BytesIO(png)).convert("RGBA").split()[3]
+def render(px, svg=SVG, ink=INK):
+    """The mark in its own colours on nothing, with the ink swapped for `ink`."""
+    txt = open(svg).read().replace(f'stroke="{INK}"', f'stroke="{ink}"').replace(f"stroke:{INK}", f"stroke:{ink}")
+    png = subprocess.run(["rsvg-convert", "-w", str(px), "-h", str(px), "-"], input=txt.encode(), check=True,
+                         capture_output=True).stdout
+    return Image.open(io.BytesIO(png)).convert("RGBA")
 
 
-def flat(px, ink, bg, svg=SVG):
-    im = Image.new("RGB", (px, px), bg)
-    im.paste(Image.new("RGB", (px, px), ink), (0, 0), alpha(px, svg))
-    return im
-
-
-def transparent(px, ink):
-    im = Image.new("RGBA", (px, px), ink + (0,))
-    im.putalpha(alpha(px))
-    return im
+def flat(px, bg, svg=SVG):
+    im = Image.new("RGBA", (px, px), bg + (255,))
+    im.alpha_composite(render(px, svg))
+    return im.convert("RGB")
 
 
 def main():
-    flat(280, INK, MARK_BG, BOLD).save(os.path.join(ROOT, "landing", "mark.png"), optimize=True)
-    flat(1024, INK, MARK_BG).save(os.path.join(ROOT, "landing", "badge.png"), optimize=True)
-    transparent(480, INK).save(os.path.join(ROOT, "docs", "brand", "mark-ink.png"), optimize=True)
-    transparent(480, PAPER_INK).save(os.path.join(ROOT, "docs", "brand", "mark-paper.png"), optimize=True)
+    flat(280, MARK_BG, BOLD).save(os.path.join(ROOT, "landing", "mark.png"), optimize=True)
+    flat(1024, MARK_BG).save(os.path.join(ROOT, "landing", "badge.png"), optimize=True)
+    render(480).save(os.path.join(ROOT, "docs", "brand", "mark-ink.png"), optimize=True)
+    render(480, ink=PAPER_INK).save(os.path.join(ROOT, "docs", "brand", "mark-paper.png"), optimize=True)
     og_path = os.path.join(ROOT, "landing", "og-image.png")
     og = Image.open(og_path).convert("RGB")
     og.paste(Image.new("RGB", (og.width, 400), OG_BG), (0, 0))   # wipe the old mark, keep the title below
-    og.paste(Image.new("RGB", (OG_MARK, OG_MARK), INK), (OG_X, OG_Y), alpha(OG_MARK))
+    og.paste(flat(OG_MARK, OG_BG), (OG_X, OG_Y))
     og.save(og_path, optimize=True)
     print("wrote landing/mark.png, landing/badge.png, landing/og-image.png, docs/brand/mark-ink.png, docs/brand/mark-paper.png")
 

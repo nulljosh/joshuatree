@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """ARM64 boot health: the Pi image on QEMU's raspi4b model must show no new failure on any boot step.
 
-Boots `make -C arch/arm64 pi` on the raspi4b model and reads the UART. It fails on:
+Boots `make -C arch/arm64 pi` on the raspi4b model and reads the console (the mini UART, QEMU's second serial port;
+the first, the PL011, is the Bluetooth radio's). It fails on:
   - any line containing FAIL that is not in EXPECTED_FAIL below (so a new step that fails can never slip in silently),
   - any `oom` line (the heap ran out),
   - a crash report or an unhandled exception line,
@@ -31,7 +32,7 @@ subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 if subprocess.run(["make", "-C", arch, "pi"], capture_output=True).returncode:
     print("FAIL: arch/arm64 `make pi` does not build"); sys.exit(1)
 log = tempfile.mktemp()
-q = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-display", "none", "-serial", "file:" + log,
+q = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-serial", "null", "-display", "none", "-serial", "file:" + log,
                       "-kernel", os.path.join(arch, "kernel8.img")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 out = ""
 try:

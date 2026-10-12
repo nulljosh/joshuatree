@@ -202,7 +202,7 @@ if "raspi4b" in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capt
     if subprocess.run(["make", "-C", arch, "cursortest"], capture_output=True).returncode: fails.append("`make cursortest` does not build")
     else:
         log2, sock2 = tmp + "/uart2", tmp + "/qmp2"
-        q = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-global", "bcm2835-fb.xres=1920", "-global", "bcm2835-fb.yres=1080",
+        q = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-serial", "null", "-global", "bcm2835-fb.xres=1920", "-global", "bcm2835-fb.yres=1080",
                               "-display", "none", "-serial", "file:" + log2, "-qmp", "unix:%s,server,nowait" % sock2,
                               "-kernel", os.path.join(arch, "cursor-kernel8.img")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:

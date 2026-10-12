@@ -291,13 +291,6 @@
   #demo-composer input:focus { outline: 2px solid var(--fg); outline-offset: 1px; }
   #demo-composer button { flex: none; width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border: none; border-radius: 50%; background: var(--fg); color: var(--bg); cursor: pointer; }
   /* Full screen on a phone: the bar sits under the demo instead of over it. */
-  /* 2.48.1, desktop: her input is this real field floating over the bottom of her face, sharp at any size (the
-     kernel's own bar was a small bitmap font scaled up with the screen). Shown only while she is open. */
-  #demo-frame.pagebar #demo-composer { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); width: min(560px, calc(100% - 64px)); max-width: none; margin: 0; z-index: 52; }
-  #demo-frame.pagebar #demo-composer input { background: rgba(28,28,30,0.55); color: #fff; border: 1px solid rgba(255,255,255,0.22); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
-  #demo-frame.pagebar #demo-composer input:focus { outline: 2px solid rgba(255,255,255,0.7); outline-offset: 1px; }
-  #demo-frame.pagebar #demo-composer input::placeholder { color: rgba(255,255,255,0.7); }
-  #demo-frame.pagebar #demo-composer button { background: #fff; color: #1c1c1e; }
   #demo-frame.demo-full #demo-composer { position: absolute; left: 0; right: 0; bottom: 0; z-index: 52; box-sizing: border-box; max-width: none; margin: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #000; }
   #demo-frame.demo-full #demo-composer input { background: #1c1c1e; color: #fff; }
   #demo-frame.demo-full #demo-composer button { background: #fff; color: #000; }
@@ -630,7 +623,7 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">31</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">2.48.1</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">2.60.2</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
@@ -892,7 +885,7 @@
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.48.1</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.60.2</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"></div>
 </footer>

@@ -50,8 +50,10 @@ and Console are available; the web demo's larger app collection is separate.
 
 ### Read the date and time
 
-The Calendar tile shows a short month name and a large day number. It is
-an icon, not a calendar you can open to add events on the Pi.
+The Calendar tile shows a short month name and a large day number. Click
+it, or find Calendar in Spotlight, to open the month in its own window.
+Left and Right step a month, 1 to 4 pick Day, Week, Month or Year, and
+Esc closes it. It cannot save events on the Pi yet.
 
 To see the time clearly, open Spotlight and search for Clock. It shows the
 time, date and Vancouver label. The display refreshes each minute. When
