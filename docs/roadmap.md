@@ -65,6 +65,8 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 
 ## Next few weeks
 
+- [ ] [Sonnet] Books, a reader app for Joshua Tree (both kernels, ring 3 like Notes): a library of plain text and EPUB-as-text books in `JT/BOOKS/`, one page at a time with the arrow keys, a remembered place per book, Tree Sans at body size. Ships with one book in the card image: Make Something Wonderful, Steve Jobs in his own words (the Steve Jobs Archive, free to read), the book the tribute line ends on. Check: a new books check under tools/checks that opens the app, turns two pages and reopens on the saved page.
+
 - [ ] [Sonnet] A small voxel building game as a native Joshua Tree app, software-rendered: walk, place and break blocks. Pick a name that is not Minecraft. Check: a host test of the block grid and ray pick, plus a `tools/checks/` boot check that opens the app and sees a frame.
 - [ ] [Joshua] Java, step one: a research doc (a docs/JAVA.md research note) on what is possible. A small JVM-style bytecode interpreter for simple programs is in reach; real Minecraft Java is out of reach; Minecraft streamed from the Mac needs the video path below. Then decide whether to build the interpreter. Check: `check-refs.sh` passes and the doc names what is in and out.
 - [ ] [Sonnet] Baseline JPEG decoder on the Pi build, then an MJPEG video path from the Mac relay. Silent first, sound after audio output. The i386 kernel already has `drivers/jpeg.c`; reuse it. Check: `tools/checks/jpeg-host-check.sh` plus an arm64 check that shows relayed frames.
