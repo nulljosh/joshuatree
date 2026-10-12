@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 3.6.1 development branch (2026-10-12)
+
+The user guide gains a chapter for each Pi app and tool: Terminal and the shell, Browser, Books, Music, Notes, Calendar, Clock, Samantha and Bluetooth. The Pi row of `architecture.svg` now lists them, solid only where the board has seen it. Browser bookmarks are on the roadmap. Check: `tools/checks/check-refs.sh`.
+
 ## 2.63.1 development branch (2026-10-12)
 
 The first board pass fixes. The Pi boots to a quiet desktop: the boot log steps aside once the desktop is up (a FAIL or oom line keeps it, Wi-Fi lines do not), and the dock-label lap that played by itself at boot is gone. One app at a time swaps instead of ignoring you: a dock tile for another app closes the one in front and opens it (Notes did nothing while Calendar was open). `bt scan` speaks English: each device as what it says it is (Mouse, Keyboard, Phone, Apple device, or its own name) and how close it is, mice first, numbered, so `bt pair 1` works; it holds 64 devices where 24 dropped the mouse in a busy room, and a mouse or keyboard takes the place of the weakest other device when the table is full. The Terminal says `samantha:` where it said `claude:`. The dev card build bakes our relay's CA (`tools/flash-pi.sh`), the missing piece behind "TLS failed". Pi text uses the shared coverage curve. Checks: `tools/checks/arm64-boot-quiet-check.py`, `arm64-bt-check.py`.

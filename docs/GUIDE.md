@@ -53,7 +53,7 @@ and Console are available; the web demo's larger app collection is separate.
 The Calendar tile shows a short month name and a large day number. Click
 it, or find Calendar in Spotlight, to open the month in its own window.
 Left and Right step a month, 1 to 4 pick Day, Week, Month or Year, and
-Esc closes it. It cannot save events on the Pi yet.
+Esc closes it. The Calendar chapter below says how events are saved.
 
 To see the time clearly, open Spotlight and search for Clock. It shows the
 time, date and Vancouver label. The display refreshes each minute. When
@@ -239,6 +239,98 @@ A Wi-Fi join and a Brick result appear beside the clock for four seconds. A new 
 In 2.41.0, five minutes without keyboard or mouse activity blanks the HDMI picture. Press a key or move the mouse to wake it; that input still reaches the app. Brick and an active Samantha request keep the screen awake. Apps, USB and networking keep running; this does not suspend the computer or save your files.
 
 QEMU checks the idle timer, refused requests and both input paths through the firmware mailbox. QEMU acknowledges blanking without hiding its pixels, so HDMI sleep and wake still need a physical Pi test after flashing. The browser demo keeps its existing behavior.
+
+## The apps and tools, one at a time
+
+This part describes what is on main now (3.6.0). Every app and command below passes its checks in QEMU. Only some of it has been seen on the real board: the Pi row of [the architecture picture](../architecture.svg) shows which. Open any app with F1 and its name, as described above. Your files live in the card's `JT/` folder.
+
+### Terminal and the shell
+
+Press F2 or Ctrl+T. The prompt is `joshua@tree % `. Type a command and press Enter. A word that is not a command prints `zsh: command not found: WORD`. Page Up, Page Down, Home and End scroll what has printed.
+
+The commands that work today:
+
+| Command | What it does |
+|---|---|
+| `help` | Lists the commands. |
+| `sam QUESTION` | Asks Samantha. See the Samantha chapter. |
+| `ls`, `ls DIR`, `cat NAME` | List the card's files and print the first 4096 bytes of one. |
+| `write NAME.EXT TEXT`, `rm NAME`, `mkdir NAME` | Make a text file, remove a file, make a folder. All three work inside `JT/` only. The name needs a dot and keeps to the old 8.3 shape. |
+| `browse`, `open`, `back`, `forward`, `reload`, `links`, `more`, `up`, `down`, `top`, `bottom`, `find` | The text browser. See the Browser chapter. |
+| `bt` | Bluetooth. See the Bluetooth chapter. |
+| `beep`, `vol` | `beep` plays a short tone. `vol 40`, `vol up` and `vol down` set the volume from 0 to 100. |
+| `userrun NAME` | Starts a user program by name, for testing. |
+| `llm PROMPT` | Asks the tiny model built into the kernel. A normal release has no model inside, so it stays quiet. |
+| `reboot`, `shutdown` | Restart or switch off. Typing the word is the confirmation. |
+
+`reboot` and `shutdown` ask the firmware to restart or halt. Shutdown stops the board but does not cut its power. Both are refused while Samantha is answering.
+
+While Samantha is answering, the network commands (`browse`, `open`, `back`, `forward`, `reload`, `llm`, `bt` and `userrun`) wait. You get `zsh: sam is using the network, try again when she answers`. Other commands keep working.
+
+### Browser
+
+Open it from Spotlight. It starts with the address bar ready. Type an address and press Enter. A bare name such as `example.com` uses HTTPS. Page text appears in Tree Sans, and links are drawn in terracotta.
+
+- **Tab, then Enter:** Tab picks the next link and scrolls it into view. Tab again wraps back to the first. Enter follows the picked link. A click on a link works too.
+- **Scrolling:** Up and Down move a line. Page Up and Page Down move a page. Home and End jump to the top and bottom. The mouse wheel scrolls three lines at a time.
+- **Moving around:** Alt+Left is back, Alt+Right is forward, F5 or Ctrl+R reloads. Ctrl+L, or just typing a letter, starts a new address. The Back, Forward and Reload buttons work with the mouse.
+- **Esc:** it leaves the address bar first. Esc again closes the window.
+
+The HTTPS part knows 37 root certificates. A site signed by anyone else fails with a TLS error, and that is on purpose.
+
+What does not work yet: JavaScript, images and styled layout. A page that needs them shows as plain text or not at all. It keeps up to 8 KB of text, 32 links and 8 pages of history. The status line says in plain words when a page did not load.
+
+### Books
+
+Books reads plain text. It lists every `.TXT` file in `JT/BOOKS/`. Up and Down pick a book. Enter opens it. Esc closes the app.
+
+In a book, Right or Space turns a page and Left goes back. Esc returns to the list. The page number is saved next to the book, as `NAME.POS`, so the book opens where you stopped. A book over 3 MB is refused with a message. Drop your own `.TXT` files into `BOOKS/` from the Mac.
+
+### Music
+
+Music plays `.WAV` and `.MP3` files from `JT/` and `JT/MUSIC/`. It shows the title and artist from an MP3's tag, the length, and the cover picture when there is one.
+
+Space plays and pauses. Left and Right seek 5 seconds. Up and Down change the volume. N and P go to the next and previous song. S turns shuffle on, and R cycles repeat through off, all and one. You can also click a song or a button, click or drag the seek bar and the volume bar, and scroll the list with the wheel. Esc closes it.
+
+A song over 3 MB is refused. The sound comes out of the headphone jack, which a real board has not yet confirmed.
+
+### Notes
+
+Notes keeps plain text files in `JT/NOTES/`. The left column holds folders and the right column holds notes. Each note shows its first line.
+
+Up and Down pick. Enter opens a folder or a note. Tab swaps columns. N makes a note. F makes a folder. D then D again deletes the selected note, and any other key cancels. Esc closes the app.
+
+In a note, type as usual. Shift with the arrows selects, Ctrl+A selects all, and copy, cut and paste work. A note saves one or two seconds after you stop typing. Esc saves and goes back to the list. Ctrl+S saves and stays.
+
+### Calendar
+
+The Calendar has four views: press 1 for Day, 2 for Week, 3 for Month and 4 for Year. Left and Right step by the view's own unit. Up and Down step too. T jumps to today. The square bracket keys move the selected day by one.
+
+Enter edits the one event for the selected day. Type and press Enter to keep it. Events are saved as lines in `JT/EVENTS.TXT`, one event per day. Esc closes the app.
+
+### Clock
+
+Open Clock from Spotlight. It shows the time, the date and the Vancouver label, and refreshes each minute. It gets the time from the network, so before Wi-Fi joins it shows `--:--` and `Waiting for network time`. There are no alarms or timers. Esc closes it.
+
+### Samantha
+
+Samantha is the assistant. On the Pi you reach her from Terminal with `sam QUESTION`. The Samantha dock tile opens that same Terminal.
+
+She does not run on the Pi. The Pi sends your question to a small program called the relay, running on your Mac. The relay asks the model and sends the answer back. The link is HTTPS with a pinned certificate and a shared token. If the Mac is off, or Wi-Fi is down, she cannot answer. [The Wi-Fi chapter](#wi-fi-from-switching-on-to-asking-a-question) covers the setup.
+
+`sam` hands the question over and gives the prompt back, so you can keep typing. Her answer prints as `sam: ...` when it lands. She can also act: a reply can add a note or blink the green light. A model that runs on the Pi itself is planned. Until then, there is only the kernel's tiny `llm` model, and a release build does not carry one.
+
+### Bluetooth
+
+The Pi has a Bluetooth radio and can pair one Bluetooth mouse. Put the mouse in pairing mode, then:
+
+1. Type `bt scan`. It listens for 5 seconds and lists what it hears, numbered, mice first.
+2. Type `bt pair 1`, using the number of your mouse. `bt pair` alone picks the strongest mouse. `bt pair NAME` picks by name.
+3. Move the mouse. The arrow follows it and clicks work.
+
+When the pairing finishes, the Pi writes it to `JT/BTPAIR.BIN` on the card. On the next boot it reconnects to that mouse by itself, with no scan. Wake the mouse if it sleeps. If it does not answer, `bt reconnect` tries again.
+
+`bt` alone shows the radio's state and whether a pairing is saved. `bt forget` deletes the saved pairing. Then run `bt scan` and `bt pair` to pair a different mouse. Without an SD card the pairing works until the next reboot. The mouse has only been tested against a fake radio so far.
 
 ## Other ways to run it
 
