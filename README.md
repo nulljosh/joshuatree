@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/nulljosh/joshuatree/releases/download/2.60.0/jt-mark-paper.png">
-  <img src="https://github.com/nulljosh/joshuatree/releases/download/2.60.0/jt-mark-ink.png" width="80" alt="Joshua Tree">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/nulljosh/joshuatree/releases/download/3.0.0/jt-mark-paper.png">
+  <img src="https://github.com/nulljosh/joshuatree/releases/download/3.0.0/jt-mark-ink.png" width="80" alt="Joshua Tree">
 </picture>
 
 # Joshua Tree
@@ -32,11 +32,11 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 <!-- bench:start -->
 | Benchmark | Result |
 |---|---|
-| Boot to shell | 240 ms |
-| Alloc + free | 157 ns/op |
-| memcpy | 836 MB/s |
-| Context switch | 2831 ns/switch |
-| Disk read | 11351 KB/s |
+| Boot to shell | 260 ms |
+| Alloc + free | 172 ns/op |
+| memcpy | 756 MB/s |
+| Context switch | 3233 ns/switch |
+| Disk read | 9674 KB/s |
 <!-- bench:end -->
 
 ## Docs
