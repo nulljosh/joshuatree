@@ -1,16 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="458" viewBox="0 0 640 458" style="background:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif">
-<text x="320" y="30" font-size="16" font-weight="600" fill="#333" text-anchor="middle">Joshua Tree memory map</text>
-<text x="320" y="50" font-size="12" fill="#666" text-anchor="middle">Room between working memory and program area: 216 KB (the check fails under 16 KB)</text>
-<rect x="40.0" y="70" width="43.2" height="18" rx="3" fill="#8fb996"/>
-<text x="40" y="106" font-size="12" fill="#333">code: 378 KB at 0xC0106000</text>
-<rect x="83.4" y="128" width="410.3" height="18" rx="3" fill="#8fb996"/>
-<text x="40" y="164" font-size="12" fill="#333">fixed data (fonts, images, text): 3,593 KB at 0xC0165000</text>
-<rect x="494.0" y="186" width="2.0" height="18" rx="3" fill="#8fb996"/>
-<text x="40" y="222" font-size="12" fill="#333">starting values: 7 KB at 0xC04E8000</text>
-<rect x="494.9" y="244" width="54.3" height="18" rx="3" fill="#8fb996"/>
-<text x="40" y="280" font-size="12" fill="#333">working memory: 475 KB at 0xC04EA000</text>
-<rect x="574.0" y="302" width="15.1" height="18" rx="3" fill="#2f6b3a"/>
-<text x="40" y="338" font-size="12" fill="#333">where programs load: 132 KB at 0xC0597000</text>
-<rect x="592.7" y="360" width="7.3" height="18" rx="3" fill="#2f6b3a"/>
-<text x="40" y="396" font-size="12" fill="#333">sound buffer: 64 KB at 0xC05C0000</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="458" viewBox="0 0 640 458" style="background:#faf8f4;font-family:Tree Sans,-apple-system,BlinkMacSystemFont,sans-serif">
+<text x="320" y="30" font-size="16" font-weight="600" fill="#1c1c1e" text-anchor="middle">Joshua Tree memory map</text>
+<text x="320" y="50" font-size="12" fill="#75726e" text-anchor="middle">Room between working memory and program area: 82 KB (the check fails under 16 KB)</text>
+<rect x="40.0" y="70" width="43.7" height="18" rx="3" fill="#e3b7a4"/>
+<text x="40" y="106" font-size="12" fill="#1c1c1e">code: 382 KB at 0xC0106000</text>
+<rect x="83.8" y="128" width="424.9" height="18" rx="3" fill="#e3b7a4"/>
+<text x="40" y="164" font-size="12" fill="#1c1c1e">fixed data (fonts, images, text): 3,720 KB at 0xC0166000</text>
+<rect x="509.1" y="186" width="2.0" height="18" rx="3" fill="#e3b7a4"/>
+<text x="40" y="222" font-size="12" fill="#1c1c1e">starting values: 7 KB at 0xC0509000</text>
+<rect x="510.0" y="244" width="54.5" height="18" rx="3" fill="#e3b7a4"/>
+<text x="40" y="280" font-size="12" fill="#1c1c1e">working memory: 477 KB at 0xC050B000</text>
+<rect x="574.0" y="302" width="15.1" height="18" rx="3" fill="#b5502c"/>
+<text x="40" y="338" font-size="12" fill="#1c1c1e">where programs load: 132 KB at 0xC0597000</text>
+<rect x="592.7" y="360" width="7.3" height="18" rx="3" fill="#b5502c"/>
+<text x="40" y="396" font-size="12" fill="#1c1c1e">sound buffer: 64 KB at 0xC05C0000</text>
 </svg>

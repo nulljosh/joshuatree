@@ -26,13 +26,13 @@ rows = []
 y = 70
 for n, a, z in parts:
     x = X0 + BAR * (a - lo) / (hi - lo); w = max(2, BAR * z / (hi - lo))
-    fill = "#2f6b3a" if n in (".userimg", ".dmabuf") else "#8fb996"
+    fill = "#b5502c" if n in (".userimg", ".dmabuf") else "#e3b7a4"
     rows.append(f'<rect x="{x:.1f}" y="{y}" width="{w:.1f}" height="18" rx="3" fill="{fill}"/>')
-    rows.append(f'<text x="{X0}" y="{y + 36}" font-size="12" fill="#333">{PLAIN[n]}: {z // 1024:,} KB at 0x{a:08X}</text>')
+    rows.append(f'<text x="{X0}" y="{y + 36}" font-size="12" fill="#1c1c1e">{PLAIN[n]}: {z // 1024:,} KB at 0x{a:08X}</text>')
     y += 58
-svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{y + 40}" viewBox="0 0 {W} {y + 40}" style="background:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif">
-<text x="{W // 2}" y="30" font-size="16" font-weight="600" fill="#333" text-anchor="middle">Joshua Tree memory map</text>
-<text x="{W // 2}" y="50" font-size="12" fill="#666" text-anchor="middle">Room between working memory and program area: {gap // 1024} KB (the check fails under 16 KB)</text>
+svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{y + 40}" viewBox="0 0 {W} {y + 40}" style="background:#faf8f4;font-family:Tree Sans,-apple-system,BlinkMacSystemFont,sans-serif">
+<text x="{W // 2}" y="30" font-size="16" font-weight="600" fill="#1c1c1e" text-anchor="middle">Joshua Tree memory map</text>
+<text x="{W // 2}" y="50" font-size="12" fill="#75726e" text-anchor="middle">Room between working memory and program area: {gap // 1024} KB (the check fails under 16 KB)</text>
 {chr(10).join(rows)}
 </svg>
 '''

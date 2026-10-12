@@ -4,7 +4,7 @@ bring-up, how it gets built, memory, apps over time). The apps line is read from
 tools/gen/progress.sh. The memory numbers come from docs/memory-map.svg (rerun tools/gen/memory-map.py first). The Pi row is typed in: update it when the board moves."""
 import re, os
 ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
-G, T, INK, MUT = '#2f6b3a', '#b5502c', '#141413', '#888'
+G, T, INK, MUT = '#1c1c1e', '#b5502c', '#1c1c1e', '#75726e'
 W = 640
 out, lines = [], []
 
@@ -51,12 +51,12 @@ chain(330, [('You type', '"call Mom at 5"'), ('Turing', 'picks the tool'), ('Jos
 sec(400, 'The Pi, on the real board')
 pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi', 'WPA2, joined', 1),
       ('Internet', 'DHCP and DNS', 1), ('Clock', 'from the net', 1), ('Samantha', 'chat on the Pi', 1),
-      ('Pi actions', 'note, green light', 1), ('Sound', 'headphone jack', 0), ('Mouse', 'USB, wired', 0),
-      ('Mic', 'Yeti, USB', 0), ('HTTPS', 'secure sites', 0), ('Apps', 'open on the Pi', 0)]
+      ('Pi actions', 'note, green light', 1), ('Sound', 'headphone jack', 0), ('Mouse', 'Bluetooth, USB', 1),
+      ('Mic', 'Yeti, USB', 0), ('HTTPS', 'Browser, 37 roots', 1), ('Apps', 'open on the Pi', 1)]
 pw = (W - 40 - 5 * 8) / 6
 for i, (a, b, done) in enumerate(pi):
     box(20 + (i % 6) * (pw + 8), 410 + (i // 6) * 50, pw, 40, a, b, 'new' if done else 'todo')
-out.append(f'<text x="20" y="518" fill="{MUT}" font-size="9">Solid boxes are seen working on the real board (2026-10-08); dashed are next, in order.</text>')
+out.append(f'<text x="20" y="518" fill="{MUT}" font-size="9">Solid boxes are seen working on the real board (2026-10-12, v3); dashed are next, in order.</text>')
 out.append('<g transform="translate(0,50)">')   # everything below moves down one row
 
 sec(496, 'How it gets built')
@@ -67,8 +67,8 @@ sec(594, 'Memory, PC build')
 # Read from docs/memory-map.svg, which tools/gen/memory-map.py draws from the built kernel.elf: never typed in.
 mm = open(os.path.join(ROOT, 'docs', 'memory-map.svg')).read()
 kb = {n: int(k.replace(',', '')) for n, k in re.findall(r'>([a-z ,()]+): ([0-9,]+) KB', mm)}
-mem = [('code', kb['code'], '#2f6b3a'), ('fonts, images, text', kb['fixed data (fonts, images, text)'], '#7fa886'),
-       ('starting values', kb['starting values'], '#b5502c'), ('working memory', kb['working memory'], '#c9d9cb'),
+mem = [('code', kb['code'], '#1c1c1e'), ('fonts, images, text', kb['fixed data (fonts, images, text)'], '#e3b7a4'),
+       ('starting values', kb['starting values'], '#b5502c'), ('working memory', kb['working memory'], '#f0d9ce'),
        ('programs', kb['where programs load'], '#141413'), ('sound', kb['sound buffer'], '#d97757')]
 tot = sum(k for _, k, _ in mem); x = 20.0
 for n, k, c in mem:
@@ -95,7 +95,7 @@ out.append(f'<text x="{W / 2}" y="798" fill="{MUT}" font-size="10" text-anchor="
 out.append('</g>')
 open(os.path.join(ROOT, 'architecture.svg'), 'w').write(
     f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="864" viewBox="0 0 {W} 864" '
-    'style="background:#fff;font-family:-apple-system,BlinkMacSystemFont,Helvetica,sans-serif">\n'
+    'style="background:#faf8f4;font-family:Tree Sans,-apple-system,BlinkMacSystemFont,Helvetica,sans-serif">\n'
     f'<defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="{T}"/></marker></defs>\n'
     f'<rect width="100%" height="100%" fill="#fff"/>\n<path d="{"".join(lines)}" stroke="#d1d1d6" fill="none"/>\n'
     + '\n'.join(out) + '\n</svg>\n')
