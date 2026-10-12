@@ -9,6 +9,9 @@ Icons synced with their projects. Samantha's dock tile is her mascot, Turing's a
 ## 2.66.0 development branch (2026-10-12)
 
 Browser app on the Pi. A Browser window opens from Spotlight: address bar, page as text in Tree Sans with clickable accent link lines, Back, Forward, Reload, scroll and a status line, wrapped around `browser.c`. Protocol-relative links (`//host/x`) keep the page's scheme. Check: `arm64-browser-app-check.py`.
+## 2.66.0 development branch (2026-10-11)
+
+Books, a plain-text reader as a ring-3 app (`user/books.c`) in the Apps folder and Spotlight. It lists the `.TXT` files in `BOOKS/` (the card's `JT/BOOKS/`), turns one page at a time with Right, Space and Left, and saves the page per book in `NAME.POS`. Books over 3 MB are refused; the card ships with one public domain sample. Check: `tools/checks/books-check.py`.
 
 ## 2.61.3 development branch (2026-10-11)
 

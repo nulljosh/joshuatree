@@ -155,6 +155,7 @@ retry|3|Notes typing, typography, pointer controls, persistence|python3 ./tools/
 retry|1|Notes' runtime-TTF text is real antialiased rasterization at 12pt and 200pt, not a duplicated-block bitmap upscale|python3 ./tools/checks/notessharp-check.py
 retry|7|Notes folders: legacy NOTES.TXT migrates intact, a new note lands in the current folder, both survive reboot, delete asks first|python3 ./tools/checks/notesfolders-check.py
 retry|3|Notes autosave: a changed note saves itself about two seconds after the last key (never per keystroke), survives a red-dot close that kills the program, and is back on screen after reopening|python3 ./tools/checks/notes-autosave-check.py
+retry|3|Books (2.66): the ring-3 reader lists BOOKS/, refuses a book over 3 MB, turns two pages, saves the page to BOOKS/TEST.POS and reopens on it after a reboot|python3 ./tools/checks/books-check.py
 retry|2|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
 retry|6|Terminal's runtime-TTF text is real antialiased rasterization with a driftless monospace grid|python3 ./tools/checks/termsharp-check.py
 retry|1|Panes: independent scrollback per tab, tab rail, activity dot on a background tab, close, split panes with their own shells|python3 ./tools/checks/panes-check.py

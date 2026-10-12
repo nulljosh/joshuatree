@@ -84,10 +84,11 @@ ART = {
     27: "windgate",
     28: "panes",
     29: "claude",
-    # 30 is Mines. Apps and Trash are 31/32.
+    # 30 is Mines, 31 is Books. Apps and Trash are 32/33.
     30: "mines",
-    31: "apps",
-    32: "trash",
+    31: "books",
+    32: "apps",
+    33: "trash",
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by
@@ -96,7 +97,7 @@ ART = {
 # trash_count() > 0, and converting it to a single static artwork would have
 # silently thrown that away, turning a real state indicator into decoration.
 VARIANT = {
-    31: "trash_full",
+    33: "trash_full",
 }
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")

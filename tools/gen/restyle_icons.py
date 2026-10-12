@@ -324,6 +324,14 @@ APPS_ONLY = {
       </g>
       <circle cx="64" cy="62" r="12" fill="#FAF8F4"/>"""),
 
+    # Books: one closed book, cream cover with a deep terracotta spine and a page edge, on the
+    # accent #b5502c. Flat, no text, no lines across the cover. Apps folder only.
+    "books": ("#B5502C", "#B5502C", "",
+              """
+      <rect x="30" y="24" width="68" height="80" rx="8" fill="#FAF8F4"/>
+      <rect x="30" y="24" width="16" height="80" rx="8" fill="#8E3A1E"/>
+      <rect x="50" y="94" width="42" height="5" rx="2.5" fill="#E4DDD3"/>"""),
+
     # Mines (2.32): one cream mine on the accent #b5502c, flat like Claude and Hamurapi. A round
     # body, four bold spikes and a small accent glint. No text, no flag, no grid.
     "mines": ("#B5502C", "#B5502C", "",
