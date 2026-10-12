@@ -17,6 +17,7 @@ unsigned browser_loads(void);
 static unsigned short br_off[BR_VL_MAX], br_len[BR_VL_MAX];   /* wrapped line i: an offset into the page text and a length */
 static unsigned br_n, br_lines;                              /* wrapped lines, and the page's own lines (the `page N lines` log) */
 static int br_top, br_edit, br_loading;
+static unsigned br_sel;   /* the link Tab has picked, 1-based; 0 when none */
 static char br_addr[BR_ADDR_MAX + 1], br_msg[96], br_err[64], br_ln[96];
 static unsigned br_addr_n, br_ln_n;
 static unsigned br_slen(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }
@@ -86,6 +87,7 @@ static void browser_paint(int report) {
         char buf[128]; for (unsigned k = 0; k < n; k++) buf[k] = t[br_off[vi] + k]; buf[n] = 0;
         unsigned num = br_mark(buf, n, 0, &e);
         int ly = y + 4 + r * BR_ROW;
+        for (unsigned f = 0, fe, k; br_sel && (k = br_mark(buf, n, f, &fe)); f = fe) if (k == br_sel) { window_rect(x + 2, ly - 2, w - 4, BR_ROW, 0x00F3E2D8); break; }
         gui_text(buf, x + 6, ly, num ? BR_ACCENT : 0x001C1C1E);
         if (report && num) { con_quiet = 1; uart_puts("browser: shows link "); uart_dec(num); uart_puts(" at "); uart_dec((unsigned)(x + 16) * (unsigned)s); uart_putc(','); uart_dec((unsigned)(ly + 8) * (unsigned)s); uart_putc('\n'); }
     }
@@ -126,7 +128,7 @@ static void br_run(const char *cmd) {   /* one browse_command line, with "loadin
     browse_command(cmd, br_slen(cmd));
     cmd_out = old; br_loading = 0;
     if (browser_loads() != before) {
-        br_top = 0; br_wrap();
+        br_top = 0; br_sel = 0; br_wrap();
         con_quiet = 1; uart_puts("browser: page "); uart_dec(br_lines); uart_puts(br_lines == 1 ? " line\n" : " lines\n");
         browser_paint(1);
         return;
@@ -155,10 +157,35 @@ static void br_nav(int what) {   /* 0 back, 1 forward, 2 reload */
     con_quiet = 1; uart_puts("browser: "); uart_puts(word[what]); uart_putc('\n');
     br_run(word[what]);
 }
+static void br_follow(unsigned n) {   /* link n, as a click on it would */
+    char cmd[16] = "open "; unsigned o = 5; char d[5]; unsigned z = 0, v = n;
+    do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) cmd[o++] = d[--z];
+    cmd[o] = 0;
+    con_quiet = 1; uart_puts("browser: link "); uart_dec(n); uart_putc('\n');
+    br_run(cmd);
+}
+static void br_tab(void) {   /* Tab: the next link, wrapping, scrolled into view */
+    unsigned want = br_sel + 1;
+    if (!browser_link(want)) want = 1;
+    if (!browser_link(want)) return;
+    br_sel = want; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0;
+    unsigned len; const char *t = browser_text(&len);
+    for (unsigned vi = 0; vi < br_n; vi++) {
+        char buf[128]; unsigned n = br_len[vi], e;
+        for (unsigned k = 0; k < n; k++) buf[k] = t[br_off[vi] + k];
+        buf[n] = 0;
+        for (unsigned f = 0, k; (k = br_mark(buf, n, f, &e)); f = e) if (k == want) {
+            if ((int)vi < br_top || (int)vi >= br_top + br_rows()) br_scroll((int)vi - br_rows() / 2);
+            con_quiet = 1; uart_puts("browser: selected link "); uart_dec(want); uart_putc('\n');
+            browser_paint(0); return;
+        }
+    }
+    browser_paint(0);
+}
 static void browser_open(void) {
     if (browser_live || !con_under) return;
     clock_close(); brick_close(); calc_close(); app_kill("closed for the Browser"); console_close();
-    browser_live = 1; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0; br_top = 0;
+    browser_live = 1; br_sel = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0; br_top = 0;
     br_wrap();
     browser_paint(0); uart_puts("browser open\n");
 }
@@ -179,6 +206,8 @@ static int browser_key(unsigned code) {   /* a key down with the Browser in fron
         br_msg[0] = 0; browser_paint(0); return 1;
     }
     if (ctrl_held || gui_held || alt_held) return 1;
+    if (code == 15 && !(br_edit && br_addr_n)) { br_tab(); return 1; }
+    if (!br_edit && br_sel && (code == 28 || code == 96)) { br_follow(br_sel); return 1; }
     if (br_edit && (code == 28 || code == 96)) { br_load(); return 1; }
     if (br_edit && code == 14) { if (br_addr_n) br_addr[--br_addr_n] = 0; browser_paint(0); return 1; }
     int ch = ask_char(code);
@@ -218,9 +247,5 @@ static void browser_click(int lx, int ly) {
         if (lx < br_x() + 6 + right) break;
     }
     if (!pick) return;
-    char cmd[16] = "open "; unsigned o = 5; char d[5]; unsigned z = 0;
-    unsigned v = (unsigned)pick; do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) cmd[o++] = d[--z];
-    cmd[o] = 0;
-    con_quiet = 1; uart_puts("browser: link "); uart_dec((unsigned)pick); uart_putc('\n');
-    br_run(cmd);
+    br_follow((unsigned)pick);
 }
