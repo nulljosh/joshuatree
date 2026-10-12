@@ -764,6 +764,7 @@ int bt_command(const char *q, unsigned n) {
         if (k < 0) { put(ndev ? "bt: nothing heard by that name, type bt scan" : "bt: nothing heard yet, type bt scan first"); say_now(); return 1; }
         for (int j = 0; j < 6; j++) peer[j] = dev[k].a[j];
         peer_type = dev[k].type;
+        put("bt: dialling "); for (int j = 5; j >= 0; j--) { put_hex(peer[j]); if (j) put(":"); } put(peer_type ? " (random address)" : " (public address)"); say();
         unsigned m = 0; for (; dev[k].name[m] && m < sizeof peer_name - 1; m++) peer_name[m] = dev[k].name[m]; peer_name[m] = 0;
         conn = closing = smp = gs = tries = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
         wipe(ltk, 16); wipe(krand, 8);

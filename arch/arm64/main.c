@@ -2656,7 +2656,11 @@ void main(void) {
         uart_puts("sdtest done\n");
     }
 #endif
+#ifdef BT_NOWIFI   /* the radio test build: Wi-Fi stays off so Bluetooth has the shared antenna to itself */
+    menubar_wifi(0);
+#else
     if (!wifi_init()) menubar_wifi(0);
+#endif
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); menubar_notify("Wi-Fi joined"); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
