@@ -2,8 +2,8 @@
 """ARM64 M4 Wi-Fi stage 1: the Pi image's Wi-Fi bring-up never hangs the boot, with and without the firmware files.
 
 QEMU's raspi4b model has the SD host the chip hangs off but no SDIO card behind it, so the kernel must print, in order,
-`usb pcie absent`, `wifi power on`, `wifi FAIL cmd5` (every wait in wifi_init is bounded) and then, behind the boot splash, `M1c fb ok`
-when the desktop paints. A second build with no firmware files (empty stubs) must boot the same way; QEMU never gets as far as `wifi no firmware`
+`usb pcie absent`, `wifi power` (its FAIL line ends the boot splash, so the desktop paints: `M1c fb ok`), `wifi FAIL cmd5` (every wait
+in wifi_init is bounded) and then `boot done`. A second build with no firmware files (empty stubs) must boot the same way; QEMU never gets as far as `wifi no firmware`
 (that needs a card), so that line is checked in the image. This proves the failure paths, not the radio: the real chip answers only on a real board.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing, or QEMU has no raspi4b model.
 Usage: tools/checks/arm64-wifi-check.py   (from the repo root)
@@ -39,7 +39,7 @@ def boot(name, want, nofw=False):
         for _ in range(300):                                       # 30 s cap: a hung boot never gets the last line
             time.sleep(0.1)
             out = open(log, errors="replace").read() if os.path.exists(log) else ""
-            if "usb pcie absent" in out and "wifi FAIL cmd5" in out and "M1c fb ok" in out: break
+            if "usb pcie absent" in out and "wifi FAIL cmd5" in out and "M1c fb ok" in out and "boot done" in out: break
     finally:
         q.kill(); q.wait()
         try: os.remove(log)
@@ -51,10 +51,10 @@ def boot(name, want, nofw=False):
         at = i
     print(f"  ok: {name} printed, in order, {want}")
 
-boot("no SDIO card", ["usb pcie absent", "wifi power", "wifi FAIL cmd5", "M1c fb ok"])
+boot("no SDIO card", ["usb pcie absent", "wifi power", "M1c fb ok", "wifi FAIL cmd5", "boot done"])
 # Without the three files the build links empty stubs. QEMU has no SDIO card, so fw_load() is never reached here and the
 # boot ends at cmd5 as before; the `wifi no firmware` line itself is checked in the image and the source.
-boot("no firmware", ["usb pcie absent", "wifi power", "wifi FAIL cmd5", "M1c fb ok"], nofw=True)
+boot("no firmware", ["usb pcie absent", "wifi power", "M1c fb ok", "wifi FAIL cmd5", "boot done"], nofw=True)
 if b"wifi no firmware" not in open(os.path.join(arch, "kernel8.img"), "rb").read() if os.path.exists(os.path.join(arch, "kernel8.img")) else True:
     fails.append("no firmware: the image lost its `wifi no firmware` line")
 else: print("  ok: no firmware: image carries the `wifi no firmware` line and the stub reports length 0")

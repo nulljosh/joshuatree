@@ -21,7 +21,9 @@ The Pi shows a terracotta splash while it boots: the tree mark in the middle and
 a thin line under it that grows as the screen, the card, Wi-Fi, the clock and
 Bluetooth finish. When Wi-Fi has joined or given up, the clock has synced or
 given up and the radio is up (or has said it will not be), the desktop paints
-once: wallpaper, menu bar, dock, no window. The
+once: wallpaper, menu bar, dock, no window. Any FAIL or oom line the boot prints
+ends the splash at once and paints the desktop, so a failure is never hidden behind
+it; a crash draws its red panel over the splash. The
 boot log is kept all the same, and a click on a dock tile with no app of its
 own (Mail, for one) opens the Console with it. Console shows what succeeded
 and what failed. A failed Wi-Fi join does

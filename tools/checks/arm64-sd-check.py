@@ -17,7 +17,8 @@ Reads, three boots. The sdtest build (`make -C arch/arm64 sdtest`) runs the Term
 list every file with its size (and no label, long-name or deleted entry), `cat config.txt` must print the file,
 `cat BIG.TXT` exactly its first 4096 bytes, `cat BAD.TXT` must be refused at the partition's end, and a raw read past
 the card's last block must be refused. The real kernel8.img with the card must mount it, and with no card must print
-`sd no card` and carry on to the Wi-Fi step, the desktop already up.
+`sd no card` and carry on to the Wi-Fi step; the boot splash is up for the SD step and the first `FAIL` line (the Wi-Fi power-on) ends it,
+so the desktop paints (`M1c fb ok`) and the splash never stays up on a missing or failing card.
 
 Writes, two boots on one clean card (no BAD.TXT; the first free FAT entries carry a top nibble, which FAT32 says
 belongs to the volume). sdw-kernel8.img (`make sdwtest`) writes JT/NOTE.TXT, replaces it, writes and deletes
@@ -151,15 +152,15 @@ try:
             print(f"  ok: a raw read of card block {CARD // 512} (one past the last) is refused")
         if "sd FAIL" in out: fails.append("sdtest: an `sd FAIL` line: " + next(l for l in out.splitlines() if "sd FAIL" in l))
 
-        # 2. The real image with the card: it mounts, prints no test lines, and the boot carries on.
+        # 2. The real image with the card: it mounts, prints no test lines, and the boot carries on (the splash is up for the SD step; the first FAIL line, Wi-Fi's, ends it and the desktop paints).
         out = boot(img, card, "wifi FAIL cmd5")
-        if in_order("kernel8.img with a card", out, ["M1c fb ok", "sd card sdhc 4096 MB, base clock", MOUNT, "wifi FAIL cmd5"]):
+        if in_order("kernel8.img with a card", out, ["splash up", "sd card sdhc 4096 MB, base clock", MOUNT, "M1c fb ok", "wifi FAIL cmd5"]):
             if "sdtest" in out or "sd refused" in out or "sd FAIL" in out: fails.append("kernel8.img with a card printed a test, refusal or FAIL line")
             else: print("  ok: kernel8.img finds the card on EMMC2 (0xFE340000), mounts the FAT32 partition and boots on to Wi-Fi")
 
-        # 3. The real image with no card: one plain line, then the boot carries on.
+        # 3. The real image with no card: one plain line, then the boot carries on and the splash does not stay up (the desktop paints, `M1c fb ok`).
         out = boot(img, None, "wifi FAIL cmd5")
-        if in_order("kernel8.img with no card", out, ["M1c fb ok", "sd no card", "wifi FAIL cmd5"]):
+        if in_order("kernel8.img with no card", out, ["splash up", "sd no card", "M1c fb ok", "wifi FAIL cmd5"]):
             if "sd FAIL" in out or "sd card" in out: fails.append("kernel8.img with no card printed more than `sd no card`")
             else: print("  ok: with no card, kernel8.img prints `sd no card` and boots on to Wi-Fi")
 
