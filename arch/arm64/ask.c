@@ -16,6 +16,7 @@
 #include "../../drivers/http.h"
 #include "tls.h"
 #include "claude_cfg.h"
+#include "emmc.h"
 #ifdef CLAUDE_RELEASE        /* a Pi release image: no token, so the Console says `claude: no token` (the Makefile sets it) */
 #undef CLAUDE_TOKEN_LEN
 #define CLAUDE_TOKEN_LEN 0
@@ -177,7 +178,8 @@ void say_wrapped(const char *prefix, const char *s, unsigned n) {   /* browser.c
 
 /* pi-actions begin: pure, no kernel calls, so tools/checks/pi-actions-check.py compiles this block on the host.
    Samantha may end an answer with actions, each alone on its line, 80 characters at most (docs/AGENT.md):
-   [[note TEXT]] [[say TEXT]] [[led blink]] [[open APP]] [[browse URL]] (http or https only) [[calc EXPR]] [[status]].
+   [[note TEXT]] [[say TEXT]] [[led blink]] [[open APP]] [[browse URL]] (http or https only) [[calc EXPR]] [[status]]
+   [[save NAME]] (the answer's first ``` block into JT/NAME, only when the question itself named NAME).
    take_actions removes those lines from s in place, records at most ACT_MAX of them, and returns the new length.
    A [[ ]] line it does not know is recorded as ACT_UNKNOWN (the kernel logs and ignores it); a long one, a fifth one,
    or one inside a sentence stays as plain text. */
@@ -191,6 +193,7 @@ void say_wrapped(const char *prefix, const char *s, unsigned n) {   /* browser.c
 #define ACT_BROWSE 5
 #define ACT_CALC 6
 #define ACT_STATUS 7
+#define ACT_SAVE 8
 static int act_kind[ACT_MAX];
 static char act_text[ACT_MAX][ACT_LEN + 1];
 static unsigned act_n;
@@ -219,6 +222,7 @@ static unsigned take_actions(char *s, unsigned n) {
             else if (m == 6 && starts(p, m, "status")) kind = ACT_STATUS;
             else if (!(kind = act_word(p, m, "note", ACT_NOTE, &skip)) && !(kind = act_word(p, m, "say", ACT_SAY, &skip))
                      && !(kind = act_word(p, m, "open", ACT_OPEN, &skip)) && !(kind = act_word(p, m, "calc", ACT_CALC, &skip))
+                     && !(kind = act_word(p, m, "save", ACT_SAVE, &skip))
                      && (kind = act_word(p, m, "browse", ACT_BROWSE, &skip))
                      && !starts(p + skip, m - skip, "http://") && !starts(p + skip, m - skip, "https://")) kind = ACT_UNKNOWN;
             if (kind == ACT_LED || kind == ACT_STATUS) skip = m;   /* no text */
@@ -234,6 +238,29 @@ static unsigned take_actions(char *s, unsigned n) {
     }
     while (o && (s[o - 1] == '\n' || s[o - 1] == ' ' || s[o - 1] == '\r')) o--;   /* no blank tail where markers were */
     return o;
+}
+/* The body of the first ``` fenced block in s (the line after the opening fence, up to the closing one): its length,
+   with *at its start. 0 when there is no complete block. What [[save NAME]] writes. */
+static unsigned code_block(const char *s, unsigned n, unsigned *at) {
+    unsigned i = 0;
+    while (i + 3 <= n && !(s[i] == '`' && s[i + 1] == '`' && s[i + 2] == '`')) i++;
+    if (i + 3 > n) return 0;
+    while (i < n && s[i] != '\n') i++;          /* past the fence and its language word */
+    if (i >= n) return 0;
+    unsigned b = ++i;
+    for (; i + 3 <= n; i++)
+        if (s[i] == '`' && s[i + 1] == '`' && s[i + 2] == '`' && (i == b || s[i - 1] == '\n')) { *at = b; return i - b; }
+    return 0;
+}
+/* 1 when `name` appears in q, any case: a file is only ever saved under a name the person typed (Turing's law 12). */
+static int named_in(const char *q, unsigned qn, const char *name) {
+    unsigned l = 0; while (name[l]) l++;
+    for (unsigned i = 0; l && i + l <= qn; i++) {
+        unsigned k = 0;
+        for (; k < l; k++) { char a = q[i + k], b = name[k]; if (a >= 'A' && a <= 'Z') a += 32; if (b >= 'A' && b <= 'Z') b += 32; if (a != b) break; }
+        if (k == l) return 1;
+    }
+    return 0;
 }
 /* pi-actions end */
 
@@ -496,8 +523,9 @@ int calc_eval_str(const char *src, int deg, char *out);   /* calc.c: 0 ok, out h
 void input_drain(void);                      /* main.c: the keys that queued during a request */
 
 /* Runs the recorded actions, printing each outcome, and writes the same outcomes into `result` for the next turn. */
+static const char *said; static unsigned said_n;   /* the answer whose actions run, for [[save]] */
 static void run_actions(void) {
-    static const char *const names[] = {"", "note", "led blink", "say", "open", "browse", "calc", "status"};
+    static const char *const names[] = {"", "note", "led blink", "say", "open", "browse", "calc", "status", "save"};
     rlen = 0; capturing = 1;
     result_puts("The Pi ran your actions. Results:\n");
     for (unsigned a = 0; a < act_n; a++) {
@@ -529,6 +557,15 @@ static void run_actions(void) {
         case ACT_STATUS: {
             char st[80]; pi_status(st);
             kputs("pi: "); kputs(st); kputs("\n"); result_puts(st); result_puts("\n");
+            break; }
+        case ACT_SAVE: {                       /* asked-for files only, into JT/ (emmc.c refuses boot files and non 8.3 names) */
+            unsigned at = 0, len = code_block(said, said_n, &at); int ok = 0;
+            if (!named_in(ac->question, ac->qlen, t)) { kputs("save: "); kputs(t); kputs(" was not in your question, not saved\n"); result_puts("refused, not named by the person\n"); break; }
+            if (!len) { kputs("save: no code block to save\n"); result_puts("no code block\n"); break; }
+            if (!sd_ready()) { kputs("save: no SD card\n"); result_puts("no SD card\n"); break; }
+            ok = sd_write(t, said + at, len) == 1;
+            kputs(ok ? "save: wrote JT/" : "save: could not write "); kputs(t); kputs(ok ? ", cat JT/" : "\n"); if (ok) { kputs(t); kputs(" to read it\n"); }
+            result_puts(ok ? "saved\n" : "not saved\n");
             break; }
         case ACT_BROWSE: {                     /* browser.c prints the page through say_wrapped, so it lands in result */
             char cmd[ACT_LEN + 8]; unsigned o = 0;
@@ -569,7 +606,8 @@ void ask_claude(const char *q, unsigned n) {   /* cmd.c sends here what is not a
         int got = post(prompt, plen, reply, &ans);
         if (got == -1 && step == 1) fallback(q, n);   /* the relay never answered the question: the local model does */
         if (got < 0) return;
-        say_wrapped("", ans, take_actions(ans, (unsigned)got));   /* the answer first, then what she asked the Pi to do */
+        said_n = take_actions(ans, (unsigned)got); said = ans;
+        say_wrapped("", ans, said_n);   /* the answer first, then what she asked the Pi to do */
         if (!act_n) return;
         run_actions();
         if (step == AGENT_STEPS) { kputs("agent: step limit\n"); return; }

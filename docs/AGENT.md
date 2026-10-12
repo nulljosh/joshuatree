@@ -24,8 +24,9 @@ Each action is alone on its own line at the end of an answer, inside `[[ ]]`, at
 | `[[browse URL]]` | Fetches an `http://` or `https://` page through the Terminal browser and prints it as text. Any other scheme is unknown. |
 | `[[calc EXPR]]` | Works out EXPR with the Calculator's evaluator and prints `calc: EXPR = RESULT`. |
 | `[[status]]` | Prints the Pi's address, clock and Wi-Fi bars. |
+| `[[save NAME]]` | Saves the answer's first ``` code block to `JT/NAME` on the SD card, so `cat JT/NAME` shows it. Only a name the person typed in the question, only an 8.3 name, never a boot file. |
 
-Nothing in this list can change a file on the Pi or on the Mac. The relay's prompt tells Samantha to ask first and explain if a task would need that. Reading the Pi's own SD card is not an action yet: the ARM build has no file reader for the card.
+Only `[[save]]` changes a file, and only one the person named in their own question, inside `JT/` (the boot files are refused). Nothing changes a file on the Mac. For anything else the relay's prompt tells Samantha to ask first and explain what would change.
 
 ## Limits
 
