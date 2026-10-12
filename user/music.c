@@ -25,6 +25,9 @@
 #include "libjt/mp3.h"
 #include "libjt/string.h"
 #include "libjt/stdlib.h"
+#ifdef __aarch64__
+#include "libjt/mascot.h"   /* the Pi build draws the mascot on the empty library */
+#endif
 
 /* drivers/jpeg.c, compiled into libjt: album art is the JPEG inside the MP3's ID3 tag */
 int jpeg_decode_scaled32(const unsigned char *data, unsigned int len, unsigned int *dst, unsigned int dw, unsigned int dh,
@@ -533,10 +536,15 @@ static void draw(void) {
         int rows = list_rows();
         clamp_top();
         if (ntracks == 0) {
-            text("No songs yet", 20, LIST_Y + 6, INK);
-            text("Put .WAV or .MP3", 20, LIST_Y + 34, HINT);
-            text("songs in a MUSIC", 20, LIST_Y + 54, HINT);
-            text("folder in Files.", 20, LIST_Y + 74, HINT);
+            int hy = LIST_Y + 6;
+#ifdef __aarch64__
+            jt_mascot_draw(&win, 10 + (lw - 4) / 2, LIST_Y + 2, 80);
+            hy = LIST_Y + 92;
+#endif
+            text("No songs yet", 20, hy, INK);
+            text("Put .WAV or .MP3", 20, hy + 28, HINT);
+            text("songs in a MUSIC", 20, hy + 48, HINT);
+            text("folder in Files.", 20, hy + 68, HINT);
         }
         for (int i = top; i < ntracks && i < top + rows; i++) {
             int y = LIST_Y + (i - top) * ROW_H;
