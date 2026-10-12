@@ -139,9 +139,9 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         if bad: fails.append(f"{name}: menu bar is not half wallpaper, half white: {bad}")
         else: print(f"  ok: {name} menu bar is half wallpaper, half white")
         dsk = [at(x, y) for y in range(mb + sc(10), dock_y - sc(40), max(1, sc(6))) for x in list(range(8, win_x - sc(8), max(1, sc(6)))) + list(range(win_x + win_w + sc(8), w - 8, max(1, sc(6))))]
-        navy = sum(1 for c in dsk if c == (0x00, 0x1f, 0x3f))   # clrs.cc Navy, arch/arm64/wall.c (3.0.0)
-        if navy * 10 < len(dsk) * 9: fails.append(f"{name}: the desktop is not Navy ({navy} of {len(dsk)} samples)")
-        else: print(f"  ok: {name} wallpaper is Navy: {navy} of {len(dsk)} samples")
+        navy = sum(1 for c in dsk if c == (0x14, 0x13, 0x11))   # design system dark, arch/arm64/wall.c (3.0.0)
+        if navy * 10 < len(dsk) * 9: fails.append(f"{name}: the desktop is not the dark fill ({navy} of {len(dsk)} samples)")
+        else: print(f"  ok: {name} wallpaper is the dark fill: {navy} of {len(dsk)} samples")
         # The Console wears the i386 window frame (kernel/gui_paint.c gui_draw_window_frame) on the logical grid: cream
         # body, a hairline under the 30 pixel title band, three traffic lights at x+24/46/68, the name centred in ink,
         # and a white well for the log. Each dot is sampled 5 left of its centre, clear of the "x" and "-" glyphs.

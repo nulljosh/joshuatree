@@ -1,6 +1,6 @@
-/* The ARM desktop's wallpaper: one flat colour, Navy from clrs.cc (#001F3F). The Satellite photo it replaced (3.0.0)
+/* The ARM desktop's wallpaper: one flat colour, the design system's dark #141311 (docs/DESIGN.md). The Satellite photo it replaced (3.0.0)
    decoded a PNG at boot; this writes the screen in one pass and needs no decoder, no heap. */
-#define WALL_RGB 0x001F3Fu
+#define WALL_RGB 0x141311u
 
 /* Paints the whole w x h screen. `swap` says red and blue are the other way round in memory. Always succeeds. */
 int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap) {

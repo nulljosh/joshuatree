@@ -33,7 +33,7 @@ Any QEMU run with a `-d` trace and `-D <file>` gets `timeout` in front: `timeout
 
 ## Theme
 
-The wallpaper is one flat colour, Navy from clrs.cc `#001f3f`; the UI face is Tree Sans; the mark is flat ink. Landing page: off-white `#faf8f4`, near-black ink, one terracotta accent `#b5502c`, rounded cards, no teal, purple or gradients. Dark mode is `#141311`. The logo comes from `tools/gen/logo.py`. The rest is in `docs/DESIGN.md`.
+The wallpaper is one flat colour, the design system dark `#141311`; the UI face is Tree Sans; the mark is flat ink. Landing page: off-white `#faf8f4`, near-black ink, one terracotta accent `#b5502c`, rounded cards, no teal, purple or gradients. Dark mode is `#141311`. The logo comes from `tools/gen/logo.py`. The rest is in `docs/DESIGN.md`.
 
 ## ARM64 and the Pi
 
