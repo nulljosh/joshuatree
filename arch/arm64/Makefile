@@ -257,6 +257,8 @@ $(eval $(call variant,oom,-DOOM_TEST -DHEAP_SIZE=$(OOM_HEAP)UL,,))
 $(eval $(call variant,hover,-DDOCK_HOVER_TEST=3,,))
 $(eval $(call variant,cursor,-DCURSOR_TEST,,))
 $(eval $(call variant,drag,-DDRAG_TEST,,))
+$(eval $(call variant,brtrace,-DBR_TRACE,,))
+brtracetest: brtrace-kernel8.elf
 $(eval $(call variant,keydbg,-DKEY_DEBUG -DKEY_SELFTEST,,))
 crashtest: crash-kernel8.elf crash-kernel8.img
 fpsave: fp-kernel8.elf
@@ -286,7 +288,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest keydbgtest calctest caltest sdtest sdwtest notestest
+.PHONY: brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest keydbgtest calctest caltest sdtest sdwtest notestest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))

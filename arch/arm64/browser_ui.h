@@ -90,6 +90,10 @@ static void br_mascot_draw(int cx, int top) {   /* the mascot, 96 logical px squ
 static void browser_paint(int report) {
     int s = (int)window_scale(), x = br_x(), w = br_w(), y = win_ly + BR_PAGE_Y, h = br_h(), ty = win_ly + 34;
     cur_hide();
+#ifdef BR_TRACE
+    unsigned long h0 = off_screen_hash(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
+#endif
+    int off = off_begin(win_lx * s, win_ly * s, win_lw * s, win_lh * s);   /* the whole window is drawn off screen, then copied over in one pass */
     if (br_frame) { gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Browser"); br_frame = 0; }
     else window_rect(win_lx + 8, win_ly + 30, win_lw - 16, win_lh - 34, 0x00F5F0EB);   /* the frame's own body colour, down to 4 px off the edge so the status line's descenders clear too */
     static const char *const lbl[3] = { "<", ">", "R" };
@@ -138,7 +142,12 @@ static void browser_paint(int report) {
     while (o && gui_text_width(st) > w - rw - 24) st[--o] = 0;
     gui_text(st, x + 2, win_ly + win_lh - 22, 0x0075726E);
     gui_text(right, x + w - rw - 2, win_ly + win_lh - 22, 0x0075726E);
-    fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
+#ifdef BR_TRACE   /* arm64-browser-flicker-check.py: until the copy, the real screen must hold exactly what it held before the paint */
+    unsigned long h1 = off_screen_hash(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
+    con_quiet = 1; uart_puts(off ? "browser: paint offscreen, screen changed before the copy: " : "browser: paint direct, screen changed before the copy: ");
+    uart_dec(h0 != h1); uart_putc('\n');
+#endif
+    if (off) off_end(); else fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
     cur_show();
 }
 static void br_sink(const char *s) {   /* browse_command's output: lines for the UART, and the last "browser: " one is the reason a load failed */

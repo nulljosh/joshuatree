@@ -313,3 +313,8 @@ Check: `tools/checks/bt-pair-check.py` and `tools/checks/arm64-bt-check.py`; the
 
 A press on the title band (not the dots) moves the Console, the Terminal, Clock, Brick or the Browser: `win_move_to` in `arch/arm64/main.c` copies the pixels to the new place, fills what it uncovered with the flat wallpaper and keeps the window between the menu bar and the dock. `con_under` is gone, closing fills the wallpaper where the window now is.
 Check: `tools/checks/arm64-drag-check.py`. Left: the Calculator and the app windows (Calendar, Notes, Music, Books) keep their places, and the Console is not dragged while one of them is open.
+
+## 3.6.1: the Browser stops flickering on the Pi
+
+The Pi's framebuffer is the live scanout, so clearing the well and drawing the text back in place showed every half-drawn state. `browser_paint` now draws the whole window into an offscreen buffer (`off_begin`, `off_end` in `arch/arm64/main.c`) and copies it to the screen in one top-to-bottom pass.
+Check: `tools/checks/arm64-browser-flicker-check.py` (the `brtrace` build proves the screen is untouched until the copy). Left: the Clock, Brick, Console and Calculator still repaint in place.
