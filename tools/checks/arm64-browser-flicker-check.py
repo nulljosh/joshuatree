@@ -111,6 +111,7 @@ try:
     PAINT = "browser: paint offscreen, screen changed before the copy: 0\n"
     def paints(): return uart().count(PAINT)
     check("opening paints off screen", paints() >= 1, uart()[-400:])
+    check("the buffer was taken at boot, before any heap mark could rewind it", "offscreen buffer reserved at boot" in uart() and uart().index("offscreen buffer reserved") < uart().index("browser open"), uart()[:300])
     n0 = paints()
     type_text("http://10.0.2.2:%d/one" % port); key("ret")
     check("loading and the page paint off screen", wait_for("browser: page 2 lines", 40) and paints() >= n0 + 5, (paints(), uart()[-400:]))
@@ -124,6 +125,18 @@ try:
     n3 = paints(); key("ctrl", "l"); type_text("abc"); key("backspace")
     time.sleep(0.5)
     check("typing in the address bar paints off screen", paints() >= n3 + 5, (n3, paints()))
+    # a dock band copy is live once the pointer has hovered a slot; the Browser's buffer must never overlap it or be rewound by it
+    def move(x, y):
+        command("input-send-event", {"events": [{"type": "abs", "data": {"axis": "x", "value": int(x * 32767 / 800)}},
+                                                {"type": "abs", "data": {"axis": "y", "value": int(y * 32767 / 600)}}]}); time.sleep(0.3)
+    key("ctrl", "l"); key("esc"); time.sleep(0.3)   # the address bar closed again, the long page on screen
+    move(400, 575); move(720, 300); ref = shot("ref")   # one hover first: the dock keeps its band copy from here on
+    move(400, 575); move(400, 300); move(300, 250)
+    key("pgdn"); key("end"); key("home")
+    move(400, 575); move(180, 130); move(720, 300)
+    after = shot("after")
+    diff = ImageChops.difference(ref, after).getbbox()
+    check("after dock hover, the pointer over the Browser and repaints, the screen is pixel for pixel what it was", diff is None, diff)
     log_text = uart()
     check("no paint ever drew straight onto the screen", "paint direct" not in log_text, log_text[-400:])
     check("the screen never changed before the copy", "screen changed before the copy: 1" not in log_text, log_text[-400:])
