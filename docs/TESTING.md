@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (245 checks)
+## The suite (246 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -109,6 +109,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Notes' runtime-TTF text is real antialiased rasterization at 12pt and 200pt, not a duplicated-block bitmap upscale | `tools/checks/notessharp-check.py` | retry |
 | Notes folders: legacy NOTES.TXT migrates intact, a new note lands in the current folder, both survive reboot, delete asks first | `tools/checks/notesfolders-check.py` | retry |
 | Notes autosave: a changed note saves itself about two seconds after the last key (never per keystroke), survives a red-dot close that kills the program, and is back on screen after reopening | `tools/checks/notes-autosave-check.py` | retry |
+| Books (2.66): the ring-3 reader lists BOOKS/, refuses a book over 3 MB, turns two pages, saves the page to BOOKS/TEST.POS and reopens on it after a reboot | `tools/checks/books-check.py` | retry |
 | Terminal grid draws the mono face at its true advance | `tools/checks/termmono-check.py` | retry |
 | Terminal's runtime-TTF text is real antialiased rasterization with a driftless monospace grid | `tools/checks/termsharp-check.py` | retry |
 | Panes: independent scrollback per tab, tab rail, activity dot on a background tab, close, split panes with their own shells | `tools/checks/panes-check.py` | retry |
@@ -296,6 +297,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Panes | `tools/checks/panes-check.py` |
 | Claude | `tools/checks/arm64-claude-console-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3claude-check.py` |
 | Mines | `tools/checks/ring3mines-check.py` |
+| Books | `tools/checks/books-check.py` |
 | Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | none yet |
 
