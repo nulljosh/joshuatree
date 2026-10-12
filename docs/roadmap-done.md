@@ -318,3 +318,8 @@ Check: `tools/checks/arm64-drag-check.py`. Left: the Calculator and the app wind
 
 The Pi's framebuffer is the live scanout, so clearing the well and drawing the text back in place showed every half-drawn state. `browser_paint` now draws the whole window into an offscreen buffer (`off_begin`, `off_end` in `arch/arm64/main.c`) and copies it to the screen in one top-to-bottom pass.
 Check: `tools/checks/arm64-browser-flicker-check.py` (the `brtrace` build proves the screen is untouched until the copy). Left: the Clock, Brick, Console and Calculator still repaint in place.
+
+## 3.6.2: reboot works after Samantha answers
+
+On the Pi, `reboot` and `shutdown` answered "Wait for Samantha to finish, then try again." every time. Root cause: the refusal asked `ask_pending()`, which is also true while the typed line holding the command runs, so the command refused itself. They now refuse only while a `sam` request is live (`ask_busy()`), in both the Pi and test builds, so an error reply, a timeout or Esc leaves them working.
+Check: `tools/checks/arm64-zsh-check.py` refuses reboot mid-question, then after a relay error runs `reboot` and `shutdown` and answers a second `sam`; it fails if the fix is reverted.

@@ -38,6 +38,8 @@ STUB = r'''#!/usr/bin/env python3
 import json, os, sys, time, uuid
 prompt = sys.stdin.read()
 with open(os.environ["STUB_LOG"], "a") as f: f.write(json.dumps({"stdin": prompt}) + "\n")
+if os.path.exists(os.environ["STUB_FAIL"]):   # the relay's error path: a claude that dies with no answer
+    sys.stderr.write("stub claude failed on purpose\\n"); sys.exit(3)
 time.sleep(float(os.environ["STUB_DELAY"]))
 print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": os.environ["STUB_ANSWER"], "session_id": str(uuid.uuid4())}))
 '''
@@ -54,6 +56,7 @@ token_file = tmp + "/token"
 with open(token_file, "w") as f: f.write(TOKEN + "\n")
 os.chmod(token_file, 0o600)
 stub_log = tmp + "/stub.log"
+fail_flag = tmp + "/fail"
 port = free_port()
 base_env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE_RELAY")}
 
@@ -101,7 +104,7 @@ try:
     env = dict(base_env, CLAUDE_RELAY_HOST="10.0.2.2", CLAUDE_RELAY_PORT=str(port), CLAUDE_RELAY_TOKEN_FILE=token_file, CLAUDE_RELAY_TLS="0")
     r = subprocess.run(["make", "-C", arch, "TLS_TA="], env=env, capture_output=True, text=True, timeout=300)
     if r.returncode: print("FAIL: arch/arm64 does not build:\n" + r.stdout[-2000:] + r.stderr[-2000:]); sys.exit(1)
-    renv = dict(base_env, PATH=tmp + "/bin" + os.pathsep + os.environ["PATH"], STUB_LOG=stub_log, STUB_ANSWER=ANSWER,
+    renv = dict(base_env, PATH=tmp + "/bin" + os.pathsep + os.environ["PATH"], STUB_LOG=stub_log, STUB_FAIL=fail_flag, STUB_ANSWER=ANSWER,
                 STUB_DELAY=str(DELAY), CLAUDE_RELAY_TOKEN=TOKEN)
     err = open(tmp + "/relay.log", "w+")
     relay = subprocess.Popen([sys.executable, relay_py, "--port", str(port), "--cwd", tmp, "--timeout", "30",
@@ -148,9 +151,27 @@ try:
         check("the stub was asked exactly once", len(stub_calls()) == 1, repr(stub_calls()))
         b.run("sam again")
         check("a new sam works once she has answered", b.wait_for("samantha: thinking", 10, 2), b.uart()[-300:])
+        b.run("reboot")
+        check("reboot while she is thinking is refused", b.wait_for("Wait for Samantha to finish, then try again.\n", 5)
+              and "power: restart" not in b.uart(), b.uart()[-300:])
+        check("... and the refused reboot does not wedge her answer", b.wait_for("sam: " + ANSWER, DELAY + 15, 2), b.uart()[-300:])
+        # The bug found on the Pi: after any finished question reboot answered "Wait for Samantha" forever, because the typed
+        # line that holds the command counted as a question running. Every end of a question must leave reboot working.
+        open(fail_flag, "w").close()
+        b.run("sam this one fails")
+        check("a relay error ends the question with an error line", b.wait_for("samantha: error", 20), b.uart()[-400:])
+        time.sleep(1.0)
+        n = b.uart().count("Wait for Samantha")
+        b.run("reboot")
+        check("reboot runs after an error reply (not refused)", b.wait_for("power: restart", 10) and b.uart().count("Wait for Samantha") == n, b.uart()[-400:])
+        b.run("shutdown")
+        check("shutdown runs too", b.wait_for("power: shutdown", 10) and b.uart().count("Wait for Samantha") == n, b.uart()[-400:])
+        os.remove(fail_flag)
+        b.run("sam after the error")
+        check("a second sam works after the error", b.wait_for("sam: " + ANSWER, DELAY + 15, 3), b.uart()[-400:])
         check("the token never appears on the UART", TOKEN not in b.uart())
         b.run("reboot")
-        check("reboot is a command: it restarts the board", b.wait_for("power: restart", 10), b.uart()[-300:])
+        check("reboot is a command: it restarts the board", b.wait_for("power: restart", 10, 2), b.uart()[-300:])
     finally:
         b.close()
 finally:
