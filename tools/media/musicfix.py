@@ -88,6 +88,24 @@ def qa_songs(which):
         n = len(body)
         tag = b"ID3\x03\x00\x00" + bytes([(n >> 21) & 127, (n >> 14) & 127, (n >> 7) & 127, n & 127]) + body
         return {"NEVERG~1.MP3": ("::MUSIC/", tag + tone)}
+    if which == "art":   # a JPEG cover in a tag, a PNG cover in a tag (not square), and a song with only COVER.JPG beside it
+        from PIL import Image, ImageDraw
+        import io
+        def pic(fmt, size, centre):
+            im = Image.new("RGB", size, (181, 80, 44)); d = ImageDraw.Draw(im)
+            cx, cy = size[0] // 2, size[1] // 2
+            d.ellipse((cx - 30, cy - 30, cx + 30, cy + 30), fill=centre)
+            b = io.BytesIO(); im.save(b, fmt, **({"quality": 85, "subsampling": 0} if fmt == "JPEG" else {})); return b.getvalue()
+        def tagged(title, img, mime):
+            def frame(i, t): return i + (len(t.encode()) + 2).to_bytes(4, "big") + b"\0\0" + b"\0" + t.encode() + b"\0"
+            apic = b"\0" + mime + b"\0" + b"\x03" + b"\0" + img
+            body = frame(b"TIT2", title) + b"APIC" + len(apic).to_bytes(4, "big") + b"\0\0" + apic
+            n = len(body)
+            return b"ID3\x03\x00\x00" + bytes([(n >> 21) & 127, (n >> 14) & 127, (n >> 7) & 127, n & 127]) + body + tone
+        return {"JPGTAG.MP3": ("::MUSIC/", tagged("Jpg Song", pic("JPEG", (120, 120), (28, 28, 30)), b"image/jpeg")),
+                "PNGTAG.MP3": ("::MUSIC/", tagged("Png Song", pic("PNG", (200, 140), (30, 60, 220)), b"image/png")),
+                "PLAIN.WAV": ("::MUSIC/", wav(1, 8, 8000, 3, 440)),
+                "COVER.JPG": ("::MUSIC/", pic("JPEG", (96, 96), (30, 200, 60)))}
     if which == "many":
         return {f"SONG{i:02d}.WAV": ("::", wav(1, 8, 8000, 1, 300 + 20 * i)) for i in range(1, 15)}
     return {}   # empty
@@ -98,8 +116,8 @@ def main():
     which = "std"
     if "--set" in args:
         i = args.index("--set"); which = args[i + 1]; del args[i:i + 2]
-    if not args or which not in ("std", "qa", "many", "empty", "tag"):
-        sys.exit("usage: musicfix.py IMG [KEEPDIR] [--set std|qa|many|empty|tag]")
+    if not args or which not in ("std", "qa", "many", "empty", "tag", "art"):
+        sys.exit("usage: musicfix.py IMG [KEEPDIR] [--set std|qa|many|empty|tag|art]")
     img = args[0]
     subprocess.run(["bash", os.path.join(ROOT, "tools", "mkdisk.sh"), img], check=True, stdout=subprocess.DEVNULL)
     work = args[1] if len(args) > 1 else tempfile.mkdtemp(prefix="jt-musicfix-")

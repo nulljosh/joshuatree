@@ -142,7 +142,7 @@ user.o: user.S
 # kernel's loader. They reach the kernel through jtsys.h's aarch64 `svc #0` path with the Joshua Tree numbers. libjt is
 # built here too, under arch/arm64 and under other names (text.o is the kernel's TTF blender), never next to its i386
 # objects in user/libjt; --start-lib pulls only the members a program uses (calendar: string.c and text.c; notes: text.c
-# and osk.c; music, M3e: string.c, text.c, stdlib.c's malloc over JT_SYS_BRK, wav.c, mp3.c, and jpeg.c for album art). -Os keeps images small.
+# and osk.c; music, M3e: string.c, text.c, stdlib.c's malloc over JT_SYS_BRK, wav.c, mp3.c, and jpeg.c and png.c for album art). -Os keeps images small.
 # mp3.c (minimp3) does its sums in floating point, so it alone is built without -mgeneral-regs-only (UFPCC); EL0 may use
 # the FPU and vectors.S keeps an app's FP registers across every call and park. The kernel stays integer-only.
 # userapps.S bakes the images in with .incbin and lists them; a new app is a name in UAPPS and a row there.
@@ -151,7 +151,7 @@ USEROBJ = user.o userapps.o
 UCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fdirect-access-external-data -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
 UFPCC = $(filter-out -mgeneral-regs-only,$(UCC))
 UJT = ../../user/libjt
-UJTOBJ = ujt_string.o ujt_text.o ujt_osk.o ujt_stdlib.o ujt_wav.o ujt_mp3.o ujt_jpeg.o
+UJTOBJ = ujt_string.o ujt_text.o ujt_osk.o ujt_stdlib.o ujt_wav.o ujt_mp3.o ujt_jpeg.o ujt_png.o
 ujt_string.o: $(UJT)/string.c $(UJT)/string.h
 	$(UCC) -c $< -o $@
 ujt_text.o: $(UJT)/text.c $(UJT)/text.h $(UJT)/aafont.h ../../user/jtsys.h
@@ -164,6 +164,8 @@ ujt_wav.o: $(UJT)/wav.c $(UJT)/wav.h
 	$(UCC) -c $< -o $@
 ujt_mp3.o: $(UJT)/mp3.c $(UJT)/mp3.h $(UJT)/stdlib.h $(UJT)/string.h ../../third_party/minimp3/minimp3.h
 	$(UFPCC) -I../../third_party/minimp3 -c $< -o $@
+ujt_png.o: $(UJT)/png.c ../../drivers/png.c ../../drivers/inflate.c ../../drivers/png.h ../../drivers/inflate.h $(UJT)/stdlib.h $(UJT)/string.h
+	$(UCC) -c $< -o $@
 ujt_jpeg.o: $(UJT)/jpeg.c ../../drivers/jpeg.c ../../drivers/jpeg.h $(UJT)/stdlib.h $(UJT)/string.h
 	$(UCC) -c $< -o $@
 uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h
