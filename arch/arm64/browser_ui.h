@@ -17,6 +17,7 @@ unsigned browser_loads(void);
 static unsigned short br_off[BR_VL_MAX], br_len[BR_VL_MAX];   /* wrapped line i: an offset into the page text and a length */
 static unsigned br_n, br_lines;                              /* wrapped lines, and the page's own lines (the `page N lines` log) */
 static int br_top, br_edit, br_loading;
+static int br_frame = 1;   /* the window frame needs drawing: set on open, cleared once drawn, so a scroll or a keystroke repaints the well and not the frame */
 static unsigned br_sel;   /* the link Tab has picked, 1-based; 0 when none */
 static char br_addr[BR_ADDR_MAX + 1], br_msg[96], br_err[64], br_ln[96];
 static unsigned br_addr_n, br_ln_n;
@@ -66,7 +67,8 @@ static void br_scroll(int top) {   /* clamped: the last page of lines is the fur
 static void browser_paint(int report) {
     int s = (int)window_scale(), x = br_x(), w = br_w(), y = win_ly + BR_PAGE_Y, h = br_h(), ty = win_ly + 34;
     cur_hide();
-    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Browser");
+    if (br_frame) { gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Browser"); br_frame = 0; }
+    else window_rect(win_lx + 8, win_ly + 30, win_lw - 16, win_lh - 34, 0x00F5F0EB);   /* the frame's own body colour, down to 4 px off the edge so the status line's descenders clear too */
     static const char *const lbl[3] = { "<", ">", "R" };
     for (int i = 0; i < 3; i++) {
         int bx = win_lx + 10 + i * 26;
@@ -185,7 +187,7 @@ static void br_tab(void) {   /* Tab: the next link, wrapping, scrolled into view
 static void browser_open(void) {
     if (browser_live || !con_under) return;
     clock_close(); brick_close(); calc_close(); app_kill("closed for the Browser"); console_close();
-    browser_live = 1; br_sel = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0; br_top = 0;
+    browser_live = 1; br_frame = 1; br_sel = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0; br_top = 0;
     br_wrap();
     browser_paint(0); uart_puts("browser open\n");
 }
