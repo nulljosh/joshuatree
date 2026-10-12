@@ -1,5 +1,6 @@
 # Joshua Tree docs
 
+- [Current pickup](LOOP-HANDOFF.md): what is being tested now
 - [Our story](STORY.md): who we are, how it went, where it is going
 - [The book](BOOK.md): how it got here, in our words
 - [Soul](SOUL.md): the pro and the rebel, and seduce, ignore, vilify: the two ideas under every decision
