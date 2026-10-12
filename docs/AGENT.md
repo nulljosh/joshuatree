@@ -25,6 +25,8 @@ Each action is alone on its own line at the end of an answer, inside `[[ ]]`, at
 | `[[calc EXPR]]` | Works out EXPR with the Calculator's evaluator and prints `calc: EXPR = RESULT`. |
 | `[[status]]` | Prints the Pi's address, clock and Wi-Fi bars. |
 | `[[save NAME]]` | Saves the answer's first ``` code block to `JT/NAME` on the SD card, so `cat JT/NAME` shows it. Only a name the person typed in the question, only an 8.3 name, never a boot file. |
+| `[[list]]` | Lists the files in `JT/` on the SD card, one line each with its size, and sends the list back to her. Read only. |
+| `[[read NAME]]` | Prints the first 4 KB of `JT/NAME` (an 8.3 name, no path) and sends it back to her, so she can read, explain or edit what she saved. Read only. |
 
 Only `[[save]]` changes a file, and only one the person named in their own question, inside `JT/` (the boot files are refused). Nothing changes a file on the Mac. For anything else the relay's prompt tells Samantha to ask first and explain what would change.
 
