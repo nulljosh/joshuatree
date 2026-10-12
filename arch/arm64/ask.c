@@ -23,6 +23,7 @@
 #include "tls.h"
 #include "claude_cfg.h"
 #include "emmc.h"
+#include "../../drivers/fat.h"
 #ifdef CLAUDE_RELEASE        /* a Pi release image: no token, so the Console says `claude: no token` (the Makefile sets it) */
 #undef CLAUDE_TOKEN_LEN
 #define CLAUDE_TOKEN_LEN 0
@@ -51,7 +52,8 @@ static void ask_service(void);
 extern void (*net_idle)(void);   /* drivers/net.c */
 #define ASK_MAX 200          /* one question; the relay takes up to 4 KB, this keeps the JSON body small */
 #define ASK_WIDTH 53         /* the Pi console rule: every printed line fits a 53-column row */
-#define ASK_TICKS 18000      /* 180 s at 100 Hz: past the relay's own 150 s limit, so its 504 lands first */
+#define ASK_TICKS 3000       /* 30 s at 100 Hz: no answer by then and `sam` stops waiting (the board once took 2 to 3 minutes) */
+#define ASK_SECS 30
 #define REPLY_MAX 8192       /* the relay caps its answer at 8191 bytes */
 
 #define MODEL_MAX 32
@@ -353,6 +355,19 @@ static int slash(const char *q, unsigned n) {
     return 1;
 }
 
+/* Where one question's time went, in ticks (100 a second): finding the relay (name lookup, the LAN probe), the TLS connect
+   and handshake, and the wait from the request going out to the whole answer back. Summed over the agent steps and
+   printed as one `sam: N.Ns (find a, tls b, wait c)` line when the question ends. */
+static unsigned t_find, t_tls, t_wait, timed;
+static unsigned t_mark;          /* sam_run: when the question started */
+static unsigned request_sent;    /* the request is out: a timeout after this is the 30 s answer wait, not the connect */
+static void put_secs(unsigned t) { kdec(t / 100); kputs("."); kdec((t % 100) / 10); }
+static void timing_line(void) {
+    if (!timed) return;
+    kputs("sam: "); put_secs(ticks() - t_mark); kputs("s (find "); put_secs(t_find); kputs(", tls "); put_secs(t_tls);
+    kputs(", wait "); put_secs(t_wait); kputs(")\n");
+}
+
 #if defined(PI_BUILD) || CLAUDE_TLS
 /* The Pi never sends its bearer over HTTP. QEMU retains its existing HTTP path unless TLS is requested.
    Finding the relay (2.46): the Mac's LAN address can change under the card, so the address does not matter. The relay's
@@ -367,6 +382,38 @@ static int slash(const char *q, unsigned n) {
 #define RELAY_CONNECT_TICKS 300      /* 3 s for a SYN-ACK: the relay is on the LAN, a dead address should fail fast */
 static unsigned relay_ip;            /* the relay that last proved itself, 0 until one has */
 static unsigned short relay_port;
+
+/* The card remembers it too: JT/RELAY.TXT holds "a.b.c.d:port" and nothing else (no token), so the first question after
+   a reboot goes straight to the relay. It is only a hint; the TLS handshake still has to prove the name jt-relay. */
+#define RELAY_FILE "RELAY.TXT"
+#define RELAY_CACHED_TICKS 200       /* 2 s for a SYN-ACK from the relay that worked last time; failing it falls back to the probe */
+static unsigned card_ip; static unsigned short card_port; static int card_loaded;
+static void card_load(void) {
+    char b[32]; unsigned got, ip = 0, i = 0, port = 0;
+    card_loaded = 1;
+    if (!sd_ready() || !sd_enter_jt(0)) return;
+    int r = fat_read_file(RELAY_FILE, b, sizeof b - 1);
+    fat_chdir("..");
+    if (r < 7) return;
+    got = (unsigned)r;
+    for (int o = 0; o < 4; o++) {
+        unsigned v = 0, d = 0;
+        while (i < got && b[i] >= '0' && b[i] <= '9' && v < 1000) { v = v * 10 + (unsigned)(b[i++] - '0'); d++; }
+        if (!d || v > 255 || i >= got || b[i] != (o < 3 ? '.' : ':')) return;
+        ip = ip << 8 | v; i++;
+    }
+    while (i < got && b[i] >= '0' && b[i] <= '9' && port <= 65535) port = port * 10 + (unsigned)(b[i++] - '0');
+    if (port < 1 || port > 65535) return;
+    card_ip = ip; card_port = (unsigned short)port;
+}
+static void card_save(unsigned ip, unsigned short port) {   /* only when the address changed: a write a question would be wasteful */
+    char b[24]; unsigned n = 0;
+    if (card_loaded && ip == card_ip && port == card_port) return;
+    if (!sd_ready()) return;
+    for (int s = 24; s >= 0; s -= 8) { n += put_dec(b + n, (ip >> s) & 255); b[n++] = s ? '.' : ':'; }
+    n += put_dec(b + n, port); b[n++] = '\n';
+    if (sd_write(RELAY_FILE, b, n) == 1) { card_ip = ip; card_port = port; card_loaded = 1; }
+}
 
 static void put_ip(unsigned ip) {
     for (int s = 24; s >= 0; s -= 8) { kdec((ip >> s) & 255); if (s) kputs("."); }
@@ -400,26 +447,36 @@ static int relay_discover(unsigned *ip, unsigned short *port) {
     return 0;
 }
 
-/* A verified TLS connection to the relay, ready for the request: 0, or -1 with tls_last_error set. */
-static int relay_try(unsigned ip, unsigned short port) {
-    unsigned saved = net_connect_wait_ticks;
-    net_connect_wait_ticks = RELAY_CONNECT_TICKS;
+/* A verified TLS connection to the relay, ready for the request: 0, or -1 with tls_last_error set. `wait` is the SYN-ACK wait. */
+static int relay_try(unsigned ip, unsigned short port, unsigned wait) {
+    unsigned saved = net_connect_wait_ticks, t0 = ticks();
+    net_connect_wait_ticks = wait;
     int r = tls_connect_private(ip, port, RELAY_NAME) < 0 || tls_handshake() < 0 ? -1 : 0;
     net_connect_wait_ticks = saved;
-    if (!r) { relay_ip = ip; relay_port = port; }
+    t_tls += ticks() - t0;
+    if (!r) { relay_ip = ip; relay_port = port; card_save(ip, port); }
     return r;
 }
 static int relay_open(void) {
-    unsigned ip = relay_ip; unsigned short port = relay_ip ? relay_port : CLAUDE_PORT;
-    if (!ip && CLAUDE_HOST[0] && !http_resolve_host(CLAUDE_HOST, &ip)) ip = 0;
-    if (ip && relay_try(ip, port) == 0) return 0;
-    relay_ip = 0;
-    if (ip && tls_last_error() == TLS_ERR_ENTROPY) return -1;   /* no randomness: another address would not help */
+    unsigned f0 = ticks(), tls0 = t_tls, ret;
+    unsigned ip = relay_ip, wait = RELAY_CACHED_TICKS; unsigned short port = relay_port;
+    if (!ip && !card_loaded) card_load();
+    if (!ip && card_ip) { ip = card_ip; port = card_port; }      /* the card's last good relay */
+    if (!ip) {                                                    /* never found one: the baked address, at the full wait */
+        port = CLAUDE_PORT; wait = RELAY_CONNECT_TICKS;
+        if (CLAUDE_HOST[0] && !http_resolve_host(CLAUDE_HOST, &ip)) ip = 0;
+    }
+    if (ip && relay_try(ip, port, wait) == 0) { ret = 0; goto done; }
+    relay_ip = 0; ret = (unsigned)-1;
+    if (ip && tls_last_error() == TLS_ERR_ENTROPY) goto done;     /* no randomness: another address would not help */
     unsigned found; unsigned short fport;
-    if (!relay_discover(&found, &fport)) { kputs("samantha: no relay answered on the LAN\n"); return -1; }
-    if ((found == ip && fport == port) || relay_try(found, fport) < 0) return -1;
+    if (!relay_discover(&found, &fport)) { kputs("samantha: no relay answered on the LAN\n"); goto done; }
+    if ((found == ip && fport == port) || relay_try(found, fport, RELAY_CONNECT_TICKS) < 0) goto done;
     kputs("samantha: relay found at "); put_ip(found); kputs("\n");
-    return 0;
+    ret = 0;
+done:
+    t_find += (ticks() - f0) - (t_tls - tls0);                    /* everything but the TLS tries is finding */
+    return (int)ret;
 }
 
 static int relay_post_tls(const char *body, unsigned body_len, const char *token, char *reply, int *status) {
@@ -435,6 +492,7 @@ static int relay_post_tls(const char *body, unsigned body_len, const char *token
     for (const char *p = "\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
     for (unsigned i = 0; i < body_len; i++) req[n++] = body[i];
     char *raw = kmalloc(REPLY_MAX + 2048);
+    request_sent = 1;
     int got = raw ? tls_exchange_timeout(req, n, raw, REPLY_MAX + 2048, ASK_TICKS) : -1;
     if (!raw) tcp_close();
     for (unsigned i = 0; i < n; i++) ((volatile char *)req)[i] = 0;
@@ -447,6 +505,15 @@ static int relay_post_tls(const char *body, unsigned body_len, const char *token
     return got;
 }
 #endif
+
+static void no_answer(void) {   /* "sam: no answer in 30s (relay at a.b.c.d)": the prompt comes back, the busy flag clears in sam_run */
+    kputs("sam: no answer in "); kdec(ASK_SECS); kputs("s (relay at ");
+#if defined(PI_BUILD) || CLAUDE_TLS
+    if (relay_ip) put_ip(relay_ip); else
+#endif
+    kputs(CLAUDE_HOST);
+    kputs(")\n");
+}
 
 /* One POST to the relay. Returns the answer's length with *ans pointing into reply, -1 when the relay never answered
    (the caller may fall back to the local model) and -2 for a refusal it already printed. */
@@ -466,8 +533,13 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
     if (ac->effort_i != 1) { for (const char *p = "\",\"effort\":\""; *p; p++) body[b++] = *p; for (const char *p = efforts[ac->effort_i]; *p; p++) body[b++] = *p; }
     for (const char *p = "\",\"pi\":\""; *p; p++) body[b++] = *p;
     b += pi_status(body + b);                  /* the Pi's live status, so the answer can be about this machine */
+    /* The relay puts this field in Samantha's system text (never changes the question), 120 characters at most. It is the one
+       place the Pi can ask for a short answer without touching relay.py, and the persona lines stay the relay's own. */
+    for (const char *p = ". Reply in one or two sentences unless asked for detail."; *p; p++) body[b++] = *p;
     body[b++] = '"'; body[b++] = '}';
     kputs("samantha: thinking\n");
+    timed = 1; request_sent = 0;
+    unsigned p0 = ticks(), find0 = t_find, tls0 = t_tls;
     static char token[64];
     for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
     token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
@@ -483,13 +555,17 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
 #endif
     heap_release(mark);
     for (int i = 0; i < 64; i++) token[i] = 0;
+    t_wait += (ticks() - p0) - (t_find - find0) - (t_tls - tls0);   /* the rest of this call: send, the relay thinking, the reply */
     ac->steps_total++;
     if (got < 0) {
         ac->relay_state = 2; ac->last_name[0] = 0;     /* out of reach: the prompt goes back to the default model */
         int e = net_last_error();
 #if defined(PI_BUILD) || CLAUDE_TLS
+        if (request_sent && (tls_last_error() == TLS_ERR_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT)) { no_answer(); return -2; }
         if (tls_last_error() == TLS_ERR_ENTROPY) { kputs("samantha: hardware randomness unavailable\n"); return -1; }
         kputs("samantha: TLS failed, no HTTP fallback\n");
+#else
+        if (e == NET_ERR_REPLY_TIMEOUT) { no_answer(); return -2; }
 #endif
         if (e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) kputs("samantha: timeout\n");
         else { kputs("samantha: error "); kputs(e == NET_ERR_NONE ? "busy" : net_error_name(e)); kputs("\n"); }
@@ -612,15 +688,43 @@ void ask_claude(const char *q, unsigned n) {   /* cmd.c: `llm PROMPT` */
     if (n > 4 && q[0] == 'l' && q[1] == 'l' && q[2] == 'm' && q[3] == ' ') local(q + 4, n - 4);
 }
 int ask_busy(void) { return sam_state != 0; }   /* cmd.c: `sam` is waiting on the relay, so the network and the heap are taken */
+/* Plain arithmetic is answered on the Pi at once and never sent: digits, spaces, . + - * / ^ and parentheses, with an
+   optional "what is" in front, quotes around it and a ? or = behind. The evaluator is the Calculator's (calc.c), so there
+   is one parser. A sum it cannot do (1/0, an unbalanced bracket) goes to the relay like any question. */
+static int has_word(const char *q, unsigned n, const char *w) { unsigned i = 0; for (; w[i]; i++) if (i >= n || q[i] != w[i]) return 0; return 1; }
+static int local_math(const char *q, unsigned n) {
+    static const char *const lead[] = {"what is ", "what's ", "whats ", "calculate ", "calc "};
+    char e[ASK_MAX + 1]; unsigned m = 0, digit = 0, op = 0;
+    while (n && (q[0] == ' ' || q[0] == '"' || q[0] == '\'')) { q++; n--; }
+    while (n && (q[n - 1] == ' ' || q[n - 1] == '"' || q[n - 1] == '\'' || q[n - 1] == '?' || q[n - 1] == '=')) n--;
+    for (unsigned k = 0; k < sizeof lead / sizeof *lead; k++) {
+        unsigned w = 0; while (lead[k][w]) w++;
+        if (has_word(q, n, lead[k])) { q += w; n -= w; break; }
+    }
+    for (unsigned i = 0; i < n; i++) {
+        char c = q[i];
+        if (c >= '0' && c <= '9') digit = 1;
+        else if (c == '+' || c == '-' || c == '*' || c == '/' || c == '^') op = 1;
+        else if (c != ' ' && c != '.' && c != '(' && c != ')') return 0;
+        e[m++] = c;
+    }
+    if (!digit || !op) return 0;
+    e[m] = 0;
+    char out[32];
+    if (calc_eval_str(e, 0, out)) return 0;
+    kputs("sam: "); kputs(out); kputs("\n");
+    return 1;
+}
 void sam_command(const char *q, unsigned n) {   /* cmd.c: `sam QUESTION` queues the question and returns; ask_poll sends it */
     while (n && q[0] == ' ') { q++; n--; }
     if (!n) { kputs("usage: sam QUESTION\n"); return; }
     if (sam_state) { kputs("sam: still thinking\n"); return; }
+    if (local_math(q, n)) return;              /* 20 for 10+10, on the Pi, no relay and no busy flag */
     if (n > ASK_MAX) n = ASK_MAX;
     for (unsigned i = 0; i < n; i++) sam_q[i] = q[i];
     sam_qn = n; sam_state = 1;
 }
-static void ask_relay(const char *q, unsigned n) {   /* the whole exchange for one question, run from sam_run */
+static void ask_relay_steps(const char *q, unsigned n) {   /* the whole exchange for one question, run from ask_relay */
     static char reply[REPLY_MAX + 1];
     if (!CLAUDE_TOKEN_LEN) { kputs("samantha: no token\n"); fallback(q, n); return; }
     if (!net_get_gateway()) {                  /* no DHCP lease, or no card at all */
@@ -652,6 +756,12 @@ static void ask_relay(const char *q, unsigned n) {   /* the whole exchange for o
         if (stop_flag) { kputs("agent: stopped\n"); return; }
         prompt = result; plen = rlen;
     }
+}
+
+static void ask_relay(const char *q, unsigned n) {   /* one question, then the line that says where the time went */
+    t_find = t_tls = t_wait = timed = 0; t_mark = ticks();
+    ask_relay_steps(q, n);
+    timing_line();
 }
 
 /* Called from the main loop: runs a line Enter queued, so the keyboard handler never blocks. Also called from ask_service
