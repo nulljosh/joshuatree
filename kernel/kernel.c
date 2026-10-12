@@ -5178,7 +5178,7 @@ static void gui_run(void){
     gui_cursor_save(mx, my);
     gui_draw_cursor(mx, my);
     gui_dock_prewarm(); ring3app_autoopen_run(mx, my); /* `open=keyrate` / `open=toroid` boot flag, if set */
-    (void)mouse_get_wheel(); /* a wheel step banked while booting (the PS/2 wake-up packet) is not input: a window under the pointer must not open already scrolled */
+    (void)mouse_take_wheel(); /* a wheel step banked while booting (the PS/2 wake-up packet) is not input: a window under the pointer must not open already scrolled. Not mouse_get_wheel: that pumps the vmmouse queue and can eat the first pointer packet on a slow host */
     for (;;) {
         window_present(); r3stress_desktop_round(); pdestress_desktop_round(); __asm__ volatile ("hlt"); /* 1.9.23: stress=r3 hook, dead unless armed */
         /* v0.76.17: direct request ("time in top right needs live reload
