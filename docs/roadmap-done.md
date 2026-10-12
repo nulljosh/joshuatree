@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 3.7.8 development branch (2026-10-12)
+
+Samantha opens as a chat in the Terminal. `sam` with no question used to print a usage line; now it takes over the window with a header (`Samantha`, the relay from the cached address or `local only`), a scrolling history of your lines and hers, and a `you: ` input row. Enter sends through the same path as `sam QUESTION`, so sums answer on the Pi, questions show a `thinking...` marker and go to the relay, and the slash commands work. Up, Down, Page Up, Page Down, Home and End scroll; Esc or `/quit` returns to the zsh prompt with the busy flag clear (after her answer, if she is mid-question). The Terminal's other keys and the power chords are untouched. Check: `tools/checks/arm64-samtui-check.py`.
+
 ## 3.7.6 development branch (2026-10-12)
 
 `sam` stops crawling on the board. Sums like `sam 10+10` are answered on the Pi at once with the Calculator's evaluator and never sent. The Pi remembers the relay that last answered, in memory and in `JT/RELAY.TXT` (no token), tries it first with a 2 second connect, and only searches the network when it fails. The request asks for one or two sentences through the relay's `pi` field, so `relay.py` is untouched. No answer in 30 seconds ends with `sam: no answer in 30s (relay at a.b.c.d)` and a free prompt, where it used to wait up to 180. The reply is read only until Content-Length is in, not until the server hangs up. Every question prints `sam: N.Ns (find a, tls b, wait c)` so the next board pass shows where the time goes. `arm64-relay-discovery-check.py` was silently skipping on QEMU 11 (its `-netdev help` probe needs `-machine`); fixed. Check: `tools/checks/arm64-samfast-check.py`.

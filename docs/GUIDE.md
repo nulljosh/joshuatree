@@ -67,7 +67,7 @@ permanent UTC-7 offset from March 8, 2026.
 Press F2 or Ctrl+T for Terminal. The Terminal and Samantha dock tiles also
 open it. The prompt is `joshua@tree % `, like a zsh shell. Type a command and
 press Enter; a word that is not a command prints `zsh: command not found`.
-Ask Samantha with `sam QUESTION`.
+Ask Samantha with `sam QUESTION`, or type `sam` alone to chat with her full screen.
 
 Press F3 to switch between two Terminal sessions. Each remembers its typed
 line, scrollback and assistant conversation until reboot. Finish or stop
@@ -253,7 +253,7 @@ The commands that work today:
 | Command | What it does |
 |---|---|
 | `help` | Lists the commands. |
-| `sam QUESTION` | Asks Samantha. See the Samantha chapter. |
+| `sam QUESTION`, `sam` | Asks Samantha, or opens the chat view when you type `sam` alone. See the Samantha chapter. |
 | `ls`, `ls DIR`, `cat NAME` | List the card's files and print the first 4096 bytes of one. |
 | `write NAME.EXT TEXT`, `rm NAME`, `mkdir NAME` | Make a text file, remove a file, make a folder. All three work inside `JT/` only. The name needs a dot and keeps to the old 8.3 shape. |
 | `browse`, `open`, `back`, `forward`, `reload`, `links`, `more`, `up`, `down`, `top`, `bottom`, `find` | The text browser. See the Browser chapter. |
@@ -315,6 +315,8 @@ Open Clock from Spotlight. It shows the time, the date and the Vancouver label, 
 ### Samantha
 
 Samantha is the assistant. On the Pi you reach her from Terminal with `sam QUESTION`. The Samantha dock tile opens that same Terminal.
+
+Type `sam` with nothing after it and the Terminal becomes a chat with her. The top row says `Samantha` and which relay she will use, or `local only` before one has answered. Below it your lines (`you: ...`) and her answers (`sam: ...`) scroll up in the same font as the shell, and the bottom row is where you type. Press Enter to send. Sums come back at once, questions show `thinking...` until she answers, and you can keep typing meanwhile. Up and Down scroll back through the conversation, Page Up, Page Down, Home and End jump around, and Esc (or typing `/quit`) takes you back to the shell prompt. If she is mid-answer when you press Esc, the chat closes as soon as her answer is in. The chat view asks the same way `sam QUESTION` does, so the relay, the 30 second limit and the slash commands behave the same.
 
 She does not run on the Pi. The Pi sends your question to a small program called the relay, running on your Mac. The relay asks the model and sends the answer back. The link is HTTPS with a pinned certificate and a shared token. If the Mac is off, or Wi-Fi is down, she cannot answer. [The Wi-Fi chapter](#wi-fi-from-switching-on-to-asking-a-question) covers the setup.
 

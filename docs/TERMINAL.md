@@ -18,11 +18,23 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 | `cat NAME` | Prints the first 4 KB of a file there as text (`cat JT/NOTE.TXT` one folder down) |
 | `write NAME.EXT TEXT` | Makes or replaces `JT/NAME.EXT` holding TEXT; boot files are refused |
 | `rm NAME`, `mkdir NAME` | Deletes the file `JT/NAME`, or makes the folder `JT/NAME` |
-| `sam QUESTION` | Asks Samantha through the relay on the Mac and returns at once; her answer prints as `sam: ...` when it lands. Only one at a time (`sam: still thinking`); `sam` alone prints the usage. While she thinks, other commands run, except `browse`, `open`, `back`, `forward`, `reload`, `llm`, `bt` and `userrun`, which wait for her |
+| `sam QUESTION` | Asks Samantha through the relay on the Mac and returns at once; her answer prints as `sam: ...` when it lands. Only one at a time (`sam: still thinking`). `sam` alone opens the chat view (below). While she thinks, other commands run, except `browse`, `open`, `back`, `forward`, `reload`, `llm`, `bt` and `userrun`, which wait for her |
 | `reboot` (or `restart`), `shutdown` (or `poweroff`) | Restarts or powers off the Pi at once. Typing the word is the confirmation; while Samantha is answering it says to wait. The chords Ctrl+Alt+Delete and Ctrl+Alt+End still ask first. |
 | anything else | Prints `zsh: command not found: WORD` |
 
-The Samantha dock tile and Spotlight's Samantha entry open this same Terminal on the ARM build; type `sam` there. The chat view on the i386 build is unchanged.
+The Samantha dock tile and Spotlight's Samantha entry open this same Terminal on the ARM build; type `sam` there.
+
+### Chat view
+
+`sam` with nothing after it turns the Terminal window into a chat. The first row is the header: `Samantha` on the left and, on the right, the relay she will use (`relay 10.0.0.116`, from the address in memory or the one on the card) or `local only` when none has answered yet. A rule sits under it, then the history of your lines (`you: ...`) and hers (`sam: ...`), wrapped to the Terminal's 53 columns in the same font, and at the bottom the input row `you: `. Enter sends the line through the same path as `sam QUESTION`: a sum answers at once on the Pi, a question goes to the relay while a `thinking...` marker shows under the history, and `/model`, `/effort`, `/status`, `/clear`, `/help` and `stop` work as in the shell. Typing while she thinks still shows on the input row; a second question gets `sam: still thinking`.
+
+| Key | What it does |
+|---|---|
+| Up, Down | Scroll the history one line |
+| Page Up, Page Down, Home, End | Half a page, the oldest line, the newest line |
+| Esc, or `/quit` | Back to the `joshua@tree % ` prompt. While she is still thinking it leaves as soon as her answer is in |
+
+A new line snaps the view to the newest. F3 (the other Terminal session) waits until you leave. The power chords and the volume keys work as everywhere; `reboot` typed here is just a question. Each row it draws is also written to the UART as `tui| ...`, which is what `tools/checks/arm64-samtui-check.py` reads. The chat view on the i386 build is unchanged.
 
 ## Getting there
 

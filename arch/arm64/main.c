@@ -1040,8 +1040,11 @@ static void con_follow(void) {   /* End: back to the newest, the same picture th
     con_wipe();
     for (unsigned k = cp->anchor; k < cp->len; k++) con_draw(k);
 }
+int ask_tui(void);   /* ask.c: the chat view (`sam` alone) has the Terminal window */
+void ask_tui_scroll(unsigned code);
 static int con_key(unsigned code, unsigned value) {   /* Page Up 104, Page Down 109, Home 102, End 107: 1 if the console took the key */
     if (code != 104 && code != 109 && code != 102 && code != 107) return 0;
+    if (ask_tui()) { if (value) ask_tui_scroll(code); return 1; }   /* the chat view scrolls its own history, not the pane's log */
     if (!con_live || !value || calc_front || app_front) return 1;
     unsigned half = (unsigned)con_rows / 2 ? (unsigned)con_rows / 2 : 1, nl = con_nlines();
     if (code == 104 || code == 102) {
@@ -1100,15 +1103,14 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
 const char *ask_prompt(void);   /* ask.c: "joshua@tree % " */
 /* The Terminal's bottom row: the prompt and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
 void con_clear(void) {         /* /clear: the Terminal's window empties, its text stays in the scrollback */
-    if (!con_live || calc_front || app_front) return;
+    if (!con_live || calc_front || app_front || ask_tui()) return;
     int held = cur_hold();
     con_wipe(); cp->anchor = cp->len; cp->scrolled = 0; con_hint();
     cur_release(held);
 }
-void con_prompt(const char *s, unsigned n) {
+static void con_input_row(const char *p, const char *s, unsigned n) {   /* the bottom row: a prompt, the line being typed (its tail when long), a cursor */
     if (!con_live || calc_front || app_front || cp != &term_p) return;
     int held = cur_hold();
-    const char *p = ask_prompt();
     unsigned plen = 0; while (p[plen]) plen++;
     unsigned row = (unsigned)con_rows, cols = (unsigned)con_cols, room = cols > plen + 2 ? cols - plen - 1 : 1;
     int y = con_y + (int)row * con_ch;
@@ -1121,6 +1123,38 @@ void con_prompt(const char *s, unsigned n) {
     con_glyph(col, row, '_');
     cur_release(held);
 }
+void con_prompt(const char *s, unsigned n) { con_input_row(ask_prompt(), s, n); }
+/* The chat view (ask.c, `sam` alone) takes the Terminal window over. The pane's log is not touched while it is up and is
+   drawn again on the way out. Rows are kept in a shadow so a new line repaints only the rows that changed. */
+#define TUI_ROWS 96
+#define TUI_COLS 128
+static char tui_shadow[TUI_ROWS][TUI_COLS];
+int con_rows_total(void) { return con_live && fb && cp == &term_p && !calc_front && !app_front ? con_rows : 0; }   /* text rows above the input row; 0 with no window to draw in */
+void con_tui_begin(void) {
+    if (!con_rows_total()) return;
+    int held = cur_hold();
+    con_wipe();
+    for (unsigned r = 0; r < TUI_ROWS; r++) tui_shadow[r][0] = 0;
+    cur_release(held);
+}
+void con_tui_rows(const char *const *rows, unsigned n) {
+    if (!con_rows_total()) return;
+    int held = cur_hold();
+    for (unsigned r = 0; r < n && r < TUI_ROWS && r < (unsigned)con_rows; r++) {
+        const char *t = rows[r] ? rows[r] : "";
+        unsigned k = 0, lim = (unsigned)con_cols < TUI_COLS - 1 ? (unsigned)con_cols : TUI_COLS - 1;
+        while (k < lim && t[k] && t[k] == tui_shadow[r][k]) k++;
+        if (k == lim || (!t[k] && !tui_shadow[r][k])) continue;   /* the same text */
+        int y = con_y + (int)r * con_ch;
+        fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
+        fb_flush(con_x - 4, y, con_cols * con_cw + 8, con_ch);
+        unsigned i = 0;
+        for (; i < lim && t[i]; i++) { tui_shadow[r][i] = t[i]; if (t[i] != ' ') con_glyph(i, r, t[i]); }
+        tui_shadow[r][i] = 0;
+    }
+    cur_release(held);
+}
+void con_tui_input(const char *p, const char *s, unsigned n) { con_input_row(p, s, n); }
 int con_columns(void) { return con_live ? con_cols : 0; }
 static void con_start(void) {   /* the screen is ready: replay what was printed before it */
     con_live = 1;
@@ -1488,6 +1522,19 @@ static void pane_open(struct pane *p) {   /* the Console or the Terminal in fron
     cur_show();
 }
 static void console_open(void) { pane_open(&con_p); }
+void con_tui_end(void) {   /* back to the shell: the Terminal's own text and prompt */
+    if (!con_rows_total()) return;
+    int held = cur_hold(), sc_ = (int)window_scale();
+    cp->scrolled = 0;
+    unsigned nl = con_nlines(), keep = con_rows > 1 ? (unsigned)con_rows - 1 : 1;
+    cp->anchor = con_line_off(nl > keep ? nl - keep : 0);
+    con_wipe();
+    for (unsigned k = cp->anchor; k < cp->len; k++) con_draw(k);
+    con_summary(); con_hint(); ask_redraw();
+    fb_flush(win_lx * sc_, win_ly * sc_, win_lw * sc_, win_lh * sc_);
+    cur_release(held);
+}
+
 /* The Calculator (calc.c holds the sums and the keypad; this draws it). Slice 5: it is a second window, with its own
    rectangle overlapping the right of the Console's, so the Console or the Terminal stays on screen beside it. The one
    in front has the keys, as on the i386 desktop: a click on the window behind brings it up and gives it the keys
@@ -1929,6 +1976,7 @@ void power_run(int off) {   /* the same action the confirmed chord runs */
 #else
 void power_run(int off) { if (!power_refused()) uart_puts(off ? "power: shutdown (this build has no power control)\n" : "power: restart (this build has no power control)\n"); }   /* the virt test build: only the Pi has a watchdog to pull */
 #endif
+void tui_log(const char *s) { con_quiet = 1; uart_puts(s); }   /* ask.c: the chat view's "tui| ..." lines, UART only (one line, newline included) */
 int volume_key(unsigned code);   /* cmd.c: F11 and F12, Volume Down, Up and Mute */
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
     int chord = ctrl_held || gui_held || alt_held;

@@ -8,7 +8,7 @@ through QMP send-key on a virtio keyboard; everything is read from the UART. Hea
 
 One boot, virtio-net, virtio keyboard, Terminal open (F2):
   1. the prompt is `joshua@tree % ` and an unknown word prints `zsh: command not found: NAME`; the stub is never asked.
-  2. `sam` alone prints `usage: sam QUESTION`; the stub is never asked.
+  2. `sam` alone opens the chat view (`tui| open`), Esc closes it (`tui| closed`) and the shell is back; the stub is never asked.
   3. `sam QUESTION` returns to the prompt at once while the stub holds its answer back: the relay has the question and the
      answer has not printed. A command typed meanwhile (`vol`) runs and prints before the answer; a second `sam` says
      `sam: still thinking`; `browse` says sam is using the network; a half-typed line (`vo`) survives the answer.
@@ -124,7 +124,10 @@ try:
         check("an unknown word prints zsh: command not found: NAME", b.wait_for("zsh: command not found: frobnicate\n", 10), b.uart()[-300:])
         check("... echoed after the zsh prompt", PROMPT + "frobnicate now\n" in b.uart(), b.uart()[-300:])
         b.run("sam")
-        check("sam alone prints a usage line", b.wait_for("usage: sam QUESTION\n", 10), b.uart()[-300:])
+        check("sam alone opens the chat view", b.wait_for("tui| open\n", 10), b.uart()[-300:])
+        time.sleep(0.5)
+        b.key("esc")
+        check("... and Esc brings the shell back", b.wait_for("tui| closed\n", 10), b.uart()[-300:])
         time.sleep(0.5)
         check("... and nothing so far went to Samantha", not stub_calls() and "samantha: thinking" not in b.uart())
 
