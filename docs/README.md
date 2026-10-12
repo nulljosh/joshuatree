@@ -11,7 +11,7 @@
 - [Design](DESIGN.md): the rules for icons, type, colour, the dock and motion, checked against the source
 - [Hardware](HARDWARE.md): the real board and the 3.0 plan
 - [Portfolio mode](PORTFOLIO.md): how heyitsmejosh.com is a mode of the OS, with Joshua in place of Samantha
-- [Raspberry Pi guide](RASPBERRY-PI.md): what to buy, the serial cable, and how to boot it on a real Pi 4. [Printable Pi case](hardware/PI-CASE.md)
+- [Raspberry Pi guide](RASPBERRY-PI.md): what to buy, the serial cable, and how to boot it on a real Pi 4. [Printable Pi case](hardware/PI-CASE.md). [Samantha box](hardware/SAMANTHA-BOX.md), a desk unit with a 7 inch screen
 - [ARM64 and the Raspberry Pi](ARM64.md): the second CPU target. It boots under QEMU today with a drawn desktop, a keyboard, mouse, disk and network, and its first program in user mode (`make -C arch/arm64 run`); the Pi 4B is the first real board
 - [Autonomy](AUTONOMY.md): the gap list between today's Pi and a computer that fixes itself, with the first three tasks
 - [Encrypted Pi relay](RELAY-TLS.md): certificates, the trusted-time bootstrap and remaining security limits

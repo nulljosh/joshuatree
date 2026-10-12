@@ -8,6 +8,8 @@
 import sys, os, subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)                                    # Blender's -P does not put this folder on the path
+from render_kit import build, blender, lin, material        # shared with render_samantha.py
 PREVIEW = bool(os.environ.get("NEO_PREVIEW"))             # 400 px, 8 samples, for checking exposure
 W, H = (400, 250) if PREVIEW else (1600, 1000)
 BASE, TOPC = (0xB9, 0x54, 0x2C), (0xF0, 0xE7, 0xD8)      # ring 0 and the cap, as in ASSEMBLY.md
@@ -47,8 +49,8 @@ if bpy is None:
     mesh = os.path.join(out, "mesh"); os.makedirs(mesh, exist_ok=True)
     if os.environ.get("NEO_CHECK_ONLY"): sys.exit(check(out))      # re-run just the colour check on existing renders
     env = dict(os.environ, NEO_MESH=mesh)
-    subprocess.run(["uv", "run", "--with", "build123d", "--with", "shapely", "python", os.path.join(HERE, "neo_cad.py"), HERE], check=True, env=env)
-    subprocess.run(["/opt/homebrew/bin/blender", "-b", "-P", __file__, "--", mesh, out], check=True)
+    build("neo_cad.py", HERE, env=env, extra=("--with", "shapely"))
+    blender(__file__, mesh, out)
     sys.exit(check(out))
 
 import math
@@ -56,9 +58,6 @@ from mathutils import Vector
 mesh_dir, out_dir = sys.argv[sys.argv.index("--") + 1:][:2]
 S = 0.001                                                   # mm to metres
 
-def lin(c):
-    f = lambda v: (v / 255.0 / 12.92) if v / 255.0 <= 0.04045 else (((v / 255.0) + 0.055) / 1.055) ** 2.4
-    return (f(c[0]), f(c[1]), f(c[2]), 1.0)
 def mix(a, b, t): return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -80,13 +79,6 @@ try:
     sc.cycles.device = "GPU"
 except Exception:
     sc.cycles.device = "CPU"
-
-def material(name, rgb, rough=0.55):
-    m = bpy.data.materials.new(name); m.use_nodes = True
-    b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-    b.inputs["Base Color"].default_value = lin(rgb); b.inputs["Roughness"].default_value = rough
-    b.inputs["Metallic"].default_value = 0.0
-    return m
 
 def load(name, mat):
     p = os.path.join(mesh_dir, name + ".stl")
