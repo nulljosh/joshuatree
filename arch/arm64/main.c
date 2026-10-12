@@ -187,14 +187,16 @@ void exc_bad(struct frame *f) {
 extern char _heap_start[];
 static unsigned long l1[512] __attribute__((aligned(4096)));   /* one table of 1 GiB blocks, enough for a flat map */
 static unsigned long l2[512] __attribute__((aligned(4096)));   /* M3a: the RAM GiB split into 2 MiB blocks... */
-static unsigned long l3[512] __attribute__((aligned(4096)));   /* ...and one of those into 4 KiB pages, for the EL0 arena */
+#define ARENA_BLOCKS 8   /* M3e: the EL0 arena is 16 MiB, eight of those blocks... */
+static unsigned long l3[ARENA_BLOCKS * 512] __attribute__((aligned(4096)));   /* ...each one a table of 4 KiB pages, back to back, so l3[page] works across all eight */
 #ifdef PI_BUILD
 #define RAM_GIB 0
 #else
 #define RAM_GIB 1
 #endif
-/* The arena: one 2 MiB block, clear of the kernel image and the heap. 64 MiB into RAM unless the heap reaches that far
-   (an image with a language model baked in, llm_model.S), then the first 2 MiB boundary after the heap. */
+/* The arena: 16 MiB (M3e; one 2 MiB block before), clear of the kernel image and the heap. 64 MiB into RAM unless the heap
+   reaches that far (an image with a language model baked in, llm_model.S), then the first 2 MiB boundary after the heap. The
+   first block holds the M3a pages and the app's image, stack and window buffer; the other seven are the app's brk heap. */
 #define ARENA_LOW (((unsigned long)RAM_GIB << 30) + (64UL << 20))
 #define HEAP_END ((unsigned long)_heap_start + HEAP_SIZE)
 #define USER_BASE (HEAP_END <= ARENA_LOW ? ARENA_LOW : (HEAP_END + (2UL << 20) - 1) & ~((2UL << 20) - 1))
@@ -202,12 +204,14 @@ static unsigned long l3[512] __attribute__((aligned(4096)));   /* ...and one of 
 #define UP_STACK 0x2000UL   /* EL0 stack, one page; sp starts at its top */
 #define UP_KERN  0x4000UL   /* a page in the same arena that only EL1 may touch */
 #define UP_APP    0x10000UL /* M3c: the app window, where user_load puts a program from the app table: code pages, data pages, zeroed pages */
-#define UP_ASTACK 0x80000UL /* ...and the app's stack: 4 pages, with nothing mapped below or above them */
-#define APP_STACK_PAGES 4
+#define UP_ASTACK 0x80000UL /* ...and the app's stack: 16 pages (M3e: minimp3 keeps about 16 KB of scratch there), nothing mapped below them */
+#define APP_STACK_PAGES 16
 #define APP_ZERO_PAGES  8   /* zeroed pages after the image (and the rest of its last page): the pool user/calendar.c keeps its events in, and user/notes.c its 28 KB arena (M3d) */
 #define UAPP_MAX 0x40000UL  /* the largest image user_load takes, and what user_c.ld asserts */
 #define UP_WIN   0x90000UL  /* M3c part 2: the app's window buffer, read-write and never executable, a free page above the stack */
-#define UWIN_MAX (0x200000UL - UP_WIN)   /* the rest of the arena's 2 MiB: room for 560x360 four times over */
+#define UWIN_MAX (0x200000UL - UP_WIN)   /* the rest of the arena's first 2 MiB: room for 560x360 four times over */
+#define UP_HEAP  0x200000UL /* M3e: the app's brk heap, from the second block to the arena's end (14 MiB), EL0 read-write, never executable */
+#define ARENA_SIZE ((unsigned long)ARENA_BLOCKS << 21)
 static unsigned long heap_next;
 #ifndef HEAP_SIZE   /* the oomtest builds (arch/arm64/Makefile) shrink it so an allocation fails on purpose */
 #define HEAP_SIZE (16UL << 20)
@@ -244,8 +248,8 @@ static void mmu_init(void) {
 #endif
     /* M3a: the RAM GiB becomes a table of 2 MiB blocks (all kernel-only, as before), and the arena block a table of 4 KiB pages */
     for (int i = 0; i < 512; i++) l2[i] = (((unsigned long)RAM_GIB << 30) + ((unsigned long)i << 21)) | NORMAL;
-    for (int i = 0; i < 512; i++) l3[i] = 0;
-    l2[(USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21] = (unsigned long)l3 | 3;
+    for (int i = 0; i < ARENA_BLOCKS * 512; i++) l3[i] = 0;
+    for (int k = 0; k < ARENA_BLOCKS; k++) l2[((USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21) + k] = (unsigned long)(l3 + k * 512) | 3;
     l1[RAM_GIB] = (unsigned long)l2 | 3;
     unsigned long mair = (0xFFUL << 8) | 0x00UL;                       /* attr 1 normal write-back, attr 0 device-nGnRnE */
     unsigned long tcr = 25UL | (1UL << 8) | (1UL << 10) | (3UL << 12) | (1UL << 23) | (2UL << 32);   /* 39-bit VA, 4 KiB pages, write-back, TTBR1 off, 40-bit PA */
@@ -281,7 +285,7 @@ extern char _start[];
 extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[], user_entry_e[];
 extern unsigned long enter_user(unsigned long entry, unsigned long sp, unsigned long arg, unsigned long arg2);
 extern void leave_user(unsigned long status) __attribute__((noreturn));
-extern unsigned long resume_user(const struct frame *f, unsigned long sp);   /* vectors.S: back into a parked app, returns like enter_user */
+extern unsigned long resume_user(const struct frame *f, unsigned long sp, const unsigned long *fp);   /* vectors.S: back into a parked app (its FP registers too), returns like enter_user */
 #define SYS_WRITE 64   /* the Linux numbers the user.S self-test uses */
 #define SYS_EXIT 93
 #define JT_SYS_EXIT 1    /* Joshua Tree's own, the ones user/jtsys.h and docs/SYSCALL-ABI.md give every program (M3b) */
@@ -292,6 +296,8 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp);   /* 
 #define JT_SYS_SCHED_YIELD 158   /* M3c part 2 */
 #define JT_SYS_WINDOW_OPEN 384
 #define JT_SYS_WINDOW_POLL 385
+#define JT_SYS_AUDIO 393         /* M3e: play, status, stop (audio.c holds the queue) */
+#define JT_SYS_BRK 397           /* M3e: the heap top */
 struct user_app { const char *name, *start, *end; };   /* userapps.S: one row per program, ended by a zero name */
 extern const struct user_app user_apps[];
 static unsigned long user_status;
@@ -305,7 +311,9 @@ static unsigned long cal_utc(void);   /* the clock the Calendar tile reads, furt
    app_wbytes at UP_WIN, 0 with no window, and app_q is the ring of events the desktop queued for it. */
 static const struct user_app *app_cur;
 static struct frame app_frame;
+static unsigned long app_fp[66];                 /* M3e: its q0-q31, FPCR and FPSR where it parked (vectors.S's save_fp layout) */
 static unsigned long app_sp, app_last, app_wbytes;
+static unsigned long app_brk;                    /* M3e: the heap top JT_SYS_BRK set, 0 while it has none */
 static unsigned long app_close_at;               /* the red dot was clicked: past this count, an app that did not close itself is ended */
 static unsigned long cnt_now(void) { unsigned long c; __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); return c; }
 static unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f)); return f ? f : 54000000; }
@@ -317,37 +325,69 @@ static unsigned app_qh, app_qt;
 static long app_window_open(unsigned long info);                    /* the window half, with the other windows further down */
 static long app_window_poll(unsigned long ev, unsigned long flags);
 static void app_window_close(void);
+static long app_audio(unsigned long op, unsigned long arg, unsigned long size);   /* M3e: JT_SYS_AUDIO, with the app loader's byte readers */
 static int span(unsigned long a, unsigned long n, unsigned long base, unsigned long len) {   /* [a, a+n) inside [base, base+len), written so a + n can never wrap */
     return n <= len && a >= base && a - base <= len - n;
 }
 long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned long a2);   /* ufile.c, M3d: open, read, write (fd 3 and up), close, lseek, readdir, readfile, mkdir, unlink */
 void ufile_release(void);                 /* ...every descriptor the app left open, closed and written back */
 void ufile_mkdirs(const char *path);      /* ...folders inside JT/ an app expects */
-int user_in_range(unsigned long a, unsigned long n) {   /* memory the program may have the kernel read: the M3a code and stack pages, and the loaded app's whole window and stack */
+static unsigned long heap_len(void) { return app_brk ? app_brk - (USER_BASE + UP_HEAP) : 0; }   /* M3e: the heap below its top */
+int user_in_range(unsigned long a, unsigned long n) {   /* memory the program may have the kernel read: the M3a code and stack pages, and the loaded app's whole window, stack and heap */
     return span(a, n, USER_BASE + UP_CODE, 4096) || span(a, n, USER_BASE + UP_STACK, 4096)
         || span(a, n, USER_BASE + UP_APP, app_len) || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0)
-        || span(a, n, USER_BASE + UP_WIN, app_wbytes);
+        || span(a, n, USER_BASE + UP_WIN, app_wbytes) || span(a, n, USER_BASE + UP_HEAP, heap_len());
 }
-int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may store into for the program: data, zeroed pool and stacks, never code (read-only at EL1 too: a store there would be a kernel fault) */
+int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may store into for the program: data, zeroed pool, stacks and heap, never code (read-only at EL1 too: a store there would be a kernel fault) */
     return span(a, n, USER_BASE + UP_STACK, 4096) || span(a, n, USER_BASE + UP_APP + app_code, app_len - app_code)
-        || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0) || span(a, n, USER_BASE + UP_WIN, app_wbytes);
+        || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0) || span(a, n, USER_BASE + UP_WIN, app_wbytes)
+        || span(a, n, USER_BASE + UP_HEAP, heap_len());
+}
+/* M3e: JT_SYS_BRK with i386's semantics (docs/SYSCALL-ABI.md, kernel/brk.c): 0 reads the top, a fresh app's is the heap's
+   base; any other value sets it, to the byte. Pages between the old and new top (rounded up to whole pages) are mapped EL0
+   read-write and never executable, then zeroed, so no earlier app's bytes are ever seen; shrinking unmaps them. A top below
+   the base or past the arena's end is -EINVAL and nothing moves. The memory is the arena's own (identity mapped, 14 MiB),
+   so there is nothing to run out of below that cap. app_unmap drops the whole heap when the app ends. */
+static long app_brk_set(unsigned long want) {
+    const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
+    unsigned long base = USER_BASE + UP_HEAP, top = app_brk ? app_brk : base;
+    if (!want) return (long)top;
+    if (want < base || want > USER_BASE + ARENA_SIZE) return -22;
+    unsigned long have = (top + 4095) & ~4095UL, need = (want + 4095) & ~4095UL;
+    for (unsigned long v = have; v < need; v += 4096) l3[(v - USER_BASE) >> 12] = v | PAGE | AP_EL0_RW | PXN | UXN;
+    for (unsigned long v = need; v < have; v += 4096) l3[(v - USER_BASE) >> 12] = 0;
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    for (unsigned long v = have; v < need; v += 8) *(unsigned long *)v = 0;
+    app_brk = want;
+    return (long)want;
 }
 /* JT_SYS_SCHED_YIELD from the scheduled app: keep every register and where it stood, with 0 as the call's answer, and go back
    to the desktop's loop. app_tick resumes it on a later pass, at the instruction after its svc. */
-static void app_park(const struct frame *f) {
+static void app_park(const struct frame *f, const unsigned long *fp) {
     for (int i = 0; i < 31; i++) app_frame.x[i] = f->x[i];
+    for (int i = 0; i < 66; i++) app_fp[i] = fp[i];   /* M3e: its floating point registers, the block el0_sync_entry saved */
     app_frame.x[0] = 0; app_frame.elr = f->elr;
     __asm__ volatile ("mrs %0, sp_el0" : "=r"(app_sp));
     app_parked = 1;
     leave_user(0);
 }
 static void svc_log(unsigned long n, unsigned long a0, long r) {   /* the calls that are not write and exit, on the UART: how a program's progress shows with no debugger */
+    static unsigned long last_n, last_a0; static long last_r = 1;   /* M3e: a call that repeats the last line exactly (Music asks the time on every pass) is not logged again */
+    if (n == last_n && a0 == last_a0 && r == last_r) return;
+    last_n = n; last_a0 = a0; last_r = r;
     uart_puts("M3c svc "); uart_dec((unsigned)n); uart_puts(" a0="); uart_hex(a0); uart_puts(" -> ");
     if (r < 0) { uart_putc('-'); r = -r; }
     uart_dec((unsigned)r); uart_putc('\n');
 }
-void exc_el0_sync(struct frame *f) {
+#ifdef MUSIC_TEST_UTC
+void fp_clobber(void);   /* fptest.c, linked into the musictest build only: the kernel using the FPU inside an app's call and while it is parked */
+#define APP_FP_CLOBBER() fp_clobber()
+#else
+#define APP_FP_CLOBBER() ((void)0)
+#endif
+void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's FP registers, saved below the frame by el0_sync_entry */
     unsigned ec = (unsigned)(f->esr >> 26);
+    APP_FP_CLOBBER();
     if (ec == 0x15) {   /* svc from EL0 */
         unsigned long n = f->x[8], a0 = f->x[0];
         if (n == JT_SYS_WRITE && a0 != 1 && a0 != 2) f->x[0] = (unsigned long)ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: a file from open (fd 0 is -EBADF there) */
@@ -361,7 +401,7 @@ void exc_el0_sync(struct frame *f) {
             uart_puts("M3 EL0 exit "); uart_dec((unsigned)f->x[0]); uart_putc('\n');
             leave_user(f->x[0]);
         } else if (n == JT_SYS_SCHED_YIELD) {   /* every turn of an app's loop, so never logged */
-            if (app_running) app_park(f);
+            if (app_running) app_park(f, fp);
             f->x[0] = 0;                         /* outside the scheduler (the boot self-test) there is nothing to yield to */
         } else if (n == JT_SYS_WINDOW_POLL) f->x[0] = (unsigned long)app_window_poll(a0, f->x[1]);   /* the same */
         else {
@@ -375,8 +415,10 @@ void exc_el0_sync(struct frame *f) {
                 }
             } else if (n == JT_SYS_GETPID) r = user_pid ? user_pid : 1;
             else if (n == JT_SYS_WINDOW_OPEN) r = app_window_open(a0);
-            else r = ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: the file calls; -ENOSYS (-38) for every number the ARM kernel does not answer yet */
-            if (n != JT_SYS_READ) svc_log(n, a0, r);           /* a read is every few hundred bytes of a file: the UART would drown */
+            else if (n == JT_SYS_AUDIO) r = app_audio(a0, f->x[1], f->x[2]);   /* M3e */
+            else if (n == JT_SYS_BRK) r = app_brk_set(a0);
+            else r = ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: the file calls; -ENOSYS (-38) for every number the ARM kernel does not answer yet, JT_SYS_AUDIO_RECORD (394) among them */
+            if (n != JT_SYS_READ && n != JT_SYS_AUDIO) svc_log(n, a0, r);   /* a read is every few hundred bytes of a file, audio a hundred calls a second: the UART would drown */
             f->x[0] = (unsigned long)r;
         }
         return;
@@ -428,6 +470,31 @@ static void user_init(const char *img, unsigned long len) {
    APP_STACK_PAGES fresh zeroed pages; the pages around the window and the stack are unmapped, so running off either faults. */
 static unsigned rd32(const char *p) { const unsigned char *u = (const unsigned char *)p; return u[0] | (unsigned)u[1] << 8 | (unsigned)u[2] << 16 | (unsigned)u[3] << 24; }
 static unsigned long rd64(const char *p) { return rd32(p) | (unsigned long)rd32(p + 4) << 32; }
+/* M3e: JT_SYS_AUDIO, i386's contract (docs/SYSCALL-ABI.md): op 1 queues a struct jt_audio_play's PCM (at most 8192 bytes a
+   call, END dropped from a call that is cut), op 2 fills a struct jt_audio_status, op 3 stops. Every pointer is checked here
+   before audio.c sees a byte. The LP64 jt_audio_play is { pcm 8, len 4, rate 4, flags 4 } padded to 24 bytes. There is
+   always a jack (QEMU virt plays into nothing at the same pace), so never -ENODEV. */
+#include "audio.h"
+static long app_audio(unsigned long op, unsigned long arg, unsigned long size) {
+    if (op == 3) { audio_app_stop(); return 0; }
+    if (op == 2) {
+        unsigned st[7];   /* version, size, playing, queued, space, rate, played */
+        if (size < 8) return -22;
+        if (size > sizeof st) size = sizeof st;
+        if (!user_writable(arg, size)) return -14;
+        audio_app_status(st);
+        for (unsigned long i = 0; i < size; i++) ((unsigned char *)arg)[i] = ((const unsigned char *)st)[i];
+        return (long)size;
+    }
+    if (op != 1 || size < 24) return -22;
+    if (!user_in_range(arg, 20)) return -14;
+    unsigned long pcm = rd64((const char *)arg);
+    unsigned len = rd32((const char *)arg + 8), rate = rd32((const char *)arg + 12), flags = rd32((const char *)arg + 16);
+    if (!len) return -22;
+    if (len > 8192) { len = 8192; flags &= ~1u; }
+    if (!user_in_range(pcm, len)) return -14;
+    return audio_app_queue((const unsigned char *)pcm, len, rate, flags & 1);
+}
 static const struct user_app *user_find(const char *name, unsigned n) {
     for (const struct user_app *a = user_apps; a->name; a++) {
         unsigned i = 0;
@@ -436,9 +503,9 @@ static const struct user_app *user_find(const char *name, unsigned n) {
     }
     return 0;
 }
-static void app_unmap(void) {   /* its pages, its stack and its window buffer */
-    app_len = app_code = app_img = app_wbytes = 0;
-    for (unsigned long i = UP_APP >> 12; i < 512; i++) l3[i] = 0;
+static void app_unmap(void) {   /* its pages, its stack, its window buffer and (M3e) its heap */
+    app_len = app_code = app_img = app_wbytes = app_brk = 0;
+    for (unsigned long i = UP_APP >> 12; i < ARENA_BLOCKS * 512; i++) l3[i] = 0;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
 }
 static unsigned long user_load(const struct user_app *a) {
@@ -501,6 +568,7 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     const struct user_app *a = app_cur;
     app_cur = 0; app_parked = app_kick = 0; app_close_at = 0; user_status = status;
     ufile_release();   /* M3d: its open files are written back and closed, after an exit, a fault or its red dot alike */
+    audio_app_stop();  /* M3e: and its sound stops (what is already in the PWM ring plays out) */
     app_window_close();
     app_unmap();
     uart_puts("M3c app "); uart_puts(a->name);
@@ -515,7 +583,8 @@ static void app_tick(void) {
     if (!app_kick && now - app_last < cnt_hz() / 100) return;
     app_kick = 0; app_last = now; app_runs++;
     app_parked = 0; user_faulted = 0; app_running = 1;
-    unsigned long st = resume_user(&app_frame, app_sp);
+    APP_FP_CLOBBER();
+    unsigned long st = resume_user(&app_frame, app_sp, app_fp);
     app_running = 0;
     if (!app_parked) app_end(st, user_faulted ? "stopped by a fault" : 0);
 }
@@ -525,7 +594,10 @@ static int app_start(const struct user_app *a) {   /* 0 started (it runs on the 
     if (!entry) return -2;
     if (a->name[0] == 'n' && a->name[1] == 'o' && a->name[2] == 't' && a->name[3] == 'e' && a->name[4] == 's' && !a->name[5])
         ufile_mkdirs("NOTES/NOTES");   /* M3d: Notes' default folder in JT/, made before it looks, as i386's notes_check_support does */
+    if (a->name[0] == 'm' && a->name[1] == 'u' && a->name[2] == 's' && a->name[3] == 'i' && a->name[4] == 'c' && !a->name[5])
+        ufile_mkdirs("MUSIC");         /* M3e: Music's library, JT/MUSIC/, there for songs dropped onto the card from a Mac */
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
+    for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
     app_frame.elr = entry; app_sp = USER_BASE + UP_ASTACK + APP_STACK_PAGES * 4096UL;
     app_cur = a; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
     uart_puts("M3c app "); uart_puts(a->name); uart_puts(" starts\n");
@@ -1188,6 +1260,8 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
 static long clock_year;   /* the local year of the last clock_local call */
 #ifdef CAL_TEST_UTC
 static unsigned long cal_utc(void) { return CAL_TEST_UTC; }   /* the caltest build: a fixed date for arm64-calicon-check.py */
+#elif defined(MUSIC_TEST_UTC)
+static unsigned long cal_utc(void) { return MUSIC_TEST_UTC + cnt_now() / cnt_hz(); }   /* the musictest build: a clock that ticks, which paces Music's `music: at` lines (arm64-music-check.py) */
 #else
 static unsigned long cal_utc(void) { return net_clock_utc(); }
 #endif
@@ -1558,6 +1632,7 @@ static void pointer_moved(void) {   /* one report done: the arrow to its new pla
 static int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx && x < bx + bw && y >= by && y < by + bh; }
 static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
 static void dock_activate(int slot);
+#define SPOT_MUSIC (GUI_ICON_COUNT + 2)   /* M3e: Music is in Spotlight (and the app table) but not on the dock, a decision */
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
@@ -1596,7 +1671,7 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     if (slot == GUI_ICON_COUNT + 1) { brick_open(); return; }
     brick_close();
     clock_close();
-    if (app_dock(dock_names[slot])) return;   /* Calendar: user/calendar.c at EL0, in its own window */
+    if (app_dock(slot == SPOT_MUSIC ? "Music" : dock_names[slot])) return;   /* Calendar, Notes and Music: user/NAME.c at EL0, in its own window */
     if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
     console_open();
     uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
@@ -1614,7 +1689,7 @@ int ask_char(unsigned code);                  /* ask.c: a key code as the charac
 #define SPOT_ROW 22
 #define SPOT_MAX 5                    /* matches shown at most */
 static char spot_text[24]; static unsigned spot_len;
-static int spot_sel, spot_hits[GUI_ICON_COUNT + 2], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
+static int spot_sel, spot_hits[SPOT_MUSIC + 1], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
 static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
 static int spot_lx, spot_ly, spot_lh;   /* the bar on the logical grid; its height is what is drawn now */
 static int spot_match(const char *name) {   /* the typed text, case folded, anywhere in the name */
@@ -1626,12 +1701,12 @@ static int spot_match(const char *name) {   /* the typed text, case folded, anyw
     }
     return 0;
 }
-static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : dock_names[slot]; }
+static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : dock_names[slot]; }
 static int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
 static void spot_paint(void) {
     int s = (int)window_scale();
     spot_n = 0;
-    for (int i = 0; i <= GUI_ICON_COUNT + 1 && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
+    for (int i = 0; i <= SPOT_MUSIC && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
     if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
     cur_hide();
     int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;
@@ -2490,7 +2565,7 @@ static void blk_probe(void) {}
 void net_stack_demo(void);
 void net_clock_sync(void);
 void tls_demo(void);
-void input_drain(void) { usb_poll(); input_poll(); }   /* ask.c, between agent steps: the keys that queued during a request */
+void input_drain(void) { usb_poll(); input_poll(); audio_pump(); }   /* ask.c, between agent steps: the keys that queued during a request, and the sound */
 
 void main(void) {
     unsigned long el;
@@ -2591,17 +2666,18 @@ void main(void) {
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); app_tick();
+            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); app_tick(); audio_pump();
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
         }
 #else
         for (;;) {
-            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy() || app_cur) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy() || app_cur || audio_busy()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
             usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick();   /* an app parked on yield runs again here */
+            audio_pump();   /* M3e: the app's sound, from its ring into the PWM's, never waiting */
         }
 #endif
     }
