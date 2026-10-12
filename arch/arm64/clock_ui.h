@@ -31,7 +31,7 @@ static void clock_paint(void) {
     con_quiet = 1; uart_puts("clock: "); uart_puts(time); uart_putc(' '); uart_puts(date); uart_putc('\n');
 }
 static void clock_open(void) {
-    if (clock_live || !con_under) return;
+    if (clock_live || !fb) return;
     brick_close(); calc_close(); browser_close(); app_kill("closed for the Clock"); console_close(); clock_live = 1;
     clock_paint(); uart_puts("clock open\n");
 }
