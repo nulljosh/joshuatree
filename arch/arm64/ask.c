@@ -528,7 +528,7 @@ int calc_eval_str(const char *src, int deg, char *out);   /* calc.c: 0 ok, out h
 void input_drain(void);                      /* main.c: the keys that queued during a request */
 
 /* Runs the recorded actions, printing each outcome, and writes the same outcomes into `result` for the next turn. */
-static const char *said; static unsigned said_n; static unsigned rlen_before;
+static const char *said; static unsigned said_n; static unsigned rlen_before; static void (*saved_out)(const char *);
 static void tee(const char *s) { real_puts(s); result_puts(s); }   /* a command's line to the Terminal and into the result */   /* the answer whose actions run, for [[save]] */
 static void run_actions(void) {
     static const char *const names[] = {"", "note", "led blink", "say", "open", "browse", "calc", "status", "save", "list", "read"};
@@ -574,8 +574,9 @@ static void run_actions(void) {
             result_puts(ok ? "saved\n" : "not saved\n");
             break; }
         case ACT_LIST: {                       /* what is in JT/: the same lines `ls JT` prints, sent back to her too */
-            rlen_before = rlen;
+            rlen_before = rlen; saved_out = cmd_out;
             cmd_run("ls JT", 5, tee);
+            cmd_out = saved_out;           /* cmd_run left its own printer set; the next action prints through the old one */
             if (rlen == rlen_before) result_puts("nothing in JT/\n");
             break; }
         case ACT_READ: {                       /* JT/NAME as text, through cat; an 8.3 name only, so no path can be built */
@@ -584,8 +585,9 @@ static void run_actions(void) {
             if (!okname) { kputs("read: not a file name\n"); result_puts("not a file name\n"); break; }
             for (const char *p = "cat JT/"; *p; p++) cmd[o++] = *p;
             for (unsigned i = 0; i < k; i++) cmd[o++] = t[i];
-            rlen_before = rlen;
+            rlen_before = rlen; saved_out = cmd_out;
             cmd_run(cmd, o, real_puts);   /* cat prints through say_wrapped, which the result buffer already sees */
+            cmd_out = saved_out;
             if (rlen == rlen_before) result_puts("no such file\n");
             break; }
         case ACT_BROWSE: {                     /* browser.c prints the page through say_wrapped, so it lands in result */
