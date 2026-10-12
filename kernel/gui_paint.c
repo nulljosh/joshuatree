@@ -194,27 +194,44 @@ void gui_hairline_h(int x, int y, int w, unsigned int color){
     for (int px = x * sc; px < (x + w) * sc; px++) window_pixel_phys(px, y * sc + sc - 1, color);
 }
 
+/* Integer square root by the bit method, fast enough to run per pixel (gui_isqrt below counts up and is for tiny radii). */
+static int gui_isqrt_fast(int n){
+    unsigned int x = (unsigned int)n, r = 0, bit = 1u << 30;
+    while (bit > x) bit >>= 2;
+    while (bit){ if (x >= r + bit){ x -= r + bit; r = (r >> 1) + bit; } else r >>= 1; bit >>= 2; }
+    return (int)r;
+}
+/* The dock's soft shadow: how far it reaches past the tray, how far it is shifted down, and its darkest point (256ths of black). */
+#define DOCK_SHADOW_REACH 14
+#define DOCK_SHADOW_DROP  5
+#define DOCK_SHADOW_PEAK  84
+
 void gui_draw_dock_tray(void){
     int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD, dock_w = gui_dock_w(), dock_x = gui_dock_x0();
 
-    /* A soft shadow beneath the tray, the same floating-panel look a real
-       macOS dock has, drawn before the tray itself so the tray's own edge
-       sits cleanly on top of it. Real per-pixel colors blended toward
-       black (gui_blend), fading back to the plain wallpaper color over a
-       few rows, no alpha compositing needed since these are precomputed
-       solid colors, same technique every AA edge in this file already
-       uses. Inset a little past the tray's own rounded corners so it
-       reads as a shadow, not a second, darker rectangle. */
-    /* Per physical pixel against the real photo. gui_wallpaper_color is one
-       colour per row (the centre column), fine for the old gradient but on
-       the photo it drew a flat striped bar under the tray. */
+    /* A soft shadow around the tray, the floating-panel look of a real macOS
+       dock, drawn before the tray so the tray's own pixels sit on top of it.
+       Each pixel's distance to the tray's rounded rectangle (shifted down
+       DOCK_SHADOW_DROP) gives a quadratic falloff over DOCK_SHADOW_REACH
+       logical px, darkening the wallpaper under it by at most DOCK_SHADOW_PEAK
+       256ths. Integer only, per physical pixel against the real photo
+       (gui_wallpaper_sample), so it is zero beyond the reach and never
+       changes a tray pixel or the wallpaper far from the dock. */
     int sc = (int)window_scale();
-    int sy0 = (y0 + dock_h) * sc, rows = 10 * sc;
-    int sx0 = (dock_x + 6) * sc, sx1 = (dock_x + dock_w - 6) * sc;
-    for (int row = 0; row < rows; row++){
-        for (int px = sx0; px < sx1; px++){
-            unsigned int wall = gui_wallpaper_sample(px, sy0 + row, 0);
-            window_pixel_phys(px, sy0 + row, gui_lerp(gui_blend(wall, 0x00000000), wall, row, rows));
+    int reach = DOCK_SHADOW_REACH * sc, rr = 18 * sc, drop = DOCK_SHADOW_DROP * sc;
+    int left = dock_x * sc, right = (dock_x + dock_w) * sc - 1, top = y0 * sc + drop, bot = (y0 + dock_h) * sc + drop - 1;
+    int il = left + rr, ir = right - rr, it = top + rr, ib = bot - rr;
+    for (int py = top - reach; py <= bot + reach; py++){
+        int ddy = py < it ? it - py : py > ib ? py - ib : 0;
+        int under_tray = py >= y0 * sc && py < (y0 + dock_h) * sc;   /* the tray's straight run covers these rows; only its rounded ends and the sides are shadow */
+        for (int px = left - reach; px <= right + reach; px++){
+            if (under_tray && px >= il && px <= ir) continue;
+            int ddx = px < il ? il - px : px > ir ? px - ir : 0;
+            int d = gui_isqrt_fast(ddx * ddx + ddy * ddy) - rr;
+            if (d < 0) d = 0;
+            if (d >= reach) continue;
+            int a = DOCK_SHADOW_PEAK * (reach - d) * (reach - d) / (reach * reach);
+            window_pixel_phys(px, py, gui_lerp(gui_wallpaper_sample(px, py, 0), 0x00000000, a, 256));
         }
     }
 
