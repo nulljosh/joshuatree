@@ -78,7 +78,13 @@ def qa_songs(which):
         }
     if which == "tag":   # NEVERG~1 is all FAT shows; the title and artist live in the ID3 tag
         def frame(i, t): return i + (len(t.encode()) + 2).to_bytes(4, "big") + b"\0\0" + b"\0" + t.encode() + b"\0"
-        body = frame(b"TIT2", "Never Gonna Give You Up") + frame(b"TPE1", "Rick Astley")
+        from PIL import Image, ImageDraw
+        import io
+        im = Image.new("RGB", (120, 120), (181, 80, 44)); d = ImageDraw.Draw(im)
+        d.rectangle((20, 20, 100, 100), fill=(250, 248, 244)); d.ellipse((40, 40, 80, 80), fill=(28, 28, 30))
+        jpg = io.BytesIO(); im.save(jpg, "JPEG", quality=85, subsampling=0); jpg = jpg.getvalue()
+        apic = b"\0" + b"image/jpeg\0" + b"\x03" + b"\0" + jpg
+        body = frame(b"TIT2", "Never Gonna Give You Up") + frame(b"TPE1", "Rick Astley") + b"APIC" + len(apic).to_bytes(4, "big") + b"\0\0" + apic
         n = len(body)
         tag = b"ID3\x03\x00\x00" + bytes([(n >> 21) & 127, (n >> 14) & 127, (n >> 7) & 127, n & 127]) + body
         return {"NEVERG~1.MP3": ("::MUSIC/", tag + tone)}

@@ -26,6 +26,10 @@
 #include "libjt/string.h"
 #include "libjt/stdlib.h"
 
+/* drivers/jpeg.c, compiled into libjt: album art is the JPEG inside the MP3's ID3 tag */
+int jpeg_decode_scaled32(const unsigned char *data, unsigned int len, unsigned int *dst, unsigned int dw, unsigned int dh,
+                         unsigned int *w, unsigned int *h);
+
 #define BG     0x00FAF8F6
 #define INK    0x001C1C1E
 #define HINT   0x0075726E
@@ -67,6 +71,9 @@ static unsigned rng JT_DATA = 2463534242u;
 static unsigned char *file JT_DATA = 0;   /* the whole song, on the heap */
 static struct wav w JT_DATA;
 static struct mp3 mp JT_DATA;
+#define ART 96
+static unsigned art[ART * ART] JT_DATA;   /* the playing song's cover, decoded once at load */
+static int have_art JT_DATA = 0;
 static int is_mp3 JT_DATA; /* the open song is an MP3: w.rate and w.frames mirror it so the time math is one path */
 static unsigned char chunk[CHUNK] JT_DATA;
 static unsigned base JT_DATA = 0;         /* frame the current stream started at */
@@ -328,6 +335,12 @@ static int start_track(int i) {
         return -1;
     }
     cur = i;
+    have_art = 0;
+    {   unsigned off, len, aw, ah;
+        if (is_mp3 && mp3_id3_pic(file, t->size, &off, &len) && jpeg_decode_scaled32(file + off, len, art, ART, ART, &aw, &ah) == 0) {
+            have_art = 1; say("music: art ", t->file, 0, 0);
+        }
+    }
     state = ST_PLAYING;
     say("music: playing ", t->file, 0, 0);
     say2("music: loaded total=", total_ms(), " rate=", w.rate);
@@ -478,11 +491,18 @@ static void draw(void) {
         {   int ti = cur >= 0 ? cur : ntracks && sel < ntracks ? sel : -1;   /* the artist, under the state word */
             if (ti >= 0 && tracks[ti].artist[0]) { ty = 94; char ar[32]; int q = 0; while (tracks[ti].artist[q] && q < 28) { ar[q] = tracks[ti].artist[q]; q++; } ar[q] = 0; ellipsize(ar, rx1 - rx); text(ar, rx, 62, HINT); }
         }
-        /* a flat tile with two notes, no text: where cover art would go */
+        if (have_art && cur >= 0) {   /* the cover */
+            for (int yy = 0; yy < ART; yy++) for (int xx = 0; xx < ART; xx++) {
+                int X = rx + xx, Y = ty + yy;
+                if (X < (int)win.width && Y < (int)win.height) win.pixels[(unsigned)Y * win.width + (unsigned)X] = art[yy * ART + xx];
+            }
+        } else {
+        /* a flat tile with two notes, no text: what shows when the song has no cover */
         rect(rx, ty, 96, 96, ACCENT);
         disc(rx + 30, ty + 66, 11, CREAM); disc(rx + 64, ty + 59, 11, CREAM);
         rect(rx + 38, ty + 22, 5, 44, CREAM); rect(rx + 72, ty + 16, 5, 43, CREAM);
         for (int i = 0; i < 39; i++) rect(rx + 38 + i, ty + 22 - i * 6 / 39, 1, 14, CREAM);
+        }
     }
 
     /* seek bar and time */

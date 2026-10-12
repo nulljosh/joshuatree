@@ -84,6 +84,44 @@ int mp3_id3(const uint8_t *buf, uint32_t len, char *title, int tn, char *artist,
     return tn > 0 && title[0] != 0;
 }
 
+int mp3_id3_pic(const uint8_t *buf, uint32_t len, uint32_t *off, uint32_t *n) {
+    if (len < 10 || buf[0] != 'I' || buf[1] != 'D' || buf[2] != '3') return 0;
+    uint8_t ver = buf[3];
+    if (ver < 2 || ver > 4 || (buf[5] & 0x80)) return 0;   /* an unsynchronised tag would need its bytes put back: no art */
+    uint32_t end = 10 + (((uint32_t)buf[6] << 21) | ((uint32_t)buf[7] << 14) | ((uint32_t)buf[8] << 7) | buf[9]);
+    if (end > len) end = len;
+    uint32_t p = 10, hdr = ver == 2 ? 6 : 10;
+    if (ver >= 3 && (buf[5] & 0x40)) {
+        if (p + 4 > end) return 0;
+        uint32_t x = ver == 4 ? ((uint32_t)buf[10] << 21) | ((uint32_t)buf[11] << 14) | ((uint32_t)buf[12] << 7) | buf[13]
+                              : (((uint32_t)buf[10] << 24) | ((uint32_t)buf[11] << 16) | ((uint32_t)buf[12] << 8) | buf[13]) + 4;
+        if (x > end - p) return 0;
+        p += x;
+    }
+    while (p + hdr <= end && buf[p] != 0) {
+        const uint8_t *f = buf + p;
+        uint32_t sz = ver == 2 ? ((uint32_t)f[3] << 16) | ((uint32_t)f[4] << 8) | f[5]
+                    : ver == 3 ? ((uint32_t)f[4] << 24) | ((uint32_t)f[5] << 16) | ((uint32_t)f[6] << 8) | f[7]
+                               : ((uint32_t)f[4] << 21) | ((uint32_t)f[5] << 14) | ((uint32_t)f[6] << 7) | f[7];
+        uint32_t body = p + hdr;
+        if (sz > end - body) return 0;
+        int pic = ver == 2 ? !memcmp(f, "PIC", 3) : !memcmp(f, "APIC", 4);
+        if (pic && sz > 4) {
+            uint32_t q = body, e = body + sz;
+            uint8_t enc = buf[q++];
+            if (ver == 2) q += 3;                            /* a three letter format, JPG or PNG */
+            else { while (q < e && buf[q]) q++; q++; }       /* the MIME type and its NUL */
+            q++;                                             /* the picture type */
+            if (enc == 1 || enc == 2) { while (q + 1 < e && (buf[q] || buf[q + 1])) q += 2; q += 2; }   /* a UTF-16 description */
+            else { while (q < e && buf[q]) q++; q++; }
+            if (q < e) { *off = q; *n = e - q; return 1; }
+            return 0;
+        }
+        p = body + sz;
+    }
+    return 0;
+}
+
 /* Everything the decoder needs that is bigger than a ring-3 program's 4KB stack lives in one heap block:
    the decoder state, the frame and sample buffers, and a stack of its own for minimp3's large scratch
    (it keeps about 15KB of float tables on the stack). The decode runs on that stack. */
