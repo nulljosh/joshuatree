@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (253 checks)
+## The suite (254 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -17,6 +17,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Pi screen sleep: idle deadline, wrap, active apps, refused mailbox requests and keyboard/mouse wake | `tools/checks/arm64-screen-idle-check.py` | once |
 | Brick on ARM: collision rules, lives and win under sanitizers; keyboard/mouse play, timed animation, pause, restart, Spotlight and close in QEMU | `tools/checks/arm64-brick-check.py` | once |
 | Pi keyboard shutdown and restart: confirmed HID chords halt or reboot raspi4b, Escape cancels, busy and hidden prompts refuse (host and QEMU) | `tools/checks/arm64-power-check.py` | once |
+| ARM tree menu: click or F10 opens About, Restart, Shut Down and Log Out (pixels, keys, outside click), power rows confirm and refuse mid-answer, Log Out closes windows, raspi4b restarts and halts | `tools/checks/arm64-treemenu-check.py` | once |
 | CI tooling preserves shared ARM shard affinity and rejects fixed test paths before builds (host only) | `tools/checks/ci-tooling-check.py` | once |
 | Dock slot constants agree with kernel.c (static drift guard) | `tools/checks/dockslots-check.py` | once |
 | No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks) | `tools/checks/tmp-paths-check.py` | once |
