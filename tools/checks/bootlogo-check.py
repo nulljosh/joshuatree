@@ -155,5 +155,11 @@ if mid * 20 < solid:
 # several identical-looking 2x2 blocks even with correct AA -- that ratio
 # was tuned against the old, much larger boot-splash rendering of this
 # same primitive, not this tiny chrome-bar one, so it doesn't transfer.
-if not fail: print("PASS: menu bar logo is solid, antialiased and drawn at physical resolution")
+# 3.0: the mark stands on a terracotta ground (MARK_GROUND in kernel/boot_mark.h), in the menu bar as well.
+# Before, the whole mark went through one ink and the ground came out near black.
+terra = sum(1 for r, gg, b in img.crop((0, 0, 100, 52)).getdata() if abs(r - 181) < 40 and abs(gg - 80) < 40 and abs(b - 44) < 40)
+print(f"terracotta ground pixels under the menu bar mark: {terra}")
+if terra < 30:
+    fail = 1; print("FAIL: the menu bar mark's ground is not terracotta")
+if not fail: print("PASS: menu bar logo is solid, antialiased and drawn at physical resolution, on a terracotta ground")
 sys.exit(fail)

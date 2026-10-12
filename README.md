@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/nulljosh/joshuatree/releases/download/2.23.0/jt-mark-paper.png">
-  <img src="https://github.com/nulljosh/joshuatree/releases/download/2.23.0/jt-mark-ink.png" width="80" alt="Joshua Tree">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/nulljosh/joshuatree/releases/download/2.60.0/jt-mark-paper.png">
+  <img src="https://github.com/nulljosh/joshuatree/releases/download/2.60.0/jt-mark-ink.png" width="80" alt="Joshua Tree">
 </picture>
 
 # Joshua Tree
@@ -23,11 +23,11 @@ Pi development build: Brick, an original brick-breaker with keys or mouse, plus 
 
 A computer is a pile of chips and a pile of software on top. Most people never see the bottom of that pile. This project is the whole pile, written by one person: the code that wakes the chip, draws the screen, reads the keyboard, and runs the apps. You can read all of it.
 
-It runs in your browser, in an emulator on a Mac, and on a real Raspberry Pi 4.
+It runs in your browser, in an emulator on a Mac, and on a real Raspberry Pi 4. Version 3.0 is the Pi release: it cuts the day the board boots the desktop and you can type and click on it ([the plan](docs/LOOP-HANDOFF.md)).
 
 ## On a Raspberry Pi
 
-It boots on a Pi 4 with a USB keyboard and an HDMI screen. The ARM apps are Calculator, Terminal, Console, Brick and a read-only Clock; the browser demo has a larger app collection. F1 opens Spotlight, F2 opens Terminal, and F3 switches between two independent Terminal conversations. Search Clock in Spotlight for Vancouver time and date. The Calendar icon shows the month and day number. Samantha’s dock tile opens the assistant Terminal. Brick opens from Spotlight and plays with keys or a mouse. Ctrl+Alt+Delete restarts, Ctrl+Alt+End shuts down, Enter confirms and Escape cancels. Short Wi-Fi and game notices appear in the menu bar. The 2.41.0 development build blanks HDMI after five idle minutes and wakes on keyboard or mouse; Brick and an active assistant request keep it awake. Wi-Fi and the Mac relay provide network time and AI replies over HTTPS. The new Clock and date icon still need a physical-board check. The steps to flash a card are in [the Pi guide](docs/RASPBERRY-PI.md); one script, `tools/flash-pi.sh`, does the work.
+It boots on a Pi 4 with a USB keyboard and an HDMI screen. The ARM apps are Calculator, Calendar, Notes, Music, Terminal, Console, Brick and a read-only Clock; the browser demo has a larger app collection. Calendar, Notes and Music run in user mode: the same `user/calendar.c`, `user/notes.c` and `user/music.c` the PC runs, each in its own window. Their files live in the card's `JT/` folder and stay there after a reboot: press n in Notes, type, and Esc saves it. Calendar steps the month with the arrows. Music has no dock tile: type music in Spotlight. It plays the WAV and MP3 songs you copy into `JT/MUSIC/` on the card from your Mac, out of the 3.5 mm jack; Space plays and pauses, n and p change song, F11 and F12 set the volume. Esc closes any of them. F1 opens Spotlight, F2 opens Terminal, and F3 switches between two independent Terminal conversations. Search Clock in Spotlight for Vancouver time and date. The Calendar icon shows the month and day number. Samantha’s dock tile opens the assistant Terminal. Brick opens from Spotlight and plays with keys or a mouse. Ctrl+Alt+Delete restarts, Ctrl+Alt+End shuts down, Enter confirms and Escape cancels. Short Wi-Fi and game notices appear in the menu bar. Wi-Fi and the Mac relay provide network time and AI replies over HTTPS. The new Clock and date icon still need a physical-board check. The steps to flash a card are in [the Pi guide](docs/RASPBERRY-PI.md); one script, `tools/flash-pi.sh`, does the work.
 
 ## Boot it
 

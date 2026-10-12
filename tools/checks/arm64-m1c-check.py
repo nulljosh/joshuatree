@@ -214,11 +214,11 @@ else: shoot("virt hover", ["-machine", "virt", "-cpu", "cortex-a72", "-m", "256"
 if "raspi4b" in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capture_output=True, text=True).stdout:
     if subprocess.run(["make", "-C", arch, "pi"], capture_output=True).returncode: fails.append("pi: `make pi` does not build")
     else:
-        shoot("pi mailbox", ["-machine", "raspi4b"], "kernel8.img")   # QEMU's model reports a 640x480 monitor: too small, stays 800x600
+        shoot("pi mailbox", ["-machine", "raspi4b", "-serial", "null"], "kernel8.img")   # QEMU's model reports a 640x480 monitor: too small, stays 800x600
         # A 1080p monitor gets a 1080p desktop; a 4K one gets exactly half, so the firmware's 2x scale stays sharp.
-        shoot("pi 1080p", ["-machine", "raspi4b", "-global", "bcm2835-fb.xres=1920", "-global", "bcm2835-fb.yres=1080"], "kernel8.img", (1920, 1080))
-        shoot("pi 1080p hover", ["-machine", "raspi4b", "-global", "bcm2835-fb.xres=1920", "-global", "bcm2835-fb.yres=1080"], "hover-kernel8.img", (1920, 1080), hover=True)
-        shoot("pi 4K", ["-machine", "raspi4b", "-global", "bcm2835-fb.xres=3840", "-global", "bcm2835-fb.yres=2160"], "kernel8.img", (1920, 1080))
+        shoot("pi 1080p", ["-machine", "raspi4b", "-serial", "null", "-global", "bcm2835-fb.xres=1920", "-global", "bcm2835-fb.yres=1080"], "kernel8.img", (1920, 1080))
+        shoot("pi 1080p hover", ["-machine", "raspi4b", "-serial", "null", "-global", "bcm2835-fb.xres=1920", "-global", "bcm2835-fb.yres=1080"], "hover-kernel8.img", (1920, 1080), hover=True)
+        shoot("pi 4K", ["-machine", "raspi4b", "-serial", "null", "-global", "bcm2835-fb.xres=3840", "-global", "bcm2835-fb.yres=2160"], "kernel8.img", (1920, 1080))
 else:
     print("  QEMU here has no raspi4b model (needs QEMU 9 or newer), Pi screen skipped")
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True)

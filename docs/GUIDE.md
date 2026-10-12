@@ -42,15 +42,18 @@ The card Joshua already booted is 2.34.0 and does not have these changes.
 ### Open an app with the keyboard
 
 Press F1 to open Spotlight, type an app name, then press Enter. Up and Down
-choose another match; Escape closes the search. Ctrl+Space, Cmd+Space and
-Alt+Space also open Spotlight. A Mac keyboard may need its Fn key for F1.
+choose another match; Escape closes the search. Cmd+Space opens Spotlight
+too, like a Mac; Space on its own does nothing. A Mac keyboard may need its
+Fn key for F1.
 Some dock tiles are placeholders on the Pi. Calculator, Clock, Terminal
 and Console are available; the web demo's larger app collection is separate.
 
 ### Read the date and time
 
-The Calendar tile shows a short month name and a large day number. It is
-an icon, not a calendar you can open to add events on the Pi.
+The Calendar tile shows a short month name and a large day number. Click
+it, or find Calendar in Spotlight, to open the month in its own window.
+Left and Right step a month, 1 to 4 pick Day, Week, Month or Year, and
+Esc closes it. It cannot save events on the Pi yet.
 
 To see the time clearly, open Spotlight and search for Clock. It shows the
 time, date and Vancouver label. The display refreshes each minute. When
@@ -141,9 +144,9 @@ HTTPS. This is a text browser: pages that need JavaScript may not work.
 Use `links`, `open 1`, `back`, `forward` and `find WORD` to move around.
 
 For Samantha, the Mac must be on the same reachable network with its relay
-running. Before flashing, set `CLAUDE_RELAY_HOST` to the Mac's local address;
-QEMU's default `10.0.2.2` is an emulator address, not your Mac's Wi-Fi address.
-The relay port defaults to 8765. See [the relay setup](CLAUDE-APP.md) for the
+running. Before flashing, set `CLAUDE_RELAY_HOST` to the Mac's local address
+as a first guess; if the router moves the Mac, the Pi finds the relay on the
+LAN by itself ([RELAY-TLS.md](RELAY-TLS.md)). The relay port defaults to 8765. See [the relay setup](CLAUDE-APP.md) for the
 shared token and the choice of Claude Code or an API-backed relay.
 
 Type a question in Terminal. `/status` shows the selected model, effort and

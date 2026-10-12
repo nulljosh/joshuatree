@@ -26,7 +26,7 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 DOC = os.path.join(ROOT, "docs", "DESIGN.md")
-HEADINGS = ["What the OS never does", "Icons", "Type", "Colour and light", "Windows and dock", "Motion",
+HEADINGS = ["What the OS never does", "Brand mark", "Icons", "Type", "Colour and light", "Windows and dock", "Motion",
             "How it is enforced"]
 
 
@@ -300,6 +300,10 @@ def secs(name):
     return int(rx("user/samantha.c", r"#define %s\s+(\d+)" % name)) / ticks_per_second()
 
 
+def boot_draw():
+    return int(rx("kernel/kernel.c", r"#define BOOT_DRAW_TICKS\s+(\d+)")) / ticks_per_second()
+
+
 def cap(name):
     return int(rx("user/samantha.c", r"#define %s\s+(\d+)" % name))
 
@@ -375,6 +379,7 @@ FACTS = {
     "LAUNCHPAD_MIN_SIDE": ("num", lambda: launchpad(1), "tools/checks/launchpad-centered-check.py"),
     "LABEL_MIN_GAP": ("num", lambda: launchpad(2), "tools/checks/launchpad-centered-check.py"),
     "TICK_HZ": ("num", ticks_per_second, "kernel/irq.c"),
+    "BOOT_DRAW": ("secs", boot_draw, "kernel/kernel.c"),
     "CAP_IN": ("secs", lambda: secs("CAP_IN"), "user/samantha.c"),
     "CAP_QUIET": ("secs", lambda: secs("CAP_QUIET"), "user/samantha.c"),
     "CAP_OUT": ("secs", lambda: secs("CAP_OUT"), "user/samantha.c"),

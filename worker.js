@@ -605,7 +605,7 @@ async function sendWaitlistEmail(env, email) {
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: env.MAIL_FROM || "Joshua Tree <noreply@epiphany.heyitsmejosh.com>",
+        from: env.MAIL_FROM || "Joshua Tree <noreply@jaybulb.com>",
         to: [email],
         subject: "You're on the Joshua Tree list",
         text: WAITLIST_MAIL_TEXT,

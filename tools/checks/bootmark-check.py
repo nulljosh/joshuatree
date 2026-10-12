@@ -52,7 +52,9 @@ try:
         fr = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("L")
         top = fr.crop((0, 0, W, 20)).resize((1, 1), Image.BOX).getpixel((0, 0))
         mid = fr.crop((760, 380, 1160, 700)).getextrema()[1]
-        if mid > 200 and top < 30: break
+        # 2.41: the splash now draws the tree on, so a frame with white in the mark box can be half a tree.
+        # The progress bar fills only after the pen finishes, so wait for most of it (x 1060 of 800..1120).
+        if mid > 200 and top < 30 and fr.getpixel((1060, 682)) > 200: break
         time.sleep(0.1)
     try: cmd({"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, OSError): pass

@@ -72,7 +72,10 @@ if (typeof document !== "undefined") (function () {
   var DESKTOP_MODE = /[?&]desktop\b/.test(location.search);
   var HERO_SAMANTHA = !DESKTOP_MODE && !/[?&](portfolio|full)\b/.test(location.search);
   var WANT_SAMANTHA = HERO_SAMANTHA || /[?&]samantha\b/.test(location.search);
-  var BOOT_CMDLINE = (IS_PHONE ? "phone samantha " : "") + RES_TOKEN + (/[?&]portfolio\b/.test(location.search) ? "portfolio samantha " : "") + (WANT_SAMANTHA && !IS_PHONE ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
+  // 2.48.1: on a desktop her input is the page's own field too (#demo-composer), drawn by the browser at full
+  // sharpness; the kernel's bar is one small bitmap font scaled up with the rest of the screen, so it read pixelated.
+  var PAGEBAR = WANT_SAMANTHA && !IS_PHONE;
+  var BOOT_CMDLINE = (PAGEBAR ? "pagebar " : "") + (IS_PHONE ? "phone samantha " : "") + RES_TOKEN + (/[?&]portfolio\b/.test(location.search) ? "portfolio samantha " : "") + (WANT_SAMANTHA && !IS_PHONE ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
   if (!HERO_SAMANTHA || IS_PHONE) { var dbl = document.getElementById("desktop-boot-link"); if (dbl) dbl.parentNode.style.display = "none"; }   // already on the desktop, his site, or a phone (the phone kernel has no desktop to show)
   var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
@@ -374,6 +377,13 @@ if (typeof document !== "undefined") (function () {
   // and the `emulator` v0.82.x comment above `kernelElfFetch` for the
   // real report and root cause this whole gate exists for).
   var emulator = null;
+  function pagebarFollow() {
+    var c = document.getElementById("demo-composer"), i = document.getElementById("demo-compose-input");
+    if (!c || !i) return;
+    c.hidden = !samanthaOpen;
+    if (samanthaOpen) { if (focused && document.activeElement === document.body) i.focus(); }
+    else if (document.activeElement === i) i.blur();
+  }
   var samanthaOpen = false;   // is her ring-3 window up (from the serial log); gates the Esc forward above
   var adaptersReady = false;
   var bootStart = 0; // set inside startEmulator, not here: the boot-detection setInterval's own "stuck in text mode" fallback measures elapsed time since boot actually STARTED, and boot no longer starts at page load
@@ -563,6 +573,7 @@ if (typeof document !== "undefined") (function () {
         if (/face: hd=/.test(serialLine)) faceHd = true;   // facePainted reads this flag: the serialLog trim above can cut the marker itself
         if (/^samopen/.test(serialLine)) samanthaOpen = true;                                       // kernel.c: boot_to_samantha opened her
         else if (/^ring3app: SAMANTHA\.BIN (?:exited|crashed)/.test(serialLine)) samanthaOpen = false;   // Esc, the red dot or the back chevron closed her
+        if (PAGEBAR && /^samopen|^ring3app: SAMANTHA\.BIN (?:exited|crashed)/.test(serialLine)) pagebarFollow();
         if (/^ring3app: \S+ (?:exited|crashed)/.test(serialLine)) ring3Exits++;   // an app's window is gone
         if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
         else if (/^(?:syscall: write\(1\) from ring 3: )?(?:chatreply=|chattool=)/.test(serialLine)) {
@@ -871,14 +882,17 @@ if (typeof document !== "undefined") (function () {
   // difference is sent, as Backspaces then new letters.
   // Phones, and touch tablets (an iPad runs the desktop layout but has no
   // keyboard either).
-  if (IS_PHONE || (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches)) {
+  var TOUCH = IS_PHONE || (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches);
+  if (TOUCH || PAGEBAR) {
     var composer = document.getElementById("demo-composer");
     var composeInput = document.getElementById("demo-compose-input");
     if (composer && composeInput) {
-      composer.hidden = false;
+      composer.hidden = PAGEBAR && !TOUCH ? !samanthaOpen : false;   // the desktop's bar shows only while she is open
       if (/[?&]portfolio\b/.test(location.search)) composeInput.placeholder = "Message Joshua";   // portfolio mode is his site
       var frameEl = document.getElementById("demo-frame");
-      if (frameEl) frameEl.classList.add("has-composer");
+      if (frameEl) frameEl.classList.add(TOUCH ? "has-composer" : "pagebar");   // pagebar: floats over the bottom of her face
+      var stageWrap = document.getElementById("stage-wrap");
+      if (!TOUCH && stageWrap) stageWrap.appendChild(composer);   // inside the screen, so it sits on her and never on the caption below
       var mirrored = ""; // what the kernel's input line holds now
       // One queue, one key at a time at the tour's own 60ms spacing: sent
       // overlapped at 30ms the kernel dropped letters. (v86 already ignores
@@ -912,7 +926,7 @@ if (typeof document !== "undefined") (function () {
       composeInput.addEventListener("focus", function () {
         focusIn(); trackActivity();
         var toggle = document.getElementById("demo-exit");
-        if (demoFrameEl && toggle && !demoFrameEl.classList.contains("demo-full")) toggle.click();
+        if (TOUCH && demoFrameEl && toggle && !demoFrameEl.classList.contains("demo-full")) toggle.click();   // only a phone keyboard covers her
         syncViewport();
       });
       composeInput.addEventListener("input", function () {
