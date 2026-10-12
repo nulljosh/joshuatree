@@ -250,6 +250,7 @@ once |2|Portfolio voice: on by default, mute button top right, remembered across
 retry|2|Portfolio tour starts even when his face frames are slow and the first Escape presses are lost: his chat exits and Epiphany opens|node ./tools/checks/portfolio-slowframes-check.mjs
 once |0|Landing demo on a phone: the chat bar raises the keyboard, typed letters reach Samantha once each and Send is Enter|node ./tools/checks/mobile-type-check.mjs
 once |0|Landing: Tech specs accordions hold every developer number collapsed, and the footer is a four-column directory of real links|node ./tools/checks/landing-specs-footer-check.mjs
+once |7|Type system: every landing font size on the 9-step scale, line heights on the 4px grid, token block and TYPE.md current, Tree Sans files load|python3 ./tools/checks/type-grid-check.py
 once |7|Landing demo: no keyboard trap, one main landmark, Full screen top right on phones|node ./tools/checks/landing-demo-ui-check.mjs
 once |5|Landing on a phone: exactly one visible "Message Samantha" input, focusable and typeable|node ./tools/checks/phone-one-input-check.mjs
 once |5|Landing on a desktop: her input is one sharp page field over her face, focusable and typeable|node ./tools/checks/desktop-pagebar-check.mjs
