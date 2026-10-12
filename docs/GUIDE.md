@@ -17,7 +17,10 @@ prepare its stack and clear the memory used by initially empty variables.
 The other cores wait. The kernel then sets up memory, the screen, input
 and networking, and draws the desktop. It talks to the hardware itself.
 
-Console shows what succeeded and what failed. A failed Wi-Fi join does
+The desktop comes up clean: wallpaper, menu bar, dock, no window. The
+boot log is kept all the same, and a click on a dock tile with no app of its
+own (Mail, for one) opens the Console with it. Console shows what succeeded
+and what failed. A failed Wi-Fi join does
 not mean the entire OS failed: you can still use local apps. A desktop
 picture proves the screen and boot path work; it does not prove every
 app, key, network request or hardware driver works.
@@ -130,7 +133,7 @@ that runs inside the chip. It scans for networks, finds the configured name
 and proves it knows the password through a WPA2 handshake. It then asks
 your router for a local address, such as `192.168.1.20`.
 
-The menu bar shows Wi-Fi progress and signal bars. Open Console for the
+The menu bar shows a Wi-Fi fan: flat ink once joined, dimmed grey until then. Open Console for the
 `wifi` status lines if joining fails. A network clock is fetched after the
 Pi gets an address. That clock comes from a verified HTTPS reply and cannot move behind the
 build date or an already accepted time. The initial check still relies on

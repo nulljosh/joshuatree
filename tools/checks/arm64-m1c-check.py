@@ -119,7 +119,12 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         win = [tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3]) for y in range(win_y + sc(32), win_y + win_h - sc(14)) for x in range(win_x + sc(8), win_x + win_w - sc(4))]
         ink = sum(1 for c in win if max(c) < 0x90)                  # dark text pixels
         soft = sum(1 for c in win if 0x30 < c[0] < 0xd0 and c[0] == c[1] == c[2])   # grey edge pixels: only smooth, anti-aliased text has them
-        if ink < 300: fails.append(f"{name}: the boot log is not on screen (only {ink} text pixels in the window)")
+        quiet = name.startswith("pi")                               # 3.6.2: the Pi image never draws the Console at boot (arm64-quietboot-check.py)
+        if quiet:
+            flat = sum(1 for c in win if c == (0xb5, 0x50, 0x2c))
+            if flat != len(win): fails.append(f"{name}: the Console's rectangle is not flat wallpaper ({len(win) - flat} of {len(win)} pixels differ)")
+            else: print(f"  ok: {name} no Console window at boot: the rectangle is flat wallpaper")
+        elif ink < 300: fails.append(f"{name}: the boot log is not on screen (only {ink} text pixels in the window)")
         elif soft < 150: fails.append(f"{name}: the text is not anti-aliased ({soft} soft edge pixels), the smooth font is not drawing")
         else: print(f"  ok: {name} boot log drawn in the window ({ink} text pixels, {soft} soft edge pixels: smooth text)")
         band = [tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3]) for y in range(dock_y - sc(30), dock_y) for x in range(w // 2 - sc(150), w // 2 + sc(150))]
@@ -154,10 +159,13 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
                 ("zoom dot", L(fx + 63, fy + 16), (0xd8, 0xd4, 0xce)),
                 ("dock tray", (w // 2, (dock_y0 + 5) * s2), (0xef, 0xeb, 0xe4)),                 # DOCK_TRAY_COLOR, in the pad above the icons
                 ("dock hairline", (w // 2, dock_y0 * s2 + s2 - 1), (0xd6, 0xd0, 0xc6))]         # its top edge, one physical pixel
-        if at(*L(fx, fy)) == (0xf5, 0xf0, 0xeb): fails.append(f"{name}: the window's top-left corner is square, not rounded onto the wallpaper")
+        if quiet: want = want[6:]                                    # the window's own pixels are not drawn; the dock's are still checked
+        if quiet: pass
+        elif at(*L(fx, fy)) == (0xf5, 0xf0, 0xeb): fails.append(f"{name}: the window's top-left corner is square, not rounded onto the wallpaper")
         else: print(f"  ok: {name} window corner is rounded onto the wallpaper")
         title = [at(x, y) for y in range(fy * s2 + 4 * s2, (fy + 26) * s2) for x in range((fx + fw // 2 - 30) * s2, (fx + fw // 2 + 30) * s2)]
-        if sum(1 for c in title if max(c) < 0x80) < 15 * s2: fails.append(f"{name}: no 'Console' title in ink at the centre of the title band")
+        if quiet: pass
+        elif sum(1 for c in title if max(c) < 0x80) < 15 * s2: fails.append(f"{name}: no 'Console' title in ink at the centre of the title band")
         else: print(f"  ok: {name} 'Console' title centred in the title band")
         # The dock's hover label (gui_draw_dock_label): the dockhover test build hovers slot 3, Calendar. A pale capsule
         # (DOCK_LABEL_BG) whose centre line is gui_dock_y0() - 13, with the name in ink. The shipped kernel has none.

@@ -2,8 +2,8 @@
 """The Pi boots to a quiet desktop: the boot log steps aside and nothing plays by itself.
 
 Boots the Pi image (`make -C arch/arm64 pi`, PI_BUILD) on QEMU's raspi4b model at 1080p and reads the mini UART. Passes when:
-  - `console closed` is printed (the boot log's window came down once the desktop was up; a FAIL or oom line would keep it, and
-    arm64-boot-health-check.py makes sure the boot prints neither);
+  - `console quiet` is printed (since 3.6.2 the boot log's window is never drawn at all: the log is kept and a dock click shows it;
+    arm64-quietboot-check.py clicks it open);
   - the screen, 14 seconds on (the old boot demo's dock-label lap started 3 s after the loop and ran about 11), shows no console
     window (no big field of pure white where its well was) and no hover label (the pale capsule over the dock);
 (Spotlight's `term` opening the Terminal as a window of its own is the dock Terminal tile's path, pane_open, the same code the
@@ -63,7 +63,7 @@ def white_and_pale(f, cmd):
 
 try:
     if not wait("M1c fb ok", 30): fails.append(f"the desktop never came up: {uart()[-300:]!r}")
-    elif not wait("console closed", 40): fails.append(f"the boot log never stepped aside (no 'console closed'): {uart()[-300:]!r}")
+    elif not wait("console quiet", 40): fails.append(f"the boot log was not kept quiet (no 'console quiet'): {uart()[-300:]!r}")
     else:
         s = socket.socket(socket.AF_UNIX)
         for _ in range(50):

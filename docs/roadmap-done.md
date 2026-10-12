@@ -341,3 +341,8 @@ Check: `tools/checks/arm64-mascot-empty-check.py` boots both apps on a card with
 
 Nothing in the pointer path paints the Browser, so the board glitch on a Wikipedia page is not a repaint per motion event; what can repaint it is a wheel event, and a Bluetooth mouse report with extra bytes reads as wheel notches. `input_event` now sums wheel notches per report, `browser_wheel` skips the paint when the page is already at that end, and `br_wrap` keeps its lines while text and width are unchanged.
 Check: `tools/checks/arm64-browser-mouse-check.py` (120 pointer reports over a 300-row page: zero Browser paints, zero layouts, screen identical). Left: the real board needs another try.
+
+## 3.7.4: a clean desktop at boot
+
+The Pi no longer draws the Console at boot. It showed for the whole Wi-Fi bring-up and stayed on any FAIL line, over the terracotta desktop. Now the log is only kept (`QUIET_BOOT`) and a dock click opens it. The Wi-Fi fan is flat ink when joined and dimmed grey when not, where it was a blue-grey.
+Check: `tools/checks/arm64-quietboot-check.py` (and `arm64-boot-quiet-check.py` on the Pi image).
