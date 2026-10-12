@@ -52,7 +52,7 @@ static int platform_seeder(const br_prng_class **ctx) {
 }
 br_prng_seeder br_prng_seeder_system(const char **name) { if (name) *name = "platform"; return platform_seeder; }
 
-static int setup(const char *host) {
+static int setup(const char *host, int private_only) {
     static const uint16_t suites[] = {
         BR_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, BR_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
         BR_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, BR_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
@@ -62,7 +62,8 @@ static int setup(const char *host) {
     static const br_hash_class *const hashes[] = { &br_md5_vtable, &br_sha1_vtable, &br_sha224_vtable, &br_sha256_vtable, &br_sha384_vtable, &br_sha512_vtable };
     br_ssl_client_zero(&sc);
     br_ssl_engine_set_versions(&sc.eng, BR_TLS12, BR_TLS12);
-    br_x509_minimal_init(&xc, &br_sha256_vtable, TAS, TAS_NUM);
+    /* The relay's own CA (TLS_TA, the anchors from TAS_PRIVATE on) is the only one that can vouch for the relay. */
+    br_x509_minimal_init(&xc, &br_sha256_vtable, private_only ? TAS + TAS_PRIVATE : TAS, private_only ? TAS_NUM - TAS_PRIVATE : TAS_NUM);
     unsigned long now = net_clock_utc(), floor = net_clock_floor();
     if (now < floor) now = floor;
     br_x509_minimal_set_time(&xc, (uint32_t)(now / 86400 + 719528), (uint32_t)(now % 86400));
@@ -107,12 +108,17 @@ static int failed(void) {   /* -1, with the engine's error or the network's in t
     tcp_close();
     return -1;
 }
-int tls_connect(unsigned ip, unsigned short port, const char *host) {
+static int connect_with(unsigned ip, unsigned short port, const char *host, int private_only) {
     tls_err = 0; read_ticks = TLS_READ_TICKS;
+    if (!host || !*host) { tls_err = TLS_ERR_CONNECT; return -1; }   /* no name would mean no name check */
     if (!tcp_open(ip, port)) { tls_err = TLS_ERR_CONNECT; return -1; }
-    if (!setup(host)) { tls_err = TLS_ERR_ENTROPY; tcp_close(); return -1; }
+    if (!setup(host, private_only)) { tls_err = TLS_ERR_ENTROPY; tcp_close(); return -1; }
     return 0;
 }
+int tls_connect(unsigned ip, unsigned short port, const char *host) { return connect_with(ip, port, host, 0); }
+/* The Claude relay (ask.c): whatever address it was found at, its certificate must name `name` and chain to the
+   private CA alone. */
+int tls_connect_private(unsigned ip, unsigned short port, const char *name) { return connect_with(ip, port, name, 1); }
 int tls_handshake(void) {
     return br_sslio_flush(&ioc) == 0 ? 0 : failed();   /* nothing to send yet, so flush runs the handshake and no more */
 }
@@ -136,6 +142,9 @@ int https_fetch_timeout(const char *host, unsigned short port, const void *reque
     tls_err = 0;
     if (!http_resolve_host(host, &ip)) { tls_err = TLS_ERR_DNS; return -1; }
     if (tls_connect(ip, port, host) < 0 || tls_handshake() < 0) return -1;
+    return tls_exchange_timeout(request, request_len, out, max, reply_ticks);
+}
+int tls_exchange_timeout(const void *request, unsigned request_len, char *out, unsigned max, unsigned reply_ticks) {
     read_ticks = reply_ticks ? reply_ticks : TLS_READ_TICKS;
     int got = tls_exchange(request, request_len, out, max);
     read_ticks = TLS_READ_TICKS;

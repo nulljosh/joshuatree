@@ -22,3 +22,4 @@ int memcmp(const void *a, const void *b, unsigned int n) {
     return 0;
 }
 unsigned int strlen(const char *s) { unsigned int n = 0; while (s[n]) n++; return n; }
+int strcmp(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return (unsigned char)*a - (unsigned char)*b; }   /* drivers/fat.c's fat_chdir */

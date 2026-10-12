@@ -30,7 +30,7 @@ def build(nofw):
 def boot(name, want, nofw=False):
     if not build(nofw): fails.append(f"{name}: arch/arm64 `make pi` does not build"); return
     log = tempfile.mktemp()
-    q = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-display", "none", "-serial", "file:" + log,
+    q = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-serial", "null", "-display", "none", "-serial", "file:" + log,
 # QEMU has no model of the firmware's GPIO expander, so the WL_ON readback says "wifi power FAIL: WL_ON reads 0" there;
 # on the real Pi it says "wifi power on, WL_ON reads 1". Either way the line must come before CMD5.
                           "-kernel", os.path.join(arch, "kernel8.img")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -39,19 +39,20 @@ echo "flashing $CARD"
 JT_WIFI_DEV=1 make -B -C arch/arm64 pi >/dev/null   # JT_WIFI_DEV: this card joins our network; release builds never carry it   # -B: the Makefile does not track headers
 
 FW="${FLASH_PI_FW:-build/pifw}"
-FILES="bootcode.bin start4.elf fixup4.dat bcm2711-rpi-4-b.dtb overlays/disable-bt.dtbo"
+FILES="bootcode.bin start4.elf fixup4.dat bcm2711-rpi-4-b.dtb"   # no overlay: Bluetooth keeps the PL011 (arch/arm64/bt.c)
 missing=0; for f in $FILES; do [ -s "$FW/$f" ] || missing=1; done
 if [ "$missing" = 1 ]; then
-    # All five from one fetch, into a temp dir, moved in only when every one
+    # All four from one fetch, into a temp dir, moved in only when every one
     # landed: a dropped download never leaves a half file in the cache, and
     # start4.elf and fixup4.dat always come from the same firmware release.
     B=https://github.com/raspberrypi/firmware/raw/stable/boot
-    tmp=$(mktemp -d); mkdir -p "$tmp/overlays"
+    tmp=$(mktemp -d)
     for f in $FILES; do curl -sSfL -o "$tmp/$f" "$B/$f"; done
     rm -rf "$FW"; mkdir -p "$(dirname "$FW")"; mv "$tmp" "$FW"
 fi
 
 tools/wifi-fw.sh   # CYW43455 firmware into build/wifi-fw/, baked into kernel8.img by the pi target
+tools/bt-fw.sh     # its Bluetooth patch into build/bt-fw/, the same way
 for f in kernel8.img config.txt; do [ -f "$CARD/$f" ] && cp "$CARD/$f" "$CARD/$f.bak"; done
 cp -R "$FW"/. "$CARD"/
 cp arch/arm64/kernel8.img "$CARD"/kernel8.img
