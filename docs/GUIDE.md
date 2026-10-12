@@ -53,7 +53,8 @@ The card Joshua already booted is 2.34.0 and does not have these changes.
 Press F1 to open Spotlight, type an app name, then press Enter. Up and Down
 choose another match; Escape closes the search. Cmd+Space opens Spotlight
 too, like a Mac; Space on its own does nothing. A Mac keyboard may need its
-Fn key for F1.
+Fn key for F1. With nothing typed, Spotlight lists every app, Calculator
+included; type calc and press Enter to open it.
 Some dock tiles are placeholders on the Pi. Calculator, Clock, Terminal
 and Console are available; the web demo's larger app collection is separate.
 
