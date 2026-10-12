@@ -1,18 +1,22 @@
-# The Joshua tree mark, 2.25: a crayon scribble.
+# The Joshua tree mark, 3.0: the crayon tree, tightened.
 #
-# Drawn like a quick marker sketch: thin, sure lines for the trunk, the three arms and the ground, and a dense
-# knot of overlapping loops at the end of every arm for the tufts, with a ragged edge and a few loose loops
-# trailing off it. The tree is lopsided like a real one, and the trunk and ground swell where the marker
-# pressed harder and overshoot their ends a hair, as if drawn in one quick pass. Black on off-white, no fill, no shading, round caps. Every point is placed by hand
-# below and then shaken a little by a seeded hand, so the line wavers like a real pen but the file is the same on
-# every run (tools/checks/logo-check.sh rebuilds it byte for byte).
+# The 2.25 marker scribble drawn again with a surer hand: steadier, heavier lines for the trunk and the three arms,
+# a trunk that swells where the marker pressed, a dense knot of loops at the end of every arm with paper showing
+# through it, a few short blades over the top of each knot, and a light crayon grain. The tree leans 8 degrees like
+# a real one. The ground is the one colour: a single terracotta stroke (#b5502c) under the tree. Everything else is
+# ink #161513 on paper #faf8f4, no fill, no gradients, no text. Every point is placed by hand below and then shaken
+# a little by a seeded hand, so the line wavers like a real pen but the file is the same on every run
+# (tools/checks/logo-check.sh rebuilds it byte for byte).
 #
 # Every copy of the mark is written from here:
 #   landing/logo.svg        the mark with a light crayon grain (an SVG displacement filter): landing seal, share
 #                           card, README, boot splash
 #   landing/mark-tree.svg   the same drawing with no grain, the name the landing CSS masks use
-#   landing/mark-bold.svg   no grain, heavier strokes on a tight box, for 16 to 48 px (favicon, menu bar, About)
+#   landing/mark-bold.svg   no grain, the leaning tree drawn down its middle in heavy strokes on a tight box, with
+#                           the same terracotta ground, for 16 to 48 px (favicon, menu bar, About)
 #   landing/icon.svg, icon.svg   the mark on an off-white square (the repo-root copy is what README renders)
+# The ground is painted first and the tree over it, so the trunk's feet stand on the terracotta. The ground is its
+# own path with its own stroke colour, which is how the copies downstream find it: the boot splash draws it last.
 # The PNG copies (landing/mark.png, landing/badge.png, landing/og-image.png, docs/brand/) come from
 # tools/gen/gen_brand_art.py, the kernel's copies from tools/gen/gen_boot_mark.py.
 import math
@@ -21,19 +25,8 @@ import random
 
 ink = "#161513"
 paper = "#faf8f4"
+accent = "#b5502c"
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-
-# Centre lines, base to tip. Lopsided on purpose, like a real tree: the trunk leans right a few degrees with a
-# small kink where it grew round something, the left arm reaches longer and lower, the right one stays short.
-TRUNK = [(48.8, 84.0), (49.6, 74.5), (50.9, 70.5), (51.8, 62.0)]
-LEFT = [(49.0, 64.5), (39.0, 62.0), (30.0, 56.5), (23.5, 48.5), (22.0, 41.0)]
-MID = [(52.0, 60.0), (53.8, 47.0), (53.0, 34.0)]
-RIGHT = [(54.0, 63.0), (63.5, 59.5), (70.0, 53.5), (72.0, 47.5)]
-# Each tuft its own size and density: (knot radius, loops, stray loops, loop size); the bold copy only takes the radius.
-# (arm, radius, loops, stray loops, stray size, blades, blade reach)
-TUFTS = ((LEFT, 7.0, 3, 2, 0.9, 6, 6.0), (MID, 9.8, 4, 2, 0.75, 8, 5.0), (RIGHT, 8.4, 3, 2, 0.8, 5, 4.4))
-SMALL_R = (6.3, 7.8, 6.7)
-ARMS = (LEFT, MID, RIGHT)
 
 
 def tilt(pts, deg=8.0, cx=48.8, cy=84.0):
@@ -42,12 +35,20 @@ def tilt(pts, deg=8.0, cx=48.8, cy=84.0):
     return [(cx + (x - cx) * c - (y - cy) * s, cy + (x - cx) * s + (y - cy) * c) for x, y in pts]
 
 
-# The big copy leans harder (8 degrees, kink kept) and its right arm forks higher, so the fork sits off centre.
-# The bold 16 px copy keeps the upright TRUNK and ARMS above.
-BIG_TRUNK = tilt(TRUNK)
-BIG_LEFT, BIG_MID = tilt(LEFT), tilt(MID)
-BIG_RIGHT = tilt([(54.0, 59.5)] + RIGHT[1:])
+# Centre lines, base to tip, placed upright and then leaned 8 degrees. Lopsided on purpose, like a real tree: the
+# trunk has a small kink where it grew round something, the left arm reaches longer and lower, the right one stays
+# short and forks off the trunk a little higher than it would if it were tidy.
+TRUNK = tilt([(48.8, 84.0), (49.6, 74.5), (50.9, 70.5), (51.8, 62.0)])
+LEFT = tilt([(49.0, 64.5), (39.0, 62.0), (30.0, 56.5), (23.5, 48.5), (22.0, 41.0)])
+MID = tilt([(52.0, 60.0), (53.8, 47.0), (53.0, 34.0)])
+RIGHT = tilt([(54.0, 59.5), (63.5, 59.5), (70.0, 53.5), (72.0, 47.5)])
+ARMS = (LEFT, MID, RIGHT)
 CROTCH_L, CROTCH_R = tilt([(50.0, 59.0)])[0], tilt([(55.0, 57.0)])[0]
+# Each tuft its own size: (arm, knot radius, loops, blades, blade reach). The bold copy takes SMALL_R.
+TUFTS = ((LEFT, 7.2, 5, 3, 3.6), (MID, 9.4, 6, 4, 3.4), (RIGHT, 8.0, 5, 3, 3.2))
+SMALL_R = (6.6, 8.2, 7.0)
+# The bold copy's ground, flat so it lands on one pixel row at 16 px (bold_box puts it there).
+SMALL_GROUND_Y = 87.8
 
 
 def f(v):
@@ -94,7 +95,7 @@ def tip(arm, push):
     return ex + math.cos(a) * push, ey + math.sin(a) * push, a
 
 
-def scribble(rnd, cx, cy, r, loops, amt, orbit=(0.85, 0.7)):
+def scribble(rnd, cx, cy, r, loops, amt, orbit):
     """A knot of looping scribble: small loops whose centre wanders round inside a circle of radius r.
     orbit: how far out the loops ride, so the weight sits at the rim and paper shows in the middle."""
     pts = []
@@ -111,16 +112,14 @@ def scribble(rnd, cx, cy, r, loops, amt, orbit=(0.85, 0.7)):
     return pts
 
 
-def blades(rnd, cx, cy, up, r, count, reach):
-    """Short flicks out of the knot, the yucca's blades, fanned over its top."""
+def flicks(rnd, cx, cy, up, r, count, reach, spread=120):
+    """A few short blades over the top of the knot only, the yucca's leaves."""
     out = []
     for k in range(count):
-        a = up - math.radians(105) + math.radians(210) * (k + rnd.uniform(-0.25, 0.25)) / (count - 1)
-        r0 = r * rnd.uniform(0.6, 0.85); r1 = r + reach * rnd.uniform(0.6, 1.0)
-        bend = rnd.uniform(-0.12, 0.12)
+        a = up + math.radians(-spread / 2 + spread * (k + rnd.uniform(-0.2, 0.2)) / (count - 1))
+        r0 = r * 0.8; r1 = r + reach * rnd.uniform(0.7, 1.0)
         out.append([(cx + math.cos(a) * r0, cy + math.sin(a) * r0),
-                    (cx + math.cos(a + bend) * (r0 + r1) / 2, cy + math.sin(a + bend) * (r0 + r1) / 2),
-                    (cx + math.cos(a + bend * 2) * r1, cy + math.sin(a + bend * 2) * r1)])
+                    (cx + math.cos(a + 0.05) * r1, cy + math.sin(a + 0.05) * r1)])
     return out
 
 
@@ -130,77 +129,61 @@ def part(stroke, a, b):
     return stroke[round(n * a):round(n * b) + 1]
 
 
-def scale(pts, k, cx=50.0, cy=52.0):
-    return [(cx + (x - cx) * k, cy + (y - cy) * k) for x, y in pts]
-
-
-def drawing(small):
-    """(line subpaths, scribble subpaths, (width factor, subpaths) marker presses). small: the tree drawn down
-    its middle for 16 to 48 px, one even weight."""
-    rnd = random.Random(1932)
-    TRUNK_, LEFT_, MID_, RIGHT_ = (TRUNK, LEFT, MID, RIGHT) if small else (BIG_TRUNK, BIG_LEFT, BIG_MID, BIG_RIGHT)
-    ARMS_ = (LEFT_, MID_, RIGHT_)
-    TUFTS_ = tuple((a,) + t[1:] for a, t in zip(ARMS_, TUFTS))
-    K = 0.82   # the drawing sits in the middle of the box, lots of paper round it
-    lines, knots = [], []
-    if small:
-        lines.append([(30.5, 85.4), (49.0, 84.0), (68.5, 83.6)])
-        lines.append(TRUNK_)
-        for arm in ARMS_:
-            lines.append([TRUNK_[-1]] + arm[1:])
-        for arm, r in zip(ARMS_, SMALL_R):
-            cx, cy, _ = tip(arm, 3.0)
-            knots.append(scribble(rnd, cx, cy, r, 3, 0.3, (0.75, 0.62)))
-        return [scale(p, K) for p in lines], [scale(p, K) for p in knots], []
-    # the ground, one quick stroke that runs a touch downhill, sags, and flicks up past where it meant to stop
-    ground = shaky(rnd, [(21.5, 87.4), (34.0, 88.0), (50.0, 88.1), (62.5, 87.1), (68.6, 86.2)], 0.45) + [(69.8, 85.3)]
-    lines.append(ground)
-    # the trunk and the arms: two thin edges each, one stroke up the outside of the tree, one for each crotch
-    tl, tr = offset(TRUNK_, 5.6, 3.9, -1), offset(TRUNK_, 5.6, 3.9, +1)
-    # each edge starts a hair past the ground, the way a fast pen overshoots
-    tl = [(tl[0][0] - 0.5, tl[0][1] + 4.4)] + tl
-    tr = [(tr[0][0] + 0.7, tr[0][1] + 3.3)] + tr
-    edges = {id(a): (offset(a, 3.3, 2.6, -1), offset(a, 3.3, 2.6, +1)) for a in ARMS_}
-    outer_l = shaky(rnd, tl[:-1] + edges[id(LEFT_)][0][1:], 0.8)
-    outer_r = shaky(rnd, list(reversed(edges[id(RIGHT_)][1][1:])) + list(reversed(tr[:-1])), 0.8)
-    lines.append(outer_l)
-    lines.append(shaky(rnd, list(reversed(edges[id(LEFT_)][1][1:])) + [CROTCH_L] + edges[id(MID_)][0][1:], 0.8))
-    lines.append(shaky(rnd, list(reversed(edges[id(MID_)][1][1:])) + [CROTCH_R] + edges[id(RIGHT_)][0][1:], 0.8))
-    lines.append(outer_r)
-    # the marker pressed harder down the trunk and through the middle of the ground, so the width swells and thins
-    press = [(1.5, [part(outer_l, 0.02, 0.42), part(outer_r, 0.6, 0.97)]),
-             (2.1, [part(outer_l, 0.04, 0.22), part(outer_r, 0.8, 0.97)])]
-    # the tufts: a mass of overlapping loops worked back and forth at each tip, a ragged edge, and a few loose
-    # loops trailing off it, each tuft its own size and density
-    # the blades sit between the two weights: thinner than the trunk, firmer than the loops
-    spikes = []
-    press.append((1.3, spikes))
-    for arm, r, loops, strays, size, count, reach in TUFTS_:
+def big():
+    """The full mark as (stroke width, colour or None for ink, subpaths) in paint order, ground first."""
+    rnd = random.Random(300)
+    # the ground, one quick stroke that sags a touch and flicks up past where it meant to stop
+    ground = shaky(rnd, [(17, 87.6), (34, 88.2), (52, 88.0), (68, 87.0), (79.5, 86.0)], 0.3) + [(80.6, 85.2)]
+    # the trunk and the arms: two edges each, one stroke up each outside of the tree and one for each crotch.
+    # Each trunk edge starts a hair below the ground, the way a fast pen overshoots.
+    tl, tr = offset(TRUNK, 5.4, 3.6, -1), offset(TRUNK, 5.4, 3.6, +1)
+    tl = [(tl[0][0] - 0.3, tl[0][1] + 3.6)] + tl
+    tr = [(tr[0][0] + 0.4, tr[0][1] + 3.0)] + tr
+    le, me, re = ((offset(a, 3.2, 2.4, -1), offset(a, 3.2, 2.4, +1)) for a in ARMS)
+    outer_l = shaky(rnd, tl[:-1] + le[0][1:], 0.4)
+    outer_r = shaky(rnd, list(reversed(re[1][1:])) + list(reversed(tr[:-1])), 0.4)
+    crotch_l = shaky(rnd, list(reversed(le[1][1:])) + [CROTCH_L] + me[0][1:], 0.4)
+    crotch_r = shaky(rnd, list(reversed(me[1][1:])) + [CROTCH_R] + re[0][1:], 0.4)
+    # the marker pressed harder down the trunk, so the line swells and thins: two heavier passes over its foot
+    press = [part(outer_l, 0.02, 0.42), part(outer_r, 0.6, 0.97)]
+    press2 = [part(outer_l, 0.04, 0.22), part(outer_r, 0.8, 0.97)]
+    # the tufts: a mass of overlapping loops worked round each tip, with paper showing through, and the blades
+    knots, blades = [], []
+    for arm, r, loops, count, reach in TUFTS:
         cx, cy, up = tip(arm, 4.5)
-        knots.append(scribble(rnd, cx, cy, r, loops, 0.9))
-        for k in range(strays):
-            a = up + rnd.uniform(-1.9, 1.9)
-            d = r * rnd.uniform(1.1, 1.35)
-            knots.append(scribble(rnd, cx + math.cos(a) * d, cy + math.sin(a) * d, r * 0.5 * size, 1, 0.3))
-        spikes += blades(rnd, cx, cy, up, r, count, reach)
-    return ([scale(p, K) for p in lines], [scale(p, K) for p in knots],
-            [(w, [scale(p, K) for p in group]) for w, group in press])
+        knots.append(scribble(rnd, cx, cy, r, loops, 0.6, (0.8, 0.66)))
+        blades += flicks(rnd, cx, cy, up, r, count, reach)
+    return [(2.6, accent, [ground]), (1.8, None, [outer_l, outer_r, crotch_l, crotch_r]), (2.7, None, press),
+            (3.5, None, press2), (1.6, None, knots), (2.0, None, blades)]
 
 
-def paths(small, line_w, knot_w):
-    lines, knots, press = drawing(small)
-    a = f'<path d="{"".join(smooth(p) for p in lines)}" stroke-width="{line_w}"/>'
-    b = f'<path d="{"".join(smooth(p) for p in knots)}" stroke-width="{knot_w}"/>'
-    c = "".join(f'<path d="{"".join(smooth(p) for p in group)}" stroke-width="{f(line_w * w)}"/>' for w, group in press)
-    return a + c + b
+def small():
+    """The tree drawn down its middle for 16 to 48 px: one heavy line per limb, a tight knot per tuft, and the ground."""
+    rnd = random.Random(1932)
+    lines = [TRUNK] + [[TRUNK[-1]] + a[1:] for a in ARMS]
+    knots = []
+    for arm, r in zip(ARMS, SMALL_R):
+        cx, cy, _ = tip(arm, 3.0)
+        knots.append(scribble(rnd, cx, cy, r, 3, 0.2, (0.6, 0.5)))
+    ground = [(26, SMALL_GROUND_Y), (50, SMALL_GROUND_Y), (75, SMALL_GROUND_Y)]
+    return [(6.0, accent, [ground]), (6.0, None, lines), (5.2, None, knots)]
+
+
+def paths(layers):
+    out = []
+    for w, colour, subs in layers:
+        stroke = f' stroke="{colour}"' if colour else ""
+        out.append(f'<path d="{"".join(smooth(p) for p in subs)}"{stroke} stroke-width="{f(w)}"/>')
+    return "".join(out)
 
 
 GRAIN = ('<filter id="crayon" x="-5%" y="-5%" width="110%" height="110%">'
          '<feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7"/>'
-         '<feDisplacementMap in="SourceGraphic" scale="1.7" xChannelSelector="R" yChannelSelector="G"/></filter>')
+         '<feDisplacementMap in="SourceGraphic" scale="1.2" xChannelSelector="R" yChannelSelector="G"/></filter>')
 
 
 def svg(body, box, grain=False, theme=False):
+    """theme: the ink turns to paper on a dark page (the favicon); the terracotta ground keeps its own colour."""
     style = (f'<style>g{{stroke:{ink}}}@media (prefers-color-scheme:dark){{g{{stroke:{paper}}}}}</style>'
              if theme else "")
     defs = f"<defs>{GRAIN}</defs>" if grain else ""
@@ -210,11 +193,15 @@ def svg(body, box, grain=False, theme=False):
 
 
 def bold_box():
-    lines, knots, _ = drawing(True)
-    xs = [p[0] for s in lines + knots for p in s]; ys = [p[1] for s in lines + knots for p in s]
-    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-    side = max(max(xs) - min(xs), max(ys) - min(ys)) + 8
-    return f"{f(cx - side / 2)} {f(cy - side / 2)} {f(side)} {f(side)}"
+    """A tight square round the bold copy: a little paper over the top knot, centred side to side, and deep enough
+    below that the ground's centre line falls on the middle of the second row up at 16 px, so the ground is one
+    solid terracotta row there instead of two half-tone ones."""
+    pts = [p for _, _, subs in small() for s in subs for p in s]
+    xs = [p[0] for p in pts]
+    top = min(p[1] for p in pts) - 3.2
+    side = (SMALL_GROUND_Y - top) / (1 - 1.5 / 16)
+    cx = (min(xs) + max(xs)) / 2
+    return f"{f(cx - side / 2)} {f(top)} {f(side)} {f(side)}"
 
 
 def write(path, text):
@@ -223,16 +210,16 @@ def write(path, text):
 
 
 def main():
-    big = paths(False, 1.1, 1.1)   # thin loop stroke so white shows through the tufts
-    write("landing/logo.svg", svg(big, "0 0 100 100", grain=True))
-    write("landing/mark-tree.svg", svg(big, "0 0 100 100"))
-    write("landing/mark-bold.svg", svg(paths(True, 5.0, 4.2), bold_box(), theme=True))
+    mark = paths(big())
+    write("landing/logo.svg", svg(mark, "0 0 100 100", grain=True))
+    write("landing/mark-tree.svg", svg(mark, "0 0 100 100"))
+    write("landing/mark-bold.svg", svg(paths(small()), bold_box(), theme=True))
     tile = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">\n'
-            '  <!-- The 2.25 mark (logo.svg), a crayon scribble on an off-white square. -->\n'
+            '  <!-- The 3.0 mark (logo.svg), the crayon tree on a terracotta ground, on an off-white square. -->\n'
             f'  <defs>{GRAIN}</defs>\n'
             f'  <rect width="200" height="200" rx="44" fill="{paper}"/>\n'
             f'  <g transform="scale(2)" fill="none" stroke="{ink}" stroke-linecap="round" stroke-linejoin="round" '
-            f'filter="url(#crayon)">{big}</g>\n'
+            f'filter="url(#crayon)">{mark}</g>\n'
             '</svg>\n')
     write("landing/icon.svg", tile)
     write("icon.svg", tile)

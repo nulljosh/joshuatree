@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/nulljosh/joshuatree/releases/download/2.23.0/jt-mark-paper.png">
-  <img src="https://github.com/nulljosh/joshuatree/releases/download/2.23.0/jt-mark-ink.png" width="80" alt="Joshua Tree">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/nulljosh/joshuatree/releases/download/2.60.0/jt-mark-paper.png">
+  <img src="https://github.com/nulljosh/joshuatree/releases/download/2.60.0/jt-mark-ink.png" width="80" alt="Joshua Tree">
 </picture>
 
 # Joshua Tree

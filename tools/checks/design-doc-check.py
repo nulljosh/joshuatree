@@ -26,7 +26,7 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 DOC = os.path.join(ROOT, "docs", "DESIGN.md")
-HEADINGS = ["What the OS never does", "Icons", "Type", "Colour and light", "Windows and dock", "Motion",
+HEADINGS = ["What the OS never does", "Brand mark", "Icons", "Type", "Colour and light", "Windows and dock", "Motion",
             "How it is enforced"]
 
 

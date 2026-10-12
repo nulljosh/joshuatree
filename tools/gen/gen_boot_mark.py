@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rasterize landing/logo.svg (the one-line Joshua tree brand mark) into an
+"""Rasterize landing/logo.svg (the crayon Joshua tree brand mark) into an
 8-bit coverage header for the boot splash, and landing/mark-bold.svg (the same
 tree drawn down its middle) for the menu bar, where the thin line would vanish.
 
@@ -21,6 +21,15 @@ re-rendered N times, each frame revealing a longer stretch of the pen's path
 (stroke-dasharray), and every pixel keeps the first frame it appears in. That
 reveal map ships beside the coverage (boot_mark_rev, 1..BOOT_MARK_STEPS, 0 =
 empty) so the kernel needs no animation data beyond one more byte per pixel.
+The pen takes the ink in the SVG's own order (trunk and arms, the heavier
+passes down the trunk, the tufts, their blades) and the terracotta ground
+last, so the ground finishes the drawing even though it is painted first.
+
+3.0: the ground is terracotta (tools/gen/logo.py's accent), the rest is ink.
+Each mark ships a second byte per pixel, *_acc, the part of the coverage that
+shows the ground: the full mark's alpha minus the alpha of the tree alone,
+because the tree is painted over the ground. The kernel blends coverage minus
+acc in its ink and acc in MARK_GROUND.
 
 Usage:
     python3 tools/gen/gen_boot_mark.py            # regenerate kernel/boot_mark.h
@@ -33,6 +42,9 @@ import subprocess
 import sys
 
 from PIL import Image
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from logo import accent  # noqa: E402  the terracotta ground's colour
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 SVG = os.path.join(ROOT, "landing", "logo.svg")
@@ -52,27 +64,55 @@ def svg_aspect():
 
 
 def coverage(svg, w, h):
-    png = subprocess.run(["rsvg-convert", "-w", str(w), "-h", str(h), svg], check=True, capture_output=True).stdout
+    """Alpha of an SVG file, or of SVG text passed in as bytes."""
+    src = ["-"] if isinstance(svg, bytes) else [svg]
+    png = subprocess.run(["rsvg-convert", "-w", str(w), "-h", str(h)] + src, input=svg if src == ["-"] else None,
+                         check=True, capture_output=True).stdout
     img = Image.open(io.BytesIO(png)).convert("RGBA")
     assert img.size == (w, h), img.size
     return list(img.split()[3].tobytes())
 
 
+def layers(svg, w, h):
+    """(coverage, ground share): the whole mark's alpha, and how much of it is the terracotta ground that shows,
+    the whole mark less the tree drawn alone (the tree is painted over the ground)."""
+    txt = open(svg).read()
+    ground = f'stroke="{accent}"'
+    assert txt.count(ground) == 1, f"{svg}: expected one terracotta ground path"
+    full = coverage(svg, w, h)
+    tree = coverage(txt.replace(ground, ground + ' stroke-opacity="0"').encode(), w, h)
+    return full, [max(a - t, 0) for a, t in zip(full, tree)]
+
+
 def subpaths():
-    """[(stroke_width, d)] for every subpath of logo.svg, in pen order."""
+    """[(stroke_width, stroke, d)] for every subpath of logo.svg, in pen order: the ink in the file's order, then
+    the terracotta ground, so the ground finishes the drawing."""
     txt = open(SVG).read()
-    out = []
+    ink, ground = [], []
     for m in re.finditer(r'<path d="([^"]+)"([^>]*)/>', txt):
         sw = re.search(r'stroke-width="([\d.]+)"', m.group(2))
+        st = re.search(r' stroke="([^"]+)"', m.group(2))
         for d in re.findall(r"M[^M]+", m.group(1)):
-            out.append((sw.group(1) if sw else None, d))
-    return out
+            (ground if st and st.group(1) == accent else ink).append((sw.group(1) if sw else None, st and st.group(1), d))
+    return ink + ground
 
 
 def plen(d):
+    """The length of one M/C subpath (all logo.py writes), each cubic walked in 24 chords. The frames dash in user
+    units: rsvg-convert ignores pathLength, so before 3.0 a stroke popped in whole early in its share of the time."""
     n = [float(v) for v in re.findall(r"-?\d+\.?\d*", d)]
-    pts = list(zip(n[0::2], n[1::2]))
-    return sum(((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5 for a, b in zip(pts, pts[1:])) or 1e-6
+    x, y, total = n[0], n[1], 0.0
+    for i in range(2, len(n) - 5, 6):
+        x1, y1, x2, y2, x3, y3 = n[i:i + 6]
+        px, py = x, y
+        for k in range(1, 25):
+            t = k / 24; u = 1 - t
+            qx = u * u * u * x + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3
+            qy = u * u * u * y + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3
+            total += ((qx - px) ** 2 + (qy - py) ** 2) ** 0.5
+            px, py = qx, qy
+        x, y = x3, y3
+    return total or 1e-6
 
 
 def frame_svg(subs, lens, frac):
@@ -81,19 +121,19 @@ def frame_svg(subs, lens, frac):
     head = txt[:txt.index("<path")]
     total, reach, start, body = sum(lens), 0.0, 0.0, []
     reach = total * frac
-    for (sw, d), ln in zip(subs, lens):
+    for (sw, st, d), ln in zip(subs, lens):
         if start >= reach:
             break
-        a = f' stroke-width="{sw}"' if sw else ""
-        dash = "" if start + ln <= reach else f' stroke-dasharray="{1000 * (reach - start) / ln:.2f} 2000"'
-        body.append(f'<path d="{d}" pathLength="1000"{a}{dash}/>')
+        a = (f' stroke="{st}"' if st else "") + (f' stroke-width="{sw}"' if sw else "")
+        dash = "" if start + ln <= reach else f' stroke-dasharray="{reach - start:.2f} 2000"'
+        body.append(f'<path d="{d}"{a}{dash}/>')
         start += ln
     return head + "".join(body) + "</g></svg>"
 
 
 def reveal_map(final, w, h):
     subs = subpaths()
-    lens = [plen(d) for _, d in subs]
+    lens = [plen(d) for _, _, d in subs]
     rev = [0] * len(final)
     for k in range(1, STEPS + 1):
         svg = frame_svg(subs, lens, k / STEPS)
@@ -121,8 +161,8 @@ def main():
     aspect = svg_aspect()
     h = TARGET_H
     w = int(round(h * aspect))
-    cov = coverage(SVG, w, h)
-    small = coverage(SMALL_SVG, SMALL, SMALL)
+    cov, acc = layers(SVG, w, h)
+    small, small_acc = layers(SMALL_SVG, SMALL, SMALL)
     rev = reveal_map(cov, w, h)
 
     lines = []
@@ -130,13 +170,17 @@ def main():
     lines.append("#ifndef BOOT_MARK_HDR")
     lines.append("#define BOOT_MARK_HDR")
     lines.append("")
-    lines.append("/* The splash: landing/logo.svg, the one-line tree at its 2.5 stroke. */")
+    lines.append("/* The ground's colour, terracotta (tools/gen/logo.py's accent); the rest of the mark takes the caller's ink. */")
+    lines.append(f"#define MARK_GROUND 0x00{accent[1:].upper()}")
+    lines.append("")
+    lines.append("/* The splash: landing/logo.svg, the 3.0 crayon tree. _acc is the part of each pixel's coverage that is the ground. */")
     lines.append(f"#define BOOT_MARK_W {w}")
     lines.append(f"#define BOOT_MARK_H {h}")
     lines.append("")
     lines += array("boot_mark_cov", cov, w)
+    lines += array("boot_mark_acc", acc, w)
     lines.append("")
-    lines.append("/* The draw-on: the frame (1 to BOOT_MARK_STEPS) each pixel first appears in as the pen traces the tree, 0 where empty. */")
+    lines.append("/* The draw-on: the frame (1 to BOOT_MARK_STEPS) each pixel first appears in as the pen traces the tree, ground last, 0 where empty. */")
     lines.append(f"#define BOOT_MARK_STEPS {STEPS}")
     lines += array("boot_mark_rev", rev, w)
     lines.append("")
@@ -145,6 +189,7 @@ def main():
     lines.append(f"#define MENU_MARK_H {SMALL}")
     lines.append("")
     lines += array("menu_mark_cov", small, SMALL)
+    lines += array("menu_mark_acc", small_acc, SMALL)
     lines.append("")
     lines.append("#endif")
     text = "\n".join(lines) + "\n"
