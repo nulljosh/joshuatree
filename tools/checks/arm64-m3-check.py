@@ -15,8 +15,9 @@ Boots arch/arm64 on QEMU's virt machine and reads the UART. Checks, in this orde
     "M3 userland ok"): the kernel kept running and can enter EL0 again.
   - M3b, a C program: user/hello.c itself, built for aarch64 (uapp_hello.bin, a flat -pie image with no relocations), is
     loaded into the app window (M3c's loader) and runs at EL0 with jtsys.h's `svc #0` path and the Joshua Tree numbers. "jt-hello: start" is
-    its first write (JT_SYS_WRITE 4, fd 1). Only write and exit exist on ARM, so its open gets -ENOSYS: it prints
-    "jt-hello: open failed -38" and exits 1 through JT_SYS_EXIT 1 ("M3 EL0 exit 1", "M3b userland C ok").
+    its first write (JT_SYS_WRITE 4, fd 1). The self-test runs before any card is mounted, so its open of HELLO.TXT is
+    answered -ENOENT (M3d): it prints "jt-hello: open failed -2" and exits 1 through JT_SYS_EXIT 1 ("M3 EL0 exit 1",
+    "M3b userland C ok"). Before M3d the open was -ENOSYS (-38); arm64-m3c-check.py runs it to exit 9 with a card.
   - "EL0: reached code after the blocked access", "M3 userland FAIL" and "M3b userland C FAIL" must never appear.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-m3-check.py   (from the repo root)
@@ -63,11 +64,11 @@ want = ["M3 EL0 task starts",
         "EL0: second task",
         "M3 EL0 exit 7",
         "M3 userland ok",
-        # M3b: user/hello.c, built for aarch64, over svc with the Joshua Tree numbers (write 4, exit 1). Only those two exist
-        # on ARM, so hello's open comes back -ENOSYS (-38) and the program takes its own failure path: exit 1.
+        # M3b: user/hello.c, built for aarch64, over svc with the Joshua Tree numbers (write 4, exit 1). No card is mounted
+        # yet, so hello's open comes back -ENOENT (-2, M3d) and the program takes its own failure path: exit 1.
         "M3b EL0 C task starts",
         "jt-hello: start",
-        "jt-hello: open failed -38",
+        "jt-hello: open failed -2",
         "M3 EL0 exit 1",
         "M3b userland C ok"]
 at = -1
@@ -79,4 +80,4 @@ for bad in ("EL0: reached code after the blocked access", "M3 userland FAIL", "M
     if bad in out: fails.append(f"{bad!r} printed: the EL0 program got past the blocked access")
 for m in fails: print("FAIL: " + m)
 if fails: sys.exit(1)
-print("PASS: the aarch64 kernel runs an unprivileged EL0 program that prints through a write syscall and exits, refuses to print kernel memory for it, survives its direct access to a kernel-only page as a printed permission fault, and runs a second EL0 task after, then runs user/hello.c built for aarch64 over svc with the Joshua Tree syscall numbers: its write reaches the UART, its unported open gets -ENOSYS and it exits through JT_SYS_EXIT")
+print("PASS: the aarch64 kernel runs an unprivileged EL0 program that prints through a write syscall and exits, refuses to print kernel memory for it, survives its direct access to a kernel-only page as a printed permission fault, and runs a second EL0 task after, then runs user/hello.c built for aarch64 over svc with the Joshua Tree syscall numbers: its write reaches the UART, its open finds no card (-ENOENT) and it exits through JT_SYS_EXIT")

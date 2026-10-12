@@ -204,7 +204,7 @@ static unsigned long l3[512] __attribute__((aligned(4096)));   /* ...and one of 
 #define UP_APP    0x10000UL /* M3c: the app window, where user_load puts a program from the app table: code pages, data pages, zeroed pages */
 #define UP_ASTACK 0x80000UL /* ...and the app's stack: 4 pages, with nothing mapped below or above them */
 #define APP_STACK_PAGES 4
-#define APP_ZERO_PAGES  4   /* zeroed pages after the image (and the rest of its last page): the pool user/calendar.c keeps its events in */
+#define APP_ZERO_PAGES  8   /* zeroed pages after the image (and the rest of its last page): the pool user/calendar.c keeps its events in, and user/notes.c its 28 KB arena (M3d) */
 #define UAPP_MAX 0x40000UL  /* the largest image user_load takes, and what user_c.ld asserts */
 #define UP_WIN   0x90000UL  /* M3c part 2: the app's window buffer, read-write and never executable, a free page above the stack */
 #define UWIN_MAX (0x200000UL - UP_WIN)   /* the rest of the arena's 2 MiB: room for 560x360 four times over */
@@ -278,13 +278,14 @@ static void m1b_selftest(void) {
    M3c: the same arena also holds the app window (UP_APP) and an app stack (UP_ASTACK). user_load puts a program from the app
    table there: code pages read-only and executable, then data pages and a zeroed pool read-write and never executable. */
 extern char _start[];
-extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[];
+extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[], user_entry_e[];
 extern unsigned long enter_user(unsigned long entry, unsigned long sp, unsigned long arg, unsigned long arg2);
 extern void leave_user(unsigned long status) __attribute__((noreturn));
 extern unsigned long resume_user(const struct frame *f, unsigned long sp);   /* vectors.S: back into a parked app, returns like enter_user */
 #define SYS_WRITE 64   /* the Linux numbers the user.S self-test uses */
 #define SYS_EXIT 93
 #define JT_SYS_EXIT 1    /* Joshua Tree's own, the ones user/jtsys.h and docs/SYSCALL-ABI.md give every program (M3b) */
+#define JT_SYS_READ 3    /* M3d: the file calls, answered by ufile.c */
 #define JT_SYS_WRITE 4
 #define JT_SYS_TIME 13    /* M3c */
 #define JT_SYS_GETPID 20
@@ -319,12 +320,15 @@ static void app_window_close(void);
 static int span(unsigned long a, unsigned long n, unsigned long base, unsigned long len) {   /* [a, a+n) inside [base, base+len), written so a + n can never wrap */
     return n <= len && a >= base && a - base <= len - n;
 }
-static int user_in_range(unsigned long a, unsigned long n) {   /* memory the program may have the kernel read: the M3a code and stack pages, and the loaded app's whole window and stack */
+long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned long a2);   /* ufile.c, M3d: open, read, write (fd 3 and up), close, lseek, readdir, readfile, mkdir, unlink */
+void ufile_release(void);                 /* ...every descriptor the app left open, closed and written back */
+void ufile_mkdirs(const char *path);      /* ...folders inside JT/ an app expects */
+int user_in_range(unsigned long a, unsigned long n) {   /* memory the program may have the kernel read: the M3a code and stack pages, and the loaded app's whole window and stack */
     return span(a, n, USER_BASE + UP_CODE, 4096) || span(a, n, USER_BASE + UP_STACK, 4096)
         || span(a, n, USER_BASE + UP_APP, app_len) || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0)
         || span(a, n, USER_BASE + UP_WIN, app_wbytes);
 }
-static int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may store into for the program: data, zeroed pool and stacks, never code (read-only at EL1 too: a store there would be a kernel fault) */
+int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may store into for the program: data, zeroed pool and stacks, never code (read-only at EL1 too: a store there would be a kernel fault) */
     return span(a, n, USER_BASE + UP_STACK, 4096) || span(a, n, USER_BASE + UP_APP + app_code, app_len - app_code)
         || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0) || span(a, n, USER_BASE + UP_WIN, app_wbytes);
 }
@@ -346,7 +350,8 @@ void exc_el0_sync(struct frame *f) {
     unsigned ec = (unsigned)(f->esr >> 26);
     if (ec == 0x15) {   /* svc from EL0 */
         unsigned long n = f->x[8], a0 = f->x[0];
-        if (n == SYS_WRITE || n == JT_SYS_WRITE) {
+        if (n == JT_SYS_WRITE && a0 != 1 && a0 != 2) f->x[0] = (unsigned long)ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: a file from open (fd 0 is -EBADF there) */
+        else if (n == SYS_WRITE || n == JT_SYS_WRITE) {
             const char *p = (const char *)f->x[1]; unsigned long len = f->x[2];
             if (a0 != 1 && a0 != 2) { f->x[0] = (unsigned long)-9; return; }   /* -EBADF: the console is fd 1 and fd 2, nothing else yet */
             if (!user_in_range((unsigned long)p, len)) { f->x[0] = (unsigned long)-14; return; }   /* -EFAULT */
@@ -360,7 +365,7 @@ void exc_el0_sync(struct frame *f) {
             f->x[0] = 0;                         /* outside the scheduler (the boot self-test) there is nothing to yield to */
         } else if (n == JT_SYS_WINDOW_POLL) f->x[0] = (unsigned long)app_window_poll(a0, f->x[1]);   /* the same */
         else {
-            long r = -38;   /* -ENOSYS: every number the ARM kernel does not answer yet, and it says so */
+            long r;
             if (n == JT_SYS_TIME) {   /* seconds since the epoch, 0 until the clock is set; a non-null pointer is also stored through */
                 unsigned long t = cal_utc();
                 r = (int)t;
@@ -370,7 +375,8 @@ void exc_el0_sync(struct frame *f) {
                 }
             } else if (n == JT_SYS_GETPID) r = user_pid ? user_pid : 1;
             else if (n == JT_SYS_WINDOW_OPEN) r = app_window_open(a0);
-            svc_log(n, a0, r);
+            else r = ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: the file calls; -ENOSYS (-38) for every number the ARM kernel does not answer yet */
+            if (n != JT_SYS_READ) svc_log(n, a0, r);           /* a read is every few hundred bytes of a file: the UART would drown */
             f->x[0] = (unsigned long)r;
         }
         return;
@@ -479,6 +485,7 @@ static int user_run(const struct user_app *a) {
     if (!entry) return -1;
     user_pid++; user_faulted = 0;
     user_status = enter_user(entry, USER_BASE + UP_ASTACK + APP_STACK_PAGES * 4096UL, 0, 0);
+    ufile_release();   /* M3d: what it left open is closed for it, however it ended */
     return 0;
 }
 #endif
@@ -493,6 +500,7 @@ static int user_run(const struct user_app *a) {
 static void app_end(unsigned long status, const char *how) {   /* an exit, a fault or a kill: the window goes, then the pages */
     const struct user_app *a = app_cur;
     app_cur = 0; app_parked = app_kick = 0; app_close_at = 0; user_status = status;
+    ufile_release();   /* M3d: its open files are written back and closed, after an exit, a fault or its red dot alike */
     app_window_close();
     app_unmap();
     uart_puts("M3c app "); uart_puts(a->name);
@@ -515,6 +523,8 @@ static int app_start(const struct user_app *a) {   /* 0 started (it runs on the 
     if (app_cur) return -3;
     unsigned long entry = user_load(a);
     if (!entry) return -2;
+    if (a->name[0] == 'n' && a->name[1] == 'o' && a->name[2] == 't' && a->name[3] == 'e' && a->name[4] == 's' && !a->name[5])
+        ufile_mkdirs("NOTES/NOTES");   /* M3d: Notes' default folder in JT/, made before it looks, as i386's notes_check_support does */
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
     app_frame.elr = entry; app_sp = USER_BASE + UP_ASTACK + APP_STACK_PAGES * 4096UL;
     app_cur = a; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
@@ -569,12 +579,20 @@ static void user_demo(void) {
     user_status = enter_user(code + (unsigned long)(user_entry_b - user_start), sp, kpage, 0);
     if (user_status == 7) uart_puts("M3 userland ok\n"); else uart_puts("M3 userland FAIL\n");
 #ifndef PI_BUILD
-    /* M3b: user/hello.c itself, built for aarch64 and talking Joshua Tree syscall numbers over svc. Only write and exit
-       exist on ARM so far: its open comes back -ENOSYS (-38), which hello.c reports and answers with exit 1. The kernel
-       takes that exit as the pass. M3d brings open and read, and the exit code becomes 9. */
+    /* M3b: user/hello.c itself, built for aarch64 and talking Joshua Tree syscall numbers over svc. This runs before any
+       card is mounted, so since M3d its open of HELLO.TXT is answered -ENOENT (-2), which hello.c reports and answers with
+       exit 1. The kernel takes that exit as the pass. With a card holding JT/HELLO.TXT, `userrun hello` goes all the way
+       to exit 9 (tools/checks/arm64-m3c-check.py). */
     const struct user_app *hello = user_find("hello", 5), *cal = user_find("calendar", 8);
     uart_puts("M3b EL0 C task starts\n");
     if (hello && !user_run(hello) && !user_faulted && user_status == 1) uart_puts("M3b userland C ok\n"); else uart_puts("M3b userland C FAIL\n");
+    /* M3d: user.S's entry E abuses the file calls once each: a kernel pointer as a path, a read into the kernel-only page,
+       a path with "..", a 4 GB readfile, a readdir whose records run past its page. Each must come back an errno (the
+       checks run before any card is touched), then it exits 0 and the kernel carries on. */
+    uart_puts("M3d file call abuse starts\n");
+    user_faulted = 0;
+    user_status = enter_user(code + (unsigned long)(user_entry_e - user_start), sp, kpage, 0);
+    uart_puts(!user_faulted && user_status == 0 ? "M3d file call abuse ok\n" : "M3d file call abuse FAIL\n");
     /* M3c: user/calendar.c, about 34 KB with relocated pointer tables, a data page and a zeroed pool. It opens its window
        first; run here, outside the scheduler, there is none to give (-ENODEV, as i386 answers a program run from the text
        shell), so it writes "calendar: no window" to fd 2 and exits 1, which is the pass. Then
@@ -2201,6 +2219,35 @@ static void demo_tick(void) {
     slot++;
 }
 #endif
+#ifdef NOTES_SELFTEST
+/* notesw-kernel8.img and notesr-kernel8.img only (arm64-notes-check.py). QEMU's raspi4b has no USB, so made-up boot
+   keyboard reports go through xhci.c's hid_kbd, the parser a real keyboard's reports take, one key every 150 ms of the
+   generic counter (never `ticks`). Right five times and Enter walk the dock to its fifth tile, Notes, the way a Pi with
+   only a keyboard opens it. '|' waits for Notes' first frame. notesw then types n (a new note), a line and Esc (Esc
+   saves it and goes back to the list); notesr presses Enter (the note opens in the editor). Then `notestest: done`, and
+   Notes stays open for the check's screendump. */
+void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p);
+static void notes_tick(void) {
+    static const char *const script = NOTES_SELFTEST == 1 ? ">>>>>\n|nhello from the pi\033" : ">>>>>\n|\n";
+    static unsigned at; static unsigned long next; static unsigned char last[8]; static int done;
+    unsigned long now = cnt_now();
+    if (!next) next = now + cnt_hz();   /* a second after the loop starts: the desktop has settled */
+    if (done || now < next) return;
+    if (!script[at]) { done = 1; uart_puts("notestest: done\n"); return; }   /* a second after the last key: it has drawn */
+    next = now + cnt_hz() / 1000 * 150;
+    char c = script[at];
+    if (c == '|') {
+        if (!app_cur || !app_shown) return;   /* not up yet: ask again on the next step */
+        uart_puts("notestest: notes is up\n");
+        at++; next = now + 2 * cnt_hz();   /* two seconds to take a screendump of the list before the next key */
+        return;
+    }
+    unsigned char down[8] = { 0 }, none[8] = { 0 };
+    down[2] = c == '>' ? 0x4F : c == '\n' ? 0x28 : c == '\033' ? 0x29 : c == ' ' ? 0x2C : (unsigned char)(0x04 + c - 'a');   /* HID usages: Right, Enter, Esc, Space, a to z */
+    hid_kbd(down, 8, last); hid_kbd(none, 8, last);
+    if (!script[++at]) next = now + cnt_hz();
+}
+#endif
 
 /* ---- M2: devices on QEMU's virt machine. 32 virtio-mmio slots from 0x0A000000, 0x200 apart, each says which device
    sits there: 1 is a network card, 18 is input (keyboard or tablet). Modern virtio (version 2) only: QEMU needs
@@ -2378,27 +2425,30 @@ static void net_arp_probe(void) {
 }
 
 /* Disk: one request queue. A request is three descriptors chained: a 16-byte header (type, sector), the data buffer,
-   and one status byte the device writes back. Polled, one request at a time. */
+   and one status byte the device writes back. Polled, one request at a time. M3d: writes too (type 1, and the buffer is
+   the device's to read), and emmc.c takes the disk as its card through vblk_*, so the FAT code runs on virt as on a Pi. */
 struct blk_hdr { unsigned type, reserved; unsigned long sector; };
 static struct vq blk_q;
 static int blk_ok;
+static unsigned long blk_sectors;
 static int blk_init(void) {
     unsigned long b = vio_find(2, 0);
     if (!b || !vio_start(b, 0) || !vq_setup(&blk_q, b, 0)) return 0;
     VR(b, 0x70) = 1 | 2 | 8 | 4;                    /* driver ok */
-    unsigned long sectors = (unsigned long)VR(b, 0x100) | (unsigned long)VR(b, 0x104) << 32;   /* config space: capacity */
-    uart_puts("M2 blk sectors "); uart_dec((unsigned)sectors); uart_putc('\n');
+    blk_sectors = (unsigned long)VR(b, 0x100) | (unsigned long)VR(b, 0x104) << 32;   /* config space: capacity */
+    uart_puts("M2 blk sectors "); uart_dec((unsigned)blk_sectors); uart_putc('\n');
     blk_ok = 1;
     return 1;
 }
-static int blk_read(unsigned long sector, void *buf) {   /* one 512-byte sector, 1 on success */
+static int blk_rw(unsigned long sector, void *buf, int write) {   /* one 512-byte sector, 1 on success */
     static struct blk_hdr hdr __attribute__((aligned(16)));
     static volatile unsigned char status __attribute__((aligned(16)));
-    hdr.type = 0; hdr.reserved = 0; hdr.sector = sector;   /* 0 = read */
+    if (!blk_ok) return 0;
+    hdr.type = write ? 1 : 0; hdr.reserved = 0; hdr.sector = sector;   /* 0 = read, 1 = write */
     status = 0xFF;
     dcache_clean(&hdr, sizeof hdr); dcache_clean(buf, 512); dcache_clean((void *)&status, 1);   /* QEMU is coherent; a real DMA engine is not */
     blk_q.d[0] = (struct vq_desc){ (unsigned long)&hdr, sizeof hdr, 1 /* next */, 1 };
-    blk_q.d[1] = (struct vq_desc){ (unsigned long)buf, 512, 1 | 2 /* next, device writes */, 2 };
+    blk_q.d[1] = (struct vq_desc){ (unsigned long)buf, 512, (unsigned short)(write ? 1 : 1 | 2) /* next; device writes on a read */, 2 };
     blk_q.d[2] = (struct vq_desc){ (unsigned long)&status, 1, 2, 0 };
     blk_q.a->ring[blk_q.a->idx % VQ] = 0;
     __asm__ volatile ("dsb sy" ::: "memory");
@@ -2412,6 +2462,10 @@ static int blk_read(unsigned long sector, void *buf) {   /* one 512-byte sector,
     dcache_clean(buf, 512); dcache_clean((void *)&status, 1);   /* drop our stale copies so the reads below see what the device wrote */
     return status == 0;
 }
+static int blk_read(unsigned long sector, void *buf) { return blk_rw(sector, buf, 0); }
+int vblk_ready(void) { return blk_ok; }
+unsigned long vblk_sectors(void) { return blk_sectors; }
+int vblk_rw(unsigned long sector, void *buf, int write) { return blk_rw(sector, buf, write); }
 static void blk_probe(void) {
     static unsigned char sec[512] __attribute__((aligned(64)));
     if (!blk_read(0, sec)) { uart_puts("M2 blk read FAIL\n"); return; }
@@ -2524,6 +2578,9 @@ void main(void) {
 #ifdef KEY_SELFTEST
     key_selftest();
 #endif
+#ifdef NOTES_SELFTEST
+    usb_ok |= !inputs;   /* QEMU's raspi4b has no USB to find: the loop runs anyway, for notes_tick's made-up keys */
+#endif
     if (usb_ok || inputs) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
@@ -2533,7 +2590,12 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); app_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); app_tick();
+#ifdef NOTES_SELFTEST
+            notes_tick();
+#endif
+        }
 #else
         for (;;) {
             if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy() || app_cur) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"

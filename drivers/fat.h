@@ -43,6 +43,12 @@ int fat_mkdir(const char *name);
 int fat_write_file(const char *name, const void *data, unsigned int len);
 int fat_replace_file(const char *name, const void *data, unsigned int len);
 
+/* The current directory as its first cluster (0 the root), for a caller
+   that walks a path and must put the cursor back where it found it: the
+   ARM kernel's file calls for user programs (arch/arm64/ufile.c). */
+unsigned int fat_cwd_get(void);
+void fat_cwd_set(unsigned int cluster);
+
 /* v29: registers fat's own functions with vfs.c as the "fat" backend.
    Call once at boot, after fat_mount(). */
 void fat_vfs_register(void);
