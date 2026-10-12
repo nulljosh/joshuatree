@@ -38,6 +38,7 @@ static char text[TEXT_MAX], title[64];    /* the page as lines of text */
 static unsigned tlen, nline, view;        /* text length, its line count, the first line of the view */
 static char hist[HIST_MAX][URL_MAX];
 static unsigned hn, hi;                   /* pages in history, and which one is on screen */
+static unsigned loads;                    /* pages that arrived so far: the Browser window sees a change and re-reads the page */
 
 static unsigned slen(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }
 static int starts(const char *s, const char *w) { for (; *w; s++, w++) if ((*s | 32) != (*w | 32)) return 0; return 1; }
@@ -67,6 +68,11 @@ static void resolve(const char *href, unsigned n, char *out) {
     struct url b; if (!parse_url(cur, &b)) return;
     unsigned o = 0;
     const char *pre = b.tls ? "https://" : "http://";
+    if (n > 2 && href[0] == '/' && href[1] == '/') {   /* //host/path keeps the page's scheme */
+        for (const char *p = pre; p[0] != '/' && o < URL_MAX - 1; p++) out[o++] = *p;
+        for (unsigned i = 0; i < n && o < URL_MAX - 1; i++) out[o++] = href[i];
+        out[o] = 0; return;
+    }
     for (const char *p = pre; *p; p++) out[o++] = *p;
     for (const char *p = b.host; *p; p++) out[o++] = *p;
     if (b.port != (b.tls ? 443 : 80)) { out[o++] = ':'; char t[6]; unsigned k = 0, v = b.port; do t[k++] = (char)('0' + v % 10); while (v /= 10); while (k) out[o++] = t[--k]; }
@@ -273,6 +279,7 @@ static void show(const char *url, int push) {
             if (hn == HIST_MAX) { for (unsigned k = 1; k < HIST_MAX; k++) scopy(hist[k - 1], hist[k], slen(hist[k]), URL_MAX); hn--; }
             scopy(hist[hn], cur, slen(cur), URL_MAX); hi = hn++;
         }
+        loads++;
         say_wrapped("browser: ", title[0] ? title : cur, slen(title[0] ? title : cur));
         show_lines(0, PAGE_LINES);
         kputs("links: "); kdec(nlinks); kputs(nlinks ? ", open N follows one\n" : "\n");
@@ -353,3 +360,9 @@ int browse_command(const char *q, unsigned n) {
     }
     return 0;
 }
+
+/* The Browser window (browser_ui.h) reads the page through these instead of the printed lines. */
+const char *browser_text(unsigned *len) { *len = tlen; return text; }   /* the page as lines of text, '\n' between them, "[N]" after a link */
+const char *browser_url(void) { return cur; }                          /* the page on screen, "" before the first */
+const char *browser_link(unsigned n) { return n && n <= nlinks ? links[n - 1] : 0; }
+unsigned browser_loads(void) { return loads; }

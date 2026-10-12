@@ -32,12 +32,14 @@ PAGE = (b"<html><head><title>Joshua &amp; the Tree</title><style>body{color:red}
 SECOND = b"<html><head><title>Second Page</title></head><body>Made it.</body></html>"
 HEAVY = (b"<html><head><title>Heavy</title><script>var a = '<p>fake</p>';</script></head><body><style>p{x:y}</style>"
          + b"<script>" + b"if (a < b) { c(); }\n" * 400 + b"</script><p>One real sentence.</p></body></html>")
+FORMS = (b"<html><body><p>one <a href=/unquoted>bare</a> two <a href='single'>single quotes</a> "
+         b"three <a href=\"//10.0.2.2:%d/proto\">protocol relative</a> four <a href=\"/dq\">double</a>.</p></body></html>")
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         seen.append(self.path)
         if self.path in ("/start", "/loop"):
             self.send_response(302); self.send_header("Location", "/dir/page" if self.path == "/start" else "/loop"); self.end_headers(); return
-        body = PAGE % port if self.path == "/dir/page" else HEAVY if self.path == "/heavy" else SECOND
+        body = PAGE % port if self.path == "/dir/page" else HEAVY if self.path == "/heavy" else FORMS % port if self.path == "/forms" else SECOND
         self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
     def log_message(self, *a): pass
 
@@ -141,6 +143,10 @@ try:
     seen.clear()
     b.type("browse https://10.0.2.2:%d/heavy" % port)
     check("a script-heavy page prints its one sentence", b.wait_for("One real sentence.", 60) and "fake" not in b.uart() and "if (a" not in b.uart(), b.uart()[-500:])
+    b.type("browse https://10.0.2.2:%d/forms" % port)
+    check("bare, single-quoted, protocol-relative and double-quoted hrefs inside a <p> are four links", b.wait_for("links: 4, open N follows one", 60), b.uart()[-500:])
+    b.type("links")
+    check("the //host link keeps the page's scheme, the bare one is root relative", b.wait_for("[3] https://10.0.2.2:%d/proto" % port, 10) and "[1] https://10.0.2.2:%d/unquoted" % port in b.uart() and "[2] https://10.0.2.2:%d/single" % port in b.uart(), b.uart()[-600:])
     seen.clear()
     b.type("browse https://10.0.2.2:%d/loop" % port)
     check("a redirect loop stops", b.wait_for("browser: too many redirects", 90), b.uart()[-400:])
