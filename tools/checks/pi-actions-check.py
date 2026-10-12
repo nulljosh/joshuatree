@@ -15,7 +15,7 @@ if not m:
     print("FAIL: no pi-actions block in arch/arm64/ask.c"); sys.exit(1)
 relay = open("tools/claude-relay/relay.py").read()
 prompt = re.search(r"SAMANTHA = \((.*?)\)\n", relay, re.S)
-ACTIONS = ["[[note TEXT]]", "[[say TEXT]]", "[[led blink]]", "[[open APP]]", "[[browse URL]]", "[[calc EXPR]]", "[[status]]"]
+ACTIONS = ["[[note TEXT]]", "[[say TEXT]]", "[[led blink]]", "[[open APP]]", "[[browse URL]]", "[[calc EXPR]]", "[[status]]", "[[save NAME]]"]
 missing = [a for a in ACTIONS if not prompt or a not in prompt.group(1)]
 if missing or "ask first" not in prompt.group(1):
     print("FAIL: the relay's SAMANTHA prompt lacks %s or the ask-first rule" % (missing or "nothing")); sys.exit(1)
@@ -35,11 +35,20 @@ CASES = [   # reply -> printed text, actions as "kind:text"
     ("No.\n[[browse ftp://x]]\n[[browse example.com]]", "No.", ["0:browse ftp://x", "0:browse example.com"]),
     ("Five.\n[[note 1]]\n[[note 2]]\n[[note 3]]\n[[note 4]]\n[[note 5]]", "Five.\n[[note 5]]", ["1:1", "1:2", "1:3", "1:4"]),
     ("[[statusx]]\n[[open]]", "", ["0:statusx", "0:open"]),
+    ("Here.\n```c\nint main(void){}\n```\n[[save HELLO.C]]", "Here.\n```c\nint main(void){}\n```", ["8:HELLO.C"]),
 ]
 harness = m.group(0) + r"""
 #include <stdio.h>
 #include <string.h>
 int main(int argc, char **argv) {
+    {   /* [[save]]'s helpers: the first fenced block, and a name the person typed */
+        const char *r = "Here.\n```c\nint x;\n```\nmore"; unsigned at = 0, l = code_block(r, (unsigned)strlen(r), &at);
+        const char *open_only = "```c\nint x;\n"; unsigned at2 = 0;
+        if (l != 7 || strncmp(r + at, "int x;\n", 7) || code_block(open_only, (unsigned)strlen(open_only), &at2)
+            || code_block("no code", 7, &at2) || !named_in("save it as hello.c", 18, "HELLO.C") || named_in("save it", 7, "HELLO.C")) {
+            puts("HELPERS_FAIL"); return 1;
+        }
+    }
     for (int c = 1; c < argc; c++) {
         static char buf[8192]; unsigned n = (unsigned)strlen(argv[c]);
         memcpy(buf, argv[c], n);
@@ -66,5 +75,5 @@ for (reply, want_text, want_acts), got in zip(CASES, out.split("\x03")):
     if text != want_text or acts != want_acts:
         print("FAIL: %r -> %r %r, want %r %r" % (reply, text, acts, want_text, want_acts)); ok = False
 if ok:
-    print("PASS: %d replies: the seven actions are stripped and recorded, four per turn, unknown ones recorded to ignore, the rest stays as text" % len(CASES))
+    print("PASS: %d replies: the eight actions are stripped and recorded, four per turn, unknown ones recorded to ignore, the rest stays as text" % len(CASES))
 sys.exit(0 if ok else 1)
