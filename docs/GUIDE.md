@@ -213,6 +213,10 @@ board's physical power supply. Restart boots the OS again. These paths
 pass in QEMU; confirm them on the board before relying on them. The current
 card has not been updated.
 
+## Drag a window
+
+Press on a window's title bar between the dots and move the mouse: the Console, Terminal, Browser, Clock and Brick windows follow the pointer and stop at the menu bar, the screen edges and the dock. The Calculator and app windows stay where they open. Released in 3.6.0.
+
 ## Play Brick
 
 The 2.37.0 development build adds an original brick-breaker game. Open

@@ -1371,7 +1371,6 @@ void dock_hover(int slot) {
 static unsigned mouse_x = 400, mouse_y = 300, mouse_moved;   /* fb_init moves it to the middle of the real screen */
 static int cur_wanted;                   /* a pointer has moved: show the arrow */
 static int win_lx, win_ly, win_lw, win_lh;   /* the Console's frame on the logical grid */
-static unsigned *con_under;              /* the wallpaper under that frame, saved before it was drawn: closing puts it back */
 static int hover_slot = -1;
 static void cur_flush(int lx, int ly) { int s = (int)window_scale(); fb_flush(lx * s, ly * s, CURSOR_W * s, CURSOR_H * s); }
 static void cur_hide(void) {
@@ -1409,11 +1408,15 @@ static int term_front(void) { return cp == &term_p && !calc_front && !app_front 
    the Calculator open behind it, the Calculator comes to the front. */
 static void calc_raise(void);
 static void app_raise(void);
+static void wall_fill(int x, int y, int w, int h) {   /* physical px: the flat wallpaper colour (wall.c); there is no picture to save, so a window can leave from anywhere */
+    unsigned c = fb_color(0x00B5502C);
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = c;
+}
 static void console_close(void) {
-    if (!con_live || !con_under) return;
+    if (!con_live || !fb) return;
     int s = (int)window_scale(), x = win_lx * s, y = win_ly * s, w = win_lw * s, h = win_lh * s;
     cur_hide();
-    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = con_under[j * w + i];
+    wall_fill(x, y, w, h);
     fb_flush(x, y, w, h);
     con_live = 0;
     uart_puts(cp == &term_p ? "terminal closed\n" : "console closed\n");
@@ -1655,9 +1658,57 @@ static int app_dock(const char *name) {
     }
     return 0;
 }
+/* ---- Window drag. The Console, the Terminal, Clock, Brick and the Browser all live in one rectangle (win_lx, win_ly, win_lw,
+   win_lh), so one function moves any of them: win_move_to copies the window's pixels to the new place (the contents come
+   along as they are, nothing is drawn again), fills what it uncovered with the flat wallpaper, shifts the Console's text
+   origin by the same amount, and cleans both rectangles out of the data cache. The window stays whole on the screen, below
+   the menu bar and above the dock's band and the line over it, so no band is ever under it. A press on the title band (not
+   on a dot) starts a drag, the grab offset kept; the left button going up ends it. The Calculator and an app's window keep
+   their boot places, and a Console with one of them open is not dragged (there is no stacking to repaint). ---- */
+static int in_box(int x, int y, int bx, int by, int bw, int bh);
+static int drag_on, drag_dx, drag_dy;   /* a title-band press is moving the window; where inside it the pointer took hold, logical px */
+static int win_draggable(void) { return !spot_live && (brick_live || clock_live || browser_live || (con_live && !calc_live && !app_wbytes)); }
+static int on_title_band(int x, int y) {   /* the top 30 px of the window, but not the three dots (radius 7, a pixel spare) */
+    if (!in_box(x, y, win_lx, win_ly, win_lw, 30)) return 0;
+    for (int d = 0; d < 3; d++) { int dx = x - (win_lx + 24 + 22 * d), dy = y - (win_ly + 16); if (dx * dx + dy * dy <= 8 * 8) return 0; }
+    return 1;
+}
+static void win_move_to(int nx, int ny) {
+    if (!fb) return;
+    int s = (int)window_scale(), top = sg(MENUBAR_H) / s + 8, bottom = gui_dock_band_top() - 22, right = (int)fb_w / s - win_lw;
+    if (nx > right) nx = right;
+    if (nx < 0) nx = 0;
+    if (ny > bottom - win_lh) ny = bottom - win_lh;
+    if (ny < top) ny = top;
+    if (nx == win_lx && ny == win_ly) return;
+    int ox = win_lx * s, oy = win_ly * s, w = win_lw * s, h = win_lh * s, px = nx * s, py = ny * s, dx = px - ox, dy = py - oy;
+    cur_hide();
+    for (int j = 0; j < h; j++) {   /* a memmove by rows: the far rows first when moving down, the far columns first when moving right */
+        int r = dy > 0 ? h - 1 - j : j;
+        unsigned *src = fb + (unsigned)(oy + r) * fb_pitch + (unsigned)ox, *dst = fb + (unsigned)(py + r) * fb_pitch + (unsigned)px;
+        if (dx > 0) for (int i = w - 1; i >= 0; i--) dst[i] = src[i];
+        else for (int i = 0; i < w; i++) dst[i] = src[i];
+    }
+    unsigned wall = fb_color(0x00B5502C);   /* the old rectangle minus the new one, row by row */
+    for (int j = 0; j < h; j++) {
+        int y = oy + j, inside = y >= py && y < py + h, a = ox, b = ox + w;
+        if (inside) { if (dx > 0) b = px < b ? px : b; else a = px + w > a ? px + w : a; }
+        for (int x = a; x < b; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = wall;
+    }
+    win_lx = nx; win_ly = ny;
+    con_x += dx; con_y += dy; con_wx += dx; con_wy += dy;   /* con_layout's origin and the title bar's "lines N-M" follow; the size, and so the rows and columns, are unchanged */
+    int ux = ox < px ? ox : px, uy = oy < py ? oy : py;
+    fb_flush(ux, uy, w + (dx < 0 ? -dx : dx), h + (dy < 0 ? -dy : dy));
+}
+static void drag_end(void) {
+    if (!drag_on) return;
+    drag_on = 0;
+    con_quiet = 1; uart_puts("window at "); uart_dec((unsigned)win_lx); uart_putc(','); uart_dec((unsigned)win_ly); uart_putc('\n');
+}
 static void pointer_moved(void) {   /* one report done: the arrow to its new place, the dock's label to the slot under it */
     if (!fb) return;
     int s = (int)window_scale(), slot = gui_dock_hit_test((int)mouse_x / s, (int)mouse_y / s);
+    if (drag_on) { if (win_draggable()) win_move_to((int)mouse_x / s - drag_dx, (int)mouse_y / s - drag_dy); else drag_on = 0; }
     if (brick_live) brick_mouse((int)mouse_x / s, (int)mouse_y / s);
     cur_wanted = 1;
     cur_hide();
@@ -1676,6 +1727,7 @@ static void pointer_click(void) {   /* the left button went down */
     if (spot_live && slot < 0) return;   /* the bar is over the windows: a raise under it would leave its saved pixels stale */
     int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);
     int on_app = app_wbytes && in_box(lx, ly, app_lx, app_ly, app_lw, app_lh);
+    if (slot < 0 && win_draggable() && on_title_band(lx, ly)) { drag_on = 1; drag_dx = lx - win_lx; drag_dy = ly - win_ly; return; }   /* the title band takes hold of the window */
     if (slot == 0) calc_open();   /* Apps tile opens Calculator; Brick and Clock are in Spotlight. */
     else if (brick_live && slot < 0) {
         if (spot_live) return;
@@ -2078,9 +2130,6 @@ static void fb_init(void) {
        lights, centred name, a hairline under the title band. Its content well is white for the log. */
     int s = (int)window_scale(), lx = win_x / s, ly = win_y / s, lw = win_w / s, lh = win_h / s;
     win_lx = lx; win_ly = ly; win_lw = lw; win_lh = lh;
-    con_under = kmalloc((unsigned)(lw * s * lh * s) * 4);   /* slice 4: what the close button puts back */
-    if (con_under) { for (int j = 0; j < lh * s; j++) for (int i = 0; i < lw * s; i++) con_under[j * lw * s + i] = fb[(unsigned)(ly * s + j) * fb_pitch + (unsigned)(lx * s + i)]; }
-    else uart_puts("oom console close\n");                  /* the Console then just has no working close button */
     /* Slice 5: the Calculator's own frame, over the right of the Console's so both show, clear of the line above the dock */
     calc_lw = 280; calc_lx = lx + lw - 150; if (calc_lx + calc_lw > W / s - 8) calc_lx = W / s - 8 - calc_lw;
     calc_ly = ly + 40; calc_lh = gui_dock_band_top() - 22 - calc_ly; if (calc_lh > 300) calc_lh = 300;
@@ -2145,6 +2194,9 @@ static void fb_init(void) {
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
     ok = ok && wall_ok && w0 == fb_color(0x00B5502C) && w1 == w0 && w2 == w0;
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
+#ifdef DRAG_TEST   /* the dragtest build: a drag of 100 right and 60 down at boot, clamped like a real one, for arm64-drag-check.py at 1080p (scale 2) */
+    drag_on = 1; win_move_to(win_lx + 100, win_ly + 60); drag_end();
+#endif
 #ifdef AUDIO_TEST   /* the audiotest build: `beep` run at boot on virt, which has no PWM (arm64-audio-check.py) */
     void cmd_run(const char *q, unsigned n, void (*out)(const char *));
     cmd_run("beep", 4, 0);
@@ -2262,6 +2314,7 @@ static void input_event(struct input_event e) {
         con_quiet = 1;   /* the UART only */
         uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
         if (e.code == 272 && e.value) pointer_click();
+        else if (e.code == 272) drag_end();
         return;
     }
     if (e.type == 1 && (e.code == 29 || e.code == 97)) ctrl_held = e.value != 0;                          /* Ctrl, either side; the key still echoes below */
