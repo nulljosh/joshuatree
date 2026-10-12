@@ -834,7 +834,11 @@ static void user_demo(void) {
    for one through the mailbox, at the monitor's own size when the firmware knows it. Either way fb_setup hands back
    plain 32-bit pixels and the drawing is shared. Everything is laid out against an 800x600 design and scaled by
    height/600, so 800x600 (QEMU) draws exactly what it always did. ---- */
+#ifdef FB_BOOT_W   /* the glitch test build: QEMU's ramfb at 1080p (window_scale 2), the size a Pi shows on a monitor, so the checks see the scale-2 layout with a USB mouse */
+static unsigned fb_w = FB_BOOT_W, fb_h = FB_BOOT_H;
+#else
 static unsigned fb_w = 800, fb_h = 600;   /* the screen we really got */
+#endif
 static unsigned disp_w, disp_h;           /* what the firmware said the monitor is, 0x0 when nobody asked */
 static unsigned int *fb;
 static unsigned fb_pitch;   /* in pixels */
@@ -1628,6 +1632,30 @@ static int term_front(void) { return cp == &term_p && !calc_front && !app_front 
    the Calculator open behind it, the Calculator comes to the front. */
 static void calc_raise(void);
 static void app_raise(void);
+static int calc_lx, calc_ly, calc_lw, calc_lh;   /* its frame on the logical grid, set in fb_init */
+static void wall_fill(int x, int y, int w, int h);
+static void tribute_paint(void) {   /* the line over the dock, drawn on the flat wallpaper at boot and again after a window leaves near it */
+    int W = (int)fb_w, H = (int)fb_h, band_y = gui_dock_band_top() * (int)window_scale();
+    /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
+       of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
+    const char *thanks = "Seduce. Vilify. Ignore.";
+    int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 7 * ar / 2 - gapx) / 2, ty = band_y - sc(4);
+    {   int bx = tx - 4, by = ty - sc(4) + ar - 7 * ar / 2 - 2;   /* the line's whole box back to flat wallpaper first: a repaint over half of it would blend the edges twice */
+        wall_fill(bx, by, tx + tw + gapx + 7 * ar / 2 + 4 - bx, band_y + sc(6) - by);   /* down past the descenders: the line's own pixels, nothing of the hover band's label capsule above the tiles */
+    }
+    text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
+    {   /* a small bitten apple after the line: apple_mask scaled to 3.5 ar square, 4x4 samples a pixel, onto the flat fill */
+        int S = 7 * ar / 2, x0 = tx + tw + gapx, y0 = ty - sc(4) + ar - S; unsigned ink = fb_color(0x00f0f4f8);
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            int sum = 0;
+            for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) sum += apple_mask[((y * 4 + j) * APPLE_N / (S * 4)) * APPLE_N + (x * 4 + i) * APPLE_N / (S * 4)];
+            unsigned al = (unsigned)sum / 16, d = fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)], out = 0;
+            if (!al) continue;
+            for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * al + ((d >> b) & 0xFF) * (255 - al)) / 255) << b;
+            fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)] = out;
+        }
+    }
+}
 static void wall_fill(int x, int y, int w, int h) {   /* physical px: the flat wallpaper colour (wall.c); there is no picture to save, so a window can leave from anywhere */
     unsigned c = fb_color(wall_get());
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = c;
@@ -1641,17 +1669,38 @@ static void wall_minus(int ox, int oy, int ow, int oh, int nx, int ny, int nw, i
         } else wall_fill(a, y, b - a, 1);
     }
 }
+/* A window leaves by wall_vacate: the wallpaper over its frame AND a ring of VACATE_PAD logical px around it. Content may
+   overhang its frame (Brick's playfield is 6 px wider than the frame at 1080p and its hint line runs 5 px below it), and
+   the old closes cleared the frame alone, leaving the overhang as a thin white bar and glyph bits (board photo, 3.6.3).
+   The ring stops under the menu bar and above the tribute line, where nothing but the wallpaper is ever under a window. */
+#define VACATE_PAD 6
+static void wall_vacate(int lx, int ly, int lw, int lh, int ring_only) {
+    int s = (int)window_scale(), x0 = (lx - VACATE_PAD) * s, y0 = (ly - VACATE_PAD) * s, x1 = (lx + lw + VACATE_PAD) * s, y1 = (ly + lh + VACATE_PAD) * s;
+    int top = sg(MENUBAR_H), bottom = (gui_dock_band_top() - 12) * s;
+    if (x0 < 0) x0 = 0;
+    if (x1 > (int)fb_w) x1 = (int)fb_w;
+    if (y0 < top) y0 = top;
+    if (y1 > bottom) y1 = bottom > ly * s + lh * s ? bottom : ly * s + lh * s;   /* never less than the frame itself */
+    int fx = lx * s, fy = ly * s, fw = lw * s, fh = lh * s;
+    if (!ring_only) wall_fill(x0, y0, x1 - x0, y1 - y0);
+    else {   /* a window being dragged keeps its frame: only the ring goes */
+        if (fy > y0) wall_fill(x0, y0, x1 - x0, fy - y0);
+        if (y1 > fy + fh) wall_fill(x0, fy + fh, x1 - x0, y1 - fy - fh);
+        if (fx > x0) wall_fill(x0, fy, fx - x0, fh);
+        if (x1 > fx + fw) wall_fill(fx + fw, fy, x1 - fx - fw, fh);
+    }
+    fb_flush(x0, y0, x1 - x0, y1 - y0);
+    if (text_ok && y1 > (gui_dock_band_top() - 40) * s) { tribute_paint(); fb_flush(0, (gui_dock_band_top() - 40) * s, (int)fb_w, 40 * s); }   /* the ring may have cut into the line over the dock */
+}
 static void console_close(void) {
     if (!con_live || !fb) return;
-    int s = (int)window_scale(), x = win_lx * s, y = win_ly * s, w = win_lw * s, h = win_lh * s;
     cur_hide();
-    wall_fill(x, y, w, h);
-    fb_flush(x, y, w, h);
+    wall_vacate(win_lx, win_ly, win_lw, win_lh, 0);
     con_live = 0;
     uart_puts(cp == &term_p ? "terminal closed\n" : "console closed\n");
     cur_show();
-    if (calc_live) calc_raise();   /* the wallpaper just went back over the part of it the window covered */
-    if (app_wbytes) app_raise();   /* the same for an app's window */
+    if (calc_live) { wall_vacate(calc_lx, calc_ly, calc_lw, calc_lh, 0); calc_raise(); }   /* the wallpaper just went back over the part of it the window covered; the window behind is wiped whole and drawn again, so its anti-aliased edge is not blended over its own old one */
+    if (app_wbytes) { wall_vacate(app_lx, app_ly, app_lw, app_lh, 0); app_raise(); }   /* the same for an app's window */
 }
 void ask_redraw(void);   /* ask.c: the line being typed, back on the ask> row */
 static void pane_draw(void) {   /* the frame, the well and the newest lines of cp, in the rectangle as it is now; the caller hides the arrow */
@@ -1690,7 +1739,6 @@ int calc_type(int ch);
 const char *calc_input(void);
 const char *calc_output(void);
 int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
-static int calc_lx, calc_ly, calc_lw, calc_lh;   /* its frame on the logical grid, set in fb_init */
 static int clock_live, brick_live, spot_live, browser_live, settings_live;
 static void set_paint(void);
 static void settings_open(int sec);
@@ -1764,13 +1812,11 @@ static void calc_open(void) {
 }
 static void calc_close(void) {
     if (!calc_live) return;
-    int s = (int)window_scale(), x = calc_lx * s, y = calc_ly * s, w = calc_lw * s, h = calc_lh * s;
     cur_hide();
-    wall_fill(x, y, w, h);
-    fb_flush(x, y, w, h);
+    wall_vacate(calc_lx, calc_ly, calc_lw, calc_lh, 0);
     calc_live = calc_front = 0;
     uart_puts("calc closed\n");
-    if (con_live) { con_live = 0; pane_open(cp); }   /* the wallpaper went over its corner too: draw it whole, in front */
+    if (con_live) { wall_vacate(win_lx, win_ly, win_lw, win_lh, 0); con_live = 0; pane_open(cp); }   /* the wallpaper went over its corner too: draw it whole, in front, on fresh wallpaper */
     cur_show();
 }
 static void calc_did(int ran) {   /* after a key: redraw, and log a finished sum on the UART (what arm64-calc-check.py reads) */
@@ -1934,10 +1980,8 @@ static long app_window_poll(unsigned long ev, unsigned long flags) {
 }
 static void app_window_close(void) {
     if (!app_wbytes) return;
-    int s = (int)window_scale(), x = app_lx * s, y = app_ly * s, w = app_lw * s, h = app_lh * s;
     cur_hide();
-    wall_fill(x, y, w, h);
-    fb_flush(x, y, w, h);
+    wall_vacate(app_lx, app_ly, app_lw, app_lh, 0);   /* the frame and a ring round it: anything that overhung the frame goes too */
     app_shown = 0;
     unsigned gone = ap->slot;
     app_z_drop(gone);
@@ -1945,7 +1989,7 @@ static void app_window_close(void) {
     ap = &apps[app_top >= 0 ? app_top : gone];
     app_front = app_top >= 0;
     if (app_front) app_repaint_all();   /* the other apps' windows the closed one covered or was covered by */
-    else if (con_live) { con_live = 0; pane_open(cp); }   /* the wallpaper went over its part of the Console too: draw it whole */
+    else if (con_live) { wall_vacate(win_lx, win_ly, win_lw, win_lh, 0); con_live = 0; pane_open(cp); }   /* the wallpaper went over its part of the Console too: draw it whole */
     cur_show();
 }
 /* A dock tile whose name is an app in the table (Calendar, and any later one): start it, or bring its window up. */
@@ -2043,6 +2087,7 @@ static void win_set(int t, int nx, int ny, int nw, int nh) {   /* the one place 
     int resized = nw != *pw_ || nh != *ph_;
     cur_hide();
     if (t == WT_MAIN && !resized) {
+        wall_vacate(*px_, *py_, *pw_, *ph_, 1);   /* what overhangs the frame stays behind otherwise */
         for (int j = 0; j < h; j++) {   /* a memmove by rows: the far rows first when moving down, the far columns first when moving right */
             int r = dy > 0 ? h - 1 - j : j;
             unsigned *src = fb + (unsigned)(oy + r) * fb_pitch + (unsigned)ox, *dst = fb + (unsigned)(py + r) * fb_pitch + (unsigned)px;

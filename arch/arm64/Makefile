@@ -289,6 +289,8 @@ hovertest: hover-kernel8.elf hover-kernel8.img
 cursortest: cursor-kernel8.elf cursor-kernel8.img
 dragtest: drag-kernel8.elf drag-kernel8.img
 keydbgtest: keydbg-kernel8.elf
+$(eval $(call variant,glitch,-DFB_BOOT_W=1920 -DFB_BOOT_H=1080 -DHEAP_SIZE=40UL*1024*1024,,))
+glitchtest: glitch-kernel8.elf
 $(eval $(call variant,calc,-DCALC_TEST,,))
 calctest: calc-kernel8.elf
 CAL_UTC ?= 1775000000
@@ -312,7 +314,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest reminderstest
+.PHONY: glitchtest brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest reminderstest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
