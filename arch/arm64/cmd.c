@@ -30,9 +30,10 @@ void menubar_notify(const char *message);                          /* main.c: th
 void (*cmd_out)(const char *s) = kputs;
 void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (char)('0' + v % 10); while (v /= 10); cmd_out(t + n); }
 
+void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
-                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), sam QUESTION (ask Samantha), help.";
+                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;
@@ -135,6 +136,11 @@ static void userrun_command(const char *name, unsigned n) {
     else if (faulted) cmd_out(": stopped by a fault, the kernel carried on\n");
     else { cmd_out(": exit "); cmd_dec((unsigned)status); cmd_out("\n"); }
 }
+static int word_is(const char *q, unsigned n, const char *w) {   /* the whole line is the word w */
+    unsigned k = 0;
+    for (; w[k]; k++) if (k >= n || q[k] != w[k]) return 0;
+    return k == n;
+}
 static int is(const char *q, unsigned n, const char *w) {   /* the line starts with the word w and a space */
     unsigned k = 0;
     for (; w[k]; k++) if (k >= n || q[k] != w[k]) return 0;
@@ -204,6 +210,8 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     }
     if (is(q, n, "rm")) { jt_command(q + 3, n - 3, 1); return; }
     if (is(q, n, "mkdir")) { jt_command(q + 6, n - 6, 2); return; }
+    if (word_is(q, n, "reboot") || word_is(q, n, "restart")) { power_run(0); return; }     /* typing it is the confirmation the chord asks for */
+    if (word_is(q, n, "shutdown") || word_is(q, n, "poweroff")) { power_run(1); return; }
     if (bt_command(q, n)) return;
     if (beep_command(q, n)) return;
     if (vol_command(q, n)) return;

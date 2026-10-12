@@ -1803,6 +1803,11 @@ static int spot_key(unsigned code) {   /* a key down with the bar open: every ke
 static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hover(slot); }
 #ifdef PI_BUILD
 #include "power.h"
+void power_run(int off) {   /* the reboot and shutdown commands: the same action the confirmed chord runs, refused while Samantha answers */
+    if (ask_pending()) power_message("Wait for Samantha to finish, then try again.\n"); else power_apply(off);
+}
+#else
+void power_run(int off) { uart_puts(off ? "power: shutdown (this build has no power control)\n" : "power: restart (this build has no power control)\n"); }   /* the virt test build: only the Pi has a watchdog to pull */
 #endif
 int volume_key(unsigned code);   /* cmd.c: F11 and F12, Volume Down, Up and Mute */
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */

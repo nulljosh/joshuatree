@@ -200,7 +200,7 @@ For the technical map and checks, see [Architecture](ARCHITECTURE.md),
 ## Restart or shut down the Pi
 
 The 2.36.0 development build adds keyboard power controls. Press
-Ctrl+Alt+Delete to restart, or Ctrl+Alt+End to shut down. On a Mac keyboard,
+Type `reboot` or `shutdown` in Terminal, or press Ctrl+Alt+Delete to restart, or Ctrl+Alt+End to shut down. On a Mac keyboard,
 Alt is Option and End may require Fn+Right. Terminal asks for confirmation:
 Enter proceeds, Escape cancels. Ordinary letters do not confirm. Wait for
 Samantha to finish an active request first.

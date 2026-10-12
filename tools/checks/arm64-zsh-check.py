@@ -149,6 +149,8 @@ try:
         b.run("sam again")
         check("a new sam works once she has answered", b.wait_for("samantha: thinking", 10, 2), b.uart()[-300:])
         check("the token never appears on the UART", TOKEN not in b.uart())
+        b.run("reboot")
+        check("reboot is a command: it restarts the board", b.wait_for("power: restart", 10), b.uart()[-300:])
     finally:
         b.close()
 finally:
@@ -158,4 +160,4 @@ finally:
 if fails:
     print("FAIL: %d of the zsh shell checks failed" % len(fails)); sys.exit(1)
 print("PASS: the Terminal prompt is joshua@tree %, an unknown word is command not found, and sam QUESTION returns to the prompt at once: "
-      "a command typed while she thinks runs, a second sam says still thinking, and her delayed answer prints as sam: above the prompt")
+      "a command typed while she thinks runs, a second sam says still thinking, her delayed answer prints as sam: above the prompt, and reboot restarts the board")
