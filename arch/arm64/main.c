@@ -864,7 +864,7 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
 #define LOG_MAX 16384
 #define CON_FG 0x00202020
 #define CON_BG 0x00ffffff
-int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);   /* arch/arm64/wall.c: the Satellite photo scaled onto the screen */
+int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);   /* arch/arm64/wall.c: the flat Navy wallpaper */
 #define MENUBAR_H 26             /* docs/DESIGN.md: GUI_MENUBAR_H, on the 960x540 grid */
 #define MENUBAR_RULE 0x00BDB8B0  /* docs/DESIGN.md: MENUBAR_RULE */
 int text_init(void);   /* arch/arm64/text.c: the DejaVu faces through drivers/ttf.c */
@@ -2038,7 +2038,7 @@ static void fb_init(void) {
         fb_flush(0, 0, W, H);
     }
     int wall_ok = wall_paint(fb, fb_pitch, W, H, fb_swap);
-    if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* the Satellite photo; flat only if it will not decode */
+    if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* Navy (clrs.cc), see wall.c; this fallback is now unreachable */
     for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {   /* menu bar: half wallpaper, half white, per pixel */
         unsigned c = fb[(unsigned)y * fb_pitch + (unsigned)x];
         fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
