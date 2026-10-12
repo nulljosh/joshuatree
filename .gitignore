@@ -58,7 +58,10 @@ arch/arm64/kernel8.img
 arch/arm64/pi-kernel8.elf
 arch/arm64/kernel8.elf
 arch/arm64/keydbg-kernel8.elf
+arch/arm64/uapp_*.bin
 arch/arm64/wifi_fw.S
+arch/arm64/bt_fw.S
+arch/arm64/bt_fw.S.tmp
 # Wi-Fi credentials never enter the repo; the build reads ~/.config/joshuatree/wifi.conf
 arch/arm64/wifi.conf
 build/wifi-fw/
@@ -79,3 +82,6 @@ arch/arm64/restart-pi-kernel8.elf
 
 # Menu notice test build
 arch/arm64/notice-kernel8.elf
+arch/arm64/audio-kernel8.elf
+arch/arm64/audio-pi-kernel8.elf
+arch/arm64/audio-kernel8.img

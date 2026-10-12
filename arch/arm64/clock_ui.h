@@ -32,7 +32,7 @@ static void clock_paint(void) {
 }
 static void clock_open(void) {
     if (clock_live || !con_under) return;
-    brick_close(); calc_close(); console_close(); clock_live = 1;
+    brick_close(); calc_close(); app_kill("closed for the Clock"); console_close(); clock_live = 1;
     clock_paint(); uart_puts("clock open\n");
 }
 static void clock_close(void) {

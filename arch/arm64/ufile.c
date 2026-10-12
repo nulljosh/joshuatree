@@ -1,0 +1,270 @@
+/* M3d: the file calls of user/jtsys.h for the one EL0 app, with the i386 semantics docs/SYSCALL-ABI.md gives them (the
+   same errnos, the 8 KB open() limit, 255 bytes a read or write, five descriptors, 3 to 7). They run over drivers/fat.c on
+   the partition emmc.c mounted: the Pi's SD card, or the virtio disk on QEMU's virt machine. An app's paths are relative
+   to the card's JT/ folder, its root: Notes asks for "NOTES/NOTES/N0000001.TXT" and gets JT/NOTES/NOTES/N0000001.TXT. No
+   leading slash, no "." or ".." parts, at most 63 bytes and 8 parts, so nothing outside JT/ is reachable, the boot files
+   least of all. Every user pointer goes through main.c's span checks before a byte moves, one byte at a time for a path.
+
+   A descriptor is a whole-file buffer, as on i386: open loads the file (8192 bytes at most, a bigger one is -EINVAL), read
+   and write work on the buffer at the descriptor's offset, and close writes it back with fat_replace_file and reads it
+   back to compare (-EIO when they differ). The kernel's heap never frees, so the five buffers are static. An app that
+   exits or faults has its descriptors closed for it, the flush included (main.c app_end).
+
+   fat.c has one current directory for the whole kernel. A call walks from the root into JT/ and down the path, then puts
+   the cursor back where it found it (fat_cwd_set), so the Terminal's ls and cat still start at the root. That is only
+   safe because one EL0 app runs at a time and is only ever parked at a yield, never inside a call: two apps, or an app
+   preempted mid-call, would need fat.c's state per caller first. */
+#include "emmc.h"
+#include "../../drivers/fat.h"
+
+int user_in_range(unsigned long a, unsigned long n);   /* main.c: memory the app may have the kernel read */
+int user_writable(unsigned long a, unsigned long n);   /* main.c: memory the kernel may store into for it (never code) */
+
+#define EIO     5
+#define EBADF   9
+#define EAGAIN 11
+#define EFAULT 14
+#define EINVAL 22
+#define EISDIR 21
+#define EMFILE 24
+#define EFBIG  27
+#define ENOSPC 28
+#define ESPIPE 29
+#define ENOENT  2
+#define ENOSYS 38
+#define O_ACCMODE 0x003
+#define O_WRONLY  0x001
+#define O_CREAT   0x040
+#define O_TRUNC   0x200
+#define O_APPEND  0x400
+#define IO_MAX 255                 /* bytes a read or write moves per call */
+#define OPEN_MAX_FILE 8192
+#define PATH_MAX 63                /* bytes of path, the NUL not counted */
+#define PATH_DEPTH 8
+#define FIRST_FD 3
+#define NFDS 5                     /* 3 to 7 */
+#define READDIR_MAX 64
+#define DIRENT_NAME 32             /* struct jt_dirent { char name[32]; unsigned size, is_dir; }: 40 bytes, no pointers, the same on LP64 */
+#define READFILE_CAP_MAX (6u << 20)
+
+struct ufd { int used, dirty; unsigned size, pos, flags; char name[PATH_MAX + 1]; char data[OPEN_MAX_FILE + 1]; };
+static struct ufd fds[NFDS];
+static char back[OPEN_MAX_FILE + 1];   /* close's read-back */
+
+static long copy_path(unsigned long a, char *out) {   /* -EFAULT off the app's memory, -EINVAL with no NUL in 64 bytes */
+    for (unsigned i = 0; i <= PATH_MAX; i++) {
+        if (!user_in_range(a + i, 1)) return -EFAULT;
+        out[i] = ((const char *)a)[i];
+        if (!out[i]) return 0;
+    }
+    return -EINVAL;
+}
+static unsigned saved_cwd;
+static void path_leave(void) { fat_cwd_set(saved_cwd); }
+/* Split `path` in place and stand in the folder that holds its last `keep` parts (1: a file or folder to open, make or
+   remove; 0: a folder to list), starting from JT/ (made first when `make`). *leaf is what is left. On an error nothing has
+   moved. */
+static long path_enter(char *path, int keep, char **leaf, int make) {
+    char *comp[PATH_DEPTH + 1];
+    int n = 0;
+    *leaf = path;
+    if (path[0] == '/') return -EINVAL;
+    if (path[0]) {
+        for (char *p = path;;) {
+            if (n > PATH_DEPTH) return -EINVAL;
+            comp[n++] = p;
+            char *q = p;
+            while (*q && *q != '/') q++;
+            long len = q - p;
+            if (len == 0 || (len == 1 && p[0] == '.') || (len == 2 && p[0] == '.' && p[1] == '.')) return -EINVAL;
+            if (!*q) break;
+            *q = 0;
+            p = q + 1;
+        }
+    }
+    if (n < keep || n - keep > PATH_DEPTH) return -EINVAL;
+    if (!sd_ready()) return -ENOENT;   /* no card: nothing is there */
+    saved_cwd = fat_cwd_get();
+    fat_cwd_set(0);
+    if (!sd_enter_jt(make)) { path_leave(); return -ENOENT; }
+    for (int i = 0; i < n - keep; i++) if (!fat_chdir(comp[i])) { path_leave(); return -ENOENT; }
+    *leaf = n ? comp[n - 1] : path;
+    return 0;
+}
+static struct ufd *fd_of(unsigned long fd) { return fd >= FIRST_FD && fd < FIRST_FD + NFDS && fds[fd - FIRST_FD].used ? &fds[fd - FIRST_FD] : 0; }
+
+static long u_open(unsigned long upath, unsigned long flags) {
+    if (flags & ~(unsigned long)(O_ACCMODE | O_CREAT | O_TRUNC | O_APPEND)) return -EINVAL;
+    unsigned acc = (unsigned)(flags & O_ACCMODE);
+    if (acc == O_ACCMODE) return -EINVAL;
+    if (!acc && (flags & (O_CREAT | O_TRUNC | O_APPEND))) return -EINVAL;   /* nothing is written back from a read-only fd */
+    char name[PATH_MAX + 1], walk[PATH_MAX + 1], *leaf;
+    long err = copy_path(upath, name);
+    if (err) return err;
+    int slot = -1;
+    for (int i = 0; i < NFDS; i++) if (!fds[i].used) { slot = i; break; }
+    if (slot < 0) return -EMFILE;
+    struct ufd *f = &fds[slot];
+    for (int i = 0; i <= PATH_MAX; i++) { walk[i] = name[i]; if (!name[i]) break; }
+    if ((err = path_enter(walk, 1, &leaf, (flags & O_CREAT) != 0))) return err;
+    int n = fat_read_file(leaf, f->data, OPEN_MAX_FILE + 1);
+    if (n > OPEN_MAX_FILE) { path_leave(); return -EINVAL; }   /* bigger than one open holds: refused, never cut */
+    int exists = n > 0;                                        /* empty and missing read the same, as on i386 */
+    if (!exists && !(flags & O_CREAT)) { path_leave(); return -ENOENT; }
+    if ((!exists || (flags & O_TRUNC)) && !fat_replace_file(leaf, "", 0)) { path_leave(); return -ENOSPC; }   /* O_CREAT and O_TRUNC land now */
+    path_leave();
+    f->used = 1; f->dirty = 0; f->flags = (unsigned)flags;
+    f->size = exists && !(flags & O_TRUNC) ? (unsigned)n : 0;
+    f->pos = flags & O_APPEND ? f->size : 0;
+    for (int i = 0; i <= PATH_MAX; i++) { f->name[i] = name[i]; if (!name[i]) break; }
+    return FIRST_FD + slot;
+}
+static long u_read(unsigned long fd, unsigned long buf, unsigned long len) {
+    if (len > IO_MAX) len = IO_MAX;
+    if (!len) return 0;
+    if (!user_writable(buf, len)) return -EFAULT;   /* the buffer before the descriptor, as i386 */
+    if (fd == 0) return -EAGAIN;                    /* no keyboard stream on ARM: nothing is ever queued */
+    struct ufd *f = fd_of(fd);
+    if (!f || (f->flags & O_ACCMODE) == O_WRONLY) return -EBADF;
+    unsigned n = f->size - f->pos < len ? f->size - f->pos : (unsigned)len;
+    for (unsigned i = 0; i < n; i++) ((char *)buf)[i] = f->data[f->pos + i];
+    f->pos += n;
+    return n;
+}
+static long u_write(unsigned long fd, unsigned long buf, unsigned long len) {
+    if (len > IO_MAX) len = IO_MAX;
+    struct ufd *f = fd_of(fd);
+    if (!f || !(f->flags & O_ACCMODE)) return -EBADF;
+    if (f->flags & O_APPEND) f->pos = f->size;
+    if (!len) return 0;
+    if (f->pos + len > OPEN_MAX_FILE) return -EFBIG;   /* nothing written, never a short write */
+    if (!user_in_range(buf, len)) return -EFAULT;
+    for (unsigned i = 0; i < len; i++) f->data[f->pos + i] = ((const char *)buf)[i];
+    f->pos += (unsigned)len;
+    if (f->pos > f->size) f->size = f->pos;
+    f->dirty = 1;
+    return (long)len;
+}
+static long u_lseek(unsigned long fd, int off, unsigned long whence) {
+    if (fd < FIRST_FD) return -ESPIPE;   /* 0, 1 and 2 are streams */
+    struct ufd *f = fd_of(fd);
+    if (!f) return -EBADF;
+    long base = whence == 0 ? 0 : whence == 1 ? (long)f->pos : whence == 2 ? (long)f->size : -1;
+    if (base < 0) return -EINVAL;
+    long np = base + off;
+    if (np < 0 || np > (long)f->size) return -EINVAL;   /* past the end would be a hole of bytes nobody wrote */
+    f->pos = (unsigned)np;
+    return np;
+}
+static long flush(struct ufd *f) {   /* the buffer back to the card, then read back and compared */
+    if (!f->dirty) return 0;
+    char walk[PATH_MAX + 1], *leaf;
+    for (int i = 0; i <= PATH_MAX; i++) { walk[i] = f->name[i]; if (!f->name[i]) break; }
+    if (path_enter(walk, 1, &leaf, 0)) return -EIO;   /* its folder went away since open */
+    int ok = fat_replace_file(leaf, f->data, f->size), n = ok ? fat_read_file(leaf, back, sizeof back) : -1;
+    path_leave();
+    if (n < 0 || (unsigned)n != f->size) return -EIO;
+    for (unsigned i = 0; i < f->size; i++) if (back[i] != f->data[i]) return -EIO;
+    f->dirty = 0;
+    return 0;
+}
+static long u_close(unsigned long fd) {   /* the descriptor goes even when the flush fails */
+    struct ufd *f = fd_of(fd);
+    if (!f) return -EBADF;
+    long err = flush(f);
+    f->used = 0;
+    return err;
+}
+static unsigned char stage[READDIR_MAX][DIRENT_NAME + 8];
+static unsigned dir_total;
+static void collect(const char *name, unsigned size, int is_dir) {
+    unsigned i = dir_total++, k = 0;
+    if (i >= READDIR_MAX) return;   /* counted, not stored: the answer says the listing was cut */
+    unsigned char *d = stage[i];
+    for (; name[k] && k < DIRENT_NAME - 1; k++) d[k] = (unsigned char)name[k];
+    for (; k < DIRENT_NAME; k++) d[k] = 0;
+    if (is_dir) size = 0;
+    for (int b = 0; b < 4; b++) { d[DIRENT_NAME + b] = (unsigned char)(size >> 8 * b); d[DIRENT_NAME + 4 + b] = b ? 0 : is_dir != 0; }
+}
+static long u_readdir(unsigned long upath, unsigned long out, unsigned long max) {
+    char walk[PATH_MAX + 1], *leaf;
+    long err = copy_path(upath, walk);
+    if (err) return err;
+    if (max > READDIR_MAX) max = READDIR_MAX;
+    if (max && !user_writable(out, max * (DIRENT_NAME + 8))) return -EFAULT;   /* the whole array, before anything runs */
+    if (walk[0] == '.' && !walk[1]) walk[0] = 0;
+    if ((err = path_enter(walk, 0, &leaf, 0))) return err;
+    dir_total = 0;
+    fat_list(collect);
+    path_leave();
+    unsigned n = dir_total < max ? dir_total : (unsigned)max;
+    for (unsigned i = 0; i < n; i++) for (unsigned b = 0; b < DIRENT_NAME + 8; b++) ((unsigned char *)out)[i * (DIRENT_NAME + 8) + b] = stage[i][b];
+    return dir_total;
+}
+static long u_mkdir(unsigned long upath) {
+    char walk[PATH_MAX + 1], *leaf;
+    long err = copy_path(upath, walk);
+    if (err) return err;
+    if ((err = path_enter(walk, 1, &leaf, 1))) return err;
+    int ok = fat_mkdir(leaf);
+    path_leave();
+    return ok ? 0 : -ENOSPC;   /* a taken name, a full card or a full folder: fat.c answers only yes or no */
+}
+static long u_unlink(unsigned long upath) {
+    char walk[PATH_MAX + 1], *leaf;
+    long err = copy_path(upath, walk);
+    if (err) return err;
+    if ((err = path_enter(walk, 1, &leaf, 0))) return err;
+    if (fat_chdir(leaf)) { path_leave(); return -EISDIR; }   /* a folder: never removed through unlink */
+    int ok = fat_delete(leaf);
+    path_leave();
+    return ok ? 0 : -ENOENT;
+}
+static long u_readfile(unsigned long upath, unsigned long buf, unsigned long cap) {
+    if (!cap || cap > READFILE_CAP_MAX) return -EINVAL;
+    char walk[PATH_MAX + 1], *leaf;
+    long err = copy_path(upath, walk);
+    if (err) return err;
+    if (!user_writable(buf, cap)) return -EFAULT;
+    if ((err = path_enter(walk, 1, &leaf, 0))) return err;
+    int n = fat_read_file(leaf, (void *)buf, (unsigned)cap);
+    path_leave();
+    return n > 0 ? n : -ENOENT;
+}
+
+/* main.c's exc_el0_sync: the file calls, by user/jtsys.h's numbers; -ENOSYS for anything else. */
+long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned long a2) {
+    switch (n) {
+    case 3:   return u_read(a0, a1, a2);
+    case 4:   return u_write(a0, a1, a2);
+    case 5:   return u_open(a0, a1);
+    case 6:   return u_close(a0);
+    case 19:  return u_lseek(a0, (int)a1, a2);
+    case 388: return u_readdir(a0, a1, a2);
+    case 389: return u_mkdir(a0);
+    case 390: return u_unlink(a0);
+    case 401: return u_readfile(a0, a1, a2);
+    }
+    return -ENOSYS;
+}
+/* An app ended (exit, fault or its red dot): every descriptor it left open is closed, written back first. */
+void ufile_release(void) {
+    for (int i = 0; i < NFDS; i++) if (fds[i].used) u_close(FIRST_FD + (unsigned long)i);
+}
+/* Folders an app expects before it runs, made inside JT/ (JT/ too) when missing: Notes gets NOTES/NOTES, its default
+   folder, as i386's notes_check_support makes it. Without NOTES/ it would fall back to loose files in its root. */
+void ufile_mkdirs(const char *path) {
+    char walk[PATH_MAX + 1], *leaf;
+    unsigned i = 0;
+    for (; path[i] && i < PATH_MAX; i++) walk[i] = path[i];
+    walk[i] = 0;
+    if (path_enter(walk, 0, &leaf, 1) == 0) { path_leave(); return; }   /* all there already */
+    for (unsigned k = 0; k <= i; k++) {   /* one more part at a time */
+        if (path[k] != '/' && path[k]) continue;
+        for (unsigned j = 0; j < k; j++) walk[j] = path[j];
+        walk[k] = 0;
+        if (path_enter(walk, 1, &leaf, 1)) return;
+        fat_mkdir(leaf);   /* fails harmlessly when it is there */
+        path_leave();
+    }
+}

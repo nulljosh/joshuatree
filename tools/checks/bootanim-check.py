@@ -9,6 +9,10 @@ partial amounts (a first stroke well under half the finished tree), and ends at
 the full mark with the progress bar filled. A splash that pops in whole gives one
 count; one that flickers gives a count that shrinks.
 
+3.0: the ground is terracotta and the pen draws it last. Each frame also counts
+the terracotta pixels in the box: the finished splash must have a ground, and it
+must not start until the white tree is nearly done.
+
 Usage: tools/checks/bootanim-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
@@ -50,19 +54,22 @@ try:
     end = time.time() + 12
     while time.time() < end:
         cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
-        g = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("L")
+        rgb = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
+        g = rgb.convert("L")
         top = g.crop((0, 0, W, 20)).resize((1, 1), Image.BOX).getpixel((0, 0))
         if top > 30 and samples: break               # the desktop's menu bar is up: the splash is over
         ink = sum(1 for v in g.crop(BOX).getdata() if v > 128)
         bar = sum(1 for v in g.crop(BAR).getdata() if v > 200)
-        if top < 30: samples.append((ink, bar))
+        terra = sum(1 for r, gg, b in rgb.crop(BOX).getdata() if r > gg + 40 and r > b + 60)
+        if top < 30: samples.append((ink, bar, terra))
     try: cmd({"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, OSError): pass
 finally:
     try: q.wait(timeout=5)
     except subprocess.TimeoutExpired: q.kill()
 
-inks = [i for i, _ in samples]
+inks = [i for i, _, _ in samples]
+terras = [t for _, _, t in samples]
 final = max(inks, default=0)
 stages = sorted({round(i * 8 / final) for i in inks if i}) if final else []
 print(f"{len(samples)} splash frames, ink {inks[:3]}..{inks[-3:]}, final {final}, stages(of 8) {stages}")
@@ -75,8 +82,18 @@ else:
         fail = 1; print(f"FAIL: first visible frame already shows {first / final:.0%} of the tree, not a draw-on")
     if len(stages) < 4:
         fail = 1; print(f"FAIL: only {len(stages)} distinct stages seen, the tree is not growing")
-    if any(b < a - final * 0.02 for a, b in zip(inks, inks[1:])):
+    grow = inks[:inks.index(final) + 1]   # only the draw-on: after the full tree the desktop paints over it (a slow
+                                          # runner catches one such frame before the menu bar shows, 1948 then 199)
+    if any(b < a - final * 0.02 for a, b in zip(grow, grow[1:])):
         fail = 1; print("FAIL: ink shrank between frames, the splash is flickering")
+    ground = max(terras, default=0)
+    start = next((k for k, t in enumerate(terras) if t > 10), None)
+    print(f"terracotta ground: {ground} px at the end, first seen with the tree {inks[start] / final:.0%} drawn"
+          if start is not None else "terracotta ground: none")
+    if ground < 150:
+        fail = 1; print("FAIL: the splash has no terracotta ground")
+    elif inks[start] < final * 0.9:
+        fail = 1; print("FAIL: the ground starts before the tree is nearly drawn; the pen should draw it last")
 if not fail:
-    print("PASS: the boot splash draws the tree on")
+    print("PASS: the boot splash draws the tree on, its terracotta ground last")
 sys.exit(fail)
