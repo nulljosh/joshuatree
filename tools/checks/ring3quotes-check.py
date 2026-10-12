@@ -116,7 +116,8 @@ try:
     def option_pixel(slot, img=None):
         # Mid-row, well inside the option box (user/quotes.c QS_OPT_Y0/QS_OPT_H).
         y = QS_OPT_Y0 + slot * 34 + 10
-        return pixel(VIEW_X + 30, VIEW_Y + y, img)
+        # x=24: the padding between the box edge (20) and the slot label (30); Tree Sans digits reach x=30 (2.65.0)
+        return pixel(VIEW_X + 24, VIEW_Y + y, img)
 
     # 1. the program is up and has its window
     if not wait_serial("ring3app: launching QUOTES.BIN at ring 3", 40):

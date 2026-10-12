@@ -49,7 +49,7 @@ VISIBLE_ROWS = (345 - LIST_TOP - 40) // ITEM_H   # 10: the window is 804x345
 SEL_COLOR = (0xE2, 0xD8, 0xCC)
 OPT_COLOR = (0xF1, 0xED, 0xE7)
 RIGHT_COLOR = (0xCF, 0xE8, 0xD2)
-OPT_Y0, OPT_H = 124, 34
+OPT_Y0, OPT_H = 124, 34   # samples use x=24, the padding left of the slot label: Tree Sans digits reach x=30 (2.65.0)
 
 NODE = r"""
 import fs from 'node:fs';
@@ -248,7 +248,7 @@ def run(name):
                 if verdict == "right": score += 1
                 if i == 0:
                     img = frame()
-                    if not near(pix(30, OPT_Y0 + ans * OPT_H + 8, img), RIGHT_COLOR): bad(f"the right answer did not turn green: {pix(30, OPT_Y0 + ans * OPT_H + 8, img)}")
+                    if not near(pix(24, OPT_Y0 + ans * OPT_H + 8, img), RIGHT_COLOR): bad(f"the right answer did not turn green: {pix(24, OPT_Y0 + ans * OPT_H + 8, img)}")
                 key("a")   # any key: next
             if not wait(f"tonchi: done {score}", 8): bad(f"the score screen did not say 'done {score}'")
             n_courses = count("tonchi: courses ")
@@ -305,7 +305,7 @@ def run(name):
             if name != "offline" and "/api/lexly" not in current["paths"]: bad("the guest never asked the stub for /api/lexly")
             if any(p.startswith("/api/lexly?c=") for p in current["paths"]): bad("the guest asked for a course although the list was unusable")
             img = frame()
-            if not near(pix(30, OPT_Y0 + 10, img), OPT_COLOR): bad(f"the Spanish option row is not drawn: {pix(30, OPT_Y0 + 10, img)}")
+            if not near(pix(24, OPT_Y0 + 10, img), OPT_COLOR): bad(f"the Spanish option row is not drawn: {pix(24, OPT_Y0 + 10, img)}")
             key("1")
             if not wait("tonchi: pick 1 right", 5): bad("the Spanish deck no longer scores round 0 slot 1 as right")
             closes()

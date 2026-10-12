@@ -9,9 +9,8 @@ partial amounts (a first stroke well under half the finished tree), and ends at
 the full mark with the progress bar filled. A splash that pops in whole gives one
 count; one that flickers gives a count that shrinks.
 
-3.0: the ground is terracotta and the pen draws it last. Each frame also counts
-the terracotta pixels in the box: the finished splash must have a ground, and it
-must not start until the white tree is nearly done.
+2.65.0: the mark is flat ink (MARK_GROUND 0x001C1C1E), no terracotta ground. Each
+frame also counts terracotta pixels in the box: the splash must show none.
 
 Usage: tools/checks/bootanim-check.py   (from the repo root, after make kernel.elf)
 """
@@ -86,14 +85,10 @@ else:
                                           # runner catches one such frame before the menu bar shows, 1948 then 199)
     if any(b < a - final * 0.02 for a, b in zip(grow, grow[1:])):
         fail = 1; print("FAIL: ink shrank between frames, the splash is flickering")
-    ground = max(terras, default=0)
-    start = next((k for k, t in enumerate(terras) if t > 10), None)
-    print(f"terracotta ground: {ground} px at the end, first seen with the tree {inks[start] / final:.0%} drawn"
-          if start is not None else "terracotta ground: none")
-    if ground < 150:
-        fail = 1; print("FAIL: the splash has no terracotta ground")
-    elif inks[start] < final * 0.9:
-        fail = 1; print("FAIL: the ground starts before the tree is nearly drawn; the pen should draw it last")
+    terra = max(terras, default=0)
+    print(f"terracotta px {terra} across the splash")
+    if terra > 10:
+        fail = 1; print("FAIL: the splash still draws a terracotta ground; the mark is flat ink now")
 if not fail:
-    print("PASS: the boot splash draws the tree on, its terracotta ground last")
+    print("PASS: the boot splash draws the tree on, on flat ink with no terracotta")
 sys.exit(fail)

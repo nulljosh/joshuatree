@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Renders 'A' and 'g' from tools/fonts/DejaVuSans.ttf with PIL at a given
+"""Renders 'A' and 'g' from tools/fonts/TreeSans-Regular-subset.ttf with PIL at a given
 pixel size and compares against the PGM coverage bitmaps dumped by the
 compiled tools/ttf-host/main.c harness (drivers/ttf.c, the kernel's own
 rasterizer code, built for the host). Prints max/mean per-pixel coverage
@@ -8,7 +8,7 @@ diff and exits nonzero if it's outside tolerance.
 import sys
 from PIL import Image, ImageFont
 
-TOL_MAX = 200  # generous: stb and freetype antialias edges differently
+TOL_MAX = 230  # generous: stb and freetype antialias edges differently; 2.65.0 Tree Sans (Inter curves) peaks at 219 on one edge pixel at 48/200px while the mean stays under 5 at 200px
 TOL_MEAN = 60  # the embedded font is unhinted (fontTools --no-hinting), so
                 # small sizes move further from PIL's hinted rendering; a
                 # 1px rounding shift also moves the mean a lot on few pixels

@@ -13,7 +13,7 @@ keydbg-kernel8.elf (make keydbgtest: the dev card's debug line, plus made-up rep
      QEMU's usb-kbd has no media interface, so the walk that opens one on a real board is not covered here.
   5. a plain letter on the bare desktop opens Spotlight with it typed ("spotlight: j"); Esc closes it; Esc again does nothing.
 kernel8.elf (release): Cmd+Space works too; a held j repeats (8 to 14 times in 1.3 s, none after the release, a tap gives one) and Caps Lock
-makes Caps, j, t type "JT" with Shift+j giving "j", all over USB, where the keyboard sends one report per change; and pi-main.o has the line only with JT_WIFI_DEV=1, and there is no debug line: no "keydbg:" on the UART or in the image.
+makes Caps, j, t type "JT" with Shift+j giving "j", all over USB, where the keyboard sends one report per change; and pi-main.o has the line only with JT_KEY_DEBUG=1 (not JT_WIFI_DEV=1 since 2.65.0), and there is no debug line: no "keydbg:" on the UART or in the image.
 Skips (exit 0) when the tools are missing. QEMU runs headless and every step has a timeout.
 """
 import json, os, re, shutil, socket, subprocess, sys, tempfile, time
@@ -117,14 +117,15 @@ boot("keydbg-kernel8.elf", dev)
 boot("kernel8.elf", release)
 step("the release image carries no debug line", b"keydbg: " not in open(os.path.join(arch, "kernel8.elf"), "rb").read())
 step("the dev image does", b"keydbg: " in open(os.path.join(arch, "keydbg-kernel8.elf"), "rb").read())
-# The Pi's switch: pi-main.o has the line only with JT_WIFI_DEV=1 (tools/flash-pi.sh); -B both ways, then a plain rebuild
+# The Pi's switch: pi-main.o has the line only with JT_KEY_DEBUG=1 (2.65.0 moved it off JT_WIFI_DEV=1, the dev card no longer shows raw reports); -B both ways, then a plain rebuild
 # so a later `make pi` never picks up the dev object.
-def pi_main(dev):
-    env = dict(os.environ); env.pop("JT_WIFI_DEV", None)
-    if dev: env["JT_WIFI_DEV"] = "1"
+def pi_main(dev, flag="JT_KEY_DEBUG"):
+    env = dict(os.environ); env.pop("JT_WIFI_DEV", None); env.pop("JT_KEY_DEBUG", None)
+    if dev: env[flag] = "1"
     ok = subprocess.run(["make", "-B", "-C", arch, "pi-main.o"], env=env, capture_output=True, timeout=300).returncode == 0
     return ok and b"keydbg: " in open(os.path.join(arch, "pi-main.o"), "rb").read()
-step("Pi dev build (JT_WIFI_DEV=1) has the debug line", pi_main(True))
+step("Pi key-debug build (JT_KEY_DEBUG=1) has the debug line", pi_main(True))
+step("Pi dev-card build (JT_WIFI_DEV=1 alone) does not", not pi_main(True, "JT_WIFI_DEV"))
 step("Pi release build does not", not pi_main(False))
 if fails: print("FAIL: " + "; ".join(fails)); sys.exit(1)
 print("PASS: arm64-keydbg-check: report IDs, Cmd+Space, letter-opens-Spotlight, key repeat and Caps Lock over USB, and the dev-only key debug line")
