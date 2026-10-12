@@ -17,7 +17,7 @@ unsigned browser_loads(void);
 static unsigned short br_off[BR_VL_MAX], br_len[BR_VL_MAX];   /* wrapped line i: an offset into the page text and a length */
 static unsigned br_n, br_lines;                              /* wrapped lines, and the page's own lines (the `page N lines` log) */
 static int br_top, br_edit, br_loading;
-static char br_addr[BR_ADDR_MAX + 1], br_msg[48], br_err[64], br_ln[96];
+static char br_addr[BR_ADDR_MAX + 1], br_msg[96], br_err[64], br_ln[96];
 static unsigned br_addr_n, br_ln_n;
 static unsigned br_slen(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }
 static int br_has(const char *s, const char *w) { unsigned k = br_slen(w); for (; *s; s++) { unsigned i = 0; while (i < k && s[i] == w[i]) i++; if (i == k) return 1; } return 0; }
@@ -134,6 +134,9 @@ static void br_run(const char *cmd) {   /* one browse_command line, with "loadin
     br_set(br_msg, br_has(br_err, "no network") ? "no network" : br_has(br_err, "bad url") ? "that is not a web address" :
                    br_has(br_err, "nothing behind") ? "nothing behind" : br_has(br_err, "nothing ahead") ? "nothing ahead" :
                    "the page did not load", sizeof br_msg);
+    if (br_err[0] && br_has(br_msg, "did not load")) {   /* say why: the stage that stopped, from the last "browser: " line */
+        unsigned m = br_slen(br_msg); br_msg[m++] = ':'; br_msg[m++] = ' '; br_set(br_msg + m, br_err, sizeof br_msg - m);
+    }
     con_quiet = 1; uart_puts("browser: status "); uart_puts(br_msg); uart_putc('\n');
     browser_paint(0);
 }
