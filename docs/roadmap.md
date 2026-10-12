@@ -65,6 +65,8 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 
 ## Next few weeks
 
+- [ ] [Fable] Samantha on the device, no relay: a small chat model (Qwen 0.5B class, int8, under 1 GB) baked into the card image and run by the kernel's own inference code (`arch/arm64/llm.c` is a float32 llama2 forward pass today; it needs int8 weights, a tokenizer for that model and a KV cache that fits the Pi's 4 GB). The relay stays the default when the Mac answers; the local model answers when it does not. Check: `tools/checks/arm64-llm-check.py` extended to the real model's tokenizer and a fixed prompt.
+
 - [ ] [Sonnet] Window dragging on the Pi: press on a window's title bar, move, and the window follows, with the wallpaper (and any window behind) repainted where it was. Today every Pi window is a fixed rectangle with the wallpaper saved under it (`con_under`, `calc_under`, `app_under`), so nothing moves. Needs one save-under per window that moves with it, a title-bar hit test, and the frame redrawn at the new spot, clamped on screen. Check: an arm64 check that drags the Terminal's title bar over QMP and finds the frame at the new place and the wallpaper at the old.
 
 - [ ] [Sonnet] Dock shading and magnification, like the Mac: the tray's shadow is a hard dark band under its bottom edge on the Pi (photo 2026-10-12), it should be a soft falloff that fades over 10 to 14 px, and each tile's drop shadow the same. Then Settings rows for dock size and hover magnification (off, small, large), the hovered tile and its two neighbours growing smoothly, shared `kernel/dock_draw.c` so both desktops match. Check: `tools/checks/arm64-m1c-check.py` samples the shadow gradient, and a dock-magnify check reads the hovered tile's size.

@@ -430,7 +430,7 @@ static void on_att(const unsigned char *p, unsigned n) {
     } else if (gs == 4) {
         if (op == 0x13) {
             put("bt: mouse ready"); say();
-            st = MOUSE; gs = 5; to_term = 0; until = FOREVER; wifi_release();
+            st = MOUSE; gs = 5; until = FOREVER; wifi_release(); to_term = 0;   /* Wi-Fi back first, so its lines land in the Terminal */
         } else if (op == 0x01 && n >= 5) { put("bt: the mouse would not send reports, error "); put_hex(p[4]); fail(0); }
     }
 }
