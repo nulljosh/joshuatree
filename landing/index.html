@@ -196,6 +196,8 @@ p,li,.sub{text-wrap:pretty}
      row above it (Apps/Documented/Version, 3 short facts) shares the
      same .facts-row/.fact classes and stays 3-across on one line each,
      unchanged. */
+  /* A four-digit value plus its unit (3233 ns/switch) is wider than a fifth of the row at laptop widths: drop the bench row one size. */
+  @media (max-width: 1400px) { [aria-label="How fast"] .fact strong { font-size:var(--t28);line-height:var(--lh28);letter-spacing:var(--tr28) } }
   @media (max-width: 480px) {
     [aria-label="How fast"] .facts-row { grid-template-columns: repeat(2, 1fr); gap: 32px 20px; max-width: 320px; }
     [aria-label="How fast"] .fact strong { font-size:var(--t22); display: flex; flex-direction: column; align-items: center; white-space: normal;line-height:var(--lh22);letter-spacing:var(--tr22)}
