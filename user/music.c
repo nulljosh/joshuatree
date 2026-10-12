@@ -452,7 +452,7 @@ static void layout(void) {
     int W = (int)win.width, H = (int)win.height;
     lw = W / 3; if (lw > 270) lw = 270; if (lw < 150) lw = 150;
     rx = lw + 28; rx1 = W - 28;
-    bar_y = H - 140; ctl_y = H - 84; vol_y = H - 42;
+    bar_y = H - 140; ctl_y = H - 84; vol_y = H - 46;   /* the volume row clears the key hint under it */
     prev_cx = rx + 18; play_cx = rx + 18 + 62; next_cx = rx + 18 + 124;
     if (rx1 - rx >= 188 + PILL_W_SHUF + 8 + PILL_W_REP) { shuf_x = rx + 188; pill_y = ctl_y; }   /* beside the transport */
     else { shuf_x = rx; pill_y = bar_y - 44; }                                                    /* a half-screen window: their own row above the seek bar */
@@ -496,20 +496,28 @@ static void draw(void) {
         }
     }
 
-    /* now playing */
-    {   char t[56] = "Nothing playing";
+    /* now playing: the cover on the left, the title, the artist and the state beside it, the way Apple Music's player reads */
+    {   int ty = 52, tx = rx + ART + 22, tw = rx1 - tx;
+        char t[56] = "Nothing playing";
         if (cur >= 0) title_of(&tracks[cur], t);
         else if (ntracks && sel < ntracks) title_of(&tracks[sel], t);
-        ellipsize(t, rx1 - rx);
-        btext(t, rx, 18, cur >= 0 ? INK : HINT);
-        const char *sub = msg[0] ? msg : state == ST_PLAYING ? "Playing" : state == ST_PAUSED ? "Paused" : !ntracks ? "Add songs to begin" : cur < 0 ? "Press space to play" : "Stopped";
-        char s[64]; int k = 0; while (sub[k] && k < 62) { s[k] = sub[k]; k++; } s[k] = 0;
-        ellipsize(s, rx1 - rx);
-        text(s, rx, 44, msg[0] ? ACCENT : HINT);
-        int ty = 84;   /* the art tile, 10 px lower when an artist line sits above it */
-        {   int ti = cur >= 0 ? cur : ntracks && sel < ntracks ? sel : -1;   /* the artist, under the state word */
-            if (ti >= 0 && tracks[ti].artist[0]) { ty = 94; char ar[32]; int q = 0; while (tracks[ti].artist[q] && q < 28) { ar[q] = tracks[ti].artist[q]; q++; } ar[q] = 0; ellipsize(ar, rx1 - rx); text(ar, rx, 62, HINT); }
+        ellipsize(t, tw);
+        btext(t, tx, ty + 12, cur >= 0 ? INK : HINT);
+        int ti = cur >= 0 ? cur : ntracks && sel < ntracks ? sel : -1;
+        /* under the title: a message (accent), else the artist (with paused or stopped after it), else the state in words */
+        char s[64]; int k = 0;
+        const char *state_word = state == ST_PAUSED ? "Paused" : state == ST_STOPPED && cur >= 0 ? "Stopped" : 0;
+        if (msg[0]) { while (msg[k] && k < 62) { s[k] = msg[k]; k++; } }
+        else if (ti >= 0 && tracks[ti].artist[0]) {
+            while (tracks[ti].artist[k] && k < 28) { s[k] = tracks[ti].artist[k]; k++; }
+            if (state_word) { s[k++] = ','; s[k++] = ' '; for (int q = 0; state_word[q] && k < 62; q++) s[k++] = (char)(state_word[q] >= 'A' && state_word[q] <= 'Z' && q == 0 ? state_word[q] + 32 : state_word[q]); }
+        } else {
+            const char *w = state == ST_PLAYING ? "Playing" : state_word ? state_word : !ntracks ? "Add songs to begin" : "Press space to play";
+            while (w[k] && k < 62) { s[k] = w[k]; k++; }
         }
+        s[k] = 0;
+        ellipsize(s, tw);
+        text(s, tx, ty + 42, msg[0] ? ACCENT : HINT);
         if (have_art && cur >= 0) {   /* the cover */
             for (int yy = 0; yy < ART; yy++) for (int xx = 0; xx < ART; xx++) {
                 int X = rx + xx, Y = ty + yy;

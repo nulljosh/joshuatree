@@ -418,7 +418,7 @@ try:
     if D.wait(r"music: playing NEVERG~1\.MP3", 5, a)[0] is None: fail("the tagged MP3 did not play")
     if D.wait(r"music: art NEVERG~1\.MP3", 5, a)[0] is None: fail("the cover in the ID3 APIC frame was not decoded")
     time.sleep(1.0)
-    img = D.frame(); c = px(img, D.bar[0] + 48, 94 + 48)   # the middle of the 96 px cover: the fixture's black disc
+    img = D.frame(); c = px(img, D.bar[0] + 48, 52 + 48)   # the middle of the 96 px cover: the fixture's black disc
     if not near(c, (28, 28, 30), 40): fail(f"the cover's centre is {c}, expected the fixture's dark disc")
     D.esc_closes()
 finally:
