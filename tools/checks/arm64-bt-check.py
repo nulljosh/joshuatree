@@ -30,6 +30,13 @@ The kernel is built with BT_HCD= a small made-up patch file, so the upload is ch
              (Pairing Failed, Confirm Value Failed) and hangs up, never sends LE Start Encryption, and answers `bt`, `help`.
   5. absent: one -serial, so no second UART: the probe's fault is skipped, "bt: no radio found at boot" (serial only,
              so every other virt check's screen is unchanged), `bt` says "bt: no radio", the kernel stays up.
+  6. remember (BT3): the same fake mouse and a FAT32 card as a virtio disk (tools/checks/sdcard.py). `bt pair` prints `bt: pairing
+             saved` once the mouse's LTK, EDIV and Rand are in, and `bt` says `saved pairing: yes`. Then, each on its own copy of
+             that card, as after a reboot: reconnect (no scan, no SMP, LE Create Connection to the saved address, LE Start
+             Encryption with the saved LTK, Rand and EDIV, `bt: reconnected`, `bt: mouse ready`, reports move the pointer, no
+             second save); a mouse that never answers (about 20 seconds, then ready again, the record kept, then `bt forget`
+             erases it); a mouse that rejects the key (Encryption Change 0x06: the record is erased, `saved pairing: no`);
+             and a card with no record (the plain ready line, `bt forget` says there was none).
 In every boot no random value, confirm value or key (STK, LTK, Rand) shows on the UART, in either byte order.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing; skips boots 1 to 4 when this QEMU's
 virt machine builds no second PL011 for a second -serial (a dumpdtb probe), and still runs boot 5.
@@ -38,6 +45,7 @@ Usage: tools/checks/arm64-bt-check.py   (from the repo root)
 import json, os, re, shutil, socket, struct, subprocess, sys, threading, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scratch import scratch_dir
+from sdcard import build_card
 
 # ---- AES-128 (FIPS-197), encrypt only, and the SMP functions on little-endian values (Core spec Vol 3 Part H 2.2) ----
 def _xt(a): return ((a << 1) ^ 0x1B) & 0xFF if a & 0x80 else a << 1
@@ -138,8 +146,9 @@ CONN_UPDATE = struct.pack("<HHHH", 6, 9, 44, 500)   # what the mouse asks for: 7
 class Fake(threading.Thread):
     """The radio, and the mouse at the other end of the air. Answers each H4 command, logs (opcode, parameters), and
     checks every ACL packet the kernel sends: flow control, SMP, ATT. Anything wrong goes in self.problems."""
-    def __init__(self, path, mode):
+    def __init__(self, path, mode, saved=None):
         super().__init__(daemon=True)
+        self.saved = saved   # (ltk, rand, ediv) the mouse gave in an earlier boot: a reconnect must encrypt with these
         self.mode, self.log, self.problems, self.quiet = mode, [], [], False
         self.expect = list(writes) if mode != "order" else [writes[1], writes[0]] + writes[2:]
         self.nwrite, self.patched = 0, False
@@ -213,6 +222,7 @@ class Fake(threading.Thread):
             self.status(op)
             if p[5] != 1 or p[6:12] != MOUSE or p[12] != 0: self.problems.append("LE Create Connection to the wrong peer: %s" % p.hex())
             self.connected = True
+            if self.mode == "nomouse": return    # the saved mouse is asleep: Create Connection stays pending
             self.at(0.05, b"\x04\x3e\x13\x01\x00" + u16(HANDLE) + b"\x00\x01" + MOUSE + u16(6) + u16(0) + u16(200) + b"\x00")
             self.l2(5, b"\x12\x01\x08\x00" + CONN_UPDATE, delay=0.15)        # the mouse's own asks, right after it connects
             self.l2(4, b"\x02\x40\x00", delay=0.15)                           # Exchange MTU, 64
@@ -222,6 +232,15 @@ class Fake(threading.Thread):
         if op == 0x2013:
             self.status(op)
             self.at(0.02, b"\x04\x3e\x0a\x03\x00" + u16(HANDLE) + u16(9) + u16(44) + u16(500)); return
+        if op == 0x2019 and self.saved:   # a reconnect: the saved key, with no SMP in front of it
+            self.status(op)
+            ltk, rand, ediv = self.saved
+            if p[:2] != u16(HANDLE) or p[2:10] != rand or p[10:12] != ediv or p[12:28] != ltk:
+                self.problems.append("LE Start Encryption is not the saved LTK with its Rand and EDIV")
+            if self.mode == "rejected": self.at(0.05, self.event(0x08, b"\x06" + u16(HANDLE) + b"\x00")); return   # PIN or key missing
+            self.encrypted = True
+            self.at(0.05, self.event(0x08, b"\x00" + u16(HANDLE) + b"\x01"))
+            return
         if op == 0x2019:
             self.status(op)
             if p[:2] != u16(HANDLE) or p[2:12] != bytes(10) or p[12:28] != self.stk:
@@ -256,6 +275,7 @@ class Fake(threading.Thread):
         elif cid == 5: self.answers.append(("sig", payload))
         else: self.problems.append("L2CAP channel %d" % cid)
     def on_smp(self, p):
+        if self.saved: self.problems.append("SMP from the kernel in a reconnect (code 0x%02x)" % p[0]); return
         if p[0] == 0x01:
             self.preq = p
             if len(p) != 7 or p[1] != 0x03 or p[3] & 0x09 != 0x01 or p[4] != 16 or not p[6] & 1:
@@ -311,18 +331,19 @@ class Fake(threading.Thread):
 
 QCODE = {" ": ("spc",)}
 class Boot:
-    def __init__(self, name, mode=None, screen=False):
+    def __init__(self, name, mode=None, screen=False, disk=None, saved=None):
         self.name, d = name, os.path.join(tmp, name); os.makedirs(d)
         self.dir, self.log, qmp = d, os.path.join(d, "uart"), os.path.join(d, "qmp")
         radio = []
         self.fake = None
         if mode:
             path = os.path.join(d, "bt.sock")
-            self.fake = Fake(path, mode); self.fake.start()
+            self.fake = Fake(path, mode, saved); self.fake.start()
             radio = ["-serial", "unix:" + path]
         self.q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-nic", "none",
                                    "-global", "virtio-mmio.force-legacy=false", "-device", "virtio-keyboard-device",
                                    *(["-device", "ramfb"] if screen else []),
+                                   *(["-drive", "if=none,id=card,file=%s,format=raw" % disk, "-device", "virtio-blk-device,drive=card"] if disk else []),
                                    "-display", "none", "-serial", "file:" + self.log, *radio,
                                    "-qmp", "unix:%s,server,nowait" % qmp, "-kernel", os.path.join(arch, "kernel8.elf")],
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -439,7 +460,9 @@ try:
         check("bt: paired", b.wait_for("bt: paired", 20), b.uart()[-400:])
         check("bt: mouse ready", b.wait_for("bt: mouse ready", 20), b.uart()[-600:])
         stage = lines(b.uart().split("bt: connecting to", 1)[-1])
-        check("one line per stage, in order", stage[:3] == ["bt: connected, link interval 7.5 ms", "bt: paired", "bt: mouse ready"], stage)
+        # no card in this boot: the keys arrive just after "paired" and the line says the pairing will not survive a reboot
+        check("one line per stage, in order", stage[:2] == ["bt: connected, link interval 7.5 ms", "bt: paired"]
+              and sorted(stage[2:4]) == sorted(["bt: no SD card, this pairing will not survive a reboot", "bt: mouse ready"]), stage)
         pair_ops = [op for op, _ in b.fake.log[len(ops):] if op not in (0x200B, 0x200C)]
         check("buffers (LE says 0, so the shared ones), our address, then LE Create Connection",
               pair_ops[:4] == [0x2002, 0x1005, 0x1009, 0x200D], [hex(o) for o in pair_ops])
@@ -512,6 +535,100 @@ try:
         check("badconfirm: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
         b.close()
 
+    if second_uart:
+        # BT3: save the pairing to a card, then boot again on copies of that card, as after a reboot.
+        card = os.path.join(tmp, "card.img"); build_card(card, False)
+        def clone(n):   # a private copy of the saved card; the image is sparse, so clone it rather than read 4 GiB
+            dst = os.path.join(tmp, "card-%s.img" % n)
+            for cp in (["cp", "-c"], ["cp", "--reflink=auto", "--sparse=always"], ["cp", "--sparse=always"]):
+                if subprocess.run(cp + [card, dst], capture_output=True).returncode == 0: return dst
+            raise SystemExit("FAIL: cannot copy the card image")
+        b = Boot("remember", "good", screen=True, disk=card); boots.append(b)
+        check("remember: no saved pairing yet, so the plain ready line", b.wait_for("bt: ready, type bt scan", 30), b.uart()[-600:])
+        check("remember: the Terminal opens", b.terminal(), b.uart()[-300:])
+        b.type("bt")
+        check("remember: bt says saved pairing: no", b.wait_for("bt: saved pairing: no", 10), b.uart()[-300:])
+        b.type("bt scan")
+        check("remember: the scan ends", b.wait_for("bt: bt pair connects to number 1", 20), b.uart()[-600:])
+        b.type("bt pair")
+        check("remember: paired", b.wait_for("bt: paired", 30), b.uart()[-600:])
+        check("remember: bt: pairing saved", b.wait_for("bt: pairing saved", 15), b.uart()[-600:])
+        check("remember: bt: mouse ready", b.wait_for("bt: mouse ready", 20), b.uart()[-600:])
+        time.sleep(0.5)
+        b.type("bt")
+        check("remember: bt says saved pairing: yes", b.wait_for("bt: saved pairing: yes", 10), b.uart()[-300:])
+        check("remember: the line says only that, once", b.uart().count("bt: pairing saved") == 1, lines(b.uart()))
+        check("remember: the fake mouse found nothing wrong", not b.fake.problems, b.fake.problems)
+        keys = (b.fake.ltk, b.fake.rand, b.fake.ediv)
+        check("remember: no random, confirm value or key on the UART", not leaked(b.uart(), b.fake.secrets), leaked(b.uart(), b.fake.secrets))
+        check("remember: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
+        b.close()
+        time.sleep(0.3)
+
+        # reconnect: the saved mouse is dialled at boot, no scan, no pairing
+        b = Boot("reconnect", "reconnect", disk=clone("reconnect"), saved=keys); boots.append(b)
+        check("reconnect: the radio is ready and dials the saved mouse by name",
+              b.wait_for("bt: ready, reconnecting Microsoft Bluetooth Mouse, wake it", 30), b.uart()[-600:])
+        check("reconnect: bt: connected", b.wait_for("bt: connected", 15), b.uart()[-400:])
+        check("reconnect: bt: reconnected", b.wait_for("bt: reconnected", 20), b.uart()[-400:])
+        check("reconnect: bt: mouse ready", b.wait_for("bt: mouse ready", 20), b.uart()[-400:])
+        rops = [op for op, _ in b.fake.log]
+        check("reconnect: no scan, and LE Start Encryption sent once", 0x200C not in rops and 0x200B not in rops and rops.count(0x2019) == 1, [hex(o) for o in rops[-10:]])
+        check("reconnect: LE Create Connection goes to the saved address and type", any(op == 0x200D and p[5] == 1 and p[6:12] == MOUSE for op, p in b.fake.log), [hex(o) for o in rops[-10:]])
+        check("reconnect: the same GATT steps run, after encryption", b.fake.writes == [(0x52, PM_VH, b"\x00"), (0x12, BOOT_CCCD, b"\x01\x00")], b.fake.writes)
+        rl = lines(b.uart().split("bt: ready, reconnecting", 1)[-1])
+        check("reconnect: one line per stage, no second save", rl == ["bt: connected, link interval 7.5 ms", "bt: reconnected", "bt: mouse ready"], rl)
+        check("reconnect: the fake mouse found nothing wrong (saved LTK, Rand and EDIV, no SMP)", not b.fake.problems, b.fake.problems)
+        check("reconnect: the terminal opens", b.terminal(), b.uart()[-300:])
+        b.type("bt")
+        check("reconnect: bt says the mouse is ready and the pairing is saved", b.wait_for("bt: mouse ready, Microsoft Bluetooth Mouse", 10)
+              and b.wait_for("bt: saved pairing: yes", 10), b.uart()[-400:])
+        check("reconnect: no random, confirm value or key on the UART", not leaked(b.uart(), [keys[0], keys[1]]), leaked(b.uart(), [keys[0], keys[1]]))
+        check("reconnect: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
+        b.close()
+
+        # a mouse that never answers: about 20 seconds, the record kept, then bt forget
+        b = Boot("nomouse", "nomouse", disk=clone("nomouse"), saved=keys); boots.append(b)
+        check("nomouse: dials the saved mouse", b.wait_for("bt: ready, reconnecting", 30), b.uart()[-600:])
+        t0 = time.time()
+        check("nomouse: gives up in one plain line, the pairing kept", b.wait_for("bt: the saved mouse did not answer, its pairing is kept", 40), b.uart()[-600:])
+        took = time.time() - t0
+        check("nomouse: after about 20 seconds", 17 < took < 30, took)
+        check("nomouse: the attempt is cancelled", 0x200E in [op for op, _ in b.fake.log], [hex(op) for op, _ in b.fake.log][-6:])
+        check("nomouse: the Terminal opens", b.terminal(), b.uart()[-300:])
+        b.type("bt")
+        check("nomouse: bt is ready and still has the pairing", b.wait_for("bt: ready, version", 10) and b.wait_for("bt: saved pairing: yes", 10), b.uart()[-400:])
+        b.type("bt forget")
+        check("nomouse: bt forget says so", b.wait_for("bt: saved pairing forgotten", 10), b.uart()[-300:])
+        b.type("bt")
+        check("nomouse: then saved pairing: no", b.wait_for("bt: saved pairing: no", 10), b.uart()[-300:])
+        check("nomouse: no key on the UART", not leaked(b.uart(), [keys[0], keys[1]]), leaked(b.uart(), [keys[0], keys[1]]))
+        check("nomouse: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
+        b.close()
+
+        # a mouse that no longer knows the key: Encryption Change 0x06 erases the record
+        b = Boot("rejected", "rejected", disk=clone("rejected"), saved=keys); boots.append(b)
+        check("rejected: dials the saved mouse", b.wait_for("bt: ready, reconnecting", 30), b.uart()[-600:])
+        check("rejected: the rejected key is forgotten, in one plain line", b.wait_for("bt: the mouse no longer knows the saved pairing, forgotten", 30), b.uart()[-600:])
+        check("rejected: the Terminal opens", b.terminal(), b.uart()[-300:])
+        time.sleep(1.0)
+        b.type("bt")
+        check("rejected: then saved pairing: no", b.wait_for("bt: saved pairing: no", 10), b.uart()[-400:])
+        check("rejected: the fake mouse saw the saved key", not b.fake.problems, b.fake.problems)
+        check("rejected: no key on the UART", not leaked(b.uart(), [keys[0], keys[1]]), leaked(b.uart(), [keys[0], keys[1]]))
+        check("rejected: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
+        b.close()
+
+        # nothing saved on this card: the plain flow, and bt forget has nothing to do
+        fresh = os.path.join(tmp, "card-fresh.img"); build_card(fresh, False)
+        b = Boot("norecord", "good", disk=fresh); boots.append(b)
+        check("norecord: the radio is ready the old way", b.wait_for("bt: ready, type bt scan", 30), b.uart()[-600:])
+        check("norecord: the Terminal opens", b.terminal(), b.uart()[-300:])
+        b.type("bt forget")
+        check("norecord: bt forget says there was none", b.wait_for("bt: no saved pairing to forget", 10), b.uart()[-300:])
+        check("norecord: no connection was tried", 0x200D not in [op for op, _ in b.fake.log], [hex(op) for op, _ in b.fake.log][-6:])
+        b.close()
+
     b = Boot("absent"); boots.append(b)
     check("absent: no second UART says so at boot", b.wait_for("bt: no radio found at boot", 10), b.uart()[-400:])
     check("absent: the probe's fault was skipped, no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
@@ -526,5 +643,7 @@ finally:
 if fails: print("FAIL: %d of the Bluetooth checks" % len(fails)); sys.exit(1)
 print("PASS: HCI over the second UART: patch upload in order, version, baud, event mask, an LE scan that lists the mouse by "
       "its scan-response name; bt pair connects, pairs with Just Works (c1 and s1 checked with AES), encrypts, finds the "
-      "boot mouse report over GATT and its reports move the pointer and click the dock; a wrong confirm, a silent or "
+      "boot mouse report over GATT and its reports move the pointer and click the dock; the pairing is saved to a card "
+      "and a second boot reconnects with the saved key, gives up after about 20 seconds keeping it, erases it when the mouse "
+      "rejects it, and bt forget erases it; a wrong confirm, a silent or "
       "out-of-order radio each end in one plain line with the kernel up, and no key ever reaches the UART")

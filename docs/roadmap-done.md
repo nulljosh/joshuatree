@@ -303,3 +303,8 @@ Calendar now shows a month and large day number, including December. Clock opens
 
 **Mac-style USB keyboard (2026-10-09).** On the board, F1, F2 and Cmd or Ctrl+Space did nothing. Cmd was never tracked, report-ID reports lost their modifier byte, and a Mac-mode top row sends media keys on an interface we never opened. Now all three are handled, any letter on the bare desktop opens Spotlight, and the dev card shows raw HID bytes in the menu bar. Check: `tools/checks/arm64-keydbg-check.py`.
 **Keyboard fix, 2026-10-09.** Spotlight shortcuts close it when pressed again, and F2 or Ctrl+T opens Terminal even while search is open. Search debug messages stay off the Console so they cannot repaint through the overlay. The keyboard-only check verifies these paths and that closing search restores the screen.
+
+## 3.5.0: the Bluetooth mouse remembers
+
+The pairing key goes to `JT/BTPAIR.BIN` and a reboot reconnects the mouse without scanning or pairing again (`bt forget` clears it, `bt reconnect` retries). Wi-Fi is held for the reconnect as for a pairing.
+Check: `tools/checks/bt-pair-check.py` and `tools/checks/arm64-bt-check.py`; the radio side needs the real board.

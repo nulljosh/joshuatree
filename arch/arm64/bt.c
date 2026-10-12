@@ -29,11 +29,24 @@
    One command is in flight at a time and each has a deadline on the generic timer (cntpct, never main.c's `ticks`), as
    does every wait on the mouse. No answer by then prints one plain line; Bluetooth stops or hangs up the link, and the
    rest of the kernel carries on. Nothing here prints a key, a random value or a confirm value.
+
+   BT3, remembering. When the mouse's LTK, EDIV and Rand have all arrived, the pairing goes to JT/BTPAIR.BIN (btpair.h:
+   address, address type, keys, name) and the line is `bt: pairing saved`, nothing else. At boot, once the radio is ready,
+   a valid record skips the scan and the pairing: the same LE Create Connection to the saved address (we are the central,
+   the mouse advertises when it wakes), then LE Start Encryption with the saved LTK, EDIV and Rand in place of the STK,
+   Encryption Change, `bt: reconnected`, and the same GATT steps as a first pairing. An LE mouse needs no Link Key Request
+   reply; that is the BR/EDR flow. The wait for the mouse is bounded at 20 seconds (RECONN_MS), then the radio goes back to
+   ready with the record kept and `bt reconnect` tries again. The record is erased only when the mouse does not know the
+   key: Encryption Change with status 0x05 or 0x06, or a hang-up with 0x05, 0x06 or 0x3D while encryption starts.
+   `bt forget` erases it; `bt` shows `saved pairing: yes` or `no`. Wi-Fi is held for a reconnect as for a pairing.
    On QEMU's virt machine the radio is a second PL011 at 0x09040000, there only when QEMU gets a second -serial;
    tools/checks/arm64-bt-check.py puts a fake controller and a fake mouse on it. */
 #include "bt.h"
 #include "rng.h"
 #include "bearssl_block.h"
+#include "btpair.h"
+#include "emmc.h"
+#include "../../drivers/fat.h"
 #define REG(a) (*(volatile unsigned *)(unsigned long)(a))
 void kputs(const char *s);
 extern void (*cmd_out)(const char *s);   /* cmd.c: where the running command's output goes */
@@ -93,6 +106,8 @@ int pi_exp_gpio(unsigned pin, unsigned on);    /* wifi.c */
 #define CMD_MS 3000                      /* every command's deadline */
 #define SCAN_MS 5000
 #define LINK_MS 10000                    /* the most we wait on the mouse for any one step */
+#define RECONN_MS 20000                  /* the most a boot-time reconnect waits for the saved mouse to answer */
+#define PAIR_FILE "BTPAIR.BIN"
 #define FOREVER (~0UL)
 
 enum { OFF, NO_RADIO, STARTING, READY, SCANNING, FAILED, PAIRING, MOUSE };
@@ -127,7 +142,9 @@ static void say(void) {                  /* prints the line built so far, from t
     if (to_term) { term_output(0); ask_redraw(); }
 }
 static void say_now(void) { line[ln++] = '\n'; line[ln] = 0; ln = 0; cmd_out(line); }   /* inside a typed command */
+void wifi_release(void);
 static void stop(const char *msg) {   /* a deadline passed: one plain line, plus a hint for a board with no serial cable */
+    wifi_release();                       /* a radio that gave up must not keep Wi-Fi off (a no-op when it was not held) */
     int stuck = !(U(FR) & TXFE);          /* bytes still in our FIFO: the radio never let them out (CTS, GPIO 30) */
     st = FAILED; why = msg; want = 0; put(msg); say();
     if (stuck) { put("bt: the command never left the UART, the radio held CTS"); say(); }
@@ -249,6 +266,8 @@ static unsigned handle;                  /* its connection handle */
 void wifi_hold(void); void wifi_release(void);   /* wifi.c: the shared antenna is Bluetooth's while a mouse pairs */
 static unsigned char me[6], peer[6], peer_type;   /* our address and the mouse's, little endian, as the radio gives them */
 static char peer_name[30];
+static int reconn;                       /* 1 while the saved mouse is being reconnected, not paired */
+static unsigned long reconn_end;         /* when that wait ends */
 static unsigned credits;                 /* ACL packets the radio can still take */
 #define AQ 8
 static unsigned char aq[AQ][32], aqn[AQ]; static unsigned aqh, aqt;   /* ACL packets waiting for a credit */
@@ -288,6 +307,32 @@ static const unsigned char tk[16];       /* Just Works: TK is zero */
 static unsigned char preq[7], pres[7], mrand[16], sconf[16], keysize;
 static int smp;                          /* 1 request sent, 2 our confirm sent, 3 our random sent, 4 paired */
 static unsigned char ltk[16], krand[8], kaddr[6], ktype; static unsigned kediv, keys;   /* the mouse's keys: RAM only */
+static int pair_load(struct btp *r) {   /* JT/BTPAIR.BIN parsed into r; 0 with no card, no file or a damaged one */
+    unsigned char b[BTP_SIZE + 1];
+    if (!sd_ready() || !sd_enter_jt(0)) return 0;
+    int got = fat_read_file(PAIR_FILE, b, sizeof b);
+    fat_chdir("..");
+    int ok = got >= 0 && btp_parse(b, (unsigned)got, r) == BTP_OK;
+    wipe(b, sizeof b);
+    return ok;
+}
+static void pair_save(void) {            /* the keys just received, to the card; one line, never the keys */
+    struct btp r; unsigned char b[BTP_SIZE];
+    wipe(&r, sizeof r);
+    r.type = peer_type; r.ediv = (unsigned short)kediv;
+    for (int i = 0; i < 6; i++) r.addr[i] = peer[i];
+    for (int i = 0; i < 16; i++) r.ltk[i] = ltk[i];
+    for (int i = 0; i < 8; i++) r.rand[i] = krand[i];
+    for (unsigned i = 0; i < BTP_NAME - 1 && peer_name[i]; i++) r.name[i] = peer_name[i];
+    int ok = sd_ready() && btp_pack(b, &r) == BTP_OK && sd_write(PAIR_FILE, b, BTP_SIZE) == 1;
+    wipe(&r, sizeof r); wipe(b, sizeof b);
+    put(ok ? "bt: pairing saved" : sd_ready() ? "bt: pairing not saved, the card would not take it" : "bt: no SD card, this pairing will not survive a reboot"); say();
+}
+static void rejected(void) {             /* the mouse does not know the saved key: erase it, so the next boot starts clean */
+    sd_remove(PAIR_FILE);
+    wipe(ltk, 16); wipe(krand, 8); kediv = 0;
+    put("bt: the mouse no longer knows the saved pairing, forgotten. Put it in pairing mode, then bt scan and bt pair"); fail(0);
+}
 static void smp_e(const unsigned char *k, const unsigned char *in, unsigned char *out) {
     unsigned char key[16], b[16], iv[16] = {0};
     br_aes_ct_cbcenc_keys c;
@@ -348,6 +393,7 @@ static void on_smp(const unsigned char *p, unsigned n) {
         for (int i = 0; i < 6; i++) kaddr[i] = peer[i];
         ktype = peer_type; keys |= 2;
     }
+    if ((keys & 3) == 3 && !(keys & 4) && smp == 4 && !reconn) { keys |= 4; pair_save(); }   /* both halves of the key are here: once */
     wipe(b, 17); wipe(chk, 16);
 }
 
@@ -477,7 +523,7 @@ static void connected(const unsigned char *p, unsigned n) {   /* LE Connection C
     for (int i = 0; i < 6; i++) peer[i] = p[5 + i];
     conn_t0 = now();
     put("bt: connected, link interval "); { unsigned iv = (p[11] | p[12] << 8u) * 125u; put_dec((int)(iv / 100)); put("."); put_dec((int)(iv / 10 % 10)); } put(" ms"); say();
-    pc = 40; until = 0;
+    pc = reconn ? 42 : 40; until = 0;   /* a saved mouse skips SMP and encrypts with the key it gave us */
 }
 static void disconnected(const unsigned char *p, unsigned n) {   /* Disconnection Complete: status, handle, reason */
     if (n < 4 || p[0] || !conn || ((p[1] | p[2] << 8u) & 0xFFF) != handle) return;
@@ -485,12 +531,13 @@ static void disconnected(const unsigned char *p, unsigned n) {   /* Disconnectio
     if (held) { for (unsigned b = 0; b < 3; b++) if (held >> b & 1) kinput(1, 272 + b, 0); held = 0; kinput(0, 0, 0); }
     if (st == PAIRING && closing) { st = READY; closing = 0; until = FOREVER; return; }   /* the line was printed by fail */
     unsigned lived = (unsigned)((now() - conn_t0) / ms(1));   /* how long the link was up, in ms */
-    if (st == PAIRING && p[3] == 0x3E && smp < 4 && tries < 3) {   /* connection failed to be established: the mouse never answered, call again, at another speed */
+    if (st == PAIRING && reconn && (pc == 43 || pc == 44) && (p[3] == 0x05 || p[3] == 0x06 || p[3] == 0x3D)) { rejected(); return; }
+    if (st == PAIRING && p[3] == 0x3E && smp < 4 && tries < 3 && (!reconn || now() < reconn_end)) {   /* connection failed to be established: the mouse never answered, call again, at another speed */
         tries++; smp = gs = 0;
         put("bt: the mouse never answered ("); put_dec((int)lived); put(" ms), calling again"); say();
         pc = 33; until = 0; return;   /* from the address step, so the Create Connection is built fresh */
     }
-    if (st == PAIRING) { put(smp < 4 ? "bt: pairing failed, the mouse hung up after " : "bt: the mouse hung up after "); put_dec((int)lived); put(" ms, reason "); put_hex(p[3]); fail(0); return; }
+    if (st == PAIRING) { put(reconn ? "bt: could not reconnect, the mouse hung up after " : smp < 4 ? "bt: pairing failed, the mouse hung up after " : "bt: the mouse hung up after "); put_dec((int)lived); put(" ms, reason "); put_hex(p[3]); fail(0); return; }
     if (st == MOUSE) { put("bt: the mouse disconnected, reason "); put_hex(p[3]); say(); st = READY; }
 }
 
@@ -514,8 +561,12 @@ static void on_event(unsigned code, const unsigned char *p, unsigned n) {
             if (((p[1 + 2 * k] | p[2 + 2 * k] << 8u) & 0xFFF) == handle) credits += p[1 + 2 * m + 2 * k] | p[2 + 2 * m + 2 * k] << 8u;
         acl_flush();
     } else if (code == 0x08 && n >= 4 && conn && ((p[1] | p[2] << 8u) & 0xFFF) == handle && st == PAIRING && (pc == 43 || pc == 44)) {   /* Encryption Change */
-        if (p[0] || !p[3]) { put("bt: pairing failed, encryption did not come on, status "); put_hex(p[0]); fail(0); return; }
-        put("bt: paired"); say();
+        if (p[0] || !p[3]) {
+            if (reconn && (p[0] == 0x05 || p[0] == 0x06)) { rejected(); return; }   /* authentication failure, PIN or key missing */
+            put(reconn ? "bt: could not reconnect, encryption did not come on, status " : "bt: pairing failed, encryption did not come on, status "); put_hex(p[0]); fail(0); return;
+        }
+        if (reconn) smp = 4;                     /* the reports are read once the link counts as paired */
+        put(reconn ? "bt: reconnected" : "bt: paired"); say();
         pc = 50; until = 0;
     } else if (code == 0x05) disconnected(p, n);
 }
@@ -546,6 +597,18 @@ static void put_version(void) {   /* Read Local Version: status, HCI version, re
     put(" rev "); put_hex(ret[2] | ret[3] << 8u);
     for (unsigned i = 0; i <= ln; i++) version[i] = i < ln ? line[i] : 0;
     ln = 0;
+}
+static void reconn_start(const struct btp *r) {   /* the saved mouse, dialled with no scan: the pair flow's steps 30 to 36, then encryption */
+    for (int j = 0; j < 6; j++) peer[j] = r->addr[j];
+    peer_type = r->type;
+    unsigned m = 0; for (; r->name[m] && m < sizeof peer_name - 1; m++) peer_name[m] = r->name[m]; peer_name[m] = 0;
+    conn = closing = smp = gs = tries = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
+    for (int i = 0; i < 16; i++) ltk[i] = r->ltk[i];
+    for (int i = 0; i < 8; i++) krand[i] = r->rand[i];
+    kediv = r->ediv;
+    wifi_hold();
+    reconn = 1; reconn_end = now() + ms(RECONN_MS);
+    st = PAIRING; pc = 30; until = now();
 }
 static void step(void) {
     static const unsigned char baud[6] = { 0, 0, FAST_BAUD & 255, FAST_BAUD >> 8 & 255, FAST_BAUD >> 16 & 255, FAST_BAUD >> 24 };
@@ -601,6 +664,12 @@ static void step(void) {
             scan_later = 0; put("bt: ready, scanning for 5 seconds"); say();
             ndev = nlost = nshown = 0; to_term = 1; st = SCANNING; pc = 20; until = now(); return;
         }
+        { struct btp r;
+          if (pair_load(&r)) {   /* a saved mouse: no scan, no pairing */
+              put("bt: ready, reconnecting "); put(r.name[0] ? r.name : "the saved mouse"); put(", wake it"); say();
+              reconn_start(&r); wipe(&r, sizeof r); return;
+          }
+          wipe(&r, sizeof r); }
         put("bt: ready, type bt scan to look for devices"); say(); return;
     case 20: cmd(OP_SCAN_PARAMS, scan, 7); return;
     case 21: cmd(OP_SCAN_ENABLE, on, 2); return;
@@ -655,9 +724,10 @@ static void step(void) {
         if (tries >= 2) { c[13] = 6; c[15] = 12; }    /* the third: 7.5 to 15 ms */
         cmd(OP_CONNECT, c, 25); return;
     }
-    case 35: until = now() + ms(LINK_MS); return;   /* Command Status came back: now wait for the link */
+    case 35: until = reconn ? reconn_end : now() + ms(LINK_MS); return;   /* Command Status came back: now wait for the link */
     case 36:   /* no LE Connection Complete in time: the mouse is not advertising */
-        put("bt: the mouse did not answer, hold its button 5 seconds and type bt pair again"); say(); to_term = 0;
+        put(reconn ? "bt: the saved mouse did not answer, its pairing is kept. Wake it and type bt reconnect, or bt scan and bt pair for another"
+                   : "bt: the mouse did not answer, hold its button 5 seconds and type bt pair again"); say(); to_term = 0;
         cmd(OP_CONNECT_CANCEL, 0, 0); return;
     case 37: st = READY; until = FOREVER; wifi_release(); return;
     case 40: {   /* SMP Pairing Request: no input or output, no OOB, bonding, a 16 byte key; the mouse sends its LTK */
@@ -668,8 +738,14 @@ static void step(void) {
     case 41: fail("bt: pairing failed, the mouse stopped answering"); return;
     case 42: {   /* LE Start Encryption with the STK: Rand and EDIV are zero for an STK */
         unsigned char e[28] = { (unsigned char)handle, (unsigned char)(handle >> 8) };
-        for (int i = 0; i < 16; i++) e[12 + i] = stk[i];
-        cmd(OP_ENCRYPT, e, 28); wipe(stk, 16); wipe(e, 28); return;
+        if (reconn) {   /* the saved key: Rand and EDIV as the mouse gave them */
+            for (int i = 0; i < 8; i++) e[2 + i] = krand[i];
+            e[10] = (unsigned char)kediv; e[11] = (unsigned char)(kediv >> 8);
+            for (int i = 0; i < 16; i++) e[12 + i] = ltk[i];
+        } else for (int i = 0; i < 16; i++) e[12 + i] = stk[i];
+        cmd(OP_ENCRYPT, e, 28); wipe(stk, 16); wipe(e, 28);
+        if (reconn) { wipe(ltk, 16); wipe(krand, 8); }
+        return;
     }
     case 43: until = now() + ms(LINK_MS); return;   /* Command Status: now wait for Encryption Change */
     case 44: fail("bt: pairing failed, encryption did not come on"); return;
@@ -739,7 +815,18 @@ int bt_command(const char *q, unsigned n) {
     unsigned i = 2; while (i < n && q[i] == ' ') i++;
     int scan = n - i == 4 && q[i] == 's' && q[i + 1] == 'c' && q[i + 2] == 'a' && q[i + 3] == 'n';
     int pair = n - i >= 4 && q[i] == 'p' && q[i + 1] == 'a' && q[i + 2] == 'i' && q[i + 3] == 'r' && (n - i == 4 || q[i + 4] == ' ');
-    if (i < n && !scan && !pair) { put("bt: try bt, bt scan or bt pair"); say_now(); return 1; }
+    int forget = n - i == 6 && has(q + i, "forget", 6), again = n - i == 9 && has(q + i, "reconnect", 9);
+    if (i < n && !scan && !pair && !forget && !again) { put("bt: try bt, bt scan, bt pair, bt reconnect or bt forget"); say_now(); return 1; }
+    if (forget) {   /* the card's record only; a link that is up stays up */
+        put(sd_ready() && sd_remove(PAIR_FILE) == 1 ? "bt: saved pairing forgotten. bt scan and bt pair to pair a mouse" : "bt: no saved pairing to forget");
+        say_now(); return 1;
+    }
+    if (again && st == READY) {
+        struct btp r;
+        if (!pair_load(&r)) { put("bt: no saved pairing, bt scan and bt pair"); say_now(); return 1; }
+        put("bt: reconnecting "); put(r.name[0] ? r.name : "the saved mouse"); put(", wake it"); say_now();
+        to_term = 1; reconn_start(&r); wipe(&r, sizeof r); return 1;
+    }
     if (scan && st == STARTING) {   /* the radio is still loading its patch (about half a minute after power-on): wait for it, then scan */
         scan_later = 1; to_term = 1;
         put("bt: the radio is still starting"); if (pc == 6 && bt_fw_hcd_len) { put(" ("); put_dec((int)(fwpos * 100u / bt_fw_hcd_len)); put("% of its patch loaded)"); }
@@ -768,7 +855,7 @@ int bt_command(const char *q, unsigned n) {
         peer_type = dev[k].type;
         put("bt: dialling "); for (int j = 5; j >= 0; j--) { put_hex(peer[j]); if (j) put(":"); } put(peer_type ? " (random address)" : " (public address)"); say();
         unsigned m = 0; for (; dev[k].name[m] && m < sizeof peer_name - 1; m++) peer_name[m] = dev[k].name[m]; peer_name[m] = 0;
-        conn = closing = smp = gs = tries = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
+        conn = closing = smp = gs = tries = reconn = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
         wipe(ltk, 16); wipe(krand, 8);
         wifi_hold();
         to_term = 1; st = PAIRING; pc = 30; until = now();
@@ -786,6 +873,7 @@ int bt_command(const char *q, unsigned n) {
     default: put(why); break;
     }
     say_now();
+    { struct btp r; put("bt: saved pairing: "); put(pair_load(&r) ? "yes" : "no"); say_now(); wipe(&r, sizeof r); }
     if ((st == READY || st == MOUSE) && (acl_in || rx_err || rx_junk)) {
         put("bt: acl in "); put_dec((int)acl_in); put(", rx errors "); put_dec((int)rx_err); put(", stray bytes "); put_dec((int)rx_junk); say_now();
     }

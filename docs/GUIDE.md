@@ -79,6 +79,8 @@ Escape from an idle Terminal returns to Console. While the assistant is
 working, Escape asks it to stop between action steps; it may have to wait
 for the current network request to finish.
 
+The Bluetooth mouse reconnects by itself after a reboot, from the pairing saved on the card; type `bt forget` to pair a different one.
+
 ### The files behind the desktop
 
 | File | What it does |
