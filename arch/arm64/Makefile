@@ -207,9 +207,9 @@ pi-xhci.o: xhci.c
 # one); with no file at all the radio runs its own ROM firmware. bt_fw.S is rewritten only when the path or the file's
 # presence changes. Pairing's AES-128 is BearSSL's aes_ct, pulled from the same --start-lib objects tls.c uses.
 BT_HCD ?= ../../build/bt-fw/BCM4345C0.hcd
-bt.o: bt.c bt.h rng.h
+bt.o: bt.c bt.h rng.h btpair.h emmc.h ../../drivers/fat.h
 	$(CC) -I$(BSSL)/inc -c $< -o $@
-pi-bt.o: bt.c bt.h rng.h
+pi-bt.o: bt.c bt.h rng.h btpair.h emmc.h ../../drivers/fat.h
 	$(CC) -DPI_BUILD $(PICON) -I$(BSSL)/inc -c $< -o $@
 bt-fw:
 	cd ../.. && tools/bt-fw.sh
