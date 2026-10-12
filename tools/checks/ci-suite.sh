@@ -72,6 +72,7 @@ once |7|docs/TESTING.md lists every check in this suite|./tools/checks/testing-d
 once |7|The landing logo rebuilds byte for byte from tools/gen/logo.py|./tools/checks/logo-check.sh
 once |7|Landing app tiles are not older than the app code that draws them (source hashes, no QEMU)|python3 ./tools/checks/landing-shots-fresh-check.py
 once |7|The landing demo downloads the kernel once, gzipped|./tools/checks/kernel-gz-check.sh
+once |7|Samantha box CAD: every fit assert holds (bosses clear the Pi, ports and screen, one-piece shell, the box drops into its stand) and all five files are written; the old stand slot stops it (skips without uv and build123d)|python3 ./tools/checks/samantha-box-check.py
 retry|5|Boot check|./check.sh
 retry|2|DHCP client leases real SLIRP config, DNS+HTTP still work, nodhcp keeps the old fixed path|./tools/checks/dhcp-check.sh
 retry|7|Benchmarks run and report every number|./tools/checks/bench-check.sh
