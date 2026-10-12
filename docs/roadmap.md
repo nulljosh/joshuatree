@@ -65,6 +65,10 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 
 ## Next few weeks
 
+- [ ] [Sonnet] Pi boots to a splash, not the log: the mark on the brand fill with the thin progress bar, held until the desktop is up, the Console never flashes on the way (the log stays one dock click away; a FAIL still raises it). Then a login screen. The first few seconds after the desktop appears take no keys; find why and fix it. Check: extend `tools/checks/arm64-m1c-check.py` to screendump the splash before the desktop and see no Console frame pixels.
+- [ ] [Fable] User accounts on the Pi: a login screen with a name and password, accounts stored on the card's `JT/` (salted hash, never the password), Notes and Music keyed to the signed-in user's folder, a `users` and `adduser` command in the Terminal. The i386 build already has Account (change password) and Add user rows in Settings; reuse that store. Check: a new accounts check that adds a user, logs out and in, and sees a wrong password refused.
+- [ ] [Sonnet] A `reboot` and `shutdown` command in the Terminal and in the menu bar, no Ctrl+Alt chord to remember (the chord stays as the keyboard route).
+
 - [ ] [Sonnet] Books, a reader app for Joshua Tree (both kernels, ring 3 like Notes): a library of plain text and EPUB-as-text books in `JT/BOOKS/`, one page at a time with the arrow keys, a remembered place per book, Tree Sans at body size. Ships with one book in the card image: Make Something Wonderful, Steve Jobs in his own words (the Steve Jobs Archive, free to read), the book the tribute line ends on. Check: a new books check under tools/checks that opens the app, turns two pages and reopens on the saved page.
 
 - [ ] [Sonnet] A small voxel building game as a native Joshua Tree app, software-rendered: walk, place and break blocks. Pick a name that is not Minecraft. Check: a host test of the block grid and ray pick, plus a `tools/checks/` boot check that opens the app and sees a frame.
