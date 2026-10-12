@@ -20,9 +20,9 @@ The ordered list below is the near-term queue. The topic sections keep the longe
 
 **On the real Pi:** the desktop, USB keyboard, Wi-Fi, network clock and Samantha relay work. Joshua confirmed an HTTPS fetch on the board. The merged Terminal, bounded agent loop, browser navigation and model controls have QEMU checks; the latest keyboard fixes still need another board pass.
 
-**Combined release work:** PR #502 brings together the Pi RNG/Terminal/Calendar fixes, readable Clock/icon, keyboard power controls, Brick, menu notices, sharper text, ISO downloads, the CI repair, Mines, the accessible landing footer and fresh-boot `wc` for the PC/browser text shell. Individual regressions pass; final gate and release results are recorded on that PR. Physical Pi verification remains for the newer features.
+**Released 2.40.0:** PR #502 merged as 264c01d9. Full local and final GitHub gates passed, deployment and release passed, and the public footer, browser demo and ISO checksum were verified. All superseded PRs and remote branches were removed. Physical Pi verification remains for the newer features.
 
-The ARM CI shard uses Ubuntu 26.04 and verifies raspi4b support before building. Its desktop verifier reads current Apps/Trash positions from APPS[] instead of stale slot numbers. The text shell installs WC.BIN at boot and uses libjt's supported number format; its check verifies exact counts and missing-file handling.
+**In review, 2.41.0:** Pi screen sleep blanks HDMI after five idle minutes and wakes on keyboard or mouse without suspending apps. Focused host and raspi4b mailbox/input checks pass. Full gates and physical HDMI verification remain.
 
 **Next, in order**
 1. Codex login from the Pi by device code. Why: a second agent on the box without typing a key. Only if the terms research says the device-code flow is allowed for this use; otherwise Codex runs through the relay on the Mac, read-only. Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
@@ -100,7 +100,7 @@ Open work by topic. The 3.0 gate above also needs a working mouse on the real bo
 
 ### Landing and demo, to A+
 
-Footer polish is prepared separately for review: a spacious directory, original desert line art built from our tree mark, dark mode and real 44px link targets. Chromium and WebKit checks cover phone/tablet/desktop layout, links, keyboard focus and contrast. The main release candidate is unchanged while its full gate runs.
+The redesigned footer is live in 2.40.0: a spacious directory, original desert art, dark mode and 44px links. Live Chromium and WebKit phone/desktop checks passed.
 
 - [ ] [Sonnet] Phone shows two input bars: the OS draws its own chat bar and the page draws a real composer for the phone keyboard. Keep one visible. The OS bar can hide while the composer is up, or the composer can be the only bar and feed the OS. Check: `tools/checks/phone-boot-check.py` plus a screenshot of the phone tour.
 - [ ] [Sonnet] The tour is silent after the intro video. Joshua speaks each stop in his cloned voice (`/api/speak` with `voice: "joshua"`, see the personas doc in the Turing repo), with the caption on screen and the speaker button respected. Check: extend `tools/checks/portfolio-mute-check.mjs` so muted means no audio request.
@@ -220,7 +220,8 @@ Sources: Onyx on Circle (Adafruit blog, 2026-09-29), Circle's feature list (gith
 Round 2, 2026-10-06 night (Raspberry Pi OS Trixie and RISC OS on the Pi 4). Small, all after Wi-Fi:
 - [ ] [Fable] Both HDMI ports: the Pi 4 drives two monitors; a second framebuffer through the mailbox display id, the desktop spanning or mirroring.
 - [ ] [Sonnet] A Screen settings page on the Pi: resolution, scale, which HDMI, saved on the card.
-- [ ] [Sonnet] Screen sleep: blank the picture after idle, wake on a key or the mouse, through the mailbox blank-screen tag.
+- [x] [Sonnet] Screen sleep implemented in the 2.41.0 branch: five idle minutes blank HDMI, keys or mouse wake, active Brick and assistant requests keep it awake. Host timing/failure controls and raspi4b mailbox/input checks: `tools/checks/arm64-screen-idle-check.py`. Full release gate and physical HDMI check remain.
+- [x] [Sonnet] Pi notification strip implemented in 2.38.0: Wi-Fi joined and Brick results appear briefly in the menu bar, clear after four seconds and leave clock/status/input intact. Apps share `menubar_notify`; file drops and updates can use it when those features exist. Check: `tools/checks/arm64-notice-check.py`. Full release gate and board verification remain.
 - [ ] [Fable] Bluetooth audio: speakers and headphones over the same CYW43455 radio. After Bluetooth for the mouse.
 Note: RISC OS on the Pi 4 still lists USB 3 as unsupported (riscosopen.org port status); Joshua Tree got xHCI working on the board on 2026-10-06.
 Round 3, 2026-10-06 night (macOS Tahoe 26 and Windows 11 2026). Joshua Tree already has the glass look (v48); these are what the two big desktops added that we lack:

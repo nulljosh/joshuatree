@@ -99,8 +99,13 @@ The Samantha box: a printable desk case for a 7 inch HDMI screen, a Pi 4B, a rou
 The boot splash draws the tree on, trunk first and spikes last, over 0.8 s before the bar fills, instead of showing it whole. `tools/gen/gen_boot_mark.py` re-renders `landing/logo.svg` as the pen's path grows and ships each pixel's first frame beside the coverage, so the kernel needs no animation data beyond one byte a pixel. Checked by `tools/checks/bootanim-check.py`, which samples the real framebuffer and wants a growing, never shrinking tree.
 
 ## 2.40.0 development branch (2026-10-10)
+## 2.41.0 development branch (2026-10-10)
 
-The PC/browser text shell can run `wc FILE` immediately after boot. Counts now use the number format libjt actually supports, fixing literal `%ld` output. It installs the existing protected user program into either the mounted filesystem or the RAM fallback, preserving an existing copy. The shell regression checks real keyboard input, exact counts and a missing-file error. Check: `tools/checks/shellname-check.sh`. Board testing remains; release status is recorded on PR #502.
+Pi HDMI blanks after five idle minutes and wakes on keyboard or mouse while apps keep running. Brick and active assistant requests prevent sleep. Refused requests preserve the display state and avoid tight retries. Host boundary, wrap and negative-control tests plus real raspi4b mailbox/input routing pass in `tools/checks/arm64-screen-idle-check.py`. QEMU does not render mailbox blanking; the physical HDMI check remains.
+
+## 2.40.0 released (2026-10-10)
+
+The PC/browser text shell can run `wc FILE` immediately after boot. Counts now use the number format libjt actually supports, fixing literal `%ld` output. It installs the existing protected user program into either the mounted filesystem or the RAM fallback, preserving an existing copy. The shell regression checks real keyboard input, exact counts and a missing-file error. Check: `tools/checks/shellname-check.sh`. PR #502 merged; local and GitHub gates, deployment, live browser QA and release ISO checksum passed. Board testing remains.
 
 ## 2.39.1 development branch (2026-10-10)
 

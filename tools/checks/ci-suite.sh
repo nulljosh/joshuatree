@@ -60,6 +60,7 @@ cd "$(dirname "$0")/../.."
 manifest() {
 cat <<'EOF'
 once |6|ARM menu notices: bounded messages, expiry, pixels and input|python3 ./tools/checks/arm64-notice-check.py
+once |6|Pi screen sleep: idle deadline, wrap, active apps, refused mailbox requests and keyboard/mouse wake|python3 ./tools/checks/arm64-screen-idle-check.py
 once |6|Brick on ARM: collision rules, lives and win under sanitizers; keyboard/mouse play, timed animation, pause, restart, Spotlight and close in QEMU|python3 ./tools/checks/arm64-brick-check.py
 once |6|Pi keyboard shutdown and restart: confirmed HID chords halt or reboot raspi4b, Escape cancels, busy and hidden prompts refuse (host and QEMU)|python3 ./tools/checks/arm64-power-check.py
 once |7|CI tooling preserves shared ARM shard affinity and rejects fixed test paths before builds (host only)|python3 ./tools/checks/ci-tooling-check.py
