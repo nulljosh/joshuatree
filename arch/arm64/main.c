@@ -2128,7 +2128,7 @@ static void fb_init(void) {
        byte order; the rule and the fill are checked in fb_color order. */
     int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == 0x00ffffff && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
-    ok = ok && wall_ok && w0 == fb_color(0x00141311) && w1 == w0 && w2 == w0;
+    ok = ok && wall_ok && w0 == fb_color(0x00B5502C) && w1 == w0 && w2 == w0;
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
 #ifdef AUDIO_TEST   /* the audiotest build: `beep` run at boot on virt, which has no PWM (arm64-audio-check.py) */
     void cmd_run(const char *q, unsigned n, void (*out)(const char *));
