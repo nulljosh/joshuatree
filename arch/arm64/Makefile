@@ -12,6 +12,7 @@
 #   oomtest     oom-kernel8.elf / oom-kernel8.img: HEAP_SIZE shrunk to OOM_HEAP bytes (make -B oomtest OOM_HEAP=n)
 #   hovertest   hover-kernel8.elf / hover-kernel8.img: the dock's hover label over slot 3 (Calendar) at boot
 #   cursortest  cursor-kernel8.elf / cursor-kernel8.img: the pointer's arrow over slot 3 at boot, with its hover label
+#   apptest     app-kernel8.img: APP_NAME (default calendar) opened at boot on the Pi image, for arm64-appsize-check.py at 1080p
 #   dragtest    drag-kernel8.elf / drag-kernel8.img: the Console dragged 100 right and 60 down at boot (clamped), for arm64-drag-check.py at 1080p
 #   keydbgtest  keydbg-kernel8.elf: the dev card's key debug line on, plus made-up HID reports (a report ID) at boot
 #   calctest    calc-kernel8.elf: the Calculator open at boot with four sums typed into it
@@ -258,6 +259,9 @@ $(eval $(call variant,oom,-DOOM_TEST -DHEAP_SIZE=$(OOM_HEAP)UL,,))
 $(eval $(call variant,hover,-DDOCK_HOVER_TEST=3,,))
 $(eval $(call variant,cursor,-DCURSOR_TEST,,))
 $(eval $(call variant,drag,-DDRAG_TEST,,))
+APP_NAME ?= calendar
+$(eval $(call variant,app,-DAPP_BOOT=\"$(APP_NAME)\",,))
+apptest: app-kernel8.img
 $(eval $(call variant,brtrace,-DBR_TRACE,,))
 brtracetest: brtrace-kernel8.elf
 $(eval $(call variant,keydbg,-DKEY_DEBUG -DKEY_SELFTEST,,))
@@ -289,7 +293,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest keydbgtest calctest caltest sdtest sdwtest notestest
+.PHONY: brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
