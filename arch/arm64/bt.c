@@ -246,6 +246,7 @@ static int tries;                        /* connection attempts this `bt pair` *
 static unsigned long conn_t0;            /* when the link came up, to say how long it lived */
 static int scan_later;                   /* `bt scan` was typed while the radio was still starting: scan the moment it is ready */
 static unsigned handle;                  /* its connection handle */
+void wifi_hold(void); void wifi_release(void);   /* wifi.c: the shared antenna is Bluetooth's while a mouse pairs */
 static unsigned char me[6], peer[6], peer_type;   /* our address and the mouse's, little endian, as the radio gives them */
 static char peer_name[30];
 static unsigned credits;                 /* ACL packets the radio can still take */
@@ -273,6 +274,7 @@ static void hang_up(void) {   /* Disconnect, reason 0x13 (we ended it), once not
     pend_op = OP_DISCONNECT; pend_p[0] = (unsigned char)handle; pend_p[1] = (unsigned char)(handle >> 8); pend_p[2] = 0x13; pend_n = 3;
 }
 static void fail(const char *msg) {   /* one plain line (msg, or the line built so far), then hang up if there is a link */
+    wifi_release();
     if (msg) put(msg);
     say(); to_term = 0;
     by_step = 0;                          /* a command still in flight no longer runs a step */
@@ -428,7 +430,7 @@ static void on_att(const unsigned char *p, unsigned n) {
     } else if (gs == 4) {
         if (op == 0x13) {
             put("bt: mouse ready"); say();
-            st = MOUSE; gs = 5; to_term = 0; until = FOREVER;
+            st = MOUSE; gs = 5; to_term = 0; until = FOREVER; wifi_release();
         } else if (op == 0x01 && n >= 5) { put("bt: the mouse would not send reports, error "); put_hex(p[4]); fail(0); }
     }
 }
@@ -657,7 +659,7 @@ static void step(void) {
     case 36:   /* no LE Connection Complete in time: the mouse is not advertising */
         put("bt: the mouse did not answer, hold its button 5 seconds and type bt pair again"); say(); to_term = 0;
         cmd(OP_CONNECT_CANCEL, 0, 0); return;
-    case 37: st = READY; until = FOREVER; return;
+    case 37: st = READY; until = FOREVER; wifi_release(); return;
     case 40: {   /* SMP Pairing Request: no input or output, no OOB, bonding, a 16 byte key; the mouse sends its LTK */
         static const unsigned char rq[7] = { 0x01, 0x03, 0x00, 0x01, 16, 0x00, 0x01 };
         for (int i = 0; i < 7; i++) preq[i] = rq[i];
@@ -768,6 +770,7 @@ int bt_command(const char *q, unsigned n) {
         unsigned m = 0; for (; dev[k].name[m] && m < sizeof peer_name - 1; m++) peer_name[m] = dev[k].name[m]; peer_name[m] = 0;
         conn = closing = smp = gs = tries = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
         wipe(ltk, 16); wipe(krand, 8);
+        wifi_hold();
         to_term = 1; st = PAIRING; pc = 30; until = now();
         put("bt: connecting to "); put(peer_name[0] ? peer_name : kind_word((unsigned)k) ? kind_word((unsigned)k) : "the strongest device"); put(", keep it in pairing mode"); say_now(); return 1;
     }
