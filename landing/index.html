@@ -634,7 +634,7 @@ p,li,.sub{text-wrap:pretty}
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
 <h1>Introducing <span class="brand">Joshua Tree.</span></h1>
-    <p class="eyebrow" data-latest="Now on a real Raspberry Pi 4"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
+    <p class="eyebrow" data-latest="3.0: Hold it. Apps, files and music on a real Raspberry Pi 4"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
   </div>
 </header>
 
@@ -647,7 +647,7 @@ p,li,.sub{text-wrap:pretty}
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">31</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">2.62.0</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">3.0.0</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
@@ -734,13 +734,13 @@ p,li,.sub{text-wrap:pretty}
   <p class="sub">The same desktop, on a small board you can hold. One command puts it on an SD card. Here is what works on a Pi 4 today, and what does not yet.</p>
   <div class="tile-grid">
     <div class="tile"><p><strong>The whole desktop.</strong> Wallpaper, menu bar, dock and windows, full screen at 1080p. It boots to a screen with the tree and a progress bar.</p></div>
-    <div class="tile"><p><strong>Plug in a keyboard.</strong> USB, any time, even after it boots. Unplug it and plug it back in, and it keeps working.</p></div>
-    <div class="tile"><p><strong>Wi-Fi, done by hand.</strong> The Pi's radio chip has no way to join a protected network on its own, so Joshua Tree does the WPA2 handshake itself. Then it gets an address and sets its clock from the internet.</p></div>
-    <div class="tile"><p><strong>A menu bar that tells you.</strong> Wi-Fi bars and a 12-hour clock sit at the top right. The console stays quiet and only shows a line when something breaks.</p></div>
-    <div class="tile"><p><strong>Samantha, on the board.</strong> Type a question and she answers, through a small relay on your Mac that calls the Claude API. The relay picks a small model for easy questions and a strong one for hard ones, and you bring your own key. She can read files from a shared folder.</p></div>
-    <div class="tile"><p><strong>She knows the board.</strong> Each question goes out with the Pi's live status: its address, its clock and its Wi-Fi. She can act on it too: print a note, or blink the green light.</p></div>
-    <div class="tile"><p><strong>Browse the web.</strong> Fetch an HTTPS page and read its text in the Terminal. Back, forward and find are built in. Pages that need JavaScript are still limited.</p></div>
-    <div class="tile"><p><strong>Still ahead.</strong> The mouse needs a test on the real board. The Calculator opens on the Pi; most desktop apps still need their own Pi port. Sound and a graphical browser are on the <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/roadmap.md">roadmap</a>.</p></div>
+    <div class="tile"><p><strong>Apps that cannot hurt it.</strong> Calendar, Notes and Music run in user mode, walled off from the kernel. If one crashes, the desktop carries on.</p></div>
+    <div class="tile"><p><strong>It keeps your files.</strong> The Pi reads and writes its own SD card. Notes saves two seconds after your last key, and the note is still there after you pull the power.</p></div>
+    <div class="tile"><p><strong>A Bluetooth mouse.</strong> It scans, pairs and moves the pointer, so there is no cable to find. USB keyboards and mice work any time, with Caps Lock and key repeat. The first test on a real Bluetooth mouse is the next step.</p></div>
+    <div class="tile"><p><strong>Sound and your music.</strong> Volume keys, a beep, and a Music app that plays the MP3s you own, with their titles, artists and covers. Apple Music downloads are out; their files are locked.</p></div>
+    <div class="tile"><p><strong>Samantha, on the board.</strong> Type a question and she answers from Turing, our own model, through a small relay on your Mac. The Pi finds the relay by itself and checks its certificate. No cloud and no key.</p></div>
+    <div class="tile"><p><strong>Wi-Fi, done by hand.</strong> The Pi's radio chip cannot join a protected network on its own, so Joshua Tree does the WPA2 handshake itself, gets an address and sets its clock from the internet.</p></div>
+    <div class="tile"><p><strong>Still ahead.</strong> Many windows at once, and the rest of the desktop apps on the Pi. See the <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/roadmap.md">roadmap</a>.</p></div>
   </div>
   <p class="sub" style="margin-top:16px"><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/RASPBERRY-PI.md">Put it on your own Pi</a></p>
 </section>
@@ -757,11 +757,11 @@ p,li,.sub{text-wrap:pretty}
           <p class="sub">Measured headless in QEMU on a Mac Mini M4 by <code>tools/bench.sh</code>. Refreshed with every release. <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/BENCHMARKS.md">Every run, in full</a>.</p>
         <div class="facts-row">
     <!-- bench:start -->
-    <div class="fact"><strong>250<span class="label" style="display:inline;margin-left:4px">ms</span></strong><span class="label">Boot to shell</span></div>
-    <div class="fact"><strong>65<span class="label" style="display:inline;margin-left:4px">ns/op</span></strong><span class="label">Alloc + free</span></div>
-    <div class="fact"><strong>777<span class="label" style="display:inline;margin-left:4px">MB/s</span></strong><span class="label">memcpy</span></div>
-    <div class="fact"><strong>2797<span class="label" style="display:inline;margin-left:4px">ns/switch</span></strong><span class="label">Context switch</span></div>
-    <div class="fact"><strong>11443<span class="label" style="display:inline;margin-left:4px">KB/s</span></strong><span class="label">Disk read</span></div>    <!-- bench:end -->
+    <div class="fact"><strong>260<span class="label" style="display:inline;margin-left:4px">ms</span></strong><span class="label">Boot to shell</span></div>
+    <div class="fact"><strong>172<span class="label" style="display:inline;margin-left:4px">ns/op</span></strong><span class="label">Alloc + free</span></div>
+    <div class="fact"><strong>756<span class="label" style="display:inline;margin-left:4px">MB/s</span></strong><span class="label">memcpy</span></div>
+    <div class="fact"><strong>3233<span class="label" style="display:inline;margin-left:4px">ns/switch</span></strong><span class="label">Context switch</span></div>
+    <div class="fact"><strong>9674<span class="label" style="display:inline;margin-left:4px">KB/s</span></strong><span class="label">Disk read</span></div>    <!-- bench:end -->
         </div>
         </div>
       </div>
@@ -909,7 +909,7 @@ p,li,.sub{text-wrap:pretty}
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.62.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">3.0.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"></div>
 </footer>
