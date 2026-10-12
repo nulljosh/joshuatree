@@ -412,7 +412,7 @@ try:
         check("the scan lasts about 5 seconds", 4.0 < took < 12, took)
         out = b.uart(); after = lines(out.split("bt: scanning for 5 seconds", 1)[1])
         check("each device once, in the order heard, names merged, latest RSSI, address byte-reversed",
-              after == ["bt: 1. Microsoft Bluetooth Mouse, near   <- this looks like your mouse: bt pair",   # it advertises the HID service and a mouse Appearance: a mouse is listed first, with its distance in words
+              after == ["bt: 1. Microsoft Bluetooth Mouse, near [connectable, discoverable]   <- your mouse? bt pair",   # it advertises the HID service and a mouse Appearance: a mouse is listed first, with its distance in words
                         "bt: 2. Tile, in the room",
                         "bt: 2 devices heard",
                         "bt: bt pair connects to number 1, or bt pair 2 for another"], after)
@@ -439,7 +439,7 @@ try:
         check("bt: paired", b.wait_for("bt: paired", 20), b.uart()[-400:])
         check("bt: mouse ready", b.wait_for("bt: mouse ready", 20), b.uart()[-600:])
         stage = lines(b.uart().split("bt: connecting to", 1)[-1])
-        check("one line per stage, in order", stage[:3] == ["bt: connected", "bt: paired", "bt: mouse ready"], stage)
+        check("one line per stage, in order", stage[:3] == ["bt: connected, link interval 7.5 ms", "bt: paired", "bt: mouse ready"], stage)
         pair_ops = [op for op, _ in b.fake.log[len(ops):] if op not in (0x200B, 0x200C)]
         check("buffers (LE says 0, so the shared ones), our address, then LE Create Connection",
               pair_ops[:4] == [0x2002, 0x1005, 0x1009, 0x200D], [hex(o) for o in pair_ops])
@@ -496,7 +496,7 @@ try:
         check("badconfirm: a wrong confirm value ends in bt: pairing failed", b.wait_for("bt: pairing failed", 30), b.uart()[-600:])
         time.sleep(1.0)
         stage = lines(b.uart().split("bt: connecting to", 1)[-1])
-        check("badconfirm: connected, then that one line, nothing after it", len(stage) == 2 and stage[0] == "bt: connected"
+        check("badconfirm: connected, then that one line, nothing after it", len(stage) == 2 and stage[0] == "bt: connected, link interval 7.5 ms"
               and stage[1].startswith("bt: pairing failed"), stage)
         bops = [op for op, _ in b.fake.log]
         check("badconfirm: the radio's own LE buffers are used (no Read Buffer Size)", 0x2002 in bops and 0x1005 not in bops, [hex(o) for o in bops[-12:]])
