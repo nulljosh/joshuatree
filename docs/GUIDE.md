@@ -328,9 +328,9 @@ The Pi has a Bluetooth radio and can pair one Bluetooth mouse. Put the mouse in 
 2. Type `bt pair 1`, using the number of your mouse. `bt pair` alone picks the strongest mouse. `bt pair NAME` picks by name.
 3. Move the mouse. The arrow follows it and clicks work.
 
-When the pairing finishes, the Pi writes it to `JT/BTPAIR.BIN` on the card. On the next boot it reconnects to that mouse by itself, with no scan. Wake the mouse if it sleeps. If it does not answer, `bt reconnect` tries again.
+When the pairing finishes, the Pi writes it to `JT/BTPAIR.BIN` on the card. On the next boot it reconnects to that mouse by itself, with no scan. Wake the mouse if it sleeps: the Pi keeps trying (12 seconds at a time, with growing pauses, up to 30 tries) and tries again whenever the mouse drops off, so a sleeping mouse comes back with a click. After the 30 tries, `bt reconnect` starts a new run.
 
-`bt` alone shows the radio's state and whether a pairing is saved. `bt forget` deletes the saved pairing. Then run `bt scan` and `bt pair` to pair a different mouse. Without an SD card the pairing works until the next reboot. The mouse has only been tested against a fake radio so far.
+`bt status` (or `bt` alone) shows the radio's state, whether it is searching, connected or idle, the saved mouse with only the last byte of its address, how many tries it made and the last error, and whether a pairing is saved. `bt forget` deletes the saved pairing. Then run `bt scan` and `bt pair` to pair a different mouse. Without an SD card the pairing works until the next reboot. The mouse has only been tested against a fake radio so far.
 
 ## Other ways to run it
 
