@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 3.8.0 development branch (2026-10-12)
+
+Nimble on the Pi, and the first Samantha plugin. Nimble (Joshua's answer engine, nimble.jaybulb.com) is a window with a search field, the answer wrapped in Tree Sans and up to three numbered sources that a click opens in the Browser. It is the dock's twelfth tile on the Pi (Nimble before Trash, a flat terracotta magnifier from `art/icons/nimble.svg`; the i386 dock keeps eleven) and Spotlight finds it by name. `nimble QUESTION` does the same at the Terminal. Samantha gains a plugin table in `ask.c` (name, argument word, the line the model is told, a handler) with `[[nimble QUESTION]]` as its first row, so `sam` can ask the web. The reply is hostile data: 32 KiB cap, a structural JSON walk, 1000 ASCII characters, and only whole http(s) source addresses. Check: `arm64-nimble-check.py` against a stub Nimble API on the host, no real network; `arm64-m1c-check.py` now counts twelve dock tiles on the Pi.
+
 ## 3.6.3 development branch (2026-10-12)
 
 The user guide gains a chapter for each Pi app and tool: Terminal and the shell, Browser, Books, Music, Notes, Calendar, Clock, Samantha and Bluetooth. The Pi row of `architecture.svg` now lists them, solid only where the board has seen it. Browser bookmarks are on the roadmap. Check: `tools/checks/check-refs.sh`.

@@ -43,8 +43,8 @@ def check(name, ok, detail=""):
 
 # The desktop at 800x600 (scale 1), the same math as kernel/dock_geom.c and fb_init.
 W, H = 800, 600
-icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 10 * 6) // 11))
-dock_x0, dock_y0 = (W - (11 * icon + 10 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
+icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 11 * 6) // 12))
+dock_x0, dock_y0 = (W - (12 * icon + 11 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
 def slot_centre(slot): return dock_x0 + 10 + slot * (icon + 6) + icon // 2, dock_y0 + 10 + icon // 2
 con = ((W - 500) // 2, 100, 500, 350)   # the Console's frame
 BG, ACCENT, RULE, SEL = (0xfa, 0xf8, 0xf6), (0xa0, 0x55, 0x3f), (0xdd, 0xd9, 0xd3), (0xed, 0xe6, 0xdc)   # calendar.c's colours

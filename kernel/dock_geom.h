@@ -5,7 +5,9 @@
    how big a tile is, where the dock's rect sits, which slot a point falls
    in. No drawing here, that stays in kernel.c's gui_draw_dock* code. */
 
+#ifndef GUI_ICON_COUNT          /* arch/arm64/Makefile builds the Pi with 12: Nimble sits before Trash there */
 #define GUI_ICON_COUNT 11
+#endif
 
 /* v36 (0.36.0): the icon size is *derived* from how many icons there are,
    instead of a constant that silently overflows the screen. DOCK_BUDGET is

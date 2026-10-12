@@ -197,6 +197,17 @@ void say_wrapped(const char *prefix, const char *s, unsigned n) {   /* browser.c
 #define ACT_SAVE 8
 #define ACT_LIST 9
 #define ACT_READ 10
+/* Plugins: Samantha's extra actions, one row each. `[[NAME TEXT]]` on its own line runs run(TEXT) on the Pi, whatever it
+   prints is the next turn's result like any other action, and the row's `help` is the one line the model is told (post()
+   adds it to the Pi status it sends). ponytail: a compile-time table, no loading. A JT/PLUGINS/ manifest on the SD card
+   can add rows without a rebuild once a second plugin needs it; until then a row here is the cheapest thing that works. */
+struct plugin { const char *name, *arg, *help; void (*run)(const char *text, unsigned n); };
+void nimble_say(const char *q, unsigned n);   /* nimble.c: ask Nimble and print the answer and its sources */
+static const struct plugin plugins[] = {
+    { "nimble", "QUESTION", "web answer with sources", nimble_say },
+};
+#define PLUGIN_N ((unsigned)(sizeof plugins / sizeof plugins[0]))
+#define ACT_PLUGIN 16            /* ACT_PLUGIN + i is plugins[i] */
 static int act_kind[ACT_MAX];
 static char act_text[ACT_MAX][ACT_LEN + 1];
 static unsigned act_n;
@@ -229,6 +240,7 @@ static unsigned take_actions(char *s, unsigned n) {
                      && !(kind = act_word(p, m, "save", ACT_SAVE, &skip)) && !(kind = act_word(p, m, "read", ACT_READ, &skip))
                      && (kind = act_word(p, m, "browse", ACT_BROWSE, &skip))
                      && !starts(p + skip, m - skip, "http://") && !starts(p + skip, m - skip, "https://")) kind = ACT_UNKNOWN;
+            for (unsigned i = 0; kind == ACT_UNKNOWN && i < PLUGIN_N; i++) kind = act_word(p, m, plugins[i].name, ACT_PLUGIN + (int)i, &skip);
             if (kind == ACT_LED || kind == ACT_STATUS || kind == ACT_LIST) skip = m;   /* no text */
             if (kind == ACT_UNKNOWN) skip = 0;           /* keep the whole marker, so the log says what was ignored */
             unsigned k = 0;
@@ -423,7 +435,7 @@ static int relay_open(void) {
 }
 
 static int relay_post_tls(const char *body, unsigned body_len, const char *token, char *reply, int *status) {
-    static char req[2 * RESULT_MAX + 512 + sizeof(RELAY_NAME)];
+    static char req[2 * RESULT_MAX + 640 + sizeof(RELAY_NAME)];
     char digits[10]; unsigned n = 0, dn = 0, v = body_len;
     *status = 0;
     if (relay_open() < 0) return -1;          /* nothing sent: the token stays home */
@@ -451,7 +463,7 @@ static int relay_post_tls(const char *body, unsigned body_len, const char *token
 /* One POST to the relay. Returns the answer's length with *ans pointing into reply, -1 when the relay never answered
    (the caller may fall back to the local model) and -2 for a refusal it already printed. */
 static int post(const char *q, unsigned n, char *reply, char **ans) {
-    static char body[2 * RESULT_MAX + 256];
+    static char body[2 * RESULT_MAX + 384];   /* +128 over the pi status for the plugin rows */
     unsigned b = 0;                            /* {"prompt":"...","session":"...","pi":"..."}: " and \ escaped, newlines as \n, other controls as spaces */
     for (const char *p = "{\"prompt\":\""; *p; p++) body[b++] = *p;
     for (unsigned i = 0; i < n; i++) {
@@ -465,7 +477,15 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
     if (ac->model_i) { for (const char *p = "\",\"model\":\""; *p; p++) body[b++] = *p; for (const char *p = models[ac->model_i]; *p; p++) body[b++] = *p; }
     if (ac->effort_i != 1) { for (const char *p = "\",\"effort\":\""; *p; p++) body[b++] = *p; for (const char *p = efforts[ac->effort_i]; *p; p++) body[b++] = *p; }
     for (const char *p = "\",\"pi\":\""; *p; p++) body[b++] = *p;
+    unsigned pi0 = b;
     b += pi_status(body + b);                  /* the Pi's live status, so the answer can be about this machine */
+    for (unsigned i = 0; i < PLUGIN_N; i++) {   /* then "; [[nimble QUESTION]] web answer with sources": the relay passes 120 characters of this field to the model, so a row that would not fit whole is left out */
+        const char *parts[] = {"; [[", plugins[i].name, " ", plugins[i].arg, "]] ", plugins[i].help};
+        unsigned len = 0;
+        for (unsigned k = 0; k < 6; k++) for (const char *c = parts[k]; *c; c++) len++;
+        if (b - pi0 + len > 119) break;
+        for (unsigned k = 0; k < 6; k++) for (const char *c = parts[k]; *c; c++) body[b++] = *c;
+    }
     body[b++] = '"'; body[b++] = '}';
     kputs("samantha: thinking\n");
     static char token[64];
@@ -538,7 +558,7 @@ static void run_actions(void) {
         capturing = 0;
         if (act_kind[a] == ACT_UNKNOWN) { kputs("agent: ignored [["); kputs(t); kputs("]]\n"); continue; }
         capturing = 1;
-        result_puts(names[act_kind[a]]); if (k) { result_puts(" "); result_puts(t); } result_puts(": ");
+        result_puts(act_kind[a] >= ACT_PLUGIN ? plugins[act_kind[a] - ACT_PLUGIN].name : names[act_kind[a]]); if (k) { result_puts(" "); result_puts(t); } result_puts(": ");
         switch (act_kind[a]) {
         case ACT_NOTE: say_wrapped("pi: ", t, k); break;
         case ACT_SAY: say_wrapped("say: ", t, k); break;   /* no voice on ARM yet: a caption */
@@ -595,6 +615,9 @@ static void run_actions(void) {
             for (unsigned i = 0; i < k; i++) cmd[o++] = t[i];
             browse_command(cmd, o);
             break; }
+        default:                               /* a plugin: its handler prints through say_wrapped, so its answer lands in result */
+            plugins[act_kind[a] - ACT_PLUGIN].run(t, k);
+            break;
         }
         capturing = 0;
     }

@@ -89,6 +89,8 @@ ART = {
     31: "books",
     32: "apps",
     33: "trash",
+    # 34 is Nimble: the Pi's dock only (arch/arm64/main.c puts it before Trash). The i386 APPS[] table stops at 33.
+    34: "nimble",
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by

@@ -9,6 +9,7 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 | Command | What it does |
 |---|---|
 | `browse URL` | Fetches a page and prints it as text with numbered links |
+| `nimble QUESTION` | Asks Nimble (nimble.jaybulb.com) and prints a short answer, then up to three sources as `[1] title` with their addresses. `no network` and the service's own reason print as `nimble: ...`. One at a time with `sam`: while she thinks it waits |
 | `open N` | Follows link N of the last page |
 | `beep [FREQ MS]` | Plays a tone out of the Pi's 3.5 mm jack |
 | `vol [0-100\|up\|down]` | Shows or sets the master volume (default 70); up and down step by 10 |
@@ -18,7 +19,7 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 | `cat NAME` | Prints the first 4 KB of a file there as text (`cat JT/NOTE.TXT` one folder down) |
 | `write NAME.EXT TEXT` | Makes or replaces `JT/NAME.EXT` holding TEXT; boot files are refused |
 | `rm NAME`, `mkdir NAME` | Deletes the file `JT/NAME`, or makes the folder `JT/NAME` |
-| `sam QUESTION` | Asks Samantha through the relay on the Mac and returns at once; her answer prints as `sam: ...` when it lands. Only one at a time (`sam: still thinking`); `sam` alone prints the usage. While she thinks, other commands run, except `browse`, `open`, `back`, `forward`, `reload`, `llm`, `bt` and `userrun`, which wait for her |
+| `sam QUESTION` | Asks Samantha through the relay on the Mac and returns at once; her answer prints as `sam: ...` when it lands. Only one at a time (`sam: still thinking`); `sam` alone prints the usage. While she thinks, other commands run, except `browse`, `open`, `back`, `forward`, `reload`, `nimble`, `llm`, `bt` and `userrun`, which wait for her |
 | `reboot` (or `restart`), `shutdown` (or `poweroff`) | Restarts or powers off the Pi at once. Typing the word is the confirmation; while Samantha is answering it says to wait. The chords Ctrl+Alt+Delete and Ctrl+Alt+End still ask first. |
 | anything else | Prints `zsh: command not found: WORD` |
 

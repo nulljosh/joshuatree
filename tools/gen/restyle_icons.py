@@ -350,6 +350,13 @@ APPS_ONLY = {
       <circle cx="52" cy="52" r="23" fill="none" stroke="#ECEFF3" stroke-width="11"/>
       <line x1="69" y1="69" x2="93" y2="93" stroke="#ECEFF3" stroke-width="12" stroke-linecap="round"/>"""),
 
+    # Nimble: a magnifier, cream on the design-system accent #b5502c. Flat like Music: one colour both ends of the ramp, a
+    # ring and a handle, no text. Not in the i386 APPS[] order: only the Pi's dock shows it (gen_icon_art.py slot 34).
+    "nimble": ("#B5502C", "#B5502C", "",
+               """
+      <circle cx="54" cy="54" r="25" fill="none" stroke="#FAF8F4" stroke-width="13"/>
+      <line x1="73" y1="73" x2="98" y2="98" stroke="#FAF8F4" stroke-width="14" stroke-linecap="round"/>"""),
+
     "contacts": ("#C9B4A5", "#614C3C",
                  lg("paper", (0, "#FFFFFF"), (1, "#E9E2DC")),
                  """

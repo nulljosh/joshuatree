@@ -223,7 +223,7 @@ static void br_tab(void) {   /* Tab: the next link, wrapping, scrolled into view
 }
 static void browser_open(void) {
     if (browser_live || !fb) return;
-    clock_close(); brick_close(); calc_close(); app_kill("closed for the Browser"); console_close();
+    clock_close(); brick_close(); calc_close(); nimble_close(); app_kill("closed for the Browser"); console_close();
     browser_live = 1; br_frame = 1; br_sel = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0; br_top = 0;
     br_wrap();
     browser_paint(0); uart_puts("browser open\n");

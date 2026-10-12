@@ -242,7 +242,7 @@ QEMU checks the idle timer, refused requests and both input paths through the fi
 
 ## The apps and tools, one at a time
 
-This part describes what is on main now (3.6.0). Every app and command below passes its checks in QEMU. Only some of it has been seen on the real board: the Pi row of [the architecture picture](../architecture.svg) shows which. Open any app with F1 and its name, as described above. Your files live in the card's `JT/` folder.
+This part describes what is on main now (3.8.0). Every app and command below passes its checks in QEMU. Only some of it has been seen on the real board: the Pi row of [the architecture picture](../architecture.svg) shows which. Open any app with F1 and its name, as described above. Your files live in the card's `JT/` folder.
 
 ### Terminal and the shell
 
@@ -257,6 +257,7 @@ The commands that work today:
 | `ls`, `ls DIR`, `cat NAME` | List the card's files and print the first 4096 bytes of one. |
 | `write NAME.EXT TEXT`, `rm NAME`, `mkdir NAME` | Make a text file, remove a file, make a folder. All three work inside `JT/` only. The name needs a dot and keeps to the old 8.3 shape. |
 | `browse`, `open`, `back`, `forward`, `reload`, `links`, `more`, `up`, `down`, `top`, `bottom`, `find` | The text browser. See the Browser chapter. |
+| `nimble QUESTION` | Asks Nimble and prints a short answer and its sources. See the Nimble chapter. |
 | `bt` | Bluetooth. See the Bluetooth chapter. |
 | `beep`, `vol` | `beep` plays a short tone. `vol 40`, `vol up` and `vol down` set the volume from 0 to 100. |
 | `userrun NAME` | Starts a user program by name, for testing. |
@@ -279,6 +280,22 @@ Open it from Spotlight. It starts with the address bar ready. Type an address an
 The HTTPS part knows 37 root certificates. A site signed by anyone else fails with a TLS error, and that is on purpose.
 
 What does not work yet: JavaScript, images and styled layout. A page that needs them shows as plain text or not at all. It keeps up to 8 KB of text, 32 links and 8 pages of history. The status line says in plain words when a page did not load.
+
+### Nimble
+
+Nimble is Joshua's answer engine, at nimble.jaybulb.com. On the Pi it is a window, a Terminal command and something Samantha can use. It needs Wi-Fi.
+
+Open it from the dock (the terracotta magnifier, next to the Trash) or with F1 and `nimble`. The search field is ready: type a question and press Enter. The answer appears in the window, wrapped in Tree Sans, and up to three numbered sources sit under it in terracotta.
+
+- **Opening a source:** click it, or press Tab to pick the next one (the status line shows its address) and Enter. It opens in the Browser.
+- **Scrolling:** Up, Down, Page Up, Page Down, Home, End and the wheel scroll a long answer. The sources stay put under it.
+- **Asking again:** the question stays selected after an answer, so typing replaces it. Esc clears the field, and Esc on an empty field closes the window.
+
+In Terminal, `nimble QUESTION` prints the same answer and the sources, with their addresses. Samantha uses it when a question needs the web (see the Samantha chapter).
+
+The window says what is going on in plain words. `Asking Nimble...` while the answer is on its way. `No network` when Wi-Fi has not joined. `Nimble could not answer` with the service's own reason when it fails, for example `the service answered 502: The answer sources failed. Try again.` When Nimble's own free AI quota is resting, it answers from Wikipedia and the window shows that answer without any change.
+
+What it keeps in mind: an answer is at most 1000 characters of plain text (accents and quote marks are flattened), a reply bigger than 32 KiB is refused, and a source is shown only if it is a whole `http://` or `https://` address. Nothing here talks to any server except Nimble's, and a busy Samantha makes the window say so instead of colliding with her.
 
 ### Books
 
@@ -318,7 +335,7 @@ Samantha is the assistant. On the Pi you reach her from Terminal with `sam QUEST
 
 She does not run on the Pi. The Pi sends your question to a small program called the relay, running on your Mac. The relay asks the model and sends the answer back. The link is HTTPS with a pinned certificate and a shared token. If the Mac is off, or Wi-Fi is down, she cannot answer. [The Wi-Fi chapter](#wi-fi-from-switching-on-to-asking-a-question) covers the setup.
 
-`sam` hands the question over and gives the prompt back, so you can keep typing. Her answer prints as `sam: ...` when it lands. She can also act: a reply can add a note or blink the green light. A model that runs on the Pi itself is planned. Until then, there is only the kernel's tiny `llm` model, and a release build does not carry one.
+`sam` hands the question over and gives the prompt back, so you can keep typing. Her answer prints as `sam: ...` when it lands. She can also act: a reply can add a note or blink the green light. Her plugins are extra things she can do, one row each in a table that is built into the kernel. The first is Nimble: when a question needs the web, she asks it and answers from what it sent back, and its sources print under her answer. You can ask Nimble yourself with `nimble QUESTION`. A model that runs on the Pi itself is planned. Until then, there is only the kernel's tiny `llm` model, and a release build does not carry one.
 
 ### Bluetooth
 

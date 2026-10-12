@@ -380,8 +380,8 @@ class Boot:
 # The dock's geometry, as in arm64-mouse-check.py (kernel/dock_geom.c and fb_init): the Mail tile is slot 2.
 def slot_centre(w, h, slot):
     s = 2 if h >= 1080 else 1; lw, lh = w // s, h // s
-    icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 10 * 6) // 11))
-    dock_w = 11 * icon + 10 * 6 + 2 * 10; x0 = (lw - dock_w) // 2; y0 = lh - icon - 2 * 10 - 24
+    icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 11 * 6) // 12))
+    dock_w = 12 * icon + 11 * 6 + 2 * 10; x0 = (lw - dock_w) // 2; y0 = lh - icon - 2 * 10 - 24
     return (x0 + 10 + slot * (icon + 6) + icon // 2) * s, (y0 + 10 + icon // 2) * s
 
 fails = []

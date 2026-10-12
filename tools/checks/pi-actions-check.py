@@ -37,10 +37,14 @@ CASES = [   # reply -> printed text, actions as "kind:text"
     ("[[statusx]]\n[[open]]", "", ["0:statusx", "0:open"]),
     ("Looking.\n[[list]]\n[[read HELLO.C]]", "Looking.", ["9:", "10:HELLO.C"]),
     ("No.\n[[listx]]\n[[read]]", "No.", ["0:listx", "0:read"]),
+    ("Web.\n[[nimble tallest tree]]\n[[nimble]]\n[[nimblex hi]]", "Web.", ["16:tallest tree", "0:nimble", "0:nimblex hi"]),   # a plugin row: [[NAME TEXT]], and no text or a longer name is unknown
     ("Here.\n```c\nint main(void){}\n```\n[[save HELLO.C]]", "Here.\n```c\nint main(void){}\n```", ["8:HELLO.C"]),
 ]
-harness = m.group(0) + r"""
+harness = r"""
+void nimble_say(const char *q, unsigned n);   /* the plugin table's handler, defined below: the host check never asks Nimble */
+""" + m.group(0) + r"""
 #include <stdio.h>
+void nimble_say(const char *q, unsigned n) { (void)q; (void)n; }
 #include <string.h>
 int main(int argc, char **argv) {
     {   /* [[save]]'s helpers: the first fenced block, and a name the person typed */

@@ -26,9 +26,20 @@ Each action is alone on its own line at the end of an answer, inside `[[ ]]`, at
 | `[[status]]` | Prints the Pi's address, clock and Wi-Fi bars. |
 | `[[save NAME]]` | Saves the answer's first ``` code block to `JT/NAME` on the SD card, so `cat JT/NAME` shows it. Only a name the person typed in the question, only an 8.3 name, never a boot file. |
 | `[[list]]` | Lists the files in `JT/` on the SD card, one line each with its size, and sends the list back to her. Read only. |
+| `[[nimble QUESTION]]` | A plugin (see below). Asks Nimble the web question and sends its answer and up to three sources back to her as the result. |
 | `[[read NAME]]` | Prints the first 4 KB of `JT/NAME` (an 8.3 name, no path) and sends it back to her, so she can read, explain or edit what she saved. Read only. |
 
 Only `[[save]]` changes a file, and only one the person named in their own question, inside `JT/` (the boot files are refused). Nothing changes a file on the Mac. For anything else the relay's prompt tells Samantha to ask first and explain what would change.
+
+## Plugins
+
+A plugin is one row in a table in `arch/arm64/ask.c`: its name, the word for its argument, one line the model is told, and a handler. `[[NAME TEXT]]` on its own line runs the handler with TEXT on the Pi. Whatever it prints is the next turn's result, cut at 1200 characters like every other action. The table is fixed when the kernel is built, so nothing is loaded at run time. Each request carries the rows' lines in the `pi` field, after the Pi status (for example `; [[nimble QUESTION]] web answer with sources`), so the relay's prompt does not need to change and the relay keeps its 120 character limit on that field.
+
+| Plugin | What it does |
+|---|---|
+| `nimble` | `[[nimble QUESTION]]`: asks Nimble (`arch/arm64/nimble.c`, nimble.jaybulb.com) and prints the answer, then `[1] title` and the address for up to three sources. Use it when a question needs the web. It needs Wi-Fi: with no network the result says `nimble: no network`. The question is at most 69 characters, because an action line is 80. |
+
+A plugin cannot change a file or the Pi's settings: it has the same four-per-turn and five-step limits, and a name that is not in the table is `agent: ignored [[...]]`. A `JT/PLUGINS/` manifest on the SD card can add rows without a rebuild once a second plugin needs it.
 
 ## Limits
 
@@ -81,7 +92,8 @@ A Pi image carries the relay token only when built with `JT_WIFI_DEV=1`, the sam
 
 ## Checks
 
-- `tools/checks/pi-actions-check.py`: the parser, compiled on the host.
+- `tools/checks/pi-actions-check.py`: the parser, compiled on the host, plugin rows included.
+- `tools/checks/arm64-nimble-check.py`: `sam` routing a web question through the nimble plugin against a stub Nimble API and a fake relay.
 - `tools/checks/arm64-agent-check.py`: the loop under QEMU against a fake relay: browse then answer, the two caps, Esc, unknown actions.
 - `tools/checks/arm64-model-check.py`: `/model`, `/effort`, `/status`, `/clear` under QEMU against a fake relay, including a refused value that is never sent.
 - `tools/checks/claude-relay-check.py`: also the relay's model and effort whitelist and the thinking budget it sends.

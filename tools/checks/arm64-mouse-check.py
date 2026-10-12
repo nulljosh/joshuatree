@@ -43,8 +43,8 @@ if not fails: print("  ok: the arrow, the close button and the reopen clean the 
 # Geometry: the same math as kernel/dock_geom.c and fb_init, at 800x600 (scale 1).
 def geom(w, h):
     s = 2 if h >= 1080 else 1; lw, lh = w // s, h // s
-    icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 10 * 6) // 11))
-    dock_w = 11 * icon + 10 * 6 + 2 * 10; x0 = (lw - dock_w) // 2; y0 = lh - icon - 2 * 10 - 24
+    icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 11 * 6) // 12))
+    dock_w = 12 * icon + 11 * 6 + 2 * 10; x0 = (lw - dock_w) // 2; y0 = lh - icon - 2 * 10 - 24
     return s, icon, x0, y0
 def slot_centre(w, h, slot):
     s, icon, x0, y0 = geom(w, h)

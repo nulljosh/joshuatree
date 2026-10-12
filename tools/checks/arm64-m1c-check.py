@@ -4,7 +4,7 @@ through ramfb; on QEMU's Raspberry Pi 4B model through the VideoCore mailbox, th
 
 Boots each build, waits for "M1c fb ok" on the UART, then asks QEMU for a screendump over QMP and checks real pixels:
 the menu bar (its rule, and half wallpaper half white), the Satellite wallpaper (real photo pixels, in colour, not the old flat fill), the i386 dock (its tray,
-hairline and 11 icon tiles, from the shared kernel/gui_paint.c; at 1080p every tile, Calendar included, must be the shared icon art pixel for pixel,
+hairline and 12 icon tiles (the shared eleven and Nimble before Trash), from the shared kernel/gui_paint.c; at 1080p every tile, Calendar included, must be the shared icon art pixel for pixel,
 so nothing is drawn over Calendar's page-and-grid picture), the i386 window frame on the Console (cream body, rounded
 corner, title hairline, traffic lights, centred title, white well) and the tribute line above the dock. A dockhover test build
 (`make hovertest`) must show the i386 hover label, capsule and name, over slot 3; the shipped kernel must not. On the Pi model it also fakes a 1080p
@@ -33,13 +33,14 @@ from PIL import Image
 icon_h = open(os.path.join(root, "kernel/icon_art.h")).read()
 ART_SIZE = int(re.search(r"#define ICON_ART_SIZE (\d+)", icon_h).group(1))
 art_vars = re.findall(r"(icon_art_\w+),", re.search(r"ICON_ART\[\d+\] = \{(.*?)\};", icon_h, re.S).group(1))
-dock_order = re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", open(os.path.join(root, "kernel/gui_paint.h")).read()).group(1).replace(" ", "").split(",")
+dock_order = re.search(r"#define PI_DOCK_ORDER \{(.*?)\}", open(os.path.join(arch, "main.c")).read()).group(1).replace(" ", "").split(",")   # the Pi's dock: the shared eleven plus Nimble, main.c
+NDOCK = len(dock_order)
 k = open(os.path.join(root, "kernel/kernel.c")).read()
 apps = re.findall(r'\{"([^\"]+)"', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", k, re.S).group(1))
-symbols = {"GUI_APPS_FOLDER": apps.index("Apps"), "GUI_TRASH": apps.index("Trash")}
+symbols = {"GUI_APPS_FOLDER": apps.index("Apps"), "GUI_TRASH": apps.index("Trash"), "GUI_NIMBLE": len(apps)}   # Nimble is ICON_ART slot 34, one past the i386 APPS[] table
 def _slot(t): return symbols[t] if t in symbols else int(t)
 DOCK_ART = [art_vars[_slot(t)] for t in dock_order]
-DOCK_NAMES = [apps[_slot(t)] for t in dock_order]
+DOCK_NAMES = [apps[_slot(t)] if _slot(t) < len(apps) else "Nimble" for t in dock_order]
 def art_tile(var, pw, under=(0xef, 0xeb, 0xe4)):
     body = re.search(r"%s\[\d+\] = \{(.*?)\};" % var, icon_h, re.S).group(1)
     png = Image.open(io.BytesIO(bytes(int(b) for b in body.replace("\n", "").split(",") if b.strip()))).convert("RGBA")
@@ -111,10 +112,10 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         sc = lambda v: v * h // 600                                  # the kernel's own layout rule: an 800x600 design scaled by height
         win_w, win_h = sc(500), sc(350); win_x, win_y = (w - win_w) // 2, sc(100)
         # The dock is the i386 desktop's own (kernel/gui_paint.c, kernel/dock_geom.c): a 1080p screen is the 960x540
-        # grid at scale 2, a smaller one scale 1. Same layout math as dock_geom.c, dock_scale_pct 7, 11 icons.
+        # grid at scale 2, a smaller one scale 1. Same layout math as dock_geom.c, dock_scale_pct 7, 12 icons.
         s2 = 2 if h >= 1080 else 1; lw, lh = w // s2, h // s2
-        icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 10 * 6) // 11))
-        dock_w = 11 * icon + 10 * 6 + 2 * 10; dock_x0 = (lw - dock_w) // 2; dock_y0 = lh - icon - 2 * 10 - 24
+        icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - (NDOCK - 1) * 6) // NDOCK))
+        dock_w = NDOCK * icon + (NDOCK - 1) * 6 + 2 * 10; dock_x0 = (lw - dock_w) // 2; dock_y0 = lh - icon - 2 * 10 - 24
         dock_y = (dock_y0 - 24) * s2                                 # the top of the dock's band: the tribute sits above it
         win = [tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3]) for y in range(win_y + sc(32), win_y + win_h - sc(14)) for x in range(win_x + sc(8), win_x + win_w - sc(4))]
         ink = sum(1 for c in win if max(c) < 0x90)                  # dark text pixels
@@ -171,17 +172,17 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
             elif ink_ < 20 * s2: fails.append(f"{name}: the hover label has no name in ink ({ink_} pixels)")
             else: print(f"  ok: {name} hover label over slot 3: capsule {cap[0]}, {ink_} ink pixels of 'Calendar'")
         elif sum(1 for c in cap if c == (0xf4, 0xf1, 0xec)) > 2: fails.append(f"{name}: a hover label shows with nothing hovered")
-        if "M1d dock 11 icons" not in out: fails.append(f"{name}: no 'M1d dock 11 icons' line: the icon artwork did not draw")
+        if f"M1d dock {NDOCK} icons" not in out: fails.append(f"{name}: no 'M1d dock {NDOCK} icons' line: the icon artwork did not draw")
         tiles = []                                                   # each slot's tile: the icon artwork, not bare tray
-        for slot in range(11):
+        for slot in range(NDOCK):
             x0, y0 = (dock_x0 + 10 + slot * (icon + 6)) * s2, (dock_y0 + 10) * s2
             px_ = [at(x, y) for y in range(y0 + 4 * s2, y0 + (icon - 4) * s2, s2) for x in range(x0 + 4 * s2, x0 + (icon - 4) * s2, s2)]
             tiles.append((sum(1 for c in px_ if c != (0xef, 0xeb, 0xe4)) * 100 // len(px_), len(set(px_))))
         bare = [i for i, (cover, _) in enumerate(tiles) if cover < 60]
         if bare: fails.append(f"{name}: dock slots {bare} show the tray, not an icon (cover % per slot: {[t[0] for t in tiles]})")
-        elif len({at((dock_x0 + 10 + k * (icon + 6) + icon // 2) * s2, (dock_y0 + 10 + icon // 3) * s2) for k in range(11)}) < 6:
-            fails.append(f"{name}: the 11 dock tiles look alike, the artwork is not drawing")
-        else: print(f"  ok: {name} dock: 11 icon tiles of {icon} at scale {s2}, {min(t[1] for t in tiles)}+ colours each")
+        elif len({at((dock_x0 + 10 + k * (icon + 6) + icon // 2) * s2, (dock_y0 + 10 + icon // 3) * s2) for k in range(NDOCK)}) < 6:
+            fails.append(f"{name}: the {NDOCK} dock tiles look alike, the artwork is not drawing")
+        else: print(f"  ok: {name} dock: {NDOCK} icon tiles of {icon} at scale {s2}, {min(t[1] for t in tiles)}+ colours each")
         y0 = (dock_y0 + 10) * s2
         if s2 == 2 and icon * s2 < ART_SIZE:                         # at 1080p each tile is the shared art, area-filtered exactly
             off = []
@@ -191,7 +192,7 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
                 bad_px = sum(1 for (j, i), c in want_t.items() if at(x0 + i, y0 + j) != c)
                 if bad_px: off.append(f"{DOCK_NAMES[slot]} ({bad_px} px)")
             if off: fails.append(f"{name}: dock tiles differ from the shared icon art (kernel/icon_art.h): {', '.join(off)}")
-            else: print(f"  ok: {name} the other 10 dock tiles are the shared icon art, pixel for pixel")
+            else: print(f"  ok: {name} the {NDOCK} dock tiles are the shared icon art, pixel for pixel")
         for what, (x, y), c in want:
             i = (y * w + x) * 3; got = tuple(px[i:i + 3])
             if got != c: fails.append(f"{name}: {what} at {(x, y)}: got {got}, want {c}")

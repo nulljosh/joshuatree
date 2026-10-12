@@ -1207,6 +1207,12 @@ static void crash(const struct frame *f) {
 #include "../../drivers/png.h"
 #include "../../kernel/dock_geom.h"
 #include "../../kernel/gui_paint.h"
+/* The Pi's dock is the shared eleven plus Nimble: 12 slots (the Makefile's -DGUI_ICON_COUNT=12 reaches dock_geom.c too), Nimble
+   just before Trash so slots 6 and 7 stay the Terminal and Samantha. GUI_NIMBLE is its ICON_ART slot (tools/gen/gen_icon_art.py);
+   the i386 desktop has no such app and keeps its 11. */
+#define GUI_NIMBLE 34
+#define DOCK_NIMBLE 10
+#define PI_DOCK_ORDER {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 18, GUI_NIMBLE, GUI_TRASH}
 #include "../../kernel/icon_art.h"
 #include "../../kernel/boot_mark.h"
 int dock_scale_pct = 7;   /* the i386 default (Settings can change it there; nothing does here yet) */
@@ -1353,7 +1359,7 @@ static void cal_overlay(unsigned *tile, int pw, int today) {
               pw * 96 / 128, day_size, 0x001C1C1E, tile, pw, pw, pw);
 }
 static int dock_tile(int slot, int shadow) {   /* one slot's art onto the dock; shadow 0 repaints the tile alone, its corners keep the old shadow */
-    static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
+    static const int order[GUI_ICON_COUNT] = PI_DOCK_ORDER;
     int size = DOCK_ICON, pw = size * (int)window_scale(), drawn = 0;
     int icon = order[slot], cx = gui_slot_x(slot) + size / 2, cy_bottom = gui_dock_y0() + DOCK_PAD + size;
     if (shadow) gui_draw_icon_shadow(cx, cy_bottom, size);
@@ -1380,7 +1386,7 @@ static void dock_paint(void) {
    moving to another slot or to none puts the plain band back before the next label; nothing is allocated until then.
    The pointer drives it (slice 4, below); the dockhover test build calls it once at boot. Names follow APPS[] in
    kernel/kernel.c for GUI_DOCK_DEFAULT_ORDER (arm64-m1c-check.py compares them). */
-static const char *const dock_names[GUI_ICON_COUNT] = {"Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"};
+static const char *const dock_names[GUI_ICON_COUNT] = {"Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Nimble", "Trash"};
 static unsigned *dock_band, *dock_mem;   /* dock_mem is the band copy's memory, taken at boot like the Browser's buffer so no mark's release can rewind over it */
 static int cur_on;           /* slice 4: the pointer's arrow is on the screen */
 static void cur_hide(void);
@@ -1502,7 +1508,12 @@ const char *calc_output(void);
 int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
 static int calc_lx, calc_ly, calc_lw, calc_lh;   /* its frame on the logical grid, set in fb_init */
 static unsigned *calc_under;                    /* the wallpaper under it, saved at boot before any window was drawn */
-static int clock_live, brick_live, spot_live, browser_live;
+static int clock_live, brick_live, spot_live, browser_live, nimble_live;
+static void nimble_open(void);
+static void nimble_close(void);
+static int nimble_key(unsigned code);
+static void nimble_click(int lx, int ly);
+static void nimble_wheel(int v);
 static void browser_open(void);
 static void browser_close(void);
 static int browser_key(unsigned code);
@@ -1559,6 +1570,7 @@ static void calc_open(void) {
     brick_close();
     clock_close();
     browser_close();
+    nimble_close();
     app_kill("closed for the Calculator");   /* the two never share the screen, so there is no third window to stack */
     if (!calc_under) return;   /* no saved wallpaper (a full heap): nothing to close it back to */
     if (calc_live) { calc_raise(); return; }
@@ -1640,7 +1652,7 @@ static long app_window_open(unsigned long info) {
         __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
         for (unsigned long i = 0; i < bytes / 8; i++) ((unsigned long *)(USER_BASE + UP_WIN))[i] = 0;
         app_wbytes = bytes; app_shown = 0;
-        spot_close(); calc_close(); browser_close();
+        spot_close(); calc_close(); browser_close(); nimble_close();
         app_front = 1;
         app_paint();
         uart_puts("M3c window "); uart_puts(app_cur->name); uart_putc(' '); uart_dec(app_cw); uart_putc('x'); uart_dec(app_ch);
@@ -1709,7 +1721,7 @@ static int app_dock(const char *name) {
    their boot places, and a Console with one of them open is not dragged (there is no stacking to repaint). ---- */
 static int in_box(int x, int y, int bx, int by, int bw, int bh);
 static int drag_on, drag_dx, drag_dy;   /* a title-band press is moving the window; where inside it the pointer took hold, logical px */
-static int win_draggable(void) { return !spot_live && (brick_live || clock_live || browser_live || (con_live && !calc_live && !app_wbytes)); }
+static int win_draggable(void) { return !spot_live && (brick_live || clock_live || browser_live || nimble_live || (con_live && !calc_live && !app_wbytes)); }
 static int on_title_band(int x, int y) {   /* the top 30 px of the window, but not the three dots (radius 7, a pixel spare) */
     if (!in_box(x, y, win_lx, win_ly, win_lw, 30)) return 0;
     for (int d = 0; d < 3; d++) { int dx = x - (win_lx + 24 + 22 * d), dy = y - (win_ly + 16); if (dx * dx + dy * dy <= 8 * 8) return 0; }
@@ -1781,6 +1793,10 @@ static void pointer_click(void) {   /* the left button went down */
         if (spot_live) return;
         if (on_close_dot(lx, ly, win_lx, win_ly)) browser_close();
         else if (on_win) browser_click(lx, ly);
+    } else if (nimble_live && slot < 0) {
+        if (spot_live) return;
+        if (on_close_dot(lx, ly, win_lx, win_ly)) nimble_close();
+        else if (on_win) nimble_click(lx, ly);
     } else if (slot >= 0) dock_activate(slot);
     else if (on_app && app_front) {   /* the front window takes the click: an app's red dot ends it, its content gets the click */
         if (on_close_dot(lx, ly, app_lx, app_ly)) {   /* i386's close: a click above the content (b < 0), which calendar.c answers by exiting */
@@ -1805,9 +1821,11 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     if (slot == GUI_ICON_COUNT) { clock_open(); return; }
     if (slot == GUI_ICON_COUNT + 1) { brick_open(); return; }
     if (slot == SPOT_BROWSER) { browser_open(); return; }
+    if (slot == DOCK_NIMBLE) { nimble_open(); return; }
     brick_close();
     clock_close();
     browser_close();
+    nimble_close();
     if (app_dock(slot == SPOT_MUSIC ? "Music" : slot == SPOT_BOOKS ? "Books" : dock_names[slot])) return;   /* Calendar, Notes, Music and Books: user/NAME.c at EL0, in its own window */
     if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
     console_open();
@@ -1921,11 +1939,12 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
 #endif
     if (volume_key(code)) return 1;   /* before Spotlight and every pane, like the Spotlight shortcut */
     if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
-    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); browser_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
+    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); browser_close(); nimble_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
     if (spot_live) return spot_key(code);
     if (brick_live) return brick_key(code, 1);
     if (clock_live) { if (code == 1) clock_close(); return 1; }
     if (browser_live) return browser_key(code);
+    if (nimble_live) return nimble_key(code);
     if (calc_front || app_front) return 0;
     if (code == 61 && term_front()) {   /* F3: the other Terminal session; never move a running request. */
         unsigned next = term_index ^ 1;
@@ -2088,6 +2107,7 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
 #include "clock_ui.h"
 #include "brick_ui.h"
 #include "browser_ui.h"
+#include "nimble_ui.h"
 int wifi_signal_level(void);   /* wifi.c: 1 to 3 from how loud our network was in the scan */
 /* The right end of the menu bar: the clock in 12-hour form, and left of it a three-bar signal icon, no name. Connected
    bars show in the same ink as the clock, as many as the signal earns; anything else (starting, joining, no network) is three
@@ -2314,13 +2334,13 @@ static void m1_selftest(void) {
 #endif
 }
 
-/* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock and Brick are available; other names return 0. */
+/* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock, Brick, Browser and Nimble are available; other names return 0. */
 int app_open_name(const char *name) {
-    static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser"};
-    for (unsigned a = 0; a < 5; a++) {
+    static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser", "nimble"};
+    for (unsigned a = 0; a < 6; a++) {
         const char *w = openable[a]; unsigned i = 0;
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
-        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); return 1; }
+        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); else if (a == 5) nimble_open(); return 1; }
     }
     return 0;
 }
@@ -2419,7 +2439,7 @@ static void input_event(struct input_event e) {
         mouse_moved = 1;
     } else if (e.type == 2) {                                                                              /* EV_REL: a mouse, clamped to the screen */
         int v = (int)e.value;
-        if (e.code == 8) { browser_wheel(v); return; }   /* REL_WHEEL: only the Browser reads it */
+        if (e.code == 8) { browser_wheel(v); nimble_wheel(v); return; }   /* REL_WHEEL: only the Browser and Nimble read it */
         if (e.code == 0) { int x = (int)mouse_x + v; mouse_x = x < 0 ? 0 : x >= (int)fb_w ? (int)fb_w - 1 : (unsigned)x; }
         else if (e.code == 1) { int y = (int)mouse_y + v; mouse_y = y < 0 ? 0 : y >= (int)fb_h ? (int)fb_h - 1 : (unsigned)y; }
         mouse_moved = 1;
