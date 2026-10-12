@@ -112,6 +112,10 @@ try:
     PAGE = (160, 164, 640, 424)  # inside the page well: 8 in from the sides, 64 down, 26 above the bottom
     def count(img, box, near, tol=14):
         return sum(1 for p in img.crop(box).getdata() if all(abs(p[i] - near[i]) <= tol for i in range(3)))
+    empty = shot("empty")
+    check("the empty well shows the mascot: its ink and its cheeks", count(empty, PAGE, (22, 21, 19), 24) > 400 and count(empty, PAGE, (231, 154, 120), 40) > 8,
+          (count(empty, PAGE, (22, 21, 19), 24), count(empty, PAGE, (231, 154, 120), 40)))
+    empty.crop(WIN).save(tmp / "empty-window.png")
     type_text("http://10.0.2.2:%d/one" % port); key("ret")
     check("Enter logs the load", wait_for("browser: load http://10.0.2.2:%d/one" % port, 10), uart()[-400:])
     check("the page arrived, two lines", wait_for("browser: page 2 lines", 40), uart()[-600:])
