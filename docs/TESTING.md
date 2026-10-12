@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (254 checks)
+## The suite (255 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -62,6 +62,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Touch: a tap opens the on-screen keyboard on phone and a tapped key reaches the Notes editor | `tools/checks/touch-osk-check.py` | retry |
 | No-disk boot falls back to ramfs with seeded demo files | `tools/checks/ramfs-demo-check.sh` | retry |
 | Shell regression suite (heap, task, preempt, kill, ring3, ps) | `tools/checks/shellregress-check.sh` | retry |
+| Small tool picker in C agrees with its Python reference (pickcheck, no network) | `tools/checks/picker-check.sh` | retry |
 | Ring-3 reference program against the v1 syscall ABI | `tools/checks/usertest-check.sh` | retry |
 | Ring-3 program writing a real file against the v2 syscall ABI | `tools/checks/notetest-check.sh` | retry |
 | Keyrate runs as a ring-3 process with its own window; crashing it leaves the desktop alive (v3 syscall ABI) | `tools/checks/ring3app-check.py` | retry |
