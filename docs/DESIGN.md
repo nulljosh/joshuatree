@@ -12,6 +12,10 @@ It never draws an emoji. UI text covers `UI_GLYPH_RANGE = 32-126`, plain ASCII, 
 
 The 3.0 mark is one Joshua tree drawn in crayon: steady ink lines for a leaning trunk that swells where the marker pressed, three arms ending in dense looping tufts with paper showing through, and a light grain. The ground under it is a single terracotta stroke, the mark's only colour, kept in the bold copy that carries it from 16 to 48 px; every copy comes from `tools/gen/logo.py`.
 
+## Mascot
+
+The mascot is the mark itself, drawn as a kid would draw a friend: the same crayon hand on a chubbier tree with a belly, shorter arms, two dot eyes, a small smile and terracotta-pink cheeks. No hands, no hair, no grin. It shows up where the OS wants a face, never on a working screen: splash, login, empty states. `tools/gen/mascot.py` draws `landing/mascot.svg`; `docs/brand/mascot.png` is its raster.
+
 ## Icons
 
 Every icon is one picture on one tile. The tile is a superellipse, `SQUIRCLE_N = 4.8`, over the whole 128 unit canvas, and an icon's edge must land within `TOL_SQUIRCLE = 1.0` unit of that curve at every angle, with a soft anti-aliased edge. A plain rounded rectangle fails.
