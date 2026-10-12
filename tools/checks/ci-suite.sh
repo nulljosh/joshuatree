@@ -180,6 +180,7 @@ retry|4|Dock apps open/close from the pointer alone|python3 ./tools/checks/appcl
 retry|3|Esc on a bare desktop does not quit the GUI; Mail still opens from the dock|python3 ./tools/checks/esc-desktop-check.py
 retry|1|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
 retry|1|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
+retry|3|Launchpad exits to the desktop: Esc, empty click, Apps tile again; web demo forwards Esc|python3 ./tools/checks/launchpad-exit-check.py
 retry|5|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py
 retry|7|Menu bar present after Launchpad, every app open and close, Esc, panels, drags; screen never black|python3 ./tools/checks/menubar-persist-check.py
 retry|1|Launchpad centered, evenly padded, icons 56px or smaller, labels clear (pixels, five screen sizes)|python3 ./tools/checks/launchpad-centered-check.py

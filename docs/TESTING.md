@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (242 checks)
+## The suite (243 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -134,6 +134,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Esc on a bare desktop does not quit the GUI; Mail still opens from the dock | `tools/checks/esc-desktop-check.py` | retry |
 | Dock hover survives mid-animation | `tools/checks/dockhover-check.py` | retry |
 | Launchpad tile click launches, doesn't just close the folder | `tools/checks/launchpad-click-check.py` | retry |
+| Launchpad exits to the desktop: Esc, empty click, Apps tile again; web demo forwards Esc | `tools/checks/launchpad-exit-check.py` | retry |
 | Apps folder layout (no black band, no row spill, no ghost icons) | `tools/checks/appsfolder-layout-check.py` | retry |
 | Menu bar present after Launchpad, every app open and close, Esc, panels, drags; screen never black | `tools/checks/menubar-persist-check.py` | retry |
 | Launchpad centered, evenly padded, icons 56px or smaller, labels clear (pixels, five screen sizes) | `tools/checks/launchpad-centered-check.py` | retry |
@@ -293,7 +294,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Panes | `tools/checks/panes-check.py` |
 | Claude | `tools/checks/arm64-claude-console-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3claude-check.py` |
 | Mines | `tools/checks/ring3mines-check.py` |
-| Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
+| Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | none yet |
 
 Apps with no check yet: Trash.
