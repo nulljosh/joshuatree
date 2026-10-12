@@ -2118,10 +2118,10 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
 #define WIFI_INK 0x001C1C1E
 #define WIFI_DIM 0x00909090
 void menubar_wifi(int state) {
+    mb_wifi = state;   /* kept even before the desktop exists (the boot splash), so its first paint shows the right fan */
     if (!fb || !text_ok) return;
     int W = (int)fb_w, H = (int)fb_h, mb = sg(MENUBAR_H);
     if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = mb_save[y * (W - mb_x0) + (x - mb_x0)];
-    mb_wifi = state;
     char clkbuf[12] = "--:--"; const char *clk = clkbuf;   /* the clock slot: dashes until the network has told us the time */
     unsigned long u = net_clock_utc();
     if (u) {
@@ -2184,12 +2184,42 @@ void menubar_tick(void) {   /* the poll loop calls this; it redraws only when th
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
     if ((int)(h * 60 + m) != clock_minute) menubar_wifi(mb_wifi);
 }
-static void fb_init(void) {
-    if (!fb_setup()) return;
+/* The Pi's boot splash (QUIET_BOOT): from the first frame a solid terracotta screen with the tree mark centred and a thin
+   line under it, one sixth longer as each stage of boot finishes (fb, sd, wifi, clock, bt, desktop). Nothing else is drawn,
+   not the desktop, not the Console, until splash_finish: Wi-Fi joined or given up, the clock synced or given up, Bluetooth
+   up or given up. Then fb_desktop paints the desktop once. The UART says `splash step N name` and `boot done`. */
+#ifdef QUIET_BOOT
+static int splash_on;
+static void splash_step(int n, const char *name) {
+    if (!splash_on) return;
+    int W = (int)fb_w, H = (int)fb_h, bw = sg(140), bh = sg(4) > 2 ? sg(4) : 2, bx = (W - bw) / 2, by = H / 2 + sg(50);
+    fb_rect(bx, by, bw, bh, 0x00923F20);              /* the track, a darker terracotta */
+    fb_rect(bx, by, bw * n / 6, bh, 0x001C1C1E);      /* the stages done, in ink */
+    fb_flush(bx, by, bw, bh);
+    uart_puts("splash step "); uart_dec((unsigned)n); uart_putc(' '); uart_puts(name); uart_putc('\n');
+#ifdef SPLASH_STEP_MS   /* the splash checks: hold each step so a screendump can catch it */
+    unsigned long f, c, end; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    end = c + (f ? f : 54000000) / 1000 * SPLASH_STEP_MS;
+    do __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); while (c < end);
+#endif
+}
+static void splash_begin(void) {
     int W = (int)fb_w, H = (int)fb_h;
-    mouse_x = fb_w / 2; mouse_y = fb_h / 2;               /* the pointer starts in the middle of the screen */
+    fb_rect(0, 0, W, H, 0x00B5502C);
+    menu_mark_paint(W / 2, H / 2 - sg(30), sg(110), 0x001C1C1E);
+    splash_on = 1;
+    uart_puts("splash up\n");
+    splash_step(1, "fb");
+}
+#define SPLASH(n, name) splash_step(n, name)
+#else
+#define SPLASH(n, name) ((void)0)
+#endif
+static void fb_desktop(void) {
+    int W = (int)fb_w, H = (int)fb_h;
     int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
     int mb = sg(MENUBAR_H);                               /* the menu bar's height on this screen: 26 on the 960x540 grid */
+#ifndef QUIET_BOOT
     {   /* the boot screen while the photo decodes (the slow part): the tree on off-white and a thin bar a third full,
            one of three steps done (screen up; the photo and the desktop follow). The wallpaper paints straight over it. */
         fb_rect(0, 0, W, H, 0x00faf8f4);
@@ -2199,6 +2229,7 @@ static void fb_init(void) {
         fb_rect(bx, by, bw / 3, bh, 0x001C1C1E);
         fb_flush(0, 0, W, H);
     }
+#endif
     int wall_ok = wall_paint(fb, fb_pitch, W, H, fb_swap);
     if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* Navy (clrs.cc), see wall.c; this fallback is now unreachable */
     for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {   /* menu bar: half wallpaper, half white, per pixel */
@@ -2247,7 +2278,7 @@ static void fb_init(void) {
     if (text_ok) {
         menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
         text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
-        menubar_wifi(1);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
+        menubar_wifi(mb_wifi < 0 ? 1 : mb_wifi);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
         const char *thanks = "Seduce. Vilify. Ignore.";
@@ -2315,6 +2346,26 @@ static void fb_init(void) {
     calc_press("Sci"); calc_press("M+"); calc_did(0);   /* end on the scientific pad, memory held, for the screendump */
 #endif
 }
+static void fb_init(void) {
+    if (!fb_setup()) return;
+    mouse_x = fb_w / 2; mouse_y = fb_h / 2;               /* the pointer starts in the middle of the screen */
+#ifdef QUIET_BOOT
+    splash_begin();                                       /* the desktop waits for splash_finish */
+#else
+    fb_desktop();
+#endif
+}
+#ifdef QUIET_BOOT
+static void fb_diag(void);
+static void splash_finish(void) {   /* everything boot waits for is done: the one desktop paint */
+    uart_puts("boot done\n");
+    if (!splash_on) return;
+    splash_step(6, "desktop");
+    splash_on = 0;
+    fb_desktop();
+    fb_diag();
+}
+#endif
 /* One line that turns a photo of the screen into a measurement: where the firmware really put the kernel, the monitor
    size it reported, the buffer we got and its pitch in bytes, and the console font's self-test ('M': width x height,
    advance, verdict). For example "@0x80000 fb 1920x1080>1920x1080 p7680 M13x18 a14 ok". */
@@ -2767,6 +2818,7 @@ static void blk_probe(void) {}
 
 void net_stack_demo(void);
 void net_clock_sync(void);
+int bt_starting(void);   /* bt.c: the radio is still loading its patch */
 void tls_demo(void);
 void input_drain(void) { usb_poll(); input_poll(); key_repeat_tick(); audio_pump(); }   /* ask.c, between agent steps and in every wait while `sam` thinks: the keys that queued, a held key repeating, and the sound */
 
@@ -2785,11 +2837,14 @@ void main(void) {
     if (blk_init()) blk_probe();
     net_stack_demo();   /* ip.c: DHCP and an HTTP POST through the shared stack, silent with no card */
     tls_demo();         /* ip.c: the HTTPS proof, only in a TLSPORT= build */
+#ifndef QUIET_BOOT
     fb_diag();   /* last, so it is the newest line on the screen */
+#endif   /* quiet boot: splash_finish prints it, once text_init has measured the font */
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
+    SPLASH(2, "sd");
 #ifdef SD_SELFTEST   /* the sd builds (arm64-sd-check.py) run the Terminal's own commands at boot on the check's card */
     {
         void cmd_run(const char *q, unsigned n, void (*out)(const char *));
@@ -2842,7 +2897,17 @@ void main(void) {
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); menubar_notify("Wi-Fi joined"); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+    SPLASH(3, "wifi");
+    SPLASH(4, "clock");   /* net_clock_sync ran inside the join above, or there was no network to ask */
     bt_init();   /* bt.c: powers the radio and returns; the main loop's bt_poll does the rest */
+#ifdef QUIET_BOOT
+    if (splash_on) {   /* the splash waits for the radio to load its patch (about half a minute on a Pi), or to say it will not: 60 s at most */
+        unsigned long t0 = key_ms();
+        while (bt_starting() && key_ms() - t0 < 60000) bt_poll();
+    }
+    SPLASH(5, "bt");
+    splash_finish();
+#endif
 #ifdef NOTICE_SELFTEST
     menubar_notify("Note kept in memory");
 #endif

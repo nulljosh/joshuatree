@@ -37,7 +37,7 @@ def run(name, heap, qemu_args, image, expect, screen):
         for _ in range(150):
             time.sleep(0.1)
             out = open(log, errors="replace").read() if os.path.exists(log) else ""
-            if "M3 userland ok" in out or "CRASH" in out: break
+            if "CRASH" in out or ("M3 userland ok" in out and ("M1c fb" in out or "oom fb" in out)): break   # the Pi image paints its desktop after the boot splash, so after userland
         lines = out.splitlines()
         if "KERNEL CRASH" in out or "M3 userland ok" not in out: fails.append(f"{name}: the kernel did not survive the failed allocation: {out[-400:]!r}"); return
         if expect not in lines: fails.append(f"{name}: no {expect!r} line, got {out[-400:]!r}"); return
