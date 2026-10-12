@@ -29,6 +29,7 @@
 /* drivers/jpeg.c, compiled into libjt: album art is the JPEG inside the MP3's ID3 tag */
 int jpeg_decode_scaled32(const unsigned char *data, unsigned int len, unsigned int *dst, unsigned int dw, unsigned int dh,
                          unsigned int *w, unsigned int *h);
+int png_decode(const unsigned char *data, unsigned int len, unsigned char **out, unsigned int *w, unsigned int *h, unsigned int *channels);
 
 #define BG     0x00FAF8F6
 #define INK    0x001C1C1E
@@ -328,6 +329,57 @@ static void follow(void) { /* scroll just enough that the selected row shows: on
 }
 static void heard_reset(void) { for (int i = 0; i < MAX_TRACKS; i++) heard[i] = 0; if (cur >= 0) heard[cur] = 1; }
 
+/* ---- album art ---------------------------------------------------------------------------
+   The cover is the picture in an MP3's ID3 tag, else a COVER, FOLDER or ALBUM file (.JPG or .PNG) next to the song, as
+   iTunes and Apple Music fall back to a folder's picture. JPEG (baseline) and PNG, any size up to 1 megapixel, are
+   cropped to their centre square and scaled to ART x ART; anything else leaves the note tile. */
+#define ART_MAX_PIXELS (1u << 20)
+#define ART_MAX_FILE   (768u << 10)
+static int decode_png(const unsigned char *d, unsigned n) {
+    unsigned char *px = 0; unsigned w_ = 0, h_ = 0, ch = 0;
+    if (n < 33 || d[0] != 0x89 || d[1] != 'P') return 0;
+    w_ = ((unsigned)d[16] << 24) | ((unsigned)d[17] << 16) | ((unsigned)d[18] << 8) | d[19];     /* IHDR, before any buffer is asked for */
+    h_ = ((unsigned)d[20] << 24) | ((unsigned)d[21] << 16) | ((unsigned)d[22] << 8) | d[23];
+    if (!w_ || !h_ || w_ > 4096 || h_ > 4096 || w_ * h_ > ART_MAX_PIXELS) return 0;
+    if (png_decode(d, n, &px, &w_, &h_, &ch) != 0 || !px) return 0;
+    if (ch != 1 && ch != 3) { free(px); return 0; }
+    unsigned side = w_ < h_ ? w_ : h_, x0 = (w_ - side) / 2, y0 = (h_ - side) / 2;               /* the centre square */
+    for (unsigned yy = 0; yy < ART; yy++) for (unsigned xx = 0; xx < ART; xx++) {
+        unsigned sx0 = x0 + xx * side / ART, sx1 = x0 + (xx + 1) * side / ART, sy0 = y0 + yy * side / ART, sy1 = y0 + (yy + 1) * side / ART;
+        if (sx1 <= sx0) sx1 = sx0 + 1;
+        if (sy1 <= sy0) sy1 = sy0 + 1;
+        unsigned r = 0, g = 0, b = 0, cnt = 0;                                                      /* a box average: a big cover stays smooth */
+        for (unsigned sy = sy0; sy < sy1; sy++) for (unsigned sx = sx0; sx < sx1; sx++) {
+            const unsigned char *p = px + ((unsigned long)sy * w_ + sx) * ch;
+            r += p[0]; g += ch == 3 ? p[1] : p[0]; b += ch == 3 ? p[2] : p[0]; cnt++;
+        }
+        art[yy * ART + xx] = ((r / cnt) << 16) | ((g / cnt) << 8) | (b / cnt);
+    }
+    free(px);
+    return 1;
+}
+static int decode_art(const unsigned char *d, unsigned n) {   /* a JPEG or a PNG, by its first bytes */
+    unsigned aw, ah;
+    if (n > 3 && d[0] == 0xFF && d[1] == 0xD8) return jpeg_decode_scaled32(d, n, art, ART, ART, &aw, &ah) == 0;
+    return decode_png(d, n);
+}
+static int load_folder_art(const struct track *t) {
+    static const char *const names[] = { "COVER.JPG", "FOLDER.JPG", "ALBUM.JPG", "COVER.PNG", "FOLDER.PNG", "ALBUM.PNG" };
+    unsigned char *buf = (unsigned char *)malloc(ART_MAX_FILE);
+    int ok = 0;
+    if (!buf) return 0;
+    for (unsigned i = 0; i < sizeof names / sizeof names[0] && !ok; i++) {
+        char path[JT_PATH_MAX + 1]; int l = 0;
+        if (t->dir) { const char *d = "MUSIC/"; while (*d) path[l++] = *d++; }
+        for (const char *p = names[i]; *p; p++) path[l++] = *p;
+        path[l] = 0;
+        int n = jt_readfile(path, buf, ART_MAX_FILE);
+        if (n > 0) ok = decode_art(buf, (unsigned)n);
+    }
+    free(buf);
+    return ok;
+}
+
 /* Loads track i whole and starts it from the top. Returns 0, or leaves a message and stops. */
 static int start_track(int i) {
     struct track *t = &tracks[i];
@@ -352,11 +404,10 @@ static int start_track(int i) {
     }
     cur = i;
     have_art = 0;
-    {   unsigned off, len, aw, ah;
+    {   unsigned off, len;
         if (!art) art = (unsigned *)malloc(ART * ART * 4);
-        if (art && is_mp3 && mp3_id3_pic(file, t->size, &off, &len) && jpeg_decode_scaled32(file + off, len, art, ART, ART, &aw, &ah) == 0) {
-            have_art = 1; say("music: art ", t->file, 0, 0);
-        }
+        if (art && is_mp3 && mp3_id3_pic(file, t->size, &off, &len) && decode_art(file + off, len)) { have_art = 1; say("music: art ", t->file, 0, 0); }
+        else if (art && load_folder_art(t)) { have_art = 1; say("music: art folder ", t->file, 0, 0); }
     }
     state = ST_PLAYING;
     say("music: playing ", t->file, 0, 0);
@@ -453,10 +504,14 @@ static void layout(void) {
     lw = W / 3; if (lw > 270) lw = 270; if (lw < 150) lw = 150;
     rx = lw + 28; rx1 = W - 28;
     bar_y = H - 140; ctl_y = H - 84; vol_y = H - 46;   /* the volume row clears the key hint under it */
-    prev_cx = rx + 18; play_cx = rx + 18 + 62; next_cx = rx + 18 + 124;
-    if (rx1 - rx >= 188 + PILL_W_SHUF + 8 + PILL_W_REP) { shuf_x = rx + 188; pill_y = ctl_y; }   /* beside the transport */
-    else { shuf_x = rx; pill_y = bar_y - 44; }                                                    /* a half-screen window: their own row above the seek bar */
-    rep_x = shuf_x + PILL_W_SHUF + 8;
+    if (rx1 - rx >= 440) {   /* Apple Music's row: Shuffle at the left edge, Previous Play Next centred under the bar, Repeat at the right edge */
+        int mid = (rx + rx1) / 2;
+        play_cx = mid; prev_cx = mid - 62; next_cx = mid + 62;
+        shuf_x = rx; rep_x = rx1 - PILL_W_REP; pill_y = ctl_y;
+    } else {   /* a half-screen window: the transport at the left and the pills on their own row above the seek bar */
+        prev_cx = rx + 18; play_cx = rx + 18 + 62; next_cx = rx + 18 + 124;
+        shuf_x = rx; pill_y = bar_y - 44; rep_x = shuf_x + PILL_W_SHUF + 8;
+    }
     vol_x0 = rx + 76; vol_x1 = vol_x0 + 150;
     if (vol_x1 > rx1 - 50) vol_x1 = rx1 - 50;
 }
@@ -534,7 +589,8 @@ static void draw(void) {
 
     /* seek bar and time */
     {   unsigned tot = total_ms(), pos = scrubbing ? scrub_ms : ms_of(pos_frames());
-        char a[12], b[12]; fmt_time(pos, a); fmt_time(tot, b);
+        char a[12], b[14]; fmt_time(pos, a);
+        b[0] = '-'; fmt_time(tot > pos ? tot - pos : 0, b + 1);   /* elapsed on the left, what is left on the right, as Apple Music shows them */
         rect(rx, bar_y, rx1 - rx, 6, RULE);
         int fill = tot ? (int)(pos * (unsigned)(rx1 - rx) / tot) : 0;
         if (fill > rx1 - rx) fill = rx1 - rx;

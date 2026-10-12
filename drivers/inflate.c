@@ -3,7 +3,14 @@
    one inflate instead of two. All three block kinds: stored, fixed Huffman,
    dynamic Huffman. No recursion, small stack tables, no allocation. */
 #include "inflate.h"
+#ifdef PNG_USER
+/* Built into user/libjt (user/libjt/png.c includes this file), for ring 3. */
+#include "../user/libjt/string.h"
+#define INF_STATIC __attribute__((section(".data"))) /* flat ring-3 images have no .bss */
+#else
 #include "libc.h"
+#define INF_STATIC
+#endif
 
 typedef unsigned int u32;
 typedef unsigned char u8;
@@ -143,8 +150,8 @@ static int inflate_stored(struct bits *b, struct out *o) {
 }
 
 static int inflate_fixed(struct bits *b, struct out *o) {
-    static struct huff lencode, distcode;
-    static int built = 0;
+    static INF_STATIC struct huff lencode, distcode;
+    static INF_STATIC int built = 0;
     if (!built) {
         unsigned short lengths[288];
         u32 i = 0;
