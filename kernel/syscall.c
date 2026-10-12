@@ -672,6 +672,15 @@ void syscall_window_push_event(int task, int kind, int a, int b) {
     }
     irq_restore(f);
 }
+void syscall_window_push_drag(int task, int a, int b) { /* a drag step is replaceable: with the ring half full it is dropped, the next position or the release's click still comes */
+    unsigned int f = irq_save();
+    struct r3win *r = r3win_of(task);
+    if (r && r->rt - r->rh < R3WIN_RING / 2) {
+        struct jt_event *e = &r->ring[r->rt % R3WIN_RING];
+        e->kind = JT_EV_DRAG; e->a = a; e->b = b; r->rt++;
+    }
+    irq_restore(f);
+}
 static void r3win_release(int task) {
     struct r3win *r = r3win_of(task);
     if (!r) return;

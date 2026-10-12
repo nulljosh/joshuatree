@@ -13,7 +13,7 @@
  *
  * Keys: space play/pause, left/right seek 5s, up/down volume, n/p next/previous, s shuffle,
  * r repeat (off, all, one), Esc closes. Mouse: click a song, a button, the seek bar or the
- * volume bar; the wheel scrolls the list. Shuffle plays every song once a round: repeat off
+ * volume bar, or drag either knob (the seek lands on release); the wheel scrolls the list. Shuffle plays every song once a round: repeat off
  * stops when the round is done, repeat all starts another. When one song ends into the next, a
  * song that will not play is skipped; n and p stop on it and say why. The backquote key is the
  * deliberate crash tools/checks/ring3crash-all-check.py presses. tools/checks/music-check.py and
@@ -50,7 +50,7 @@ int jpeg_decode_scaled32(const unsigned char *data, unsigned int len, unsigned i
 enum { ST_STOPPED, ST_PLAYING, ST_PAUSED };
 enum { K_PAUSE, K_SEEK, K_START };
 
-struct track { char file[JT_DIRENT_NAME]; unsigned char dir; unsigned size; char title[40]; char artist[28]; };   /* title and artist: the MP3's ID3 tag, when it has one */
+struct track { char file[JT_DIRENT_NAME]; unsigned char dir; unsigned size; char title[40]; char artist[28]; unsigned ms; };   /* title and artist: the MP3's ID3 tag, when it has one */
 
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 static struct jt_dirent ents[JT_READDIR_MAX] JT_DATA;
@@ -67,12 +67,15 @@ static int repeat JT_DATA = 0;         /* 0 off, 1 all, 2 one */
 static int volume JT_DATA = 100;       /* 0..100, applied to samples before they are queued */
 static char msg[64] JT_DATA = {0};     /* a visible message: too big, not a WAV, no card */
 static unsigned rng JT_DATA = 2463534242u;
+static int drag_zone JT_DATA = 0;        /* what a held press grabbed: 1 the seek bar, 2 the volume bar, 3 nothing that drags */
+static int scrubbing JT_DATA = 0;        /* the seek knob follows the pointer; the release seeks there */
+static unsigned scrub_ms JT_DATA = 0;
 
 static unsigned char *file JT_DATA = 0;   /* the whole song, on the heap */
 static struct wav w JT_DATA;
 static struct mp3 mp JT_DATA;
 #define ART 96
-static unsigned art[ART * ART] JT_DATA;   /* the playing song's cover, decoded once at load */
+static unsigned *art JT_DATA = 0;        /* the playing song's cover, decoded once at load, on the heap (36 KB is too much for the image) */
 static int have_art JT_DATA = 0;
 static int is_mp3 JT_DATA; /* the open song is an MP3: w.rate and w.frames mirror it so the time math is one path */
 static unsigned char chunk[CHUNK] JT_DATA;
@@ -209,20 +212,29 @@ static void scan_dir(const char *dir, int dirid) {
         struct track *t = &tracks[ntracks++];
         int k = 0;
         while (ents[i].name[k] && k < JT_DIRENT_NAME - 1) { t->file[k] = ents[i].name[k]; k++; }
-        t->file[k] = 0; t->dir = (unsigned char)dirid; t->size = ents[i].size; t->title[0] = t->artist[0] = 0;
+        t->file[k] = 0; t->dir = (unsigned char)dirid; t->size = ents[i].size; t->title[0] = t->artist[0] = 0; t->ms = 0;
     }
 }
-static void read_tags(struct track *t);
+static void probe(struct track *t);
+static int title_cmp(const struct track *a, const struct track *b) { /* case-blind, by the shown title */
+    char x[56], y[56]; title_of(a, x); title_of(b, y);
+    for (int i = 0;; i++) {
+        int c = x[i], d = y[i];
+        if (c >= 'A' && c <= 'Z') c += 32;
+        if (d >= 'A' && d <= 'Z') d += 32;
+        if (c != d || !c) return c - d;
+    }
+}
 static void scan_library(void) {
     ntracks = 0;
     scan_dir("", 0);
     scan_dir("MUSIC", 1);
-    for (int i = 1; i < ntracks; i++) { /* insertion sort by file name: a stable order for the check and the eye */
+    for (int i = 0; i < ntracks; i++) probe(&tracks[i]);
+    for (int i = 1; i < ntracks; i++) { /* insertion sort by title, as iTunes lists them: a stable order for the check and the eye */
         struct track t = tracks[i]; int j = i - 1;
-        while (j >= 0 && strcmp(tracks[j].file, t.file) > 0) { tracks[j + 1] = tracks[j]; j--; }
+        while (j >= 0 && title_cmp(&tracks[j], &t) > 0) { tracks[j + 1] = tracks[j]; j--; }
         tracks[j + 1] = t;
     }
-    for (int i = 0; i < ntracks; i++) if (ext_is(tracks[i].file, "MP3")) read_tags(&tracks[i]);
     say("music: library n=", 0, (unsigned)ntracks, 1);
 }
 
@@ -248,13 +260,17 @@ static void track_path(const struct track *t, char *path) {
     for (int i = 0; t->file[i] && l < JT_PATH_MAX; i++) path[l++] = t->file[i];
     path[l] = 0;
 }
-static void read_tags(struct track *t) { /* the start of an MP3 is enough for its title and artist: 8.3 names are all FAT shows, the tag has the real ones */
+static void probe(struct track *t) { /* the start of a song is enough for its title, artist and length: 8.3 names are all FAT shows, the tag has the real ones */
     static unsigned char head[2048] JT_DATA;
     char path[JT_PATH_MAX + 1];
     track_path(t, path);
     int got = jt_readfile(path, head, sizeof head);   /* a short read on purpose: open() refuses anything over 8KB, which is every song */
     if (got <= 0) return;
-    if (mp3_id3(head, (unsigned)got, t->title, sizeof t->title, t->artist, sizeof t->artist)) { say("music: tag ", t->title, 0, 0); if (t->artist[0]) say("music: artist ", t->artist, 0, 0); }
+    if (ext_is(t->file, "MP3")) {
+        if (mp3_id3(head, (unsigned)got, t->title, sizeof t->title, t->artist, sizeof t->artist)) { say("music: tag ", t->title, 0, 0); if (t->artist[0]) say("music: artist ", t->artist, 0, 0); }
+        t->ms = mp3_probe_ms(head, (unsigned)got, t->size);
+    } else t->ms = wav_probe_ms(head, (unsigned)got);
+    {   char b[48]; int k = 0; while (t->file[k] && k < 40) { b[k] = t->file[k]; k++; } b[k++] = '='; b[k] = 0; say("music: length ", b, t->ms, 1); }
 }
 static int load_file(const struct track *t, unsigned char *buf, unsigned size) {
     char path[JT_PATH_MAX + 1];
@@ -337,7 +353,8 @@ static int start_track(int i) {
     cur = i;
     have_art = 0;
     {   unsigned off, len, aw, ah;
-        if (is_mp3 && mp3_id3_pic(file, t->size, &off, &len) && jpeg_decode_scaled32(file + off, len, art, ART, ART, &aw, &ah) == 0) {
+        if (!art) art = (unsigned *)malloc(ART * ART * 4);
+        if (art && is_mp3 && mp3_id3_pic(file, t->size, &off, &len) && jpeg_decode_scaled32(file + off, len, art, ART, ART, &aw, &ah) == 0) {
             have_art = 1; say("music: art ", t->file, 0, 0);
         }
     }
@@ -470,7 +487,9 @@ static void draw(void) {
             int y = LIST_Y + (i - top) * ROW_H;
             if (i == sel) rect(10, y, lw - 4, ROW_H - 2, TINT);
             char t[56]; title_of(&tracks[i], t);
-            ellipsize(t, lw - 56);
+            int dw = 0;
+            if (tracks[i].ms) { char d[12]; fmt_time(tracks[i].ms, d); dw = jt_text_width(JT_FACE_BODY, d) + 8; text(d, lw + 6 - dw, y + 3, HINT); }
+            ellipsize(t, lw - 56 - dw);
             if (i == cur && state == ST_PLAYING) tri(18, y + ROW_H / 2 - 1, 7, 10, 1, ACCENT);
             else if (i == cur && state == ST_PAUSED) { rect(18, y + 6, 2, 11, ACCENT); rect(22, y + 6, 2, 11, ACCENT); }   /* as wide as the triangle; stopped shows no mark, since bars would say paused */
             if (i == cur) btext(t, 30, y + 3, ACCENT); else text(t, 30, y + 3, INK);
@@ -506,7 +525,7 @@ static void draw(void) {
     }
 
     /* seek bar and time */
-    {   unsigned pos = ms_of(pos_frames()), tot = total_ms();
+    {   unsigned tot = total_ms(), pos = scrubbing ? scrub_ms : ms_of(pos_frames());
         char a[12], b[12]; fmt_time(pos, a); fmt_time(tot, b);
         rect(rx, bar_y, rx1 - rx, 6, RULE);
         int fill = tot ? (int)(pos * (unsigned)(rx1 - rx) / tot) : 0;
@@ -544,36 +563,42 @@ static void draw(void) {
 }
 
 /* ---- input ------------------------------------------------------------------------------- */
-static void set_volume(int v) { volume = v < 0 ? 0 : v > 100 ? 100 : v; say("music: vol=", 0, (unsigned)volume, 1); }
+static void set_volume(int v) { v = v < 0 ? 0 : v > 100 ? 100 : v; if (v == volume) return; volume = v; say("music: vol=", 0, (unsigned)volume, 1); }
 static void toggle_shuffle(void) { /* turning it on starts a round: the song playing now counts as heard */
     shuffle = !shuffle;
     if (shuffle) heard_reset();
     say("music: shuffle=", 0, (unsigned)shuffle, 1);
 }
 static int inside(int x, int y, int x0, int y0, int rw, int rh) { return x >= x0 && x < x0 + rw && y >= y0 && y < y0 + rh; }
+static int on_seek_bar(int x, int y) { return inside(x, y, rx - 6, bar_y - 10, rx1 - rx + 12, 26); }
+static int on_vol_bar(int x, int y) { return inside(x, y, vol_x0 - 8, vol_y - 4, vol_x1 - vol_x0 + 16, 24); }
+static unsigned bar_ms(int x) { unsigned tot = total_ms(); int fx = x < rx ? 0 : x > rx1 ? rx1 - rx : x - rx; return (unsigned)fx * tot / (unsigned)(rx1 - rx); }
+static int vol_of(int x) { int fx = x < vol_x0 ? 0 : x > vol_x1 ? vol_x1 - vol_x0 : x - vol_x0; return fx * 100 / (vol_x1 - vol_x0); }
+static void drag(int x, int y) { /* the first step is where the press landed, which picks the bar; the later ones move its knob */
+    layout();
+    if (!drag_zone) drag_zone = on_seek_bar(x, y) ? 1 : on_vol_bar(x, y) ? 2 : 3;
+    if (drag_zone == 1) { if (total_ms()) { scrubbing = 1; scrub_ms = bar_ms(x); } }
+    else if (drag_zone == 2) set_volume(vol_of(x));
+}
 static void click(int x, int y) {
     layout();
     int cy = ctl_y + 14;
+    int zone = drag_zone; drag_zone = 0;
+    if (zone == 1) { scrubbing = 0; if (total_ms()) seek_ms((int)bar_ms(x)); return; }   /* the release ends a scrub at the knob, wherever the pointer went */
+    if (zone == 2) { set_volume(vol_of(x)); return; }
+    if (zone == 3) return;   /* a drag that began elsewhere is not a click on where it ended */
     if (x < lw + 12) { /* the library */
         int i = top + (y - LIST_Y) / ROW_H;
         if (y >= LIST_Y && (y - LIST_Y) / ROW_H < list_rows() && i >= 0 && i < ntracks) start_track(i);
         return;
     }
-    if (inside(x, y, rx - 6, bar_y - 10, rx1 - rx + 12, 26)) {
-        unsigned tot = total_ms();
-        int fx = x < rx ? 0 : x > rx1 ? rx1 - rx : x - rx;
-        if (tot) seek_ms((int)((unsigned)fx * tot / (unsigned)(rx1 - rx)));
-        return;
-    }
+    if (on_seek_bar(x, y)) { if (total_ms()) seek_ms((int)bar_ms(x)); return; }
     if (inside(x, y, prev_cx - 14, cy - 18, 30, 36)) { go_next(0, 0); return; }
     if (inside(x, y, next_cx - 14, cy - 18, 30, 36)) { go_next(1, 0); return; }
     if (inside(x, y, play_cx - 26, cy - 26, 52, 52)) { toggle_play(); return; }
     if (inside(x, y, shuf_x, pill_y, PILL_W_SHUF, 28)) { toggle_shuffle(); return; }
     if (inside(x, y, rep_x, pill_y, PILL_W_REP, 28)) { repeat = (repeat + 1) % 3; say("music: repeat=", 0, (unsigned)repeat, 1); return; }
-    if (inside(x, y, vol_x0 - 8, vol_y - 4, vol_x1 - vol_x0 + 16, 24)) {
-        int fx = x < vol_x0 ? 0 : x > vol_x1 ? vol_x1 - vol_x0 : x - vol_x0;
-        set_volume(fx * 100 / (vol_x1 - vol_x0));
-    }
+    if (on_vol_bar(x, y)) set_volume(vol_of(x));
 }
 /* Returns 1 to quit. */
 static int key(int k) {
@@ -636,6 +661,7 @@ void _start(int argc, char **argv) {
         if (r != 1) break;
         if (ev.kind == JT_EV_KEY) { if (key(ev.a)) break; }
         else if (ev.kind == JT_EV_CLICK) click(ev.a, ev.b);
+        else if (ev.kind == JT_EV_DRAG) drag(ev.a, ev.b);
         else if (ev.kind == JT_EV_WHEEL) { int t0 = top; top -= ev.a; clamp_top(); if (top != t0) say("music: list top=", 0, (unsigned)top, 1); }
         draw(); flags = JT_POLL_PRESENT; dirty = 0;
     }

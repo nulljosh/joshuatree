@@ -84,6 +84,22 @@ int mp3_id3(const uint8_t *buf, uint32_t len, char *title, int tn, char *artist,
     return tn > 0 && title[0] != 0;
 }
 
+uint32_t mp3_probe_ms(const uint8_t *buf, uint32_t len, uint32_t file_len) {
+    uint32_t p = id3v2_skip_size(buf, len), tag = p;
+    while (p + 4 <= len && !(buf[p] == 0xFF && (buf[p + 1] & 0xE0) == 0xE0 && hdr_valid(buf + p))) p++;
+    if (p + 4 > len) return 0;
+    const uint8_t *h = buf + p;
+    uint32_t rate = hdr_sample_rate_hz(h), kbps = hdr_bitrate_kbps(h), spf = hdr_frame_samples(h);
+    if (!rate || !spf) return 0;
+    uint32_t x = p + 4 + (HDR_IS_MONO(h) ? (HDR_TEST_MPEG1(h) ? 17 : 9) : (HDR_TEST_MPEG1(h) ? 32 : 17));   /* past the side info */
+    if (x + 12 <= len && (!memcmp(buf + x, "Xing", 4) || !memcmp(buf + x, "Info", 4)) && (buf[x + 7] & 1)) {
+        uint32_t frames = ((uint32_t)buf[x + 8] << 24) | ((uint32_t)buf[x + 9] << 16) | ((uint32_t)buf[x + 10] << 8) | buf[x + 11];
+        if (frames < 0x7FFFFFFFu / spf) { uint32_t s = frames * spf; return s / rate * 1000u + s % rate * 1000u / rate; }
+    }
+    if (!kbps || file_len <= tag) return 0;
+    return (file_len - tag) * 8u / kbps;   /* bytes * 8 / kbps is milliseconds; a 3 MB song is well inside 32 bits */
+}
+
 int mp3_id3_pic(const uint8_t *buf, uint32_t len, uint32_t *off, uint32_t *n) {
     if (len < 10 || buf[0] != 'I' || buf[1] != 'D' || buf[2] != '3') return 0;
     uint8_t ver = buf[3];

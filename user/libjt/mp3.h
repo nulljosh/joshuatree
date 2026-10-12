@@ -33,6 +33,10 @@ int mp3_id3(const uint8_t *buf, uint32_t len, char *title, int tn, char *artist,
 /* The first picture in the ID3v2 tag (APIC, or PIC in v2.2): sets *off and *n to its image bytes inside buf.
    Returns 1 if there is one, else 0. Never reads outside buf. */
 int mp3_id3_pic(const uint8_t *buf, uint32_t len, uint32_t *off, uint32_t *n);
+/* The length in ms from the first frame alone, for a list: a Xing or Info frame's count (VBR), else the file's size at
+   the first frame's bit rate (CBR), the way iTunes reads an untagged file. buf may hold only the start of the file;
+   file_len is the whole file's size. 0 when no frame is in buf. */
+uint32_t mp3_probe_ms(const uint8_t *buf, uint32_t len, uint32_t file_len);
 /* Frees the decoder block. Safe on a struct that never opened. */
 void mp3_close(struct mp3 *m);
 #endif

@@ -105,6 +105,7 @@ struct jt_text { int x, y; unsigned int fg; const char *s; };
 #define JT_EV_CLICK 2
 #define JT_EV_WHEEL 3
 #define JT_EV_RESIZE 4
+#define JT_EV_DRAG  5   /* the pointer moved with the button held inside the window: a and b are where it is, in viewport coordinates; the press's own position comes first, and the release still sends a JT_EV_CLICK */
 /* Key codes above ASCII, the same values the desktop's own apps see. */
 #define JT_KEY_UP    256
 #define JT_KEY_DOWN  257

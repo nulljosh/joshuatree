@@ -485,6 +485,7 @@ again. Any other bit in `ecx` is -EINVAL. Event kinds:
 | 2 `JT_EV_CLICK` | a left click | x in window coordinates | y |
 | 3 `JT_EV_WHEEL` | a wheel tick | +1 up, -1 down | 0 |
 | 4 `JT_EV_RESIZE` | the window rect changed (compositor windows only) | new width | new height |
+| 5 `JT_EV_DRAG` | the pointer moved with the left button held inside the window's content (2.44.2): the press's own spot first, then one per new pixel, dropped if the ring is half full; the release still sends its `JT_EV_CLICK` | x in window coordinates | y |
 
 There is no `window_close`. Exiting releases the window; so does
 crashing. `task_exit_with` runs `syscall_release_task` for a task that

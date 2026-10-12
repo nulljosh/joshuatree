@@ -193,6 +193,13 @@ print("music-qa-check: boot A (long MP3, damaged MP3, songs that will not play)"
 A = Boot("qa", "qa")
 try:
     A.start(6)
+    lens = {m.group(1): int(m.group(2)) for m in (re.search(r"music: length (\S+)=(\d+)", l) for l in A.lines()) if m}
+    print(f"  list lengths read from the headers: {lens}")
+    if lens.get("ALPHA.WAV") != 3000: fail(f"ALPHA.WAV's length in the list is {lens.get('ALPHA.WAV')} ms, expected 3000 from its header")
+    # DELTA is one 12 s clip seventeen times over, so its Xing frame (the first copy's) says 12 s while the whole decodes to 3:25: the list
+    # trusts the header, and the player's own count (checked below) replaces it the moment the song loads
+    if not 11000 <= lens.get("DELTA.MP3", 0) <= 13500: fail(f"DELTA.MP3's length in the list is {lens.get('DELTA.MP3')} ms, expected about 12000 from its Xing frame")
+    if not 900 <= lens.get("CORRUPT.MP3", 0) <= 1300: fail(f"CORRUPT.MP3's length in the list is {lens.get('CORRUPT.MP3')} ms, expected about 1070 from its bit rate")
     bx0, bx1, by = A.bar
     pos_lines = lambda a, n, secs: [(int(m.group(1)), int(m.group(2))) for m in A.wait_n(r"music: at playing pos=(\d+) ahead=(\d+)", n, secs, a)]
 
@@ -248,6 +255,22 @@ try:
         if len(runs_y) < 2: fail(f"could not find the play button and the volume bar in the frame (accent runs {runs_y})")
         elif runs_y[-1][0] - runs_y[-2][1] - 1 < 8:
             fail(f"the play button sits {runs_y[-1][0] - runs_y[-2][1] - 1} px above the volume bar (at least 8 wanted)")
+        # a drag on the seek bar: the knob follows the pointer and the seek lands once, on release (JT_EV_DRAG, 2.44.2)
+        ad = A.mark()
+        A.drag(VIEW_X + bx0 + (bx1 - bx0) * 20 // 100, VIEW_Y + by, VIEW_X + bx0 + (bx1 - bx0) * 60 // 100, VIEW_Y + by)
+        time.sleep(0.5)
+        seeks = [int(m.group(1)) for m in (re.search(r"music: seek pos=(\d+)", l) for l in A.lines()[ad:]) if m]
+        print(f"  drag 20% to 60% -> seeks {seeks} of {total} ms")
+        if len(seeks) != 1 or not (total * 55 // 100 <= seeks[0] <= total * 65 // 100):
+            fail(f"a drag from 20% to 60% along the seek bar made seeks {seeks}, expected one near {total * 60 // 100} ms")
+        # a drag on the volume bar sets it as the pointer goes
+        av = A.mark(); vx0 = bx0 + 76; vy = by + 105
+        A.drag(VIEW_X + vx0 + 10, VIEW_Y + vy, VIEW_X + vx0 + 75, VIEW_Y + vy)
+        vols = [int(m.group(1)) for m in (re.search(r"music: vol=(\d+)", l) for l in A.lines()[av:]) if m]
+        print(f"  volume drag -> {vols[:3]}...{vols[-1:]}")
+        if len(vols) < 3 or not (44 <= vols[-1] <= 56): fail(f"a drag along the volume bar made volumes {vols}, expected steps ending near 50")
+        A.key("up"); A.key("up"); A.key("up"); A.key("up"); A.key("up")   # back to loud for what follows
+        a2 = A.mark()
         A.click_view(bx0 + (bx1 - bx0) * 97 // 100, by)
         i2, m2 = A.wait(r"music: seek pos=(\d+)", 10, a2)
         if i2 is None: fail("a click on the seek bar did not seek")
