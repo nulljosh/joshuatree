@@ -12,6 +12,10 @@ It never draws an emoji. UI text covers `UI_GLYPH_RANGE = 32-126`, plain ASCII, 
 
 The 3.0 mark is one Joshua tree drawn in crayon: steady ink lines for a leaning trunk that swells where the marker pressed, three arms ending in dense looping tufts with paper showing through, and a light grain. The ground under it is a single terracotta stroke, the mark's only colour, kept in the bold copy that carries it from 16 to 48 px; every copy comes from `tools/gen/logo.py`.
 
+## Mascot
+
+The mascot is the mark itself, drawn as a kid would draw a friend: the same crayon hand on a chubbier tree with a belly, shorter arms, two dot eyes, a small smile and terracotta-pink cheeks. No hands, no hair, no grin. It shows up where the OS wants a face, never on a working screen: splash, login, empty states. `tools/gen/mascot.py` draws `landing/mascot.svg`; `docs/brand/mascot.png` is its raster.
+
 ## Icons
 
 Every icon is one picture on one tile. The tile is a superellipse, `SQUIRCLE_N = 4.8`, over the whole 128 unit canvas, and an icon's edge must land within `TOL_SQUIRCLE = 1.0` unit of that curve at every angle, with a soft anti-aliased edge. A plain rounded rectangle fails.
@@ -24,11 +28,11 @@ No text, letters or wordmarks, so `ICON_TEXT_ELEMENTS = 0`. That includes Calend
 
 The house accent is terracotta, `ACCENT = #b5502c`, the landing page's accent and the colour of the Music, Movies and Hamurapi tiles. The one deliberate exception is Tonchi, which keeps its own sky blue, `LEXLY_BLUE = #2E86DE`, because that is the colour of its store icon.
 
-Fleet icons are the `FLEET_ICONS = 10` apps imported from their own repos. They keep their own tile colour and their own picture. They must still share the squircle, the anti-aliased edge, the top lip and the glyph margin. They do not get the tile falloff, so a fleet tile is flat. The importer clips each one to the squircle and lays the lip on it. The checks measure the squircle and the edge on all `ICON_FILES = 34` icons, but the glyph margin only on the `MARGIN_TILES = 21` that carry the shared tile header written by `restyle_icons.py`. A fleet icon's margin is held by eye, and the roadmap lists the fleet icons that still fall short.
+Fleet icons are the `FLEET_ICONS = 11` apps imported from their own repos. They keep their own tile colour and their own picture. They must still share the squircle, the anti-aliased edge, the top lip and the glyph margin. They do not get the tile falloff, so a fleet tile is flat. The importer clips each one to the squircle and lays the lip on it. The checks measure the squircle and the edge on all `ICON_FILES = 34` icons, but the glyph margin only on the `MARGIN_TILES = 20` that carry the shared tile header written by `restyle_icons.py`. A fleet icon's margin is held by eye, and the roadmap lists the fleet icons that still fall short.
 
 ## Type
 
-The registry holds `DEJAVU_FACES = 14` faces. Six are DejaVu: Sans, Sans Bold, Serif, Serif Bold, Mono and Mono Bold. Eight are open look-alikes for documents and user choice: Inter, EB Garamond, Comic Neue, Caveat Brush, Dancing Script, JetBrains Mono, Source Serif and Source Sans (`fonts` lists them). Sans only in the UI chrome: the menu bar, dock and window titles stay DejaVu Sans. Sans is the interface. The desktop draws it at `GUI_TEXT_PX = 24` physical pixels, 12 on the 960 wide grid. Apps draw it at `BODY_PX = 14.0`, with bold at the same size and the big display digits at `DISP_PX = 56.0`.
+The registry holds `DEJAVU_FACES = 14` faces. Two are Tree Sans (Regular and Bold, our own face, built from Inter; the headers keep their `dejavu_` names) and four are DejaVu: Serif, Serif Bold, Mono and Mono Bold. Eight are open look-alikes for documents and user choice: Inter, EB Garamond, Comic Neue, Caveat Brush, Dancing Script, JetBrains Mono, Source Serif and Source Sans (`fonts` lists them). Sans only in the UI chrome: the menu bar, dock and window titles are Tree Sans (3.0.0; DejaVu Sans before). Sans is the interface. The desktop draws it at `GUI_TEXT_PX = 24` physical pixels, 12 on the 960 wide grid. Apps draw it at `BODY_PX = 14.0`, with bold at the same size and the big display digits at `DISP_PX = 56.0`.
 
 On the desktop, Mono is for a shell grid and nothing else: `MONO_APPS = panes, terminal`, at `MONO_PX = 13.5` with every glyph `JT_MONO_ADV = 8` pixels wide. Serif ships with the fonts and nothing draws with it, so `SERIF_USES = 0`. Sans-serif only is the house rule, so serif has to earn its way in.
 

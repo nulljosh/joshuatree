@@ -297,6 +297,7 @@ retry|6|ARM64 crash screen: an unexpected EL1 fault prints class, ESR, FAR, ELR 
 retry|6|ARM64 FP state: q0-q31, FPCR and FPSR survive timer interrupts whose handler wipes them, and the build without the save fails the same test (skips where the tools are missing)|python3 ./tools/checks/arm64-fp-check.py
 retry|6|ARM64 out of memory: a full heap prints oom fb or oom text and the kernel carries on (no screen, or the VGA fallback font) on virt and the Pi 4B model (skips where the tools are missing)|python3 ./tools/checks/arm64-oom-check.py
 retry|6|ARM64 boot health: the Pi image boots on QEMU's raspi4b with no FAIL line beyond the listed expected ones, no oom, no crash, and the desktop up (skips where the tools are missing)|python3 ./tools/checks/arm64-boot-health-check.py
+retry|6|ARM64 quiet boot: the Pi image's boot log steps aside, no dock label plays by itself (raspi4b at 1080p)|python3 ./tools/checks/arm64-boot-quiet-check.py
 once |4|Pi card flasher: kernel, firmware and tools/pi-config.txt land on a stand-in card, and what was there is kept as .bak (skips where the tools are missing)|bash ./tools/checks/flash-pi-check.sh
 once |6|ARM64 RNG200 full seeds, health faults, bounded waits and wiped failures (host harness)|python3 ./tools/checks/arm64-rng-check.py
 once |6|ARM64 clock accepts bounded HTTPS dates only, never before the build or an accepted clock (host harness)|python3 ./tools/checks/arm64-clock-check.py

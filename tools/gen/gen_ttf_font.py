@@ -20,10 +20,10 @@ UNICODES = "U+0020-007E,U+00A0-00FF"
 
 # (source ttf, subset ttf, header, C array name, license comment)
 FACES = [
-    ("DejaVuSans.ttf", "DejaVuSans-subset.ttf", "dejavu_font.h",
-     "dejavu_font_data", "DejaVu Sans", "DejaVu Sans is public domain / Bitstream Vera license."),
-    ("DejaVuSans-Bold.ttf", "DejaVuSans-Bold-subset.ttf", "dejavu_bold_font.h",
-     "dejavu_bold_font_data", "DejaVu Sans Bold", "DejaVu Sans Bold is public domain / Bitstream Vera license."),
+    ("treesans/TreeSans-Regular.ttf", "TreeSans-Regular-subset.ttf", "dejavu_font.h",
+     "dejavu_font_data", "Tree Sans", "Tree Sans is built from Inter 4.1, SIL OFL 1.1 (tools/fonts/treesans/OFL.txt). 3.0.0: the UI face, the header keeps its old name."),
+    ("treesans/TreeSans-Bold.ttf", "TreeSans-Bold-subset.ttf", "dejavu_bold_font.h",
+     "dejavu_bold_font_data", "Tree Sans Bold", "Tree Sans is built from Inter 4.1, SIL OFL 1.1 (tools/fonts/treesans/OFL.txt). 3.0.0: the UI bold face, the header keeps its old name."),
     ("DejaVuSerif.ttf", "DejaVuSerif-subset.ttf", "dejavu_serif_font.h",
      "dejavu_serif_font_data", "DejaVu Serif", "DejaVu Serif is public domain / Bitstream Vera license."),
     ("DejaVuSerif-Bold.ttf", "DejaVuSerif-Bold-subset.ttf", "dejavu_serif_bold_font.h",

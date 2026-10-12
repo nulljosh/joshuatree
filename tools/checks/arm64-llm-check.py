@@ -9,8 +9,8 @@ that pass (float64, no numpy), and the kernel's text and token count must match 
 pick wins by a clear margin, so float32 against float64 rounding cannot flip a token.
 
   1. net, relay not listening: `llm once upon a time` prints the reference text and "llm: N tokens, X tok/s";
-     a plain question gets "claude: error ..." (the relay is unreachable) and then the local model's answer to it.
-  2. no network card: a plain question prints "claude: no network", then the local model's answer. This build pads the
+     a plain question gets "samantha: error ..." (the relay is unreachable) and then the local model's answer to it.
+  2. no network card: a plain question prints "samantha: no network", then the local model's answer. This build pads the
      checkpoint with 64 MiB of zeros, so the image and heap reach past the EL0 arena's usual place (RAM + 64 MiB):
      without main.c moving the arena past the heap, this build stops booting right after "M1 vectors set".
   3. the LLM_BREAK build (llm.c without its rotary position step) must NOT match: the check can tell.
@@ -193,7 +193,7 @@ try:
         b.ask(QUESTION)
         b.wait_for(DONE, 60, 2)
         out = b.uart()
-        check("a question with the relay not listening: claude reports the error", re.search(r"claude: (error|timeout)", out) is not None, out[-300:])
+        check("a question with the relay not listening: claude reports the error", re.search(r"samantha: (error|timeout)", out) is not None, out[-300:])
         got = answer(out, 2)
         check("then the local model answers it", same(got, refs[QUESTION]), "%r vs %r" % (got[0][:80], refs[QUESTION][0][:80]))
     finally: b.close()
@@ -204,7 +204,7 @@ try:
         b.ask(QUESTION)
         b.wait_for(DONE, 60)
         out = b.uart()
-        check("no network card: \"claude: no network\" first", "claude: no network\nllm: thinking" in out, out[-300:])
+        check("no network card: \"samantha: no network\" first", "samantha: no network\nllm: thinking" in out, out[-300:])
         got = answer(out, 1)
         speeds.append(got[2])
         check("then the local model answers, from an image padded past 64 MiB", same(got, refs[QUESTION]), "%r vs %r" % (got[0][:80], refs[QUESTION][0][:80]))

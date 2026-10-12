@@ -14,7 +14,7 @@ Boot 1, virtio-net, ramfb, virtio keyboard:
   0. the Console has no input: "hi" and Enter with it in front reach nobody. Then F1 opens the Terminal.
   1. typing: the letters land on the prompt row (its pixels change), Backspace takes one back, and the per-key echo
      lines stay on the UART only.
-  2. ask: Enter sends; "claude: thinking", the stub got exactly the typed text on stdin, and the stub's answer comes back
+  2. ask: Enter sends; "samantha: thinking", the stub got exactly the typed text on stdin, and the stub's answer comes back
      word for word, wrapped to lines of at most 53 columns, and the Terminal window gains ink. A reply at all proves the
      bearer was sent: the relay answers 401 without it. F1 back to the Console: the answer's ##### line is not there.
   3. follow-up: a second question reaches the stub with --resume <the session the first reply named>. The relay runs
@@ -23,14 +23,14 @@ Boot 1, virtio-net, ramfb, virtio keyboard:
      the model the relay said answered.
   3b. Turing: the relay restarts with --turing pointed at a stub of turing's app/serve.py (OpenAI chat shape) on
      loopback; its answer prints and the next prompt reads "Samantha $ " again, so ask.c takes "M Samantha".
-  4. wrong token: the relay restarts on the same port with another token; the next question prints "claude: error -401".
+  4. wrong token: the relay restarts on the same port with another token; the next question prints "samantha: error -401".
   The token never shows up on the UART.
-Boot 2, no network card: the prompt is the default "Samantha $ ", a question prints "claude: no network" and the
+Boot 2, no network card: the prompt is the default "Samantha $ ", a question prints "samantha: no network" and the
 relay is never asked.
 Boot 3, built with no token file: the prompt is still "Samantha $ " (never Claude before Claude answers), a question prints
-"claude: no token" and the relay is never asked.
+"samantha: no token" and the relay is never asked.
 
-Discriminating: point ask.c at another path ("/api/claudx") and step 2 fails with "claude: error -404": the stub is
+Discriminating: point ask.c at another path ("/api/claudx") and step 2 fails with "samantha: error -404": the stub is
 never asked, no answer on the UART and no ##### line on the screen.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Pass --tls to run the same end-to-end token/session/answer checks over HTTPS with a throwaway certificate for the
@@ -197,8 +197,8 @@ def bands(shot_):   # the kernel's layout: an 800x600 design scaled by height; 1
     x0, x1 = win_x + sc(8), win_x + win_w - sc(4)
     return (x0, win_y + sc(32), x1, win_y + sc(32 + 17 * 16)), (x0, win_y + sc(32 + 18 * 16), x1, win_y + sc(32 + 19 * 16))
 
-def answer_after(out, marker_count):   # the lines printed after the n-th "claude: thinking", up to the next prompt line
-    chunk = out.split("claude: thinking\n")[marker_count]
+def answer_after(out, marker_count):   # the lines printed after the n-th "samantha: thinking", up to the next prompt line
+    chunk = out.split("samantha: thinking\n")[marker_count]
     return [l for l in PROMPT_RE.split(chunk)[0].split("\n") if l and not re.match(r"key \d+ (down|up)$", l)]
 
 try:
@@ -213,7 +213,7 @@ try:
         check("DHCP leased an address", "net dhcp 10.0.2.15 gw 10.0.2.2" in b.uart(), b.uart()[-300:])
         b.type("hi"); b.key("ret"); time.sleep(1.5)
         check("the Console takes no input: hi and Enter with it in front ask nobody",
-              "claude: thinking" not in b.uart() and DEFAULT + "hi" not in b.uart() and not stub_calls(), b.uart()[-300:])
+              "samantha: thinking" not in b.uart() and DEFAULT + "hi" not in b.uart() and not stub_calls(), b.uart()[-300:])
         b.terminal()
         a = b.shot(); body, prompt = bands(a)
         b.type(QUESTION + "x"); b.key("backspace"); time.sleep(0.4)
@@ -222,7 +222,7 @@ try:
               "%d -> %d dark pixels" % (ink(a, *prompt), ink(t, *prompt)))
         check("key echoes stay on the UART", "key 17 down" in b.uart())
         b.key("ret")
-        got = b.wait_for("claude: thinking", 10) and b.wait_for(MARK, 30)
+        got = b.wait_for("samantha: thinking", 10) and b.wait_for(MARK, 30)
         out = b.uart()
         calls = stub_calls()
         check("Enter sent the question: the stub got exactly the typed text, Backspace applied",
@@ -232,7 +232,7 @@ try:
         check("it is wrapped to lines of at most 53 columns", len(lines) > 1 and all(len(l) <= 53 for l in lines),
               repr([len(l) for l in lines]))
         check("the question is echoed after the default prompt, Samantha $", DEFAULT + QUESTION + "\n" in out, out[-400:])
-        before = out.split("claude: thinking")[0]
+        before = out.split("samantha: thinking")[0]
         check("... and no Claude prompt shows before a Claude backend has answered", not re.search(r"Claude[^\n]*\$ ", before), before[-300:])
         check("... and the relay's model line is not printed as part of the answer", "M Claude" not in out)
         c = b.shot()
@@ -249,7 +249,7 @@ try:
         b.terminal()
         # a follow-up resumes the relay's session
         b.type(SECOND); b.key("ret")
-        b.wait_for("claude: thinking", 10, 2); b.wait_for(MARK, 30, 2)
+        b.wait_for("samantha: thinking", 10, 2); b.wait_for(MARK, 30, 2)
         calls = stub_calls()
         sid = None
         if len(calls) == 2:
@@ -262,20 +262,20 @@ try:
         n_claude = len(stub_calls())
         start_relay(TOKEN, turing_url)
         b.type("turing"); b.key("ret")
-        b.wait_for("claude: thinking", 10, 3); b.wait_for(MARK, 30, 3)
+        b.wait_for("samantha: thinking", 10, 3); b.wait_for(MARK, 30, 3)
         out = b.uart()
         check("turing: the stub serve.py got the question", turing_seen[-1:] == ["turing"], repr(turing_seen))
         check("turing: its answer prints in the Terminal", " ".join(" ".join(answer_after(out, 3)).split()) == ANSWER + " " + MARK,
-              repr(answer_after(out, 3)) if out.count("claude: thinking") > 3 else out[-300:])
+              repr(answer_after(out, 3)) if out.count("samantha: thinking") > 3 else out[-300:])
         check("turing: no claude -p ran", len(stub_calls()) == n_claude)
         # the relay now wants another token
         start_relay(OTHER)
         b.type("hi"); b.key("ret")
-        check("a wrong token prints claude: error -401", b.wait_for("claude: error -401", 20), b.uart()[-300:])
+        check("a wrong token prints samantha: error -401", b.wait_for("samantha: error -401", 20), b.uart()[-300:])
         check("after Turing answered, the prompt reads Samantha $ (ask.c took M Samantha)", DEFAULT + "hi\n" in b.uart().split(MARK)[-1], b.uart()[-300:])
         check("the 401 never ran claude", len(stub_calls()) == 2)
         # the Terminal's own scrollback: five more refusals (3+ lines each) overflow its rows, then Page Up and End
-        for k in range(2, 7): b.type("hi"); b.key("ret"); b.wait_for("claude: error -401", 20, k)
+        for k in range(2, 7): b.type("hi"); b.key("ret"); b.wait_for("samantha: error -401", 20, k)
         time.sleep(0.4)
         region = lambda s, r: [s[2][(y * s[0] + r[0]) * 3:(y * s[0] + r[2]) * 3] for y in range(r[1], r[3])]
         e = b.shot(); b.key("pgup"); time.sleep(0.4); f = b.shot(); b.key("end"); time.sleep(0.4); g = b.shot()
@@ -320,7 +320,7 @@ try:
     try:
         b.terminal(); b.type("hi"); b.key("ret")
         check("with no network card the prompt is the default model", b.wait_for(DEFAULT + "hi\n", 10), b.uart()[-300:])
-        check("with no network card: claude: no network", b.wait_for("claude: no network", 10), b.uart()[-300:])
+        check("with no network card: samantha: no network", b.wait_for("samantha: no network", 10), b.uart()[-300:])
         time.sleep(1)
         check("... and with no model baked in, no local-model line follows", "llm:" not in b.uart(), b.uart()[-300:])
     finally:
@@ -334,7 +334,7 @@ try:
     try:
         b.terminal(); b.type("hi"); b.key("ret")
         check("with no token the prompt is still Samantha $", b.wait_for("\n" + DEFAULT + "hi\n", 10) and not re.search(r"Claude[^\n]*\$ ", b.uart()), b.uart()[-300:])
-        check("with no token: claude: no token", b.wait_for("claude: no token", 10), b.uart()[-300:])
+        check("with no token: samantha: no token", b.wait_for("samantha: no token", 10), b.uart()[-300:])
     finally:
         b.close()
     check("... and the relay was never asked", len(stub_calls()) == n0)

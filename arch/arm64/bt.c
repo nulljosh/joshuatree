@@ -165,26 +165,69 @@ static void pause_ms(unsigned n) { until = now() + ms(n); }
 static unsigned pend_op, pend_n; static unsigned char pend_p[14];   /* one command the link needs, sent when none is in flight */
 
 /* ---- What the radio heard: a short table, one row per address ---- */
-#define DEVS 24
-static struct { unsigned char a[6], type, full; signed char rssi; char name[30]; } dev[DEVS];
+#define DEVS 64   /* a busy room: the first 24 filled in 5 seconds and the mouse was one of the six not kept */
+static struct { unsigned char a[6], type, full, hid; signed char rssi; unsigned char evts, adfl; unsigned short app, co; char name[30]; } dev[DEVS];   /* evts: bit per advertising event type heard (0 connectable, 1 directed, 2 scannable only, 3 not connectable); adfl: its Flags byte */   /* hid: 1 advertises the HID service, 2 says it is a mouse; app: its Appearance, co: its maker's Bluetooth company id */
 static unsigned ndev, nlost;
-static void heard(const unsigned char *a, unsigned type, const unsigned char *d, unsigned n, signed char rssi) {
+static void heard(unsigned evt, const unsigned char *a, unsigned type, const unsigned char *d, unsigned n, signed char rssi) {
     unsigned k = 0;
     for (; k < ndev; k++) { unsigned j = 0; while (j < 6 && dev[k].a[j] == a[j]) j++; if (j == 6 && dev[k].type == type) break; }
     if (k == ndev) {
-        if (ndev == DEVS) { nlost++; return; }
+        if (ndev == DEVS) {   /* full: a device that advertises as a mouse or HID takes the place of the weakest one that does not */
+            int hid_now = 0;
+            for (unsigned i = 0; i + 1 < n && d[i] && i + 1 + d[i] <= n; i += 1 + d[i]) {
+                unsigned t = d[i + 1], len = d[i] - 1u;
+                if ((t == 0x02 || t == 0x03) && !(len & 1u)) for (unsigned m = 0; m < len; m += 2) if ((d[i + 2 + m] | d[i + 3 + m] << 8u) == 0x1812u) hid_now = 1;
+                if (t == 0x19 && len >= 2) { unsigned ap = d[i + 2] | d[i + 3] << 8u; if (ap >= 0x03C0u && ap <= 0x03CFu) hid_now = 1; }
+            }
+            int w = -1;
+            if (hid_now) for (unsigned x = 0; x < ndev; x++) if (!dev[x].hid && (w < 0 || dev[x].rssi < dev[w].rssi)) w = (int)x;
+            if (w < 0) { nlost++; return; }
+            k = (unsigned)w; ndev--; nlost++;   /* reuse that row: it is counted lost, the new device is counted heard just below */
+        }
         for (unsigned j = 0; j < 6; j++) dev[k].a[j] = a[j];
-        dev[k].type = (unsigned char)type; dev[k].full = 0; dev[k].name[0] = 0; dev[k].rssi = 127; ndev++;
+        dev[k].type = (unsigned char)type; dev[k].full = 0; dev[k].hid = 0; dev[k].evts = dev[k].adfl = 0; dev[k].app = dev[k].co = 0; dev[k].name[0] = 0; dev[k].rssi = 127; ndev++;
     }
     if (rssi != 127) dev[k].rssi = rssi;   /* 127: the radio could not measure it */
+    if (evt < 4) dev[k].evts |= (unsigned char)(1u << evt);
     for (unsigned i = 0; i + 1 < n && d[i] && i + 1 + d[i] <= n; i += 1 + d[i]) {   /* AD structures: length, type, data */
         unsigned t = d[i + 1], len = d[i] - 1u;
+        /* Most mice and keyboards advertise no name at all, but they say what they are: the HID service (0x1812) in a 16 bit
+           UUID list, or an Appearance (0x19) of 0x03C0 to 0x03CF, HID, with 0x03C2 the mouse. A tag in the scan list and a
+           first pick for `bt pair` find the mouse among the phones and watches. */
+        if ((t == 0x02 || t == 0x03) && !(len & 1u)) { for (unsigned m = 0; m < len; m += 2) if ((d[i + 2 + m] | d[i + 3 + m] << 8u) == 0x1812u && !dev[k].hid) dev[k].hid = 1; }
+        if (t == 0x19 && len >= 2) { unsigned ap = d[i + 2] | d[i + 3] << 8u; dev[k].app = (unsigned short)ap; if (ap == 0x03C2u) dev[k].hid = 2; else if (ap >= 0x03C0u && ap <= 0x03CFu && !dev[k].hid) dev[k].hid = 1; }
+        if (t == 0x01 && len >= 1) dev[k].adfl = d[i + 2];
+        if (t == 0xFF && len >= 2) dev[k].co = (unsigned short)(d[i + 2] | d[i + 3] << 8u);   /* manufacturer data starts with the maker's company id */
         if (t != 0x09 && !(t == 0x08 && !dev[k].full)) continue;   /* a complete name beats a shortened one */
         unsigned m = 0;
         for (; m < len && m < sizeof dev[k].name - 1; m++) { unsigned char c = d[i + 2 + m]; dev[k].name[m] = c >= 32 && c < 127 ? (char)c : '?'; }
         dev[k].name[m] = 0; dev[k].full = t == 0x09;
     }
 }
+/* ---- The list in plain words: what a device says it is, how close it is, mice first, numbered for `bt pair N` ---- */
+static int has(const char *name, const char *w, unsigned wn);
+static const char *kind_word(unsigned k) {   /* from its Appearance, else its HID service, else its maker; 0 when it tells us nothing */
+    unsigned a = dev[k].app;
+    if (a == 0x03C2) return "Mouse";
+    if (a == 0x03C1) return "Keyboard";
+    if (a == 0x03C4) return "Game controller";
+    if (a >= 0x03C0 && a <= 0x03CF) return "Input device";
+    if (dev[k].hid) return "Mouse or keyboard";
+    switch (a >> 6) { case 1: return "Phone"; case 2: return "Computer"; case 3: return "Watch"; case 5: return "Display"; case 6: return "Remote"; case 8: return "Tag"; case 10: return "Media player"; case 49: return "Earbuds"; default: break; }
+    switch (dev[k].co) {
+    case 0x004C: return "Apple device";      case 0x0006: return "Microsoft device"; case 0x00E0: return "Google device";
+    case 0x0075: return "Samsung device";    case 0x012D: return "Sony device";      case 0x01DA: return "Logitech device";
+    case 0x009E: return "Bose device";       case 0x038F: return "Xiaomi device";    case 0x0087: return "Garmin device";
+    default: return 0;
+    }
+}
+static const char *near_word(int rssi) { return rssi == 127 ? "signal unknown" : rssi >= -45 ? "very close" : rssi >= -60 ? "near" : rssi >= -75 ? "in the room" : "far away"; }
+static unsigned shown[DEVS], nshown;   /* the last list's order: row N of `bt scan` is dev[shown[N - 1]] */
+static int rank(unsigned k) {          /* higher lists first: a mouse, then anything HID, then a named device, then one that says what it is */
+    int g = dev[k].hid == 2 ? 4 : dev[k].hid ? 3 : dev[k].name[0] ? 2 : kind_word(k) ? 1 : 0;
+    return g * 1000 + (dev[k].rssi == 127 ? 0 : dev[k].rssi + 128);
+}
+
 /* LE Advertising Report: the number of reports, then each one whole, back to back, the way BlueZ reads them:
    event type, address type, address (6, little endian), data length, data, RSSI. */
 static void adv_reports(const unsigned char *p, unsigned n) {
@@ -192,14 +235,18 @@ static void adv_reports(const unsigned char *p, unsigned n) {
     while (k-- && i + 9 <= n) {
         unsigned len = p[i + 8];
         if (i + 10 + len > n) break;
-        heard(p + i + 2, p[i + 1], p + i + 9, len, (signed char)p[i + 9 + len]);
+        heard(p[i], p + i + 2, p[i + 1], p + i + 9, len, (signed char)p[i + 9 + len]);
         i += 10 + len;
     }
 }
 
 /* ---- The link to the mouse ---- */
 static int conn, closing;                /* a link is up; we are hanging it up after a failure */
+static int tries;                        /* connection attempts this `bt pair` */
+static unsigned long conn_t0;            /* when the link came up, to say how long it lived */
+static int scan_later;                   /* `bt scan` was typed while the radio was still starting: scan the moment it is ready */
 static unsigned handle;                  /* its connection handle */
+void wifi_hold(void); void wifi_release(void);   /* wifi.c: the shared antenna is Bluetooth's while a mouse pairs */
 static unsigned char me[6], peer[6], peer_type;   /* our address and the mouse's, little endian, as the radio gives them */
 static char peer_name[30];
 static unsigned credits;                 /* ACL packets the radio can still take */
@@ -227,6 +274,7 @@ static void hang_up(void) {   /* Disconnect, reason 0x13 (we ended it), once not
     pend_op = OP_DISCONNECT; pend_p[0] = (unsigned char)handle; pend_p[1] = (unsigned char)(handle >> 8); pend_p[2] = 0x13; pend_n = 3;
 }
 static void fail(const char *msg) {   /* one plain line (msg, or the line built so far), then hang up if there is a link */
+    wifi_release();
     if (msg) put(msg);
     say(); to_term = 0;
     by_step = 0;                          /* a command still in flight no longer runs a step */
@@ -382,7 +430,7 @@ static void on_att(const unsigned char *p, unsigned n) {
     } else if (gs == 4) {
         if (op == 0x13) {
             put("bt: mouse ready"); say();
-            st = MOUSE; gs = 5; to_term = 0; until = FOREVER;
+            st = MOUSE; gs = 5; until = FOREVER; wifi_release(); to_term = 0;   /* Wi-Fi back first, so its lines land in the Terminal */
         } else if (op == 0x01 && n >= 5) { put("bt: the mouse would not send reports, error "); put_hex(p[4]); fail(0); }
     }
 }
@@ -427,7 +475,8 @@ static void connected(const unsigned char *p, unsigned n) {   /* LE Connection C
     if (p[0]) { put("bt: could not connect, status "); put_hex(p[0]); fail(0); return; }
     conn = 1; handle = h; peer_type = p[4];
     for (int i = 0; i < 6; i++) peer[i] = p[5 + i];
-    put("bt: connected"); say();
+    conn_t0 = now();
+    put("bt: connected, link interval "); { unsigned iv = (p[11] | p[12] << 8u) * 125u; put_dec((int)(iv / 100)); put("."); put_dec((int)(iv / 10 % 10)); } put(" ms"); say();
     pc = 40; until = 0;
 }
 static void disconnected(const unsigned char *p, unsigned n) {   /* Disconnection Complete: status, handle, reason */
@@ -435,7 +484,13 @@ static void disconnected(const unsigned char *p, unsigned n) {   /* Disconnectio
     conn = 0; aqh = aqt; pend_op = 0;
     if (held) { for (unsigned b = 0; b < 3; b++) if (held >> b & 1) kinput(1, 272 + b, 0); held = 0; kinput(0, 0, 0); }
     if (st == PAIRING && closing) { st = READY; closing = 0; until = FOREVER; return; }   /* the line was printed by fail */
-    if (st == PAIRING) { put(smp < 4 ? "bt: pairing failed, the mouse hung up, reason " : "bt: the mouse hung up, reason "); put_hex(p[3]); fail(0); return; }
+    unsigned lived = (unsigned)((now() - conn_t0) / ms(1));   /* how long the link was up, in ms */
+    if (st == PAIRING && p[3] == 0x3E && smp < 4 && tries < 3) {   /* connection failed to be established: the mouse never answered, call again, at another speed */
+        tries++; smp = gs = 0;
+        put("bt: the mouse never answered ("); put_dec((int)lived); put(" ms), calling again"); say();
+        pc = 33; until = 0; return;   /* from the address step, so the Create Connection is built fresh */
+    }
+    if (st == PAIRING) { put(smp < 4 ? "bt: pairing failed, the mouse hung up after " : "bt: the mouse hung up after "); put_dec((int)lived); put(" ms, reason "); put_hex(p[3]); fail(0); return; }
     if (st == MOUSE) { put("bt: the mouse disconnected, reason "); put_hex(p[3]); say(); st = READY; }
 }
 
@@ -540,23 +595,44 @@ static void step(void) {
         cmd(OP_BAUD, baud, 6); return;
     case 11: ux_baud(FAST_BAUD); pause_ms(10); return;
     case 12: cmd(OP_EVENT_MASK, mask, 8); return;
-    case 13: st = READY; put("bt: ready, type bt scan to look for devices"); say(); return;
+    case 13:
+        st = READY;
+        if (scan_later) {   /* a scan was asked for during start-up: run it now, into the Terminal that asked */
+            scan_later = 0; put("bt: ready, scanning for 5 seconds"); say();
+            ndev = nlost = nshown = 0; to_term = 1; st = SCANNING; pc = 20; until = now(); return;
+        }
+        put("bt: ready, type bt scan to look for devices"); say(); return;
     case 20: cmd(OP_SCAN_PARAMS, scan, 7); return;
     case 21: cmd(OP_SCAN_ENABLE, on, 2); return;
     case 22: pause_ms(SCAN_MS); return;
     case 23: cmd(OP_SCAN_ENABLE, off, 2); return;
-    case 24:
-        for (unsigned k = 0; k < ndev; k++) {
-            put("bt: "); put(dev[k].name[0] ? dev[k].name : "(no name)"); put("  rssi ");
-            if (dev[k].rssi == 127) put("?"); else put_dec(dev[k].rssi);
-            put("  addr ");
-            for (int j = 5; j >= 0; j--) { char h[3] = { "0123456789abcdef"[dev[k].a[j] >> 4], "0123456789abcdef"[dev[k].a[j] & 15], 0 }; put(h); if (j) put(":"); }
+    case 24: {   /* the list, in words: the interesting ones numbered, strongest group first; the nameless rest counted */
+        unsigned ord[DEVS], n = 0;
+        for (unsigned k = 0; k < ndev; k++) if (rank(k) >= 1000) ord[n++] = k;
+        for (unsigned x = 1; x < n; x++) { unsigned v = ord[x]; int y = (int)x - 1; while (y >= 0 && rank(ord[y]) < rank(v)) { ord[y + 1] = ord[y]; y--; } ord[y + 1] = v; }
+        nshown = n > 9 ? 9 : n;
+        for (unsigned r = 0; r < nshown; r++) {
+            unsigned k = ord[r]; shown[r] = k;
+            const char *w = kind_word(k);
+            put("bt: "); put_dec((int)r + 1); put(". ");
+            if (dev[k].name[0]) { put(dev[k].name); unsigned wl = 0; while (w && w[wl]) wl++; if (w && dev[k].hid && !has(dev[k].name, w, wl)) { put(" ("); put(w); put(")"); } }
+            else put(w ? w : "Unknown device");
+            put(", "); put(near_word(dev[k].rssi));
+            if (dev[k].hid) {   /* how it advertises: only a connectable one can be called */
+                put(dev[k].evts & 1 ? " [connectable" : dev[k].evts & 2 ? " [directed to another device, not to us" : dev[k].evts & 12 ? " [NOT connectable" : " [?");
+                put(dev[k].adfl & 3 ? ", discoverable]" : dev[k].adfl ? ", not in pairing mode]" : "]");
+            }
+            if (dev[k].hid == 2 || (dev[k].hid && r == 0)) put("   <- your mouse? bt pair");
             say();
         }
-        put("bt: scan done, "); if (ndev) { put_dec((int)ndev); put(ndev == 1 ? " device" : " devices"); } else put("nothing heard");
-        if (nlost) { put(", "); put_dec((int)nlost); put(" more not kept"); }
+        unsigned rest = ndev - nshown + nlost;
+        if (!ndev) put("bt: nothing heard. Is the radio on? Try bt scan again");
+        else { put("bt: "); put_dec((int)ndev + (int)nlost); put(" devices heard"); if (rest) { put(", "); put_dec((int)rest); put(" more with no name or type, hidden"); } }
         say();
+        if (!nshown || !(dev[shown[0]].hid)) { put("bt: no mouse yet. Hold your mouse's pairing button until its light blinks, put it next to the Pi, and bt scan again"); say(); }
+        else { put("bt: bt pair connects to number 1, or bt pair 2 for another"); say(); }
         st = READY; to_term = 0; return;
+    }
     /* `bt pair`: buffers, our address, the connection */
     case 30: cmd(OP_LE_BUFSIZE, 0, 0); return;
     case 31:   /* status, LE ACL length (2), LE ACL packets; 0 packets means the radio shares its classic buffers */
@@ -569,17 +645,21 @@ static void step(void) {
         pc = 34; cmd(OP_BDADDR, 0, 0); return;
     case 34: {
         for (int i = 0; i < 6; i++) me[i] = ret[1 + i];
-        /* scan interval 60 ms and window 30 ms, no filter, the mouse, our public address, interval 7.5 to 15 ms,
-           no latency, supervision timeout 2 s, no connection event lengths */
+        /* scan interval 60 ms and window 30 ms, no filter, the mouse, our public address, interval 30 to 50 ms (Linux's
+           defaults; on the Pi 4 the radio shares its antenna with Wi-Fi, and at 7.5 ms the first packets to a real mouse
+           never got through: the link dropped with 0x3e, connection failed to be established), no latency, supervision
+           timeout 2 s, no connection event lengths */
         unsigned char c[25] = { 0x60, 0, 0x30, 0, 0, peer_type, peer[0], peer[1], peer[2], peer[3], peer[4], peer[5], 0,
-                                6, 0, 12, 0, 0, 0, 200, 0, 0, 0, 0, 0 };
+                                24, 0, 40, 0, 0, 0, 200, 0, 0, 0, 0, 0 };
+        if (tries == 1) { c[13] = 12; c[15] = 24; }   /* the second call: 15 to 30 ms */
+        if (tries >= 2) { c[13] = 6; c[15] = 12; }    /* the third: 7.5 to 15 ms */
         cmd(OP_CONNECT, c, 25); return;
     }
     case 35: until = now() + ms(LINK_MS); return;   /* Command Status came back: now wait for the link */
     case 36:   /* no LE Connection Complete in time: the mouse is not advertising */
         put("bt: the mouse did not answer, hold its button 5 seconds and type bt pair again"); say(); to_term = 0;
         cmd(OP_CONNECT_CANCEL, 0, 0); return;
-    case 37: st = READY; until = FOREVER; return;
+    case 37: st = READY; until = FOREVER; wifi_release(); return;
     case 40: {   /* SMP Pairing Request: no input or output, no OOB, bonding, a 16 byte key; the mouse sends its LTK */
         static const unsigned char rq[7] = { 0x01, 0x03, 0x00, 0x01, 16, 0x00, 0x01 };
         for (int i = 0; i < 7; i++) preq[i] = rq[i];
@@ -660,24 +740,39 @@ int bt_command(const char *q, unsigned n) {
     int scan = n - i == 4 && q[i] == 's' && q[i + 1] == 'c' && q[i + 2] == 'a' && q[i + 3] == 'n';
     int pair = n - i >= 4 && q[i] == 'p' && q[i + 1] == 'a' && q[i + 2] == 'i' && q[i + 3] == 'r' && (n - i == 4 || q[i + 4] == ' ');
     if (i < n && !scan && !pair) { put("bt: try bt, bt scan or bt pair"); say_now(); return 1; }
+    if (scan && st == STARTING) {   /* the radio is still loading its patch (about half a minute after power-on): wait for it, then scan */
+        scan_later = 1; to_term = 1;
+        put("bt: the radio is still starting"); if (pc == 6 && bt_fw_hcd_len) { put(" ("); put_dec((int)(fwpos * 100u / bt_fw_hcd_len)); put("% of its patch loaded)"); }
+        put(". I will scan the moment it is ready"); say_now(); return 1;
+    }
     if (scan && st == READY) {
-        ndev = nlost = 0; to_term = 1; st = SCANNING; pc = 20; until = now();
+        ndev = nlost = nshown = 0; to_term = 1; st = SCANNING; pc = 20; until = now();
         put("bt: scanning for 5 seconds"); say_now(); return 1;
     }
-    if (pair && st == READY) {   /* `bt pair [NAME]`: NAME, else the first name with "mouse" in it, else the strongest */
+    if (pair && st == READY) {   /* `bt pair [NAME]`: NAME, else the strongest device that says it is a mouse, then one that says HID, then the first name with "mouse" in it, else the strongest */
         unsigned w = i + 4; while (w < n && q[w] == ' ') w++;
         int k = -1;
+        if (w < n && q[w] >= '1' && q[w] <= '9' && w + 1 == n) {   /* bt pair 2: the second row of the last list */
+            unsigned r = (unsigned)(q[w] - '1');
+            if (r >= nshown) { put("bt: no number "); put_dec((int)r + 1); put(" in the list, type bt scan first"); say_now(); return 1; }
+            k = (int)shown[r];
+        }
         for (unsigned d = 0; d < ndev && k < 0; d++) if (w < n ? has(dev[d].name, q + w, n - w) : has(dev[d].name, "mouse", 5)) k = (int)d;
+        for (int want_hid = 2; want_hid >= 1 && k < 0 && w == n; want_hid--)   /* a device that advertised itself as a mouse, else as HID: the strongest of those */
+            for (unsigned d = 0; d < ndev; d++) if (dev[d].hid >= want_hid && (k < 0 || (dev[d].rssi != 127 && (dev[k].rssi == 127 || dev[d].rssi > dev[k].rssi)))) k = (int)d;
+        if (k < 0 && w == n && !nshown) { put("bt: type bt scan first, so there is a list to pair from"); say_now(); return 1; }
         if (k < 0 && w == n)   /* no name with "mouse" in it: the strongest signal, an unmeasured one last */
             for (unsigned d = 0; d < ndev; d++) if (k < 0 || (dev[d].rssi != 127 && (dev[k].rssi == 127 || dev[d].rssi > dev[k].rssi))) k = (int)d;
         if (k < 0) { put(ndev ? "bt: nothing heard by that name, type bt scan" : "bt: nothing heard yet, type bt scan first"); say_now(); return 1; }
         for (int j = 0; j < 6; j++) peer[j] = dev[k].a[j];
         peer_type = dev[k].type;
+        put("bt: dialling "); for (int j = 5; j >= 0; j--) { put_hex(peer[j]); if (j) put(":"); } put(peer_type ? " (random address)" : " (public address)"); say();
         unsigned m = 0; for (; dev[k].name[m] && m < sizeof peer_name - 1; m++) peer_name[m] = dev[k].name[m]; peer_name[m] = 0;
-        conn = closing = smp = gs = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
+        conn = closing = smp = gs = tries = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
         wipe(ltk, 16); wipe(krand, 8);
+        wifi_hold();
         to_term = 1; st = PAIRING; pc = 30; until = now();
-        put("bt: connecting to "); put(peer_name[0] ? peer_name : "the strongest device"); say_now(); return 1;
+        put("bt: connecting to "); put(peer_name[0] ? peer_name : kind_word((unsigned)k) ? kind_word((unsigned)k) : "the strongest device"); put(", keep it in pairing mode"); say_now(); return 1;
     }
     switch (st) {
     case READY: put("bt: ready, version "); put(version); break;
@@ -685,7 +780,7 @@ int bt_command(const char *q, unsigned n) {
     case PAIRING: put("bt: pairing with "); put(peer_name[0] ? peer_name : "the mouse"); break;
     case MOUSE: put("bt: mouse ready, "); put(peer_name[0] ? peer_name : "no name"); break;
     case STARTING:
-        if (pc == 6 && nrec) { put("bt: loading the radio's patch, record "); put_dec((int)nrec); }
+        if (pc == 6 && nrec && bt_fw_hcd_len) { put("bt: loading the radio's patch, "); put_dec((int)(fwpos * 100u / bt_fw_hcd_len)); put("% done"); }
         else put("bt: starting");
         break;
     default: put(why); break;
