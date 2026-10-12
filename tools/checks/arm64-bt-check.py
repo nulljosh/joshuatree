@@ -407,14 +407,15 @@ try:
         b.type("bt scan")
         check("bt scan starts at once", b.wait_for("bt: scanning for 5 seconds", 10), b.uart()[-400:])
         t0 = time.time()
-        check("bt scan ends", b.wait_for("bt: scan done", 20), b.uart()[-600:])
+        check("bt scan ends", b.wait_for("bt: bt pair connects to number 1", 20), b.uart()[-600:])
         took = time.time() - t0
         check("the scan lasts about 5 seconds", 4.0 < took < 12, took)
         out = b.uart(); after = lines(out.split("bt: scanning for 5 seconds", 1)[1])
         check("each device once, in the order heard, names merged, latest RSSI, address byte-reversed",
-              after == ["bt: Tile  rssi -70  addr ab:cd:ef:12:34:56",
-                        "bt: Microsoft Bluetooth Mouse  rssi -60  addr c4:8e:8f:65:43:21",
-                        "bt: scan done, 2 devices"], after)
+              after == ["bt: 1. Microsoft Bluetooth Mouse, near   <- this looks like your mouse: bt pair",   # it advertises the HID service and a mouse Appearance: a mouse is listed first, with its distance in words
+                        "bt: 2. Tile, in the room",
+                        "bt: 2 devices heard",
+                        "bt: bt pair connects to number 1, or bt pair 2 for another"], after)
         sc = [(op, prm) for op, prm in b.fake.log if op in (0x200B, 0x200C)]
         check("active scan parameters, enable, then disable", [op for op, _ in sc] == [0x200B, 0x200C, 0x200C]
               and sc[0][1][:1] == b"\x01" and sc[1][1][:1] == b"\x01" and sc[2][1][:1] == b"\x00", sc)
@@ -490,7 +491,7 @@ try:
         check("badconfirm: bring-up ends in bt: ready", b.wait_for("bt: ready, type bt scan", 30), b.uart()[-800:])
         check("badconfirm: the Terminal opens", b.terminal(), b.uart()[-300:])
         b.type("bt scan")
-        check("badconfirm: the scan ends", b.wait_for("bt: scan done", 20), b.uart()[-600:])
+        check("badconfirm: the scan ends", b.wait_for("bt: bt pair connects to number 1", 20), b.uart()[-600:])
         b.type("bt pair")
         check("badconfirm: a wrong confirm value ends in bt: pairing failed", b.wait_for("bt: pairing failed", 30), b.uart()[-600:])
         time.sleep(1.0)

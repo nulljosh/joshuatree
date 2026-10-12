@@ -5,7 +5,7 @@ virtio keyboard, and keys go in through QMP send-key, the path arm64-claude-cons
   1. a bare Space and Ctrl+Space do nothing; Cmd+Space opens Spotlight ("spotlight open"); the bar is on the screen:
      its off-white surface and one accent mark.
   2. typing "term" narrows it to one name ("spotlight: term 1"); Enter opens the Terminal ("terminal open") and the
-     Terminal has the keyboard: "hi" and Enter reach ask.c, which answers with a claude: line.
+     Terminal has the keyboard: "hi" and Enter reach ask.c, which answers with a samantha: line.
   3. Esc hands the keys back to the desktop ("console open"); Right three times moves the dock's label to Calendar
      ("M1d hover 2 Mail" on the way) and Enter opens that tile: Calendar, user/calendar.c in its own window ("M3c window
      calendar first frame"), which takes the keys, so Esc closes it ("M3c app calendar exit 0").
@@ -70,7 +70,7 @@ try:
          count(img, (0xfa, 0xf8, 0xf4)) > count(base, (0xfa, 0xf8, 0xf4)) + 2000 and count(img, (0xb5, 0x50, 0x2c)) > count(base, (0xb5, 0x50, 0x2c)))
     done = expect("spotlight: term 1", "typing 'term' leaves one match"); key("t", "e", "r", "m"); done()
     done = expect("terminal open", "Enter opens the Terminal"); key("ret"); done()
-    done = expect("claude:", "the Terminal has the keyboard: 'hi' and Enter get a claude: line", 150); key("h", "i", "ret"); done()
+    done = expect("claude:", "the Terminal has the keyboard: 'hi' and Enter get a samantha: line", 150); key("h", "i", "ret"); done()
     done = expect("console open", "Esc hands the keys back to the desktop"); key("esc"); done()
     done = expect("M1d hover 2 Mail", "Right moves the dock's label along"); key("right", "right", "right"); done()
     done = expect("M1d hover 3 Calendar", "to Calendar"); key("right"); done()

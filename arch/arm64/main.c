@@ -1636,7 +1636,11 @@ static int app_dock(const char *name) {
         while (name[i] && (name[i] | 32) == a->name[i]) i++;
         if (name[i] || a->name[i]) continue;
         if (app_cur == a) app_raise();
-        else if (app_cur) { con_quiet = 1; uart_puts("M3c app busy: "); uart_puts(app_cur->name); uart_puts(" is running\n"); }
+        else if (app_cur) {   /* one app at a time: a tile for another app swaps to it (the one in front is closed, its files written back), as clicking a second app does on any desktop */
+            con_quiet = 1; uart_puts("M3c app swap: "); uart_puts(app_cur->name); uart_puts(" closed for "); uart_puts(a->name); uart_putc('\n');
+            app_kill("closed for another app");
+            if (!app_cur) app_start(a);
+        }
         else app_start(a);
         return 1;
     }
@@ -2304,24 +2308,6 @@ int wifi_init(void);
 #define WIFI_ON_PI 0
 #endif   /* wifi.c: M4 Wi-Fi stage 1, polled, every wait bounded */
 void usb_poll(void);
-/* The boot demo: the Pi has no mouse yet, so one lap of the dock labels plays by itself, Apps to Trash, a beat each,
-   and then stops. Joshua's request for the first video of it booting (2026-10-07). */
-#ifdef PI_BUILD
-static void demo_tick(void) {
-    static unsigned next; static int slot = -1;
-    if (slot > GUI_ICON_COUNT) return;
-    unsigned long f, c;
-    __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
-    unsigned t = (unsigned)(c / ((f ? f : 54000000) / 100));   /* 100 a second, like ip.c's ticks() */
-    if (!next) next = t + 300;   /* three seconds after the loop starts: the console has settled */
-    if (t < next) return;
-    next = t + 80;
-    if (slot < 0) slot = 0;
-    hover_slot = slot < GUI_ICON_COUNT ? slot : -1;
-    dock_hover(hover_slot);
-    slot++;
-}
-#endif
 #ifdef NOTES_SELFTEST
 /* notesw-kernel8.img and notesr-kernel8.img only (arm64-notes-check.py). QEMU's raspi4b has no USB, so made-up boot
    keyboard reports go through xhci.c's hid_kbd, the parser a real keyboard's reports take, one key every 150 ms of the
@@ -2694,8 +2680,21 @@ void main(void) {
 #ifdef NOTES_SELFTEST
     usb_ok |= !inputs;   /* QEMU's raspi4b has no USB to find: the loop runs anyway, for notes_tick's made-up keys */
 #endif
+#ifdef PI_BUILD
+    {   /* The desktop is up: the boot log steps aside, so the board boots to a clean desktop (it stays one dock click away, and
+           the Terminal opens as its own window). Anything that went wrong keeps it on screen: a FAIL or an oom line in the log. */
+        int trouble = 0;
+        for (unsigned i = 0, ls = 0; i + 4 <= con_p.len; i++) {   /* ls: where this line began; a Wi-Fi line is skipped, the menu bar says when Wi-Fi is down */
+            if (con_p.log[i] == '\n') { ls = i + 1; continue; }
+            const char *q = con_p.log + i;
+            int wifi = con_p.log[ls] == 'w' || con_p.log[ls] == 'W';
+            if (!wifi && ((q[0] == 'F' && q[1] == 'A' && q[2] == 'I' && q[3] == 'L') || (q[0] == 'o' && q[1] == 'o' && q[2] == 'm' && q[3] == ' '))) { trouble = 1; break; }
+        }
+        if (!trouble) console_close();
+    }
+#endif
     if (usb_ok || inputs) {
-        /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
+        /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
            so its handler never runs; the short unmask is for the virtio devices, whose handler acknowledges them. */
         *(volatile unsigned char *)(GICD_BASE + 0x400 + 27) = 0x80;
@@ -2704,7 +2703,7 @@ void main(void) {
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); demo_tick(); menubar_tick(); keydbg_tick(); app_tick(); audio_pump(); screen_tick();   /* only the display sleeps: USB stays polled */
+            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); audio_pump(); screen_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif

@@ -36,6 +36,10 @@ fi
 [ -d "$CARD" ] || { echo "$CARD is not mounted" >&2; exit 1; }
 echo "flashing $CARD"
 
+# The dev card trusts our relay's private CA and nothing else for it (the Pi refuses a relay whose certificate is not signed by
+# a TLS_TA anchor, 2.46.0): without this the Terminal says "TLS failed" however well the relay runs. docs/RELAY-TLS.md.
+CA="${JT_RELAY_CA:-$HOME/.config/joshuatree/relay-tls/ca.pem}"
+[ -f "$CA" ] && export TLS_TA="$CA"
 JT_WIFI_DEV=1 make -B -C arch/arm64 pi >/dev/null   # JT_WIFI_DEV: this card joins our network; release builds never carry it   # -B: the Makefile does not track headers
 
 FW="${FLASH_PI_FW:-build/pifw}"

@@ -3,6 +3,7 @@
    crossing the boundary is an integer (sizes in tenths of a pixel). Each glyph is rasterized into the heap, drawn, then
    the heap is rolled back: the bump heap never frees, and a log of a few hundred characters would eat it. */
 #include "../../drivers/ttf.h"
+#include "../../lib/text_ink.h"   /* the coverage curve i386 and libjt use, so the Pi's text is as dense and sharp as theirs */
 unsigned long heap_mark(void);
 void heap_release(unsigned long mark);
 
@@ -33,6 +34,7 @@ int text_draw(int which, const char *s, int x, int baseline, int px10, unsigned 
                     unsigned a = g.coverage[j * g.width + i];
                     if (!a || xx < 0 || xx >= w) continue;
                     unsigned d = fb[yy * pitch + xx], o = 0;
+                    a = (unsigned)text_ink((int)a, fg, d);
                     for (int sh = 0; sh < 24; sh += 8) {
                         int dl = (int)(d >> sh & 0xFF), fl = (int)(fg >> sh & 0xFF);
                         o |= (unsigned)(dl + (fl - dl) * (int)a / 255) << sh;

@@ -51,7 +51,7 @@ Mac-style USB keyboards: Cmd is the GUI modifier (0x08 left, 0x80 right in the b
 
 A dev card (`JT_WIFI_DEV=1`) shows the last raw HID report in hex and the key's name in the menu bar for 3 seconds after each key, for real-board tests. Release builds leave it out.
 
-A release build has no relay token. Claude then answers `claude: no token`, and the other commands still work. Only the dev card that `tools/flash-pi.sh` writes carries a token. The token comes from a file outside the repo and is never printed.
+A release build has no relay token. Claude then answers `samantha: no token`, and the other commands still work. Only the dev card that `tools/flash-pi.sh` writes carries a token. The token comes from a file outside the repo and is never printed.
 
 ## Code and checks
 

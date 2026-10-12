@@ -78,7 +78,7 @@ pi-ask.o: ask.c claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
 	$(NETCC) -DPI_BUILD $(if $(filter 1,$(JT_WIFI_DEV)),,-DCLAUDE_RELEASE) -c ask.c -o $@
 ttf.o: ../../drivers/ttf.c
 	$(FPCC) -c $< -o $@
-text.o: text.c ../../drivers/ttf.h
+text.o: text.c ../../drivers/ttf.h ../../lib/text_ink.h
 	$(FPCC) -c $< -o $@
 libc.o: libc.c
 	$(FPCC) -c $< -o $@

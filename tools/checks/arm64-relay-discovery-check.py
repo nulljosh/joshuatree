@@ -8,13 +8,13 @@ are made with the exact openssl commands in docs/RELAY-TLS.md. The relay is the 
 other ports: the user network (DHCP, and TCP to the relay at 10.0.2.2) and a UDP socket to this script, which plays
 the rest of the LAN. Every broadcast probe it sees goes to the relay's own discovery socket, and the relay's answer
 goes back on the wire from 10.0.2.2, the Mac as the guest sees it. One boot, four questions in the Terminal:
-  0. a bare TCP listener on the relay's port and no probe answerer: "claude: no relay answered on the LAN", and the
+  0. a bare TCP listener on the relay's port and no probe answerer: "samantha: no relay answered on the LAN", and the
      listener never saw a connection. This is the control: the baked 10.0.2.77 really does not reach the host.
-  1. the relay with a certificate for DNS:jt-relay: the probe finds it ("claude: relay found at 10.0.2.2") and the
+  1. the relay with a certificate for DNS:jt-relay: the probe finds it ("samantha: relay found at 10.0.2.2") and the
      stub's answer comes back. The address in the certificate is nowhere near 10.0.2.77.
   2. a follow-up goes straight to the relay that answered last: answered, with no second "relay found" line.
   3. the relay restarted with a certificate from the same CA for the old IP name (DNS:10.0.2.2, IP:10.0.2.2), the
-     relay itself answering the probe: "claude: TLS failed", the stub is never run and the relay logs no request, so
+     relay itself answering the probe: "samantha: TLS failed", the stub is never run and the relay logs no request, so
      the token never left the Pi. The token is never on the UART.
 Discriminating: drop the relay_discover call in arch/arm64/ask.c (or answer_probes in relay.py) and step 1 fails;
 verify CLAUDE_HOST instead of jt-relay and step 1 fails on the name; drop the name check and step 3 is answered.
@@ -167,13 +167,13 @@ class Boot:
     def key(self, *qcodes):
         self.cmd("send-key", keys=[{"type": "qcode", "data": k} for k in qcodes]); time.sleep(0.12)
     def ask(self, text):   # type a question at the Terminal's prompt and press Enter; returns how many asks came before
-        n = self.uart().count("claude: thinking")
+        n = self.uart().count("samantha: thinking")
         for ch in text: self.key("spc" if ch == " " else ch)
         self.key("ret")
-        if not self.wait_for("claude: thinking", 10, n + 1): raise SystemExit("FAIL: the question was not sent: %r" % self.uart()[-300:])
+        if not self.wait_for("samantha: thinking", 10, n + 1): raise SystemExit("FAIL: the question was not sent: %r" % self.uart()[-300:])
         return n
     def after(self, n):    # what the n-th question printed so far
-        return self.uart().split("claude: thinking\n")[n + 1] if self.uart().count("claude: thinking") > n else ""
+        return self.uart().split("samantha: thinking\n")[n + 1] if self.uart().count("samantha: thinking") > n else ""
     def outcome(self, n, secs=40):   # waits for this question's own answer or refusal, then what it printed
         end = time.time() + secs
         while time.time() < end and ANSWER not in self.after(n) and "TLS failed, no HTTP fallback" not in self.after(n):
@@ -210,8 +210,8 @@ try:
         if not b.wait_for("terminal open", 10, n + 1): raise SystemExit("FAIL: F2 did not open the Terminal")
         time.sleep(0.4)
         out = b.outcome(b.ask("hi"))
-        check("with no probe answer: claude: no relay answered on the LAN, and TLS failed",
-              "claude: no relay answered on the LAN\n" in out and "TLS failed" in out, out[-300:])
+        check("with no probe answer: samantha: no relay answered on the LAN, and TLS failed",
+              "samantha: no relay answered on the LAN\n" in out and "TLS failed" in out, out[-300:])
         done.set(); th.join(3); listener.close()
         check("... and the dead baked address never reached the host", not conns, "%d connections" % len(conns))
         check("... though the probe did go out on the LAN as a broadcast", lan.probes > 0)
@@ -219,7 +219,7 @@ try:
         # 1. the real relay, certificate for jt-relay: found by its probe
         start_relay(good)
         out = b.outcome(b.ask("where are you"))
-        check("the probe finds the relay: claude: relay found at 10.0.2.2", "claude: relay found at 10.0.2.2\n" in out, out[-300:])
+        check("the probe finds the relay: samantha: relay found at 10.0.2.2", "samantha: relay found at 10.0.2.2\n" in out, out[-300:])
         check("... and the stub's answer comes back through it", ANSWER in out, out[-300:])
         calls = stub_calls()
         check("the stub got exactly the question", len(calls) == 1 and calls[0]["stdin"] == "where are you", repr(calls))
