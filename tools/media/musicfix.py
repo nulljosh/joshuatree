@@ -76,6 +76,12 @@ def qa_songs(which):
             "CORRUPT.MP3": ("::MUSIC/", damage_frame(open(os.path.join(FIXTURES, "mono22.mp3"), "rb").read(), 10)),
             "DELTA.MP3": ("::MUSIC/", tone * 17),
         }
+    if which == "tag":   # NEVERG~1 is all FAT shows; the title and artist live in the ID3 tag
+        def frame(i, t): return i + (len(t.encode()) + 2).to_bytes(4, "big") + b"\0\0" + b"\0" + t.encode() + b"\0"
+        body = frame(b"TIT2", "Never Gonna Give You Up") + frame(b"TPE1", "Rick Astley")
+        n = len(body)
+        tag = b"ID3\x03\x00\x00" + bytes([(n >> 21) & 127, (n >> 14) & 127, (n >> 7) & 127, n & 127]) + body
+        return {"NEVERG~1.MP3": ("::MUSIC/", tag + tone)}
     if which == "many":
         return {f"SONG{i:02d}.WAV": ("::", wav(1, 8, 8000, 1, 300 + 20 * i)) for i in range(1, 15)}
     return {}   # empty
@@ -86,8 +92,8 @@ def main():
     which = "std"
     if "--set" in args:
         i = args.index("--set"); which = args[i + 1]; del args[i:i + 2]
-    if not args or which not in ("std", "qa", "many", "empty"):
-        sys.exit("usage: musicfix.py IMG [KEEPDIR] [--set std|qa|many|empty]")
+    if not args or which not in ("std", "qa", "many", "empty", "tag"):
+        sys.exit("usage: musicfix.py IMG [KEEPDIR] [--set std|qa|many|empty|tag]")
     img = args[0]
     subprocess.run(["bash", os.path.join(ROOT, "tools", "mkdisk.sh"), img], check=True, stdout=subprocess.DEVNULL)
     work = args[1] if len(args) > 1 else tempfile.mkdtemp(prefix="jt-musicfix-")

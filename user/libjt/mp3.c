@@ -21,6 +21,69 @@ static uint32_t id3v2_skip_size(const uint8_t *buf, uint32_t len) {
     return size + 10;
 }
 
+/* Copies one ID3 text frame's body (encoding byte first) into out as plain ASCII, stopping at its NUL. */
+static void id3_text(const uint8_t *d, uint32_t n, char *out, int cap) {
+    int o = 0;
+    uint32_t i = 1;
+    if (n < 1 || cap < 1) { if (cap > 0) out[0] = 0; return; }
+    uint8_t enc = d[0];
+    if (enc == 1 || enc == 2) {                         /* UTF-16: a BOM says which byte of each pair is the low one */
+        int le = 1;
+        if (n >= 3 && d[1] == 0xFE && d[2] == 0xFF) { le = 0; i = 3; }
+        else if (n >= 3 && d[1] == 0xFF && d[2] == 0xFE) i = 3;
+        else if (enc == 2) le = 0;
+        for (; i + 1 < n && o < cap - 1; i += 2) {
+            uint8_t lo = d[i + (le ? 0 : 1)], hi = d[i + (le ? 1 : 0)];
+            if (lo == 0 && hi == 0) break;
+            out[o++] = hi || lo < 0x20 || lo >= 0x7F ? '?' : (char)lo;
+        }
+    } else {
+        for (; i < n && o < cap - 1; i++) {
+            uint8_t c = d[i];
+            if (c == 0) break;
+            if (enc == 3 && c >= 0x80 && c < 0xC0) continue;   /* a UTF-8 continuation byte: the '?' already stands for it */
+            out[o++] = c < 0x20 || c >= 0x7F ? '?' : (char)c;
+        }
+    }
+    while (o > 0 && out[o - 1] == ' ') o--;
+    out[o] = 0;
+}
+
+int mp3_id3(const uint8_t *buf, uint32_t len, char *title, int tn, char *artist, int an) {
+    if (tn > 0) title[0] = 0;
+    if (an > 0) artist[0] = 0;
+    if (len < 10 || buf[0] != 'I' || buf[1] != 'D' || buf[2] != '3') return 0;
+    uint8_t ver = buf[3];
+    if (ver < 2 || ver > 4) return 0;
+    uint32_t end = 10 + (((uint32_t)buf[6] << 21) | ((uint32_t)buf[7] << 14) | ((uint32_t)buf[8] << 7) | buf[9]);
+    if (end > len) end = len;                           /* a short read of a long tag: use what is here */
+    uint32_t p = 10;
+    int idl = ver == 2 ? 3 : 4, hdr = ver == 2 ? 6 : 10;
+    if (ver >= 3 && (buf[5] & 0x40) && p + 4 <= end) {  /* an extended header comes first: skip it */
+        uint32_t x = ((uint32_t)buf[10] << 24) | ((uint32_t)buf[11] << 16) | ((uint32_t)buf[12] << 8) | buf[13];
+        if (ver == 4) x = ((uint32_t)buf[10] << 21) | ((uint32_t)buf[11] << 14) | ((uint32_t)buf[12] << 7) | buf[13];
+        else x += 4;
+        if (x > end - p) return 0;
+        p += x;
+    }
+    while (p + hdr <= end && buf[p] != 0) {
+        const uint8_t *f = buf + p;
+        uint32_t sz = ver == 2 ? ((uint32_t)f[3] << 16) | ((uint32_t)f[4] << 8) | f[5]
+                    : ver == 3 ? ((uint32_t)f[4] << 24) | ((uint32_t)f[5] << 16) | ((uint32_t)f[6] << 8) | f[7]
+                               : ((uint32_t)f[4] << 21) | ((uint32_t)f[5] << 14) | ((uint32_t)f[6] << 7) | f[7];
+        uint32_t body = p + (uint32_t)hdr;
+        uint32_t avail = end - body;
+        uint32_t use = sz < avail ? sz : avail;         /* the last frame may be cut off by a short read */
+        int is_t = idl == 3 ? !memcmp(f, "TT2", 3) : !memcmp(f, "TIT2", 4);
+        int is_a = idl == 3 ? !memcmp(f, "TP1", 3) : !memcmp(f, "TPE1", 4);
+        if (is_t && tn > 0) id3_text(buf + body, use, title, tn);
+        if (is_a && an > 0) id3_text(buf + body, use, artist, an);
+        if (sz > avail) break;
+        p = body + sz;
+    }
+    return tn > 0 && title[0] != 0;
+}
+
 /* Everything the decoder needs that is bigger than a ring-3 program's 4KB stack lives in one heap block:
    the decoder state, the frame and sample buffers, and a stack of its own for minimp3's large scratch
    (it keeps about 15KB of float tables on the stack). The decode runs on that stack. */

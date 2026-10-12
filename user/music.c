@@ -46,7 +46,7 @@
 enum { ST_STOPPED, ST_PLAYING, ST_PAUSED };
 enum { K_PAUSE, K_SEEK, K_START };
 
-struct track { char file[JT_DIRENT_NAME]; unsigned char dir; unsigned size; };
+struct track { char file[JT_DIRENT_NAME]; unsigned char dir; unsigned size; char title[40]; char artist[28]; };   /* title and artist: the MP3's ID3 tag, when it has one */
 
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 static struct jt_dirent ents[JT_READDIR_MAX] JT_DATA;
@@ -169,8 +169,9 @@ static void fmt_time(unsigned ms, char *out) { /* m:ss */
     out[n++] = (char)('0' + s % 10);
     out[n] = 0;
 }
-static void title_of(const struct track *t, char *out) { /* ALPHA.WAV -> Alpha */
+static void title_of(const struct track *t, char *out) { /* an ID3 title as it is, else ALPHA.WAV -> Alpha */
     int i = 0;
+    if (t->title[0]) { while (t->title[i] && i < 52) { out[i] = t->title[i]; i++; } out[i] = 0; return; }
     while (t->file[i] && t->file[i] != '.' && i < 24) {
         char c = t->file[i];
         if (i > 0 && c >= 'A' && c <= 'Z') c = (char)(c + 32);
@@ -201,9 +202,10 @@ static void scan_dir(const char *dir, int dirid) {
         struct track *t = &tracks[ntracks++];
         int k = 0;
         while (ents[i].name[k] && k < JT_DIRENT_NAME - 1) { t->file[k] = ents[i].name[k]; k++; }
-        t->file[k] = 0; t->dir = (unsigned char)dirid; t->size = ents[i].size;
+        t->file[k] = 0; t->dir = (unsigned char)dirid; t->size = ents[i].size; t->title[0] = t->artist[0] = 0;
     }
 }
+static void read_tags(struct track *t);
 static void scan_library(void) {
     ntracks = 0;
     scan_dir("", 0);
@@ -213,6 +215,7 @@ static void scan_library(void) {
         while (j >= 0 && strcmp(tracks[j].file, t.file) > 0) { tracks[j + 1] = tracks[j]; j--; }
         tracks[j + 1] = t;
     }
+    for (int i = 0; i < ntracks; i++) if (ext_is(tracks[i].file, "MP3")) read_tags(&tracks[i]);
     say("music: library n=", 0, (unsigned)ntracks, 1);
 }
 
@@ -232,11 +235,23 @@ static unsigned src_read8(unsigned from, unsigned char *out, unsigned n) {
     return mp3_read8(&mp, out, n);
 }
 
-static int load_file(const struct track *t, unsigned char *buf, unsigned size) {
-    char path[JT_PATH_MAX + 1]; int l = 0;
+static void track_path(const struct track *t, char *path) {
+    int l = 0;
     if (t->dir) { const char *d = "MUSIC/"; while (*d) path[l++] = *d++; }
     for (int i = 0; t->file[i] && l < JT_PATH_MAX; i++) path[l++] = t->file[i];
     path[l] = 0;
+}
+static void read_tags(struct track *t) { /* the start of an MP3 is enough for its title and artist: 8.3 names are all FAT shows, the tag has the real ones */
+    static unsigned char head[2048] JT_DATA;
+    char path[JT_PATH_MAX + 1];
+    track_path(t, path);
+    int got = jt_readfile(path, head, sizeof head);   /* a short read on purpose: open() refuses anything over 8KB, which is every song */
+    if (got <= 0) return;
+    if (mp3_id3(head, (unsigned)got, t->title, sizeof t->title, t->artist, sizeof t->artist)) { say("music: tag ", t->title, 0, 0); if (t->artist[0]) say("music: artist ", t->artist, 0, 0); }
+}
+static int load_file(const struct track *t, unsigned char *buf, unsigned size) {
+    char path[JT_PATH_MAX + 1];
+    track_path(t, path);
     int r = jt_readfile(path, buf, size);
     if (r == -ENOSYS_) { /* a kernel without SYS_READFILE can still load a song open() fits */
         int fd = jt_open(path, 0);
@@ -459,11 +474,15 @@ static void draw(void) {
         char s[64]; int k = 0; while (sub[k] && k < 62) { s[k] = sub[k]; k++; } s[k] = 0;
         ellipsize(s, rx1 - rx);
         text(s, rx, 44, msg[0] ? ACCENT : HINT);
+        int ty = 84;   /* the art tile, 10 px lower when an artist line sits above it */
+        {   int ti = cur >= 0 ? cur : ntracks && sel < ntracks ? sel : -1;   /* the artist, under the state word */
+            if (ti >= 0 && tracks[ti].artist[0]) { ty = 94; char ar[32]; int q = 0; while (tracks[ti].artist[q] && q < 28) { ar[q] = tracks[ti].artist[q]; q++; } ar[q] = 0; ellipsize(ar, rx1 - rx); text(ar, rx, 62, HINT); }
+        }
         /* a flat tile with two notes, no text: where cover art would go */
-        rect(rx, 84, 96, 96, ACCENT);
-        disc(rx + 30, 84 + 66, 11, CREAM); disc(rx + 64, 84 + 59, 11, CREAM);
-        rect(rx + 38, 84 + 22, 5, 44, CREAM); rect(rx + 72, 84 + 16, 5, 43, CREAM);
-        for (int i = 0; i < 39; i++) rect(rx + 38 + i, 84 + 22 - i * 6 / 39, 1, 14, CREAM);
+        rect(rx, ty, 96, 96, ACCENT);
+        disc(rx + 30, ty + 66, 11, CREAM); disc(rx + 64, ty + 59, 11, CREAM);
+        rect(rx + 38, ty + 22, 5, 44, CREAM); rect(rx + 72, ty + 16, 5, 43, CREAM);
+        for (int i = 0; i < 39; i++) rect(rx + 38 + i, ty + 22 - i * 6 / 39, 1, 14, CREAM);
     }
 
     /* seek bar and time */

@@ -384,10 +384,23 @@ try:
 finally:
     C.close()
 
+print("music-qa-check: boot D (an MP3 with an ID3 tag)")
+D = Boot("tag", "tag")
+try:
+    a = D.mark()
+    D.start(1)
+    if D.wait(r"music: tag Never Gonna Give You Up", 5, a)[0] is None: fail("the library did not read the ID3 title of NEVERG~1.MP3 (it showed the 8.3 name)")
+    if D.wait(r"music: artist Rick Astley", 5, a)[0] is None: fail("the library did not read the ID3 artist")
+    D.key("spc")
+    if D.wait(r"music: playing NEVERG~1\.MP3", 5, a)[0] is None: fail("the tagged MP3 did not play")
+    D.esc_closes()
+finally:
+    D.close()
+
 if fails:
     print("FAIL:")
     for f in fails: print("  - " + f)
     sys.exit(1)
 print("PASS: Music QA: the queue stays under half a second ahead, an unplayable song is skipped, a damaged MP3 frame no longer hangs the song, "
       "a 3:25 MP3 reads 3:25 and seeks near its end, n moves on from a refused song, the list has no row under the hint, the wheel scrolls it, "
-      "shuffle plays each song once, a half-screen window keeps its pills, and an empty library is quiet")
+      "shuffle plays each song once, a half-screen window keeps its pills, an empty library is quiet, and an MP3 shows its ID3 title instead of its 8.3 name")

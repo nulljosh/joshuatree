@@ -26,6 +26,10 @@ uint32_t mp3_read8(struct mp3 *m, uint8_t *out, uint32_t n);
 void mp3_rewind(struct mp3 *m);
 /* Jumps so the next mp3_read8 returns sample `at` (clamped to the end). Returns 0 or a negative MP3_E_*. */
 int mp3_seek(struct mp3 *m, uint32_t at);
+/* Title and artist from the ID3v2 tag at the start of buf (v2.2, 2.3, 2.4; Latin-1, UTF-8 or UTF-16 text, anything
+   past ASCII shown as '?'). len may cover only the start of the file. Returns 1 if there is a title; both outputs are
+   always NUL terminated. Never reads outside buf. */
+int mp3_id3(const uint8_t *buf, uint32_t len, char *title, int tn, char *artist, int an);
 /* Frees the decoder block. Safe on a struct that never opened. */
 void mp3_close(struct mp3 *m);
 #endif
