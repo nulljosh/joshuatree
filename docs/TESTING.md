@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (252 checks)
+## The suite (253 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -265,6 +265,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | ARM64 clock accepts bounded HTTPS dates only, never before the build or an accepted clock (host harness) | `tools/checks/arm64-clock-check.py` | once |
 | ARM64 Terminal asks the real relay over TLS, with session resume and wrong-token refusal | `tools/checks/arm64-claude-console-check.py` | retry |
 | ARM64 relay discovery: with a dead baked relay address the Pi finds the relay by a LAN broadcast probe, verifies its jt-relay certificate from the private CA, and refuses a right-CA certificate for the wrong name before the token is sent (skips where the tools are missing) | `tools/checks/arm64-relay-discovery-check.py` | retry |
+| ARM64 sam speed: sums answered on the Pi with no relay traffic, the relay remembered in memory and on the card (0 UDP probes after the first), a stalled relay stops at 30 seconds with the relay address, the timing line prints (skips where the tools are missing) | `tools/checks/arm64-samfast-check.py` | retry |
 
 `retry` checks boot a VM and get one retry for host timing noise; `once` checks are pure and never retried.
 

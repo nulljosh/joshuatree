@@ -122,6 +122,24 @@ int tls_connect_private(unsigned ip, unsigned short port, const char *name) { re
 int tls_handshake(void) {
     return br_sslio_flush(&ioc) == 0 ? 0 : failed();   /* nothing to send yet, so flush runs the handshake and no more */
 }
+/* 1 once out[0..n) holds a whole HTTP reply that carries Content-Length: the answer is complete, so there is no need to
+   wait for the server to close the connection (a relay that lingers would cost the whole read timeout). */
+static int reply_complete(const char *p, unsigned n) {
+    unsigned h = 0;
+    while (h + 3 < n && !(p[h] == '\r' && p[h + 1] == '\n' && p[h + 2] == '\r' && p[h + 3] == '\n')) h++;
+    if (h + 3 >= n) return 0;
+    for (unsigned i = 0; i + 15 < h; i++) {
+        if ((p[i] | 32) != 'c' || i && p[i - 1] != '\n') continue;
+        static const char key[] = "content-length:";
+        unsigned k = 0; while (key[k] && (p[i + k] | 32) == key[k]) k++;
+        if (key[k]) continue;
+        unsigned j = i + k, v = 0;
+        while (j < h && p[j] == ' ') j++;
+        for (; j < h && p[j] >= '0' && p[j] <= '9' && v < 100000000; j++) v = v * 10 + (unsigned)(p[j] - '0');
+        return n >= h + 4 + v;
+    }
+    return 0;
+}
 int tls_exchange(const void *request, unsigned request_len, char *out, unsigned max) {
     if (br_sslio_write_all(&ioc, request, request_len) != 0 || br_sslio_flush(&ioc) != 0) return failed();
     int total = 0;
@@ -129,6 +147,7 @@ int tls_exchange(const void *request, unsigned request_len, char *out, unsigned 
         int r = br_sslio_read(&ioc, out + total, max - (unsigned)total);
         if (r <= 0) break;
         total += r;
+        if (reply_complete(out, (unsigned)total)) break;
     }
     int e = br_ssl_engine_last_error(&sc.eng);
     if (e != BR_ERR_OK && e != BR_ERR_IO) return failed();   /* BR_ERR_IO is the plain FIN an HTTP/1.0 server ends with */
