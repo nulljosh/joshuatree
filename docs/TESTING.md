@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (254 checks)
+## The suite (255 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -252,6 +252,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | ARM64 Browser flicker: the BR_TRACE build hashes the screen's window rectangle before a Browser paint and again just before the copy, and every paint (open, load, Tab, scroll, address typing) must log offscreen with the screen unchanged, never paint direct (skips where the tools are missing) | `tools/checks/arm64-browser-flicker-check.py` | retry |
 | ARM64 Browser pointer motion: 120 pointer reports across a long (hundreds of lines) Browser page on the BR_TRACE build must cause zero Browser paints and zero page layouts, leave the screen pixel for pixel as it was, and a page down must paint once without laying out again (skips where the tools are missing) | `tools/checks/arm64-browser-mouse-check.py` | retry |
 | ARM64 focus: with the Terminal and the Calculator both open, a click focuses one and typed keys land only in it (the sum in the Calculator, digits on the Terminal's prompt row), the clicked window comes to the front, and closing the Calculator puts the wallpaper back (skips where the tools are missing) | `tools/checks/arm64-focus-check.py` | retry |
+| ARM64 Launchpad: the Apps tile opens a centred cream card of all 16 apps Spotlight lists with icon art and names, the six with no ARM app greyed, no Calculator; arrows (stopping at the edges), Enter, Esc and an outside click work and restore the pixels under the card, a click on the Calculator cell opens it, Enter on Calendar starts it, and every name is found by Spotlight (skips where the tools are missing) | `tools/checks/arm64-launchpad-check.py` | retry |
 | ARM64 Calculator: calc.c gets a table of 42 sums right on the host (sin(30deg)=0.5, 5!=120, 2^10=1024, 1/0 is an error), its keypad's memory and Deg keys work, and the calctest build types four sums at boot with the same answers on the UART and the window in a screendump (QEMU part skips where the tools are missing) | `tools/checks/arm64-calc-check.py` | retry |
 | ARM64 keyboard only: with no mouse, Cmd+Space and F1 open Spotlight and a bare Space does not (drawn in the house colours), typing term and Enter opens the Terminal with the keyboard, Esc hands the keys back, Left and Right move the dock's label and Enter opens that tile (Calendar, which Esc closes), F2 opens the Terminal at once (skips where the tools are missing) | `tools/checks/arm64-keys-check.py` | retry |
 | ARM64 Mac-style USB keyboard: over xHCI, Cmd+Space opens Spotlight, a plain letter on the bare desktop opens it with the letter typed, Esc with it closed does nothing, a 9-byte report with a report ID still gives Ctrl+T, and the key debug line shows only in the dev build (skips where the tools are missing) | `tools/checks/arm64-keydbg-check.py` | retry |
@@ -276,7 +277,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 |---|---|
 | Burrow | `tools/checks/burrow-labels-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/filesview-check.py`, `tools/checks/ring3burrow-check.py` |
 | Mail | `tools/checks/arm64-led-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/esc-desktop-check.py`, `tools/checks/mailsend-check.py`, `tools/checks/mailtools-check.py`, `tools/checks/read-long-files-check.py` |
-| Calendar | `tools/checks/apptop-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/ring3calendar-check.py` |
+| Calendar | `tools/checks/apptop-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/ring3calendar-check.py` |
 | Notes | `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-notes-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notes-autosave-check.py`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3resize-check.py`, `tools/checks/ring3window-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py`, `tools/checks/ring3window-check.py` |
 | Terminal | `tools/checks/arm64-browser-check.py`, `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/arm64-focus-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-music-check.py`, `tools/checks/arm64-zsh-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
@@ -291,7 +292,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Hikko | `tools/checks/ring3hikko-check.py`, `tools/checks/ring3hikko-live-check.py` |
 | Fieldbook | `tools/checks/ring3fieldbook-check.py` |
 | Contacts | `tools/checks/ring3contacts-check.py` |
-| Calculator | `tools/checks/arm64-calc-check.py`, `tools/checks/arm64-focus-check.py`, `tools/checks/ring3calc-check.py` |
+| Calculator | `tools/checks/arm64-calc-check.py`, `tools/checks/arm64-focus-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/ring3calc-check.py` |
 | Stocks | `tools/checks/ring3stocks-list-check.py`, `tools/checks/stocks-aa-check.py`, `tools/checks/stocks-dock-check.py`, `tools/checks/stocks-live-check.mjs` |
 | Search | `tools/checks/ring3search-check.py` |
 | Epiphany | `tools/checks/epiphany-cmdbar-check.py`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3epiphany-check.py` |
@@ -306,7 +307,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Claude | `tools/checks/arm64-claude-console-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3claude-check.py` |
 | Mines | `tools/checks/ring3mines-check.py` |
 | Books | `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-mascot-empty-check.py`, `tools/checks/books-check.py` |
-| Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
+| Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | none yet |
 
 Apps with no check yet: Trash.
