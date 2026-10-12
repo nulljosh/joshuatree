@@ -25,5 +25,10 @@ grep -q 'disable-bt' "$t/card/config.txt" && { echo "FAIL: config.txt still turn
 grep -qx 'enable_uart=1' "$t/card/config.txt" || { echo "FAIL: config.txt lost enable_uart=1 (the mini UART console's steady clock)"; fail=1; }
 [ "$(cat "$t/card/kernel8.img.bak")" = old-kernel ] || { echo "FAIL: old kernel8.img not kept as .bak"; fail=1; }
 [ "$(cat "$t/card/config.txt.bak")" = old-config ] || { echo "FAIL: old config.txt not kept as .bak"; fail=1; }
+[ -s "$t/card/JT/MUSIC/HELLO.WAV" ] || { echo "FAIL: an empty JT/MUSIC/ did not get the sample song"; fail=1; }
+# a card that already has songs keeps exactly them
+mkdir -p "$t/card2/JT/MUSIC"; echo mine > "$t/card2/JT/MUSIC/MINE.MP3"
+FLASH_PI_FW="$t/fw" FLASH_PI_NO_EJECT=1 tools/flash-pi.sh "$t/card2" >/dev/null
+[ "$(ls "$t/card2/JT/MUSIC")" = MINE.MP3 ] || { echo "FAIL: flash-pi.sh added a song next to Joshua's own"; fail=1; }
 [ "$fail" = 0 ] && echo "PASS: flash-pi.sh writes the kernel, firmware and config, and backs up what was there"
 exit "$fail"

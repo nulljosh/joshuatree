@@ -631,6 +631,8 @@ If the note is gone: send me `ls` before and after.
 
 Put an MP3 you own in the card's `JT/MUSIC/` folder (Music makes the folder the first time it opens, so open it once, power off, copy the file, boot again). Open Music from Spotlight (type `music`): the song shows its real title and artist, its cover if the file has one (or a `COVER.JPG` or `FOLDER.JPG` beside it), and its length. Play it: it comes out of the jack. Drag the volume knob and the seek knob. Apple Music downloads won't play (their files are locked).
 
+A fresh card from `tools/flash-pi.sh` comes with one sample song, `HELLO.WAV` (shown as "Hello", 16 seconds, three voices, made by `tools/gen/sample-song.py`), put in `JT/MUSIC/` only when that folder has no songs; your own files are never touched or replaced. A WAV has no tag, so its title is its file name.
+
 If it hangs on a file: tell me which file. If the title reads like `NEVERG~1` or the cover is missing, tell me the file name and what tool tagged it.
 
 ### 8. Samantha

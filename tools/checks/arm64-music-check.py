@@ -14,6 +14,8 @@ tools/media/musicfix.py's own generator) and JT/MUSIC/CHARLIE.MP3 (the 880 Hz fi
   - the MP3 decodes at EL0 (minimp3 in floating point, its registers kept across every call and park): its position
     advances and its stream's sums are not zero;
   - F11 lowers the kernel's volume to 60 while it plays (`notice: Volume 60`; the tick is refused, the PWM is the app's);
+  - n moves to HELLO.WAV, the sample song tools/flash-pi.sh puts on a fresh card (tools/gen/sample-song.py): the list shows its title
+    "Hello" (ink in the third row), Music logs its length as 16000 ms at 22050 Hz, and its stream is 16-bit mono taken to 8 bits;
   - n wraps to ALPHA.WAV again, Esc closes Music (`music: closed`, exit 0) and its stream's sums match the file at volume 60,
     lower per frame than at 70: Music's volume and the kernel's compose;
   - F2 and `vol`: the Terminal answers `volume 60`. No fault, no crash, no oom.
@@ -32,6 +34,10 @@ root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 arch = os.path.join(root, "arch/arm64")
 sys.path.insert(0, os.path.join(root, "tools", "media"))
 from musicfix import wav   # the i386 music check's own song generator
+sys.path.insert(0, os.path.join(root, "tools", "gen"))
+import importlib.util
+_sp = importlib.util.spec_from_file_location("sample_song", os.path.join(root, "tools", "gen", "sample-song.py"))
+sample_song = importlib.util.module_from_spec(_sp); _sp.loader.exec_module(sample_song)   # the Pi card's own sample song
 
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64", "mmd", "mcopy")):
     print("SKIP: clang, ld.lld, qemu-system-aarch64 or mtools not installed"); sys.exit(0)
@@ -169,15 +175,18 @@ if r.returncode: print("FAIL: arch/arm64 `make musictest` does not build:\n" + (
 alpha = wav(1, 8, 8000, 6, 440)
 pcm = alpha[44:]                                     # the RIFF header is 44 bytes: fmt then data
 assert alpha[36:40] == b"data" and struct.unpack_from("<I", alpha, 40)[0] == len(pcm) == 48000
+hello = sample_song.wav_bytes()
+assert len(hello) < 2_000_000
 charlie = open(os.path.join(root, "tools", "media", "fixtures", "tone880.mp3"), "rb").read()
 card = os.path.join(tmp, "card.img")
 build_card(card, False)
 MT = dict(os.environ, MTOOLS_SKIP_CHECK="1")
 def mt(*a): return subprocess.run([a[0], "-i", f"{card}@@{PART * 512}", *a[1:]], capture_output=True, env=MT)
-for name, blob in (("ALPHA.WAV", alpha), ("CHARLIE.MP3", charlie)):
+for name, blob in (("ALPHA.WAV", alpha), ("CHARLIE.MP3", charlie), ("HELLO.WAV", hello)):
     open(os.path.join(tmp, name), "wb").write(blob)
 for args in (("mmd", "::JT"), ("mmd", "::JT/MUSIC"), ("mcopy", os.path.join(tmp, "ALPHA.WAV"), "::JT/MUSIC/ALPHA.WAV"),
-             ("mcopy", os.path.join(tmp, "CHARLIE.MP3"), "::JT/MUSIC/CHARLIE.MP3")):
+             ("mcopy", os.path.join(tmp, "CHARLIE.MP3"), "::JT/MUSIC/CHARLIE.MP3"),
+             ("mcopy", os.path.join(tmp, "HELLO.WAV"), "::JT/MUSIC/HELLO.WAV")):
     if mt(*args).returncode: print("FAIL: mtools could not write %r onto the check card" % (args,)); sys.exit(1)
 
 log, sock = os.path.join(tmp, "uart"), os.path.join(tmp, "qmp")
@@ -230,12 +239,12 @@ try:
     check("Enter starts user/music.c at EL0 in its own window", m and "M3c app music starts" in uart()[n0:], uart()[n0:][-600:])
     if not m: raise SystemExit
     cw, ch, cx, cy = map(int, m.groups())
-    lib = wait_for("music: library n=2\n", 10, n0)
-    check("it reads JT/MUSIC/ through readdir and lists both songs", lib, uart()[n0:][-400:])
+    lib = wait_for("music: library n=3\n", 10, n0)
+    check("it reads JT/MUSIC/ through readdir and lists all three songs", lib, uart()[n0:][-400:])
     wait_for("M3c window music first frame", 5, n0); time.sleep(0.5)
     img = shot()
-    rows = [ink(img, cx + 30, cy + 46 + i * 26 + 2, 140, 20) for i in range(3)]
-    check("on screen, the list has ink in its first two rows (Alpha, Charlie) and none in the third (%s)" % rows, rows[0] > 20 and rows[1] > 20 and rows[2] == 0, rows)
+    rows = [ink(img, cx + 30, cy + 46 + i * 26 + 2, 140, 20) for i in range(4)]
+    check("on screen, the list has ink in its three rows (Alpha, Charlie, Hello) and none in a fourth (%s)" % rows, rows[0] > 20 and rows[1] > 20 and rows[2] > 20 and rows[3] == 0, rows)
 
     # ---- Space plays the WAV; its clock is the sound ----
     n1 = len(uart())
@@ -276,6 +285,19 @@ try:
     st = streams(uart()[n4:])
     check("the MP3 decodes: its position advances (%s ms) and its stream at 22050 Hz is not silence" % mpos,
           len(mpos) >= 2 and mpos[-1] > mpos[0] and st and st[0][1] == "22050" and int(st[0][0]) > 22050 and int(st[0][3]) > 0, (mpos, st))
+
+    # ---- the sample song: HELLO.WAV, 16 s, titled from its file name ----
+    check("the next song is the sample, HELLO.WAV", wait_for("music: playing HELLO.WAV\n", 8, n4), uart()[n4:][-300:])
+    m = wait_re(r"music: loaded total=(\d+) rate=(\d+)\n", 4, n4)
+    check("Music reads its length as 16 s at 22050 Hz (%s)" % (m.groups() if m else None,), m and abs(int(m.group(1)) - 16000) <= 50 and m.group(2) == "22050", uart()[n4:][-300:])
+    wait_re(r"(music: at playing pos=\d+(?: ahead=\d+)?\n(.|\n)*){3}", 8, n4)
+    hpos = positions(uart()[n4:])
+    n4b = len(uart())
+    key("n")
+    wait_re(r"audio: app stream \d+ .*\n", 2, n4b)
+    st = streams(uart()[n4b:])
+    check("its stream is at 22050 Hz and advanced like a second a second (%s ms)" % hpos, len(hpos) >= 3 and hpos[-1] > hpos[0] and st and st[0][1] == "22050" and int(st[0][0]) > 22050 and int(st[0][3]) > 0, (hpos, st))
+    n4 = n4b
 
     # ---- the WAV again at volume 60, Esc ----
     check("n wraps to ALPHA.WAV again", wait_for("music: playing ALPHA.WAV\n", 8, n4), uart()[n4:][-300:])
