@@ -64,6 +64,9 @@ BAND_RANGE_MAX = 12
 # Burrow is a full-bleed Finder-style split: its light left half runs edge to
 # edge by design, so the light is measured on its right, tile-coloured half.
 FULL_BLEED = {"Burrow": range(42, 54)}
+# Samantha is her portrait (3.0.0, the mascot on a warm ground): a face, not a glyph on a lit tile, so it has no tile
+# falloff to measure. Her edge, margin and size are still held by iconinset-check.py and iconart-check.py.
+PORTRAIT = {"Samantha"}
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -132,6 +135,8 @@ def lum(p):
 
 fail = 0
 for slot, name in enumerate(SLOTS):
+    if name in PORTRAIT:
+        print("%-10s portrait, not a lit tile: skipped" % name); continue
     x0 = (SLOT0_X + slot * PITCH) * SCALE
     y0 = ICON_TOP_Y * SCALE
     rows = {}
