@@ -1,6 +1,6 @@
-/* The ARM desktop's wallpaper: one flat colour, the brand terracotta #b5502c (docs/DESIGN.md). The Satellite photo it replaced (3.0.0)
+/* The ARM desktop's wallpaper: one flat colour, the calm clay #9c5a44 (docs/DESIGN.md; the terracotta #b5502c is the accent). The Satellite photo it replaced (3.0.0)
    decoded a PNG at boot; this writes the screen in one pass and needs no decoder, no heap. */
-#define WALL_RGB 0x00B5502Cu
+#include "wall.h"
 
 /* Paints the whole w x h screen. `swap` says red and blue are the other way round in memory. Always succeeds. */
 int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap) {

@@ -30,7 +30,7 @@ def check(name, ok, detail=""):
     print(("  ok: " if ok else "  FAIL: ") + name + ("" if ok else "  " + repr(detail)[:500]))
     if not ok: fails.append(name)
 
-WALL, RED, YELLOW, GREY, WHITE = (0xB5, 0x50, 0x2C), (0xFF, 0x5F, 0x57), (0xFF, 0xD6, 0x4A), (0xD8, 0xD4, 0xCE), (255, 255, 255)
+WALL, RED, YELLOW, GREY, WHITE = (0x9C, 0x5A, 0x44), (0xFF, 0x5F, 0x57), (0xFF, 0xD6, 0x4A), (0xD8, 0xD4, 0xCE), (255, 255, 255)
 
 def geom(w, h):   # main.c's numbers: scale, the window's logical rectangle, the lowest and highest places it may sit
     s = 2 if h >= 1080 else 1

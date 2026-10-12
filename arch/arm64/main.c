@@ -870,6 +870,7 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
 #endif
 #define CON_FG 0x00202020
 #define CON_BG 0x00ffffff
+#include "wall.h"
 int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);   /* arch/arm64/wall.c: the flat Navy wallpaper */
 #define MENUBAR_H 26             /* docs/DESIGN.md: GUI_MENUBAR_H, on the 960x540 grid */
 #define MENUBAR_RULE 0x00BDB8B0  /* docs/DESIGN.md: MENUBAR_RULE */
@@ -1457,7 +1458,7 @@ static int term_front(void) { return cp == &term_p && !calc_front && !app_front 
 static void calc_raise(void);
 static void app_raise(void);
 static void wall_fill(int x, int y, int w, int h) {   /* physical px: the flat wallpaper colour (wall.c); there is no picture to save, so a window can leave from anywhere */
-    unsigned c = fb_color(0x00B5502C);
+    unsigned c = fb_color(WALL_RGB);
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = c;
 }
 static void console_close(void) {
@@ -1754,7 +1755,7 @@ static void win_move_to(int nx, int ny) {
         if (dx > 0) for (int i = w - 1; i >= 0; i--) dst[i] = src[i];
         else for (int i = 0; i < w; i++) dst[i] = src[i];
     }
-    unsigned wall = fb_color(0x00B5502C);   /* the old rectangle minus the new one, row by row */
+    unsigned wall = fb_color(WALL_RGB);   /* the old rectangle minus the new one, row by row */
     for (int j = 0; j < h; j++) {
         int y = oy + j, inside = y >= py && y < py + h, a = ox, b = ox + w;
         if (inside) { if (dx > 0) b = px < b ? px : b; else a = px + w > a ? px + w : a; }
@@ -2184,7 +2185,7 @@ void menubar_tick(void) {   /* the poll loop calls this; it redraws only when th
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
     if ((int)(h * 60 + m) != clock_minute) menubar_wifi(mb_wifi);
 }
-/* The Pi's boot splash (QUIET_BOOT): from the first frame a solid terracotta screen with the tree mark centred and a thin
+/* The Pi's boot splash (QUIET_BOOT): from the first frame a solid clay screen with the tree mark centred and a thin
    line under it, one sixth longer as each stage of boot finishes (fb, sd, wifi, clock, bt, desktop). Nothing else is drawn,
    not the desktop, not the Console, until splash_finish: Wi-Fi joined or given up, the clock synced or given up, Bluetooth
    up or given up. Then fb_desktop paints the desktop once. The UART says `splash step N name` and `boot done`. */
@@ -2193,7 +2194,7 @@ static int splash_on;
 static void splash_step(int n, const char *name) {
     if (!splash_on) return;
     int W = (int)fb_w, H = (int)fb_h, bw = sg(140), bh = sg(4) > 2 ? sg(4) : 2, bx = (W - bw) / 2, by = H / 2 + sg(50);
-    fb_rect(bx, by, bw, bh, 0x00923F20);              /* the track, a darker terracotta */
+    fb_rect(bx, by, bw, bh, WALL_TRACK_RGB);          /* the track, a darker clay */
     fb_rect(bx, by, bw * n / 6, bh, 0x001C1C1E);      /* the stages done, in ink */
     fb_flush(bx, by, bw, bh);
     uart_puts("splash step "); uart_dec((unsigned)n); uart_putc(' '); uart_puts(name); uart_putc('\n');
@@ -2205,7 +2206,7 @@ static void splash_step(int n, const char *name) {
 }
 static void splash_begin(void) {
     int W = (int)fb_w, H = (int)fb_h;
-    fb_rect(0, 0, W, H, 0x00B5502C);
+    fb_rect(0, 0, W, H, WALL_RGB);
     menu_mark_paint(W / 2, H / 2 - sg(30), sg(110), 0x001C1C1E);
     splash_on = 1;
     uart_puts("splash up\n");
@@ -2317,13 +2318,13 @@ static void fb_desktop(void) {
        design system's dark fill at three corners, not the old 0x203040 fallback). Grey and white read the same either
        byte order; the rule and the fill are checked in fb_color order. */
 #ifdef QUIET_BOOT
-    unsigned well = fb_color(0x00B5502C);   /* no window was drawn: the spot where its well would end is bare wallpaper */
+    unsigned well = fb_color(WALL_RGB);   /* no window was drawn: the spot where its well would end is bare wallpaper */
 #else
     unsigned well = 0x00ffffff;
 #endif
     int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == well && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
-    ok = ok && wall_ok && w0 == fb_color(0x00B5502C) && w1 == w0 && w2 == w0;
+    ok = ok && wall_ok && w0 == fb_color(WALL_RGB) && w1 == w0 && w2 == w0;
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
 #ifdef QUIET_BOOT
     uart_puts("console quiet\n");

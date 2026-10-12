@@ -121,7 +121,7 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         soft = sum(1 for c in win if 0x30 < c[0] < 0xd0 and c[0] == c[1] == c[2])   # grey edge pixels: only smooth, anti-aliased text has them
         quiet = name.startswith("pi")                               # 3.6.2: the Pi image never draws the Console at boot (arm64-quietboot-check.py)
         if quiet:
-            flat = sum(1 for c in win if c == (0xb5, 0x50, 0x2c))
+            flat = sum(1 for c in win if c == (0x9c, 0x5a, 0x44))
             if flat != len(win): fails.append(f"{name}: the Console's rectangle is not flat wallpaper ({len(win) - flat} of {len(win)} pixels differ)")
             else: print(f"  ok: {name} no Console window at boot: the rectangle is flat wallpaper")
         elif ink < 300: fails.append(f"{name}: the boot log is not on screen (only {ink} text pixels in the window)")
@@ -144,9 +144,9 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         if bad: fails.append(f"{name}: menu bar is not half wallpaper, half white: {bad}")
         else: print(f"  ok: {name} menu bar is half wallpaper, half white")
         dsk = [at(x, y) for y in range(mb + sc(10), dock_y - sc(40), max(1, sc(6))) for x in list(range(8, win_x - sc(8), max(1, sc(6)))) + list(range(win_x + win_w + sc(8), w - 8, max(1, sc(6))))]
-        navy = sum(1 for c in dsk if c == (0xb5, 0x50, 0x2c))   # brand terracotta, arch/arm64/wall.c (3.0.0)
-        if navy * 10 < len(dsk) * 9: fails.append(f"{name}: the desktop is not the terracotta fill ({navy} of {len(dsk)} samples)")
-        else: print(f"  ok: {name} wallpaper is the terracotta fill: {navy} of {len(dsk)} samples")
+        navy = sum(1 for c in dsk if c == (0x9c, 0x5a, 0x44))   # the clay wallpaper, WALL_RGB in arch/arm64/wall.h
+        if navy * 10 < len(dsk) * 9: fails.append(f"{name}: the desktop is not the clay fill ({navy} of {len(dsk)} samples)")
+        else: print(f"  ok: {name} wallpaper is the clay fill: {navy} of {len(dsk)} samples")
         # The Console wears the i386 window frame (kernel/gui_paint.c gui_draw_window_frame) on the logical grid: cream
         # body, a hairline under the 30 pixel title band, three traffic lights at x+24/46/68, the name centred in ink,
         # and a white well for the log. Each dot is sampled 5 left of its centre, clear of the "x" and "-" glyphs.

@@ -332,6 +332,7 @@ FACTS = {
     "MARGIN_TILES": ("num", margin_tiles, "art/icons/*.svg (the Tile header iconinset-check.py keys on)"),
     "ICON_TEXT_ELEMENTS": ("num", icon_text_elements, "art/icons/*.svg"),
     "ICON_PURPLE_TEAL": ("num", icon_purple_teal, "art/icons/*.svg"),
+    "WALLPAPER": ("hex", lambda: hexval(rx("arch/arm64/wall.h", r"#define WALL_RGB (0x[0-9A-Fa-f]+)u")), "arch/arm64/wall.h"),
     "ACCENT": ("hex", accent, "landing/index.html, tools/gen/restyle_icons.py, art/icons/movies.svg"),
     "LEXLY_BLUE": ("hex", lexly_blue, "tools/gen/import_fleet_icons.py and art/icons/tonchi.svg"),
     "FLEET_ICONS": ("num", fleet_count, "tools/gen/import_fleet_icons.py"),

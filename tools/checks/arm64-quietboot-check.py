@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""The Pi boots behind a terracotta splash to a clean desktop, and the Wi-Fi fan in the menu bar wears the house ink.
+"""The Pi boots behind a clay splash to a clean desktop, and the Wi-Fi fan in the menu bar wears the house ink.
 
 Three builds on QEMU's virt machine with ramfb and a USB keyboard and mouse behind a hub (the Pi image has QUIET_BOOT on by itself;
 here -DQUIET_BOOT turns it on for virt, which can be clicked). WIFI_ICON_TEST makes the kernel print where the fan is.
-  - Build 1, not joined: `console quiet` is printed and the Console's whole rectangle on screen is one flat terracotta
+  - Build 1, not joined: `console quiet` is printed and the Console's whole rectangle on screen is one flat clay
     (no frame, no dots, no white well, no boot log); the menu bar's closing rule is there; the fan has dimmed neutral grey
     pixels (0x909090), nothing blue (no pixel with blue above red) and nothing ink-dark in it.
     Then a click on the Mail tile opens the Console with the buffered boot log (white well, ink text, `console open`), and a
     click on the Terminal tile opens the Terminal (`terminal open`), so the log was kept the whole time.
   - Build 2, joined: the same fan is flat ink, 0x1C1C1E, the clock's ink, with no grey 0x909090 left in it.
   - Build 3, the splash (-DSPLASH_STEP_MS=1500 holds each boot stage so screendumps can catch it): the first dump is solid
-    terracotta with the tree mark centred (ink pixels), a track and one sixth of the bar filled, and no window frame, no menu
+    clay with the tree mark centred (ink pixels), a track and one sixth of the bar filled, and no window frame, no menu
     bar, nothing white; a later dump (after the wifi stage) is still that splash with half the bar; the one before the end has
     five sixths; none of them shows the menu bar's rule or a Console frame. The desktop's first screendump comes after the
     `boot done` line, and the Console's rectangle is flat wallpaper then, too.
@@ -25,7 +25,7 @@ arch = os.path.join(root, "arch/arm64")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
     print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
 fails = []
-WALL, INK, DIM = (0xB5, 0x50, 0x2C), (0x1C, 0x1C, 0x1E), (0x90, 0x90, 0x90)
+WALL, INK, DIM = (0x9C, 0x5A, 0x44), (0x1C, 0x1C, 0x1E), (0x90, 0x90, 0x90)
 
 
 def geom(w, h):
@@ -113,7 +113,7 @@ try:
             area = [px(img, x, y) for y in range(wy, wy + wh, 3) for x in range(wx, wx + ww, 3)]
             odd = sum(1 for c in area if c != WALL)
             if odd: fails.append(f"the Console's rectangle is not flat wallpaper after boot ({odd} of {len(area)} samples differ: a window is on screen)")
-            else: print(f"  ok: after boot the Console's whole rectangle is flat terracotta ({len(area)} samples)")
+            else: print(f"  ok: after boot the Console's whole rectangle is flat clay ({len(area)} samples)")
             if px(img, W // 2, 26 * H // 540 - 1) != (0xBD, 0xB8, 0xB0): fails.append("the menu bar's closing rule is missing: no desktop")
             dump(img, uart); f_ = fan(img, uart)
             grey = sum(1 for c in f_ if c == DIM); blue = sum(1 for c in f_ if c[2] > c[0]); ink = sum(1 for c in f_ if max(c) < 0x50)
@@ -170,11 +170,11 @@ try:
                 rule = px(img, W // 2, 26 * H // 540 - 1)
                 bw = 140 * H // 540; bx = (W - bw) // 2; by = H // 2 + 50 * H // 540
                 filled = sum(1 for x in range(bx, bx + bw) if px(img, x, by) == INK)
-                track = sum(1 for x in range(bx, bx + bw) if px(img, x, by) == (0x92, 0x3F, 0x20))
-                if wall < 0.9 or white or rule != WALL: fails.append(f"{what}: not the bare terracotta splash ({wall:.0%} terracotta, {white} white samples, bar rule {rule})")
+                track = sum(1 for x in range(bx, bx + bw) if px(img, x, by) == (0x78, 0x3E, 0x2A))
+                if wall < 0.9 or white or rule != WALL: fails.append(f"{what}: not the bare clay splash ({wall:.0%} clay, {white} white samples, bar rule {rule})")
                 elif inkpx < sz * sz // 12: fails.append(f"{what}: the tree mark is missing ({inkpx} ink pixels in its box)")
                 elif abs(filled - bw * n // 6) > 3 or filled + track < bw - 3: fails.append(f"{what}: the progress line should be {n}/6 full, got {filled} ink and {track} track of {bw}")
-                else: print(f"  ok: {what}: solid terracotta, the tree mark ({inkpx} ink pixels), the line {n}/6 full ({filled} of {bw}), no window frame")
+                else: print(f"  ok: {what}: solid clay, the tree mark ({inkpx} ink pixels), the line {n}/6 full ({filled} of {bw}), no window frame")
                 return img
             splash_check(1, "the first frame")
             if "boot done" in uart(): fails.append("boot was already done at the first frame")
@@ -218,4 +218,4 @@ finally:
 
 if fails:
     print("FAIL:"); [print("  - " + x) for x in fails]; sys.exit(1)
-print("PASS: the Pi boots behind a terracotta splash that fills as the stages finish, the desktop then paints once with no Console window, the log is one click away, and the Wi-Fi fan is ink when joined and dimmed grey when not")
+print("PASS: the Pi boots behind a clay splash that fills as the stages finish, the desktop then paints once with no Console window, the log is one click away, and the Wi-Fi fan is ink when joined and dimmed grey when not")
