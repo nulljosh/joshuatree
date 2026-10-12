@@ -173,7 +173,7 @@ static void run_on_stack(struct mp3_work *w) {
                       : : "r"(top) : "ebx", "eax", "ecx", "edx", "memory", "cc");
 }
 #else
-static void run_on_stack(struct mp3_work *w) { decode_one(w); }   /* host tests: the big stack is already there */
+static void run_on_stack(struct mp3_work *w) { decode_one(w); }   /* host tests, and the ARM build (64 KiB app stack): the big stack is already there */
 #endif
 
 /* Copies the frame at pos into the padded buffer and decodes it. Returns samples (0 = none). */

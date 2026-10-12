@@ -2,6 +2,8 @@
 #define FAT_H
 /* FAT16, single fixed volume on the ATA primary master starting at sector 0
    (no partition table yet -- QEMU's raw disk image is the whole filesystem).
+   FAT32 too (2.53.0 reads, 2.57.0 writes): the Pi's boot partition, through
+   arch/arm64/emmc.c, whose blockdev sector 0 is the partition's first sector.
    Call fat_mount() once at boot before any other fat_* call. Every fat_*
    call below operates on the current directory, root at mount time, moved
    by fat_chdir(). No long filenames -- 8.3 names exactly as FAT stores
@@ -17,11 +19,10 @@ int fat_read_file(const char *name_8_3, void *buf, unsigned int bufsize);
    for each one ("." and ".." excluded). */
 void fat_list(void (*cb)(const char *name, unsigned int size, int is_dir));
 
-/* Marks the named file's directory entry deleted (0xE5) and writes that
-   sector back. Returns 1 on success, 0 if the file wasn't found or is a
-   directory. Doesn't free its clusters in the FAT -- ponytail: no
-   free-space reclaim yet, just enough to make a file stop showing up in
-   ls/cat. */
+/* Marks the named file's directory entry deleted (0xE5), writes that
+   sector back, then frees its clusters in the FAT (2.57.0; before, they
+   stayed allocated and fsck called them lost). Returns 1 on success, 0 if
+   the file wasn't found or is a directory. */
 int fat_delete(const char *name);
 
 /* Moves the current directory to the named subdirectory, ".." (parent,
@@ -41,6 +42,12 @@ int fat_mkdir(const char *name);
    same scope decision as fat_mkdir) or the disk is full. */
 int fat_write_file(const char *name, const void *data, unsigned int len);
 int fat_replace_file(const char *name, const void *data, unsigned int len);
+
+/* The current directory as its first cluster (0 the root), for a caller
+   that walks a path and must put the cursor back where it found it: the
+   ARM kernel's file calls for user programs (arch/arm64/ufile.c). */
+unsigned int fat_cwd_get(void);
+void fat_cwd_set(unsigned int cluster);
 
 /* v29: registers fat's own functions with vfs.c as the "fat" backend.
    Call once at boot, after fat_mount(). */

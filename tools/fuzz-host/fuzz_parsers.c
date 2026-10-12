@@ -254,6 +254,11 @@ static int run_fat(const unsigned char *data, unsigned len) {
            which walks 2..total_clusters+2: total_clusters is derived from
            boot-sector fields a hostile image fully controls. */
         fat_write_file("NEW.TXT", "hi", 2);
+        /* 2.57.0: FAT32 writes too, so the Pi's write paths face the same
+           hostile images: a folder (a cluster and a slot) and a delete
+           (release_chain walks a chain the image controls). */
+        fat_mkdir("NEWDIR");
+        fat_delete("TEST.TXT");
     }
     alarm(0);
     return r;
@@ -307,6 +312,30 @@ static unsigned char *build_fat_image(void) {
     memset(c3 + 32, ' ', 11); c3[32] = '.'; c3[33] = '.';
     c3[32 + 11] = 0x10; c3[32 + 26] = 0; c3[32 + 27] = 0;
 
+    return img;
+}
+
+/* The same files on FAT32 (2.53.0, the Pi's boot partition): no fixed root,
+   FAT size at offset 36, the root a chain at cluster 2 (lba 2), 4-byte FAT
+   entries. TEST.TXT moves to cluster 3 (lba 3), SUBDIR to cluster 4 (lba 4),
+   so the data sectors stay where build_fat_image put them. */
+static unsigned char *build_fat32_image(const unsigned char *fat16) {
+    unsigned char *img = malloc(FAT_IMG_SIZE);
+    memcpy(img, fat16, FAT_IMG_SIZE);
+    img[17] = 0; img[18] = 0;          /* root_entry_count: none on FAT32 */
+    img[22] = 0; img[23] = 0;          /* fat_size_16 = 0 means FAT32 */
+    img[36] = 1;                       /* fat_size_32 = 1 sector */
+    img[44] = 2;                       /* root cluster */
+    unsigned char *fat_sec = img + 1 * FAT_SECTOR_SIZE;
+    static const unsigned char entries[] = { 0xF8,0xFF,0xFF,0x0F, 0xFF,0xFF,0xFF,0x0F, 0xFF,0xFF,0xFF,0x0F,
+                                             0xFF,0xFF,0xFF,0x0F, 0xFF,0xFF,0xFF,0x0F }; /* clusters 0-4, each ends its chain */
+    memset(fat_sec, 0, FAT_SECTOR_SIZE);
+    memcpy(fat_sec, entries, sizeof entries);
+    unsigned char *root = img + 2 * FAT_SECTOR_SIZE;
+    root[0 + 26] = 3;                  /* TEST.TXT */
+    root[32 + 26] = 4;                 /* SUBDIR */
+    unsigned char *sub = img + 4 * FAT_SECTOR_SIZE;
+    sub[0 + 26] = 4;                   /* "." is itself; ".." stays 0, the root */
     return img;
 }
 
@@ -500,6 +529,26 @@ int main(void) {
     unsigned char *fat_base = build_fat_image();
     fuzz_sample(run_fat, fat_base, FAT_IMG_SIZE, "fat16_basic", regress_dir);
     fat_nasties(fat_base, regress_dir);
+    unsigned char *fat32_base = build_fat32_image(fat_base);
+    fuzz_sample(run_fat, fat32_base, FAT_IMG_SIZE, "fat32_basic", regress_dir);
+    /* FAT32 write nasties: a FAT size past the 2^28-cluster limit must not
+       mount (its sums would overflow); one right at the limit, with a
+       4-billion-sector claim, mounts, and every write path (write, mkdir,
+       delete) still fails cleanly instead of hanging: its root lies past
+       the image, so each stops at the first sector it cannot read. */
+    {
+        unsigned char *img = malloc(FAT_IMG_SIZE); memcpy(img, fat32_base, FAT_IMG_SIZE);
+        img[36] = 0xFF; img[37] = 0xFF; img[38] = 0xFF; img[39] = 0xFF;
+        g_regress_dir = regress_dir;
+        try_one(run_fat, img, FAT_IMG_SIZE, "fat32_huge_fat_size");
+        memcpy(img, fat32_base, FAT_IMG_SIZE);
+        img[36] = 0; img[37] = 0; img[38] = 0x20; img[39] = 0;              /* 2^21 FAT sectors */
+        img[32] = 0xFF; img[33] = 0xFF; img[34] = 0xFF; img[35] = 0xFF;     /* total_sectors_32 */
+        memset(img + 2 * FAT_SECTOR_SIZE, 0xAA, FAT_IMG_SIZE - 2 * FAT_SECTOR_SIZE);   /* nothing reads as free */
+        try_one(run_fat, img, FAT_IMG_SIZE, "fat32_alloc_cluster_dos");
+        free(img);
+    }
+    free(fat32_base);
     free(fat_base);
 
     fprintf(stderr, "parser-fuzz: %ld cases run\n", g_cases);

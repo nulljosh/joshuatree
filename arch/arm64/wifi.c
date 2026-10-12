@@ -614,22 +614,28 @@ static int wmbox_call(void) {
         if (R32(m + 0x00) == (unsigned)a) { wmbox_flush(); return wmbox[1] == 0x80000000u; }
     }
 }
-static void wifi_power_on(void) {
+/* Drives expander pin `pin` as an output at `on` (0 or 1). Returns the readback (0 or 1), -1 when only the readback
+   failed, -2 when the firmware took neither the config nor the state. Bluetooth's BT_ON (pin 128) uses it too (bt.c). */
+int pi_exp_gpio(unsigned pin, unsigned on) {
     /* get config: gpio, direction, polarity, term_en, term_pull_up (24-byte value buffer) */
     wmbox[0] = 48; wmbox[1] = 0; wmbox[2] = 0x00030043; wmbox[3] = 24; wmbox[4] = 0;
-    wmbox[5] = WL_ON; wmbox[6] = 0; wmbox[7] = 0; wmbox[8] = 0; wmbox[9] = 0; wmbox[10] = 0; wmbox[11] = 0;
+    wmbox[5] = pin; wmbox[6] = 0; wmbox[7] = 0; wmbox[8] = 0; wmbox[9] = 0; wmbox[10] = 0; wmbox[11] = 0;
     unsigned pol = wmbox_call() ? wmbox[7] : 0;
-    /* set config: output, keep polarity, no termination, driven high */
+    /* set config: output, keep polarity, no termination, driven to `on` */
     wmbox[0] = 48; wmbox[1] = 0; wmbox[2] = 0x00038043; wmbox[3] = 24; wmbox[4] = 0;
-    wmbox[5] = WL_ON; wmbox[6] = 1; wmbox[7] = pol; wmbox[8] = 0; wmbox[9] = 0; wmbox[10] = 1; wmbox[11] = 0;
+    wmbox[5] = pin; wmbox[6] = 1; wmbox[7] = pol; wmbox[8] = 0; wmbox[9] = 0; wmbox[10] = on; wmbox[11] = 0;
     int cfg = wmbox_call();
-    /* set state high */
-    wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00038041; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = WL_ON; wmbox[6] = 1; wmbox[7] = 0;
+    /* set the state */
+    wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00038041; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = pin; wmbox[6] = on; wmbox[7] = 0;
     int set = wmbox_call();
     /* read it back */
-    wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00030041; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = WL_ON; wmbox[6] = 0; wmbox[7] = 0;
+    wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00030041; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = pin; wmbox[6] = 0; wmbox[7] = 0;
     int got = wmbox_call() ? (int)wmbox[6] : -1;
-    if (!cfg && !set) kputs("wifi power on (no mailbox)\n");
+    return !cfg && !set ? -2 : got;
+}
+static void wifi_power_on(void) {
+    int got = pi_exp_gpio(WL_ON, 1);
+    if (got == -2) kputs("wifi power on (no mailbox)\n");
     else if (got == 1) kputs("wifi power on, WL_ON reads 1\n"), step(1);
     else kputs(got == 0 ? "wifi power FAIL: WL_ON reads 0\n" : "wifi power on, readback failed\n");
     mdelay(150);

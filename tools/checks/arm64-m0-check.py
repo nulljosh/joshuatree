@@ -4,6 +4,8 @@
 virt: `make -C arch/arm64` boots on QEMU's generic virt machine, entered at EL1.
 pi:   `make -C arch/arm64 pi` makes kernel8.img, the file a Raspberry Pi 4 loads. QEMU's raspi4b model
       loads it at 0x80000 and enters at EL2 like the real firmware, so the EL2 to EL1 drop is proven too.
+      Its console is the mini UART, QEMU's second serial port: the first, the PL011, is the Bluetooth radio's (bt.c),
+      so every raspi4b boot in these checks passes `-serial null` before the log file.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-m0-check.py   (from the repo root)
 """
@@ -37,7 +39,7 @@ def boot(name, target, qemu_args, image, want):
 boot("virt", "all", ["-machine", "virt", "-cpu", "cortex-a72", "-m", "256"], "kernel8.elf",
      ["Joshua Tree on ARM64", "booted at EL1", "M0 ok", "M1b mmu on", "M1b heap ok", "M1 svc ok", "tick 3", "M1a ok"])
 if "raspi4b" in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capture_output=True, text=True).stdout:
-    boot("pi", "pi", ["-machine", "raspi4b"], "kernel8.img",
+    boot("pi", "pi", ["-machine", "raspi4b", "-serial", "null"], "kernel8.img",
          ["Joshua Tree on ARM64", "booted at EL2", "EL1", "M0 ok", "M1b mmu on", "M1b heap ok", "M1 svc ok", "tick 3", "M1a ok"])
 else:
     if subprocess.run(["make", "-C", arch, "pi"], capture_output=True).returncode: fails.append("pi: arch/arm64 `make pi` does not build")
