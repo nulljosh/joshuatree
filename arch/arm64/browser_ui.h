@@ -3,6 +3,7 @@
    line. It runs the same commands the Terminal does (browse, open N, back, forward, reload) with cmd_out pointed at a
    sink, and reads the page back through browser.c's accessors. Loading blocks, as it does at the Terminal; "loading..."
    is painted first. Every line it logs on the UART starts "browser: " (arm64-browser-app-check.py reads them). */
+#include "mascot_art.h"
 extern void (*cmd_out)(const char *s);                       /* cmd.c */
 int browse_command(const char *q, unsigned n);               /* browser.c */
 const char *browser_text(unsigned *len);
@@ -18,6 +19,8 @@ static unsigned short br_off[BR_VL_MAX], br_len[BR_VL_MAX];   /* wrapped line i:
 static unsigned br_n, br_lines;                              /* wrapped lines, and the page's own lines (the `page N lines` log) */
 static int br_top, br_edit, br_loading;
 static int br_frame = 1;   /* the window frame needs drawing: set on open, cleared once drawn, so a scroll or a keystroke repaints the well and not the frame */
+static unsigned char *br_mascot;   /* the mascot's decoded RGBA, or 0 when it would not decode */
+static int br_mascot_tried;
 static unsigned br_sel;   /* the link Tab has picked, 1-based; 0 when none */
 static char br_addr[BR_ADDR_MAX + 1], br_msg[96], br_err[64], br_ln[96];
 static unsigned br_addr_n, br_ln_n;
@@ -64,6 +67,26 @@ static void br_scroll(int top) {   /* clamped: the last page of lines is the fur
     int max = (int)br_n - br_rows(); if (max < 0) max = 0;
     br_top = top < 0 ? 0 : top > max ? max : top;
 }
+static void br_mascot_draw(int cx, int top) {   /* the mascot, 96 logical px square, centred on cx, top edge at top; 2x2 samples a pixel onto what is there */
+    if (!br_mascot_tried) {
+        br_mascot_tried = 1; unsigned w, h, ch;
+        if (png_decode(mascot_png, MASCOT_PNG_LEN, &br_mascot, &w, &h, &ch) || w != MASCOT_PX || h != MASCOT_PX || ch != 4) br_mascot = 0;
+    }
+    if (!br_mascot) return;
+    int s = (int)window_scale(), D = 96 * s, x0 = (cx - 48) * s, y0 = top * s;
+    for (int y = 0; y < D; y++) for (int x = 0; x < D; x++) {
+        unsigned r = 0, g = 0, b = 0, a = 0;
+        for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) {
+            const unsigned char *q = br_mascot + (((y * 2 + j) * MASCOT_PX / (D * 2)) * MASCOT_PX + (x * 2 + i) * MASCOT_PX / (D * 2)) * 4;
+            r += q[0] * q[3]; g += q[1] * q[3]; b += q[2] * q[3]; a += q[3];
+        }
+        if (!a) continue;
+        unsigned ink = fb_color(((r / a) << 16) | ((g / a) << 8) | (b / a)), al = a / 4;
+        unsigned *px = &fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)], d = *px, out = 0;
+        for (int sh = 0; sh <= 16; sh += 8) out |= ((((ink >> sh) & 0xFF) * al + ((d >> sh) & 0xFF) * (255 - al)) / 255) << sh;
+        *px = out;
+    }
+}
 static void browser_paint(int report) {
     int s = (int)window_scale(), x = br_x(), w = br_w(), y = win_ly + BR_PAGE_Y, h = br_h(), ty = win_ly + 34;
     cur_hide();
@@ -93,7 +116,12 @@ static void browser_paint(int report) {
         gui_text(buf, x + 6, ly, num ? BR_ACCENT : 0x001C1C1E);
         if (report && num) { con_quiet = 1; uart_puts("browser: shows link "); uart_dec(num); uart_puts(" at "); uart_dec((unsigned)(x + 16) * (unsigned)s); uart_putc(','); uart_dec((unsigned)(ly + 8) * (unsigned)s); uart_putc('\n'); }
     }
-    if (!len) gui_text("Nothing to show yet", x + 6, y + 4, 0x0075726E);
+    if (!len) {   /* an empty well: the mascot, and the words under it */
+        const char *none = "Nothing to show yet";
+        int top = y + (h - 96 - 28) / 2;
+        br_mascot_draw(x + w / 2, top);
+        gui_text(none, x + (w - gui_text_width(none)) / 2, top + 96 + 10, 0x0075726E);
+    }
     char st[BR_ADDR_MAX + 48]; unsigned o = 0;
     const char *left = br_loading ? "loading..." : br_msg[0] ? br_msg : browser_url();
     for (; left[o] && o < BR_ADDR_MAX; o++) st[o] = left[o];
