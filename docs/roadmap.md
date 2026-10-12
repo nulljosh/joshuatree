@@ -312,6 +312,7 @@ The hardware is called Neo in the files (`docs/hardware/neo_cad.py`, the bluepri
 ### Known limits to recheck
 - [ ] [Sonnet] `SYS_READFILE` reads with interrupts off, so loading mid-song can glitch the audio.
 - [ ] [Sonnet] Music and Movies live in the Apps folder only, not on the dock.
+- [ ] [Sonnet] A persistent FAT disk keeps the first copy of every app's `.BIN`: `ring3app_seed` only writes a file that is missing, so after an upgrade the disk still runs the old app (the Music QA ran a pre-fix `MUSIC.BIN` off a reused disk). Compare the embedded checksum and replace a stale copy. Check: boot twice on one disk, the second kernel carrying a different Music, and see the new `music:` line.
 - [ ] [Sonnet] Silent movie clips play about twice too fast on this QEMU build.
 
 ## Architecture to A+ (refreshed 2026-10-11)

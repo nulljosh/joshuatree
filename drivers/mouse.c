@@ -171,6 +171,8 @@ int mouse_get_delta(int *dx, int *dy, int *buttons) {
     return was_dirty;
 }
 
+int mouse_take_wheel(void) { int dz = accum_dz; accum_dz = 0; return dz; }
+
 int mouse_get_wheel(void) {
     vmmouse_fold();
     int dz = accum_dz;

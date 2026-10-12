@@ -235,6 +235,7 @@ retry|5|Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcu
 retry|7|Window top edge and corner arc are one continuous AA shape|python3 ./tools/checks/windowedge-check.py
 retry|3|Sound Blaster 16 detects, beep plays a real 440Hz tone, card-less boot is a no-op|python3 ./tools/checks/sb16-check.py
 retry|5|Music runs as a ring-3 app: plays a fixture WAV off a FAT disk (position from the driver, pause holds, bar and arrow seeks land, next changes the song, oversize file refused) and the sound card hears the tones|python3 ./tools/checks/music-check.py
+retry|5|Music QA: a 3:25 MP3 reads 3:25, a damaged MP3 frame no longer hangs the song, an unplayable song is skipped when one ends into the next and n moves on from it, the queue stays under half a second ahead, shuffle plays each song once, the wheel scrolls the list, no row sits under the key hint, a half-screen window keeps its pills, an empty library is quiet|python3 ./tools/checks/music-qa-check.py
 retry|0|Sound Blaster 16 record path: `listen` reaches the driver and times out cleanly (QEMU has no ADC backend), card-less boot is a no-op|python3 ./tools/checks/sb16-record-check.py
 retry|1|Chat speaks: say fetches /api/speak PCM from a stub and plays a real 1000Hz tone|python3 ./tools/checks/chat-speaks-check.py
 retry|2|Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face|python3 ./tools/checks/chat-face-check.py

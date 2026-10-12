@@ -119,6 +119,7 @@ struct jt_dirent { char name[JT_DIRENT_NAME]; unsigned int size, is_dir; };
 #define JT_EV_KEY   1
 #define JT_EV_CLICK 2
 #define JT_EV_WHEEL 3
+#define JT_EV_DRAG  5
 #define JT_EV_RESIZE 4 /* a = new width, b = new height: the window rect changed; call SYS_WINDOW_OPEN again to get a buffer that size */
 
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
@@ -386,3 +387,4 @@ int  syscall_window_register(int task, unsigned int w, unsigned int h, void *ima
 void syscall_window_request_size(int task, unsigned int w, unsigned int h); /* compositor: the viewport is now w x h; queues JT_EV_RESIZE once per change */
 const unsigned int *syscall_window_fb(int task, unsigned int *w, unsigned int *h, int *dirty); /* kernel pointer to the window's buffer, clears dirty */
 void syscall_window_push_event(int task, int kind, int a, int b);
+void syscall_window_push_drag(int task, int a, int b);

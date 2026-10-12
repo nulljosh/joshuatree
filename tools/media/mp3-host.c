@@ -88,6 +88,18 @@ int main(int argc, char **argv) {
       CHECK(mp3_seek(&b, 0) == MP3_OK && mp3_read8(&b, part, 2000) == 2000);
       CHECK(mp3_seek(&b, 99999999) == MP3_OK);               /* past the end clamps, no crash */
       long diff0 = 0; for (uint32_t i = 1200; i < 2000; i++) diff0 += abs((int)part[i] - (int)full[i]); CHECK(diff0 / 800 <= 2); }
+    /* a damaged frame mid-song must not stop the read: mp3_open's header scan counts it, and the player ends a song only
+       when it has sent `frames` samples, so a read that stopped short left the song hanging for ever (found in the Music QA) */
+    { struct mp3 a, b; static uint8_t sink[8192]; uint32_t got = 0, r, all = 0;
+      mp3_open(&a, mono22, n0);
+      while (got < 576 * 10 && (r = mp3_read8(&a, sink, 576 * 10 - got)) > 0) got += r;   /* a.pos is now the start of frame 10 */
+      uint8_t *bad = exact(mono22, n0);
+      for (uint32_t k = 4; k < 14 && a.pos + k < n0; k++) bad[a.pos + k] = 0xFF;   /* its side info */
+      CHECK(mp3_open(&b, bad, n0) == MP3_OK);
+      while ((r = mp3_read8(&b, sink, sizeof sink)) > 0) all += r;
+      CHECK(all == b.frames);
+      CHECK(mp3_seek(&b, 8000) == MP3_OK && mp3_read8(&b, sink, 2000) == 2000);          /* and a seek past it still lands */
+      mp3_close(&a); mp3_close(&b); free(bad); }
     /* stereo at 44100 Hz */
     uint8_t *stereo44 = slurp(dir, "stereo44.mp3", &n);
     CHECK(mp3_open(&m, stereo44, n) == MP3_OK);
@@ -125,5 +137,37 @@ int main(int argc, char **argv) {
     }
 
     printf(fails ? "mp3-host: %d FAILED\n" : "mp3-host: ok\n", fails);
+
+    {   /* ID3 titles: the three tag versions, the three text encodings, a cut-off read, and garbage */
+        char t[40], a[28];
+        static const uint8_t v23[] = {'I','D','3',3,0,0, 0,0,0,0x23,
+            'T','I','T','2', 0,0,0,9, 0,0, 0, 'N','e','v','e','r',' ','G','o',
+            'T','P','E','1', 0,0,0,6, 0,0, 0, 'R','i','c','k',' '};
+        CHECK(mp3_id3(v23, sizeof v23, t, sizeof t, a, sizeof a) == 1 && !strcmp(t, "Never Go") && !strcmp(a, "Rick"));
+        static const uint8_t v24[] = {'I','D','3',4,0,0, 0,0,0,0x1C,
+            'T','I','T','2', 0,0,0,6, 0,0, 3, 'C','a','f',0xC3,0xA9,
+            'T','P','E','1', 0,0,0,2, 0,0, 3, 'X'};
+        CHECK(mp3_id3(v24, sizeof v24, t, sizeof t, a, sizeof a) == 1 && !strcmp(t, "Caf?") && !strcmp(a, "X"));
+        static const uint8_t v22[] = {'I','D','3',2,0,0, 0,0,0,0x13,
+            'T','T','2', 0,0,5, 0, 'H','i','!','!',
+            'T','P','1', 0,0,2, 0, 'Z'};
+        CHECK(mp3_id3(v22, sizeof v22, t, sizeof t, a, sizeof a) == 1 && !strcmp(t, "Hi!!") && !strcmp(a, "Z"));
+        static const uint8_t u16[] = {'I','D','3',3,0,0, 0,0,0,0x13,
+            'T','I','T','2', 0,0,0,9, 0,0, 1, 0xFF,0xFE, 'A',0, 'B',0, 'C',0};
+        CHECK(mp3_id3(u16, sizeof u16, t, sizeof t, a, sizeof a) == 1 && !strcmp(t, "ABC") && a[0] == 0);
+        CHECK(mp3_id3(v23, 30, t, sizeof t, a, sizeof a) == 1 && !strcmp(t, "Never Go") && a[0] == 0);   /* the read ended inside the artist frame */
+        CHECK(mp3_id3(v23, 14, t, sizeof t, a, sizeof a) == 0 && t[0] == 0);
+        CHECK(mp3_id3(v23, 5, t, sizeof t, a, sizeof a) == 0);
+        CHECK(mp3_id3(v23, sizeof v23, t, 4, a, 3) == 1 && !strcmp(t, "Nev") && !strcmp(a, "Ri"));      /* small outputs stay terminated */
+        srand(7);
+        for (int it = 0; it < 4000; it++) {                   /* bit-flipped tags never run off the buffer (ASan judges) */
+            uint8_t *m = exact(v23, sizeof v23);
+            for (int k = 0; k < 4; k++) m[rand() % sizeof v23] = (uint8_t)rand();
+            uint32_t n = 1 + (uint32_t)rand() % sizeof v23;
+            uint8_t *e = exact(m, n); free(m);
+            mp3_id3(e, n, t, sizeof t, a, sizeof a);
+            free(e);
+        }
+    }
     return fails != 0;
 }

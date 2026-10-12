@@ -17,6 +17,8 @@ struct wav {
 };
 
 int wav_open(struct wav *w, const uint8_t *buf, uint32_t len);
+/* The length in ms from the header alone, for a list: buf may hold only the start of the file. 0 when it is not a WAV. */
+uint32_t wav_probe_ms(const uint8_t *buf, uint32_t len);
 /* Writes up to n mono 8-bit unsigned samples starting at frame `from`; returns how many. */
 uint32_t wav_read8(const struct wav *w, uint32_t from, uint8_t *out, uint32_t n);
 #endif

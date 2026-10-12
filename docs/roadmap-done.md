@@ -1,5 +1,12 @@
 # Joshua Tree roadmap: done
 
+## 2.61.0 development branch (2026-10-11)
+
+Music, the iTunes pass. A song shows its real name: the library reads the first 2 KB of each file and takes the ID3 title and artist from an MP3 (v2.2, 2.3, 2.4; Latin-1, UTF-8, UTF-16), and the cover from its picture frame through the JPEG decoder Movies already uses, so `NEVERG~1.MP3` reads "Never Gonna Give You Up" with Rick Astley's cover. Rows carry each song's length from its header (WAV fmt and data, MP3 Xing frame or bit rate) and sort by title. The seek and volume knobs drag: the kernel sends `JT_EV_DRAG` to a ring-3 window while the button is held inside it, the seek lands once on release. The ARM build links the decoder too, and `arm64-music-check.py` reads the `ahead=` position lines. Under it the desktop reads the wheel without pumping the mouse queue a second time, which had swallowed fast clicks in the browser demo. Checks: `tools/checks/music-qa-check.py` boot D and the drag asserts, `tools/media/mp3-host.c` for the tag parser.
+
+## 2.44.1 development branch (2026-10-11)
+
+The Music QA pass: every key and click, a WAV and an MP3, screenshots of each state. A 3:25 MP3 read 0:10 (frames times 1000 wrapped past 32 bits), one damaged MP3 frame hung the song for good, a song that would not play stopped the queue and trapped n, shuffle never ended, no app window ever got a wheel step, a volume change landed a second late, a half-screen window cut off Repeat, and the list ran under the key hint. All fixed (the wheel fix is the kernel's: every ring-3 window now gets wheel steps, and Music is the one checked). Check: `tools/checks/music-qa-check.py`, each fix's assertion failing when the fix is reverted, and the damaged-frame case in `tools/media/mp3-host.c`.
 ## 2.48.1 development branch (2026-10-11)
 
 On the landing page, Samantha tells the time and the date from the machine's own clock ("It's 3:07 PM."): the server cannot see a visitor's time zone, so she used to say she couldn't find anything. Her input on a desktop is now the page's own field over her face, sharp at any size; the kernel's bar was a small bitmap font scaled up with the screen and read pixelated. `pagebar` on the boot line tells her to draw none. Checks: `tools/checks/samantha-clock-check.py`, `tools/checks/desktop-pagebar-check.mjs`.

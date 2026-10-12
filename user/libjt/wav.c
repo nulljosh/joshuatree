@@ -53,3 +53,22 @@ uint32_t wav_read8(const struct wav *w, uint32_t from, uint8_t *out, uint32_t n)
     }
     return n;
 }
+
+uint32_t wav_probe_ms(const uint8_t *buf, uint32_t len) {
+    if (len < 12 || buf[0]!='R' || buf[1]!='I' || buf[2]!='F' || buf[3]!='F' || buf[8]!='W' || buf[9]!='A' || buf[10]!='V' || buf[11]!='E') return 0;
+    uint32_t pos = 12, rate = 0, align = 0;
+    while (len - pos >= 8) {
+        uint32_t size = le32(buf + pos + 4), body = pos + 8;
+        if (buf[pos]=='f' && buf[pos+1]=='m' && buf[pos+2]=='t' && buf[pos+3]==' ') {
+            if (len - body < 16) return 0;
+            rate = le32(buf + body + 4); align = le16(buf + body + 12);
+        } else if (buf[pos]=='d' && buf[pos+1]=='a' && buf[pos+2]=='t' && buf[pos+3]=='a') {
+            if (!rate || !align) return 0;
+            uint32_t fr = size / align;                     /* the chunk's declared size: its bytes need not be in buf */
+            return fr / rate * 1000u + fr % rate * 1000u / rate;
+        }
+        if (size > len - body) return 0;
+        pos = body + size + (size & 1);
+    }
+    return 0;
+}
