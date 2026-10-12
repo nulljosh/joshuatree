@@ -22,6 +22,7 @@
 #endif
 #define REG(a) (*(volatile unsigned int *)(a))
 #include "bt.h"
+#include "apple_mask.h"
 #define UART_DR   (UART_BASE + 0x00)
 #define UART_FR   (UART_BASE + 0x18)
 #define UART_IBRD (UART_BASE + 0x24)
@@ -2083,26 +2084,17 @@ static void fb_init(void) {
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
         const char *thanks = "Seduce. Vilify. Ignore.";
-        int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 2 * ar - gapx) / 2, ty = band_y - sc(4);
+        int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 3 * ar - gapx) / 2, ty = band_y - sc(4);
         text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
-        {   /* a small apple after the line, antialiased (4x4 samples a pixel) onto the flat fill: a round fruit, a dip on
-               top, a short stem and one leaf, no bite, so it is a fruit and not a logo. Integer only: q is 1/1024 of ar. */
-            int acx = tx + tw + gapx + ar, acy = ty - sc(4); unsigned ink = fb_color(0x00f0f4f8);
-            for (int y = -2 * ar; y <= ar + 1; y++) for (int x = -ar - 1; x <= ar + 1; x++) {
-                int hit = 0;
-                for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
-                    int qx = ((x * 4 + i) * 2 + 1) * 128 / ar, qy = ((y * 4 + j) * 2 + 1) * 128 / ar;   /* sample centre, in q */
-                    long long body = (long long)qx * qx + (long long)qy * qy * 1024 / 829;             /* a 1 : 0.9 ellipse */
-                    long long dip = (long long)qx * qx + (long long)(qy + 920) * (qy + 920);
-                    int stem = qx > -110 && qx < 110 && qy < -760 && qy > -1300;
-                    long long lx = qx - 520, ly = qy + 1080, u = (lx * 53 - ly * 37) / 64, v = (lx * 37 + ly * 53) / 64;   /* the leaf, tilted */
-                    long long leaf = u * u * 1024 / 300 + v * v * 1024 / 60;
-                    if ((body <= 1048576 && dip > 92160) || stem || leaf <= 1048576) hit++;
-                }
-                if (!hit) continue;
-                unsigned d = fb[(unsigned)(acy + y) * fb_pitch + (unsigned)(acx + x)], out = 0;
-                for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * hit + ((d >> b) & 0xFF) * (16 - hit)) / 16) << b;
-                fb[(unsigned)(acy + y) * fb_pitch + (unsigned)(acx + x)] = out;
+        {   /* a small bitten apple after the line: apple_mask scaled to 3 ar square, 4x4 samples a pixel, onto the flat fill */
+            int S = 3 * ar, x0 = tx + tw + gapx, y0 = ty - sc(4) + ar - S; unsigned ink = fb_color(0x00f0f4f8);
+            for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+                int sum = 0;
+                for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) sum += apple_mask[((y * 4 + j) * APPLE_N / (S * 4)) * APPLE_N + (x * 4 + i) * APPLE_N / (S * 4)];
+                unsigned al = (unsigned)sum / 16, d = fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)], out = 0;
+                if (!al) continue;
+                for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * al + ((d >> b) & 0xFF) * (255 - al)) / 255) << b;
+                fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)] = out;
             }
         }
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
