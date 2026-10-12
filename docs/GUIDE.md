@@ -221,4 +221,10 @@ QEMU checks pass; play on the real board is still pending.
 
 ### Short messages in the Pi menu bar
 
-A Wi-Fi join and a Brick result appear beside the clock for four seconds. A new message replaces the old one. Messages do not take the keyboard or mouse away from your app. This is a development feature awaiting release and a board check.
+A Wi-Fi join and a Brick result appear beside the clock for four seconds. A new message replaces the old one. Messages do not take the keyboard or mouse away from your app. Released in 2.40.0; a board check remains.
+
+## Screen sleep on the Pi
+
+In 2.41.0, five minutes without keyboard or mouse activity blanks the HDMI picture. Press a key or move the mouse to wake it; that input still reaches the app. Brick and an active Samantha request keep the screen awake. Apps, USB and networking keep running; this does not suspend the computer or save your files.
+
+QEMU checks the idle timer, refused requests and both input paths through the firmware mailbox. QEMU acknowledges blanking without hiding its pixels, so HDMI sleep and wake still need a physical Pi test after flashing. The browser demo keeps its existing behavior.

@@ -180,7 +180,7 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = bt.h notice.h brick.h brick_ui.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = screen_idle.h bt.h notice.h brick.h brick_ui.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
@@ -290,6 +290,8 @@ $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
 $(eval $(call variant,restart,-DPOWER_SELFTEST=2,,))
 
 $(eval $(call variant,notice,-DNOTICE_SELFTEST,,))
+$(eval $(call variant,screen,-DSCREEN_SELFTEST,,))
+
 
 # audiotest: runs `beep` at boot on virt, which has no PWM, so arm64-audio-check.py reads back the tone's ring checksum.
 $(eval $(call variant,audio,-DAUDIO_TEST,,))
