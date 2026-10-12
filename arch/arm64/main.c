@@ -1508,6 +1508,7 @@ static void browser_close(void);
 static int browser_key(unsigned code);
 static void browser_click(int lx, int ly);
 static void browser_wheel(int v);
+static int wheel_acc;   /* wheel notches since the last report ended */
 static void brick_open(void);
 static void brick_close(void);
 static int brick_key(unsigned code, unsigned value);
@@ -2440,11 +2441,13 @@ static void input_event(struct input_event e) {
         mouse_moved = 1;
     } else if (e.type == 2) {                                                                              /* EV_REL: a mouse, clamped to the screen */
         int v = (int)e.value;
-        if (e.code == 8) { browser_wheel(v); return; }   /* REL_WHEEL: only the Browser reads it */
+        if (e.code == 8) { wheel_acc += v; return; }   /* REL_WHEEL: only the Browser reads it, once per report (the SYN below), so a burst of notches is one scroll and one paint */
         if (e.code == 0) { int x = (int)mouse_x + v; mouse_x = x < 0 ? 0 : x >= (int)fb_w ? (int)fb_w - 1 : (unsigned)x; }
         else if (e.code == 1) { int y = (int)mouse_y + v; mouse_y = y < 0 ? 0 : y >= (int)fb_h ? (int)fb_h - 1 : (unsigned)y; }
         mouse_moved = 1;
-    } else if (e.type == 0 && mouse_moved) {                                                               /* EV_SYN: one report done */
+    } else if (e.type == 0 && (mouse_moved || wheel_acc)) {                                                /* EV_SYN: one report done */
+        if (wheel_acc) { int v = wheel_acc; wheel_acc = 0; browser_wheel(v); }
+        if (!mouse_moved) return;
         con_quiet = 1;   /* the UART only: every report would scroll the Console */
         uart_puts("mouse "); uart_dec(mouse_x); uart_putc(','); uart_dec(mouse_y); uart_putc('\n');
         mouse_moved = 0;

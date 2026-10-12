@@ -31,9 +31,15 @@ static int br_x(void) { return win_lx + 8; }
 static int br_w(void) { return win_lw - 16; }
 static int br_h(void) { return win_lh - BR_PAGE_Y - 26; }
 static int br_rows(void) { return (br_h() - 8) / BR_ROW; }
-static void br_wrap(void) {   /* the page into lines that fit the well: break at the last space that fits, or inside a word that is too long */
+static const char *br_wk_t; static unsigned br_wk_len, br_wk_loads; static int br_wk_w = -1;   /* what the wrapped lines were made from: the page text, its length, the load count and the width */
+static void br_wrap(void) {   /* the page into lines that fit the well: break at the last space that fits, or inside a word that is too long. Unchanged text and width keep the lines already made: wrapping measures every character, the slow part on a Pi */
     unsigned len; const char *t = browser_text(&len);
     int s = (int)window_scale(), maxw = (br_w() - 12) * s;
+    if (br_wk_w == maxw && br_wk_t == t && br_wk_len == len && br_wk_loads == browser_loads()) return;
+    br_wk_w = maxw; br_wk_t = t; br_wk_len = len; br_wk_loads = browser_loads();
+#ifdef BR_TRACE
+    con_quiet = 1; uart_puts("browser: wrap\n");
+#endif
     br_n = 0; br_lines = len ? 1 : 0;
     for (unsigned i = 0; i < len; i++) if (t[i] == '\n') br_lines++;
     for (unsigned i = 0; len && br_n < BR_VL_MAX;) {
@@ -259,7 +265,10 @@ static int browser_key(unsigned code) {   /* a key down with the Browser in fron
 }
 static void browser_wheel(int v) {   /* REL_WHEEL: up is positive */
     if (!browser_live || spot_live || !v) return;
-    br_scroll(br_top - v * 3); br_msg[0] = 0; browser_paint(0);
+    int was = br_top;
+    br_scroll(br_top - v * 3);
+    if (br_top == was) return;   /* already at that end of the page: nothing moved, so nothing to draw */
+    br_msg[0] = 0; browser_paint(0);
 }
 static void browser_click(int lx, int ly) {
     int ty = win_ly + 34;
