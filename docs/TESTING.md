@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (239 checks)
+## The suite (240 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -188,6 +188,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Window top edge and corner arc are one continuous AA shape | `tools/checks/windowedge-check.py` | retry |
 | Sound Blaster 16 detects, beep plays a real 440Hz tone, card-less boot is a no-op | `tools/checks/sb16-check.py` | retry |
 | Music runs as a ring-3 app: plays a fixture WAV off a FAT disk (position from the driver, pause holds, bar and arrow seeks land, next changes the song, oversize file refused) and the sound card hears the tones | `tools/checks/music-check.py` | retry |
+| Music QA: a 3:25 MP3 reads 3:25, a damaged MP3 frame no longer hangs the song, an unplayable song is skipped when one ends into the next and n moves on from it, the queue stays under half a second ahead, shuffle plays each song once, the wheel scrolls the list, no row sits under the key hint, a half-screen window keeps its pills, an empty library is quiet | `tools/checks/music-qa-check.py` | retry |
 | Sound Blaster 16 record path: `listen` reaches the driver and times out cleanly (QEMU has no ADC backend), card-less boot is a no-op | `tools/checks/sb16-record-check.py` | retry |
 | Chat speaks: say fetches /api/speak PCM from a stub and plays a real 1000Hz tone | `tools/checks/chat-speaks-check.py` | retry |
 | Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face | `tools/checks/chat-face-check.py` | retry |
@@ -283,7 +284,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Portfolio | `tools/checks/portfolio-check.py`, `tools/checks/portfolio-mute-check.mjs`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3portfolio-check.py` |
 | Activity | `tools/checks/arm64-led-check.py`, `tools/checks/panes-check.py`, `tools/checks/ring3activity-check.py` |
 | Clock | `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-clock-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-music-check.py`, `tools/checks/clock-check.py`, `tools/checks/clockicon-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/movie-check.py`, `tools/checks/ring3clock-check.py`, `tools/checks/ring3windgate-check.py`, `tools/checks/samantha-clock-check.py` |
-| Music | `tools/checks/arm64-music-check.py`, `tools/checks/music-check.py` |
+| Music | `tools/checks/arm64-music-check.py`, `tools/checks/music-check.py`, `tools/checks/music-qa-check.py` |
 | Movies | `tools/checks/movie-check.py` |
 | Hamurapi | `tools/checks/ring3hamurabi-check.py` |
 | Windgate | `tools/checks/ring3windgate-check.py` |

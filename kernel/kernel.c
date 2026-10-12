@@ -5139,6 +5139,7 @@ static void gui_run(void){
        threshold while held, so a plain click (down, no movement, up)
        never gets mistaken for a drag onto its own slot. */
     int press_slot = -1, press_x = 0, press_y = 0, drag_slot = -1, press_window = -1;
+    int r3drag_on = 0, r3drag_x = 0, r3drag_y = 0;   /* a press held and moved inside a ring-3 window's content: JT_EV_DRAG steps */
     /* Window title-bar drag: win_drag_armed latches on a title-bar press
        (the same "record it, only promote to a real drag past a small
        threshold" shape drag_slot above already uses for dock reordering).
@@ -5177,6 +5178,7 @@ static void gui_run(void){
     gui_cursor_save(mx, my);
     gui_draw_cursor(mx, my);
     gui_dock_prewarm(); ring3app_autoopen_run(mx, my); /* `open=keyrate` / `open=toroid` boot flag, if set */
+    (void)mouse_take_wheel(); /* a wheel step banked while booting (the PS/2 wake-up packet) is not input: a window under the pointer must not open already scrolled. Not mouse_get_wheel: that pumps the vmmouse queue and can eat the first pointer packet on a slow host */
     for (;;) {
         window_present(); r3stress_desktop_round(); pdestress_desktop_round(); __asm__ volatile ("hlt"); /* 1.9.23: stress=r3 hook, dead unless armed */
         /* v0.76.17: direct request ("time in top right needs live reload
@@ -5424,6 +5426,11 @@ static void gui_run(void){
         int win_hit_here = (menu_open || notif_open || weather_open) ? -1 : gui_multiwin_hit_test(mx, my); /* v0.73.6: real hit test against every open window, topmost first, see gui_multiwin_hit_test */
         int win_close_here = (win_hit_here >= 0 && win_hit_here == gui_window_count - 1) ? win_hit_here : -1; /* only the already-focused (topmost) window's own click-anywhere-closes contract; a click on a background window is click-to-focus, not close, handled below */
         int win_focus_changed = 0; /* set below when a click raises a background window; folded into `launched` once it's declared, so the z-order change gets a real full repaint this same frame */
+        {   /* The wheel goes to the ring-3 window under the pointer (JT_EV_WHEEL, +1 up, -1 down), the way a click does. Only the blocking launcher ever read it before, so no window app saw a wheel step. */
+            int wz = mouse_take_wheel();   /* not mouse_get_wheel: that pumps the vmmouse queue again and swallows a click whose press and release land in one frame (v86) */
+            if (wz && win_hit_here >= 0 && gui_windows[win_hit_here].task >= 0)
+                syscall_window_push_event(gui_windows[win_hit_here].task, JT_EV_WHEEL, wz > 0 ? 1 : -1, 0);
+        }
 
         if (just_pressed) {
             if (logo_here) { menu_open = 1; menu_opening = 1; }
@@ -5438,6 +5445,7 @@ static void gui_run(void){
                    the window exactly as it always has. */
                 const gui_window_t *pw = &gui_windows[win_close_here];
                 int in_titlebar = my >= pw->y && my < pw->y + 30;
+                press_x = mx; press_y = my;   /* a content press remembers where, for the drag steps below */
                 int cx = pw->x + 24, cy = pw->y + 16, ddx = mx - cx, ddy = my - cy;
                 int on_close = (ddx * ddx + ddy * ddy) <= 9 * 9;
                 if (in_titlebar && !on_close) {
@@ -5469,6 +5477,16 @@ static void gui_run(void){
         if (held && win_drag_armed && drag_win < 0) {
             int moved = (mx > press_x ? mx - press_x : press_x - mx) + (my > press_y ? my - press_y : press_y - my);
             if (moved > 8) { drag_win = press_window; press_window = -1; } /* real drag now: the release logic below moves/snaps instead of closing */
+        }
+
+        if (held && press_window >= 0 && !win_drag_armed && gui_windows[press_window].task >= 0 && press_y >= gui_windows[press_window].y + 30
+            && (r3drag_on || mx != press_x || my != press_y)) {
+            /* The pointer moving with the button held inside a ring-3 window's content: JT_EV_DRAG with the viewport position, the press's
+               own first so the program knows what it grabbed, then one per new pixel, so a seek or volume knob follows the hand. A plain
+               click sends nothing new, and the release still sends its click. */
+            const gui_window_t *pw = &gui_windows[press_window];
+            if (!r3drag_on) { r3drag_on = 1; r3drag_x = press_x; r3drag_y = press_y; syscall_window_push_drag(pw->task, press_x - (pw->x + 8), press_y - (pw->y + 32)); }
+            if (mx != r3drag_x || my != r3drag_y) { r3drag_x = mx; r3drag_y = my; syscall_window_push_drag(pw->task, mx - (pw->x + 8), my - (pw->y + 32)); }
         }
 
         int launched = sys_launched || notif_draw_pending || weather_draw_pending || win_focus_changed || mw_key_repaint; notif_draw_pending = 0; weather_draw_pending = 0;
@@ -5580,7 +5598,7 @@ static void gui_run(void){
                 slot_here = (menu_open || notif_open || weather_open) ? -1 : gui_dock_hit_test(mx, my);
                 launched = 1; /* the app view just took over the whole screen; force a redraw below even if the cursor never moved */
             }
-            press_slot = -1; drag_slot = -1; press_window = -1;
+            press_slot = -1; drag_slot = -1; press_window = -1; r3drag_on = 0;
             win_drag_armed = 0; drag_win = -1; drag_zone = -1;
         }
         prev_buttons = buttons;

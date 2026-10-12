@@ -217,7 +217,7 @@ try:
         return int(parts[1].split()[0]), parts[3]
     def ink(img, x, y, w, h): return sum(1 for j in range(y, y + h) for i in range(x, x + w) if max(img[1][(j * img[0] + i) * 3:(j * img[0] + i) * 3 + 3]) < 0x60)
     def streams(text): return [m.groups() for m in re.finditer(r"audio: app stream (\d+) frames at (\d+) Hz, ring sum 0x([0-9a-f]{8}), abs (\d+), volume (\d+), played (\d+)\n", text)]
-    def positions(text): return [int(p) for p in re.findall(r"music: at playing pos=(\d+)\n", text)]
+    def positions(text): return [int(p) for p in re.findall(r"music: at playing pos=(\d+)(?: ahead=\d+)?\n", text)]
 
     # ---- Spotlight opens Music ----
     n0 = len(uart())
@@ -241,7 +241,7 @@ try:
     n1 = len(uart())
     key("spc")
     check("Space plays ALPHA.WAV", wait_for("music: playing ALPHA.WAV\n", 8, n1), uart()[n1:][-400:])
-    wait_re(r"(music: at playing pos=\d+\n(.|\n)*){3}", 8, n1)
+    wait_re(r"(music: at playing pos=\d+(?: ahead=\d+)?\n(.|\n)*){3}", 8, n1)
     n2 = len(uart())
     key("n")
     m = wait_re(r"audio: app stream \d+ .*\n", 2, n2)
@@ -263,12 +263,12 @@ try:
 
     # ---- the MP3 decodes at EL0, F11 turns the kernel down ----
     check("the next song is the MP3", wait_for("music: playing CHARLIE.MP3\n", 8, n2), uart()[n2:][-400:])
-    wait_re(r"(music: at playing pos=\d+\n(.|\n)*){2}", 8, n2)
+    wait_re(r"(music: at playing pos=\d+(?: ahead=\d+)?\n(.|\n)*){2}", 8, n2)
     n3 = len(uart())
     key("f11")
     check("F11 lowers the kernel's volume to 60 while it plays", wait_for("notice: Volume 60\n", 4, n3), uart()[n3:][-300:])
     check("and its tick is refused: the PWM is the app's while its stream runs", wait_for("audio: busy, an app is playing\n", 4, n3), uart()[n3:][-300:])
-    wait_re(r"music: at playing pos=\d+\n", 4, n3)
+    wait_re(r"music: at playing pos=\d+(?: ahead=\d+)?\n", 4, n3)
     mpos = positions(uart()[n2:])
     n4 = len(uart())
     key("n")
@@ -279,7 +279,7 @@ try:
 
     # ---- the WAV again at volume 60, Esc ----
     check("n wraps to ALPHA.WAV again", wait_for("music: playing ALPHA.WAV\n", 8, n4), uart()[n4:][-300:])
-    wait_re(r"music: at playing pos=\d+\n(.|\n)*music: at playing pos=\d+\n", 6, n4)
+    wait_re(r"music: at playing pos=\d+(?: ahead=\d+)?\n(.|\n)*music: at playing pos=\d+(?: ahead=\d+)?\n", 6, n4)
     n5 = len(uart())
     key("esc")
     check("Esc closes Music: it stops its sound and exits 0", wait_for("M3c app music exit 0", 6, n5) and "music: closed\n" in uart()[n5:], uart()[n5:][-300:])

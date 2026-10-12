@@ -21,6 +21,9 @@ int mouse_get_delta(int *dx, int *dy, int *buttons);
    those and clear the entire accumulator. This is here so callers that only
    care about wheel scroll don't need a dummy dx/dy buffer. */
 int mouse_get_wheel(void);
+/* The wheel steps the last mouse_get_delta already folded in, without pumping the vmmouse queue again: a second
+   pump in one frame would fold a fast press and release together and the desktop would never see the click. */
+int mouse_take_wheel(void);
 
 /* Absolute position, only when the VMware backdoor (vmmouse.h) is live
    and a new packet arrived since the last call: writes the pointer's

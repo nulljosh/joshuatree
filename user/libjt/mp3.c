@@ -21,6 +21,123 @@ static uint32_t id3v2_skip_size(const uint8_t *buf, uint32_t len) {
     return size + 10;
 }
 
+/* Copies one ID3 text frame's body (encoding byte first) into out as plain ASCII, stopping at its NUL. */
+static void id3_text(const uint8_t *d, uint32_t n, char *out, int cap) {
+    int o = 0;
+    uint32_t i = 1;
+    if (n < 1 || cap < 1) { if (cap > 0) out[0] = 0; return; }
+    uint8_t enc = d[0];
+    if (enc == 1 || enc == 2) {                         /* UTF-16: a BOM says which byte of each pair is the low one */
+        int le = 1;
+        if (n >= 3 && d[1] == 0xFE && d[2] == 0xFF) { le = 0; i = 3; }
+        else if (n >= 3 && d[1] == 0xFF && d[2] == 0xFE) i = 3;
+        else if (enc == 2) le = 0;
+        for (; i + 1 < n && o < cap - 1; i += 2) {
+            uint8_t lo = d[i + (le ? 0 : 1)], hi = d[i + (le ? 1 : 0)];
+            if (lo == 0 && hi == 0) break;
+            out[o++] = hi || lo < 0x20 || lo >= 0x7F ? '?' : (char)lo;
+        }
+    } else {
+        for (; i < n && o < cap - 1; i++) {
+            uint8_t c = d[i];
+            if (c == 0) break;
+            if (enc == 3 && c >= 0x80 && c < 0xC0) continue;   /* a UTF-8 continuation byte: the '?' already stands for it */
+            out[o++] = c < 0x20 || c >= 0x7F ? '?' : (char)c;
+        }
+    }
+    while (o > 0 && out[o - 1] == ' ') o--;
+    out[o] = 0;
+}
+
+int mp3_id3(const uint8_t *buf, uint32_t len, char *title, int tn, char *artist, int an) {
+    if (tn > 0) title[0] = 0;
+    if (an > 0) artist[0] = 0;
+    if (len < 10 || buf[0] != 'I' || buf[1] != 'D' || buf[2] != '3') return 0;
+    uint8_t ver = buf[3];
+    if (ver < 2 || ver > 4) return 0;
+    uint32_t end = 10 + (((uint32_t)buf[6] << 21) | ((uint32_t)buf[7] << 14) | ((uint32_t)buf[8] << 7) | buf[9]);
+    if (end > len) end = len;                           /* a short read of a long tag: use what is here */
+    uint32_t p = 10;
+    int idl = ver == 2 ? 3 : 4, hdr = ver == 2 ? 6 : 10;
+    if (ver >= 3 && (buf[5] & 0x40) && p + 4 <= end) {  /* an extended header comes first: skip it */
+        uint32_t x = ((uint32_t)buf[10] << 24) | ((uint32_t)buf[11] << 16) | ((uint32_t)buf[12] << 8) | buf[13];
+        if (ver == 4) x = ((uint32_t)buf[10] << 21) | ((uint32_t)buf[11] << 14) | ((uint32_t)buf[12] << 7) | buf[13];
+        else x += 4;
+        if (x > end - p) return 0;
+        p += x;
+    }
+    while (p + hdr <= end && buf[p] != 0) {
+        const uint8_t *f = buf + p;
+        uint32_t sz = ver == 2 ? ((uint32_t)f[3] << 16) | ((uint32_t)f[4] << 8) | f[5]
+                    : ver == 3 ? ((uint32_t)f[4] << 24) | ((uint32_t)f[5] << 16) | ((uint32_t)f[6] << 8) | f[7]
+                               : ((uint32_t)f[4] << 21) | ((uint32_t)f[5] << 14) | ((uint32_t)f[6] << 7) | f[7];
+        uint32_t body = p + (uint32_t)hdr;
+        uint32_t avail = end - body;
+        uint32_t use = sz < avail ? sz : avail;         /* the last frame may be cut off by a short read */
+        int is_t = idl == 3 ? !memcmp(f, "TT2", 3) : !memcmp(f, "TIT2", 4);
+        int is_a = idl == 3 ? !memcmp(f, "TP1", 3) : !memcmp(f, "TPE1", 4);
+        if (is_t && tn > 0) id3_text(buf + body, use, title, tn);
+        if (is_a && an > 0) id3_text(buf + body, use, artist, an);
+        if (sz > avail) break;
+        p = body + sz;
+    }
+    return tn > 0 && title[0] != 0;
+}
+
+uint32_t mp3_probe_ms(const uint8_t *buf, uint32_t len, uint32_t file_len) {
+    uint32_t p = id3v2_skip_size(buf, len), tag = p;
+    while (p + 4 <= len && !(buf[p] == 0xFF && (buf[p + 1] & 0xE0) == 0xE0 && hdr_valid(buf + p))) p++;
+    if (p + 4 > len) return 0;
+    const uint8_t *h = buf + p;
+    uint32_t rate = hdr_sample_rate_hz(h), kbps = hdr_bitrate_kbps(h), spf = hdr_frame_samples(h);
+    if (!rate || !spf) return 0;
+    uint32_t x = p + 4 + (HDR_IS_MONO(h) ? (HDR_TEST_MPEG1(h) ? 17 : 9) : (HDR_TEST_MPEG1(h) ? 32 : 17));   /* past the side info */
+    if (x + 12 <= len && (!memcmp(buf + x, "Xing", 4) || !memcmp(buf + x, "Info", 4)) && (buf[x + 7] & 1)) {
+        uint32_t frames = ((uint32_t)buf[x + 8] << 24) | ((uint32_t)buf[x + 9] << 16) | ((uint32_t)buf[x + 10] << 8) | buf[x + 11];
+        if (frames < 0x7FFFFFFFu / spf) { uint32_t s = frames * spf; return s / rate * 1000u + s % rate * 1000u / rate; }
+    }
+    if (!kbps || file_len <= tag) return 0;
+    return (file_len - tag) * 8u / kbps;   /* bytes * 8 / kbps is milliseconds; a 3 MB song is well inside 32 bits */
+}
+
+int mp3_id3_pic(const uint8_t *buf, uint32_t len, uint32_t *off, uint32_t *n) {
+    if (len < 10 || buf[0] != 'I' || buf[1] != 'D' || buf[2] != '3') return 0;
+    uint8_t ver = buf[3];
+    if (ver < 2 || ver > 4 || (buf[5] & 0x80)) return 0;   /* an unsynchronised tag would need its bytes put back: no art */
+    uint32_t end = 10 + (((uint32_t)buf[6] << 21) | ((uint32_t)buf[7] << 14) | ((uint32_t)buf[8] << 7) | buf[9]);
+    if (end > len) end = len;
+    uint32_t p = 10, hdr = ver == 2 ? 6 : 10;
+    if (ver >= 3 && (buf[5] & 0x40)) {
+        if (p + 4 > end) return 0;
+        uint32_t x = ver == 4 ? ((uint32_t)buf[10] << 21) | ((uint32_t)buf[11] << 14) | ((uint32_t)buf[12] << 7) | buf[13]
+                              : (((uint32_t)buf[10] << 24) | ((uint32_t)buf[11] << 16) | ((uint32_t)buf[12] << 8) | buf[13]) + 4;
+        if (x > end - p) return 0;
+        p += x;
+    }
+    while (p + hdr <= end && buf[p] != 0) {
+        const uint8_t *f = buf + p;
+        uint32_t sz = ver == 2 ? ((uint32_t)f[3] << 16) | ((uint32_t)f[4] << 8) | f[5]
+                    : ver == 3 ? ((uint32_t)f[4] << 24) | ((uint32_t)f[5] << 16) | ((uint32_t)f[6] << 8) | f[7]
+                               : ((uint32_t)f[4] << 21) | ((uint32_t)f[5] << 14) | ((uint32_t)f[6] << 7) | f[7];
+        uint32_t body = p + hdr;
+        if (sz > end - body) return 0;
+        int pic = ver == 2 ? !memcmp(f, "PIC", 3) : !memcmp(f, "APIC", 4);
+        if (pic && sz > 4) {
+            uint32_t q = body, e = body + sz;
+            uint8_t enc = buf[q++];
+            if (ver == 2) q += 3;                            /* a three letter format, JPG or PNG */
+            else { while (q < e && buf[q]) q++; q++; }       /* the MIME type and its NUL */
+            q++;                                             /* the picture type */
+            if (enc == 1 || enc == 2) { while (q + 1 < e && (buf[q] || buf[q + 1])) q += 2; q += 2; }   /* a UTF-16 description */
+            else { while (q < e && buf[q]) q++; q++; }
+            if (q < e) { *off = q; *n = e - q; return 1; }
+            return 0;
+        }
+        p = body + sz;
+    }
+    return 0;
+}
+
 /* Everything the decoder needs that is bigger than a ring-3 program's 4KB stack lives in one heap block:
    the decoder state, the frame and sample buffers, and a stack of its own for minimp3's large scratch
    (it keeps about 15KB of float tables on the stack). The decode runs on that stack. */
@@ -105,19 +222,32 @@ int mp3_open(struct mp3 *m, const uint8_t *buf, uint32_t len) {
     return total ? MP3_OK : MP3_E_EMPTY;
 }
 
+/* Decodes the frame at m->pos into pend (and steps m->pos past it). Returns 0 or -1 at the end.
+   A frame minimp3 cannot decode (damaged side info, or main data that lived in frames we never had, as at the start
+   of a song cut out of a stream) comes back with no samples but a byte count to skip. mp3_open's header scan counted
+   that frame, so it plays as the silence its header says it lasts: the clock keeps matching `frames`, the song does
+   not stop there for good, and the frame is not decoded a second time after the decoder has already taken its bytes. */
+static int load_frame(struct mp3 *m, struct mp3_work *w) {
+    int samples = decode_at(w, m->buf, m->len, m->pos);
+    if (w->info.frame_bytes <= 0 || step_bytes(w) > m->len - m->pos) return -1;
+    if (w->info.hz < 4000 || w->info.hz > 44100) return -1;
+    if (samples <= 0) {
+        w->scan = 1; samples = decode_at(w, m->buf, m->len, m->pos); w->scan = 0;   /* header only: how long the frame lasts */
+        if (samples <= 0 || samples * 2 > MINIMP3_MAX_SAMPLES_PER_FRAME) return -1;
+        memset(w->pcm, 0, sizeof w->pcm);
+    }
+    m->pos += step_bytes(w);
+    w->pend_i = 0; w->pend_n = samples;
+    return 0;
+}
+
 uint32_t mp3_read8(struct mp3 *m, uint8_t *out, uint32_t n) {
     if (!m->decoder || !out || !n) return 0;
     struct mp3_work *w = (struct mp3_work *)m->decoder;
     uint32_t total = 0;
     while (total < n) {
         if (w->pend_i >= w->pend_n) {                      /* frame used up: decode the next one */
-            if (m->len - m->pos < 4) break;
-            int samples = decode_at(w, m->buf, m->len, m->pos);
-            if (samples <= 0) break;
-            if (w->info.hz < 4000 || w->info.hz > 44100) break;
-            if (w->info.frame_bytes <= 0 || step_bytes(w) > m->len - m->pos) break;
-            m->pos += step_bytes(w);
-            w->pend_i = 0; w->pend_n = samples;
+            if (m->len - m->pos < 4 || load_frame(m, w) != 0) break;
         }
         int i = w->pend_i++, v;                            /* a frame can straddle two calls: keep its tail */
         if (m->channels == 2) { int l = w->pcm[i * 2], r = w->pcm[i * 2 + 1]; v = ((l + r) / 2 >> 8) + 128; }
@@ -134,15 +264,6 @@ void mp3_rewind(struct mp3 *m) {
     mp3dec_init(&w->dec); w->pend_i = w->pend_n = 0;
     m->pos = id3v2_skip_size(m->buf, m->len);
     m->next = 0;
-}
-
-/* Decodes the frame at m->pos into pend (and steps m->pos past it). Returns 0 or -1 at the end. */
-static int load_frame(struct mp3 *m, struct mp3_work *w) {
-    int samples = decode_at(w, m->buf, m->len, m->pos);
-    if (samples <= 0 || w->info.frame_bytes <= 0 || step_bytes(w) > m->len - m->pos) return -1;
-    m->pos += step_bytes(w);
-    w->pend_i = 0; w->pend_n = samples;
-    return 0;
 }
 
 int mp3_seek(struct mp3 *m, uint32_t at) {
