@@ -19,8 +19,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from restyle_icons import squircle_path, HL_WIDTH, HL_ALPHA, HL_FADE  # single source of truth for the shared shape/light
 
 # art/icons name -> repo folder
-FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "tonchi": "lexly", "hikko": "hikko",
-         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook", "windgate": "breathe"}  # Weather is a system app, it keeps the restyled icon from restyle_icons.py
+FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "tonchi": "tonchi", "hikko": "hikko",
+         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook", "windgate": "breathe",
+         "chat": "turing:web/mascot.svg"}   # Samantha: her mascot, Turing's app icon since v5.12.4 (a flat portrait: copper hair, tortoise-shell glasses). A "repo:path" value names the file when it is not repo/icon.svg.
 
 # Dock tile color per app. Most projects ship a near-black tile, so eight of
 # them side by side read as one black strip; the dock repaints each one's
@@ -29,6 +30,10 @@ FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank",
 TILE = {"epiphany": "#D6DEE6", "curbfind": "#C8644F", "bookrank": "#3E5C86", "tonchi": "#2E86DE",
         "hikko": "#8A5A3C", "quotes": "#F5F5F8", "keyrate": "#5A5A5E"}  # toroid stays black: Life is white-on-black
 
+
+
+# Art that is a bare shape, not a tile: the colour laid under it.
+GROUND = {"chat": "#F3F1EE"}
 
 
 def retile(inner, box, color):
@@ -59,7 +64,8 @@ def wrap(repo, box, inner):
 
 def main():
     for name, repo in FLEET.items():
-        src = os.path.join(CODE, repo, "icon.svg")
+        repo, _, rel = repo.partition(":")
+        src = os.path.join(CODE, repo, rel or "icon.svg")
         if not os.path.isfile(src):
             print("skip %s: no %s" % (name, src)); continue
         svg = open(src).read()
@@ -72,6 +78,9 @@ def main():
         else: box = vb.group(1)
         inner = svg[m.end():svg.rindex("</svg>")]
         if name in TILE: inner = retile(inner, box, TILE[name])
+        if name in GROUND:   # art with no tile of its own (a round portrait): a full-size rect under it fills the squircle's corners
+            w, h = box.split()[2:4]
+            inner = '<rect x="0" y="0" width="%s" height="%s" fill="%s"/>' % (w, h, GROUND[name]) + inner
         open(os.path.join(ROOT, "art", "icons", name + ".svg"), "w").write(wrap(repo, box, inner))
         print("imported", name)
 
