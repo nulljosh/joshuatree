@@ -12,6 +12,10 @@ It never draws an emoji. UI text covers `UI_GLYPH_RANGE = 32-126`, plain ASCII, 
 
 The 3.0 mark is one Joshua tree drawn in crayon: steady ink lines for a leaning trunk that swells where the marker pressed, three arms ending in dense looping tufts with paper showing through, and a light grain. The ground under it is a single terracotta stroke, the mark's only colour, kept in the bold copy that carries it from 16 to 48 px; every copy comes from `tools/gen/logo.py`.
 
+## Mascot
+
+The mascot is the mark itself, drawn as a kid would draw a friend: the same crayon hand on a chubbier tree with a belly, shorter arms, two dot eyes, a small smile and terracotta-pink cheeks. No hands, no hair, no grin. It shows up where the OS wants a face, never on a working screen: splash, login, empty states. `tools/gen/mascot.py` draws `landing/mascot.svg`; `docs/brand/mascot.png` is its raster.
+
 ## Icons
 
 Every icon is one picture on one tile. The tile is a superellipse, `SQUIRCLE_N = 4.8`, over the whole 128 unit canvas, and an icon's edge must land within `TOL_SQUIRCLE = 1.0` unit of that curve at every angle, with a soft anti-aliased edge. A plain rounded rectangle fails.
@@ -48,7 +52,7 @@ A window is one frame: a body with a `WINDOW_RADIUS = 18` pixel corner, a one pi
 
 Drag a window by its title bar. It follows the pointer live. Let go within `SNAP_EDGE = 12` pixels of a side and it takes that half of the strip between the menu bar and the dock; within `SNAP_CORNER = 40` pixels of a corner it takes that quarter; at the top edge it takes the whole strip.
 
-The dock holds `DOCK_SLOTS = 11` tiles in this order: `DOCK_ORDER = Apps, Burrow, Mail, Calendar, Notes, Reminders, Terminal, Samantha, Weather, Stocks, Trash`. Portfolio mode swaps in the fleet. A tile is `dock_scale_pct = 7` percent of the screen height, so `DOCK_ICON = 37` pixels on the desktop, with `DOCK_GAP = 6` between tiles, `DOCK_PAD = 10` inside the tray and `DOCK_MARGIN_BOT = 24` below it. The tray has a `TRAY_RADIUS = 18` corner, a hairline `TRAY_EDGE = 0x00D6D0C6` top and bottom, and a soft shadow `TRAY_SHADOW_ROWS = 10` rows deep that follows the wallpaper. Hover shows the app's name in a pale capsule, `DOCK_LABEL_BG = 0x00F4F1EC` with a `DOCK_LABEL_EDGE = 0x00BDB4A8` hairline. Nothing magnifies or bounces.
+The dock holds `DOCK_SLOTS = 11` tiles in this order: `DOCK_ORDER = Apps, Burrow, Mail, Calendar, Notes, Reminders, Terminal, Samantha, Weather, Stocks, Trash`. Portfolio mode swaps in the fleet. A tile is `dock_scale_pct = 7` percent of the screen height, so `DOCK_ICON = 37` pixels on the desktop, with `DOCK_GAP = 6` between tiles, `DOCK_PAD = 10` inside the tray and `DOCK_MARGIN_BOT = 24` below it. The tray has a `TRAY_RADIUS = 18` corner, a hairline `TRAY_EDGE = 0x00D6D0C6` top and bottom, and a soft shadow that fades out over `TRAY_SHADOW_REACH = 14` pixels and follows the wallpaper. Hover shows the app's name in a pale capsule, `DOCK_LABEL_BG = 0x00F4F1EC` with a `DOCK_LABEL_EDGE = 0x00BDB4A8` hairline. Nothing magnifies or bounces.
 
 The Launchpad is `APPS_COLS = 5` columns of icons at most `APPS_TILE = 56` pixels. Its glass panel is centred, at least `LAUNCHPAD_MIN_TOP = 24` pixels from the menu bar and the dock and `LAUNCHPAD_MIN_SIDE = 40` from the sides, the padding is even, and no two labels are closer than `LABEL_MIN_GAP = 6` pixels.
 

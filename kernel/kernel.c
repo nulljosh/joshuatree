@@ -3922,7 +3922,7 @@ static void gui_apps_log_geom(const struct apps_geom *g){
     for (int n = 0; n < 12; n++) { serial_puts(k[n]); app_utoa((unsigned)v[n], b); serial_puts(b); }
     serial_puts("\n");
 }
-static void gui_launch_apps(void){
+static void gui_launch_apps_run(void){
     int sel = 0;
     int rows = (gui_apps_n() + APPS_COLS - 1) / APPS_COLS;
     int vw = (int)window_width(), vis, py;
@@ -4065,6 +4065,9 @@ static void gui_launch_apps(void){
         if (sel != old_sel) gui_apps_redraw_panel(g, scroll_offset, sel);
     }
 }
+
+/* The web demo forwards Esc to the kernel only while a screen of ours is up that Esc closes, so the open and close of the Launchpad are announced on serial (landing/v86/embed.js, tools/checks/launchpad-exit-check.py). */
+static void gui_launch_apps(void){ serial_puts("appsopen\n"); gui_launch_apps_run(); serial_puts("appsclose\n"); }
 
 /* v39: the Trash, a real view of what rm set aside, with real recovery.
    Same keyboard-and-click contract every screen here uses (see

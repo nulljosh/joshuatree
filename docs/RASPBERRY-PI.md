@@ -173,7 +173,7 @@ Apps see `JT/` as their whole disk (2.58.0). Notes asks for `NOTES/NOTES/N000000
 
 The OS writes only inside `JT/`, made on the first write. It never writes a file the firmware boots from: `bootcode.bin`, `start*.elf`, `fixup*.dat`, any `.dtb`, `config.txt`, `cmdline.txt`, `kernel*.img`, `armstub*` and the `overlays` folder are refused by name, with an `sd refused NAME, the firmware boots from it` line. A name that is not 8.3, like `../config.txt`, is refused too. Under that, the driver refuses any write past the boot partition or onto its boot sectors. A full `JT/` folder or root says no rather than grow: folders do not grow past their first cluster yet.
 
-The board test, after flashing with `tools/flash-pi.sh`:
+The ten minute pass for 3.0 is [BOARD-TEST.md](BOARD-TEST.md). The longer board test, after flashing with `tools/flash-pi.sh`:
 
 1. The Console shows `sd card sdhc` with about the card's size, then `sd fat32 partition ... writes go in JT/`. Photograph both lines.
 2. `ls` lists what `tools/flash-pi.sh` copied: `BOOTCODE.BIN`, `START4.ELF`, `FIXUP4.DAT`, `BCM271~1.DTB`, `CONFIG.TXT`, `KERNEL8.IMG` and `OVERLAYS/`. The backups it kept show as `KERNEL~1.BAK` and `CONFIG~1.BAK`, and folders macOS left may show too. The sizes match what the Mac shows.

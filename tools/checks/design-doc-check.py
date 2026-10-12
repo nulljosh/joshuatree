@@ -26,7 +26,7 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 DOC = os.path.join(ROOT, "docs", "DESIGN.md")
-HEADINGS = ["What the OS never does", "Brand mark", "Icons", "Type", "Colour and light", "Windows and dock", "Motion",
+HEADINGS = ["What the OS never does", "Brand mark", "Mascot", "Icons", "Type", "Colour and light", "Windows and dock", "Motion",
             "How it is enforced"]
 
 
@@ -275,7 +275,7 @@ def tray(i):
     t = text("kernel/gui_paint.c")
     radius = re.search(r"gui_rounded_rect_on_wallpaper\(dock_x, y0, dock_w, dock_h, DOCK_TRAY_COLOR, (\d+)\)", t)
     edge = re.search(r"gui_hairline_h\(dock_x \+ 18, y0, dock_w - 36, (0x[0-9A-Fa-f]+)\)", t)
-    rows = re.search(r"rows = (\d+) \* sc;", t)
+    rows = re.search(r"#define DOCK_SHADOW_REACH\s+(\d+)", t)
     if not (radius and edge and rows):
         raise Gone("kernel/gui_paint.c: gui_draw_dock_tray no longer matches the tray patterns")
     return [int(radius.group(1)), hexval(edge.group(1)), int(rows.group(1))][i]
@@ -370,7 +370,7 @@ FACTS = {
     "DOCK_MARGIN_BOT": ("num", lambda: int(rx("kernel/dock_geom.h", r"#define DOCK_MARGIN_BOT\s+(\d+)")), "kernel/dock_geom.h"),
     "TRAY_RADIUS": ("num", lambda: tray(0), "kernel/gui_paint.c"),
     "TRAY_EDGE": ("hex", lambda: tray(1), "kernel/gui_paint.c"),
-    "TRAY_SHADOW_ROWS": ("num", lambda: tray(2), "kernel/gui_paint.c"),
+    "TRAY_SHADOW_REACH": ("num", lambda: tray(2), "kernel/gui_paint.c"),
     "DOCK_LABEL_BG": ("hex", lambda: hexval(rx("kernel/gui_paint.h", r"#define DOCK_LABEL_BG\s+(0x[0-9A-Fa-f]+)")), "kernel/gui_paint.h"),
     "DOCK_LABEL_EDGE": ("hex", lambda: hexval(rx("kernel/gui_paint.h", r"#define DOCK_LABEL_EDGE\s+(0x[0-9A-Fa-f]+)")), "kernel/gui_paint.h"),
     "APPS_COLS": ("num", lambda: int(rx("kernel/apps_geom.h", r"#define APPS_COLS\s+(\d+)")), "kernel/apps_geom.h"),

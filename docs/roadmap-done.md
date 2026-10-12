@@ -6,10 +6,17 @@ The first board pass fixes. The Pi boots to a quiet desktop: the boot log steps 
 ## 2.63.2 development branch (2026-10-12)
 
 Icons synced with their projects. Samantha's dock tile is her mascot, Turing's app icon since v5.12.4 (the flat portrait with copper hair and tortoise-shell glasses, `web/mascot.svg`), in place of the voice-orb stand-in; `tools/gen/import_fleet_icons.py` can now name a file inside a repo and lay a ground colour under art that is a bare shape. Tonchi's icon comes from its renamed repo. Every other fleet icon was re-imported and is unchanged.
+## 2.66.0 development branch (2026-10-12)
+
+Browser app on the Pi. A Browser window opens from Spotlight: address bar, page as text in Tree Sans with clickable accent link lines, Back, Forward, Reload, scroll and a status line, wrapped around `browser.c`. Protocol-relative links (`//host/x`) keep the page's scheme. Check: `arm64-browser-app-check.py`.
 
 ## 2.61.3 development branch (2026-10-11)
 
 Music artwork. A cover comes from the picture in an MP3's ID3 tag (JPEG or PNG), else a `COVER`, `FOLDER` or `ALBUM` file (`.JPG` or `.PNG`) beside the song, which also covers WAVs; anything else keeps the note tile. A non-square picture is cropped to its centre square and scaled to the 96 px tile. PNG needed the kernel's decoder in ring 3 (`user/libjt/png.c`). The transport row is Apple Music's: Shuffle at the left, Previous Play Next centred under the bar, Repeat at the right, and the right-hand time counts down. Checks: `tools/checks/music-qa-check.py` boot E reads a pixel off each kind of cover.
+
+## 3.0.0 "Hold it" (2026-10-12)
+
+Version 3: the desktop on a real Raspberry Pi 4 with apps in user mode. The landing page's Pi section says what works on the board and what is still only proven in QEMU, the ten minute board pass is `docs/BOARD-TEST.md`, and `docs/LOOP-HANDOFF.md` says where everything stands. This release carries no code of its own: it is the twenty PRs above, cut as one number. The board pass decides whether it holds.
 
 ## 2.62.0 development branch (2026-10-11)
 

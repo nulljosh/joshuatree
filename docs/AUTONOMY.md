@@ -32,7 +32,7 @@ Nine steps. Each one says what exists and what is missing.
 
 ### 5. CI
 
-- Exists: `.github/workflows/check.yml` runs the suite on every push. `tools/ci-local.sh` runs it on the Mac first. `tools/checks/arm64-*.py` boot the Pi image under QEMU.
+- Exists: `.github/workflows/check.yml` runs the suite on every pull request (not on push). `tools/ci-local.sh` runs it on the Mac first. `tools/checks/arm64-*.py` boot the Pi image under QEMU.
 - Missing: nothing that blocks the loop. CI never runs on a real board, so a change that passes QEMU can still fail on the Pi.
 
 ### 6. A person merges

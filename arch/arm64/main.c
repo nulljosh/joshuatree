@@ -22,6 +22,7 @@
 #endif
 #define REG(a) (*(volatile unsigned int *)(a))
 #include "bt.h"
+#include "apple_mask.h"
 #define UART_DR   (UART_BASE + 0x00)
 #define UART_FR   (UART_BASE + 0x18)
 #define UART_IBRD (UART_BASE + 0x24)
@@ -1454,7 +1455,12 @@ const char *calc_output(void);
 int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
 static int calc_lx, calc_ly, calc_lw, calc_lh;   /* its frame on the logical grid, set in fb_init */
 static unsigned *calc_under;                    /* the wallpaper under it, saved at boot before any window was drawn */
-static int clock_live, brick_live, spot_live;
+static int clock_live, brick_live, spot_live, browser_live;
+static void browser_open(void);
+static void browser_close(void);
+static int browser_key(unsigned code);
+static void browser_click(int lx, int ly);
+static void browser_wheel(int v);
 static void brick_open(void);
 static void brick_close(void);
 static int brick_key(unsigned code, unsigned value);
@@ -1505,6 +1511,7 @@ static void calc_raise(void) {   /* in front of the Console or the Terminal, wit
 static void calc_open(void) {
     brick_close();
     clock_close();
+    browser_close();
     app_kill("closed for the Calculator");   /* the two never share the screen, so there is no third window to stack */
     if (!calc_under) return;   /* no saved wallpaper (a full heap): nothing to close it back to */
     if (calc_live) { calc_raise(); return; }
@@ -1586,7 +1593,7 @@ static long app_window_open(unsigned long info) {
         __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
         for (unsigned long i = 0; i < bytes / 8; i++) ((unsigned long *)(USER_BASE + UP_WIN))[i] = 0;
         app_wbytes = bytes; app_shown = 0;
-        spot_close(); calc_close();
+        spot_close(); calc_close(); browser_close();
         app_front = 1;
         app_paint();
         uart_puts("M3c window "); uart_puts(app_cur->name); uart_putc(' '); uart_dec(app_cw); uart_putc('x'); uart_dec(app_ch);
@@ -1659,6 +1666,7 @@ static int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx
 static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
 static void dock_activate(int slot);
 #define SPOT_MUSIC (GUI_ICON_COUNT + 2)   /* M3e: Music is in Spotlight (and the app table) but not on the dock, a decision */
+#define SPOT_BROWSER (GUI_ICON_COUNT + 3) /* the Browser is in Spotlight only too: the dock's 11 slots stay as they are */
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
@@ -1672,6 +1680,10 @@ static void pointer_click(void) {   /* the left button went down */
         else if (on_win && ly >= win_ly + 32) brick_key(57, 1);
     } else if (clock_live && slot < 0) {
         if (on_close_dot(lx, ly, win_lx, win_ly)) clock_close();
+    } else if (browser_live && slot < 0) {
+        if (spot_live) return;
+        if (on_close_dot(lx, ly, win_lx, win_ly)) browser_close();
+        else if (on_win) browser_click(lx, ly);
     } else if (slot >= 0) dock_activate(slot);
     else if (on_app && app_front) {   /* the front window takes the click: an app's red dot ends it, its content gets the click */
         if (on_close_dot(lx, ly, app_lx, app_ly)) {   /* i386's close: a click above the content (b < 0), which calendar.c answers by exiting */
@@ -1695,8 +1707,10 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     if (slot == 0) { calc_open(); return; }
     if (slot == GUI_ICON_COUNT) { clock_open(); return; }
     if (slot == GUI_ICON_COUNT + 1) { brick_open(); return; }
+    if (slot == SPOT_BROWSER) { browser_open(); return; }
     brick_close();
     clock_close();
+    browser_close();
     if (app_dock(slot == SPOT_MUSIC ? "Music" : dock_names[slot])) return;   /* Calendar, Notes and Music: user/NAME.c at EL0, in its own window */
     if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
     console_open();
@@ -1715,7 +1729,7 @@ int ask_char(unsigned code);                  /* ask.c: a key code as the charac
 #define SPOT_ROW 22
 #define SPOT_MAX 5                    /* matches shown at most */
 static char spot_text[24]; static unsigned spot_len;
-static int spot_sel, spot_hits[SPOT_MUSIC + 1], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
+static int spot_sel, spot_hits[SPOT_BROWSER + 1], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
 static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
 static int spot_lx, spot_ly, spot_lh;   /* the bar on the logical grid; its height is what is drawn now */
 static int spot_match(const char *name) {   /* the typed text, case folded, anywhere in the name */
@@ -1727,12 +1741,12 @@ static int spot_match(const char *name) {   /* the typed text, case folded, anyw
     }
     return 0;
 }
-static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : dock_names[slot]; }
+static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : slot == SPOT_BROWSER ? "Browser" : dock_names[slot]; }
 static int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
 static void spot_paint(void) {
     int s = (int)window_scale();
     spot_n = 0;
-    for (int i = 0; i <= SPOT_MUSIC && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
+    for (int i = 0; i <= SPOT_BROWSER && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
     if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
     cur_hide();
     int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;
@@ -1795,10 +1809,11 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
 #endif
     if (volume_key(code)) return 1;   /* before Spotlight and every pane, like the Spotlight shortcut */
     if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
-    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
+    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); browser_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
     if (spot_live) return spot_key(code);
     if (brick_live) return brick_key(code, 1);
     if (clock_live) { if (code == 1) clock_close(); return 1; }
+    if (browser_live) return browser_key(code);
     if (calc_front || app_front) return 0;
     if (code == 61 && term_front()) {   /* F3: the other Terminal session; never move a running request. */
         unsigned next = term_index ^ 1;
@@ -1960,6 +1975,7 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
 }
 #include "clock_ui.h"
 #include "brick_ui.h"
+#include "browser_ui.h"
 int wifi_signal_level(void);   /* wifi.c: 1 to 3 from how loud our network was in the scan */
 /* The right end of the menu bar: the clock in 12-hour form, and left of it a three-bar signal icon, no name. Connected
    bars show in the same ink as the clock, as many as the signal earns; anything else (starting, joining, no network) is three
@@ -2083,26 +2099,17 @@ static void fb_init(void) {
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
         const char *thanks = "Seduce. Vilify. Ignore.";
-        int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 2 * ar - gapx) / 2, ty = band_y - sc(4);
+        int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 7 * ar / 2 - gapx) / 2, ty = band_y - sc(4);
         text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
-        {   /* a small apple after the line, antialiased (4x4 samples a pixel) onto the flat fill: a round fruit, a dip on
-               top, a short stem and one leaf, no bite, so it is a fruit and not a logo. Integer only: q is 1/1024 of ar. */
-            int acx = tx + tw + gapx + ar, acy = ty - sc(4); unsigned ink = fb_color(0x00f0f4f8);
-            for (int y = -2 * ar; y <= ar + 1; y++) for (int x = -ar - 1; x <= ar + 1; x++) {
-                int hit = 0;
-                for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
-                    int qx = ((x * 4 + i) * 2 + 1) * 128 / ar, qy = ((y * 4 + j) * 2 + 1) * 128 / ar;   /* sample centre, in q */
-                    long long body = (long long)qx * qx + (long long)qy * qy * 1024 / 829;             /* a 1 : 0.9 ellipse */
-                    long long dip = (long long)qx * qx + (long long)(qy + 920) * (qy + 920);
-                    int stem = qx > -110 && qx < 110 && qy < -760 && qy > -1300;
-                    long long lx = qx - 520, ly = qy + 1080, u = (lx * 53 - ly * 37) / 64, v = (lx * 37 + ly * 53) / 64;   /* the leaf, tilted */
-                    long long leaf = u * u * 1024 / 300 + v * v * 1024 / 60;
-                    if ((body <= 1048576 && dip > 92160) || stem || leaf <= 1048576) hit++;
-                }
-                if (!hit) continue;
-                unsigned d = fb[(unsigned)(acy + y) * fb_pitch + (unsigned)(acx + x)], out = 0;
-                for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * hit + ((d >> b) & 0xFF) * (16 - hit)) / 16) << b;
-                fb[(unsigned)(acy + y) * fb_pitch + (unsigned)(acx + x)] = out;
+        {   /* a small bitten apple after the line: apple_mask scaled to 3.5 ar square, 4x4 samples a pixel, onto the flat fill */
+            int S = 7 * ar / 2, x0 = tx + tw + gapx, y0 = ty - sc(4) + ar - S; unsigned ink = fb_color(0x00f0f4f8);
+            for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+                int sum = 0;
+                for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) sum += apple_mask[((y * 4 + j) * APPLE_N / (S * 4)) * APPLE_N + (x * 4 + i) * APPLE_N / (S * 4)];
+                unsigned al = (unsigned)sum / 16, d = fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)], out = 0;
+                if (!al) continue;
+                for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * al + ((d >> b) & 0xFF) * (255 - al)) / 255) << b;
+                fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)] = out;
             }
         }
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
@@ -2192,11 +2199,11 @@ static void m1_selftest(void) {
 
 /* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock and Brick are available; other names return 0. */
 int app_open_name(const char *name) {
-    static const char *const openable[] = {"calculator", "console", "clock", "brick"};
-    for (unsigned a = 0; a < 4; a++) {
+    static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser"};
+    for (unsigned a = 0; a < 5; a++) {
         const char *w = openable[a]; unsigned i = 0;
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
-        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); return 1; }
+        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); return 1; }
     }
     return 0;
 }
@@ -2294,6 +2301,7 @@ static void input_event(struct input_event e) {
         mouse_moved = 1;
     } else if (e.type == 2) {                                                                              /* EV_REL: a mouse, clamped to the screen */
         int v = (int)e.value;
+        if (e.code == 8) { browser_wheel(v); return; }   /* REL_WHEEL: only the Browser reads it */
         if (e.code == 0) { int x = (int)mouse_x + v; mouse_x = x < 0 ? 0 : x >= (int)fb_w ? (int)fb_w - 1 : (unsigned)x; }
         else if (e.code == 1) { int y = (int)mouse_y + v; mouse_y = y < 0 ? 0 : y >= (int)fb_h ? (int)fb_h - 1 : (unsigned)y; }
         mouse_moved = 1;

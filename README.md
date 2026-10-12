@@ -1,51 +1,29 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/nulljosh/joshuatree/releases/download/2.60.0/jt-mark-paper.png">
-  <img src="https://github.com/nulljosh/joshuatree/releases/download/2.60.0/jt-mark-ink.png" width="80" alt="Joshua Tree">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/nulljosh/joshuatree/releases/download/3.0.0/jt-mark-paper.png">
+  <img src="https://github.com/nulljosh/joshuatree/releases/download/3.0.0/jt-mark-ink.png" width="80" alt="Joshua Tree">
 </picture>
 
 # Joshua Tree
 
 ![version](https://img.shields.io/github/v/release/nulljosh/joshuatree?label=version&color=blue)
-![ci](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/check.yml?event=pull_request&label=ci)
+![release](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/release.yml?branch=main&label=release)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
 A whole computer, built from scratch: its own windows, dock, fonts, sound, internet and 31 apps, from the first chip instruction to the last pixel. No libc, no dependencies.
 
-Where it is going, and the picture of how it all fits: [Vision](docs/VISION.md).
+It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it and answers out loud. Where it is going: [Vision](docs/VISION.md).
 
-**Try it in your browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
+## Try it
 
-You can talk to it. Ask Samantha to set a reminder, take a note or open an app, and she answers out loud. (She is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
+Open [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com). For a PC USB stick, grab the [latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) and its [checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS). BIOS boot is checked in QEMU. UEFI and real PC hardware are not verified.
 
-Pi development build: Brick, an original brick-breaker with keys or mouse, plus keyboard restart and shutdown with confirmation. See [the guide](docs/GUIDE.md#restart-or-shut-down-the-pi). Physical verification is pending.
-
-## In plain words
-
-A computer is a pile of chips and a pile of software on top. Most people never see the bottom of that pile. This project is the whole pile, written by one person: the code that wakes the chip, draws the screen, reads the keyboard, and runs the apps. You can read all of it.
-
-It runs in your browser, in an emulator on a Mac, and on a real Raspberry Pi 4. Version 3.0 is the Pi release: it cuts the day the board boots the desktop and you can type and click on it ([the plan](docs/LOOP-HANDOFF.md)).
+To build it: `brew install lld qemu`, then `make run` to boot and `./check.sh` to test.
 
 ## On a Raspberry Pi
 
-It boots on a Pi 4 with a USB keyboard and an HDMI screen. The ARM apps are Calculator, Calendar, Notes, Music, Terminal, Console, Brick and a read-only Clock; the browser demo has a larger app collection. Calendar, Notes and Music run in user mode: the same `user/calendar.c`, `user/notes.c` and `user/music.c` the PC runs, each in its own window. Their files live in the card's `JT/` folder and stay there after a reboot: press n in Notes, type, and Esc saves it. Calendar steps the month with the arrows. Music has no dock tile: type music in Spotlight. It plays the WAV and MP3 songs you copy into `JT/MUSIC/` on the card from your Mac, out of the 3.5 mm jack; Space plays and pauses, n and p change song, F11 and F12 set the volume. Esc closes any of them. F1 opens Spotlight, F2 opens Terminal, and F3 switches between two independent Terminal conversations. Search Clock in Spotlight for Vancouver time and date. The Calendar icon shows the month and day number. Samantha’s dock tile opens the assistant Terminal. Brick opens from Spotlight and plays with keys or a mouse. Ctrl+Alt+Delete restarts, Ctrl+Alt+End shuts down, Enter confirms and Escape cancels. Short Wi-Fi and game notices appear in the menu bar. Wi-Fi and the Mac relay provide network time and AI replies over HTTPS. The new Clock and date icon still need a physical-board check. The steps to flash a card are in [the Pi guide](docs/RASPBERRY-PI.md); one script, `tools/flash-pi.sh`, does the work.
+It boots a Pi 4 to the desktop with a USB keyboard and an HDMI screen. Calculator, Calendar, Notes, Music, Terminal, Console, Clock and Brick run there. Samantha answers through a relay on your Mac that uses your own Claude API key, which never goes on the Pi. Sound, the newest Clock and date icon, and Brick still need a check on the physical board.
 
-## Boot it
-
-- **Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
-- **PC USB stick:** [Download the latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) · [SHA-256 checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS). [Release notes](https://github.com/nulljosh/joshuatree/releases/latest) have the copy steps. BIOS boot is checked in QEMU; UEFI and real PC hardware are not verified. The Pi uses its own card image, as described above.
-- **Talk to her:** `make talk`, then hold **F2**. Needs real hardware and a mic (see `user/samantha.c`). She is built to answer out loud. Voice on the real Pi is not verified yet: no speaker has been tested there.
-- **Samantha on the Pi:** she answers questions at the Pi's console through a relay on your Mac that uses the Claude API. You need your own API key. It stays on the Mac and never goes on the Pi. See [the Pi guide](docs/RASPBERRY-PI.md).
-- **Ask Claude Code:** run the relay on your Mac and open Claude from the Launchpad. See [the Claude app](docs/CLAUDE-APP.md).
-
-## Build it
-
-```sh
-brew install lld qemu
-make run       # boot it (type gui for the desktop)
-./check.sh     # test it
-```
-
-More in the Makefile: `make samantha`, `make talk`, `make iso`.
+Flash a card with `tools/flash-pi.sh`. The steps are in [docs/RASPBERRY-PI.md](docs/RASPBERRY-PI.md).
 
 ## How fast
 
@@ -54,18 +32,16 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 <!-- bench:start -->
 | Benchmark | Result |
 |---|---|
-| Boot to shell | 240 ms |
-| Alloc + free | 157 ns/op |
-| memcpy | 836 MB/s |
-| Context switch | 2831 ns/switch |
-| Disk read | 11351 KB/s |
+| Boot to shell | 260 ms |
+| Alloc + free | 172 ns/op |
+| memcpy | 756 MB/s |
+| Context switch | 3233 ns/switch |
+| Disk read | 9674 KB/s |
 <!-- bench:end -->
 
-On the real Pi 4: memcpy 1109 MB/s, alloc 30 ns/op, Wi-Fi joined in 6.4 s; the full table is in docs/BENCHMARKS.md.
+## Docs
 
-## Read more
-
-[Current pickup](docs/LOOP-HANDOFF.md) and [priorities](docs/roadmap.md): what is being tested and what comes next. [Our story](docs/STORY.md): who we are and how it went. [User guide](docs/GUIDE.md): Wi-Fi setup and troubleshooting in plain words. [The docs](docs/README.md): whitepaper, architecture, the design rules, hardware, the Raspberry Pi guide and the roadmap.
+[Architecture](docs/ARCHITECTURE.md), [design rules](docs/DESIGN.md), [roadmap](docs/roadmap.md) and the [user guide](docs/GUIDE.md). The rest is indexed in [docs/README.md](docs/README.md).
 
 ## License
 

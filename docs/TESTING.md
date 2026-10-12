@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (243 checks)
+## The suite (245 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -134,6 +134,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Esc on a bare desktop does not quit the GUI; Mail still opens from the dock | `tools/checks/esc-desktop-check.py` | retry |
 | Dock hover survives mid-animation | `tools/checks/dockhover-check.py` | retry |
 | Launchpad tile click launches, doesn't just close the folder | `tools/checks/launchpad-click-check.py` | retry |
+| Launchpad exits to the desktop: Esc, empty click, Apps tile again; web demo forwards Esc | `tools/checks/launchpad-exit-check.py` | retry |
 | Apps folder layout (no black band, no row spill, no ghost icons) | `tools/checks/appsfolder-layout-check.py` | retry |
 | Menu bar present after Launchpad, every app open and close, Esc, panels, drags; screen never black | `tools/checks/menubar-persist-check.py` | retry |
 | Launchpad centered, evenly padded, icons 56px or smaller, labels clear (pixels, five screen sizes) | `tools/checks/launchpad-centered-check.py` | retry |
@@ -220,6 +221,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | ARM64 HTTPS: a TLS 1.2 page from a host server with a throwaway certificate built in as a trust anchor, refused (tls FAIL 62) when it is left out (skips where the tools are missing) | `tools/checks/arm64-tls-check.py` | retry |
 | ARM64 browser: browse URL typed at the Terminal's ask> row reads an HTTPS page through a redirect, prints readable text with numbered links, open N follows one, a redirect loop stops (skips where the tools are missing) | `tools/checks/arm64-browser-check.py` | retry |
 | ARM64 browser, dead server: a host that accepts and never answers, and a closed port, each end in one timeout line (tls, reply, connect) within 12 s with dns ok and tcp ok printed first, and the prompt still answers (skips where the tools are missing) | `tools/checks/arm64-browser-deadserver-check.py` | retry |
+| ARM64 Browser window: Spotlight opens it, the address bar loads a page from a stub server, a click on the link line follows it, Alt+Left, Alt+Right and F5 navigate, a long page scrolls and stops at its end, a dead port says so in plain words, Esc closes; accent link colour and off-white page in a screendump (skips where the tools are missing) | `tools/checks/arm64-browser-app-check.py` | retry |
 | ARM64 audio: `beep` fills the ring with a tone whose checksum matches Python, the PWM FIFO gets it in order on a fake Pi, stuck hardware gives up with one line, GPIO 42 and the boot path stay untouched (QEMU part skips where the tools are missing; the real jack is unverified) | `tools/checks/arm64-audio-check.py` | once |
 | ARM64 volume: `vol 50` halves the ring sum of a beep against `vol 100`, `vol 0` is a silent ring, F11/F12 and the Mac media keys step the level before any pane with a "Volume N" menu bar notice and a tick, never past 0 or 100 (QEMU, skips where the tools are missing; the real speaker is unverified) | `tools/checks/arm64-volume-check.py` | retry |
 | ARM64 green light: the Pi's activity LED is blinked through the firmware mailbox (pin 42), never at boot, on a wait that ends (static, no hardware) | `tools/checks/arm64-led-check.py` | once |
@@ -294,7 +296,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Panes | `tools/checks/panes-check.py` |
 | Claude | `tools/checks/arm64-claude-console-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3claude-check.py` |
 | Mines | `tools/checks/ring3mines-check.py` |
-| Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
+| Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | none yet |
 
 Apps with no check yet: Trash.

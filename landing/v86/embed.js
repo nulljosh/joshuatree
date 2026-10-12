@@ -366,8 +366,8 @@ if (typeof document !== "undefined") (function () {
       if (ev.shiftKey && focused) releaseKeyboard();
       // 2.11.1: the hero opens on her full-screen face, and Esc is how a visitor
       // closes her to the desktop (the red dot does the same). Forwarded only while
-      // she is open: on the bare desktop Esc still must not reach the kernel (shell exit).
-      else if (!ev.shiftKey && focused && samanthaOpen && emulator && emulator.keyboard_send_keys && !ev.jtFullExit) emulator.keyboard_send_keys([27], 80);   // index.html sets jtFullExit when this same keypress already left the page's full-screen box: that Esc does not also close her, the next one does
+      // she or the Launchpad (Esc closes it back to the desktop) is open: on the bare desktop Esc still must not reach the kernel (shell exit).
+      else if (!ev.shiftKey && focused && (samanthaOpen || appsOpen) && emulator && emulator.keyboard_send_keys && !ev.jtFullExit) emulator.keyboard_send_keys([27], 80);   // index.html sets jtFullExit when this same keypress already left the page's full-screen box: that Esc does not also close her, the next one does
     }
   }, true); // capture phase, BEFORE v86's own global listener (both on window, FIFO order)
 
@@ -384,6 +384,7 @@ if (typeof document !== "undefined") (function () {
     if (samanthaOpen) { if (focused && document.activeElement === document.body) i.focus(); }
     else if (document.activeElement === i) i.blur();
   }
+  var appsOpen = false;   // is the Launchpad grid up (kernel.c announces appsopen/appsclose); gates the Esc forward above too
   var samanthaOpen = false;   // is her ring-3 window up (from the serial log); gates the Esc forward above
   var adaptersReady = false;
   var bootStart = 0; // set inside startEmulator, not here: the boot-detection setInterval's own "stuck in text mode" fallback measures elapsed time since boot actually STARTED, and boot no longer starts at page load
@@ -571,6 +572,7 @@ if (typeof document !== "undefined") (function () {
         if (m) { speakCount++; lastSpeakBytes = Number(m[1]); }
         if (/samface: idle ready/.test(serialLine)) faceReady = true;
         if (/face: hd=/.test(serialLine)) faceHd = true;   // facePainted reads this flag: the serialLog trim above can cut the marker itself
+        if (/^appsopen/.test(serialLine)) appsOpen = true; else if (/^appsclose/.test(serialLine)) appsOpen = false;
         if (/^samopen/.test(serialLine)) samanthaOpen = true;                                       // kernel.c: boot_to_samantha opened her
         else if (/^ring3app: SAMANTHA\.BIN (?:exited|crashed)/.test(serialLine)) samanthaOpen = false;   // Esc, the red dot or the back chevron closed her
         if (PAGEBAR && /^samopen|^ring3app: SAMANTHA\.BIN (?:exited|crashed)/.test(serialLine)) pagebarFollow();

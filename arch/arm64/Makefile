@@ -180,7 +180,7 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = screen_idle.h bt.h notice.h brick.h brick_ui.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
