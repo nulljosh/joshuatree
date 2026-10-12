@@ -2082,7 +2082,7 @@ static void fb_init(void) {
         menubar_wifi(1);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
-        const char *thanks = "Steve Jobs, 1955 to 2011. Make something wonderful.";
+        const char *thanks = "Seduce. Vilify. Ignore.";
         int ar = sc(5), gapx = sc(6), tw = text_width(2, thanks, sc(110)), tx = (W - tw + 2 * ar + gapx) / 2, ty = band_y - sc(4), sh = sc(1) > 1 ? sc(1) : 1;
         {   /* a small apple to the left of the line: a round fruit with a dip on top and a leaf, no bite, so it is a fruit and not a logo */
             int acx = tx - gapx - ar, acy = ty - sc(4);

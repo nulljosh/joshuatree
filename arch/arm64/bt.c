@@ -241,6 +241,7 @@ static void adv_reports(const unsigned char *p, unsigned n) {
 /* ---- The link to the mouse ---- */
 static int conn, closing;                /* a link is up; we are hanging it up after a failure */
 static int tries;                        /* connection attempts this `bt pair` */
+static int scan_later;                   /* `bt scan` was typed while the radio was still starting: scan the moment it is ready */
 static unsigned handle;                  /* its connection handle */
 static unsigned char me[6], peer[6], peer_type;   /* our address and the mouse's, little endian, as the radio gives them */
 static char peer_name[30];
@@ -586,7 +587,13 @@ static void step(void) {
         cmd(OP_BAUD, baud, 6); return;
     case 11: ux_baud(FAST_BAUD); pause_ms(10); return;
     case 12: cmd(OP_EVENT_MASK, mask, 8); return;
-    case 13: st = READY; put("bt: ready, type bt scan to look for devices"); say(); return;
+    case 13:
+        st = READY;
+        if (scan_later) {   /* a scan was asked for during start-up: run it now, into the Terminal that asked */
+            scan_later = 0; put("bt: ready, scanning for 5 seconds"); say();
+            ndev = nlost = nshown = 0; to_term = 1; st = SCANNING; pc = 20; until = now(); return;
+        }
+        put("bt: ready, type bt scan to look for devices"); say(); return;
     case 20: cmd(OP_SCAN_PARAMS, scan, 7); return;
     case 21: cmd(OP_SCAN_ENABLE, on, 2); return;
     case 22: pause_ms(SCAN_MS); return;
@@ -719,6 +726,11 @@ int bt_command(const char *q, unsigned n) {
     int scan = n - i == 4 && q[i] == 's' && q[i + 1] == 'c' && q[i + 2] == 'a' && q[i + 3] == 'n';
     int pair = n - i >= 4 && q[i] == 'p' && q[i + 1] == 'a' && q[i + 2] == 'i' && q[i + 3] == 'r' && (n - i == 4 || q[i + 4] == ' ');
     if (i < n && !scan && !pair) { put("bt: try bt, bt scan or bt pair"); say_now(); return 1; }
+    if (scan && st == STARTING) {   /* the radio is still loading its patch (about half a minute after power-on): wait for it, then scan */
+        scan_later = 1; to_term = 1;
+        put("bt: the radio is still starting"); if (pc == 6 && bt_fw_hcd_len) { put(" ("); put_dec((int)(fwpos * 100u / bt_fw_hcd_len)); put("% of its patch loaded)"); }
+        put(". I will scan the moment it is ready"); say_now(); return 1;
+    }
     if (scan && st == READY) {
         ndev = nlost = nshown = 0; to_term = 1; st = SCANNING; pc = 20; until = now();
         put("bt: scanning for 5 seconds"); say_now(); return 1;
@@ -752,7 +764,7 @@ int bt_command(const char *q, unsigned n) {
     case PAIRING: put("bt: pairing with "); put(peer_name[0] ? peer_name : "the mouse"); break;
     case MOUSE: put("bt: mouse ready, "); put(peer_name[0] ? peer_name : "no name"); break;
     case STARTING:
-        if (pc == 6 && nrec) { put("bt: loading the radio's patch, record "); put_dec((int)nrec); }
+        if (pc == 6 && nrec && bt_fw_hcd_len) { put("bt: loading the radio's patch, "); put_dec((int)(fwpos * 100u / bt_fw_hcd_len)); put("% done"); }
         else put("bt: starting");
         break;
     default: put(why); break;

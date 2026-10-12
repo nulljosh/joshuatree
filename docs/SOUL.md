@@ -1,6 +1,6 @@
 # Soul
 
-The two ideas under every decision here, and where each one shows up in the software. Joshua set them on 2026-10-07 and this page was reread on 2026-10-11, on the road to 3.0. They are not slogans for a landing page; they are the tie-breaker when two designs both work.
+The ideas under every decision here, and where each one shows up in the software. Joshua set them on 2026-10-07 and this page was reread on 2026-10-11, on the road to 3.0. They are not slogans for a landing page; they are the tie-breaker when two designs both work.
 
 ## The pro and the rebel
 
@@ -23,15 +23,17 @@ Steve Jobs was both at once: the professional who shipped finished things, and t
 - When the industry says "you need a cloud for that", the answer is a 595 KB firmware upload done by hand over a serial line.
 - 3.0 is the proof: the same desktop on a real Pi 4 with nothing underneath, in a case we print ourselves.
 
-## Seduce, ignore, vilify
+## Seduce. Vilify. Ignore.
 
-Jobs's marketing rule, used here as a design rule.
+Three words, in this order, and the order is the point. They are on the desktop itself, above the dock, in the line that used to be a tribute. Jobs's marketing rule, used here as a design rule: first win people with beauty, then tell them what they are escaping, then stop talking and build.
 
-**Seduce.** The first sixty seconds have to be beautiful. The wallpaper, the dock, the window frame and the type specimen are the first things on screen, before any log line. The landing page boots the real OS in the browser with one click. Samantha speaks.
+**Seduce.** The first sixty seconds have to be beautiful. The wallpaper, the dock, the window frame and the type are the first things on screen, before any log line, and the boot log steps aside once the desktop is up. The landing page boots the real OS in the browser with one click. The typeface is our own (Tree Sans, `TYPE.md`), set on a 4 px grid and spaced the way the font was drawn. Samantha speaks.
 
-**Ignore.** Do not answer every feature list. There is no app store, no account to make, no notification centre, no settings maze. The roadmap says no to more things than it says yes to, and the Top 10 is the whole plan. Feature requests that do not serve the demo wait.
+**Vilify.** Then name the thing we are against, not a competitor's name. The enemy is the computer you cannot read: the OS that is a hundred million lines nobody owns, the chip that needs a cloud login, the settings page with forty toggles, the assistant that rents you your own notes. Say it plainly and let the contrast do the work. Every "we do not do that" in `DESIGN.md` is a small act of this.
 
-**Vilify.** Name the thing we are against, not a competitor's name. The enemy is the computer you cannot read: the OS that is a hundred million lines nobody owns, the chip that needs a cloud login, the settings page with forty toggles. Every "we do not do that" in `DESIGN.md` is a small act of this.
+**Ignore.** Once they are in and know why, stop answering. Do not answer every feature list or every critic. There is no app store, no account to make, no notification centre, no settings maze. The roadmap says no to more things than it says yes to, and the Top 10 is the whole plan. Feature requests that do not serve the demo wait. Noise, trends and other people's checklists get nothing from us; the work gets everything.
+
+The three are a loop, not a menu. A change that is not beautiful fails the first test, one that cannot say what it is against fails the second, and one that chases a crowd fails the third.
 
 ## Aspen, 1983
 
