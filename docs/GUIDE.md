@@ -23,7 +23,9 @@ Bluetooth finish. When Wi-Fi has joined or given up, the clock has synced or
 given up and the radio is up (or has said it will not be), the desktop paints
 once: wallpaper, menu bar, dock, no window. The
 boot log is kept all the same, and a click on a dock tile with no app of its
-own (Mail, for one) opens the Console with it. Console shows what succeeded
+own (Mail, for one) opens the Console with it. The first tile, Apps, opens the Launchpad (3.8.2): a cream card with every app, greyed when it
+is not on the Pi yet. Click one, or use the arrows and Enter; Esc or a click outside closes it. The Calculator lives there
+and in Spotlight; it has no dock tile. Console shows what succeeded
 and what failed. A failed Wi-Fi join does
 not mean the entire OS failed: you can still use local apps. A desktop
 picture proves the screen and boot path work; it does not prove every
