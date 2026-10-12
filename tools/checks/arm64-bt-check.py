@@ -34,9 +34,14 @@ The kernel is built with BT_HCD= a small made-up patch file, so the upload is ch
              saved` once the mouse's LTK, EDIV and Rand are in, and `bt` says `saved pairing: yes`. Then, each on its own copy of
              that card, as after a reboot: reconnect (no scan, no SMP, LE Create Connection to the saved address, LE Start
              Encryption with the saved LTK, Rand and EDIV, `bt: reconnected`, `bt: mouse ready`, reports move the pointer, no
-             second save); a mouse that never answers (about 20 seconds, then ready again, the record kept, then `bt forget`
-             erases it); a mouse that rejects the key (Encryption Change 0x06: the record is erased, `saved pairing: no`);
+             second save); a mouse that never answers (a try of about 12 seconds, the record kept, `bt status` says searching with
+             the address masked, then `bt forget` erases it); a mouse that rejects the key (Encryption Change 0x06: the record is erased, `saved pairing: no`);
              and a card with no record (the plain ready line, `bt forget` says there was none).
+  7. autorc (BT4): a mouse asleep at boot (the first LE Create Connection gets no answer, the kernel cancels it after about 12
+             seconds and tries again after a 2 second pause), then connected: no typing, `bt: reconnected`, notifications
+             written again, two reports move the pointer by 7,0 and 0,9. The fake then drops the link (reason 0x08, a sleep) and
+             the kernel reconnects on its own with the saved key, writes the notifications again and the pointer moves again;
+             `bt status` says connected, the last byte of the address and the attempts. Never the full address or a key.
 In every boot no random value, confirm value or key (STK, LTK, Rand) shows on the UART, in either byte order.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing; skips boots 1 to 4 when this QEMU's
 virt machine builds no second PL011 for a second -serial (a dumpdtb probe), and still runs boot 5.
@@ -141,6 +146,13 @@ HID_START, HID_END, PM_VH, BOOT_VH, BOOT_CCCD = 0x20, 0x3F, 0x24, 0x2A, 0x2C
 def group_end(h):
     later = [x for x, t, _ in DB if t == 0x2800 and x > h]
     return later[0] - 1 if later else 0xFFFF
+DB_MAP = b"\x05\x01"
+# A mouse that keeps Report protocol even when told boot: buttons 3 bits + 5 pad, X and Y 12 bits each, packed, then an 8 bit wheel.
+PACKED_MAP = bytes.fromhex("05010902a1010901a100" "05091901290315002501750195038102" "7505950181" "03"
+                           "05010930093116 01f826ff07750c95028106" "093815812 57f750895018106".replace(" ", "") + "c0c0")
+def packed(btn, x, y, w):
+    x &= 0xFFF; y &= 0xFFF
+    return bytes([btn, x & 255, (x >> 8) | (y & 15) << 4, y >> 4 & 255, w & 255])
 CONN_UPDATE = struct.pack("<HHHH", 6, 9, 44, 500)   # what the mouse asks for: 7.5 to 11.25 ms, latency 44, timeout 5 s
 
 class Fake(threading.Thread):
@@ -159,6 +171,11 @@ class Fake(threading.Thread):
         self.preq = self.pairing_failed = self.mconf = self.srand = self.stk = None
         self.connected = self.encrypted = False
         self.reports = []
+        self.creates = 0
+        self.pm, self.ignore_pm, self.rmap = b"\x01", False, DB_MAP   # Protocol Mode as the mouse holds it; a mouse that ignores the write; its report map
+        if mode == "packed":
+            self.ignore_pm, self.rmap = True, PACKED_MAP
+            self.reports = [packed(0, 5, -3, 0), packed(0, 7, 11, 0), packed(0, -5, 3, 0), packed(1, 0, 0, 0)]
         self.srv = socket.socket(socket.AF_UNIX); self.srv.bind(path); self.srv.listen(1); self.srv.settimeout(30)
     def run(self):
         try: self.c, _ = self.srv.accept()
@@ -221,8 +238,8 @@ class Fake(threading.Thread):
         if op == 0x200D:
             self.status(op)
             if p[5] != 1 or p[6:12] != MOUSE or p[12] != 0: self.problems.append("LE Create Connection to the wrong peer: %s" % p.hex())
-            self.connected = True
-            if self.mode == "nomouse": return    # the saved mouse is asleep: Create Connection stays pending
+            self.connected = True; self.encrypted = False; self.creates += 1
+            if self.mode == "nomouse" or (self.mode == "flaky" and self.creates == 1): return    # the saved mouse is asleep: Create Connection stays pending
             self.at(0.05, b"\x04\x3e\x13\x01\x00" + u16(HANDLE) + b"\x00\x01" + MOUSE + u16(6) + u16(0) + u16(200) + b"\x00")
             self.l2(5, b"\x12\x01\x08\x00" + CONN_UPDATE, delay=0.15)        # the mouse's own asks, right after it connects
             self.l2(4, b"\x02\x40\x00", delay=0.15)                           # Exchange MTU, 64
@@ -316,9 +333,15 @@ class Fake(threading.Thread):
             found = [(h, ty) for h, ty, _ in DB if s <= h <= e_][:5]
             if found: self.l2(4, b"\x05\x01" + b"".join(u16(h) + u16(t) for h, t in found))
             else: self.att_err(op, s, 0x0A)
+        elif op in (0x0A, 0x0C):   # Read Request, Read Blob: Protocol Mode and the report map
+            h = struct.unpack("<H", p[1:3])[0]; off = struct.unpack("<H", p[3:5])[0] if op == 0x0C else 0
+            if h == PM_VH: self.l2(4, bytes([op + 1]) + self.pm[off:off + 22])
+            elif h == 0x30: self.l2(4, bytes([op + 1]) + self.rmap[off:off + 22])
+            else: self.att_err(op, h, 0x02)
         elif op in (0x12, 0x52):   # Write Request, Write Command
             h = struct.unpack("<H", p[1:3])[0]; v = p[3:]
             self.writes.append((op, h, v))
+            if h == PM_VH and not self.ignore_pm: self.pm = v
             if HID_START <= h <= HID_END and not self.encrypted:
                 self.problems.append("a HID write before encryption")
                 if op == 0x12: self.att_err(op, h, 0x0F)
@@ -488,6 +511,7 @@ try:
         check("bt says the mouse is ready, by name", b.wait_for("bt: mouse ready, Microsoft Bluetooth Mouse", 10), b.uart()[-400:])
         b.fake.inject.append(b"\x04\x05\x04\x00" + u16(HANDLE) + b"\x13")   # the mouse switches off
         check("the mouse hanging up is one plain line", b.wait_for("bt: the mouse disconnected, reason 0x13", 10), b.uart()[-400:])
+        time.sleep(2.5)   # no card, so no saved pairing: the reconnect run ends at once and silently
         b.type("bt")
         check("after it, bt is back to ready", b.wait_for("bt: ready, version", 10, count=3), b.uart()[-400:])
         check("no random, confirm value or key on the UART", not leaked(b.uart(), b.fake.secrets) and len(b.fake.secrets) >= 7,
@@ -587,23 +611,79 @@ try:
         check("reconnect: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
         b.close()
 
-        # a mouse that never answers: about 20 seconds, the record kept, then bt forget
+        # a mouse that never answers: tries of about 12 seconds with a pause between, the record kept, bt status says so, then bt forget
         b = Boot("nomouse", "nomouse", disk=clone("nomouse"), saved=keys); boots.append(b)
         check("nomouse: dials the saved mouse", b.wait_for("bt: ready, reconnecting", 30), b.uart()[-600:])
         t0 = time.time()
-        check("nomouse: gives up in one plain line, the pairing kept", b.wait_for("bt: the saved mouse did not answer, its pairing is kept", 40), b.uart()[-600:])
+        check("nomouse: the first try ends in one plain line", b.wait_for("bt: no answer from the saved mouse, try 1 of 30", 40), b.uart()[-600:])
         took = time.time() - t0
-        check("nomouse: after about 20 seconds", 17 < took < 30, took)
-        check("nomouse: the attempt is cancelled", 0x200E in [op for op, _ in b.fake.log], [hex(op) for op, _ in b.fake.log][-6:])
+        check("nomouse: after about 12 seconds", 9 < took < 20, took)
+        check("nomouse: the try is cancelled", 0x200E in [op for op, _ in b.fake.log], [hex(op) for op, _ in b.fake.log][-6:])
         check("nomouse: the Terminal opens", b.terminal(), b.uart()[-300:])
-        b.type("bt")
-        check("nomouse: bt is ready and still has the pairing", b.wait_for("bt: ready, version", 10) and b.wait_for("bt: saved pairing: yes", 10), b.uart()[-400:])
+        b.type("bt status")
+        check("nomouse: bt status says searching, the address masked but its last byte, and the attempts",
+              b.wait_for("bt: state searching, mouse **:**:**:**:**:21, attempts", 10), b.uart()[-400:])
+        check("nomouse: bt status gives the last error", b.wait_for("bt: last error: no answer from the saved mouse, try", 10), b.uart()[-400:])
+        check("nomouse: and the pairing is kept", b.wait_for("bt: saved pairing: yes", 10), b.uart()[-400:])
+        check("nomouse: the full address is never printed", "c4:8e:8f:65:43" not in b.uart().lower(), lines(b.uart()))
         b.type("bt forget")
         check("nomouse: bt forget says so", b.wait_for("bt: saved pairing forgotten", 10), b.uart()[-300:])
         b.type("bt")
         check("nomouse: then saved pairing: no", b.wait_for("bt: saved pairing: no", 10), b.uart()[-300:])
         check("nomouse: no key on the UART", not leaked(b.uart(), [keys[0], keys[1]]), leaked(b.uart(), [keys[0], keys[1]]))
         check("nomouse: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
+        b.close()
+
+        # BT5: a mouse that ignores Protocol Mode and sends packed 12 bit X and Y: the layout comes from its report map
+        b = Boot("packed", "packed", screen=True, disk=clone("packed"), saved=keys); boots.append(b)
+        check("packed: reconnects", b.wait_for("bt: mouse ready", 40), b.uart()[-600:])
+        def moves2(out):
+            pts = [tuple(map(int, m)) for m in re.findall(r"^mouse (\d+),(\d+)$", out, re.M)]
+            return [(q[0] - a[0], q[1] - a[1]) for a, q in zip(pts, pts[1:])]
+        end = time.time() + 15
+        while time.time() < end and (-5, 3) not in moves2(b.uart()): time.sleep(0.2)
+        check("packed: 12 bit X and Y move the pointer by their real deltas, signs kept (7,11 then -5,3)", (7, 11) in moves2(b.uart()) and (-5, 3) in moves2(b.uart()), moves2(b.uart()))
+        check("packed: the button comes from bit 0 of the first byte", b.wait_for("key 272 down", 10), b.uart()[-400:])
+        check("packed: the map was read in 22 byte pieces", len(PACKED_MAP) > 22, len(PACKED_MAP))
+        check("packed: the fake mouse found nothing wrong", not b.fake.problems, b.fake.problems)
+        check("packed: the Terminal opens", b.terminal(), b.uart()[-300:])
+        b.type("bt status")
+        check("packed: bt status shows the last report and where the layout came from",
+              b.wait_for("bt: last report 5 bytes: 01 00 00 00 00, layout from the mouse's report map", 10), b.uart()[-400:])
+        check("packed: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
+        b.close()
+
+        # BT4: the saved mouse is asleep at boot, wakes on the second try; then it drops and comes back. No typing, no pairing.
+        b = Boot("autorc", "flaky", screen=True, disk=clone("autorc"), saved=keys); boots.append(b)
+        b.fake.reports = [bytes([0, 7, 0]), bytes([0, 0, 9])]
+        check("autorc: the radio dials the saved mouse at boot", b.wait_for("bt: ready, reconnecting Microsoft Bluetooth Mouse, wake it", 30), b.uart()[-600:])
+        check("autorc: the first try gets no answer", b.wait_for("bt: no answer from the saved mouse, try 1 of 30", 40), b.uart()[-600:])
+        check("autorc: the second try reconnects on its own", b.wait_for("bt: reconnected", 40), b.uart()[-600:])
+        check("autorc: bt: mouse ready", b.wait_for("bt: mouse ready", 20), b.uart()[-400:])
+        def moves(out):   # the pointer's steps, from the `mouse X,Y` lines
+            pts = [tuple(map(int, m)) for m in re.findall(r"^mouse (\d+),(\d+)$", out, re.M)]
+            return [(b2[0] - a[0], b2[1] - a[1]) for a, b2 in zip(pts, pts[1:])]
+        def pairs(out): return moves(out).count((0, 9))   # the first report's start is not printed, the second's step is
+        end = time.time() + 15
+        while time.time() < end and not pairs(b.uart()): time.sleep(0.2)
+        check("autorc: pointer events arrive after the reconnect", pairs(b.uart()) == 1, moves(b.uart())[-6:])
+        cops = [op for op, _ in b.fake.log]
+        check("autorc: two dials, one Start Encryption, no scan, one Cancel", cops.count(0x200D) == 2 and cops.count(0x2019) == 1 and 0x200C not in cops and cops.count(0x200E) == 1, [hex(o) for o in cops[-8:]])
+        b.fake.inject.append(b"\x04\x05\x04\x00" + u16(HANDLE) + b"\x08")   # it sleeps: supervision timeout
+        check("autorc: the drop is one plain line", b.wait_for("bt: the mouse disconnected, reason 0x8", 10), b.uart()[-400:])
+        check("autorc: it comes back with no typing", b.wait_for("bt: reconnected", 30, count=2), b.uart()[-600:])
+        check("autorc: bt: mouse ready again", b.wait_for("bt: mouse ready", 20, count=2), b.uart()[-400:])
+        end = time.time() + 15
+        while time.time() < end and pairs(b.uart()) < 2: time.sleep(0.2)
+        check("autorc: pointer events arrive again", pairs(b.uart()) == 2, moves(b.uart())[-8:])
+        check("autorc: notifications turned on again after the second encryption",
+              b.fake.writes == [(0x52, PM_VH, b"\x00"), (0x12, BOOT_CCCD, b"\x01\x00")] * 2, b.fake.writes)
+        check("autorc: the fake mouse found nothing wrong (saved key both times, no SMP)", not b.fake.problems, b.fake.problems)
+        check("autorc: the Terminal opens", b.terminal(), b.uart()[-300:])
+        b.type("bt status")
+        check("autorc: bt status says connected", b.wait_for("bt: state connected, mouse **:**:**:**:**:21, attempts 1", 10), b.uart()[-400:])
+        check("autorc: no key and no full address on the UART", not leaked(b.uart(), [keys[0], keys[1]]) and "c4:8e:8f:65:43" not in b.uart().lower() and "c48e8f6543" not in b.uart().lower(), leaked(b.uart(), [keys[0], keys[1]]))
+        check("autorc: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
         b.close()
 
         # a mouse that no longer knows the key: Encryption Change 0x06 erases the record
@@ -644,6 +724,6 @@ if fails: print("FAIL: %d of the Bluetooth checks" % len(fails)); sys.exit(1)
 print("PASS: HCI over the second UART: patch upload in order, version, baud, event mask, an LE scan that lists the mouse by "
       "its scan-response name; bt pair connects, pairs with Just Works (c1 and s1 checked with AES), encrypts, finds the "
       "boot mouse report over GATT and its reports move the pointer and click the dock; the pairing is saved to a card "
-      "and a second boot reconnects with the saved key, gives up after about 20 seconds keeping it, erases it when the mouse "
+      "and a second boot reconnects with the saved key, keeps it through a mouse that does not answer, reconnects on its own when the mouse wakes late or drops the link, erases it when the mouse "
       "rejects it, and bt forget erases it; a wrong confirm, a silent or "
       "out-of-order radio each end in one plain line with the kernel up, and no key ever reaches the UART")
