@@ -7,15 +7,26 @@
    kmalloc for the inflated scanlines plus one for the pixel output. */
 #include "png.h"
 #include "inflate.h"
+#ifdef PNG_USER
+/* Built into user/libjt (user/libjt/png.c includes this file): the same decoder in ring 3, no libc, buffers from
+   libjt's malloc arena. */
+#include "../user/libjt/string.h"
+#include "../user/libjt/stdlib.h"
+#define kmalloc malloc
+#define kfree free
+#define PNG_STATIC __attribute__((section(".data"))) /* flat ring-3 images have no .bss */
+#else
 #include "kheap.h"
 #include "libc.h"
+#define PNG_STATIC
+#endif
 
 typedef unsigned int u32;
 typedef unsigned char u8;
 
 /* ---- CRC-32 (PNG chunks) --------------------------------------------- */
-static u32 crc_table[256];
-static int crc_ready = 0;
+static PNG_STATIC u32 crc_table[256];
+static PNG_STATIC int crc_ready = 0;
 
 static void crc_init(void) {
     for (u32 n = 0; n < 256; n++) {

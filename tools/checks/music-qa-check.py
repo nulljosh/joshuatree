@@ -247,14 +247,18 @@ try:
         lw = 268
         if any(near(px(img, lw + 12, y), (0xE4, 0xDE, 0xD6)) for y in range(318, 336)):
             fail("the divider between the panes runs through the key hint at the bottom")
-        # the play button and the volume bar below it are not touching: scan the column through the button's centre
-        col, runs_y, start = [near(px(img, 376, y), ACCENT, 8) for y in range(200, 335)], [], None
-        for k, on in enumerate(col + [False]):
-            if on and start is None: start = k
-            if not on and start is not None: runs_y.append((start, k - 1)); start = None
-        if len(runs_y) < 2: fail(f"could not find the play button and the volume bar in the frame (accent runs {runs_y})")
-        elif runs_y[-1][0] - runs_y[-2][1] - 1 < 8:
-            fail(f"the play button sits {runs_y[-1][0] - runs_y[-2][1] - 1} px above the volume bar (at least 8 wanted)")
+        # the play button and the volume bar below it are not touching: the button is centred under the seek bar, the volume bar
+        # starts 76 px in from the bar's left edge, so the two are found in their own columns
+        def accent_runs(x):
+            col, runs, st = [near(px(img, x, y), ACCENT, 8) for y in range(200, 335)], [], None
+            for k, on in enumerate(col + [False]):
+                if on and st is None: st = k
+                if not on and st is not None: runs.append((st, k - 1)); st = None
+            return runs
+        play_runs, vol_runs = accent_runs((A.bar[0] + A.bar[1]) // 2), accent_runs(A.bar[0] + 110)
+        if not play_runs or not vol_runs: fail(f"could not find the play button ({play_runs}) and the volume bar ({vol_runs}) in the frame")
+        elif vol_runs[-1][0] - play_runs[-1][1] - 1 < 8:
+            fail(f"the play button sits {vol_runs[-1][0] - play_runs[-1][1] - 1} px above the volume bar (at least 8 wanted)")
         # a drag on the seek bar: the knob follows the pointer and the seek lands once, on release (JT_EV_DRAG, 2.44.2)
         ad = A.mark()
         A.drag(VIEW_X + bx0 + (bx1 - bx0) * 20 // 100, VIEW_Y + by, VIEW_X + bx0 + (bx1 - bx0) * 60 // 100, VIEW_Y + by)
@@ -424,10 +428,29 @@ try:
 finally:
     D.close()
 
+print("music-qa-check: boot E (album art: a JPEG tag, a PNG tag, a folder cover)")
+E = Boot("art", "art")
+try:
+    E.start(3)
+    cx = (E.bar[0] - 0) - (E.bar[0]) + 48   # the cover's centre, 48 px into the 96 px tile
+    def cover_centre(row_idx, want, what):
+        a = E.mark(); E.click_view(100, row_y(row_idx))
+        if E.wait(r"music: art", 8, a)[0] is None: fail(f"{what}: no cover was decoded"); return
+        time.sleep(1.0)
+        c = px(E.frame(), E.bar[0] + 48, 52 + 48)
+        print(f"  {what}: cover centre {c}")
+        if not near(c, want, 50): fail(f"{what}: the cover's centre is {c}, expected {want}")
+    cover_centre(0, (28, 28, 30), "a JPEG in the ID3 tag")            # Jpg Song
+    cover_centre(2, (30, 60, 220), "a PNG in the ID3 tag, 200x140")    # Png Song: a non-square cover is cropped to its centre square
+    cover_centre(1, (30, 200, 60), "COVER.JPG beside a WAV")           # Plain: no tag at all
+    E.esc_closes()
+finally:
+    E.close()
+
 if fails:
     print("FAIL:")
     for f in fails: print("  - " + f)
     sys.exit(1)
 print("PASS: Music QA: the queue stays under half a second ahead, an unplayable song is skipped, a damaged MP3 frame no longer hangs the song, "
       "a 3:25 MP3 reads 3:25 and seeks near its end, n moves on from a refused song, the list has no row under the hint, the wheel scrolls it, "
-      "shuffle plays each song once, a half-screen window keeps its pills, an empty library is quiet, and an MP3 shows its ID3 title instead of its 8.3 name")
+      "shuffle plays each song once, a half-screen window keeps its pills, an empty library is quiet, and an MP3 shows its ID3 title instead of its 8.3 name, and covers load from a JPEG tag, a PNG tag and a folder file")

@@ -142,7 +142,7 @@ user/note.bin: user/note.o user/note.ld boot/memmap.ld
 # shaped calls without a real libc or a kernel include path. llvm-ar
 # rather than plain `ar` because this toolchain is clang/lld throughout,
 # see USER_CFLAGS above.
-LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c user/libjt/text.c user/libjt/osk.c user/libjt/mono.c user/libjt/jpeg.c user/libjt/mp3.c
+LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c user/libjt/text.c user/libjt/osk.c user/libjt/mono.c user/libjt/jpeg.c user/libjt/png.c user/libjt/mp3.c
 LIBJT_OBJS := $(LIBJT_SRCS:.c=.o)
 # Plain `llvm-ar` first (on PATH on most CI images); then a versioned
 # `llvm-ar-NN` apt sometimes installs instead of the unversioned name;
@@ -178,6 +178,7 @@ user/libjt/text.o user/libjt/mono.o: lib/text_ink.h
 user/libjt/text.o: user/libjt/text.c user/libjt/text.h user/libjt/aafont.h user/jtsys.h
 user/libjt/mono.o: user/libjt/mono.c user/libjt/text.h user/libjt/aamono.h user/jtsys.h
 user/libjt/jpeg.o: user/libjt/jpeg.c drivers/jpeg.c drivers/jpeg.h user/libjt/string.h user/libjt/stdlib.h
+user/libjt/png.o: user/libjt/png.c drivers/png.c drivers/inflate.c drivers/png.h drivers/inflate.h user/libjt/string.h user/libjt/stdlib.h
 user/libjt/mp3.o: user/libjt/mp3.c user/libjt/mp3.h third_party/minimp3/minimp3.h third_party/minimp3/stdlib.h third_party/minimp3/string.h
 user/libjt/osk.o: user/libjt/osk.c user/libjt/osk.h user/libjt/text.h user/jtsys.h
 
