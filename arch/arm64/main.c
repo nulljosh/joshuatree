@@ -1822,7 +1822,7 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
     return 0;
 }
 
-/* The dev card's key debug line (KEY_DEBUG, set by JT_WIFI_DEV=1 builds only): for 3 seconds after a key, the menu bar
+/* The dev card's key debug line (KEY_DEBUG, set by JT_KEY_DEBUG=1 builds only): for 3 seconds after a key, the menu bar
    shows the last raw HID report in hex ("m" in front for a media interface) and the decoded key, so a real-board test
    shows exactly what the keyboard sends. The UART gets the same line ("keydbg: ..."). Release builds compile it out. */
 #ifdef KEY_DEBUG
