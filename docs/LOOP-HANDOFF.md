@@ -10,6 +10,10 @@ Every PR in the v3 queue is merged (2.43.0 to 2.62.0, twenty of them, 2026-10-11
 
 The dev card carries main 2.62.0 (flashed 2026-10-12 at the desk). The Tree Sans OS build (2.63.0, PR open) and this release are not on it yet.
 
+## State, 2026-10-12 late
+
+Main is 3.7.0 (this PR, the mascot on the empty Music and Books screens). Merged since 3.5.0: 3.6.0 drag a window by its title, 3.6.1 the Browser stops flickering, 3.6.2 reboot works after Samantha answers, 3.6.3 guide chapters for the Pi apps. Remaining PRs: #560 docs and #563 quiet boot.
+
 ## Not yet seen on the board
 
 Bluetooth pairing has only run against QEMU's fake radio. Sound out of the jack, Music through DMA, SD writes, user mode apps and screen sleep are all proven in QEMU and never on the real Pi. The board pass is the gate: when it passes, 3.0.0 is released; what fails becomes the first 3.0.x.

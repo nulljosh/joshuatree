@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (250 checks)
+## The suite (251 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -244,6 +244,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | ARM64 M4 SD card: the Pi image reads and writes a FAT32 SDHC card through EMMC2 at 0xFE340000 under QEMU: ls and cat through FAT32 chains with reads past the partition and the card refused; write, rm and mkdir in JT/ survive a reboot on the same card, config.txt, kernel8.img and the other boot files are refused and hash the same, a CMD25 lands, and mtools, a FAT pass and fsck.fat find the card clean; with no card it prints sd no card and boots on (skips where the tools are missing) | `tools/checks/arm64-sd-check.py` | retry |
 | ARM64 M3d Notes on the Pi: on QEMU's raspi4b with the sd check's FAT32 card, made-up USB key reports walk the dock to Notes, the unchanged user/notes.c opens at EL0, a typed line is saved by Esc through open, write and close to JT/NOTES/NOTES/N0000001.TXT (mtools reads exactly the line, a FAT pass and fsck.fat find the card clean), and after a reboot on the same card Notes lists it pixel for pixel and opens it in the editor (skips where the tools are missing) | `tools/checks/arm64-notes-check.py` | retry |
 | ARM64 M3e Music on the Pi: on QEMU virt with the check card as a virtio disk holding JT/MUSIC/ALPHA.WAV and CHARLIE.MP3, Spotlight opens the unchanged user/music.c at EL0 and it lists both, Space plays the WAV with its clock following the frames the kernel fed and its ring sums matching the file exactly, n decodes the MP3 at EL0 with the FPU, F11 lowers the kernel volume and the WAV plays again with lower sums, Esc closes it and the Terminal answers; fpkeep keeps q0-q31, FPCR and FPSR across 40 parks and calls while the kernel wipes the FPU; on the host the Pi build's PWM1 DMA ring takes every queued byte in order (skips where the tools are missing; the real jack is unverified) | `tools/checks/arm64-music-check.py` | retry |
+| ARM64 mascot on the empty Music and Books screens: with no songs and no books, each app's window carries the mascot's ink and terracotta above a plain caption in a screendump (skips where the tools are missing) | `tools/checks/arm64-mascot-empty-check.py` | retry |
 | ARM64 M4 USB: the aarch64 kernel finds an xHCI controller behind a PCIe root port, enumerates a hub, a keyboard behind it and a mouse, and reads key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-usb-check.py` | retry |
 | ARM64 mouse: a USB mouse behind a hub moves the shared arrow over the ARM desktop, the dock label follows it and leaves no ghost, the Console's close button and a dock click work, a hot-plugged mouse moves it, and the scale-2 arrow at 1080p (skips where the tools are missing) | `tools/checks/arm64-mouse-check.py` | retry |
 | ARM64 window drag: the Console and the Browser follow a press on their title band (not the dots or the well) with their contents, leave flat wallpaper and the dock untouched, clamp whole between the menu bar and the dock, and the red dot still closes the moved window; the boot-time drag at 1080p (scale 2) (skips where the tools are missing) | `tools/checks/arm64-drag-check.py` | retry |
@@ -294,14 +295,14 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Portfolio | `tools/checks/portfolio-check.py`, `tools/checks/portfolio-mute-check.mjs`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3portfolio-check.py` |
 | Activity | `tools/checks/arm64-led-check.py`, `tools/checks/panes-check.py`, `tools/checks/ring3activity-check.py` |
 | Clock | `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-clock-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-music-check.py`, `tools/checks/clock-check.py`, `tools/checks/clockicon-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/movie-check.py`, `tools/checks/ring3clock-check.py`, `tools/checks/ring3windgate-check.py`, `tools/checks/samantha-clock-check.py` |
-| Music | `tools/checks/arm64-music-check.py`, `tools/checks/music-check.py`, `tools/checks/music-qa-check.py` |
+| Music | `tools/checks/arm64-mascot-empty-check.py`, `tools/checks/arm64-music-check.py`, `tools/checks/music-check.py`, `tools/checks/music-qa-check.py` |
 | Movies | `tools/checks/movie-check.py` |
 | Hamurapi | `tools/checks/ring3hamurabi-check.py` |
 | Windgate | `tools/checks/ring3windgate-check.py` |
 | Panes | `tools/checks/panes-check.py` |
 | Claude | `tools/checks/arm64-claude-console-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3claude-check.py` |
 | Mines | `tools/checks/ring3mines-check.py` |
-| Books | `tools/checks/books-check.py` |
+| Books | `tools/checks/arm64-mascot-empty-check.py`, `tools/checks/books-check.py` |
 | Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | none yet |
 

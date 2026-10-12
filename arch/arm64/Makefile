@@ -171,7 +171,8 @@ ujt_jpeg.o: $(UJT)/jpeg.c ../../drivers/jpeg.c ../../drivers/jpeg.h $(UJT)/stdli
 	$(UCC) -c $< -o $@
 uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h
 	$(UCC) -c $< -o $@
-uapp_music.o: $(UJT)/wav.h $(UJT)/mp3.h $(UJT)/stdlib.h $(UJT)/string.h
+uapp_music.o: $(UJT)/wav.h $(UJT)/mp3.h $(UJT)/stdlib.h $(UJT)/string.h $(UJT)/mascot.h mascot_art.h
+uapp_books.o: $(UJT)/mascot.h mascot_art.h
 # notes.c finds its arena with (unsigned)_user_end, a 32-bit cast that is still exact here: the app window sits below 4 GiB.
 uapp_notes.o: UCC += -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
 uapp_%.bin: uapp_%.o $(UJTOBJ) user_c.ld

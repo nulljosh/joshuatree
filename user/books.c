@@ -17,6 +17,9 @@
 #include "jtsys.h"
 #include "libjt/text.h"
 #include "libjt/stdlib.h"
+#ifdef __aarch64__
+#include "libjt/mascot.h"   /* the Pi build draws the mascot on the empty library */
+#endif
 
 #define BG    0x00FAF8F6
 #define INK   0x001C1C1E
@@ -288,7 +291,16 @@ static void draw_library(void) {
     int W = (int)win.width, H = (int)win.height;
     rect(0, 0, W, H, BG);
     jt_text_draw(&win, JT_FACE_BOLD, MARGIN, HEAD_Y, INK, "Books");
-    if (nbk == 0) jt_text_draw(&win, JT_FACE_BODY, MARGIN, LIST_Y, DIM, "No books yet. Put a .TXT file in JT/BOOKS.");
+    if (nbk == 0) {
+#ifdef __aarch64__
+        const char *cap = "No books yet", *hint = "Put a .TXT file in JT/BOOKS.";
+        jt_mascot_draw(&win, W / 2, LIST_Y, 96);
+        jt_text_draw(&win, JT_FACE_BODY, (W - jt_text_width(JT_FACE_BODY, cap)) / 2, LIST_Y + 108, INK, cap);
+        jt_text_draw(&win, JT_FACE_BODY, (W - jt_text_width(JT_FACE_BODY, hint)) / 2, LIST_Y + 134, DIM, hint);
+#else
+        jt_text_draw(&win, JT_FACE_BODY, MARGIN, LIST_Y, DIM, "No books yet. Put a .TXT file in JT/BOOKS.");
+#endif
+    }
     int v = rows_visible();
     for (int i = top; i < nbk && i < top + v; i++) {
         int y = LIST_Y + (i - top) * ROW_H;

@@ -327,3 +327,8 @@ Check: `tools/checks/arm64-browser-flicker-check.py` (the `brtrace` build proves
 
 On the Pi, `reboot` and `shutdown` answered "Wait for Samantha to finish, then try again." every time. Root cause: the refusal asked `ask_pending()`, which is also true while the typed line holding the command runs, so the command refused itself. They now refuse only while a `sam` request is live (`ask_busy()`), in both the Pi and test builds, so an error reply, a timeout or Esc leaves them working.
 Check: `tools/checks/arm64-zsh-check.py` refuses reboot mid-question, then after a relay error runs `reboot` and `shutdown` and answers a second `sam`; it fails if the fix is reverted.
+
+## 3.7.0: the mascot on empty Music and Books
+
+On the Pi build, an empty Music library and an empty Books shelf draw the mascot (`arch/arm64/mascot_art.h`, the same art as the Browser's empty well) above a plain caption: "No songs yet" and "No books yet". The i386 apps are unchanged.
+Check: `tools/checks/arm64-mascot-empty-check.py` boots both apps on a card with no songs or books and reads the mascot's pixels out of a screendump; it fails if the draw is reverted.
