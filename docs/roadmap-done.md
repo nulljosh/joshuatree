@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 3.8.1 development branch (2026-10-12)
+
+The tree in the menu bar's corner is a menu. Click the mark or "Joshua Tree", or press F10 or Ctrl+Option+T, and a cream card drops under the bar in Spotlight's own style with About (version and a one-line credit, closes on any key), Restart, Shut Down and Log Out. Restart and Shut Down go through the same confirmed power path as the Ctrl+Alt chords, so Enter confirms, Escape cancels and a busy Samantha refuses politely. Log Out is a ponytail stub: it closes every window and shows "Logged out" until the 4.0 login screen replaces it. It rides on Spotlight's saved pixels and `spot_live`, so windows, drags and app frames already stand back for it. Check: `tools/checks/arm64-treemenu-check.py` (pixels, rows, Esc, outside click, About, Log Out, busy refusal mid-question on QEMU virt; raspi4b restart and halt through self-test builds). Not flashed; board test remains.
+
 ## 3.7.3 development branch (2026-10-12)
 
 The Bluetooth mouse comes back by itself. Before, a saved pairing got one 20 second try at boot and nothing after, so a mouse that was asleep, or that slept later, stayed gone until `bt reconnect`. Now the reconnect is a run of tries (12 seconds each, then a pause of 2, 4, 8, 15 and 30 seconds, up to 30), it starts at boot, when the link drops and on `bt reconnect`, and it re-encrypts with the saved key and turns the mouse's reports on again each time. `bt status` shows searching, connected or idle, the saved address with only its last byte, the tries and the last error. A mouse that ignores boot protocol now has its report map read and its button, X, Y and wheel fields placed from it (12 bit packed X and Y checked), and `bt status` shows the last report's bytes. Proven in QEMU only against a fake mouse, not yet on the Pi. Check: `tools/checks/arm64-bt-check.py`.

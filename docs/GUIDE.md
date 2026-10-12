@@ -202,6 +202,8 @@ For the technical map and checks, see [Architecture](ARCHITECTURE.md),
 ## Restart or shut down the Pi
 
 The 2.36.0 development build adds keyboard power controls. Press
+Click the tree and "Joshua Tree" at the left of the menu bar, or press F10 (or Ctrl+Option+T), for a menu: About, Restart, Shut Down and Log Out. Use Up, Down and Enter, or click a row; Escape or a click elsewhere closes it. Restart and Shut Down ask the same confirmation as the chords below, and refuse while Samantha is answering. Log Out closes every window and says "Logged out"; there is no login screen yet, so you are straight back at the desktop. Released in 3.8.1.
+
 Type `reboot` or `shutdown` in Terminal, or press Ctrl+Alt+Delete to restart, or Ctrl+Alt+End to shut down. On a Mac keyboard,
 Alt is Option and End may require Fn+Right. Terminal asks for confirmation:
 Enter proceeds, Escape cancels. Ordinary letters do not confirm. Wait for

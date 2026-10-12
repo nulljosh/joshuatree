@@ -25,7 +25,8 @@
 # The Console's ask> prompt asks the Claude relay. claude_cfg.sh writes its address and token (gitignored) on every build
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token), but only when
 # JT_WIFI_DEV=1 (tools/flash-pi.sh) or CLAUDE_RELAY_TOKEN_FILE is set explicitly (the checks); a release build has neither.
-CC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -O2 -Wall -Wextra
+JT_VERSION := $(shell tr -d '\n' < ../../VERSION)   # the tree menu's About line (main.c)
+CC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -O2 -Wall -Wextra -DJT_VERSION='"$(JT_VERSION)"'
 # ttf.c, text.c and libc.c are the one part that uses floating point (the TrueType rasterizer), so they skip
 # -mgeneral-regs-only; start.S turns the FPU on at EL1. Everything else stays integer-only.
 FPCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -fno-math-errno -fno-builtin -O2 -Wall -Wextra -Wno-unused-parameter
@@ -183,7 +184,7 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = ../../VERSION screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
@@ -299,6 +300,8 @@ FORCE:
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
 $(eval $(call variant,restart,-DPOWER_SELFTEST=2,,))
 
+$(eval $(call variant,treerestart,-DTREEMENU_SELFTEST=1,,))
+$(eval $(call variant,treeshutdown,-DTREEMENU_SELFTEST=2,,))
 $(eval $(call variant,notice,-DNOTICE_SELFTEST,,))
 $(eval $(call variant,screen,-DSCREEN_SELFTEST,,))
 

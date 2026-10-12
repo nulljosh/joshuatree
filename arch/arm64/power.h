@@ -4,6 +4,15 @@ static void power_apply(int off);
 static void power_message(const char *s) {
     term_output(1); uart_puts(s); term_output(0);
 }
+/* The one entry the confirmed chords and the tree menu's Restart and Shut Down rows share: the Terminal comes up, a busy
+   Samantha refuses, otherwise the same Enter-confirms prompt. Nothing here touches the watchdog. */
+static void power_ask(int off) {
+    spot_close(); brick_close(); clock_close(); calc_close(); pane_open(&term_p);
+    if (ask_pending()) { power_message("Wait for Samantha to finish, then try again.\n"); return; }
+    power_pending = off ? 1 : 2;
+    power_message(off ? "Shut down? Unsaved conversations will be lost.\n" : "Restart? Unsaved conversations will be lost.\n");
+    power_message("Enter confirms. Escape cancels.\n");
+}
 static int power_key(unsigned code) {
     if (power_pending) {
         if (!term_front()) { power_pending = 0; return 0; }
@@ -17,14 +26,12 @@ static int power_key(unsigned code) {
         return 1;
     }
     if (!ctrl_held || !alt_held || (code != 111 && code != 107)) return 0;
-    spot_close(); brick_close(); clock_close(); calc_close(); pane_open(&term_p);
-    if (ask_pending()) { power_message("Wait for Samantha to finish, then try again.\n"); return 1; }
-    power_pending = code == 107 ? 1 : 2;
-    power_message(power_pending == 1 ? "Shut down? Unsaved conversations will be lost.\n" : "Restart? Unsaved conversations will be lost.\n");
-    power_message("Enter confirms. Escape cancels.\n");
+    power_ask(code == 107);
     return 1;
 }
-#ifndef POWER_HOST_TEST
+#if !defined(POWER_HOST_TEST) && !defined(PI_BUILD)
+static void power_apply(int off) { power_message(off ? "power: shutdown (this build has no power control)\n" : "power: restart (this build has no power control)\n"); }   /* the virt test build: only the Pi has a watchdog to pull */
+#elif !defined(POWER_HOST_TEST)
 static void power_apply(int off) {
     power_message(off ? "power: shutdown\n" : "power: restart\n");
     /* shortcut: no writable storage yet; flush pending disk writes when SD saving lands. */
