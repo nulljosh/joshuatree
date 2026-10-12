@@ -1594,9 +1594,25 @@ static unsigned *app_under;                  /* the wallpaper under it, saved at
 static unsigned app_cw, app_ch;              /* the content, the app's buffer, pixel for pixel */
 static int app_shown;                        /* the app has presented a frame since its window opened */
 static void spot_close(void);
+static unsigned mix31(unsigned a, unsigned b) {   /* three parts a, one part b, in each colour lane */
+    return ((((a & 0xFF00FFu) * 3 + (b & 0xFF00FFu)) >> 2) & 0xFF00FFu) | ((((a & 0x00FF00u) * 3 + (b & 0x00FF00u)) >> 2) & 0x00FF00u);
+}
 static void app_blit(void) {
     int s = (int)window_scale(), x0 = (app_lx + 8) * s, y0 = (app_ly + 32) * s;
     const unsigned *src = (const unsigned *)(USER_BASE + UP_WIN);
+    if (s == 2) {   /* the apps draw on a 1x grid: spread each pixel over its 2x2 by bilinear weights (3/4 itself, 1/4 the near neighbour), so a stem is a soft ramp, not a 2x2 block */
+        int cw = (int)app_cw, ch = (int)app_ch;
+        for (int y = 0; y < ch; y++) for (int j = 0; j < 2; j++) {
+            const unsigned *r0 = src + (unsigned)y * app_cw, *r1 = src + (unsigned)(j ? (y + 1 < ch ? y + 1 : y) : (y ? y - 1 : y)) * app_cw;
+            unsigned *d = fb + (unsigned)(y0 + y * 2 + j) * fb_pitch + (unsigned)x0;
+            for (int x = 0; x < cw; x++) for (int i = 0; i < 2; i++) {
+                int xn = i ? (x + 1 < cw ? x + 1 : x) : (x ? x - 1 : x);
+                unsigned a = mix31(r0[x] & 0x00FFFFFFu, r0[xn] & 0x00FFFFFFu), b = mix31(r1[x] & 0x00FFFFFFu, r1[xn] & 0x00FFFFFFu);
+                d[x * 2 + i] = fb_color(mix31(a, b));
+            }
+        }
+        return;
+    }
     for (unsigned y = 0; y < app_ch; y++) for (unsigned x = 0; x < app_cw; x++) {
         unsigned c = fb_color(src[y * app_cw + x] & 0x00FFFFFFu), *d = fb + (unsigned)(y0 + (int)y * s) * fb_pitch + (unsigned)(x0 + (int)x * s);
         for (int j = 0; j < s; j++) for (int i = 0; i < s; i++) d[(unsigned)j * fb_pitch + (unsigned)i] = c;
@@ -2194,10 +2210,12 @@ static void fb_init(void) {
     if (calc_under) { for (int j = 0; j < calc_lh * s; j++) for (int i = 0; i < calc_lw * s; i++) calc_under[j * calc_lw * s + i] = fb[(unsigned)(calc_ly * s + j) * fb_pitch + (unsigned)(calc_lx * s + i)]; }
     else uart_puts("oom calculator\n");                    /* the Apps tile then opens nothing */
     /* M3c part 2: an EL0 app's window, placed like the Calculator's, then moved up and cut to fit above the dock's band */
-    app_lw = 576; if (app_lw > W / s - 16) app_lw = W / s - 16;
+    /* Scale 1 keeps 576x400. At scale 2 (1080p) an app is the Console's size plus a little: its 1x buffer is smoothed up to 2x,
+       so a window as big as the 576x400 one would be soft and look huge beside the Terminal. */
+    app_lw = s >= 2 ? 520 : 576; if (app_lw > W / s - 16) app_lw = W / s - 16;
     app_lx = lx + lw - 150; if (app_lx + app_lw > W / s - 8) app_lx = W / s - 8 - app_lw;
     {   int top = mb / s + 8, bottom = gui_dock_band_top() - 22;
-        app_lh = 400; app_ly = ly + 40;
+        app_lh = s >= 2 ? 368 : 400; app_ly = ly + 40;
         if (app_ly + app_lh > bottom) app_ly = bottom - app_lh;
         if (app_ly < top) { app_ly = top; app_lh = bottom - top; }
     }
@@ -2253,6 +2271,9 @@ static void fb_init(void) {
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
 #ifdef DRAG_TEST   /* the dragtest build: a drag of 100 right and 60 down at boot, clamped like a real one, for arm64-drag-check.py at 1080p (scale 2) */
     drag_on = 1; win_move_to(win_lx + 100, win_ly + 60); drag_end();
+#endif
+#ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with) */
+    app_dock(APP_BOOT);
 #endif
 #ifdef AUDIO_TEST   /* the audiotest build: `beep` run at boot on virt, which has no PWM (arm64-audio-check.py) */
     void cmd_run(const char *q, unsigned n, void (*out)(const char *));
@@ -2818,7 +2839,7 @@ void main(void) {
     uart_puts("screen: input selftest done\n");
 #endif
 #endif
-#ifdef NOTES_SELFTEST
+#if defined(NOTES_SELFTEST) || defined(APP_BOOT)
     usb_ok |= !inputs;   /* QEMU's raspi4b has no USB to find: the loop runs anyway, for notes_tick's made-up keys */
 #endif
 #ifdef PI_BUILD
