@@ -88,11 +88,21 @@ static int con_quiet;   /* the rest of this line goes to the UART only: key echo
 static int con_line_start = 1;   /* the next character begins a line */
 static int con_to_term;          /* a Terminal command is running: what it prints goes to the Terminal, not the Console */
 void term_output(int on) { con_to_term = on; }   /* ask.c, around one command */
+#if defined(PI_BUILD) && !defined(QUIET_BOOT)
+#define QUIET_BOOT   /* the desktop comes up bare: the boot log is kept but its window is not drawn (a dock click or the Terminal's Esc brings it up) */
+#endif
+#ifdef QUIET_BOOT
+static int splash_on, splash_bad;   /* the boot splash is up; a FAIL or oom line is being printed under it */
+static void splash_abort(void);
+#endif
 static void uart_putc(char c) {
     con_tx(c);
     if (!con_quiet) console_putc(c);
     if (c == '\n') con_quiet = 0;
     con_line_start = c == '\n';
+#ifdef QUIET_BOOT
+    if (c == '\n' && splash_bad) { splash_bad = 0; if (splash_on) splash_abort(); }   /* a failure ends the splash once its line is whole */
+#endif
 }
 /* The boot narrative is long, and on the screen it pushed the lines that matter out of the window. These line starts go to
    the UART only (the serial log is unchanged): the self-test chatter, the USB enumeration walk and the Wi-Fi steps that went
@@ -101,7 +111,7 @@ static int con_noise(const char *s) {
 #ifdef CON_VERBOSE
     (void)s; return 0;   /* the scroll check builds with every line on the screen so there is a long log to scroll */
 #else
-    static const char *const skip[] = { "tick", "M0 ", "M1 ", "M1a ", "M1b ", "M1c fb ok", "M1d dock ", "M3 ", "M3b ", "M3c ", "EL0", "EL1", "booted at ",
+    static const char *const skip[] = { "tick", "M0 ", "M1 ", "M1a ", "M1b ", "M1c fb ok", "splash ", "M1d dock ", "M3 ", "M3b ", "M3c ", "EL0", "EL1", "booted at ",
         "usb ", "wifi power", "wifi sdio", "wifi f1", "wifi alp", "wifi chip", "wifi cores", "wifi arm", "wifi fw ", "wifi ht ",
         "wifi bus", "wifi radio up", "wifi ver", "wifi mac", "wifi found", "wifi scan", "wifi joining", "wifi handshake", "wifi assoc",
         "Wi-Fi: found", "Wi-Fi: looked", "Wi-Fi: this Pi", "Wi-Fi: chip", "Wi-Fi: connecting", "Wi-Fi: the router", "Wi-Fi: we answered", "Wi-Fi: handshake",
@@ -116,6 +126,12 @@ static int con_noise(const char *s) {
 }
 static void uart_puts(const char *s) {
     if (con_line_start && con_noise(s)) con_quiet = 1;
+#ifdef QUIET_BOOT
+    if (splash_on) {   /* the splash never hides a failure: any FAIL or oom line brings the desktop up */
+        if (s[0] == 'o' && s[1] == 'o' && s[2] == 'm' && s[3] == ' ') splash_bad = 1;
+        for (const char *p = s; *p; p++) if (p[0] == 'F' && p[1] == 'A' && p[2] == 'I' && p[3] == 'L') splash_bad = 1;
+    }
+#endif
     while (*s) uart_putc(*s++);
 }
 static void uart_hex(unsigned long v) {
@@ -865,9 +881,6 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
    lines are shown, and a pinned row under the text keeps the latest wifi and usb status in view wherever you are. ---- */
 #include "../../drivers/vgafont.h"
 #define LOG_MAX 16384
-#if defined(PI_BUILD) && !defined(QUIET_BOOT)
-#define QUIET_BOOT   /* the desktop comes up bare: the boot log is kept but its window is not drawn (a dock click or the Terminal's Esc brings it up) */
-#endif
 #define CON_FG 0x00202020
 #define CON_BG 0x00ffffff
 int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);   /* arch/arm64/wall.c: the flat Navy wallpaper */
@@ -2189,7 +2202,6 @@ void menubar_tick(void) {   /* the poll loop calls this; it redraws only when th
    not the desktop, not the Console, until splash_finish: Wi-Fi joined or given up, the clock synced or given up, Bluetooth
    up or given up. Then fb_desktop paints the desktop once. The UART says `splash step N name` and `boot done`. */
 #ifdef QUIET_BOOT
-static int splash_on;
 static void splash_step(int n, const char *name) {
     if (!splash_on) return;
     int W = (int)fb_w, H = (int)fb_h, bw = sg(140), bh = sg(4) > 2 ? sg(4) : 2, bx = (W - bw) / 2, by = H / 2 + sg(50);
@@ -2357,12 +2369,17 @@ static void fb_init(void) {
 }
 #ifdef QUIET_BOOT
 static void fb_diag(void);
-static void splash_finish(void) {   /* everything boot waits for is done: the one desktop paint */
-    uart_puts("boot done\n");
-    if (!splash_on) return;
-    splash_step(6, "desktop");
+static void splash_abort(void) {   /* a FAIL or oom line was printed under the splash: show the desktop now, boot carries on behind it */
     splash_on = 0;
     fb_desktop();
+}
+static void splash_finish(void) {   /* everything boot waits for is done: the one desktop paint (already made if a failure ended the splash) */
+    uart_puts("boot done\n");
+    if (splash_on) {
+        splash_step(6, "desktop");
+        splash_on = 0;
+        fb_desktop();
+    }
     fb_diag();
 }
 #endif

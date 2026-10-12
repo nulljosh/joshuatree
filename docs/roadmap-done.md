@@ -349,3 +349,8 @@ Check: `tools/checks/arm64-browser-mouse-check.py` (120 pointer reports over a 3
 The Pi boots behind a terracotta screen with the tree mark and a thin line that fills as the screen, card, Wi-Fi, clock and Bluetooth finish (`splash_step` in `arch/arm64/main.c`); the desktop paints once after `boot done`, and the Console never shows at boot. The log is still kept and a dock click opens it. Wi-Fi fan: flat ink when joined, dimmed grey when not.
 Check: `tools/checks/arm64-quietboot-check.py` (a screendump per stage, the desktop only after `boot done`). Was: the Pi no longer draws the Console at boot. It showed for the whole Wi-Fi bring-up and stayed on any FAIL line, over the terracotta desktop. Now the log is only kept (`QUIET_BOOT`) and a dock click opens it. The Wi-Fi fan is flat ink when joined and dimmed grey when not, where it was a blue-grey.
 Check: `tools/checks/arm64-quietboot-check.py` (and `arm64-boot-quiet-check.py` on the Pi image).
+
+## 3.7.10: the splash never hides a failure
+
+The splash ends on any FAIL or oom line the boot prints, so the desktop paints and the failure shows; a crash during the splash still draws the red panel and prints its UART lines. Two Pi checks (`arm64-crash-check.py`, `arm64-sd-check.py`) had waited for `M1c fb ok` before the splash existed; they now wait for `splash up` and the desktop after the first FAIL line.
+Check: `tools/checks/arm64-crash-check.py` (the Pi image faults behind the splash, the panel is drawn over terracotta) and `tools/checks/arm64-sd-check.py` (no card and a good card both end with the desktop up).
