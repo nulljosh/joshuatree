@@ -2,10 +2,10 @@
 """/model and /effort on the ARM Terminal's prompt (docs/AGENT.md), against a fake relay on the host.
 
 One QEMU boot with a throwaway token pointed at a fake relay (it logs every request body and answers
-"S <uuid>", "M Claude Opus 5.5"). Typed at the Terminal, in order:
+"S <uuid>", "M Claude Opus 5.5"). Typed at the Terminal (questions as `sam QUESTION`), in order:
   1. /model and /effort with no argument list the choices and mark the current one; nothing is sent.
   2. /model opus, /effort high, then a question: the request body carries "model":"opus" and "effort":"high".
-  3. /status says model, effort, the prompt text ("Claude Opus 5.5 high $"), relay answered, steps used 1.
+  3. /status says model, effort, the model that last answered ("Claude Opus 5.5"), relay answered, steps used 1.
   4. /model gpt and /effort max are refused with one line each and nothing is sent; so are /help, /status, /bogus.
   5. /model auto, /effort medium, then a question: the body has neither field (the relay's defaults apply).
   6. /clear starts a new conversation: the next question carries an empty session.
@@ -103,13 +103,13 @@ try:
 
         out = say(b, "/model opus", "model: opus\n"); check("/model opus is accepted", "model: opus\n" in out, out[-300:])
         out = say(b, "/effort high", "effort: high\n"); check("/effort high is accepted", "effort: high\n" in out, out[-300:])
-        out = say(b, "hi there", "ANSWER1")
+        out = say(b, "sam hi there", "ANSWER1")
         check("the request carries model opus and effort high", len(calls) == 1 and calls[0].get("model") == "opus" and calls[0].get("effort") == "high", repr(calls))
         check("the question text is not changed", calls and calls[0]["prompt"] == "hi there", repr(calls))
 
         out = say(b, "/status", "steps used")
         check("/status shows model and effort", "status: model opus, effort high" in out, out[-400:])
-        check("/status shows the prompt with the model that answered", "status: prompt Claude Opus 5.5 high $ \n" in out, out[-400:])
+        check("/status shows the model that last answered", "status: last answer Claude Opus 5.5\n" in out, out[-400:])
         check("/status says the relay answered and one step was used", "relay answered last time" in out and "steps used 1" in out, out[-400:])
 
         n = len(calls)
@@ -121,29 +121,29 @@ try:
         out = say(b, "/model", "model: auto haiku sonnet [opus]"); check("a refused value left the model alone", "[opus]" in out, out[-300:])
 
         out = say(b, "/model auto", "model: auto\n"); out = say(b, "/effort medium", "effort: medium\n")
-        out = say(b, "second", "ANSWER2")
+        out = say(b, "sam second", "ANSWER2")
         check("back to default: neither field is sent", len(calls) == 2 and "model" not in calls[1] and "effort" not in calls[1], repr(calls[1:]))
         check("the session carries over", calls[1].get("session") == SID, repr(calls[1:]))
-        out = say(b, "/clear", "clear: new conversation"); out = say(b, "third", "ANSWER3")
+        out = say(b, "/clear", "clear: new conversation"); out = say(b, "sam third", "ANSWER3")
         check("/clear starts a new conversation (empty session)", len(calls) == 3 and calls[2].get("session") == "", repr(calls[2:]))
         # Session 1 has auto/medium and a conversation. Session 2 starts independently.
         b.key("f3"); check("F3 opens session 2", b.wait_for("terminal session 2", 10))
         out = say(b, "/status", "steps used")
         check("session 2 starts with default settings", "status: model auto, effort medium" in out and "steps used 0" in out, out[-400:])
         say(b, "/model sonnet", "model: sonnet\n"); say(b, "/effort low", "effort: low\n")
-        say(b, "fourth", "ANSWER4")
+        say(b, "sam fourth", "ANSWER4")
         check("session 2 sends its settings and an empty session", len(calls) == 4 and calls[3].get("session") == "" and calls[3].get("model") == "sonnet" and calls[3].get("effort") == "low", repr(calls[3:]))
         b.key("f3"); check("F3 returns to session 1", b.wait_for("terminal session 1", 10))
-        say(b, "fifth", "ANSWER5")
+        say(b, "sam fifth", "ANSWER5")
         check("session 1 keeps its conversation and defaults", len(calls) == 5 and calls[4].get("session") == SID and "model" not in calls[4] and "effort" not in calls[4], repr(calls[4:]))
         # A partially typed command belongs to the session where it began.
-        for ch in "saved": b.key(ch)
+        for ch in "sam saved": b.key("spc" if ch == " " else ch)
         b.key("f3"); say(b, "/clear", "clear: new conversation")
         b.key("f3"); b.key("ret"); check("unfinished text survives switching", b.wait_for("ANSWER6", 30) and len(calls) == 6 and calls[5]["prompt"] == "saved")
         out = say(b, "/status", "steps used")
         check("clearing session 2 leaves session 1 alone", "steps used 3" in out, out[-400:])
         before = b.uart().count("terminal session 2")
-        b.ask("hold"); check("slow request reaches relay", holding.wait(10))
+        b.ask("sam hold"); check("slow request reaches relay", holding.wait(10))
         b.key("f3"); time.sleep(0.4)
         check("F3 cannot move a running request", b.uart().count("terminal session 2") == before)
         release.set(); check("request finishes in its original session", b.wait_for("ANSWER7", 30))
@@ -157,5 +157,5 @@ finally:
     shutil.rmtree(tmp, ignore_errors=True)
 if fails:
     print("FAIL: %d of the model and effort checks failed" % len(fails)); sys.exit(1)
-print("PASS: /model and /effort change what the Pi sends, the prompt shows the answering model, a bad value is refused "
+print("PASS: /model and /effort change what the Pi sends, /status shows the answering model, a bad value is refused "
       "in one line and never sent, /status /help /clear run on the Pi")

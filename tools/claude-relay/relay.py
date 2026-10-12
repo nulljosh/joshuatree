@@ -69,7 +69,7 @@ Three backends, picked at start:
   - default: `claude -p` (headless Claude Code on this user's plan), as above.
   - --turing [URL]: Samantha, Joshua's own on-device model from the turing repo (its app/serve.py, default
     http://127.0.0.1:8127). The relay posts the question in the OpenAI chat shape with the session's history and
-    answers "M Samantha", so the Pi's prompt reads "Samantha $ ". No account and no credit. It wins over
+    answers "M Samantha", so `/status` on the Pi says "Samantha" (the prompt itself is `joshua@tree % `). No account and no credit. It wins over
     --api-key-file when both are given. Turing down is a 502 with a plain sentence.
   - --api-key-file FILE: the Messages API, paid from a Claude Platform credit. It only starts with
     --allow-api-spend as well, so an old script cannot spend a topped-up credit by accident.

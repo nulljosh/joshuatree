@@ -140,14 +140,14 @@ class ModelName(unittest.TestCase):
         self.assertEqual(seen, ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"])
 
     def test_pi_default_matches_relay_default(self):
-        """ask.c's prompt before any answer must name Samantha, the relay's --turing backend (TURING_NAME), never Claude."""
+        """ask.c's default model (what /status says before any answer) must be Samantha, the relay's --turing backend (TURING_NAME), never Claude; the prompt itself is the zsh style joshua@tree % ."""
         src = pathlib.Path(ROOT, "arch", "arm64", "ask.c").read_text()
         m = re.search(r'#define ASK_DEFAULT_MODEL "([^"]+)"', src)
         self.assertTrue(m, "ask.c has no ASK_DEFAULT_MODEL")
         self.assertEqual(m.group(1), relay.TURING_NAME)
         self.assertEqual(relay.TURING_NAME, "Samantha")
         self.assertIn('static const char sam[] = "Samantha";', src, "ask.c's take_model no longer accepts M Samantha")
-        self.assertIn("prompt[k++] = ' '; prompt[k++] = '$'; prompt[k++] = ' ';", src, "the prompt no longer ends ' $ '")
+        self.assertIn('return "joshua@tree % ";', src, "the prompt is no longer joshua@tree % ")
         self.assertNotIn('"ask> "', src)
 
 

@@ -166,9 +166,9 @@ class Boot:
             if "return" in r or "error" in r: return r
     def key(self, *qcodes):
         self.cmd("send-key", keys=[{"type": "qcode", "data": k} for k in qcodes]); time.sleep(0.12)
-    def ask(self, text):   # type a question at the Terminal's prompt and press Enter; returns how many asks came before
+    def ask(self, text):   # type `sam QUESTION` at the Terminal's prompt and press Enter; returns how many asks came before
         n = self.uart().count("samantha: thinking")
-        for ch in text: self.key("spc" if ch == " " else ch)
+        for ch in "sam " + text: self.key("spc" if ch == " " else ch)
         self.key("ret")
         if not self.wait_for("samantha: thinking", 10, n + 1): raise SystemExit("FAIL: the question was not sent: %r" % self.uart()[-300:])
         return n

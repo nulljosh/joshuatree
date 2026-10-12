@@ -32,6 +32,7 @@ unsigned int net_get_ip(void);   /* our address now: the lease, or the fixed fal
 /* Wait budgets in ticks (100 a second) for one DNS answer and one SYN-ACK. 20 s by default; a caller that would rather
    fail fast (the Pi browser) sets them short for its call and puts them back. */
 extern unsigned int net_dns_wait_ticks, net_connect_wait_ticks;
+extern void (*net_idle)(void);   /* called once a pass in the client wait loops; null unless a kernel sets it */
 
 /* Hardware-agnostic single raw-frame send and MAC accessor, for low-level
    diagnostics (kernel.c's "nettest"/"ifconfig") that used to call
