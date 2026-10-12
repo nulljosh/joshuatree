@@ -2083,17 +2083,28 @@ static void fb_init(void) {
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
         const char *thanks = "Seduce. Vilify. Ignore.";
-        int ar = sc(5), gapx = sc(6), tw = text_width(2, thanks, sc(110)), tx = (W - tw + 2 * ar + gapx) / 2, ty = band_y - sc(4), sh = sc(1) > 1 ? sc(1) : 1;
-        {   /* a small apple to the left of the line: a round fruit with a dip on top and a leaf, no bite, so it is a fruit and not a logo */
-            int acx = tx - gapx - ar, acy = ty - sc(4);
-            for (int pass = 0; pass < 2; pass++) for (int y = -2 * ar; y <= ar; y++) for (int x = -ar - 1; x <= ar + 1; x++) {
-                int body = x * x + y * y <= ar * ar && !(x * x + (y + ar) * (y + ar) <= (ar / 3) * (ar / 3));
-                int lx2 = x - ar / 3, ly2 = y + ar + ar / 2, leaf = 4 * lx2 * lx2 + 9 * ly2 * ly2 - 4 * lx2 * ly2 <= ar * ar && y < -ar + 1 && x > 0;
-                if (body || leaf) fb_rect(acx + x + (pass ? 0 : sh), acy + y + (pass ? 0 : sh), 1, 1, pass ? 0x00f0f4f8 : 0x00101010);
+        int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 2 * ar - gapx) / 2, ty = band_y - sc(4);
+        text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
+        {   /* a small apple after the line, antialiased (4x4 samples a pixel) onto the flat fill: a round fruit, a dip on
+               top, a short stem and one leaf, no bite, so it is a fruit and not a logo. Integer only: q is 1/1024 of ar. */
+            int acx = tx + tw + gapx + ar, acy = ty - sc(4); unsigned ink = fb_color(0x00f0f4f8);
+            for (int y = -2 * ar; y <= ar + 1; y++) for (int x = -ar - 1; x <= ar + 1; x++) {
+                int hit = 0;
+                for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
+                    int qx = ((x * 4 + i) * 2 + 1) * 128 / ar, qy = ((y * 4 + j) * 2 + 1) * 128 / ar;   /* sample centre, in q */
+                    long long body = (long long)qx * qx + (long long)qy * qy * 1024 / 829;             /* a 1 : 0.9 ellipse */
+                    long long dip = (long long)qx * qx + (long long)(qy + 920) * (qy + 920);
+                    int stem = qx > -110 && qx < 110 && qy < -760 && qy > -1300;
+                    long long lx = qx - 520, ly = qy + 1080, u = (lx * 53 - ly * 37) / 64, v = (lx * 37 + ly * 53) / 64;   /* the leaf, tilted */
+                    long long leaf = u * u * 1024 / 300 + v * v * 1024 / 60;
+                    if ((body <= 1048576 && dip > 92160) || stem || leaf <= 1048576) hit++;
+                }
+                if (!hit) continue;
+                unsigned d = fb[(unsigned)(acy + y) * fb_pitch + (unsigned)(acx + x)], out = 0;
+                for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * hit + ((d >> b) & 0xFF) * (16 - hit)) / 16) << b;
+                fb[(unsigned)(acy + y) * fb_pitch + (unsigned)(acx + x)] = out;
             }
         }
-        text_draw(2, thanks, tx + sh, ty + sh, sc(110), fb_color(0x00101010), fb, fb_pitch, W, H);   /* a dark shadow so it reads on the busy photo */
-        text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
     con_layout(win_x, win_y, win_w, win_h);
     {   /* keep the log inside the frame's white well: under the title band's hairline, clear of the cream margins */
@@ -2112,12 +2123,12 @@ static void fb_init(void) {
     pointer_moved();
 #endif
     dcache_clean(fb, (unsigned long)fb_pitch * fb_h * 4);   /* the whole still picture out to RAM; con_glyph cleans as it goes from here */
-    /* Blank spots, clear of any text: the bottom of the window's white well, the menu bar's rule, and the wallpaper (not
-       the old flat fill, and not one colour everywhere). Grey and white read the same either byte order; the rule is
-       checked in fb_color order. */
+    /* Blank spots, clear of any text: the bottom of the window's white well, the menu bar's rule, and the wallpaper (the
+       design system's dark fill at three corners, not the old 0x203040 fallback). Grey and white read the same either
+       byte order; the rule and the fill are checked in fb_color order. */
     int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == 0x00ffffff && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
-    ok = ok && (!wall_ok || (w0 != 0x00203040 && (w0 != w1 || w1 != w2)));   /* a full heap leaves the flat fill, which is the fallback working */
+    ok = ok && wall_ok && w0 == fb_color(0x00141311) && w1 == w0 && w2 == w0;
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
 #ifdef AUDIO_TEST   /* the audiotest build: `beep` run at boot on virt, which has no PWM (arm64-audio-check.py) */
     void cmd_run(const char *q, unsigned n, void (*out)(const char *));
