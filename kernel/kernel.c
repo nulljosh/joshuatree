@@ -5427,7 +5427,7 @@ static void gui_run(void){
         int win_close_here = (win_hit_here >= 0 && win_hit_here == gui_window_count - 1) ? win_hit_here : -1; /* only the already-focused (topmost) window's own click-anywhere-closes contract; a click on a background window is click-to-focus, not close, handled below */
         int win_focus_changed = 0; /* set below when a click raises a background window; folded into `launched` once it's declared, so the z-order change gets a real full repaint this same frame */
         {   /* The wheel goes to the ring-3 window under the pointer (JT_EV_WHEEL, +1 up, -1 down), the way a click does. Only the blocking launcher ever read it before, so no window app saw a wheel step. */
-            int wz = mouse_get_wheel();
+            int wz = mouse_take_wheel();   /* not mouse_get_wheel: that pumps the vmmouse queue again and swallows a click whose press and release land in one frame (v86) */
             if (wz && win_hit_here >= 0 && gui_windows[win_hit_here].task >= 0)
                 syscall_window_push_event(gui_windows[win_hit_here].task, JT_EV_WHEEL, wz > 0 ? 1 : -1, 0);
         }
