@@ -1237,19 +1237,36 @@ int gui_icon_text_w(const char *s, int face, int mul) { int k = (int)window_scal
    painted before anything else covers its band. */
 unsigned int gui_wallpaper_sample(int px, int py, int sway) { (void)sway; return window_get_pixel_phys(px, py); }
 /* 2.25: the brand mark in the menu bar's corner, as on i386 (gui_draw_mark_sized): the small copy of the scribbled
-   tree from kernel/boot_mark.h, box-filtered to T physical pixels and blended in ink over what is there. */
+   tree from kernel/boot_mark.h, box-filtered to T physical pixels and blended in ink over what is there, its ground
+   (menu_mark_acc, 3.0) in terracotta. Drawn bigger than stored (the boot screen, 220 px at 1080p), it blends the four
+   nearest stored pixels instead, so the curves stay smooth rather than stepping in 2 to 3 pixel blocks. */
+static unsigned mark_lerp(const unsigned char *m, int x0, int y0, int wx, int wy) {
+    int x1 = x0 + 1 < MENU_MARK_W ? x0 + 1 : x0, y1 = y0 + 1 < MENU_MARK_H ? y0 + 1 : y0;
+    return (unsigned)(((m[y0 * MENU_MARK_W + x0] * (256 - wx) + m[y0 * MENU_MARK_W + x1] * wx) * (256 - wy)
+                     + (m[y1 * MENU_MARK_W + x0] * (256 - wx) + m[y1 * MENU_MARK_W + x1] * wx) * wy) >> 16);
+}
 static void menu_mark_paint(int cx, int cy, int T, unsigned ink) {
     int ox = cx - T / 2, oy = cy - T / 2;
     for (int row = 0; row < T; row++) for (int col = 0; col < T; col++) {
-        int c0 = col * MENU_MARK_W / T, c1 = (col + 1) * MENU_MARK_W / T, r0 = row * MENU_MARK_H / T, r1 = (row + 1) * MENU_MARK_H / T;
-        if (c1 == c0) c1 = c0 + 1;
-        if (r1 == r0) r1 = r0 + 1;
-        int sum = 0, n = (c1 - c0) * (r1 - r0);
-        for (int y = r0; y < r1; y++) for (int x = c0; x < c1; x++) sum += menu_mark_cov[y * MENU_MARK_W + x];
-        unsigned a = (unsigned)(sum / n);
+        unsigned a, g;
+        if (T > MENU_MARK_W) {   /* sample point in 1/256 stored pixels, centre to centre */
+            int fx = (2 * col + 1) * MENU_MARK_W * 128 / T - 128, fy = (2 * row + 1) * MENU_MARK_H * 128 / T - 128;
+            if (fx < 0) fx = 0;
+            if (fy < 0) fy = 0;
+            a = mark_lerp(menu_mark_cov, fx >> 8, fy >> 8, fx & 255, fy & 255);
+            g = mark_lerp(menu_mark_acc, fx >> 8, fy >> 8, fx & 255, fy & 255);
+        } else {
+            int c0 = col * MENU_MARK_W / T, c1 = (col + 1) * MENU_MARK_W / T, r0 = row * MENU_MARK_H / T, r1 = (row + 1) * MENU_MARK_H / T;
+            if (c1 == c0) c1 = c0 + 1;
+            if (r1 == r0) r1 = r0 + 1;
+            int sum = 0, gsum = 0, n = (c1 - c0) * (r1 - r0);
+            for (int y = r0; y < r1; y++) for (int x = c0; x < c1; x++) { sum += menu_mark_cov[y * MENU_MARK_W + x]; gsum += menu_mark_acc[y * MENU_MARK_W + x]; }
+            a = (unsigned)(sum / n); g = (unsigned)(gsum / n);
+        }
         if (!a) continue;
         unsigned d = window_get_pixel_phys(ox + col, oy + row), out = 0;
-        for (int sh = 0; sh <= 16; sh += 8) out |= ((((ink >> sh) & 0xFF) * a + ((d >> sh) & 0xFF) * (255 - a)) / 255) << sh;
+        for (int sh = 0; sh <= 16; sh += 8)
+            out |= ((((ink >> sh) & 0xFF) * (a - g) + ((MARK_GROUND >> sh) & 0xFF) * g + ((d >> sh) & 0xFF) * (255 - a)) / 255) << sh;
         window_pixel_phys(ox + col, oy + row, out);
     }
 }

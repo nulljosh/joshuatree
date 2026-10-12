@@ -157,9 +157,9 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Dock tray corner AA (real coverage blend, not binary) | `tools/checks/traycorner-check.py` | retry |
 | Portfolio catalog opens, lists the fleet, and the list scrolls | `tools/checks/portfolio-check.py` | retry |
 | Asking Samantha for the weather fetches it, no "open Weather first" | `tools/checks/samweather-check.py` | retry |
-| Boot logo AA (no false interior seams at overlapping capsule joints) | `tools/checks/bootlogo-check.py` | retry |
+| Menu bar mark AA (no false interior seams) on its terracotta ground | `tools/checks/bootlogo-check.py` | retry |
 | Boot splash draws the real landing/logo.svg mark, not the old stick tree | `tools/checks/bootmark-check.py` | retry |
-| Boot splash draws the tree on stroke by stroke, never pops in whole | `tools/checks/bootanim-check.py` | retry |
+| Boot splash draws the tree on stroke by stroke, never pops in whole, terracotta ground last | `tools/checks/bootanim-check.py` | retry |
 | Landing eyebrow tracks roadmap Latest, H1 stays the brand line | `tools/checks/landing-headline-check.sh` | once |
 | Idle tour still cycles all 8 real dock apps | `tools/checks/tourappcount-check.mjs` | once |
 | Idle tour autoplay fix is in place (tourArmed reset) | `tools/checks/idletour-arm-reset-check.mjs` | once |

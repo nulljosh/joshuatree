@@ -8,6 +8,9 @@ Music, the iTunes pass. A song shows its real name: the library reads the first 
 
 The Music QA pass: every key and click, a WAV and an MP3, screenshots of each state. A 3:25 MP3 read 0:10 (frames times 1000 wrapped past 32 bits), one damaged MP3 frame hung the song for good, a song that would not play stopped the queue and trapped n, shuffle never ended, no app window ever got a wheel step, a volume change landed a second late, a half-screen window cut off Repeat, and the list ran under the key hint. All fixed (the wheel fix is the kernel's: every ring-3 window now gets wheel steps, and Music is the one checked). Check: `tools/checks/music-qa-check.py`, each fix's assertion failing when the fix is reverted, and the damaged-frame case in `tools/media/mp3-host.c`.
 
+## 2.60.0 development branch (2026-10-11)
+
+The 3.0 mark, option A from Joshua's contact sheet: the crayon tree with steadier, heavier lines, denser tufts and a terracotta ground, the one accent. `tools/gen/logo.py` writes every SVG, the PNGs and the README copies are regenerated, and the kernel blends the ground in terracotta on the splash (drawn last), the menu bar and About. Checks: `logo-check.sh`, `bootanim-check.py` (ground last) and `bootlogo-check.py` (ground in the menu bar).
 ## 2.59.0 development branch (2026-10-11)
 
 M3e, Music on the Pi: the unchanged `user/music.c` opens from Spotlight and plays the WAV and MP3 songs in the card's `JT/MUSIC/` out of the 3.5 mm jack. Under it, a 16 MiB EL0 arena with a `JT_SYS_BRK` heap for whole songs, a `JT_SYS_AUDIO` that never waits (a 32 KB ring the desktop's loop drains into a DMA-fed PWM ring, through the 2.48.0 master volume, merged in here), and an app's FP registers kept across every call and park so minimp3 runs at EL0. Check: `tools/checks/arm64-music-check.py`; the jack is unverified.
