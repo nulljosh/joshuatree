@@ -382,7 +382,7 @@ Check: `tools/checks/picker-check.sh` (QEMU, no network): the C agrees with the 
 `art/icons/chat.svg` stated no tile gradient, so `iconart-check.py` could not read what colour the dock should draw, and her portrait ran to the bottom of the tile where the glyph margin belongs to the tile's light. The importer (`tools/gen/import_fleet_icons.py`, not `restyle_icons.py`, writes this icon) now states `Tile #F3F1EE -> #F3F1EE` and fits the portrait disc into 88 of 128 units. `iconart-check.py` also stops failing on an idle desktop that presents no new frame, and joins `ci-suite.sh`.
 Check: `tools/checks/iconart-check.py` (all 11 dock tiles within 0.3, Samantha 0.0) and `tools/checks/iconinset-check.py` (chat margins 0.0).
 
-## 3.8.4: the small picker stops acting on questions about its own topics
+## 3.8.5: the small picker stops acting on questions about its own topics
 
 Questions that only mention a tool's topic ("whats the history of the calendar", "is my clipboard private") no longer call the tool. On Turing's nine dev sets the tool-level right rate is 81.2 percent (3,618 of 4,455) and the picker makes a tool call on 20 of 434 chat sentences (4.6 percent) against the full model's 22 (5.1 percent). The chat rows were written after reading the dev sets' mistakes (phrasings the dev sets own were dropped), so these numbers are tuned to dev; the sealed sets are unread.
 Check: `tools/checks/picker-check.sh` (QEMU, no network): the C agrees with the Python reference on 297 of 297 golden sentences.
