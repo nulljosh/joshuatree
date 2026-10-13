@@ -210,6 +210,15 @@ try:
             check(f"{n}: the bottom edge alone changes the height only", size == (r[2], r[3] + 20), (at, size))
             if size is None: return
             r[2], r[3] = size
+            right0 = r[0] + r[2]
+            at, size = drag((r[0] + 5, r[1] + r[3] // 2), (r[0] + 5 + 30, r[1] + r[3] // 2 + 15))
+            check(f"{n}: the left edge moves in, the right edge stays", at == (r[0] + 30, r[1]) and size == (r[2] - 30, r[3]) and at[0] + size[0] == right0, (at, size, right0))
+            if size is None: return
+            r[0], r[2] = at[0], size[0]
+            at, size = drag((r[0] + 5, r[1] + r[3] // 2), (r[0] + 5 - 30, r[1] + r[3] // 2))
+            check(f"{n}: the left edge back out puts the window where it was", at == (r[0] - 30, r[1]) and size == (r[2] + 30, r[3]) and at[0] + size[0] == right0, (at, size, right0))
+            if size is None: return
+            r[0], r[2] = at[0], size[0]
             # 4. far out: the screen's right edge and the dock's band
             band0 = screendump(cmd, tmp)
             c = corner(r)
@@ -242,6 +251,10 @@ try:
             title = centroid(a, ((r1[0] + r1[2] - 130) * S, (r1[1] + 8) * S, 120 * S, 18 * S), lambda p: max(p) < 0xB0, [ar])
             full = lambda c, w, h: c[2] * 4 >= w * h * S * S * 0.85 / 1   # centroid counts every other pixel in each direction: a quarter of the area
             return (full(strip_b, r1[2] - 24, dh - 4) and full(strip_r, dw - 4, r1[3] - 50) and title[2] > 15), (strip_b[2], strip_r[2], title[2])
+        def r_terminal(b, a, r0, r1, dw, dh, ar):   # the ask> row follows the bottom of the taller well: ink there now, none where the row was
+            now = centroid(a, ((r1[0] + 12) * S, (r1[1] + r1[3] - 28) * S, 120 * S, 18 * S), dark, [ar])
+            was = centroid(a, ((r0[0] + 12) * S, (r0[1] + r0[3] - 28) * S, 120 * S, 18 * S), dark, [ar])
+            return now[2] > 10 and was[2] == 0, (now[2], was[2])
         def r_browser(b, a, r0, r1, dw, dh, ar):   # the empty page's mascot stays in the middle of a bigger well
             sk = [ar, arrow(pos[0], pos[1])]
             f0 = centroid(b, ((r0[0] + 10) * S, (r0[1] + 66) * S, (r0[2] - 20) * S, (r0[3] - 96) * S), terra, sk)
@@ -291,9 +304,16 @@ try:
             n0 = len(re.findall(pat, uart()))
             wa = Win(nm, (0, 0, 0, 0), (400, 300), (lambda o=mk: spot(o)), (lambda p=pat, n=n0: wait_re(p, n + 1)), r_app, 0, app=True)
             exercise(wa, f"M3c window {mk} ")
-        # the Calendar over the Console: moving it draws the Console whole again where it was covered
+        # the Terminal: the same pane rectangle as the Console, F2 opens it
+        nt = uart().count("terminal closed")
+        term = Win("Terminal", cons.rect, (320, 220), lambda: key("f2"), lambda: wait_for("terminal closed", 40, nt + 1), r_terminal, 0)
+        term.first = tuple(cons.first)
+        exercise(term, "terminal open")
+        cons.rect[:] = term.rect
+        # the Calendar over the Terminal: moving it draws the Terminal whole again where it was covered
+        nt = uart().count("terminal open")
         key("f2")
-        check("F2 opens the Terminal", wait_for("terminal open", 30))
+        check("F2 opens the Terminal", wait_for("terminal open", 30, nt + 1))
         time.sleep(0.3)
         nf = uart().count("M3c window calendar first frame") + 1
         spot("calendar")
@@ -301,7 +321,7 @@ try:
             m = re.findall(r"M3c window calendar (\d+)x(\d+) at (\d+),(\d+)\n", uart())[-1]
             r = [int(m[2]) - 8, int(m[3]) - 32, int(m[0]) + 16, int(m[1]) + 40]
             img0 = screendump(cmd, tmp)
-            t = (con[0], con[1], con[2], con[3])
+            t = tuple(cons.rect)
             # a probe inside the Terminal and the Calendar's frame both, so before it is the Calendar, after it must be the Terminal
             px0, py0 = max(r[0], t[0]) + 6, t[1] + t[3] // 2
             check("the probe point is inside both windows", t[0] <= px0 < t[0] + t[2] and r[0] <= px0 < r[0] + r[2] and r[1] <= py0 < r[1] + r[3], (r, t))
