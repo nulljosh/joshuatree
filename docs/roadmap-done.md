@@ -380,3 +380,8 @@ Check: `tools/checks/picker-check.sh` (QEMU, no network): `pickcheck: 297/297 ok
 
 `art/icons/chat.svg` stated no tile gradient, so `iconart-check.py` could not read what colour the dock should draw, and her portrait ran to the bottom of the tile where the glyph margin belongs to the tile's light. The importer (`tools/gen/import_fleet_icons.py`, not `restyle_icons.py`, writes this icon) now states `Tile #F3F1EE -> #F3F1EE` and fits the portrait disc into 88 of 128 units. `iconart-check.py` also stops failing on an idle desktop that presents no new frame, and joins `ci-suite.sh`.
 Check: `tools/checks/iconart-check.py` (all 11 dock tiles within 0.3, Samantha 0.0) and `tools/checks/iconinset-check.py` (chat margins 0.0).
+
+## 3.9.0: the Pi gets every app, sharp
+
+The Pi now has Settings, Finder, Mail, Weather, Stocks, Reminders and four games (Mines, Toroid, Hamurapi, Keyrate), all in Spotlight, a clipboard, and resizable windows. Every one draws at 2x through `hires.h`, so text and shapes are device pixels. The menu bar icons are always ink, the wallpaper is graphite grey `#6E6E6E` and Settings offers Grey first (the default), then Terracotta, Clay and Ink. The boot splash flushes its rows to RAM so the Pi screen no longer shows torn slivers.
+Check: `tools/checks/arm64-sharp2x-check.py` (crisp-stem share per app), `arm64-settings-check.py`, `arm64-quietboot-check.py` (the fan is flat ink joined or not), and the per-app checks listed in `docs/TESTING.md`.

@@ -6,7 +6,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
-**Latest**: 3.13: Settings on the Pi. A real Settings window with a flat wallpaper choice, volume and dock size, reached from Spotlight or the new menu bar icons.
+**Latest**: 3.9: Every app on the Pi. Settings, Finder, Mail, Weather, Stocks, Reminders and four games, all sharp at 2x and one Spotlight away.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
