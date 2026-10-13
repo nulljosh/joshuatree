@@ -14,7 +14,8 @@ run's darkest contrast, "soft" pixels are the ones between 15% and 85% of it. Pa
   - at least 85% of stems have at most 2 soft pixels (one soft edge a side: no blur ramp) and at least 50% have 2 or more
     full pixels (a stem two pixels wide at least, not a 1 px line spread thin);
   - the average stem has fewer than 2.3 soft pixels (a bilinear 1x->2x blit averages 3 or more).
-Pass --shots DIR to keep the screendumps (PPM and PNG) there. Skips (exit 0) when clang, ld.lld, qemu-system-aarch64 or its
+Also covers finder, mail, weather, stocks, reminders, the four games and Settings. Pass --shots DIR to keep the screendumps
+(PPM and PNG) there, --save FILE to keep the per-app shares as JSON and --before FILE to print a before/after table against such a file. Skips (exit 0) when clang, ld.lld, qemu-system-aarch64 or its
 raspi4b model is missing.
 Usage: tools/checks/arm64-sharp2x-check.py [--shots DIR]   (from the repo root)
 """
@@ -28,8 +29,9 @@ arch = os.path.join(root, "arch/arm64")
 SW, SH = 1920, 1080
 shots = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else None
 fails = []
-EL0 = ("calendar", "notes", "music", "books")
-ALL = EL0 + ("calculator", "clock", "brick", "browser", "terminal", "console")
+EL0 = ("calendar", "notes", "music", "books", "finder", "mail", "weather", "stocks", "reminders", "mines", "toroid", "hamurabi", "keyrate")
+ALL = EL0 + ("calculator", "clock", "brick", "browser", "terminal", "console", "settings")
+FEW_STEMS = {"music": 40, "books": 40, "mines": 15, "toroid": 15, "hamurabi": 30, "keyrate": 15, "settings": 40}   # apps that show less text at boot
 results = {}
 if os.environ.get("JT_SHARP_APPS"): ALL = tuple(os.environ["JT_SHARP_APPS"].split(","))   # a subset, for a before/after on another tree
 def check(name, ok, detail=""):
@@ -117,7 +119,7 @@ def run(app):
         n, soft_ok, full_ok, soft_avg = stems(parts[3], cx * 2, cy * 2, cw * 2, ch * 2)
         results[app] = soft_ok
         print("  %s: crisp-stem share %.0f%% (%d stems)" % (app, soft_ok * 100, n))
-        check(app + ": %d text stems measured" % n, n >= (100 if app in ("calendar", "notes") else 40))
+        check(app + ": %d text stems measured" % n, n >= FEW_STEMS.get(app, 100 if app in ("calendar", "notes", "finder", "mail", "reminders", "stocks") else 40))
         check(app + ": %.0f%% of stems have at most 2 soft pixels (a blur ramp has 3 or more)" % (soft_ok * 100), soft_ok >= 0.85, "%.2f" % soft_ok)
         check(app + ": %.0f%% of stems are 2 or more full pixels wide" % (full_ok * 100), full_ok >= 0.50, "%.2f" % full_ok)
         check(app + ": a stem averages %.2f soft pixels" % soft_avg, soft_avg < 2.3, "%.2f" % soft_avg)
@@ -132,6 +134,11 @@ if __name__ == "__main__":
     for a in ALL:
         run(a)
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
-    if fails: print("FAIL: %d: %s" % (len(fails), "; ".join(fails))); sys.exit(1)
     print("shares: " + ", ".join("%s %.0f%%" % (kv[0], kv[1] * 100) for kv in results.items()))
+    if "--save" in sys.argv: json.dump(results, open(sys.argv[sys.argv.index("--save") + 1], "w"))
+    if "--before" in sys.argv:   # a table against an earlier --save: the same apps on the tree before the change
+        before = json.load(open(sys.argv[sys.argv.index("--before") + 1]))
+        print("%-12s %7s %7s" % ("app", "before", "after"))
+        for a, v in results.items(): print("%-12s %6.0f%% %6.0f%%" % (a, before.get(a, 0) * 100, v * 100))
+    if fails: print("FAIL: %d: %s" % (len(fails), "; ".join(fails))); sys.exit(1)
     print("ok: every app window is crisp at scale 2")

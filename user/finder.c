@@ -13,6 +13,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 
 #define BG     0x00FAF8F6
 #define INK    0x001C1C1E
@@ -59,24 +60,26 @@ static void say_num(int v) {
 static int is_docs(const char *n) {   /* Documents is 9 letters, so an 8.3 card holds it as DOCUME~1 (or a short DOCS) */
     return ieq(n, "DOCUMENTS") || ieq(n, "DOCS") || (ieq(n, "DOCUME~1") || ieq(n, "DOCUME~2"));
 }
-static const char *pretty(const char *n) { return is_docs(n) ? "Documents" : n; }
+/* The name as shown, not as stored: an 8.3 entry is all capitals, which macOS never shows. A name with any lower case letter
+   (a long name the card kept) is left alone; otherwise a folder is Capitalised (BOOKS is Books) and a file is lower case
+   (HELLO.C is hello.c). Display only: the path the app opens is still the entry's own name. */
+static const char *pretty(const char *n, int is_dir, char *buf) {
+    if (is_docs(n)) return "Documents";
+    int k = 0, lower = 0;
+    for (; n[k] && k < 47; k++) { buf[k] = n[k]; if (n[k] >= 'a' && n[k] <= 'z') lower = 1; }
+    buf[k] = 0;
+    if (lower) return buf;
+    for (int i = 0; i < k; i++) if (buf[i] >= 'A' && buf[i] <= 'Z' && !(is_dir && i == 0)) buf[i] += 32;
+    return buf;
+}
 static int has_ext(const char *name, const char *ext) {
     int n = slen(name), e = slen(ext);
     return n > e + 1 && name[n - e - 1] == '.' && ieq(name + n - e, ext);
 }
 
 /* ---- flat shapes ---- */
-static void fill(int x, int y, int w, int h, unsigned c) {
-    int W = (int)win.width, H = (int)win.height, pitch = (int)(win.pitch / 4);
-    if (x < 0) { w += x; x = 0; }
-    if (y < 0) { h += y; y = 0; }
-    if (x + w > W) w = W - x;
-    if (y + h > H) h = H - y;
-    for (int j = 0; j < h; j++) { unsigned *p = win.pixels + (y + j) * pitch + x; for (int i = 0; i < w; i++) p[i] = c; }
-}
-static void disc(int cx, int cy, int r, unsigned c) {
-    for (int j = -r; j <= r; j++) for (int i = -r; i <= r; i++) if (i * i + j * j <= r * r) fill(cx + i, cy + j, 1, 1, c);
-}
+static void fill(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
+static void disc(int cx, int cy, int r, unsigned c) { jt_disc(&win, cx, cy, r, c); }
 enum { K_DIR, K_TXT, K_MUSIC, K_IMG, K_FILE };
 static int kind_of(const struct jt_dirent *d) {
     if (d->is_dir) return K_DIR;
@@ -256,7 +259,8 @@ static void open_sel(void) {
 static int visible(void) { return ((int)win.height - TOP_H - FOOT_H) / ROW_H; }
 static void draw_preview(int x0) {
     int w = (int)win.width - x0 - 24, y = TOP_H + 14, lh = jt_text_height(JT_FACE_BODY) + 3;
-    text_at(JT_FACE_BOLD, x0 + 12, y + 8, INK, pv_name);
+    char pvb[48];
+    text_at(JT_FACE_BOLD, x0 + 12, y + 8, INK, pretty(pv_name, 0, pvb));
     y += 26;
     fill(x0 + 12, y - 5, w, 1, RULE);
     char line[96]; int ln = 0;
@@ -302,11 +306,22 @@ static void draw(void) {
     for (int i = 0; cwd[i]; i++) if (cwd[i] == '/') base = cwd + i + 1;
     if (builtin) { const char *t = "Applications"; for (; t[k]; k++) title[k] = t[k]; }
     else if (!cwd[0]) { const char *t = place_name[0]; for (; t[k]; k++) title[k] = t[k]; }
-    else { const char *pb = pretty(base); for (; pb[k] && k < 40; k++) title[k] = (pb != base || !k || pb[k] < 'A' || pb[k] > 'Z') ? pb[k] : (char)(pb[k] + 32); }
+    else { char pbuf[48]; const char *pb = pretty(base, 1, pbuf); for (; pb[k] && k < 40; k++) title[k] = pb[k]; }
     title[k] = 0;
-    if (k && !builtin && cwd[0] && title[0] >= 'a' && title[0] <= 'z') title[0] -= 32;
     text_at(JT_FACE_BOLD, x0 + 14, TOP_H / 2, INK, title);
-    if (cwd[0] && !builtin) text_at(JT_FACE_BODY, W - 12 - jt_text_width(JT_FACE_BODY, cwd), TOP_H / 2, FADE, cwd);
+    if (cwd[0] && !builtin) {   /* the path, each folder in its friendly case */
+        char path[PATH_MAX_LEN + 8]; int pn = 0;
+        for (int i = 0; cwd[i] && pn < PATH_MAX_LEN;) {
+            char comp[16], pb[48]; int cn = 0;
+            while (cwd[i] && cwd[i] != '/' && cn < 15) comp[cn++] = cwd[i++];
+            comp[cn] = 0;
+            if (cwd[i] == '/') i++;
+            if (pn) path[pn++] = '/';
+            for (const char *q = pretty(comp, 1, pb); *q && pn < PATH_MAX_LEN; q++) path[pn++] = *q;
+        }
+        path[pn] = 0;
+        text_at(JT_FACE_BODY, W - 12 - jt_text_width(JT_FACE_BODY, path), TOP_H / 2, FADE, path);
+    }
     if (previewing) draw_preview(x0);
     else {
         int vis = visible();
@@ -317,7 +332,7 @@ static void draw(void) {
             struct jt_dirent *d = &ar->de[i];
             if (i == sel) fill(x0 + 6, y + 1, W - x0 - 12, ROW_H - 2, focus_side ? SELOFF : SEL);
             icon(x0 + 14, y + 4, kind_of(d));
-            char nm[48]; fit(nm, sizeof nm, pretty(d->name), W - x0 - 14 - 22 - 90);
+            char nm[48], pb[48]; fit(nm, sizeof nm, builtin ? d->name : pretty(d->name, d->is_dir, pb), W - x0 - 14 - 22 - 90);
             text_at(JT_FACE_BODY, x0 + 38, y + ROW_H / 2, INK, nm);
             char sz[16];
             if (builtin) { sz[0] = 0; const char *t = "built in"; int q = 0; for (; t[q]; q++) sz[q] = t[q]; sz[q] = 0; }
@@ -384,7 +399,7 @@ static void on_click(int x, int y) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) { say("finder: no window\n"); jt_exit(1); }
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) { say("finder: no window\n"); jt_exit(1); }
     ar = (struct arena *)(((unsigned long)_user_bss_end + 15ul) & ~15ul);
     say("finder: window "); say_num((int)win.width); say("x"); say_num((int)win.height); say("\n");
     find_places();

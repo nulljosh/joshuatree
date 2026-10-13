@@ -4,11 +4,11 @@
 Three builds on QEMU's virt machine with ramfb and a USB keyboard and mouse behind a hub (the Pi image has QUIET_BOOT on by itself;
 here -DQUIET_BOOT turns it on for virt, which can be clicked). WIFI_ICON_TEST makes the kernel print where the fan is.
   - Build 1, not joined: `console quiet` is printed and the Console's whole rectangle on screen is one flat terracotta
-    (no frame, no dots, no white well, no boot log); the menu bar's closing rule is there; the fan has dimmed neutral grey
-    pixels (0x909090), nothing blue (no pixel with blue above red) and nothing ink-dark in it.
+    (no frame, no dots, no white well, no boot log); the menu bar's closing rule is there; the fan is flat ink
+    (0x1C1C1E) even though nothing is joined, with no grey and nothing blue (no pixel with blue above red) in it.
     Then a click on the Mail tile opens the Console with the buffered boot log (white well, ink text, `console open`), and a
     click on the Terminal tile opens the Terminal (`terminal open`), so the log was kept the whole time.
-  - Build 2, joined: the same fan is flat ink, 0x1C1C1E, the clock's ink, with no grey 0x909090 left in it.
+  - Build 2, joined: the same fan is flat ink, 0x1C1C1E, the clock's ink, with no grey 0x909090 left in it (3.19.1: the speaker and power icons wear the same ink).
   - Build 3, the splash (-DSPLASH_STEP_MS=1500 holds each boot stage so screendumps can catch it): the first dump is solid
     terracotta with the tree mark centred (ink pixels), a track and one sixth of the bar filled, and no window frame, no menu
     bar, nothing white; a later dump (after the wifi stage) is still that splash with half the bar; the one before the end has
@@ -117,8 +117,9 @@ try:
             if px(img, W // 2, 26 * H // 540 - 1) != (0xBD, 0xB8, 0xB0): fails.append("the menu bar's closing rule is missing: no desktop")
             dump(img, uart); f_ = fan(img, uart)
             grey = sum(1 for c in f_ if c == DIM); blue = sum(1 for c in f_ if c[2] > c[0]); ink = sum(1 for c in f_ if max(c) < 0x50)
-            if grey < 10 or blue or ink: fails.append(f"not joined, the fan should be dimmed grey: {grey} pixels of 0x909090, {blue} bluish, {ink} ink-dark")
-            else: print(f"  ok: not joined, the Wi-Fi fan is dimmed grey ({grey} solid pixels, none blue, none ink)")
+            ink = sum(1 for c in f_ if c == INK)
+            if ink < 10 or grey or blue: fails.append(f"not joined, the fan should still be flat ink 0x1C1C1E: {ink} ink pixels, {grey} grey, {blue} bluish")
+            else: print(f"  ok: not joined, the Wi-Fi fan is flat ink too, no grey ({ink} solid pixels, none blue)")
             # the log was kept: a dock click opens the Console with it, and the Terminal tile opens the Terminal
             pos = [W // 2, H // 2]
             def move_to(x, y):
@@ -218,4 +219,4 @@ finally:
 
 if fails:
     print("FAIL:"); [print("  - " + x) for x in fails]; sys.exit(1)
-print("PASS: the Pi boots behind a grey splash that fills as the stages finish, the desktop then paints once with no Console window, the log is one click away, and the Wi-Fi fan is ink when joined and dimmed grey when not")
+print("PASS: the Pi boots behind a grey splash that fills as the stages finish, the desktop then paints once with no Console window, the log is one click away, and the Wi-Fi fan is flat ink joined or not")

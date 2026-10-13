@@ -1775,7 +1775,7 @@ static long app_window_open(unsigned long info, unsigned long flags) {
     if (!user_writable(info, 24)) return -14;
     if (!app_wbytes || app_cw != app_bw || app_ch != app_bh) {   /* the first open, or the answer to JT_EV_RESIZE: a buffer of the content's size now, zeroed */
         const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
-        int hi = (flags & 1) && window_scale() == 2;   /* hires.h's ask: only at scale 2, where there are device pixels to give */
+        int hi = ((flags & 1) || (app_wbytes && app_hi)) && window_scale() == 2;   /* hires.h's ask: only at scale 2, where there are device pixels to give */
         unsigned long bytes = ((unsigned long)app_cw * app_ch * (hi ? 16 : 4) + 4095) & ~4095UL;
         if (bytes > UWIN_MAX) return -12;
         for (unsigned long i = 0; i < bytes / 4096; i++) l3[(UP_WIN >> 12) + i] = (USER_BASE + UP_WIN + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
@@ -2392,12 +2392,11 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
 #include "browser_ui.h"
 #include "glyphs.h"
 #include "settings_ui.h"
-/* The right end of the menu bar: the clock in 12-hour form, and left of it the Wi-Fi fan, no name. Joined, the fan is flat
-   ink, the same 0x001C1C1E as the clock; anything else (starting, joining, no network) is the same fan dimmed to a neutral grey.
+/* The right end of the menu bar: the clock in 12-hour form, and left of it the Wi-Fi fan, no name. The fan, the speaker and the power
+   symbol are all flat ink, the same 0x001C1C1E as the clock, in every state.
    Each arc is anti-aliased (4x4 samples a pixel, blended onto the bar), so it stays crisp at scale 1 and 2. Each call puts the
    saved bare bar back first, so old pixels never show through. */
 #define WIFI_INK 0x001C1C1E
-#define WIFI_DIM 0x00909090
 void menubar_wifi(int state) {
     mb_wifi = state;   /* kept even before the desktop exists (the boot splash), so its first paint shows the right fan */
     if (!fb || !text_ok) return;
@@ -2415,7 +2414,7 @@ void menubar_wifi(int state) {
     int cx = W - sg(16) - text_width(2, clk, sg(120));
     text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
     int R = sg(11), th = sg(3) / 2 < 2 ? 2 : sg(3) / 2, dr = sg(3) / 2, ox = cx - sg(16) - R, oy = mb / 2 + sg(5);   /* the classic fan: a dot, then three arcs above it */
-    unsigned ink = fb_color(state == 2 ? WIFI_INK : WIFI_DIM);
+    unsigned ink = fb_color(WIFI_INK);   /* the clock's ink in every state, joined or not (3.19.1: no grey icons) */
     for (int y = -R - 1; y <= dr + 1; y++) for (int x = -R - 1; x <= R + 1; x++) {
         int hit = 0;
         for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {   /* a sample's offset from the dot's centre, in eighths of a pixel */
@@ -2434,7 +2433,7 @@ void menubar_wifi(int state) {
     /* 3.13.0: two more status icons left of the fan, a speaker (dim and without waves at volume 0) and a power symbol. A click on
        any of them, the fan and the clock too, opens Settings at its section (menubar_click). */
     int isz = sg(16), sx = ox - R - sg(14) - isz, wx = sx - sg(12) - isz, iy = (mb - 1 - isz) / 2, vol = audio_volume();
-    glyph_paint(GL_SOUND, vol == 0 ? 0 : vol <= 50 ? 1 : 2, sx, iy, isz, vol ? WIFI_INK : WIFI_DIM);
+    glyph_paint(GL_SOUND, vol == 0 ? 0 : vol <= 50 ? 1 : 2, sx, iy, isz, WIFI_INK);   /* ink at every volume: the waves say the level, not a grey */
     glyph_paint(GL_POWER, 0, wx, iy, isz, WIFI_INK);
     mb_hit[0][0] = wx - sg(5); mb_hit[0][1] = wx + isz + sg(5);         /* power */
     mb_hit[1][0] = sx - sg(5); mb_hit[1][1] = sx + isz + sg(5);         /* sound */
@@ -2660,7 +2659,8 @@ static void fb_desktop(void) {
         #define NM_IS(w) ({ const char *a_ = nm, *b_ = w; while (*a_ && *a_ == *b_) { a_++; b_++; } !*a_ && !*b_; })
         if (NM_IS("calculator")) { calc_open(); bx = calc_lx; by = calc_ly; bw = calc_lw; bh = calc_lh; }
         else {
-            if (NM_IS("clock")) clock_open();
+            if (NM_IS("settings")) settings_open(0);
+            else if (NM_IS("clock")) clock_open();
             else if (NM_IS("brick")) brick_open();
             else if (NM_IS("browser")) browser_open();
             else if (NM_IS("terminal")) pane_open(&term_p);

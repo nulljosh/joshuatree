@@ -26,6 +26,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 
 #define BG     0x00FAF8F6 /* GUI_BG */
 #define BOARD  0x00F1EDE7
@@ -74,16 +75,7 @@ static void tr_step(void) {
     tr_gen++;
 }
 
-static void rect(int x, int y, int w, int h, unsigned c) {
-    if (x < 0) { w += x; x = 0; }
-    if (y < 0) { h += y; y = 0; }
-    if (x + w > (int)win.width)  w = (int)win.width - x;
-    if (y + h > (int)win.height) h = (int)win.height - y;
-    for (int yy = 0; yy < h; yy++) {
-        unsigned *row = win.pixels + (unsigned)(y + yy) * win.width + (unsigned)x;
-        for (int xx = 0; xx < w; xx++) row[xx] = c;
-    }
-}
+static void rect(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
 static int text(const char *s, int x, int y, unsigned fg) { return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
@@ -113,7 +105,7 @@ static void tr_draw(void) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) {
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) {
         jt_write(2, "toroid: no window\n", 18);
         jt_exit(1);
     }

@@ -23,6 +23,7 @@
 #include "jtsys.h"
 #include "libjt/string.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 
 #define BG   0x00FAF8F6
 #define INK  0x001C1C1E
@@ -43,17 +44,7 @@ static const char *WORDS[] = {
 
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 
-static void rect(int x, int y, int w, int h, unsigned c) {
-    if (x < 0) { w += x; x = 0; }
-    if (y < 0) { h += y; y = 0; }
-    if (x + w > (int)win.width)  w = (int)win.width - x;
-    if (y + h > (int)win.height) h = (int)win.height - y;
-    for (int yy = 0; yy < h; yy++) {
-        unsigned *row = win.pixels + (unsigned)(y + yy) * win.width + (unsigned)x;
-        for (int xx = 0; xx < w; xx++) row[xx] = c;
-    }
-}
-
+static void rect(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
 static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 
 /* One glyph at a time so typed and untyped letters take different inks;
@@ -102,7 +93,7 @@ static int next_event(struct jt_event *ev, int present) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) {
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) {
         jt_write(2, "keyrate: no window\n", 19);
         jt_exit(1);
     }

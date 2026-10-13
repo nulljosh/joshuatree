@@ -60,6 +60,12 @@ int jt_text_draw_half(struct jt_window_info *w, int face, int x, int y, unsigned
     return hi_draw(w, face, &f, kind, x, y, rgb, s, 50);
 }
 
+int jt_text_draw_pct(struct jt_window_info *w, int face, int x, int y, unsigned rgb, const char *s, int pct) {
+    struct face f; int kind = face_info(face, &f);
+    if (jt_scale(w) < 2) return -1;
+    return hi_draw(w, face, &f, kind, x, y, rgb, s, pct);
+}
+
 int jt_text_draw(struct jt_window_info *w, int face, int x, int y, unsigned rgb, const char *s) {
     struct face f; int kind = face_info(face, &f);
     if (jt_scale(w) > 1) return hi_draw(w, face, &f, kind, x, y, rgb, s, 100);

@@ -173,10 +173,12 @@ ujt_png.o: $(UJT)/png.c ../../drivers/png.c ../../drivers/inflate.c ../../driver
 	$(UCC) -c $< -o $@
 ujt_jpeg.o: $(UJT)/jpeg.c ../../drivers/jpeg.c ../../drivers/jpeg.h $(UJT)/stdlib.h $(UJT)/string.h
 	$(UCC) -c $< -o $@
-uapp_weather.o: ../../user/weather_pi.c ../../user/jtsys.h $(UJT)/text.h
+# (the recipe line below was missing: make then built i386's weather.c through the pattern rule)
+uapp_weather.o: ../../user/weather_pi.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/hires.h
+	$(UCC) -c $< -o $@
 uapp_stocks.o: ../../user/stocks_pi.c ../../user/jtsys.h $(UJT)/text.h
 	$(UCC) -c $< -o $@
-uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h
+uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h $(UJT)/hires.h
 	$(UCC) -c $< -o $@
 # 3.17.0: the app called reminders is user/remindpi.c (the Pi's macOS-shaped list), not user/reminders.c, which is the i386 one; this rule beats the pattern above.
 uapp_reminders.o: ../../user/remindpi.c ../../user/jtsys.h $(UJT)/text.h

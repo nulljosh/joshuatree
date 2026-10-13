@@ -19,6 +19,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 
 #define BG     0x00FAF8F6
 #define INK    0x001C1C1E
@@ -50,16 +51,7 @@ static int full JT_DATA = 0;          /* an add was refused: the list is full */
 static char entry[TEXT_N] JT_DATA = {0};
 static int entry_len JT_DATA = 0;
 
-static void rect(int x, int y, int w, int h, unsigned c) {
-    if (x < 0) { w += x; x = 0; }
-    if (y < 0) { h += y; y = 0; }
-    if (x + w > (int)win.width)  w = (int)win.width - x;
-    if (y + h > (int)win.height) h = (int)win.height - y;
-    for (int yy = 0; yy < h; yy++) {
-        unsigned *row = win.pixels + (unsigned)(y + yy) * win.width + (unsigned)x;
-        for (int xx = 0; xx < w; xx++) row[xx] = c;
-    }
-}
+static void rect(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
 static int text(int face, const char *s, int x, int y, unsigned fg) { return jt_text_draw(&win, face, x, y, fg, s); }
 
 static unsigned blend(unsigned bg, unsigned fg, int a /* 0..16 */) {
@@ -73,18 +65,19 @@ static unsigned blend(unsigned bg, unsigned fg, int a /* 0..16 */) {
 /* A disc or a ring around (cx, cy), 4x4 samples a pixel so the edge is soft. ri 0 is a disc of radius ro; a ring is the
    band from ri to ro. Units inside are eighths of a pixel. */
 static void round_mark(int cx, int cy, int ro, int ri, unsigned c) {
-    long O = (long)ro * 8, I = (long)ri * 8;
-    for (int y = cy - ro - 1; y <= cy + ro + 1; y++) {
-        if (y < 0 || y >= (int)win.height) continue;
-        for (int x = cx - ro - 1; x <= cx + ro + 1; x++) {
-            if (x < 0 || x >= (int)win.width) continue;
+    int k = jt_scale(&win), W = (int)win.width * k, H = (int)win.height * k;   /* device pixels; the shape is the same size and place as at 1x */
+    long O = (long)ro * k * 8, I = (long)ri * k * 8;
+    for (int y = (cy - ro - 1) * k; y <= (cy + ro + 2) * k; y++) {
+        if (y < 0 || y >= H) continue;
+        for (int x = (cx - ro - 1) * k; x <= (cx + ro + 2) * k; x++) {
+            if (x < 0 || x >= W) continue;
             int hit = 0;
             for (int sy = 0; sy < 4; sy++) for (int sx = 0; sx < 4; sx++) {
-                long dx = (long)x * 8 + sx * 2 + 1 - ((long)cx * 8 + 4), dy = (long)y * 8 + sy * 2 + 1 - ((long)cy * 8 + 4), d = dx * dx + dy * dy;
+                long dx = (long)x * 8 + sx * 2 + 1 - ((long)cx * k * 8 + 4 * k), dy = (long)y * 8 + sy * 2 + 1 - ((long)cy * k * 8 + 4 * k), d = dx * dx + dy * dy;
                 if (d <= O * O && (ri == 0 || d >= I * I)) hit++;
             }
             if (!hit) continue;
-            unsigned *p = win.pixels + (unsigned)y * win.width + (unsigned)x;
+            unsigned *p = win.pixels + (unsigned)y * (unsigned)W + (unsigned)x;
             *p = blend(*p, c, hit);
         }
     }
@@ -267,7 +260,7 @@ static void remove_row(int i) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) {
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) {
         jt_write(2, "reminders: no window\n", 21);
         jt_exit(1);
     }

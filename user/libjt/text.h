@@ -23,6 +23,10 @@ int jt_text_draw(struct jt_window_info *w, int face, int x, int y, unsigned rgb,
    (the caller then keeps its own 1x way). */
 int jt_text_draw_half(struct jt_window_info *w, int face, int x, int y, unsigned rgb, const char *s);
 
+/* Like jt_text_draw but pct percent of the face's size (25 to 400), for a hi-res window only (the Hamurapi title): same pen rule,
+   the 1x advances times pct/100. Returns the logical x after the last glyph, or -1 when the window is not hi-res. */
+int jt_text_draw_pct(struct jt_window_info *w, int face, int x, int y, unsigned rgb, const char *s, int pct);
+
 /* Mono face: DejaVu Sans Mono, ASCII 0x20..0x7E only (anything else draws
    '?'), one size, every glyph the same 8 px advance. Lives in its own object
    (user/libjt/mono.c, own atlas) so only apps that call it pay for it; this

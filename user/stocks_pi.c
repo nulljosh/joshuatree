@@ -13,6 +13,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 
 #define BG     0x00F5F0EB
 #define SIDEBG 0x00F1ECE6
@@ -84,28 +85,31 @@ static void load(void) {
     }
 }
 
-static void pset(int x, int y, unsigned c) {
-    if (x >= 0 && y >= 0 && x < (int)win.width && y < (int)win.height) win.pixels[(unsigned)y * win.width + (unsigned)x] = c;
-}
-static void rect(int x, int y, int w, int h, unsigned c) { for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) pset(x + i, y + j, c); }
+static void rect(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
 static int text(const char *s, int x, int y, unsigned fg, int bold) { return jt_text_draw(&win, bold ? JT_FACE_BOLD : JT_FACE_BODY, x, y, fg, s); }
 static int tw(const char *s, int bold) { return jt_text_width(bold ? JT_FACE_BOLD : JT_FACE_BODY, s); }
 
-/* Antialiased line: each step spreads its coverage over the four nearest pixels. */
+/* Antialiased line, in device pixels (hires.h: a logical pixel is k by k of them): each step spreads its coverage over the
+   four nearest pixels. At scale 1 these are the logical pixels the line always used. */
 static void blend(int x, int y, unsigned c, int a) {
-    if (x < 0 || y < 0 || x >= (int)win.width || y >= (int)win.height || a <= 0) return;
-    unsigned *d = &win.pixels[(unsigned)y * win.width + (unsigned)x], o = *d, r = 0;
+    int k = jt_scale(&win), W = (int)win.width * k, H = (int)win.height * k;
+    if (x < 0 || y < 0 || x >= W || y >= H || a <= 0) return;
+    unsigned *d = &win.pixels[(unsigned)y * (unsigned)W + (unsigned)x], o = *d, r = 0;
     for (int s = 0; s < 24; s += 8) r |= ((((c >> s) & 255) * (unsigned)a + ((o >> s) & 255) * (unsigned)(255 - a)) / 255) << s;
     *d = r;
 }
-static void line(int x0, int y0, int x1, int y1, unsigned c) {
+static void line(int x0, int y0, int x1, int y1, unsigned c) {   /* logical end points; drawn from the pixel centres' device positions */
+    int k = jt_scale(&win);
+    x0 = x0 * k + (k - 1) / 2; y0 = y0 * k + (k - 1) / 2; x1 = x1 * k + (k - 1) / 2; y1 = y1 * k + (k - 1) / 2;
     int dx = x1 - x0, dy = y1 - y0, n = (dx < 0 ? -dx : dx) > (dy < 0 ? -dy : dy) ? (dx < 0 ? -dx : dx) : (dy < 0 ? -dy : dy);
-    if (!n) { blend(x0, y0, c, 255); return; }
-    for (int i = 0; i <= n; i++) {
-        int fx = x0 * 256 + dx * 256 * i / n, fy = y0 * 256 + dy * 256 * i / n;
-        int ix = fx >> 8, iy = fy >> 8, ax = fx & 255, ay = fy & 255;
-        blend(ix, iy, c, (256 - ax) * (256 - ay) >> 8); blend(ix + 1, iy, c, ax * (256 - ay) >> 8);
-        blend(ix, iy + 1, c, (256 - ax) * ay >> 8); blend(ix + 1, iy + 1, c, ax * ay >> 8);
+    for (int o = 0; o < 2 * k; o++) {   /* two logical pixels thick */
+        if (!n) { blend(x0, y0 + o, c, 255); continue; }
+        for (int i = 0; i <= n; i++) {
+            int fx = x0 * 256 + dx * 256 * i / n, fy = (y0 + o) * 256 + dy * 256 * i / n;
+            int ix = fx >> 8, iy = fy >> 8, ax = fx & 255, ay = fy & 255;
+            blend(ix, iy, c, (256 - ax) * (256 - ay) >> 8); blend(ix + 1, iy, c, ax * (256 - ay) >> 8);
+            blend(ix, iy + 1, c, (256 - ax) * ay >> 8); blend(ix + 1, iy + 1, c, ax * ay >> 8);
+        }
     }
 }
 /* 32-bit only: no __divdi3 in a flat binary, so shrink both terms until the product fits. */
@@ -118,7 +122,7 @@ static void chart(int x, int y, int w, int h, const int *v, int n, unsigned c) {
     int px = x, py = y + h - 1 - scale(v[0] - lo, hi - lo, h - 1);
     for (int i = 1; i < n; i++) {
         int cx = x + i * (w - 1) / (n - 1), cy = y + h - 1 - scale(v[i] - lo, hi - lo, h - 1);
-        line(px, py, cx, cy, c); line(px, py + 1, cx, cy + 1, c); px = cx; py = cy;
+        line(px, py, cx, cy, c); px = cx; py = cy;
     }
 }
 
@@ -195,7 +199,7 @@ static void draw(void) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "stocks: no window\n", 18); jt_exit(1); }
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) { jt_write(2, "stocks: no window\n", 18); jt_exit(1); }
     load();
     jt_write(1, saved ? "stocks: saved prices\n" : "stocks: sample, not live prices\n", saved ? 21 : 32);
     draw();

@@ -13,6 +13,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 
 #define BG     0x00F5F0EB
 #define CARD   0x00ECE5DC
@@ -40,11 +41,8 @@ static int itoa10(int v, char *b) {
 }
 static int deg(char *b, int v) { int n = itoa10(v, b); b[n++] = (char)0xB0; b[n] = 0; return n; }
 
-static void pset(int x, int y, unsigned c) {
-    if (x >= 0 && y >= 0 && x < (int)win.width && y < (int)win.height) win.pixels[(unsigned)y * win.width + (unsigned)x] = c;
-}
-static void rect(int x, int y, int w, int h, unsigned c) { for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) pset(x + i, y + j, c); }
-static void disc(int cx, int cy, int r, unsigned c) { for (int j = -r; j <= r; j++) for (int i = -r; i <= r; i++) if (i * i + j * j <= r * r) pset(cx + i, cy + j, c); }
+static void rect(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
+static void disc(int cx, int cy, int r, unsigned c) { jt_disc(&win, cx, cy, r, c); }
 static void cap(int x0, int y0, int x1, int y1, int t, unsigned c) {   /* a line with round ends, t px thick */
     int dx = x1 - x0, dy = y1 - y0, n = (dx < 0 ? -dx : dx) > (dy < 0 ? -dy : dy) ? (dx < 0 ? -dx : dx) : (dy < 0 ? -dy : dy);
     for (int i = 0; i <= n; i++) disc(n ? x0 + dx * i / n : x0, n ? y0 + dy * i / n : y0, t / 2 ? t / 2 : 1, c);
@@ -158,7 +156,7 @@ static void draw(void) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "weather: no window\n", 19); jt_exit(1); }
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) { jt_write(2, "weather: no window\n", 19); jt_exit(1); }
     load();
     draw();
     say("weather: ", have ? 1 : 0, " saved, days ", nd);
