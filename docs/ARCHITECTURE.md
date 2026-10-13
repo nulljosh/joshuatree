@@ -911,19 +911,7 @@ relocations, so its load address is not negotiable:
 
 #### What this contract does NOT cover
 
-Honest scope, so nothing here overclaims:
-
-- No memory-mapping call, no `brk`, no `mmap`. A v1 program gets the
-  eight pages it was loaded with, and that is all the memory it will ever
-  have.
-- No `fork` or `exec`. Tasks are created by the kernel, not by user code.
-- No signals, no IPC, no sockets. The network stack is kernel-side only.
-- No directory enumeration, no seek, no stat. `open`/`read`/`close` on a
-  known path only.
-- No writing to files. `open` is read-only in v1.
-- No command-line arguments and no environment. `_start` takes nothing.
-- Nothing about the GUI. Every app you can click is kernel code today, not
-  a ring-3 program, and converting them is a separate, larger job.
+v1 had no memory-mapping call (a program got the eight pages it was loaded with), no `fork` or `exec`, no signals, IPC or sockets, no directory enumeration, seek or stat, no writing to files (`open` was read-only), no command-line arguments or environment, and nothing about the GUI. v2 and v3 below added the file, argument, memory, window and network calls; this list is kept short because later versions overtook it.
 
 ### v2, shipped
 
@@ -1108,57 +1096,11 @@ not a quiet edit to the v1 section above.
 
 #### The v2 reference program
 
-`user/note.c`, built and loaded exactly like `user/hello.c` and against
-`user/jtsys.h` and no kernel header. The difference is that it is a program
-someone would run rather than an interface self-test:
-
-```
-note FILE              print it
-note FILE text...      append a line, creating the file
-note FILE @N text...   overwrite the bytes at offset N
-```
-
-The third form is what makes `lseek` load-bearing rather than decorative:
-the descriptor is opened for writing without `O_TRUNC`, so it still holds
-the file's existing bytes, the seek moves into the middle of them, and the
-write replaces exactly what it covers.
-
-`tools/checks/notetest-check.sh` runs it on every push. Its strongest
-assertion is not one of the program's printed lines: after the runs, the
-kernel reads the file back through the VFS itself and compares the bytes,
-because everything the program prints is the program's claim about what it
-did, and a write path that printed the right numbers and stored nothing
-would pass the first check and fail that one.
+`user/note.c`, built like `user/hello.c` against `user/jtsys.h` and no kernel header: `note FILE` prints it, `note FILE text...` appends a line (creating the file), `note FILE @N text...` overwrites the bytes at offset N, which is what makes `lseek` load-bearing (the descriptor is opened without `O_TRUNC`, so the seek moves into the existing bytes and the write replaces exactly what it covers). `tools/checks/notetest-check.sh` runs it on every push; its strongest assertion has the kernel read the file back through the VFS and compare bytes, because what the program prints is only its own claim about what it did.
 
 #### What v2 still does NOT cover
 
-Honest scope again, and the list is still long.
-
-- **One program at a time, still.** There is one image window and one user
-  stack page, and the shell blocks on the program it started. There is no
-  `fork`, no `wait`, no job control, no way for two user programs to be
-  alive at once.
-- ~~No shell that runs programs by name.~~ Fixed for 1.0.0: an unknown
-  command now falls through to the same lookup `exec` uses
-  (`exec_resolve_name()` in `kernel/exec.c`), case-insensitive and trying
-  the real on-disk extension, before the shell reports it unknown. `exec
-  NOTE.BIN args...` still works exactly as before; typing `note buy milk`
-  does too. The kernel shell is still an `if`-ladder of built-ins, and
-  built-ins still win over a program of the same name -- there is no
-  `$PATH`, just one lookup against the active VFS backend.
-- **No `unlink`, no `rename`, no `mkdir`, no directory enumeration, no
-  `stat`.** A program can read and write files it already knows the names
-  of. Removing one is still a kernel-side `rm`.
-- **No append-without-reading.** Opening a file for writing reads the whole
-  thing first, because the write-back model needs it. Appending one line to
-  an 8KB file moves 8KB twice.
-- **No `dup`, no redirection, no pipes.** fd 1 is the console and nothing
-  can change that.
-- **Still no `brk`/`mmap`, no signals, no IPC, no sockets.** A program gets
-  the eight pages it was loaded with, and that is all the memory it will
-  ever have.
-- **Nothing about the GUI.** Every app you can click is still kernel code,
-  not a ring-3 program.
+Still missing at v2: more than one user program alive at once (one image window and one user stack page, and the shell blocks on the program it started), `fork`, `wait`, job control, `dup`, redirection and pipes (fd 1 is the console), signals, IPC and sockets, and append without reading (opening a file for writing reads the whole thing first, so appending one line to an 8KB file moves 8KB twice). An unknown shell command already falls through to the same lookup `exec` uses (`exec_resolve_name()` in `kernel/exec.c`, case-insensitive, real on-disk extension), so typing `note buy milk` works; built-ins still win over a program of the same name and there is no `$PATH`. `unlink`, `mkdir`, directory enumeration, `brk` and the GUI arrived in v3.
 
 #### What a MAJOR version means, from here on
 
@@ -1670,217 +1612,57 @@ full).
 
 ## Threat model
 
-Written before the auth code, per `ROADMAP.md` (Roadmap)'s own gate: a login prompt on
-top of no real privilege boundary would protect nothing, so this has to be
-honest about what "protects" means here before a line of it gets built.
+Written before the auth code: a login prompt on top of no real privilege boundary would protect nothing, so this is honest about what "protects" means here. Condensed 2026-10-12; the full prose is in git history.
 
-### What a Joshua Tree account actually protects against
+### What an account protects against, and what it does not
 
-The one real scenario this kernel runs in today: a single machine (real
-hardware, or QEMU/v86 in a browser tab) with one keyboard and one screen,
-used by one person at a time who steps away and comes back. A login screen
-protects against a casual second person sitting down at that keyboard
-while the first person is away, and it protects against someone opening
-the desktop by accident (a stray click, a demo left running) and seeing or
-changing another account's files. It also gives this kernel a real,
-non-trivial password hash for the first time (PBKDF2-HMAC-SHA256 over
-BearSSL, 100,000 iterations, a 16-byte salt and the iteration count stored
-per record; the 1.7.9 replacement for the earlier home-grown chained
-SHA-256, which is still verified so old accounts log in, then rewritten as
-PBKDF2 on that login), which is worth having on its own, so that adding a
-second real account later (multi-user on one machine, still not networked)
-doesn't start from a worse place than "no hash at all." That is the whole
-scope: a lock on the desktop for the person physically in front of it,
-nothing more.
+A Joshua Tree account is a desktop lock for the person physically at the keyboard. It stops a casual second person sitting down while the first is away, and an accidental open of the desktop (a stray click, a demo left running) changing another account's files. It also gives the kernel a real password hash: PBKDF2-HMAC-SHA256 over BearSSL, 100,000 iterations, a 16-byte salt and the iteration count stored per record (the 1.7.9 replacement for the older home-grown chained SHA-256, which is still verified so old accounts log in and are then rewritten as PBKDF2).
 
-### What it explicitly does NOT protect against
+It does not protect against anything past the keyboard, and must not be oversold. There is no network-facing multi-tenant use and no remote caller for the login to guard. There is no disk encryption: `USERS.TXT` and every file sit in plaintext on the same FAT image, so anyone who can read the disk can run an offline crack of the hashes as if the login never existed. Apps now run at ring 3 in their own address spaces, but code already running in the kernel can read a session's memory or the raw disk. No claim anywhere in the UI or comments may say this "secures your data" or "encrypts your files".
 
-Everything past the keyboard is out of scope and this must not be
-oversold as covering it. There is no network-facing multi-tenant use case
-today; nothing here is an authentication boundary for a remote caller,
-because there is no remote caller. There is no disk encryption: `USERS.TXT`
-and every other file live in plaintext on the same FAT image
-(`dotfiles.img`) as everything else, so anyone who can read that file off
-the disk (copy it to another machine, mount it read-only, boot a different
-OS from it) can read every stored salt and hash directly, and could run an
-offline crack against the hash exactly as if the login screen never
-existed. `USERS.TXT` is not sealed to the login flow that writes it. Most
-importantly, this kernel has no ring-3/ring-0 isolation for user data: as
-the roadmap already logs, every task today shares one address space and
-runs with full ring-0 access to all of memory and the raw disk, so any
-code already running inside the kernel (a shell command, a buggy app, a
-future third-party binary loaded by `exec`) can read a logged-in session's
-memory, or the disk's plaintext `USERS.TXT`, directly, no privilege check
-in the way. A login screen does not create that boundary; it was never
-going to, and pretending otherwise here would be the "false sense of
-security" the roadmap entry warned against.
-
-### What this means for the design
-
-Because of the above, the actual engineering bar is: do the hashing for
-real (real salt, real iteration, real constant-time comparison, because a
-weak or comparison-timing-leaky hash is a cheap, avoidable mistake even in
-a low-stakes threat model), but do not spend effort implying a stronger
-boundary exists than does. No claim anywhere in the UI or code comments
-that this "secures your data," "encrypts your files," or is safe against
-anyone with ring-0 code execution or raw access to the disk image. The
-honest framing, and the one this implementation uses: a desktop lock for
-the person in front of the machine, backed by a real password hash instead
-of a fake one, nothing else.
-
-### The gate is opt-in, not on by default
-
-The login screen only engages once at least one account actually exists
-in `USERS.TXT`; an unconfigured system (no `USERS.TXT`, or an empty one)
-boots straight to the desktop, exactly as it did before this feature
-existed. That is deliberate, not a gap in the implementation, and follows
-directly from the framing above: with no account configured there is
-nothing for a login screen to protect, so a gate that blocked boot anyway
-would be exactly the false sense of security this document already warns
-against, a lock on a door with no one behind it. It also matches this
-kernel's one real deployment that a login prompt cannot be sprung on:
-`landing/index.html`'s live v86 demo boots this exact `kernel.elf` for an
-anonymous browser visitor with no keyboard focus guaranteed and no one
-able to create an account first, so that build is, and stays,
-unconfigured by design. Creating the first account is a deliberate,
-in-desktop action (Settings' "Add user" row) rather than something the
-boot path forces on every visitor.
+The engineering bar that follows: do the hashing for real (real salt, real iteration, constant-time comparison, because a weak or timing-leaky hash is a cheap avoidable mistake) and imply no stronger boundary than exists. The gate is opt-in: the login screen engages only once at least one account exists in `USERS.TXT`. An unconfigured system boots straight to the desktop, deliberately, because a gate with no account behind it would be a lock on a door with no one behind it, and because the live v86 demo on `landing/index.html` boots this exact `kernel.elf` for anonymous visitors who cannot create an account first. Creating the first account is a deliberate in-desktop action (Settings' "Add user" row).
 
 ### The Claude relay (2.14.0)
 
-The Claude app is the first thing here with a remote caller, so it gets its own line. The relay (`tools/claude-relay/relay.py`) runs Claude Code on the host for anyone who presents its token. The token is a shared secret, kept in plain text in `SETTINGS.TXT` like the Mail token, added to the request by the kernel and never handed to ring 3. The relay listens on loopback by default; with `--lan` the token crosses the network in plain HTTP and can be replayed by anyone who sees it. Claude's tools are read-only and scoped to the relay's working directory, so the worst case for a stolen token is reading that directory and spending the owner's plan. `docs/GUIDE.md` (The Claude app) has the full list.
+The Claude app is the first thing here with a remote caller. The relay (`tools/claude-relay/relay.py`) runs Claude Code on the host for anyone who presents its token. The token is a shared secret kept in plain text in `SETTINGS.TXT` like the Mail token, added to the request by the kernel and never handed to ring 3. The relay listens on loopback by default; a LAN relay now requires TLS (see the Encrypted Pi relay section of GUIDE.md). Claude's tools are read-only and scoped to the relay's working directory, so the worst case for a stolen token is reading that directory and spending the owner's plan. The Claude app section of GUIDE.md has the full list.
 
 ## Security on the Pi
 
-A read-only review of what the ARM64 build exposes to the network: the text browser (`arch/arm64/browser.c`), HTTPS (`arch/arm64/tls.c`, `arch/arm64/tls.h`, the roots in `arch/arm64/certs/`, `tools/gen/tls-ta.py`, `tools/gen/tls-roots.py`), the DNS path (`drivers/net.c`, `drivers/http.c`, `arch/arm64/ip.c`) and the Claude prompt (`arch/arm64/ask.c`, `arch/arm64/claude_cfg.sh`, `arch/arm64/wifi_cfg.sh`, `tools/flash-pi.sh`). Nothing was changed in code. Each finding names the file and line, what goes wrong, the fix, and the check that would prove the fix.
-
-Reviewed on 2026-10-08 against the branch head. Line numbers are from that commit.
+A read-only review of what the ARM64 build exposes to the network, reviewed 2026-10-08 against the branch head: the text browser (`arch/arm64/browser.c`), HTTPS (`arch/arm64/tls.c`, the roots in `arch/arm64/certs/`, `tools/gen/tls-ta.py`, `tools/gen/tls-roots.py`), the DNS path (`drivers/net.c`, `drivers/http.c`), the relay client (`arch/arm64/ask.c`, `claude_cfg.sh`) and the relay (`tools/claude-relay/relay.py`). Condensed 2026-10-12: the line numbers and per-finding write-ups are in git history, and the status below says which findings have since moved.
 
 ### What holds up
 
-- Every HTTPS server certificate is checked against the embedded roots and against the host name asked for. `br_ssl_client_reset(&sc, host, 0)` (`arch/arm64/tls.c:97`) hands BearSSL the name, and `br_x509_minimal` rejects a name mismatch with error 56 and an untrusted chain with error 62. `tools/checks/arm64-tls-check.py` proves the trust check with a build that lacks the test certificate.
-- Response size is bounded. The raw reply stops at `RAW_MAX` (64 KiB), the readable text at `TEXT_MAX`, links at `LINK_MAX`, the title at 60 bytes, and the request buffer is sized from `URL_MAX`, so a host plus path from a 255-byte URL cannot overrun it.
-- Redirects stop after three hops (`arch/arm64/browser.c:72` and `:109`). `tools/checks/arm64-browser-check.py` proves a self-loop stops.
-- The HTML walker stays inside its input. Every scan is bounded by `n` or by the terminating zero that `fetch` writes at `raw[got]`; `put` refuses to write past `TEXT_MAX`; a comment with no end runs to the end of input and stops. No overrun was found.
-- The relay token is never printed. It lives in one static buffer, is sent in one Authorization header, and is zeroed after the request (`arch/arm64/ask.c:193` to `:201`). The browser's requests carry no token, no cookie, and no session id. A browsed page is never sent to Claude, and the `[[note]]` and `[[led blink]]` actions are only parsed out of relay replies, never out of a page.
-- The relay compares the token in constant time and does not log prompts or replies (`tools/claude-relay/relay.py`).
-- The Wi-Fi passphrase never reaches the kernel. `arch/arm64/wifi_cfg.sh` derives the PMK on the Mac and only the PMK is embedded, and only when `JT_WIFI_DEV=1`.
+- Every HTTPS server certificate is checked against the embedded roots and the requested host name (`br_ssl_client_reset(&sc, host, 0)`): a name mismatch is error 56 and an untrusted chain error 62.
+- Response size is bounded: the raw reply stops at `RAW_MAX` (64 KiB), text at `TEXT_MAX`, links at `LINK_MAX`, the title at 60 bytes, and the request buffer is sized from `URL_MAX`. Redirects stop after three hops (`arm64-browser-check.py` proves a self-loop stops). The HTML walker stays inside its input; `put` refuses to write past `TEXT_MAX`.
+- The relay token is never printed: one static buffer, one Authorization header, zeroed after the request. Browser requests carry no token, cookie or session id, and a browsed page is never sent to Claude. The relay compares the token in constant time and does not log prompts or replies. The Wi-Fi passphrase never reaches the kernel: `wifi_cfg.sh` derives the PMK on the Mac and only the PMK is embedded, only when `JT_WIFI_DEV=1`.
 
-### Findings, most severe first
+### Findings, most severe first, with status
 
-#### 1. High: the relay token is embedded in every Pi build made on the dev Mac, not only the dev card
+1. **High: the relay token was embedded in every Pi build made on the dev Mac** (`claude_cfg.sh` read `~/.claude-relay-token` whenever it existed; only the Wi-Fi key was gated). Fixed: only `JT_WIFI_DEV=1` or an explicitly supplied token file embeds a token. Check idea: build with the flag unset and fail if the token bytes appear in `kernel8.img`.
+2. **High: the token crossed the Wi-Fi in clear text** over plain TCP with `--lan`. Fixed 2026-10-09: Pi relay requests use verified HTTPS with no fallback and a LAN relay needs a certificate and key.
+3. **High: the certificate clock came from an unauthenticated HTTP Date header.** Reduced, not closed: the clock now takes only a verified HTTPS Date and refuses dates before the build or a previously accepted time, but the first handshake still validates at build time, so a certificate valid at build and expired now can pass that bootstrap check. Closing it needs persistent trusted time or a signed-time protocol.
+4. **Medium: an HTTPS page can redirect to plain HTTP silently.** Fix: refuse an `http://` redirect from an `https://` page (`browser: redirect to http refused`) and mark plain links in the link list; check by a `/down` route in `arm64-browser-check.py`.
+5. **Medium: DNS answers are easy to forge on the LAN**: the transaction id came from the 100 Hz `ticks()`, the source port is fixed at 53000, and answers are matched on ports only. HTTPS still protects page content; plain HTTP pages and the clock do not. Fix: id and port from the entropy source, drop answers from the wrong source IP, compare the question section; check in `dns-txid-check.sh`.
+6. **Medium: a crafted link can split the request line** (`parse_url` accepts any byte, so `\r\n` in an `href` injects a header). Fix: reject any byte below `!` or above `~` in host or path; check with a hostile page.
+7. **Medium: the trust anchor set is small, hand-refreshed, with no expiry check or revocation** (seven roots in `tools/gen/tls-roots.py`; the earliest, GlobalSign Root CA, expires January 2028; no CRL, OCSP or CT, which is normal for a BearSSL minimal client but should be written down). Fix: a CI check that fails when any root expires within a year or `TAS_NUM` differs from the PEM count.
+8. **Low: the TLS random seed came from the timer**, and the suite list includes plain RSA key exchange and CBC with SHA-1 (no forward secrecy). The BCM2711 RNG200 hardware FIFO now seeds TLS on the Pi (a health fault or one-second timeout refuses the connection; `arm64-rng-check.py` checks the driver with fake registers; hardware output still needs a board test). Open: drop the `BR_TLS_RSA_WITH_*` and `*_CBC_SHA` suites unless a needed site requires them.
+9. **Low: the dev card holds the Wi-Fi PMK and SSID in the image.** Accepted: the dev card never leaves the house and `tools/flash-pi.sh` is the only path that sets the dev flag; the log must never gain a line that prints the key.
 
-`arch/arm64/claude_cfg.sh:17` reads `~/.claude-relay-token` whenever the file exists. Only the Wi-Fi key is gated by `JT_WIFI_DEV` (`arch/arm64/wifi_cfg.sh:9`). So `make -C arch/arm64 pi` on the Mac that runs the relay produces a `kernel8.img` with the token inside, and the claim in `CLAUDE.md` that release builds carry neither secret is only true for a build made on a machine without that file. `.github/workflows/release.yml` ships only the i386 ISO, so any Pi image a person hands out comes from the Mac.
-
-What goes wrong: an image copied to a friend's card carries a token that lets anyone on the LAN run `claude -p` on the Mac, as the Mac's user, with whatever tools the relay was started with.
-
-Fix: gate the token on the same dev flag as the Wi-Fi key (`[ "${JT_WIFI_DEV:-0}" = 1 ]` around the read in `claude_cfg.sh`), and rename the flag to something like `JT_DEV_CARD` so its meaning covers both secrets. `tools/flash-pi.sh:39` already sets it.
-
-Check: a script that writes a known 24-byte token to a temp file, builds with `CLAUDE_RELAY_TOKEN_FILE` pointing at it and the dev flag unset, and fails if those bytes appear in `kernel8.img`; then builds with the flag set and fails if they do not.
-
-#### 2. High: the relay token crosses the Wi-Fi in clear text
-
-`arch/arm64/ask.c:198` posts to the relay with `http_post_timeout`, plain TCP, with the token in the Authorization header. On QEMU this stays on the Mac. On the Pi, with the relay started `--lan`, the token is visible to anyone on the same network and can be replayed. `relay.py` warns about exactly this at start-up.
-
-What goes wrong: one captured packet gives a stranger the same `claude -p` access as finding 1.
-
-Fix: send the question through `https_fetch` from `arch/arm64/tls.c`. The build already accepts an extra trust anchor through `TLS_TA=`, so the relay can use a self-signed certificate baked into the dev card. If a certificate is too much, replace the static bearer with a per-request HMAC over the body and a counter, which a replay cannot reuse.
-
-Check: extend `tools/checks/arm64-tls-check.py` style setup with the relay behind the throwaway certificate, and fail if the string `Bearer` is seen on the plain TCP port or if the UART ever shows `claude: error` for a correct token.
-
-#### 3. High: the clock used for certificate validity is set from an unauthenticated HTTP Date header
-
-`arch/arm64/ip.c:92` to `:122` (`net_clock_sync`) looks up `www.google.com`, does a plain `HEAD /` on port 80 and takes the `Date:` header as the board's UTC. `arch/arm64/tls.c:72` then hands that time to `br_x509_minimal_set_time`. There is no battery clock. The only guard is `year < 2024`.
-
-What goes wrong: anyone on the path (a rogue router, a spoofed DNS answer, see finding 5) sets any date they like, so an expired certificate, or a certificate from a key that was retired and leaked, passes. When the sync fails the fallback is the build time, which is safe against rollback but means a kernel built months ago rejects any certificate issued after its build date with error 54 until the clock sync succeeds. That is a reliability gap that pushes people to trust the plain-HTTP clock.
-
-Fix: never accept a Date earlier than `BUILD_UTC`, which removes rollback; and take the Date from an HTTPS reply instead of port 80. The first HTTPS handshake can run with the build time, which validates any chain that was valid at build, and that reply's Date header then becomes the clock for the rest of the session.
-
-Check: a host-side unit over the Date parser (the same pattern as `tools/checks/dns-txid-check.sh`) that feeds a Date before the build time and asserts the clock stays unset, and a Date after it and asserts it is taken.
-
-#### 4. Medium: an HTTPS page may redirect the browser to plain HTTP without a word
-
-`arch/arm64/browser.c:104` resolves the `Location` header and `:110` makes it the new URL. `resolve` accepts an absolute `http://` target from an `https://` page. The page then loads in clear text and the Console shows no sign of it. A link in the page (`href="http://..."`) does the same through `open N`.
-
-What goes wrong: a user who typed `browse example.com`, which this browser upgrades to HTTPS (`:205`), can end up reading a page that a router on the path rewrote.
-
-Fix: in `fetch`, when the current URL is HTTPS and `next` starts with `http://`, print `browser: redirect to http refused` and return. For links, keep following them but print the scheme in the link list, or mark plain links with `[3 http]`.
-
-Check: add a `/down` route to `tools/checks/arm64-browser-check.py` that answers 302 to an `http://` URL, and assert the refusal line and that the plain server never sees a GET.
-
-#### 5. Medium: DNS answers are easy to forge on the LAN
-
-`drivers/net.c:648` takes the transaction id from `ticks()`, a 100 Hz counter, so it is a small and predictable number. `:576` fixes the source port at 53000. `:665` matches only ports; the answer's source IP is not compared with the server asked, and the question name in the answer is not compared with the one sent.
-
-What goes wrong: a device on the same Wi-Fi can answer any lookup first. For HTTPS the certificate check still protects the page, because the forged host must present a valid certificate for the real name. For plain HTTP pages and for the clock sync (finding 3) the forger controls the content.
-
-Fix: take the id from `tls.c`'s `entropy` mixer (or the hardware RNG once it is wired), pick a source port from the same source per query, and drop answers whose source IP is not the server asked. Comparing the question section is a few more lines.
-
-Check: extend `tools/checks/dns-txid-check.sh` with a correct-id answer from the wrong source IP and assert it is rejected.
-
-#### 6. Medium: a crafted link can split the request line
-
-`parse_url` (`arch/arm64/browser.c:32`) accepts any byte in the host and path. In `to_text`, a quoted `href` is read up to the closing quote (`:150`), so it may contain `\r\n`. `fetch` copies the path into the request (`:77`) with no filter, so a page can make `open N` send `GET /a\r\nX-Injected: 1\r\n HTTP/1.0`. The injected headers go to the same server the link points at, so the damage is limited to that server, but the behaviour is wrong and could be used to smuggle a request through a proxy.
-
-Fix: in `parse_url`, reject any byte below `!` or above `~` in the host or the path, which also closes typed input with odd bytes.
-
-Check: a page in `tools/checks/arm64-browser-check.py` with such a link, asserting `browser: bad url` on `open` and that the server saw no second request.
-
-#### 7. Medium: the trust anchor set is small, hand-refreshed and has no expiry check
-
-`arch/arm64/certs/` holds seven roots chosen in `tools/gen/tls-roots.py`. The earliest to expire is GlobalSign Root CA, in January 2028. There is no revocation at all (no CRL, no OCSP, no CT), which is normal for a BearSSL minimal client but should be written down. Nothing in the build or CI fails when a root is near its end, and `tls-roots.py` copies whatever the Mac's store holds, so a bad root on the Mac becomes a bad root on every Pi.
-
-Fix: a check that reads each PEM's `notAfter` and fails when any root expires within a year, run from `tools/checks/ci-suite.sh`.
-
-Check: that script is the check. It should also fail when `TAS_NUM` in the generated header differs from the number of PEM files.
-
-#### 8. Low: the TLS random seed comes from the timer
-
-`arch/arm64/tls.c:43` to `:53` seeds BearSSL's DRBG from the generic timer read between short spins, and the comment says so. The ClientHello random and the ECDHE private key come from this seed.
-
-What goes wrong: if the seed is more predictable than it looks, a passive listener could recover the ephemeral key and read the session. The suite list (`:62`) also includes plain RSA key exchange and CBC with SHA-1, so a server can choose a suite with no forward secrecy at all.
-
-Fix: read the BCM2711 hardware RNG on the Pi (the comment already names it), and drop the `BR_TLS_RSA_WITH_*` and `*_CBC_SHA` suites unless a needed site still requires them.
-
-Check: a boot test that prints two 32-byte seeds across two boots and fails when they match is the honest minimum; it cannot run under QEMU because the Pi 4 model does not expose that RNG, so it has to run through `tools/flash-pi.sh` on the board.
-
-#### 9. Low: the dev card holds the Wi-Fi PMK and the SSID in the image
-
-`arch/arm64/wifi_cfg.sh` embeds the PMK as a 32-byte array. Anyone with the card can read it from `kernel8.img` and join the network. `arch/arm64/wifi.c:464` prints the SSID to the UART log, which is fine, but the log should never gain a line that prints the key. This is accepted for the dev card and needs no code change; it is listed so the split is clear.
-
-Fix: none. Keep the rule that the dev card never leaves the house, and keep `tools/flash-pi.sh` as the only path that sets the dev flag.
-
-Check: the same script as finding 1 covers it: build with the flag unset and fail if the PMK bytes appear in the image.
-
-### The dev card versus a release card
+### Dev card versus release card
 
 | | Dev card (`tools/flash-pi.sh`) | Release card |
 |---|---|---|
 | Wi-Fi SSID and PMK | Embedded, from `~/.config/joshuatree/wifi.conf` | Absent: the Pi only scans |
-| Relay host, port, token | Embedded, from `~/.claude-relay-token` | Absent only if the build machine lacks that file (finding 1) |
-| Trust anchors | The seven roots, plus any `TLS_TA=` extra | The seven roots |
-| Clock | Plain-HTTP Date header, else build time | Same |
+| Relay host, port, token | Embedded, from `~/.claude-relay-token` | Absent |
+| Trust anchors | The seven roots, plus any `TLS_TA=` extra (the relay CA) | The seven roots |
 
 ### What was not verified
 
-- No run on the real board. Every claim about the Pi is from reading the code; QEMU does not model the Wi-Fi chip or the hardware RNG.
-- BearSSL's minimal X.509 engine is known not to enforce name constraints in intermediate certificates. This review did not test it, and the embedded roots are all public CAs for which it matters little.
-- `drivers/net.c`'s TCP (one connection, no retransmission) was not reviewed for its own parsing bugs; only the DNS path and the HTTP header helpers were read.
-- `arch/arm64/wifi.c`'s WPA2 handshake was not reviewed.
-- Whether `www.google.com` keeps answering plain `HEAD /` on port 80 with a Date header.
-- The relay's tool sandbox (`~/pi-files`, read only) was read in its header comment only.
+No run on the real board (QEMU does not model the Wi-Fi chip or the hardware RNG); BearSSL's minimal X.509 engine is known not to enforce name constraints in intermediate certificates (untested, and the roots are all public CAs); `drivers/net.c`'s TCP (one connection, no retransmission) and the WPA2 handshake were not reviewed; whether `www.google.com` keeps answering plain `HEAD /` with a Date header; the relay's tool sandbox (`~/pi-files`, read only) was read in its header comment only.
 
 ### Relay follow-up, 2026-10-09
 
-The API relay's shared-folder reader had a high-severity check/open race: a local process with write access to `~/pi-files` could replace an approved file with a symlink, letting a model read outside the folder. The reader now pins the folder, opens with `O_NOFOLLOW` and checks the opened descriptor is a regular file. Nonblocking open also prevents a replacement FIFO from hanging the relay. `tools/checks/relay-api-check.py` reproduces the old symlink leak and covers FIFO and deletion races. The API key file is now closed after each read.
-
-The existing release-token guard in `arch/arm64/claude_cfg.sh` already addresses finding 1 for normal release builds: only `JT_WIFI_DEV=1` or an explicitly supplied token file embeds a token. Findings 2 and 3 remain open: Pi requests still send a bearer token over HTTP, and the certificate clock still trusts an unauthenticated Date header. TLS entropy remains timer-based. This follow-up does not certify those paths or the hardware.
-
-### TLS and clock follow-up, 2026-10-09
-
-Pi relay requests now use verified HTTPS with no HTTP fallback. LAN relay startup requires a certificate and key; loopback HTTP remains for i386/QEMU. Clock sync accepts only a verified HTTPS Date, refuses dates before the build or previous accepted time, rejects invalid/duplicate dates and preserves its last value on failure. See `docs/GUIDE.md` (Encrypted Pi relay) for migration and checks.
-
-Finding 3 is reduced, not fully closed: the first handshake still validates at build time. An old certificate valid at build time but expired now can pass that bootstrap check. Removing that window needs persistent trusted time or a fresh signed-time protocol. Timer-based TLS entropy also remains open. No live relay was restarted and no card was flashed by this change.
+The API relay's shared-folder reader had a high-severity check/open race: a local process with write access to `~/pi-files` could replace an approved file with a symlink and make the model read outside the folder. The reader now pins the folder, opens with `O_NOFOLLOW` and checks the opened descriptor.
 
 ## Soul
 
