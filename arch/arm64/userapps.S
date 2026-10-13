@@ -23,6 +23,10 @@
     app weather
     app stocks
     app reminders
+    app mines
+    app toroid
+    app hamurabi
+    app keyrate
 
 /* M3c part 2: loop, the scheduler's test program, made by hand in the same image format: one code page, then the trailer
    { "JTU1", 4096 bytes of code, an empty relocation list }. It asks for its window, then yields forever: it never polls,
@@ -108,6 +112,10 @@ fpkeep_img_end:
 .Lname_weather:  .asciz "weather"
 .Lname_stocks:   .asciz "stocks"
 .Lname_reminders: .asciz "reminders"
+.Lname_mines:    .asciz "mines"
+.Lname_toroid:   .asciz "toroid"
+.Lname_hamurabi: .asciz "hamurabi"
+.Lname_keyrate:  .asciz "keyrate"
 .Lname_loop:     .asciz "loop"
 .Lname_fpkeep:   .asciz "fpkeep"
 
@@ -124,6 +132,10 @@ user_apps:
     .quad .Lname_weather, weather_img, weather_img_end
     .quad .Lname_stocks, stocks_img, stocks_img_end
     .quad .Lname_reminders, reminders_img, reminders_img_end
+    .quad .Lname_mines, mines_img, mines_img_end
+    .quad .Lname_toroid, toroid_img, toroid_img_end
+    .quad .Lname_hamurabi, hamurabi_img, hamurabi_img_end
+    .quad .Lname_keyrate, keyrate_img, keyrate_img_end
     .quad .Lname_loop, loop_img, loop_img_end
     .quad .Lname_fpkeep, fpkeep_img, fpkeep_img_end
     .quad 0, 0, 0

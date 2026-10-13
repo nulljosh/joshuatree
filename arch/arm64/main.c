@@ -315,6 +315,7 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_WINDOW_OPEN 384
 #define JT_SYS_WINDOW_POLL 385
 #define JT_SYS_AUDIO 393         /* M3e: play, status, stop (audio.c holds the queue) */
+#define JT_SYS_TASKS 386         /* 3.19.0: uptime in 100 Hz ticks for hamurabi.c (the rest of struct jt_tasks stays 0), no kill */
 #define JT_SYS_BRK 397           /* M3e: the heap top */
 #define JT_SYS_TEXT2 402         /* 3.9.0: Tree Sans into a device-size window buffer (user/libjt/hires.h) */
 #define JT_SYS_CLIPBOARD 399     /* 3.10.0: copy and paste, see clip_put below */
@@ -475,6 +476,10 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             else if (n == JT_SYS_AUDIO) r = app_audio(a0, f->x[1], f->x[2]);   /* M3e */
             else if (n == JT_SYS_BRK) r = app_brk_set(a0);
             else if (n == JT_SYS_CLIPBOARD) r = app_clip(a0, f->x[1], f->x[2]);   /* 3.10.0 */
+            else if (n == JT_SYS_TASKS) {
+                if (!a0 || !user_writable(a0, 20)) r = -14;
+                else { unsigned t = (unsigned)(cnt_now() / (cnt_hz() / 100)); for (int i = 0; i < 20; i++) ((unsigned char *)a0)[i] = i < 4 ? (unsigned char)(t >> (8 * i)) : 0; r = 0; }
+            }
             else r = ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: the file calls; -ENOSYS (-38) for every number the ARM kernel does not answer yet, JT_SYS_AUDIO_RECORD (394) among them */
             if (n != JT_SYS_READ && n != JT_SYS_AUDIO && n != JT_SYS_TEXT2) svc_log(n, a0, r);   /* a read is every few hundred bytes of a file, audio a hundred calls a second: the UART would drown */
             f->x[0] = (unsigned long)r;
@@ -1723,6 +1728,7 @@ static void app_paint(void) {   /* the frame, then the last frame the app presen
     char t[16]; unsigned n = 0;
     for (const char *p = app_cur ? app_cur->name : "app"; *p && n < sizeof t - 1; p++, n++) t[n] = n ? *p : (char)(*p & ~32);   /* "calendar" is titled Calendar */
     t[n] = 0;
+    if (n == 8 && t[0] == 'H' && t[7] == 'i') t[6] = 'p';   /* hamurabi is shown as Hamurapi (the store name Hamurabi was taken) */
     int s = (int)window_scale();
     cur_hide();
     gui_draw_window_frame(app_lx, app_ly, app_lw, app_lh, t);
@@ -2015,6 +2021,9 @@ static void dock_activate(int slot);
 #define SPOT_CALC (GUI_ICON_COUNT + 5)    /* 3.7.5: the Calculator, in Spotlight too (its dock tile is Apps); opens the calc window */
 #define SPOT_FINDER (GUI_ICON_COUNT + 6)  /* 3.14.0: the Finder, user/finder.c at EL0; the dock has no Finder tile, so Spotlight and Samantha's open reach it */
 #define SPOT_SETTINGS (GUI_ICON_COUNT + 7) /* 3.13.0: Settings, in Spotlight and the menu bar's status icons; the dock keeps its 11 tiles */
+#define SPOT_GAME0 (GUI_ICON_COUNT + 8)   /* 3.19.0: Mines, Toroid, Hamurabi and Keyrate, the unchanged user/NAME.c at EL0, Spotlight only */
+#define SPOT_LAST (GUI_ICON_COUNT + 11)
+static const char *const game_names[4] = {"Mines", "Toroid", "Hamurabi", "Keyrate"};
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
@@ -2068,7 +2077,7 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     brick_close();
     clock_close();
     browser_close();
-    if (app_dock(slot == SPOT_MUSIC ? "Music" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_FINDER || slot == 1 ? "Finder" : dock_names[slot])) return;   /* slot 1 is the Burrow tile: the file window, called Finder on the Pi */   /* Calendar, Notes, Music and Books: user/NAME.c at EL0, in its own window */
+    if (app_dock(slot == SPOT_MUSIC ? "Music" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_FINDER || slot == 1 ? "Finder" : slot >= SPOT_GAME0 ? game_names[slot - SPOT_GAME0] : dock_names[slot])) return;   /* slot 1 is the Burrow tile: the file window, called Finder on the Pi */   /* Calendar, Notes, Music and Books: user/NAME.c at EL0, in its own window */
     if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
     console_open();
     uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
@@ -2083,8 +2092,8 @@ int ask_pending(void);
 int ask_select(unsigned pane);
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 #define SPOT_W 300
-#define SPOT_ROW 22
-#define SPOT_MAX (SPOT_SETTINGS + 1)      /* every app fits: an empty query lists them all, no scrolling */
+#define SPOT_ROW 20
+#define SPOT_MAX (SPOT_LAST + 1)      /* every app fits: an empty query lists them all, no scrolling */
 static char spot_text[24]; static unsigned spot_len;
 static int spot_sel, spot_hits[SPOT_MAX], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
 static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
@@ -2098,12 +2107,12 @@ static int spot_match(const char *name) {   /* the typed text, case folded, anyw
     }
     return 0;
 }
-static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : slot == SPOT_BROWSER ? "Browser" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_CALC ? "Calculator" : slot == SPOT_FINDER ? "Finder" : slot == SPOT_SETTINGS ? "Settings" : dock_names[slot]; }
+static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : slot == SPOT_BROWSER ? "Browser" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_CALC ? "Calculator" : slot == SPOT_FINDER ? "Finder" : slot == SPOT_SETTINGS ? "Settings" : slot == SPOT_GAME0 + 2 ? "Hamurapi" : slot >= SPOT_GAME0 ? game_names[slot - SPOT_GAME0] : dock_names[slot]; }
 static int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
 static void spot_paint(void) {
     int s = (int)window_scale();
     spot_n = 0;
-    for (int i = 0; i <= SPOT_SETTINGS && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
+    for (int i = 0; i <= SPOT_LAST && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i)) || (i >= SPOT_GAME0 && spot_match(game_names[i - SPOT_GAME0]))) spot_hits[spot_n++] = i;
     if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
     cur_hide();
     int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;
