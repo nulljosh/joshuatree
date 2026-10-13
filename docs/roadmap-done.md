@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 3.13.0: Settings on the Pi
+
+The Pi has a real Settings window: About (version, board, heap, Wi-Fi), Display (a flat wallpaper colour that repaints the whole desktop at once), Sound (the volume, the same level the keys change), Dock (tile size, from the next boot) and Date and Time. Each section has a flat glyph on a terracotta tile. Spotlight lists it, and the menu bar gets a speaker and a power symbol next to the Wi-Fi fan and the clock; a click on any of them opens Settings at its section. Choices are saved to `JT/SETTINGS.TXT` on the card. The Settings tile in the dock still does not exist (the dock keeps its 11), so Settings is reached from Spotlight and the menu bar. Check: `tools/checks/arm64-settings-check.py`.
+
 ## 3.7.3 development branch (2026-10-12)
 
 The Bluetooth mouse comes back by itself. Before, a saved pairing got one 20 second try at boot and nothing after, so a mouse that was asleep, or that slept later, stayed gone until `bt reconnect`. Now the reconnect is a run of tries (12 seconds each, then a pause of 2, 4, 8, 15 and 30 seconds, up to 30), it starts at boot, when the link drops and on `bt reconnect`, and it re-encrypts with the saved key and turns the mouse's reports on again each time. `bt status` shows searching, connected or idle, the saved address with only its last byte, the tries and the last error. A mouse that ignores boot protocol now has its report map read and its button, X, Y and wheel fields placed from it (12 bit packed X and Y checked), and `bt status` shows the last report's bytes. Proven in QEMU only against a fake mouse, not yet on the Pi. Check: `tools/checks/arm64-bt-check.py`.
