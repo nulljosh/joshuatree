@@ -27,27 +27,12 @@ except ImportError:
     bpy = None
 
 def make_screen(path):
-    """The screen: a fresh headless screendump of the ARM desktop (docs/hardware/nimbus_desktop.py writes nimbus/nimbus-desktop.png), 1920 x 1080.
-    The motto line and its glyph above the dock are painted out. The desktop is shown on the grey wallpaper (#E5E5E7 family) Joshua wants:
-    until that lands in the kernel, the terracotta wallpaper pixels (and the dock's shadow on them) are remapped to grey, and the menu bar,
-    half white over the wallpaper, is rebuilt over grey. Text, the dock and its icons are untouched."""
-    import numpy as np
+    """The screen: a headless 1920 x 1080 screendump of the ARM desktop (grey wallpaper, grey menu bar, real dock) with the Hamurapi window open,
+    kept true. Only the motto line and its glyph above the dock are painted out with the wallpaper colour."""
     from PIL import Image
     img = Image.open(DESKTOP).convert("RGB")
-    wall = img.getpixel((600, 600))
-    img.paste(wall, (780, 815, 1140, 890))            # the motto line and the glyph beside it
-    a = np.asarray(img).astype(np.float32); r, g, b = a[..., 0], a[..., 1], a[..., 2]
-    grey = np.array([0xE5, 0xE5, 0xE7], np.float32)
-    f = r / float(wall[0])                                                         # 1 on flat wallpaper, below 1 in the dock's shadow
-    on_wall = (np.abs(g - r * wall[1] / wall[0]) < 7) & (np.abs(b - r * wall[2] / wall[0]) < 7)
-    out = np.where(on_wall[..., None], np.clip(grey[None, None, :] * f[..., None], 0, 255), a)
-    bar_old = np.asarray(img).astype(np.float32)[10, 900]                           # the old menu bar colour, a pale terracotta
-    bar_new = (grey + 255.0) / 2
-    ink = np.array([0x1C, 0x1C, 0x1E], np.float32); y0, y1 = 0, 51
-    lum = lambda c: c[..., 0] * 0.3 + c[..., 1] * 0.6 + c[..., 2] * 0.1
-    cov = np.clip((lum(bar_old) - lum(a[y0:y1])) / (lum(bar_old) - lum(ink)), 0, 1)[..., None]    # how much ink is on each pixel
-    out[y0:y1] = bar_new * (1 - cov) + ink * cov
-    Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)).save(path)
+    img.paste(img.getpixel((400, 600)), (790, 820, 1120, 885))
+    img.save(path)
 
 if bpy is None:
     out = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else HERE)
@@ -113,7 +98,7 @@ def glass_sheen(m):
     mr.inputs["From Min"].default_value = 0.35; mr.inputs["From Max"].default_value = 1.0; mr.inputs["To Min"].default_value = 0.0; mr.inputs["To Max"].default_value = float(os.environ.get("SHEEN", 0.045))
     mr.clamp = True
     b.inputs["Emission Color"].default_value = (0.82, 0.86, 0.95, 1.0); nt.links.new(mr.outputs["Result"], b.inputs["Emission Strength"])
-M = {"cream": mat("cream", tuple(min(c, 238) for c in CREAM), 0.55, float(os.environ.get("SSS", 0.1)), 0.22), "ink": mat("ink", INK, 0.3, 0.0, 0.5),
+M = {"cream": mat("cream", tuple(min(c, 238) for c in CREAM), 0.62, float(os.environ.get("SSS", 0.1)), 0.15), "ink": mat("ink", INK, 0.3, 0.0, 0.5),
      "glass": mat("glass", INK, 0.06, 0.0, 0.25), "terra": mat("terra", TERRA, 0.6)}
 glass_sheen(M["glass"])
 USE = {"front_shell": "cream", "back_cover": "cream", "ground_inlay": "terra", "slot_inlay": "ink", "glass": "glass", "module": "ink", "sdliner": "ink", "driver": "ink", "ports": "ink", "board": "ink"}

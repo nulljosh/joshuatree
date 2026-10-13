@@ -14,7 +14,7 @@ def build(script, out, env=None, extra=()):
 
 def blender(script, *args, factory=False):
     """Run script inside Blender, headless. The script reads its own arguments with argv()."""
-    subprocess.run([BLENDER, "-b", *(["--factory-startup"] if factory else []), "-P", script, "--", *args], check=True)
+    subprocess.run([BLENDER, "-b", "-t", "4", *(["--factory-startup"] if factory else []), "-P", script, "--", *args], check=True)
 
 def argv():
     """Inside Blender: the arguments after "--"."""
