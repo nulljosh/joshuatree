@@ -119,13 +119,13 @@
 <path d="M550.25 546v10H89.75v-6" fill="none" stroke="#b5502c" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/><text x="320.0" y="568" fill="#75726e" font-size="9" text-anchor="middle">next item</text>
 <text x="20" y="594" fill="#75726e" font-size="10" font-weight="600" letter-spacing="1">MEMORY, PC BUILD</text>
 <rect x="20.0" y="602" width="47.8" height="16" fill="#1c1c1e"/>
-<rect x="67.8" y="602" width="467.8" height="16" fill="#e3b7a4"/>
-<rect x="535.6" y="602" width="2.0" height="16" fill="#b5502c"/>
-<rect x="537.6" y="602" width="59.2" height="16" fill="#f0d9ce"/>
+<rect x="67.8" y="602" width="467.7" height="16" fill="#e3b7a4"/>
+<rect x="535.5" y="602" width="2.0" height="16" fill="#b5502c"/>
+<rect x="537.5" y="602" width="59.3" height="16" fill="#f0d9ce"/>
 <rect x="596.8" y="602" width="16.4" height="16" fill="#141413"/>
-<rect x="613.2" y="602" width="7.9" height="16" fill="#d97757"/>
+<rect x="613.2" y="602" width="8.0" height="16" fill="#d97757"/>
 <rect x="20" y="626" width="8" height="8" fill="#1c1c1e"/><text x="31" y="634" fill="#555" font-size="9">code 385 KB</text>
-<rect x="220" y="626" width="8" height="8" fill="#e3b7a4"/><text x="231" y="634" fill="#555" font-size="9">fonts, images, text 3,768 KB</text>
+<rect x="220" y="626" width="8" height="8" fill="#e3b7a4"/><text x="231" y="634" fill="#555" font-size="9">fonts, images, text 3,764 KB</text>
 <rect x="420" y="626" width="8" height="8" fill="#b5502c"/><text x="431" y="634" fill="#555" font-size="9">starting values 7 KB</text>
 <rect x="20" y="640" width="8" height="8" fill="#f0d9ce"/><text x="31" y="648" fill="#555" font-size="9">working memory 477 KB</text>
 <rect x="220" y="640" width="8" height="8" fill="#141413"/><text x="231" y="648" fill="#555" font-size="9">programs 132 KB</text>

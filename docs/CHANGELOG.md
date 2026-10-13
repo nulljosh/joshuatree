@@ -4,12 +4,14 @@ Joshua Tree began on 2026-08-31 as an i386 kernel written from scratch: boot, ke
 It grew a mouse-driven desktop, then a fleet of apps and a protected program for each one.
 Then it got an ARM64 port that boots on a real Raspberry Pi 4, and Samantha, who talks to you through it.
 
-This list is built from the git history: every change to `VERSION` is one release, newest first. 437 releases from 0.30.0 to 3.8.1, plus 30 numbered steps before semver. Some patch numbers were skipped or landed out of order when branches merged. The plan lives in `docs/VERSIONS.md` and the long form of each release in `docs/roadmap-done.md`.
+This list is built from the git history: every change to `VERSION` is one release, newest first. 439 releases from 0.30.0 to 3.8.3, plus 30 numbered steps before semver. Some patch numbers were skipped or landed out of order when branches merged. The plan lives in `docs/VERSIONS.md` and the long form of each release in `docs/roadmap-done.md`.
 
 ## 3.x: the Raspberry Pi
 
 Joshua Tree leaves the emulator. It boots on a real Raspberry Pi 4 and runs Notes, Calendar, Music, Books, Browser, a shell and Samantha on the board. Most of the Pi work this week was found in QEMU first and fixed after Joshua tried it on the card.
 
+- **3.8.3** (2026-10-12): Docs: this changelog, graphs refreshed, a Raspberry Pi overview in the architecture
+- **3.8.2** (2026-10-12): The Samantha chat icon carries the tile light
 - **3.8.1** (2026-10-12): sam never hangs after an answer
 - **3.8.0** (2026-10-12): A small tool picker in freestanding C (pick, pickcheck)
 - **3.7.12** (2026-10-12): sam is fast on the board

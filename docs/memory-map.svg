@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="640" height="458" viewBox="0 0 640 458" style="background:#faf8f4;font-family:Tree Sans,-apple-system,BlinkMacSystemFont,sans-serif">
 <text x="320" y="30" font-size="16" font-weight="600" fill="#1c1c1e" text-anchor="middle">Joshua Tree memory map</text>
-<text x="320" y="50" font-size="12" fill="#75726e" text-anchor="middle">Room between working memory and program area: 30 KB (the check fails under 16 KB)</text>
+<text x="320" y="50" font-size="12" fill="#75726e" text-anchor="middle">Room between working memory and program area: 34 KB (the check fails under 16 KB)</text>
 <rect x="40.0" y="70" width="44.0" height="18" rx="3" fill="#e3b7a4"/>
 <text x="40" y="106" font-size="12" fill="#1c1c1e">code: 385 KB at 0xC0106000</text>
-<rect x="84.3" y="128" width="430.4" height="18" rx="3" fill="#e3b7a4"/>
-<text x="40" y="164" font-size="12" fill="#1c1c1e">fixed data (fonts, images, text): 3,768 KB at 0xC0167000</text>
-<rect x="515.0" y="186" width="2.0" height="18" rx="3" fill="#e3b7a4"/>
-<text x="40" y="222" font-size="12" fill="#1c1c1e">starting values: 7 KB at 0xC0516000</text>
-<rect x="516.0" y="244" width="54.5" height="18" rx="3" fill="#e3b7a4"/>
-<text x="40" y="280" font-size="12" fill="#1c1c1e">working memory: 477 KB at 0xC0518000</text>
+<rect x="84.3" y="128" width="429.9" height="18" rx="3" fill="#e3b7a4"/>
+<text x="40" y="164" font-size="12" fill="#1c1c1e">fixed data (fonts, images, text): 3,764 KB at 0xC0167000</text>
+<rect x="514.6" y="186" width="2.0" height="18" rx="3" fill="#e3b7a4"/>
+<text x="40" y="222" font-size="12" fill="#1c1c1e">starting values: 7 KB at 0xC0515000</text>
+<rect x="515.5" y="244" width="54.5" height="18" rx="3" fill="#e3b7a4"/>
+<text x="40" y="280" font-size="12" fill="#1c1c1e">working memory: 477 KB at 0xC0517000</text>
 <rect x="574.0" y="302" width="15.1" height="18" rx="3" fill="#b5502c"/>
 <text x="40" y="338" font-size="12" fill="#1c1c1e">where programs load: 132 KB at 0xC0597000</text>
 <rect x="592.7" y="360" width="7.3" height="18" rx="3" fill="#b5502c"/>
