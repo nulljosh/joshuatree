@@ -45,6 +45,9 @@ const char *picker_pick(const char *text) {
     for (int i = 0; i + 3 <= n; i++) add(fnv('c', t + i, 3), seen, s);
     int best = 0;
     for (int k = 1; k < PICK_K; k++) if (s[k] > s[best]) best = k;   /* first maximum wins, like the reference */
+    int second = best == 0 ? -0x7fffffff : s[0];
+    for (int k = 0; k < PICK_K; k++) if (k != best && s[k] > second) second = s[k];
+    if (best != PICK_NULL && s[best] - second < PICK_MARGIN) best = PICK_NULL;   /* too close to call: not a command */
     return pick_tools[best];
 }
 

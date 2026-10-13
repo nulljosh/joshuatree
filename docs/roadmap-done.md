@@ -1,5 +1,10 @@
 # Joshua Tree roadmap: done
 
+## 3.8.3 development branch (2026-10-12)
+
+The Pi boots behind a neutral grey splash with the tree mark crisp in the middle and a calm grey bar under it. Before, it was a terracotta screen with a dark blurry blob where the mark should be: the small menu bar copy stretched far past its size, ink on orange. Now the splash uses the full 160 px stored mark, and no terracotta is left on it.
+The first Pi flash showed the mark as torn slivers: `splash_mark` wrote pixels without flushing the data cache, so only some rows reached the GPU. It now flushes the mark and the ground (`fb_flush`) and writes through `fb_rect`, which honours the mailbox pitch. The ARM desktop wallpaper is graphite grey `#6E6E6E` too (`wall.c`), the motto and menu bar still read; the ARM build has no Settings app yet, so there is no colour list to reorder.
+Check: `tools/checks/arm64-splash-check.py` (grey ground, no terracotta pixel, every ink row of the art present, hard edges), with `arm64-quietboot-check.py` and `arm64-crash-check.py` updated to the grey.
 ## 3.10.0 development branch (2026-10-12)
 
 Copy, paste and the Cmd keys on the Pi. One 4 KB plain-text clipboard in the kernel, reached by Notes through `JT_SYS_CLIPBOARD` (399, the i386 call) and directly by the Terminal's input line and the Browser's address bar. Cmd (or Ctrl) with A, C, X and V works in all three; Cmd+W closes the front window and Cmd+Q quits the front app. A paste that does not fit its field is cut and logs `CLIPTRUNC`. Check: `tools/checks/arm64-clipboard-check.py`.
@@ -375,6 +380,11 @@ Check: `tools/checks/arm64-crash-check.py` (the Pi image faults behind the splas
 
 `pick <sentence>` names the tool Samantha's hands would reach for, from a 15K-weight integer model in freestanding C (`kernel/picker.c`). On Turing's nine dev sets the Python reference gets 3,820 of 4,455 tool picks right (85.8 percent); the C matches it on all 297 golden sentences. Arguments and the guard stay with the full model, this picks the tool only.
 Check: `tools/checks/picker-check.sh` (QEMU, no network): `pickcheck: 297/297 ok` and four typed sentences.
+
+## 3.8.3: the small picker learns to say "not a command"
+
+The 3.8.0 picker made a tool call on 26 percent of sentences that are only chat; it now abstains (a lean toward null and a margin rule) and was trained on 1,400 more chatty rows, down to 7 percent on the same sentences. The tool-level right rate on Turing's nine dev sets is 81.2 percent (3,617 of 4,455), still over the 80 percent bar.
+Check: `tools/checks/picker-check.sh` (QEMU, no network): the C agrees with the Python reference on 297 of 297 golden sentences, margin rule included.
 
 ## 3.8.1: the Samantha chat icon carries the tile light
 
