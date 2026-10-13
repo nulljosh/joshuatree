@@ -9,17 +9,17 @@
 ![release](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/release.yml?branch=main&label=release)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-An operating system with its own windows, dock, fonts, sound, internet and 32 apps. It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it and answers out loud. Where it is going: [Vision](docs/ROADMAP.md#vision).
+A small operating system with its own windows, dock, sound, internet and 32 apps. It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it and answers out loud through a relay on your Mac.
+
+<p>
+  <img src="landing/shots/app-hamurapi.webp" width="32%" alt="Hamurapi, a game">
+  <img src="landing/shots/app-weather.webp" width="32%" alt="Weather">
+  <img src="landing/shots/app-terminal.webp" width="32%" alt="Terminal">
+</p>
 
 ## Try it
 
-Open [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com). For a PC USB stick, grab the [latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) and its [checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS). BIOS boot is checked in QEMU. UEFI and real PC hardware are not verified.
-
-To build it: `brew install lld qemu`, then `make run` to boot and `./check.sh` to test.
-
-## On a Raspberry Pi
-
-It boots a Pi 4 to the desktop with a USB keyboard and an HDMI screen. Samantha answers through a relay on your Mac that uses your own Claude API key, which never goes on the Pi. Flash a card with `tools/flash-pi.sh`; the steps, and what is still unchecked on the board, are in [docs/GUIDE.md](docs/GUIDE.md#raspberry-pi).
+Open [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com). On a PC, boot the [latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) ([checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS)); BIOS boot is checked in QEMU, UEFI and real PCs are not. On a Pi 4, flash a card with `tools/flash-pi.sh` ([steps](docs/GUIDE.md#raspberry-pi)). To build it: `brew install lld qemu`, then `make run` to boot and `./check.sh` to test.
 
 ## How fast
 
