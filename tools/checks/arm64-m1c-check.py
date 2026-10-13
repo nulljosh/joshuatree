@@ -132,7 +132,7 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         if light < 40: fails.append(f"{name}: no tribute line above the dock ({light} light pixels)")
         else: print(f"  ok: {name} tribute line above the dock ({light} light pixels)")
         at = lambda x, y: tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3])
-        mb = 26 * h // 540                                           # docs/DESIGN.md: GUI_MENUBAR_H = 26 on the 960x540 grid
+        mb = 26 * h // 540                                           # docs/ARCHITECTURE.md: GUI_MENUBAR_H = 26 on the 960x540 grid
         if at(w // 2, mb - 1) != (0xbd, 0xb8, 0xb0): fails.append(f"{name}: menu bar rule at y={mb - 1}: got {at(w // 2, mb - 1)}, want (189, 184, 176)")
         else: print(f"  ok: {name} menu bar closed by its rule at y={mb - 1}")
         if at(w // 2, mb) == (0xbd, 0xb8, 0xb0): fails.append(f"{name}: menu bar is taller than {mb} pixels")

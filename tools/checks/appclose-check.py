@@ -26,7 +26,7 @@ on Notes. Finally open and close Mail once more to prove input survived
 the whole sweep. Any app that stays open fails the run by name.
 
 Discriminating: on the v66 kernel Notes and Chat both fail step 2 (proven
-before the fix landed, see roadmap.md's v67 entry).
+before the fix landed, see ROADMAP.md's v67 entry).
 
 Usage: tools/checks/appclose-check.py   (from the repo root, after make kernel.elf)
 """

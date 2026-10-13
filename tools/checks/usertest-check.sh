@@ -1,5 +1,5 @@
 #!/bin/bash
-# The regression test for the v1 syscall ABI (docs/SYSCALL-ABI.md).
+# The regression test for the v1 syscall ABI (docs/ARCHITECTURE.md).
 #
 # What it proves, and why it is the test this repo needed most: user/hello.c
 # is a real external consumer of the kernel. It is compiled separately,

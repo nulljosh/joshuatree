@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The type system holds (docs/TYPE.md): every font-size on the landing page is one of the nine scale steps, the token block in
-landing/index.html and docs/TYPE.md are what tools/gen/typetokens.py writes today, every scale step's line height sits on the
+"""The type system holds (docs/ARCHITECTURE.md): every font-size on the landing page is one of the nine scale steps, the token block in
+landing/index.html and docs/ARCHITECTURE.md are what tools/gen/typetokens.py writes today, every scale step's line height sits on the
 4 px grid, and the Tree Sans files the page loads exist and are real WOFF2.
 
 Usage: python3 tools/checks/type-grid-check.py"""
@@ -17,7 +17,9 @@ if raw: fails.append(f"raw px font sizes outside the scale: {raw}; use var(--tN)
 for m in re.finditer(r"font-size\s*:\s*var\(--t(\d+)\)", body):
     if int(m.group(1)) not in tt.SIZES: fails.append(f"--t{m.group(1)} is not on the scale {tt.SIZES}")
 if tt.START not in html or tt.css_block() not in html: fails.append("the token block in landing/index.html is stale: python3 tools/gen/typetokens.py")
-if open(os.path.join(ROOT, "docs", "TYPE.md")).read() != tt.type_md(): fails.append("docs/TYPE.md is stale: python3 tools/gen/typetokens.py")
+sys.path.insert(0, os.path.join(ROOT, "tools", "gen"))
+import docblock
+if (docblock.current("type") or "").strip() != tt.type_md().strip(): fails.append("the type block in docs/ARCHITECTURE.md is stale: python3 tools/gen/typetokens.py")
 for s in tt.SIZES:
     if tt.lh(s) % 4: fails.append(f"line height of {s}px is {tt.lh(s)}, off the 4 px grid")
 for _, _, _, f in tt.FACES:
@@ -25,4 +27,4 @@ for _, _, _, f in tt.FACES:
     if not os.path.exists(p) or open(p, "rb").read(4) != b"wOF2": fails.append(f"{p} is missing or not WOFF2")
 if fails:
     print("FAIL:"); [print("  - " + x) for x in fails]; sys.exit(1)
-print(f"PASS: type grid: every landing font size is on the {len(tt.SIZES)}-step scale, line heights sit on the 4 px grid, the token block and TYPE.md are current, and all {len(tt.FACES)} Tree Sans files load")
+print(f"PASS: type grid: every landing font size is on the {len(tt.SIZES)}-step scale, line heights sit on the 4 px grid, the token block and ARCHITECTURE.md are current, and all {len(tt.FACES)} Tree Sans files load")

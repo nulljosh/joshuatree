@@ -1,6 +1,6 @@
 # Draws docs/hardware/breadboard.png: the Joshua Tree breadboard prototype (a Pi 4, a 40-pin breakout, LED, button,
 # speaker, serial header). Run: blender -b --factory-startup -P tools/gen/breadboard.py -- docs/hardware/breadboard.png
-# The wiring it shows is written out in docs/hardware/BREADBOARD.md; change both together.
+# The wiring it shows is written out in docs/GUIDE.md; change both together.
 import bpy, math, sys
 from mathutils import Vector
 OUT = sys.argv[sys.argv.index('--') + 1]

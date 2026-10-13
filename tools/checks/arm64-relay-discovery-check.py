@@ -3,7 +3,7 @@
 
 The kernel is built with TLS on, a throwaway private CA as TLS_TA and CLAUDE_RELAY_HOST set to 10.0.2.77, an address
 nothing on QEMU's user network answers: the stale address a card keeps after the router moves the Mac. The certificates
-are made with the exact openssl commands in docs/RELAY-TLS.md. The relay is the real tools/claude-relay/relay.py on
+are made with the exact openssl commands in docs/GUIDE.md. The relay is the real tools/claude-relay/relay.py on
 127.0.0.1 with a stub `claude`. QEMU's user network drops broadcasts, so the guest's card sits on a QEMU hub with two
 other ports: the user network (DHCP, and TCP to the relay at 10.0.2.2) and a UDP socket to this script, which plays
 the rest of the LAN. Every broadcast probe it sees goes to the relay's own discovery socket, and the relay's answer
@@ -59,7 +59,7 @@ port = free_port()
 
 def sh(*args, cwd=tmp):
     subprocess.run(args, cwd=cwd, check=True, capture_output=True)
-# docs/RELAY-TLS.md, word for word: the private CA, then a server certificate for the fixed name
+# docs/GUIDE.md, word for word: the private CA, then a server certificate for the fixed name
 sh("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "365", "-subj", "/CN=Joshua Tree relay CA",
    "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign",
    "-keyout", "ca.key", "-out", "ca.pem")

@@ -28,7 +28,7 @@ the kernel would really fetch.
 Kernel-image budget (checked the same way gen_icon_art.py's own comment
 documents for the icon-art PNG-storage pass, since it's the same
 0xC0587000 ring-3 program window ceiling, see boot/linker.ld and
-docs/SYSCALL-ABI.md): a raw 960x540x3 RGB blob is 1,555,200 bytes, more
+docs/ARCHITECTURE.md): a raw 960x540x3 RGB blob is 1,555,200 bytes, more
 than double the ~638KB of headroom this kernel image had before this
 capture (measured via `size`/section-header dump against
 boot/linker.ld's `. + .bss <= 0xC0587000` ASSERT) -- a raw bake would not

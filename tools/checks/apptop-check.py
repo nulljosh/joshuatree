@@ -2,7 +2,7 @@
 """Headless pixel proof that windowed apps start their content right under
 the title bar, and that Calendar fits a six-week month inside its window.
 
-Bug (2026-09-21 QA tour, docs/roadmap.md "Bugs"): Mail, Calendar, Notes,
+Bug (2026-09-21 QA tour, docs/ROADMAP.md "Bugs"): Mail, Calendar, Notes,
 Reminders and Chat (and, found after, Trash, Contacts, Calculator and
 Search) drew their first line at y=52, left over from the
 full-screen layout where the app drew its own title strip across the top.

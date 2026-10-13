@@ -7,7 +7,7 @@ appsfolder-layout-check.py), not derived from source constants alone.
 Real bug this locks in (found in a Joshua-directed typography quality
 pass; real 4x before/after crops sit at /tmp/jt-loop/typography-crops,
 this pass's own review output, not committed to the repo; described in
-docs/roadmap.md's own entry): the Apps folder's glass panel
+docs/ROADMAP.md's own entry): the Apps folder's glass panel
 (gui_apps_redraw_panel in kernel/kernel.c) was sized as if its grid
 started at the panel's own top edge (APPS_VIS_ROWS(3) * cell_h(108) =
 324, comfortably under the old 375px panel height), but the grid

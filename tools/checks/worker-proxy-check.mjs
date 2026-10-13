@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// v0.76.10 (real fix, not this pass's own bump -- see roadmap.md for the
+// v0.76.10 (real fix, not this pass's own bump -- see ROADMAP.md for the
 // full CORS trace): worker.js's /api/proxy route is what makes v86's
 // cors_proxy option actually work for real, server-to-server, never-CORS-
 // limited fetches to the three hosts this kernel's own code asks for
@@ -8,7 +8,7 @@
 // allowlist, checked here directly.
 //
 // This container's own outbound network is itself behind a host-level
-// allowlist (see roadmap.md's v0.76.7 entry), so a real end-to-end fetch
+// allowlist (see ROADMAP.md's v0.76.7 entry), so a real end-to-end fetch
 // to any of the three allowed hosts isn't reproducible from here either
 // -- these checks cover the real, deterministic logic (allowlist
 // rejection, missing/invalid url handling, and the success path's

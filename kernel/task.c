@@ -42,7 +42,7 @@ typedef unsigned int u32;
    another frame that size in tcp_send_segment, about 3.7KB before a timer
    IRQ pushes its own frame on top. 4KB was enough for the file and window
    calls and nothing deeper; six slots at 16KB is 96KB of heap. */
-#define STACK_SIZE 32768 /* 2.0.0: 32 KB, up from 16 KB; the Samantha reset (docs/wip/samantha-reset.md) was the net path on a ring-3 task's kernel stack running off the bottom */
+#define STACK_SIZE 32768 /* 2.0.0: 32 KB, up from 16 KB; the Samantha reset (docs/ROADMAP.md) was the net path on a ring-3 task's kernel stack running off the bottom */
 #define STACK_GUARD 4096 /* 2.0.0: a pattern-filled pad below the stack, so an overflow hits the pad (and task_stack_check sees it) before any neighbouring frame, such as the page directory kheap.c describes */
 #define GUARD_WORD 0x5AFE57ACu
 

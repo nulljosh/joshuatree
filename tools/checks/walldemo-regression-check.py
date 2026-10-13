@@ -31,7 +31,7 @@ click directly on the Wallpaper row's own coordinates, to reproduce the
 OLD embed.js's literal input method, did not register at all in this
 harness during development -- a separate, unconfirmed question about
 gui_launch_settings' click hit-testing under a synthetic QMP pointer,
-logged in roadmap.md as an open item, and irrelevant to this fix since
+logged in ROADMAP.md as an open item, and irrelevant to this fix since
 the real fix removes those clicks entirely rather than depending on them
 working.)
 

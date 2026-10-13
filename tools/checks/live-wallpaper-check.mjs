@@ -3,7 +3,7 @@
 // despite the local fix (v0.76.13's Settings-click regression fix)
 // already verified working in a local sandbox build. This session's own
 // network blocks the live URL directly and blocks downloading workflow
-// artifacts (confirmed, see roadmap.md), so this prints real pixel
+// artifacts (confirmed, see ROADMAP.md), so this prints real pixel
 // analysis straight to the job log instead -- readable via the Actions
 // API even when the binary screenshot itself can't be fetched.
 //

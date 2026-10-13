@@ -2,7 +2,7 @@
 """Claude in the ARM Terminal: open the Terminal (F1), type `sam QUESTION` at its zsh style prompt (`joshua@tree % `) and Claude's answer is printed in
 the Terminal as `sam: ...`, through the real relay on this machine and the shared IP stack on virtio-net. No app, no model, no
 internet. The Console is logs only: typing with it in front asks nothing, and the answer never lands in it
-(docs/TERMINAL.md). The file keeps its old name so the suite and the docs that point at it stay put.
+(docs/GUIDE.md). The file keeps its old name so the suite and the docs that point at it stay put.
 
 The host side is the real tools/claude-relay/relay.py, bound to 127.0.0.1 on a free port, with a throwaway token file and
 a stub `claude` first on PATH (it records its argv and stdin and answers in Claude Code's JSON shape). The kernel is

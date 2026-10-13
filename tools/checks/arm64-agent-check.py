@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Samantha's agent loop on the ARM Terminal (docs/AGENT.md), against a fake relay on the host.
+"""Samantha's agent loop on the ARM Terminal (docs/GUIDE.md), against a fake relay on the host.
 
 Boots arch/arm64/kernel8.elf on QEMU virt with virtio-net and a keyboard, built with a throwaway token pointed at a
 fake relay (a tiny HTTP server here, scripted answers, every prompt logged) and a plain http page server for
@@ -72,7 +72,7 @@ class Boot:
         time.sleep(0.5)
         self.s = socket.socket(socket.AF_UNIX); self.s.settimeout(20); self.s.connect(sock); self.f = self.s.makefile("rw")
         self.f.readline(); self.cmd("qmp_capabilities")
-        n = self.uart().count("terminal open"); self.key("f2")   # the Terminal takes the typing; the Console is logs (docs/TERMINAL.md)
+        n = self.uart().count("terminal open"); self.key("f2")   # the Terminal takes the typing; the Console is logs (docs/GUIDE.md)
         if not self.wait_for("terminal open", 10, n + 1): raise SystemExit("FAIL: F1 did not open the Terminal: %r" % self.uart()[-300:])
         time.sleep(0.4)
     def uart(self): return open(self.log, errors="replace").read() if os.path.exists(self.log) else ""

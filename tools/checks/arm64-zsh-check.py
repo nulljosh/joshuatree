@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The ARM Terminal is a zsh style shell, and Samantha is a command that never blocks it (docs/TERMINAL.md, `sam`).
+"""The ARM Terminal is a zsh style shell, and Samantha is a command that never blocks it (docs/GUIDE.md, `sam`).
 
 The host side is the real tools/claude-relay/relay.py on 127.0.0.1 with a throwaway token and a stub `claude` that waits
 STUB_DELAY seconds before it answers (the same approach as arm64-claude-console-check.py). The kernel is built with

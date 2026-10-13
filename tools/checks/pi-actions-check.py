@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Samantha's Pi actions: [[note TEXT]], [[say TEXT]], [[led blink]], [[open APP]], [[browse URL]], [[calc EXPR]] and
-[[status]] at the end of an answer (docs/AGENT.md).
+[[status]] at the end of an answer (docs/GUIDE.md).
 
 Host-only, no hardware. Compiles the real take_actions block out of arch/arm64/ask.c with clang and feeds it replies:
 known markers are stripped and recorded, an unknown marker line is recorded as kind 0 (the kernel logs and ignores

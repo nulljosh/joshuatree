@@ -114,7 +114,7 @@ drivers/jpeg_testdata.h:
 # user/ is not kernel code and is built with its own flags: no kernel
 # include paths at all, so it physically cannot reach a kernel header, and
 # nothing links against the kernel. Its only interface is user/jtsys.h's
-# int 0x80 wrappers, which is the whole point -- docs/SYSCALL-ABI.md is the
+# int 0x80 wrappers, which is the whole point -- docs/ARCHITECTURE.md is the
 # contract, and the reference program is a real external consumer of it,
 # not a kernel file in a different directory.
 #

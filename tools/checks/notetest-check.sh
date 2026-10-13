@@ -1,5 +1,5 @@
 #!/bin/bash
-# The regression test for the v2 syscall ABI (docs/SYSCALL-ABI.md).
+# The regression test for the v2 syscall ABI (docs/ARCHITECTURE.md).
 #
 # v1 gave a ring-3 program a stable interface it could only look through.
 # v2 is the half that lets it change something: open() flags, write() to a

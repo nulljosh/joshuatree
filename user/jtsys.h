@@ -3,7 +3,7 @@
 /* Joshua Tree user-space syscall wrappers. This is the whole of what a
    ring-3 program gets: no libc, no startup files, no relocations. Every
    function here is one `int $0x80` with the arguments already in the
-   registers docs/SYSCALL-ABI.md names, so the generated code is the ABI
+   registers docs/ARCHITECTURE.md names, so the generated code is the ABI
    itself rather than a layer over it.
 
    eax = call number, ebx/ecx/edx = arguments 1-3, eax = result on return,
@@ -189,7 +189,7 @@ static inline int jt_syscall(int n, jt_arg a, jt_arg b, jt_arg c) {
     return r;
 }
 #elif defined(__aarch64__) && defined(__ELF__)
-/* ARM64 (docs/ARM64.md, M3b): the same numbers and the same -errno results,
+/* ARM64 (docs/ARCHITECTURE.md, M3b): the same numbers and the same -errno results,
    reached with `svc #0` instead of `int $0x80`. x8 = call number, x0 to x2 =
    arguments 1-3 (x3 to x5 are free for calls that grow more), x0 = result.
    Built position independent, no libc, no relocations, like the i386 ones. */

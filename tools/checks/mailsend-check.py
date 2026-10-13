@@ -9,7 +9,7 @@
 2. The wiring, from source: user/mail.c posts {from_name,to,subject,body} to /api/mail/send with
    JT_POST_WORKER, shows "Sent." or a reason, files the record with the s/x flag; the kernel adds
    the bearer only for that path inside SYS_HTTP_POST and the token is never exposed to ring 3;
-   SYSCALL-ABI.md documents it.
+   ARCHITECTURE.md documents it.
 
 The "Sent" state in a booted Mail window is not driven here (that needs QEMU); it is covered by
 the source assertions plus the Worker half.
@@ -87,7 +87,7 @@ check("no syscall returns the token", "mail_token" not in rd("kernel/syscall.h")
 check("settings persist mailtoken", "mailtoken=" in rd("kernel/kernel.c") and "is_mailtoken" in rd("kernel/kernel.c"))
 check("settings row exists", "Mail token" in rd("kernel/settings_ui.h"))
 check("http.c adds Authorization: Bearer", "Authorization: Bearer" in rd("drivers/http.c"))
-abi = rd("SYSCALL-ABI.md") if os.path.exists(os.path.join(ROOT, "SYSCALL-ABI.md")) else rd("docs/SYSCALL-ABI.md")
+abi = rd("ARCHITECTURE.md") if os.path.exists(os.path.join(ROOT, "ARCHITECTURE.md")) else rd("docs/ARCHITECTURE.md")
 check("SYSCALL-ABI documents /api/mail/send", "/api/mail/send" in abi and "never" in abi)
 wr = rd("wrangler.toml")
 check("wrangler MAIL_RATE_LIMITER", 'name = "MAIL_RATE_LIMITER"' in wr)

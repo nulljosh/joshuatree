@@ -940,7 +940,7 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
    (that stays a separate queued roadmap item, not built against here):
      0 = Photo, the baked NPS photo (v75's original alternative).
      1 = Map Warm, the default once buildable (Joshua's own call in
-         roadmap.md's satellite entry): the fetched map put through
+         ROADMAP.md's satellite entry): the fetched map put through
          gui_map_tint's existing Mojave warm grade (v79).
      2 = Map Cool, v81: a distinct cooler, higher-contrast grade
          (gui_map_tint_cool below) for legibility -- a real, different
@@ -969,7 +969,7 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
 #define WALL_SAT   4
 /* v0.76.7: default flipped from WALL_WARM to WALL_SAT per Joshua's own
    direct, previously-recorded request ("the real satellite-town wallpaper
-   should become the default once buildable", roadmap.md's "Later idea:
+   should become the default once buildable", ROADMAP.md's "Later idea:
    location-dynamic satellite wallpaper" entry) -- Satellite became real and
    buildable in v0.73.1 but the compiled-in default was never actually
    flipped, so every fresh boot (and, worse, the browser demo's every idle-
@@ -1661,7 +1661,7 @@ static void gui_rounded_rect_gradient(int x, int y, int w, int h, unsigned int c
 }
 
 /* Real pictograms, not letters: there's no image decoder or asset pipeline
-   in this kernel (deliberately, see roadmap.md's font/asset scope notes),
+   in this kernel (deliberately, see ROADMAP.md's font/asset scope notes),
    so each icon is drawn from the same primitives gui_rounded_rect already
    uses (window_pixel/window_rect plus a circle-distance test), geometric
    but genuinely representative of what each app actually is, the same way
@@ -2346,7 +2346,7 @@ static int json_current_number(const char *json, const char *key, int *out_x10){
    v56 dropdown, v60 wind amplitude, v65 particles and tint) reported a
    place ~40km from where this machine actually sits (Langley, per both
    Joshua's own phone and a real `curl http://ip-api.com/json/` from the
-   host, roadmap.md's "Real find" entry). Open-Meteo itself was never
+   host, ROADMAP.md's "Real find" entry). Open-Meteo itself was never
    wrong, it answered honestly for the coordinates it was given; the
    coordinates were the bug. ip-api.com answers on plain HTTP (no TLS in
    this kernel), so this is the same http_get shape the weather call
@@ -2549,7 +2549,7 @@ void weather_ring3_open(void){
     weather_last_tick += ticks() - t0;
 }
 
-/* v75 (0.67.0): the real location-dynamic wallpaper, the item roadmap.md's
+/* v75 (0.67.0): the real location-dynamic wallpaper, the item ROADMAP.md's
    satellite entry was building toward. Honest naming first: this is a MAP
    of the real town, not a satellite photo. Real curl checks (roadmap.md,
    v75 entry) found every satellite/imagery source that answers on plain
@@ -3377,7 +3377,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     }
     /* The artwork is stored as PNG, not as decoded RGBA: 24 artworks of
        128x128 RGBA is 1.5MB, which runs into the ring-3 program window
-       kernel/memmap.h pins at JT_USER_BASE, and docs/SYSCALL-ABI.md names that
+       kernel/memmap.h pins at JT_USER_BASE, and docs/ARCHITECTURE.md names that
        address as part of the published v1 contract. As PNG the same 24 are
        141KB. Decoding here rather than once at boot costs nothing in
        practice: this function is the icon cache's own miss path, so it runs
@@ -3648,7 +3648,7 @@ void gui_app_mouse_tick(void){
    to actually go to, so a lit, clickable minimize or maximize button would
    be a fake control that looks like it does something it doesn't. Real
    minimize/maximize wait on the actual windowing system already queued in
-   roadmap.md's later product ideas, not a shortcut bolted on here. */
+   ROADMAP.md's later product ideas, not a shortcut bolted on here. */
 void gui_draw_app_titlebar(const char *title){
     if (gui_app_windowed) return;
     if (boot_to_phone) { phone_app_titlebar_draw(title); return; } /* kernel/phone_home.h: back chevron, no Esc key on a phone */
@@ -4195,7 +4195,7 @@ again:
     }
 }
 
-/* v0.73.0: phase 1 of real multi-window, per roadmap.md's "Multi-window,
+/* v0.73.0: phase 1 of real multi-window, per ROADMAP.md's "Multi-window,
    honestly scoped" entry (grep for it: real windows were estimated as
    "3-5 sessions of unstarted work" before this pass, and confirmed still
    unstarted immediately before this one, every app a blocking function and
@@ -5596,7 +5596,7 @@ static void gui_run(void){
                    settled pmemsave, the dockhover-check.py pattern) could
                    NOT reproduce a PERSISTENT stuck-lifted tile either
                    before or after this fix, dropped as a non-discriminating
-                   test rather than kept as false evidence; see roadmap.md
+                   test rather than kept as false evidence; see ROADMAP.md
                    for the honest state of the underlying report, this fix
                    narrows a real gap but is not confirmed to be the full
                    explanation for a hang lasting more than one frame. */
@@ -5812,7 +5812,7 @@ void gui_panic_screen(const char *name, unsigned int fault_addr, unsigned int ei
 }
 
 /* ---- usertest: the ring-3 reference program, end to end -------------------
-   The real proof that docs/SYSCALL-ABI.md is a contract and not a wish.
+   The real proof that docs/ARCHITECTURE.md is a contract and not a wish.
    user/hello.c is compiled on its own, against user/jtsys.h and nothing
    else, and reaches this kernel only through int 0x80. This command puts
    it and its data file on the VFS, runs it at ring 3 via exec_user(), and
@@ -6457,7 +6457,7 @@ static void run(char *line){
            dump of three gui_wind_shift() samples, reverted before commit,
            nothing left in the suite. Real, discriminating logic to pin
            down: wind_pct_for_weather_code's seven WMO-code buckets, the
-           exact percentages roadmap.md's own table names (Fog stillest at
+           exact percentages ROADMAP.md's own table names (Fog stillest at
            40%, then Clear/Cloudy/Snow/Rain/Showers/Storm climbing to
            200%), every boundary value, not just one code per bucket. */
         int ok =
@@ -6595,7 +6595,7 @@ static void run(char *line){
            reverted before commit. Two real, discriminating checks: (1)
            weather_word()'s WMO-code bucket mapping, the same function the
            dropdown's condition word and v60's wind multiplier both depend
-           on, every boundary named in roadmap.md's own table; (2)
+           on, every boundary named in ROADMAP.md's own table; (2)
            gui_draw_weather_panel() actually paints its own bg chrome and,
            only once weather_have is set, real antialiased glyph ink for
            the line it claims to show, not a blank rect.
@@ -7305,7 +7305,7 @@ static void run(char *line){
            not a clone: no SYN-stealth/OS-fingerprint modes, one scan type,
            a fixed common-port list, exactly what tcp_probe_port actually
            supports. Same "not a general tool, a real narrow proof" scope
-           as everything else this session, see roadmap.md's v30 entry. */
+           as everything else this session, see ROADMAP.md's v30 entry. */
         if (!*arg) { puts("usage: netscan <host, e.g. 10.0.2.2>\n"); }
         else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
@@ -7468,7 +7468,7 @@ static void run(char *line){
            launch function, and the only reliable way to drive input from
            a script is keyboard injection (proven repeatedly this session;
            QEMU's monitor mouse commands don't reach this kernel's real
-           PS2 driver headlessly, see roadmap.md's honest note on that).
+           PS2 driver headlessly, see ROADMAP.md's honest note on that).
            Any key (Escape included) closes every one of these exactly the
            same way a real click already does via gui_wait_close, so a
            script can drive this whole suite with nothing but sendkey. */

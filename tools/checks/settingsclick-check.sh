@@ -23,7 +23,7 @@
 # replaced with a stub that always returns -1 (simulating the pre-fix
 # behavior where a click never changes `sel`), rebuilt, and this test
 # failed exactly as expected (`settingsclick FAIL`); restored immediately
-# after and reran clean. See roadmap.md's own entry for this pass.
+# after and reran clean. See ROADMAP.md's own entry for this pass.
 set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf

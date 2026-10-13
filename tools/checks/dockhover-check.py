@@ -3,7 +3,7 @@
 boots kernel.elf with -display none, drives the pointer over QMP absolute
 events (the v62 vmmouse path, the first synthetic input that reliably
 reaches this kernel's GUI loop headlessly) across the dock exactly the way
-roadmap.md's recording-evidence entry describes (park on one icon, then
+ROADMAP.md's recording-evidence entry describes (park on one icon, then
 hop across four more), then pmemsaves the real framebuffer mid-animation
 and again after it has settled, and asserts on actual pixels:
 

@@ -1,4 +1,4 @@
-/* v0.77 (Sep 2026): real user accounts. docs/THREAT-MODEL.md was written
+/* v0.77 (Sep 2026): real user accounts. docs/ARCHITECTURE.md was written
    first and gates everything here: this is a desktop lock for whoever is
    physically at the keyboard, backed by a real salted, iterated SHA-256
    hash instead of a fake one, not a claim of disk encryption or
@@ -139,7 +139,7 @@ static int auth_from_hex(const char *str, unsigned int len, unsigned char *out) 
    an OR of differences rather than returning early on the first
    mismatch, so a timing side channel can't be used to guess the hash
    one byte at a time. The one place in this file that's genuinely worth
-   being paranoid about (see docs/THREAT-MODEL.md's "not lazy about
+   being paranoid about (see docs/ARCHITECTURE.md's "not lazy about
    this one part" framing). */
 static int auth_const_time_eq(const unsigned char *a, const unsigned char *b, unsigned int len) {
     unsigned char diff = 0;
@@ -350,7 +350,7 @@ static int auth_change_password(const char *username, const char *old_password, 
    is a local stack array cleared before returning so a stale copy
    doesn't linger in memory longer than it has to (belt-and-suspenders
    given the honest "any ring-0 code can read memory anyway" limit
-   docs/THREAT-MODEL.md already names). */
+   docs/ARCHITECTURE.md already names). */
 
 /* One text-entry field, either plain (username) or masked (password).
    Returns 1 on enter, 0 on esc. Chrome (titlebar + static label above
@@ -386,7 +386,7 @@ static int auth_field_input(char *out, int max, int y, int masked) {
 /* Real login: wrong credentials refuse and re-prompt. No lockout table
    (there's exactly one local user in front of the keyboard in this threat
    model, and a fake-looking account-lockout screen would be exactly the
-   overclaiming docs/THREAT-MODEL.md warns against), but a fixed 1-second
+   overclaiming docs/ARCHITECTURE.md warns against), but a fixed 1-second
    delay (100 PIT ticks at 100/sec, see kernel/irq.h) after every rejected
    attempt below -- security pass: a real throttle against an automated
    guesser is worth having even in a single-user threat model, and unlike
@@ -457,7 +457,7 @@ static void auth_login_screen(void) {
    interaction, none of which know this feature exists) keeps working
    unmodified on a fresh image with no USERS.TXT, since the gate is a
    pure no-op in that case. It's also the honest reading of
-   docs/THREAT-MODEL.md's own scope: with no accounts configured there
+   docs/ARCHITECTURE.md's own scope: with no accounts configured there
    is nothing to protect, so there's nothing for the gate to do. */
 /* Pure, GUI-free: whether auth_gate would actually show the blocking
    login screen (at least one account exists) or no-op straight to the

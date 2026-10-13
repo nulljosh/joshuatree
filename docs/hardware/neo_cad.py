@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: CC-BY-NC-SA-4.0
 # Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
 # Neo Kit enclosure, print-ready parts (v4: 200 x 200 x 55 mm, staggered quarter seams, feet hide the bottom hardware, cap = frame + whole-tree panel). build123d -> STL per printable part, one STEP, exploded SVGs.
-# mm throughout. Numbers match docs/HARDWARE.md. Target: Bambu A1 mini (180 x 180 x 180), FDM.
+# mm throughout. Numbers match docs/GUIDE.md. Target: Bambu A1 mini (180 x 180 x 180), FDM.
 #   uv run --with build123d python docs/hardware/neo_cad.py docs/hardware
 import sys, os, json, re, math
 from build123d import *
@@ -9,7 +9,7 @@ from build123d import *
 OUT = sys.argv[1] if len(sys.argv) > 1 else "."
 STL_DIR, ASM_DIR = os.path.join(OUT, "stl"), os.path.join(OUT, "assembly")
 
-# ---- the board: ASRock J4125B-ITX, numbers from docs/HARDWARE.md ----
+# ---- the board: ASRock J4125B-ITX, numbers from docs/GUIDE.md ----
 BOARD = 170.0                    # mini-ITX is 170 x 170
 HOLE_DX, HOLE_DY = 154.94, 157.48  # mini-ITX hole spacing (ATX spec)
 SHIELD_W, SHIELD_H = 158.75, 44.45  # stock I/O shield
@@ -353,7 +353,7 @@ print("SOLID VOLUME %.0f cm3 (about %.0f g PLA at 1.24 g/cm3 and 100%% fill)" % 
 for r in report: print("  %-22s x%d  %5.1f x %5.1f x %5.1f  %s" % (r["part"], r["qty"], r["x"], r["y"], r["z"], r["hex"]))
 print("PIECES", sum(r["qty"] for r in report), "FILES", len(report))
 print("pad to face %.1f mm, worst part overlap %.4f mm3, strips %s" % (BOSS_FACE, worst_ov, ["%.2f" % v for v in STRIP()]))
-# the parts table in docs/HARDWARE.md is generated here from the constants and manifest.json, so it cannot drift
+# the parts table in docs/GUIDE.md is generated here from the constants and manifest.json, so it cannot drift
 npc = lambda pre: sum(r["qty"] for r in report if r["part"].startswith(pre))
 tbl = "\n".join([
  "| Part | Size | Print |", "|---|---|---|",
@@ -362,7 +362,7 @@ tbl = "\n".join([
  "| Core tray | %.0f mm square, %.1f mm tall, %.0f mm walls, corners chamfered %.1f mm, vent slots on every gap line, 4 board standoffs printed on the floor, no rear wall | Printed, floor down, no supports |" % (CORE, CORE_H, WALL, CH),
  "| Rear plate | %.1f x %.1f mm and %.0f mm deep including the facade, one piece, with the %.0f x %.0f I/O window and a %.1f mm frame on all four sides, flush with the ring faces | Printed lying flat |" % (next(r for r in report if r["part"] == "rear_plate")["x"], next(r for r in report if r["part"] == "rear_plate")["y"], next(r for r in report if r["part"] == "rear_plate")["z"], IO_W, IO_H, MIN_WALL),
  "| Feet | %.1f mm round, %.1f mm thick, recessed under ring 0, cover the nut and the rod end | TPU or PLA |" % (FOOT_OD, FOOT_T)])
-hw = os.path.join(OUT, "..", "HARDWARE.md")
+hw = os.path.join(OUT, "..", "GUIDE.md")
 if os.path.exists(hw):
     t = open(hw).read(); a, b = "<!-- parts:start -->", "<!-- parts:end -->"
     if a in t: open(hw, "w").write(t[:t.index(a) + len(a)] + "\n" + tbl + "\n" + t[t.index(b):])

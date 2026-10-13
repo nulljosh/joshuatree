@@ -623,7 +623,7 @@ p,li,.sub{text-wrap:pretty}
          network stack, no browser fetch() involved), so this isn't
          reverting the kernel fix, only what the landing page claims a
          browser visitor will see today. Real follow-up logged in
-         roadmap.md: a same-origin Cloudflare Worker proxy route would
+         ROADMAP.md: a same-origin Cloudflare Worker proxy route would
          fix this for real (server-to-server fetches aren't CORS-limited),
          scoped carefully to avoid becoming an open proxy -- not done in
          this pass. Headline swapped to Multi-Window, a real, CI-verified
@@ -649,11 +649,11 @@ p,li,.sub{text-wrap:pretty}
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">32</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">3.8.4</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">3.8.5</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
-    <p class="boot-line">or try it live above, or <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/RASPBERRY-PI.md">put it on a Raspberry Pi 4</a></p>
+    <p class="boot-line">or try it live above, or <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/GUIDE.md">put it on a Raspberry Pi 4</a></p>
   </div>
 </section>
 
@@ -742,9 +742,9 @@ p,li,.sub{text-wrap:pretty}
     <div class="tile"><p><strong>Sound and your music.</strong> Volume keys, a beep, and a Music app that plays the MP3s you own, with their titles, artists and covers. Apple Music downloads are out; their files are locked.</p></div>
     <div class="tile"><p><strong>Samantha, on the board.</strong> Type a question and she answers from Turing, our own model, through a small relay on your Mac. The Pi finds the relay by itself and checks its certificate. No cloud and no key.</p></div>
     <div class="tile"><p><strong>Wi-Fi, done by hand.</strong> The Pi's radio chip cannot join a protected network on its own, so Joshua Tree does the WPA2 handshake itself, gets an address and sets its clock from the internet.</p></div>
-    <div class="tile"><p><strong>Still ahead.</strong> Many windows at once, and the rest of the desktop apps on the Pi. See the <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/roadmap.md">roadmap</a>.</p></div>
+    <div class="tile"><p><strong>Still ahead.</strong> Many windows at once, and the rest of the desktop apps on the Pi. See the <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ROADMAP.md">roadmap</a>.</p></div>
   </div>
-  <p class="sub" style="margin-top:16px"><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/RASPBERRY-PI.md">Put it on your own Pi</a></p>
+  <p class="sub" style="margin-top:16px"><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/GUIDE.md">Put it on your own Pi</a></p>
 </section>
 
 <section class="specs reveal" id="specs" aria-label="Tech specs">
@@ -756,7 +756,7 @@ p,li,.sub{text-wrap:pretty}
       <div class="spec-body">
         <div class="facts" role="group" aria-label="How fast">
           <h3>Fast on nothing.</h3>
-          <p class="sub">Measured headless in QEMU on a Mac Mini M4 by <code>tools/bench.sh</code>. Refreshed with every release. <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/BENCHMARKS.md">Every run, in full</a>.</p>
+          <p class="sub">Measured headless in QEMU on a Mac Mini M4 by <code>tools/bench.sh</code>. Refreshed with every release. <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">Every run, in full</a>.</p>
         <div class="facts-row">
     <!-- bench:start -->
     <div class="fact"><strong>260<span class="label" style="display:inline;margin-left:4px">ms</span></strong><span class="label">Boot to shell</span></div>
@@ -774,7 +774,7 @@ p,li,.sub{text-wrap:pretty}
         <dl class="spec-dl">
           <div><dt>Kernel</dt><dd>A freestanding kernel for PCs (i386) and the Raspberry Pi 4 (ARM64). No libc, and no dependencies beyond the toolchain.</dd></div>
           <div><dt>Apps</dt><dd><span data-fact="apps">32</span> built in, <span data-fact="ring3">32</span> of them running as their own protected programs at ring 3.</dd></div>
-          <div><dt>Read more</dt><dd><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">Architecture</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/SYSCALL-ABI.md">System calls</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/THREAT-MODEL.md">Threat model</a></dd></div>
+          <div><dt>Read more</dt><dd><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">Architecture</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">System calls</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">Threat model</a></dd></div>
         </dl>
       </div>
     </details>
@@ -785,7 +785,7 @@ p,li,.sub{text-wrap:pretty}
           <div><dt>Toolchain</dt><dd>Stock clang and <code>ld.lld</code>, cross-compiling straight to i386. No cross-toolchain to install.</dd></div>
           <div><dt>Runs on</dt><dd>QEMU, a real PC from a USB stick, or a Raspberry Pi 4 from an SD card.</dd></div>
           <div><dt>Commands</dt><dd><code>make</code> builds <code>kernel.elf</code>. <code>make run</code> boots it. <code>./check.sh</code> is the boot test.</dd></div>
-          <div><dt>Read more</dt><dd><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/TESTING.md">Testing</a></dd></div>
+          <div><dt>Read more</dt><dd><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">Testing</a></dd></div>
         </dl>
       </div>
     </details>
@@ -851,8 +851,8 @@ p,li,.sub{text-wrap:pretty}
     <p class="waitlist-status" id="waitlist-status" role="status" aria-live="polite"></p>
     <video class="ad-video" controls preload="none" playsinline poster="https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7-poster.jpg" aria-label="A 30 second ad for Joshua Tree"><source src="https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7.mp4" type="video/mp4"></video>
     <p class="neo-cap">The 30 second version.</p>
-    <a class="neo-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md"><img class="neo-img" src="neo-hero.jpg" alt="A render of Neo, the case for the Joshua Tree board" width="1200" height="750" loading="lazy"></a>
-    <p class="neo-cap">Neo, the case. A concept for now, not for sale yet. <a class="neo-more" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md">See the plans</a>.</p>
+    <a class="neo-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/GUIDE.md"><img class="neo-img" src="neo-hero.jpg" alt="A render of Neo, the case for the Joshua Tree board" width="1200" height="750" loading="lazy"></a>
+    <p class="neo-cap">Neo, the case. A concept for now, not for sale yet. <a class="neo-more" href="https://github.com/nulljosh/joshuatree/blob/main/docs/GUIDE.md">See the plans</a>.</p>
   </div>
 </section>
 
@@ -875,8 +875,8 @@ p,li,.sub{text-wrap:pretty}
         <li><a href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a></li>
         <li><a href="https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS">ISO checksums</a></li>
         <li><a href="https://github.com/nulljosh/joshuatree/releases">What&rsquo;s new</a></li>
-        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/roadmap.md">Roadmap</a></li>
-        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/VERSIONS.md">Version history</a></li>
+        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ROADMAP.md">Roadmap</a></li>
+        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ROADMAP.md">Version history</a></li>
       </ul>
     </div>
     <div class="foot-col">
@@ -885,7 +885,7 @@ p,li,.sub{text-wrap:pretty}
         <li><a href="#samantha">Meet Samantha</a></li>
         <li><a href="#apps">Apps</a></li>
         <li><a href="#protected">Protected apps</a></li>
-        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md">Neo hardware</a></li>
+        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/GUIDE.md">Neo hardware</a></li>
         <li><a href="#waitlist">Want one?</a></li>
       </ul>
     </div>
@@ -894,8 +894,8 @@ p,li,.sub{text-wrap:pretty}
       <ul>
         <li><a href="https://github.com/nulljosh/joshuatree">Source</a></li>
         <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">Architecture</a></li>
-        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/TESTING.md">Testing</a></li>
-        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/SYSCALL-ABI.md">System calls</a></li>
+        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">Testing</a></li>
+        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">System calls</a></li>
         <li><a href="#specs">Tech specs</a></li>
         <li><a href="https://github.com/nulljosh/joshuatree/issues">Report a bug</a></li>
       </ul>
@@ -911,7 +911,7 @@ p,li,.sub{text-wrap:pretty}
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">3.8.4</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">3.8.5</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"></div>
 </footer>
@@ -959,7 +959,7 @@ p,li,.sub{text-wrap:pretty}
 })();
 // Direct request: a dynamic version number next to the "Joshua Tree"
 // header, sourced from the same VERSION file every real release already
-// bumps (see roadmap.md/CLAUDE.md's own semver rule), not hand-typed
+// bumps (see ROADMAP.md/CLAUDE.md's own semver rule), not hand-typed
 // into this HTML where it would drift the same way kernel.c's About
 // panel version string just did (hardcoded, found 30+ versions stale).
 // version.txt is a real static file, kept in sync with the repo-root
@@ -974,7 +974,7 @@ p,li,.sub{text-wrap:pretty}
   // curated, not fetched from GitHub's API at runtime: a live API call
   // from every visitor's browser would need auth to avoid rate-limiting
   // and a CORS-safe proxy, real scope beyond a landing-page cycling
-  // caption. Updated by hand alongside real roadmap.md entries.
+  // caption. Updated by hand alongside real ROADMAP.md entries.
   var el = document.getElementById('kernel-version');
   if (!el) return;
   var eyebrow = el.closest('.eyebrow');

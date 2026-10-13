@@ -12,7 +12,7 @@ sys.path.insert(0, HERE)                                    # Blender's -P does 
 from render_kit import build, blender, lin, material        # shared with render_samantha.py
 PREVIEW = bool(os.environ.get("NEO_PREVIEW"))             # 400 px, 8 samples, for checking exposure
 W, H = (400, 250) if PREVIEW else (1600, 1000)
-BASE, TOPC = (0xB9, 0x54, 0x2C), (0xF0, 0xE7, 0xD8)      # ring 0 and the cap, as in ASSEMBLY.md
+BASE, TOPC = (0xB9, 0x54, 0x2C), (0xF0, 0xE7, 0xD8)      # ring 0 and the cap, as in GUIDE.md
 INK, CREAM = (0x1E, 0x1C, 0x1A), (0xE9, 0xE0, 0xCF)
 BLOCK = (127.0, 127.0, 50.0)                                # plain reference block, mm
 

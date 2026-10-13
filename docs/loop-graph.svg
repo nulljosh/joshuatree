@@ -4,7 +4,7 @@
 <text x="320" y="38" font-size="20" font-weight="600" fill="#1c1c1e" text-anchor="middle">The Joshua Tree loop</text>
 <text x="320" y="58" font-size="12" fill="#75726e" text-anchor="middle">one task at a time, from the roadmap to a release</text>
 <g font-size="14" font-weight="600" fill="#1c1c1e" text-anchor="middle">
-<rect x="190" y="84" width="260" height="52" rx="12" fill="#f5f0eb" stroke="#ddd8ce"/><text x="320" y="106">Roadmap</text><text x="320" y="124" font-size="11" font-weight="400" fill="#75726e">docs/roadmap.md, the open items</text>
+<rect x="190" y="84" width="260" height="52" rx="12" fill="#f5f0eb" stroke="#ddd8ce"/><text x="320" y="106">Roadmap</text><text x="320" y="124" font-size="11" font-weight="400" fill="#75726e">docs/ROADMAP.md, the open items</text>
 <rect x="190" y="170" width="260" height="52" rx="12" fill="#f5f0eb" stroke="#ddd8ce"/><text x="320" y="192">Main session</text><text x="320" y="210" font-size="11" font-weight="400" fill="#75726e">picks one item, decides, verifies</text>
 <rect x="190" y="256" width="260" height="52" rx="12" fill="#f5f0eb" stroke="#ddd8ce"/><text x="320" y="278">One agent</text><text x="320" y="296" font-size="11" font-weight="400" fill="#75726e">its own worktree and branch, one slice</text>
 <rect x="190" y="342" width="260" height="52" rx="12" fill="#f5f0eb" stroke="#ddd8ce"/><text x="320" y="364">Local checks, headless</text><text x="320" y="382" font-size="11" font-weight="400" fill="#75726e">QEMU, no window, real artifacts</text>

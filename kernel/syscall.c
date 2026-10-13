@@ -147,7 +147,7 @@ static struct open_file fds[TASK_SLOTS][MAX_FDS];
    The real, contractual consequence is that the file on the backend does
    not change until close() (or task exit, which closes for you). Two
    descriptors open on the same file will not see each other, and the last
-   one closed wins the whole file. That is in docs/SYSCALL-ABI.md, not
+   one closed wins the whole file. That is in docs/ARCHITECTURE.md, not
    hidden here. */
 
 /* Copies a NUL-terminated string out of user space into a fixed kernel

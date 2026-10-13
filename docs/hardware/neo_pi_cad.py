@@ -1,7 +1,7 @@
 # Neo Pi enclosure for a Raspberry Pi 4 Model B, printable parts. build123d -> STEP (whole thing) + STL per part.
 # Same stacked-ring look as neo_cad.py (the mini-ITX case), sized for an 85 x 56 mm board. mm throughout.
 # Run:  python3 neo_pi_cad.py OUTDIR    (needs build123d)
-# Print docs/hardware/PI-CASE.md's fit_test.stl first. Every number from the Raspberry Pi 4B mechanical drawing
+# Print docs/GUIDE.md's fit_test.stl first. Every number from the Raspberry Pi 4B mechanical drawing
 # (board, holes, standoff, port windows) lives in pi4b.py, shared with samantha_cad.py. The windows are deliberately
 # bigger than the connectors, so a half-millimetre of error in a port position still fits. Check the real board with
 # calipers before the full print.

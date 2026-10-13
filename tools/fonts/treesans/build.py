@@ -3,7 +3,7 @@
 
     python3 tools/fonts/treesans/build.py INTER_VARIABLE.ttf OUT_DIR
 
-The constraints (docs/TYPE.md) are enforced here, not hoped for:
+The constraints (docs/ARCHITECTURE.md) are enforced here, not hoped for:
   * every vertical metric is a multiple of 1/16 em (128 units of 2048): ascent 15, descent 4, line gap 0, so the line box
     is 19/16 em and a size on the 4 px grid gives a line on the 4 px grid;
   * one face per optical size: Text is Inter's opsz 14 (open apertures, looser fit), Display is opsz 32 (tight, for 22 px and up);

@@ -2,7 +2,7 @@
 #define JPEG_H
 /* v76: minimal baseline JPEG decoder, "part 1" of the same shape as
    drivers/png.c's PNG bridge. Real gap this closes, logged honestly in
-   roadmap.md: every plain-HTTP satellite tile source found (Google
+   ROADMAP.md: every plain-HTTP satellite tile source found (Google
    mt0.google.com/vt/lyrs=s, Bing ecn.t0.tiles.virtualearth.net) serves
    JPEG, not PNG, so the map-wallpaper feature was stuck on OpenTopoMap's
    line-art tiles instead of real satellite photography until this

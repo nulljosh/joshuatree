@@ -6,7 +6,7 @@ Boots headless with `open=keyrate`, which launches Keyrate from the dock
 path the moment the desktop is up. Keyrate is now user/keyrate.c, a flat
 binary loaded off the VFS by exec_user and run at CPL 3; it gets its
 window through SYS_WINDOW_OPEN and its keys through SYS_WINDOW_POLL
-(docs/SYSCALL-ABI.md, v3). The check then:
+(docs/ARCHITECTURE.md, v3). The check then:
 
   1. asserts, off the serial log, that the program opened a window of the
      app viewport's size and that the kernel saw the open come from ring 3;

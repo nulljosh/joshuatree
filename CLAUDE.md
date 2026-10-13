@@ -2,7 +2,7 @@
 
 A from-scratch OS: a freestanding i386 kernel plus an ARM64 build that runs on a real Raspberry Pi 4. No libc. Needs only clang, ld.lld and qemu.
 
-- Subsystems: `docs/ARCHITECTURE.md`. Plan and queue: `docs/roadmap.md`. Look and feel: `docs/DESIGN.md`.
+- Docs are three files plus this one: `docs/GUIDE.md` (use it, the Pi, the hardware), `docs/ARCHITECTURE.md` (subsystems, design rules, system calls, security, tests) and `docs/ROADMAP.md` (plan, shipped log, story). Add to them; do not start a new .md file.
 
 ## Build and verify
 
@@ -24,7 +24,7 @@ Any QEMU run with a `-d` trace and `-D <file>` gets `timeout` in front: `timeout
 
 ## Docs
 
-- Docs stay at 100 percent: every source file the progress graph counts has a row in `docs/ARCHITECTURE.md`, added in the same PR.
+- Docs stay at 100 percent: every source file the progress graph counts has a row in the Architecture section of `docs/ARCHITECTURE.md`, added in the same PR.
 - Plain words, short sentences. A roadmap entry says what changed and why in two or three lines, then names its check. Long stories go in the commit or PR.
 
 ## Versioning
@@ -33,11 +33,11 @@ Any QEMU run with a `-d` trace and `-D <file>` gets `timeout` in front: `timeout
 
 ## Theme
 
-The wallpaper is one flat colour, the brand terracotta `#b5502c`; the UI face is Tree Sans; the mark is flat ink. Landing page: off-white `#faf8f4`, near-black ink, one terracotta accent `#b5502c`, rounded cards, no teal, purple or gradients. Dark mode is `#141311`. The logo comes from `tools/gen/logo.py`. The rest is in `docs/DESIGN.md`.
+The wallpaper is one flat colour, the brand terracotta `#b5502c`; the UI face is Tree Sans; the mark is flat ink. Landing page: off-white `#faf8f4`, near-black ink, one terracotta accent `#b5502c`, rounded cards, no teal, purple or gradients. Dark mode is `#141311`. The logo comes from `tools/gen/logo.py`. The rest is in `docs/ARCHITECTURE.md` (Design rules).
 
 ## ARM64 and the Pi
 
-`arch/arm64/` is a separate build (plan in `docs/ARM64.md`). `make -C arch/arm64 run` boots it in QEMU; `tools/checks/arm64-m0-check.py` proves it. The i386 Makefile is untouched.
+`arch/arm64/` is a separate build (plan in the ARM64 section of `docs/ARCHITECTURE.md`). `make -C arch/arm64 run` boots it in QEMU; `tools/checks/arm64-m0-check.py` proves it. The i386 Makefile is untouched.
 
 - Flash with `tools/flash-pi.sh`. Only that dev card carries the Wi-Fi key and relay token. Keys live in `~/.config/joshuatree/` and `~/.claude-relay-token`; never print or commit one.
 - The relay (`tools/claude-relay/relay.py`) answers the Pi's `sam QUESTION` command (the Terminal prompt is `joshua@tree % `, zsh style; `/status` names the model that last answered). Run it with `--turing` so Samantha answers from Joshua's own model. `--api-key-file` spends the Claude Platform credit and only starts with `--allow-api-spend`.
@@ -48,11 +48,11 @@ The wallpaper is one flat colour, the brand terracotta `#b5502c`; the UI face is
 ## Loop rules
 
 - PRs open as drafts (`gh pr create --draft`). Run `tools/ci-local.sh`; only when it passes, `gh pr ready`.
-- On a conflict in a generated file (`VERSION`, `landing/index.html`, `landing/version.txt`, `docs/TESTING.md`), take main's side, then regenerate.
+- On a conflict in a generated file (`VERSION`, `landing/index.html`, `landing/version.txt`, the generated blocks in `docs/ARCHITECTURE.md`), take main's side, then regenerate.
 - Never resolve a Makefile conflict by taking one side blindly. Merge both by hand.
 - Never push with conflict markers in any file.
 - New arm64 checks must be wired into `tools/checks/ci-suite.sh`.
-- Resume state is in `docs/LOOP-HANDOFF.md`. What keeps going wrong is in docs/LESSONS.md.
+- Resume state is the Loop handoff section of `docs/ROADMAP.md`. What keeps going wrong is the Lessons section of `docs/ARCHITECTURE.md`.
 
 ## Naming
 
@@ -64,8 +64,8 @@ The wallpaper is one flat colour, the brand terracotta `#b5502c`; the UI face is
 
 ## Picking this up with Codex (the $20 plan)
 
-Start with `docs/LOOP-HANDOFF.md`, then `docs/roadmap.md`'s Top 10. The plan has far less room than the Claude Max plan, so keep each task short: one task, one branch, one PR.
+Start with the Loop handoff section of `docs/ROADMAP.md`, then its Top 10. The plan has far less room than the Claude Max plan, so keep each task short: one task, one branch, one PR.
 
 Good fits for Codex: reviewing a PR against its checks, running `tools/ci-local.sh` (one run at a time) and reading the failure, small fixes with a test, relay and script work in Python, docs and roadmap tidying, and regenerating the graphs (`tools/gen/`). Poor fits: long unattended loops, the big `kernel/kernel.c` split, or anything that needs the real Pi board (flashing and the photos stay with Joshua).
 
-Use the notes under "ARM64 and the Pi" before touching `arch/arm64/`. Resume state: `docs/LOOP-HANDOFF.md`.
+Use the notes under "ARM64 and the Pi" before touching `arch/arm64/`. Resume state: the Loop handoff section of `docs/ROADMAP.md`.

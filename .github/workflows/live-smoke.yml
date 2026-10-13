@@ -2,7 +2,7 @@ name: Live site smoke test
 
 # Direct, real gap this closes: every dev session working on this repo runs
 # in a sandboxed container whose own network policy blocks the live
-# deployed domain outright (confirmed repeatedly, see roadmap.md's CORS-fix
+# deployed domain outright (confirmed repeatedly, see ROADMAP.md's CORS-fix
 # entries) -- there was previously no way for a session to check what a
 # real visitor actually sees without asking a human to open DevTools.
 # GitHub's own hosted runners have ordinary internet access (already proven
