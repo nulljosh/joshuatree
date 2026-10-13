@@ -367,3 +367,8 @@ Check: `tools/checks/arm64-crash-check.py` (the Pi image faults behind the splas
 
 `pick <sentence>` names the tool Samantha's hands would reach for, from a 15K-weight integer model in freestanding C (`kernel/picker.c`). On Turing's nine dev sets the Python reference gets 3,820 of 4,455 tool picks right (85.8 percent); the C matches it on all 297 golden sentences. Arguments and the guard stay with the full model, this picks the tool only.
 Check: `tools/checks/picker-check.sh` (QEMU, no network): `pickcheck: 297/297 ok` and four typed sentences.
+
+## 3.9.0: apps are sharp at 2x
+
+On the Pi at 1080p the ring-3 apps drew on a 1x grid and the kernel smoothed it up, so every stem of text was a soft ramp. Calendar, Notes, Music and Books now ask for a device-size buffer (`jt_window_open_hires`), draw rectangles, circles and the mascot at 2x through `user/libjt/hires.h`, and the kernel rasterises their text with Tree Sans at twice the size (`JT_SYS_TEXT2`), the pen moving by twice the 1x advance so the layout does not shift. The window buffer moved to the top of the arena to fit. Scale 1 and i386 are unchanged; the kernel-drawn windows already drew at device size.
+Check: `tools/checks/arm64-sharp2x-check.py` (a text stem has at most two soft pixels: 0 and 1 percent of stems in Notes and Calendar did before, 96 to 99 percent after).

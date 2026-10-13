@@ -87,6 +87,7 @@ static void cal_ymd_from_epoch(unsigned t, int *y, int *m, int *d){
 
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 
 #define T (-32) /* calendar.h's gui_app_dy() inside a dock window: same offsets, same pixels */
 
@@ -129,28 +130,12 @@ static char entry[EVENT_TEXT_MAX] JT_DATA = {0};
 static int entry_len JT_DATA = 0;
 
 /* ---- drawing: antialiased libjt text and a few shapes ---- */
-static void rect(int x, int y, int w, int h, unsigned c) {
-    if (x < 0) { w += x; x = 0; }
-    if (y < 0) { h += y; y = 0; }
-    if (x + w > (int)win.width)  w = (int)win.width - x;
-    if (y + h > (int)win.height) h = (int)win.height - y;
-    for (int yy = 0; yy < h; yy++) {
-        unsigned *row = win.pixels + (unsigned)(y + yy) * win.width + (unsigned)x;
-        for (int xx = 0; xx < w; xx++) row[xx] = c;
-    }
-}
-static void put(int x, int y, unsigned c) {
-    if (x < 0 || x >= (int)win.width || y < 0 || y >= (int)win.height) return;
-    win.pixels[(unsigned)y * win.width + (unsigned)x] = c;
-}
+static void rect(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
+static void put(int x, int y, unsigned c) { jt_pixel(&win, x, y, c); }
 static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 static int text_w(const char *s) { return jt_text_width(JT_FACE_BODY, s); }
 static void text_bold(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BOLD, x, y, fg, s); }
-static void fill_circle(int cx, int cy, int r, unsigned c) {
-    for (int dy = -r; dy <= r; dy++)
-        for (int dx = -r; dx <= r; dx++)
-            if (dx * dx + dy * dy <= r * r) put(cx + dx, cy + dy, c);
-}
+static void fill_circle(int cx, int cy, int r, unsigned c) { jt_disc(&win, cx, cy, r, c); }   /* the same footprint, antialiased at scale 2 */
 /* A pill from centre (x0,cy) to centre (x1,cy), radius r. */
 static void capsule(int x0, int x1, int cy, int r, unsigned c) {
     rect(x0, cy - r, x1 - x0 + 1, 2 * r + 1, c);
@@ -431,6 +416,11 @@ static void draw_day(void){
 
 /* Half-size dates reuse the normal antialiased face, averaging each 2x2 coverage block. */
 static void small_date(const char *s, int cx, int cy, unsigned fg) {
+    if (jt_scale(&win) > 1) {   /* a hi-res window: the face at half size, drawn by the kernel, instead of averaging 2x2 blocks */
+        int w = (text_w(s) + 1) / 2;
+        jt_text_draw_half(&win, JT_FACE_BODY, cx - w / 2, cy - 4, fg, s);
+        return;
+    }
     unsigned pixels[32 * 16] = {0};
     struct jt_window_info scratch = {32, 16, 32, pixels};
     jt_text_draw(&scratch, JT_FACE_BODY, 0, 0, WHITE, s);
@@ -554,7 +544,7 @@ static int on_key(int k){
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) {
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) {
         jt_write(2, "calendar: no window\n", 20);
         jt_exit(1);
     }

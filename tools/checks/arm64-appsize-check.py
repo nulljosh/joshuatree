@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""ARM64 app windows at 1080p (scale 2): normal size, and no pixel-doubled edges.
+"""ARM64 app windows at 1080p (scale 2): a normal size.
 
-Board feedback: the ring-3 apps looked too big and pixelated beside the Terminal and Browser. The cause: apps draw on a 1x
-grid (a 576x400 window, 560x360 buffer) and the kernel doubled every pixel (nearest neighbour) at scale 2, so the window was
-1152x800 on a 1920x1080 screen and every stem was a hard 2x2 block. The fix (arch/arm64/main.c): at scale 2 the window is
-520x368 logical (the Console is 500x350) and app_blit() spreads each pixel by bilinear weights; scale 1 is unchanged.
+Board feedback: the ring-3 apps looked too big and pixelated beside the Terminal and Browser. The size half of that is fixed in
+arch/arm64/main.c: at scale 2 the window is 520x368 logical (the Console is 500x350), the same as it was at 3.7.1. The pixelated
+half moved on in 3.9.0: the apps now draw at device size and arm64-sharp2x-check.py proves their edges are crisp, so the old
+"no hard 2x2 blocks" test that lived here is gone (a sharp rectangle edge is exactly two flat 2x2 blocks side by side).
 
 For each of calendar, notes, music and books this builds the apptest kernel (`make APP_NAME=x apptest`: that app opened at
 boot, since QEMU's raspi4b has no USB to click with), boots it on raspi4b at 1920x1080, waits for the first frame and takes a
 screendump through QMP. Passes when, per app:
   - the UART says "M3c window x WxH at X,Y" and the frame (content plus its 8 px sides, 32 px title and 8 px foot) is between
     20% and 60% of the screen wide and 30% and 70% tall, and no more than 15% wider or taller than the Console's frame;
-  - the screendump shows the frame's content area, and in it at least 200 colour transitions fall on the 2x grid, of which
-    under 10% are hard (two flat 2x2 blocks side by side, which is what pixel doubling makes of every edge).
+  - the screendump is the 1920x1080 screen and the frame's content area is not blank (it holds at least 200 colour changes).
 Skips (exit 0) when clang, ld.lld, qemu-system-aarch64 or its raspi4b model is missing.
 Usage: tools/checks/arm64-appsize-check.py   (from the repo root)
 """
@@ -90,7 +89,7 @@ def run(app):
         check(app + ": the screen is %dx%d" % (SW, SH), (w, h) == (SW, SH), (w, h))
         if (w, h) != (SW, SH): return
         allt, hard = transitions(parts[3], cx * 2, cy * 2, cw * 2, ch * 2)
-        check(app + ": %d edges on the 2x grid, %d hard (pixel doubling makes ~100%%)" % (allt, hard), allt >= 200 and hard * 10 < allt)
+        check(app + ": the content shows %d colour changes" % allt, allt >= 200)
     finally:
         q.terminate(); q.wait()
 
@@ -98,4 +97,4 @@ for a in ("calendar", "notes", "music", "books"):
     run(a)
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 if fails: print("FAIL: %d: %s" % (len(fails), "; ".join(fails))); sys.exit(1)
-print("ok: every app window is a normal size and its edges are smooth at scale 2")
+print("ok: every app window is a normal size at scale 2")

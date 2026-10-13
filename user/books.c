@@ -16,6 +16,7 @@
    books: too big FILE, books: closed. */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 #include "libjt/stdlib.h"
 #ifdef __aarch64__
 #include "libjt/mascot.h"   /* the Pi build draws the mascot on the empty library */
@@ -58,17 +59,7 @@ static int cur JT_DATA = 0;          /* the page on screen, 0 based */
 static int lines_pp JT_DATA = 1, body_w JT_DATA = 120, pitch JT_DATA = 20, space_w JT_DATA = 4;
 static char msg[80] JT_DATA = {0};
 
-static void rect(int x, int y, int w, int h, unsigned c) {
-    int W = (int)win.width, H = (int)win.height;
-    if (x < 0) { w += x; x = 0; }
-    if (y < 0) { h += y; y = 0; }
-    if (x + w > W) w = W - x;
-    if (y + h > H) h = H - y;
-    for (int yy = 0; yy < h; yy++) {
-        unsigned *row = win.pixels + (unsigned)(y + yy) * win.width + (unsigned)x;
-        for (int xx = 0; xx < w; xx++) row[xx] = c;
-    }
-}
+static void rect(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
 static int slen(const char *s) { int n = 0; while (s[n]) n++; return n; }
 static void scopy(char *d, const char *s, int max) {
     int i = 0;
@@ -357,7 +348,7 @@ static int handle_key(int k) {
 
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) { say_fail("books: no window"); jt_exit(1); }
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) { say_fail("books: no window"); jt_exit(1); }
     layout();
     scan();
     struct sb o; o.l = 0;

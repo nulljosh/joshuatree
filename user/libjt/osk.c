@@ -2,6 +2,7 @@
    in-kernel keyboard had, drawn with the antialiased text face. */
 #include "osk.h"
 #include "text.h"
+#include "hires.h"
 
 #define PANEL 0x00E9E4DD
 #define TILE  0x00FAF8F6
@@ -11,16 +12,7 @@ static const char *const LETTERS[4] = {"1234567890", "qwertyuiop", "asdfghjkl", 
 
 int jt_osk_height(void) { return JT_OSK_ROW_H * JT_OSK_ROWS; }
 
-static void fill(struct jt_window_info *w, int x, int y, int cw, int ch, unsigned c) {
-    if (x < 0) { cw += x; x = 0; }
-    if (y < 0) { ch += y; y = 0; }
-    if (x + cw > (int)w->width) cw = (int)w->width - x;
-    if (y + ch > (int)w->height) ch = (int)w->height - y;
-    for (int yy = 0; yy < ch; yy++) {
-        unsigned *row = w->pixels + (unsigned)(y + yy) * w->width + (unsigned)x;
-        for (int xx = 0; xx < cw; xx++) row[xx] = c;
-    }
-}
+static void fill(struct jt_window_info *w, int x, int y, int cw, int ch, unsigned c) { jt_fill(w, x, y, cw, ch, c); }   /* hires.h: logical pixels at either scale */
 
 static int row_off(int row, int cell) { return row == 2 ? cell / 2 : (row == 3 ? cell : 0); }
 

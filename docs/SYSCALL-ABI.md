@@ -899,3 +899,17 @@ fixed glyph width. Errors: -EBADF (caller does not own the window), -EINVAL
 (bad op or string), -EFAULT (pointer outside user memory), -ENOMEM (queue
 full).
 
+## text2 (402), ARM64 only, and the hi-res window flag (3.9.0)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 402 | `text2` | `struct jt_text2 *` (LP64: x, y, rgb, face, pct, len, s, adv) | unused | unused | the pen's device x after the run, or -errno |
+
+`window_open` (384) takes a flag in ecx (it ignored it before): 1 asks for a device-size buffer. The ARM64 kernel at
+scale 2 then maps twice the width and height, reports `width` and `height` in logical pixels and `pitch` (bytes) as
+`2 * width * 4`; every other kernel, and ARM64 at scale 1, ignores the flag and answers `pitch = width * 4`.
+`user/libjt/hires.h` reads the scale off that pitch. **text2** draws `len` bytes (1 to 255) of `s` into such a buffer
+with Tree Sans at the face's 1x size times the scale times `pct` / 100, face 0 body, 1 bold, 2 display, 3 mono; x and y
+(the baseline) are device pixels and the pen moves by `adv[i]` device pixels after byte i, so the app keeps its own 1x
+layout. -EINVAL when the window is not hi-res, -EFAULT for a request, string or advance array outside the app's memory.
+i386 has no 402: it answers -ENOSYS and its apps never call it.

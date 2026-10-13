@@ -39,6 +39,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 #include "libjt/osk.h"
 
 #define BG    0x00FAF8F6
@@ -91,16 +92,7 @@ static int esel JT_DATA = -1;       /* selection anchor; the selection is anchor
 static char efile[13] JT_DATA = {0};
 static int del_armed JT_DATA = 0;   /* d once asks, d again deletes, anything else cancels */
 
-static void rect(int x, int y, int w, int h, unsigned c) {
-    if (x < 0) { w += x; x = 0; }
-    if (y < 0) { h += y; y = 0; }
-    if (x + w > (int)win.width)  w = (int)win.width - x;
-    if (y + h > (int)win.height) h = (int)win.height - y;
-    for (int yy = 0; yy < h; yy++) {
-        unsigned *row = win.pixels + (unsigned)(y + yy) * win.width + (unsigned)x;
-        for (int xx = 0; xx < w; xx++) row[xx] = c;
-    }
-}
+static void rect(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
 static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 static int slen(const char *s) { int n = 0; while (s[n]) n++; return n; }
 static void scopy(char *d, const char *s, int max) {
@@ -563,7 +555,7 @@ static void click(int x, int y) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     phone = argc > 1 && seq(argv[1], "phone");
-    if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "notes: no window\n", 17); jt_exit(1); }
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) { jt_write(2, "notes: no window\n", 17); jt_exit(1); }
     ar = (struct arena *)(((unsigned)_user_end + 15u) & ~15u); /* past the image, inside the 128KB window */
     for (int c = 32; c < 127; c++) { char g[2] = {(char)c, 0}; ar->adv[c - 32] = (unsigned char)jt_text_width(JT_FACE_BODY, g); }
     ar->adv[0] = (unsigned char)(ar->adv[0] ? ar->adv[0] : 4);
