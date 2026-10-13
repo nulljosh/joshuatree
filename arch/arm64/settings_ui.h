@@ -26,7 +26,7 @@ static const int set_glyph[SET_SECTIONS] = { GL_ABOUT, GL_DISPLAY, GL_SOUND, GL_
 static int set_sec, set_row, set_con, set_minute = -1;
 static int dock_pct_boot = 7;   /* the dock size this boot drew; a changed size shows from the next one */
 #define SET_SB_W 150            /* the sidebar, inside the frame's 8 pixel margin */
-#define SET_ROW_H 36
+#define SET_ROW_H 30
 #define SET_CARD_W 312
 #define SET_INK 0x001C1C1E
 #define SET_HINT 0x0075726E
@@ -104,8 +104,8 @@ static void set_saved(void) {
     set_log(settings_saved() > 0 ? "saved" : "save failed, no card", -1, 0);
 }
 static void set_card(int *cx, int *cy) { *cx = win_lx + 8 + SET_SB_W + 16; *cy = win_ly + 74; }
-static void set_step_box(int cx, int ry, int plus, int *x, int *y) {   /* the - and + buttons: 22 pixel squares either side of an 84 pixel value */
-    *x = cx + SET_CARD_W - 14 - 22 - (plus ? 0 : 22 + 6 + 84 + 6); *y = ry + 7;
+static void set_step_box(int cx, int ry, int plus, int *x, int *y) {   /* the - and + buttons: 16 pixel squares either side of a 70 pixel value */
+    *x = cx + SET_CARD_W - 14 - 16 - (plus ? 0 : 16 + 6 + 70 + 6); *y = ry + 7;
 }
 static void set_paint(void) {
     int s = (int)window_scale(), wx = win_lx, wy = win_ly, ww = win_lw, wh = win_lh, cx, cy;
@@ -116,11 +116,11 @@ static void set_paint(void) {
     window_rect(wx + 8, wy + 30, SET_SB_W, wh - 38, 0x00F0EAE1);
     window_rect(wx + 8 + SET_SB_W, wy + 30, 1, wh - 38, 0x00DDD5C8);
     for (int i = 0; i < SET_SECTIONS; i++) {
-        int y = wy + 42 + i * 34;
-        if (i == set_sec) gui_rounded_rect_on_wallpaper(wx + 14, y - 4, SET_SB_W - 12, 30, 0x00E2D9C9, 8);
-        gui_rounded_rect_on_wallpaper(wx + 20, y, 22, 22, SET_ACCENT, 6);
-        glyph_paint(set_glyph[i], 2, (wx + 23) * s, (y + 3) * s, 16 * s, 0x00FAF8F4);
-        gui_text(set_names[i], wx + 50, y + 3, SET_INK);
+        int y = wy + 40 + i * 30;
+        if (i == set_sec) gui_rounded_rect_on_wallpaper(wx + 14, y - 4, SET_SB_W - 12, 26, 0x00E2D9C9, 7);
+        gui_rounded_rect_on_wallpaper(wx + 20, y, 18, 18, SET_ACCENT, 5);
+        glyph_paint(set_glyph[i], 2, (wx + 22) * s, (y + 2) * s, 14 * s, 0x00FAF8F4);
+        gui_text(set_names[i], wx + 46, y + 1, SET_INK);
     }
     gui_icon_text(set_names[set_sec], cx, wy + 38, 1, s, SET_INK);
     int n = set_rows(set_sec);
@@ -129,37 +129,38 @@ static void set_paint(void) {
         int ry = cy + r * SET_ROW_H, kind = set_kind(set_sec, r);
         char v[40]; set_value(set_sec, r, v);
         if (r) gui_hairline_h(cx + 12, ry, SET_CARD_W - 24, 0x00E8E2D8);
-        gui_text(set_label(set_sec, r), cx + 14, ry + 10, r == set_row ? SET_ACCENT : SET_INK);
+        gui_text(set_label(set_sec, r), cx + 14, ry + 7, r == set_row ? SET_ACCENT : SET_INK);
         if (kind == SK_STEP) {
             int bx, by, px, vx0 = 0;
             for (int plus = 0; plus < 2; plus++) {
                 set_step_box(cx, ry, plus, &bx, &by);
-                gui_rounded_rect_on_wallpaper(bx, by, 22, 22, 0x00EFEBE4, 6);
-                window_rect(bx + 6, by + 10, 10, 2, SET_INK);
-                if (plus) window_rect(bx + 10, by + 6, 2, 10, SET_INK);
-                if (!plus) vx0 = bx + 22 + 6;
+                gui_rounded_rect_on_wallpaper(bx, by, 16, 16, 0x00EFEBE4, 5);
+                window_rect(bx + 4, by + 8, 8, 1, SET_INK);
+                if (plus) window_rect(bx + 8, by + 4, 1, 8, SET_INK);
+                if (!plus) vx0 = bx + 16 + 6;
             }
             set_step_box(cx, ry, 1, &px, &by);
-            int tw = gui_text_width(v), vx = vx0 + (84 - tw) / 2;
+            int tw = gui_text_width(v), vx = vx0 + (70 - tw) / 2;
             if (set_sec == SET_DISPLAY) {   /* the colour itself, a small round chip, then its name */
-                vx = vx0 + (84 - tw - 18) / 2 + 18;
-                gui_rounded_rect_on_wallpaper(vx - 18, ry + 12, 12, 12, settings_wall_rgb(settings_wall()), 6);
+                vx = vx0 + (70 - tw - 18) / 2 + 18;
+                gui_rounded_rect_on_wallpaper(vx - 18, ry + 9, 11, 11, settings_wall_rgb(settings_wall()), 5);
             }
-            gui_text(v, vx, ry + (set_sec == SET_SOUND ? 5 : 10), SET_INK);
+            gui_text(v, vx, ry + (set_sec == SET_SOUND ? 2 : 7), SET_INK);
             if (set_sec == SET_SOUND) {   /* a thin bar under the number: the level, to the pixel */
-                window_rect(vx0, ry + 25, 84, 4, 0x00E2D9C9);
-                window_rect(vx0, ry + 25, 84 * audio_volume() / 100, 4, SET_ACCENT);
+                window_rect(vx0, ry + 21, 70, 2, 0x00E2D9C9);
+                window_rect(vx0, ry + 21, 70 * audio_volume() / 100, 2, SET_ACCENT);
+                gui_rounded_rect_on_wallpaper(vx0 + 70 * audio_volume() / 100 - 4, ry + 18, 8, 8, SET_ACCENT, 4);   /* a small round thumb */
             }
         } else if (kind == SK_TOGGLE) {
-            int on = audio_volume() == 0, tx = cx + SET_CARD_W - 14 - 40;
+            int on = audio_volume() == 0, tx = cx + SET_CARD_W - 14 - 26;
             unsigned track = on ? SET_ACCENT : 0x00C7C0B4;
-            gui_rounded_rect_on_wallpaper(tx, ry + 7, 40, 22, track, 11);
-            gui_fill_circle(on ? tx + 29 : tx + 11, ry + 18, 8, 0x00FFFFFF, track);
+            gui_rounded_rect_on_wallpaper(tx, ry + 7, 26, 15, track, 7);
+            gui_rounded_rect_on_wallpaper(on ? tx + 13 : tx + 2, ry + 9, 11, 11, 0x00FFFFFF, 5);
         } else {
-            gui_text(v, cx + SET_CARD_W - 14 - gui_text_width(v), ry + 10, SET_HINT);
+            gui_text(v, cx + SET_CARD_W - 14 - gui_text_width(v), ry + 7, SET_HINT);
         }
     }
-    int hy = cy + n * SET_ROW_H + 10;
+    int hy = cy + n * SET_ROW_H + 8;
     if (set_sec == SET_DISPLAY) gui_text("Flat colours. The change shows at once.", cx, hy, SET_HINT);
     else if (set_sec == SET_SOUND) gui_text("The same level the volume keys change.", cx, hy, SET_HINT);
     else if (set_sec == SET_DOCK) gui_text(settings_dock() == dock_pct_boot ? "A new size shows from the next restart." : "Restart to see the new size.", cx, hy, SET_HINT);
@@ -231,8 +232,8 @@ static int settings_key(unsigned code) {   /* a key down with Settings in front:
 static void settings_click(int lx, int ly) {   /* a click inside the window (the close dot is the caller's) */
     int cx, cy; set_card(&cx, &cy);
     for (int i = 0; i < SET_SECTIONS; i++) {
-        int y = win_ly + 42 + i * 34;
-        if (lx >= win_lx + 14 && lx < win_lx + 8 + SET_SB_W && ly >= y - 4 && ly < y + 26) { set_section(i); return; }
+        int y = win_ly + 40 + i * 30;
+        if (lx >= win_lx + 14 && lx < win_lx + 8 + SET_SB_W && ly >= y - 4 && ly < y + 22) { set_section(i); return; }
     }
     for (int r = 0; r < set_rows(set_sec); r++) {
         int ry = cy + r * SET_ROW_H, kind = set_kind(set_sec, r);
@@ -240,7 +241,7 @@ static void settings_click(int lx, int ly) {   /* a click inside the window (the
         if (kind == SK_TOGGLE) { set_row = r; set_adjust(r, 1); return; }
         for (int plus = 0; plus < 2 && kind == SK_STEP; plus++) {
             int bx, by; set_step_box(cx, ry, plus, &bx, &by);
-            if (lx >= bx && lx < bx + 22 && ly >= by && ly < by + 22) { set_row = r; set_adjust(r, plus ? 1 : -1); return; }
+            if (lx >= bx && lx < bx + 16 && ly >= by && ly < by + 16) { set_row = r; set_adjust(r, plus ? 1 : -1); return; }
         }
     }
 }

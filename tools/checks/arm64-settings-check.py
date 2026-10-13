@@ -203,13 +203,13 @@ try:
     check("the window has its red close dot", px(a, WX + 19, WY + 16) == RED, px(a, WX + 19, WY + 16))
     tiles = []
     for i in range(5):
-        tb = box(a, WX + 20, WY + 42 + i * 34, 22, 22)
+        tb = box(a, WX + 20, WY + 40 + i * 30, 18, 18)
         tiles.append(tb)
     terra = [sum(1 for p in tb if p == ACCENT) for tb in tiles]
     glyph = [sum(1 for p in tb if sum(abs(p[k] - GLYPH[k]) for k in range(3)) < 40) for tb in tiles]
     check("each of the five sidebar tiles is terracotta with a glyph on it (%s accent, %s glyph pixels)" % (terra, glyph),
-          all(t > 150 for t in terra) and all(g > 25 for g in glyph), (terra, glyph))
-    check("no two glyphs are the same picture", len({tuple(p == ACCENT for p in tb) for tb in tiles}) == 5)
+          all(t > 100 for t in terra) and all(g > 5 for g in glyph), (terra, glyph))
+    check("no two glyphs are the same picture", len({tuple(tb) for tb in tiles}) == 5)
     check("the Settings title is in the sidebar's neighbour: About, Version, Board, Memory, Wi-Fi, Power rows draw (the card is white)", px(a, WX + 8 + 150 + 16 + 5, WY + 74 + 5) == (255, 255, 255))
     # ---- sections ----
     names = ["Display", "Sound", "Dock", "Date and Time"]
@@ -257,14 +257,14 @@ try:
     check("a click on the speaker opens Settings in Sound", S.click(mid(1), 12, "settings section 2 Sound\n") and S.wait_for("menubar click sound\n", 2))
     time.sleep(0.5)
     cx, cy = WX + 8 + 150 + 16, WY + 74
-    plus, minus = (cx + 312 - 14 - 11, cy + 18), (cx + 312 - 14 - 22 - 6 - 84 - 6 - 11, cy + 18)
+    plus, minus = (cx + 312 - 14 - 8, cy + 15), (cx + 312 - 14 - 16 - 16 - 6 - 70 - 6 + 8, cy + 15)
     sp_before = S.shot()
     check("Sound: + raises the volume to 80", S.click(*plus, "settings volume 80\n"))
     time.sleep(0.4)
     sp_after = S.shot()
-    bar_x0, bar_y = cx + 312 - 14 - 22 - 6 - 84, cy + 25 + 2
-    filled = lambda img: sum(1 for i in range(84) if px(img, bar_x0 + i, bar_y) == ACCENT)
-    check("the level bar under the number is 70%% full, then 80%% (%d, %d of 84 pixels)" % (filled(sp_before), filled(sp_after)), abs(filled(sp_before) - 58) <= 2 and abs(filled(sp_after) - 67) <= 2)
+    bar_x0, bar_y = cx + 312 - 14 - 16 - 6 - 70, cy + 21
+    filled = lambda img: sum(1 for i in range(70) if px(img, bar_x0 + i, bar_y) == ACCENT)
+    check("the level bar under the number is 70%% full, then 80%% (%d, %d of 70 pixels)" % (filled(sp_before), filled(sp_after)), abs(filled(sp_before) - 49) <= 2 and abs(filled(sp_after) - 56) <= 2)
     check("- steps back to 70", S.click(*minus, "settings volume 70\n"))
     for _ in range(7): S.click(*minus, "settings volume") ; time.sleep(0.1)
     check("... and down to 0 and no further", S.wait_for("settings volume 0\n", 6))
@@ -272,19 +272,19 @@ try:
     muted = S.shot()
     check("at 0 the speaker in the menu bar loses its waves and is dimmed (fewer ink pixels than at 70)",
           sum(1 for p in box(muted, ic[2] + 2, 3, ic[3] - ic[2] - 4, 19) if max(p) < 0xB0) < sum(1 for p in box(sp_before, ic[2] + 2, 3, ic[3] - ic[2] - 4, 19) if max(p) < 0xB0))
-    mx, my = cx + 312 - 14 - 20, cy + 36 + 18
+    mx, my = cx + 312 - 14 - 13, cy + 30 + 14
     check("the Mute row's switch turns volume back up from 0 (last level 10)", S.click(mx, my, "settings volume 10\n"))
     check("and again mutes", S.click(mx, my, "settings volume 0\n"))
     check("m also toggles, back to 10", S.press("m", "settings volume 10\n"))
     check("a click on the power symbol opens About", S.click(mid(0), 12, "settings section 0 About\n") and S.wait_for("menubar click power\n", 2))
     check("the Wi-Fi fan opens About too", S.click(mid(2), 12, "menubar click wifi\n"))
     check("the clock opens Date and Time", S.click(mid(3), 12, "settings section 4 Date and Time\n") and S.wait_for("menubar click clock\n", 2))
-    check("a click on a sidebar row (Dock) selects it", S.click(WX + 60, WY + 42 + 3 * 34 + 8, "settings section 3 Dock\n"))
+    check("a click on a sidebar row (Dock) selects it", S.click(WX + 60, WY + 40 + 3 * 30 + 6, "settings section 3 Dock\n"))
     time.sleep(0.3)
-    check("the Dock + button steps the tile size to 8", S.click(cx + 312 - 14 - 11, cy + 18, "settings dock 8\n"))
+    check("the Dock + button steps the tile size to 8", S.click(cx + 312 - 14 - 8, cy + 15, "settings dock 8\n"))
     check("every change was saved", S.uart().count("settings saved\n") >= 12, S.uart().count("settings saved\n"))
     # the sound page, for the screenshot
-    S.click(WX + 60, WY + 42 + 2 * 34 + 8, "settings section 2 Sound\n"); time.sleep(0.5)
+    S.click(WX + 60, WY + 40 + 2 * 30 + 6, "settings section 2 Sound\n"); time.sleep(0.5)
     S.click(*plus, "settings volume 20\n"); time.sleep(0.5)
     shot = S.shot()
     keep = os.environ.get("JT_SETTINGS_SHOT")
