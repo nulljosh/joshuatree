@@ -41,7 +41,7 @@ Notes on ARM, the boot chime, the admin tier and [docs/AUTONOMY.md](AUTONOMY.md)
 - **Nothing underneath.** No Linux, no Raspberry Pi OS: it boots straight into our desktop. Say it on the box and in the first second of the video.
 - **It knows what you want.** The anticipation slice from `docs/VISION.md`, all on the device. No other hobby OS has an assistant that runs it.
 - **A maker pack.** The breadboard prototype (`docs/hardware/BREADBOARD.md`) with real drivers for the LED, button and speaker, so people can wire their own things to it.
-- **Show it in person.** A live Pi on a table at Vancouver maker meetups and the UBC and SFU computing clubs; a Show HN with the 30-second boot video (`docs/LAUNCH.md`).
+- **Show it in person.** A live Pi on a table at Vancouver maker meetups and the UBC and SFU computing clubs; a Show HN with the 30-second boot video (`docs/STORY.md`).
 - **Later, our own board.** A carrier board for the Raspberry Pi compute module with the mark on it, so the kit is ours down to the copper.
 
 **A guide for everyone (Joshua 2026-10-07).** Documentation a person can read without knowing code: a plain-words user guide where every part of the OS, and every file behind it, is explained so a curious reader understands what each piece does and why it is there. Plan: the guide ([docs/GUIDE.md](GUIDE.md), boot, Wi-Fi and Pi desktop/Clock/Terminal chapters written), one chapter per area (boot, memory, screen, apps, network, Wi-Fi, Samantha), each file in `docs/ARCHITECTURE.md` gets a one-line "in plain words" summary, and a check keeps the two in step. Written a chapter at a time, Wi-Fi first because it is freshest.
@@ -280,7 +280,7 @@ Why: the Neo kit's x86 board and almost every PC made after about 2015 is 64-bit
 
 ### From the YouTube playlists (checked 2026-10-06)
 
-Both reference series are mapped in `docs/PLAYLIST.md`. What is still open from them:
+Both reference series are mapped in `docs/RESEARCH.md`. What is still open from them:
 
 - [ ] [Sonnet] MBR partition tables and FAT32: `drivers/fat.c` is FAT16 on one volume from sector 0, but a Pi SD card is an MBR partition table with a FAT32 boot partition. Needed before the SD driver can read the card it boots from.
 - [ ] [Sonnet] ICMP: answer and send pings, so `ping` works on both builds.

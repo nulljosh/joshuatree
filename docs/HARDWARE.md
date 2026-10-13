@@ -228,11 +228,11 @@ Hardware: 4 M3x50 rods, 8 M3 nuts, 4 M3x8 self-tapping screws (16 fasteners, was
 
 35 printed pieces in 32 STL files (24 ring pieces, 5 cap pieces, tray, rear plate, 4 feet), down from 58 loose pieces. The 24 loose spacers and the metal standoffs are gone; the spacers and standoffs are printed into parts you already make, and four recessed feet hide the bottom nuts. Picture version: `hardware/BUILD.md`.
 
-Full STL list with counts: `hardware/stl/manifest.json`. Print settings and steps: `hardware/ASSEMBLY.md`.
+Full STL list with counts: `hardware/stl/manifest.json`. Print settings and steps: `hardware/BUILD.md`.
 
 ### Build it
 
-Follow `hardware/ASSEMBLY.md`. The short version: rods and nuts in ring 0, tray in, rings, board on the printed standoffs, rear plate, nuts in ring 5, cap on top.
+Follow `hardware/BUILD.md`. The short version: rods and nuts in ring 0, tray in, rings, board on the printed standoffs, rear plate, nuts in ring 5, cap on top.
 
 ### Check before cutting
 

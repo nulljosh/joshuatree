@@ -83,7 +83,7 @@ stays as a later box.
 
 ### Unit economics, from the BOM
 
-The parts list for the Pi kit is in `docs/SHOPPING.md` and the case in
+The parts list for the Pi kit is in `docs/RASPBERRY-PI.md` and the case in
 `docs/hardware/PI-CASE.md`. Neither has a kit total yet. The only line
 in the repo with a real listing behind it is the x86 board in
 `docs/HARDWARE.md` (about $120 USD), and that board is not in this kit.
@@ -95,8 +95,8 @@ quote.
 | Raspberry Pi 4B board | no number yet | estimate needed | not priced in any doc yet; a retail listing goes here |
 | 7 inch HDMI screen (Waveshare 7inch HDMI LCD (C) class, the stand-in in the CAD) | about $60 | estimate, no listing checked | `docs/hardware/samantha_cad.py` PARTS block |
 | Round speaker, 40 mm, and a small USB mic | about $15 | estimate | same PARTS block; the mic is for 5.0's voice in |
-| Power supply, USB-C | no number yet | estimate needed | not in `docs/SHOPPING.md` yet |
-| microSD card, 32 GB, with the OS on it | about $10 | estimate (CAD, rough) | `docs/SHOPPING.md` |
+| Power supply, USB-C | no number yet | estimate needed | not in `docs/RASPBERRY-PI.md` yet |
+| microSD card, 32 GB, with the OS on it | about $10 | estimate (CAD, rough) | `docs/RASPBERRY-PI.md` |
 | The Samantha box, printed (shell, bezel, stand) | about $9 plastic at home; $40 to $75 from a print service | estimate | `docs/HARDWARE.md`, Prototype cost, sized for the bigger x86 case; the first real quote comes from the Vancouver computer shop |
 | Bolts and nuts | about $7 | estimate | `docs/HARDWARE.md`, hardware bag |
 | Card fees, about 3% of $500 | about $15 | estimate, standard processor rate | no processor picked |
@@ -228,7 +228,7 @@ not have today.
 
 In order. Each one feeds the next.
 
-1. Show HN: "I built an operating system from scratch, and it runs in your browser." The live demo is the pitch. One click, no install. Drafted in `docs/LAUNCH.md`, waits for the mouse working on the Pi.
+1. Show HN: "I built an operating system from scratch, and it runs in your browser." The live demo is the pitch. One click, no install. Drafted in `docs/STORY.md`, waits for the mouse working on the Pi.
 2. A 30 second video: boot, open apps, ask for something, hear the answer. X, Reddit (r/osdev, r/programming), YouTube Shorts. Drafted in the same file.
 3. The story: one person in Langley, Claude as the hands. Pitched to AI and developer newsletters.
 4. The osdev forums: source, a write-up of the hard parts. These are the first kit buyers.

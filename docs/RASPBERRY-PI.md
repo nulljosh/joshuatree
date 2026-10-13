@@ -316,7 +316,7 @@ Wi-Fi firmware: the three CYW43455 files (`brcmfmac43455-sdio.bin`, `.txt`, `.cl
 
 Newest first. Each entry says what was tried on the real board and the last line seen.
 
-- **2026-10-07: the real desktop on a Pi 4 (2.23.0).** Main is at 2.23.0 (PR 445, ARM desktop slice 3). The Pi boots to a 1920x1080 desktop with the satellite wallpaper, dock with eleven icons, a window frame and the menu bar all rendered live from `drivers/window.c` shared with i386. The Steve Jobs tribute line sits above the dock. A USB keyboard types and hot-plugs after boot. The Console window shows the boot log with readable DejaVu text (the cache clean fix still holds). Page Up scrollback is in 2.19.0 but not yet seen on the real board because the Wi-Fi lines scroll off screen during boot. The Wi-Fi chip advanced from silent to nine of twelve steps (power, bus, clock, reset, chip RAM size, core addresses, block-mode transfers); the optional regulatory-data and country-code steps were made optional and skipped, so the newest card goes straight to the network scan (not yet confirmed on board). Reading the failure lines off photos found key bugs in the ARM code: the ARM core held in reset froze its own memory, the chip's RAM was 32 KB short of expectation, core addresses were guessed instead of read from the chip, and frames over 512 bytes need block mode. The Burrow dock icon is a Finder-style split face in terracotta. Eight typefaces are now available in a registry (PR 451), with pickers and boot-time load still to implement. Joshua's next steps are to buy a wired USB mouse and a 3.3V serial cable. The HN post and a 30-second video are drafted in docs/LAUNCH.md and wait for the mouse working on the Pi.
+- **2026-10-07: the real desktop on a Pi 4 (2.23.0).** Main is at 2.23.0 (PR 445, ARM desktop slice 3). The Pi boots to a 1920x1080 desktop with the satellite wallpaper, dock with eleven icons, a window frame and the menu bar all rendered live from `drivers/window.c` shared with i386. The Steve Jobs tribute line sits above the dock. A USB keyboard types and hot-plugs after boot. The Console window shows the boot log with readable DejaVu text (the cache clean fix still holds). Page Up scrollback is in 2.19.0 but not yet seen on the real board because the Wi-Fi lines scroll off screen during boot. The Wi-Fi chip advanced from silent to nine of twelve steps (power, bus, clock, reset, chip RAM size, core addresses, block-mode transfers); the optional regulatory-data and country-code steps were made optional and skipped, so the newest card goes straight to the network scan (not yet confirmed on board). Reading the failure lines off photos found key bugs in the ARM code: the ARM core held in reset froze its own memory, the chip's RAM was 32 KB short of expectation, core addresses were guessed instead of read from the chip, and frames over 512 bytes need block mode. The Burrow dock icon is a Finder-style split face in terracotta. Eight typefaces are now available in a registry (PR 451), with pickers and boot-time load still to implement. Joshua's next steps are to buy a wired USB mouse and a 3.3V serial cable. The HN post and a 30-second video are drafted in docs/STORY.md and wait for the mouse working on the Pi.
 
 - **2026-10-06, night: full screen, readable console and USB first light (2.13.0).** Flashed with `tools/flash-pi.sh` and booted. The picture now fills the Samsung monitor at 1920x1080, sharp, and the Console shows real text: the cache write-back fix for the marks worked, so that explanation was right. The Steve Jobs line sits above the dock. The first diagnostic line read `@0x80000 fb 1920x1080>1920x1080 p7680 M13x18 a14 ok`: loaded at 0x80000, the firmware gave the size we asked for, and the font test passed. The USB bring-up ran on the real chips: PCIe link up at gen 2 x1, the VL805 firmware loaded through the mailbox, the xHCI controller started with 5 ports, and one port held a hub (`2109:3431`, a VIA 4-port hub, the VL805's own) which the driver enumerated. The first try ended with `usb ready: 0 kbd, 0 mouse`: the keyboard's cable was a charge-only one with no data wires. On a real data cable the NuPhy keyboard enumerated behind the hub (`usb kbd addr 2 port 1.1 full 1915:3266`, `usb ready: 1 kbd, 0 mouse`) and every key pressed printed on screen (`usb key 0x0c i`). **A USB keyboard works on the real Pi.** The Pi also shut off once mid-session: the USB-C power plug had worked loose.
 
@@ -335,3 +335,39 @@ Newest first. Each entry says what was tried on the real board and the last line
 Joshua Tree 3.0 ships when it boots the desktop on a real Pi.
 
 Want to try parts (an LED, a button, a speaker) before soldering anything? See [the breadboard prototype](hardware/BREADBOARD.md).
+
+## Shopping list
+
+Everything the Pi work needs, cheapest and most useful first. Prices are rough Canadian estimates, not quotes.
+
+### Get this week
+
+- [ ] **USB-C to TTL serial cable, 3.3 V** (about $10 to $15). The Mac sees everything the Pi prints, even with a black screen. Search "USB-C to TTL serial 3.3V" (CP2102, FTDI or CH340).
+- [ ] **A smart plug** (about $15 to $20). The Mac power-cycles the Pi, so no plugging and unplugging for each test. Joshua 2026-10-07.
+- [ ] **A second microSD card, 32 GB** (about $10). One card keeps the last good build, the other is for experiments.
+- [ ] **A wired USB mouse** (about $10 to $15), unless the old one turns up. Bluetooth mice wait for the Bluetooth driver.
+- [ ] **A USB-C to USB-A data cable** (about $10). A real data cable, not a charging one: the vape cable was the reason the keyboard went missing.
+- [ ] **An Ethernet cable** (about $5 to $10), if the old ones stay lost. The wired backup to Wi-Fi, and what lets the Pi 4 load its kernel over the network so the SD card never has to leave the Pi.
+
+### Soon
+
+- [ ] **Breadboard starter kit** (about $10 to $15): breadboard, jumper wires, LEDs, resistors, buttons. The first GPIO driver.
+- [ ] **A 3.5 mm audio cable** (about $5) from the Pi's headphone jack to the Edifier speakers, for the sound driver.
+- [ ] **Raspberry Pi camera module** (about $25 to $35). A real driver with live data, and the camera settings page.
+
+### Later
+
+- [ ] **A 7 inch touchscreen** (about $60 to $90). Joshua Tree as a handheld.
+- [ ] **Raspberry Pi Pico** (about $5 to $8). Bare metal with no OS at all, for sensors and the breadboard.
+- [ ] **A USB gamepad** (about $20 to $30), for Doom.
+- [ ] **A small USB speaker or a USB sound card** (about $15), for the Samantha box. The Yeti mic is already here.
+
+### Books
+
+- [x] **Make Something Wonderful**, Steve Jobs in his own words (the Steve Jobs Archive, free online). Its title is now on the Pi's tribute line.
+- [ ] **Operating Systems: Three Easy Pieces**, Remzi and Andrea Arpaci-Dusseau. Free online. The clearest book on how an OS works: processes, memory, files. The 4.0 road in book form.
+- [ ] **The Elements of Computing Systems** (Nand2Tetris), Nisan and Schocken. Build a computer from one logic gate up to an OS. Makes the bottom layers of Joshua Tree feel obvious.
+- [ ] **Code**, Charles Petzold. How computers work, from light bulbs and switches to software. A good first read before the two above.
+- [ ] **The Soul of a New Machine**, Tracy Kidder. A small team racing to build a computer. The closest story to what this project feels like.
+- [ ] **Just for Fun**, Linus Torvalds. How one person's hobby kernel became Linux.
+- [ ] **Steve Jobs**, Walter Isaacson. The full biography, after Make Something Wonderful.
