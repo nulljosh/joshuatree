@@ -1,5 +1,10 @@
 # Joshua Tree roadmap: done
 
+## 3.8.3 development branch (2026-10-12)
+
+The Pi boots behind a neutral grey splash with the tree mark crisp in the middle and a calm grey bar under it. Before, it was a terracotta screen with a dark blurry blob where the mark should be: the small menu bar copy stretched far past its size, ink on orange. Now the splash uses the full 160 px stored mark, and no terracotta is left on it.
+Check: `tools/checks/arm64-splash-check.py` (grey ground, no terracotta pixel, many ink pixels, hard edges), with `arm64-quietboot-check.py` and `arm64-crash-check.py` updated to the grey.
+
 ## 3.7.3 development branch (2026-10-12)
 
 The Bluetooth mouse comes back by itself. Before, a saved pairing got one 20 second try at boot and nothing after, so a mouse that was asleep, or that slept later, stayed gone until `bt reconnect`. Now the reconnect is a run of tries (12 seconds each, then a pause of 2, 4, 8, 15 and 30 seconds, up to 30), it starts at boot, when the link drops and on `bt reconnect`, and it re-encrypts with the saved key and turns the mouse's reports on again each time. `bt status` shows searching, connected or idle, the saved address with only its last byte, the tries and the last error. A mouse that ignores boot protocol now has its report map read and its button, X, Y and wheel fields placed from it (12 bit packed X and Y checked), and `bt status` shows the last report's bytes. Proven in QEMU only against a fake mouse, not yet on the Pi. Check: `tools/checks/arm64-bt-check.py`.

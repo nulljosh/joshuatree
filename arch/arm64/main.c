@@ -1309,11 +1309,29 @@ unsigned int gui_wallpaper_sample(int px, int py, int sway) { (void)sway; return
    tree from kernel/boot_mark.h, box-filtered to T physical pixels and blended in ink over what is there, its ground
    (menu_mark_acc, 3.0) in terracotta. Drawn bigger than stored (the boot screen, 220 px at 1080p), it blends the four
    nearest stored pixels instead, so the curves stay smooth rather than stepping in 2 to 3 pixel blocks. */
-static unsigned mark_lerp(const unsigned char *m, int x0, int y0, int wx, int wy) {
-    int x1 = x0 + 1 < MENU_MARK_W ? x0 + 1 : x0, y1 = y0 + 1 < MENU_MARK_H ? y0 + 1 : y0;
-    return (unsigned)(((m[y0 * MENU_MARK_W + x0] * (256 - wx) + m[y0 * MENU_MARK_W + x1] * wx) * (256 - wy)
-                     + (m[y1 * MENU_MARK_W + x0] * (256 - wx) + m[y1 * MENU_MARK_W + x1] * wx) * wy) >> 16);
+static unsigned mark_lerp_n(const unsigned char *m, int n, int x0, int y0, int wx, int wy) {
+    int x1 = x0 + 1 < n ? x0 + 1 : x0, y1 = y0 + 1 < n ? y0 + 1 : y0;
+    return (unsigned)(((m[y0 * n + x0] * (256 - wx) + m[y0 * n + x1] * wx) * (256 - wy)
+                     + (m[y1 * n + x0] * (256 - wx) + m[y1 * n + x1] * wx) * wy) >> 16);
 }
+static unsigned mark_lerp(const unsigned char *m, int x0, int y0, int wx, int wy) { return mark_lerp_n(m, MENU_MARK_W, x0, y0, wx, wy); }
+#ifdef QUIET_BOOT
+/* The splash's mark: the 160 px stored copy (the menu's 80 px one, stretched 2.75x, was the smudge on the Pi), ink over a
+   known flat ground written straight to the screen, so nothing depends on what was there before. */
+static void splash_mark(int cx, int cy, int T, unsigned ink, unsigned bg) {
+    int ox = cx - T / 2, oy = cy - T / 2, n = BOOT_MARK_W;
+    for (int row = 0; row < T; row++) for (int col = 0; col < T; col++) {
+        int fx = (2 * col + 1) * n * 128 / T - 128, fy = (2 * row + 1) * n * 128 / T - 128;
+        if (fx < 0) fx = 0;
+        if (fy < 0) fy = 0;
+        unsigned a = mark_lerp_n(boot_mark_cov, n, fx >> 8, fy >> 8, fx & 255, fy & 255);
+        if (!a) continue;
+        unsigned out = 0;
+        for (int sh = 0; sh <= 16; sh += 8) out |= ((((ink >> sh) & 0xFF) * a + ((bg >> sh) & 0xFF) * (255 - a)) / 255) << sh;
+        fb_rect(ox + col, oy + row, 1, 1, out);
+    }
+}
+#endif
 static void menu_mark_paint(int cx, int cy, int T, unsigned ink) {
     int ox = cx - T / 2, oy = cy - T / 2;
     for (int row = 0; row < T; row++) for (int col = 0; col < T; col++) {
@@ -2198,16 +2216,16 @@ void menubar_tick(void) {   /* the poll loop calls this; it redraws only when th
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
     if ((int)(h * 60 + m) != clock_minute) menubar_wifi(mb_wifi);
 }
-/* The Pi's boot splash (QUIET_BOOT): from the first frame a solid terracotta screen with the tree mark centred and a thin
-   line under it, one sixth longer as each stage of boot finishes (fb, sd, wifi, clock, bt, desktop). Nothing else is drawn,
+/* The Pi's boot splash (QUIET_BOOT): from the first frame a solid light grey screen with the crisp tree mark centred and a thin
+   grey line under it, one sixth longer as each stage of boot finishes (fb, sd, wifi, clock, bt, desktop). Nothing else is drawn,
    not the desktop, not the Console, until splash_finish: Wi-Fi joined or given up, the clock synced or given up, Bluetooth
    up or given up. Then fb_desktop paints the desktop once. The UART says `splash step N name` and `boot done`. */
 #ifdef QUIET_BOOT
 static void splash_step(int n, const char *name) {
     if (!splash_on) return;
-    int W = (int)fb_w, H = (int)fb_h, bw = sg(140), bh = sg(4) > 2 ? sg(4) : 2, bx = (W - bw) / 2, by = H / 2 + sg(50);
-    fb_rect(bx, by, bw, bh, 0x00923F20);              /* the track, a darker terracotta */
-    fb_rect(bx, by, bw * n / 6, bh, 0x001C1C1E);      /* the stages done, in ink */
+    int W = (int)fb_w, H = (int)fb_h, bw = sg(140), bh = sg(4) > 2 ? sg(4) : 2, bx = (W - bw) / 2, by = H / 2 + sg(62);
+    fb_rect(bx, by, bw, bh, 0x00C8C8CC);              /* the track, a calm darker grey */
+    fb_rect(bx, by, bw * n / 6, bh, 0x00636366);      /* the stages done, mid grey */
     fb_flush(bx, by, bw, bh);
     uart_puts("splash step "); uart_dec((unsigned)n); uart_putc(' '); uart_puts(name); uart_putc('\n');
 #ifdef SPLASH_STEP_MS   /* the splash checks: hold each step so a screendump can catch it */
@@ -2218,8 +2236,8 @@ static void splash_step(int n, const char *name) {
 }
 static void splash_begin(void) {
     int W = (int)fb_w, H = (int)fb_h;
-    fb_rect(0, 0, W, H, 0x00B5502C);
-    menu_mark_paint(W / 2, H / 2 - sg(30), sg(110), 0x001C1C1E);
+    fb_rect(0, 0, W, H, 0x00E5E5E7);
+    splash_mark(W / 2, H / 2 - sg(30), sg(150), 0x001C1C1E, 0x00E5E5E7);
     splash_on = 1;
     uart_puts("splash up\n");
     splash_step(1, "fb");
