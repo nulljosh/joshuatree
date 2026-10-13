@@ -3,7 +3,8 @@
 ## 3.8.3 development branch (2026-10-12)
 
 The Pi boots behind a neutral grey splash with the tree mark crisp in the middle and a calm grey bar under it. Before, it was a terracotta screen with a dark blurry blob where the mark should be: the small menu bar copy stretched far past its size, ink on orange. Now the splash uses the full 160 px stored mark, and no terracotta is left on it.
-Check: `tools/checks/arm64-splash-check.py` (grey ground, no terracotta pixel, many ink pixels, hard edges), with `arm64-quietboot-check.py` and `arm64-crash-check.py` updated to the grey.
+The first Pi flash showed the mark as torn slivers: `splash_mark` wrote pixels without flushing the data cache, so only some rows reached the GPU. It now flushes the mark and the ground (`fb_flush`) and writes through `fb_rect`, which honours the mailbox pitch. The ARM desktop wallpaper is graphite grey `#6E6E6E` too (`wall.c`), the motto and menu bar still read; the ARM build has no Settings app yet, so there is no colour list to reorder.
+Check: `tools/checks/arm64-splash-check.py` (grey ground, no terracotta pixel, every ink row of the art present, hard edges), with `arm64-quietboot-check.py` and `arm64-crash-check.py` updated to the grey.
 
 ## 3.7.3 development branch (2026-10-12)
 

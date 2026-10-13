@@ -1328,8 +1328,9 @@ static void splash_mark(int cx, int cy, int T, unsigned ink, unsigned bg) {
         if (!a) continue;
         unsigned out = 0;
         for (int sh = 0; sh <= 16; sh += 8) out |= ((((ink >> sh) & 0xFF) * a + ((bg >> sh) & 0xFF) * (255 - a)) / 255) << sh;
-        fb_rect(ox + col, oy + row, 1, 1, out);
+        fb_rect(ox + col, oy + row, 1, 1, out);   /* fb_rect honours fb_pitch (the mailbox pitch is not always width * 4) and the colour swap */
     }
+    fb_flush(ox, oy, T, T);   /* out of the data cache to RAM: the GPU reads RAM, so unflushed rows reached the Pi screen as torn slivers */
 }
 #endif
 static void menu_mark_paint(int cx, int cy, int T, unsigned ink) {
@@ -1488,7 +1489,7 @@ static int term_front(void) { return cp == &term_p && !calc_front && !app_front 
 static void calc_raise(void);
 static void app_raise(void);
 static void wall_fill(int x, int y, int w, int h) {   /* physical px: the flat wallpaper colour (wall.c); there is no picture to save, so a window can leave from anywhere */
-    unsigned c = fb_color(0x00B5502C);
+    unsigned c = fb_color(0x006E6E6E);
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = c;
 }
 static void console_close(void) {
@@ -1785,7 +1786,7 @@ static void win_move_to(int nx, int ny) {
         if (dx > 0) for (int i = w - 1; i >= 0; i--) dst[i] = src[i];
         else for (int i = 0; i < w; i++) dst[i] = src[i];
     }
-    unsigned wall = fb_color(0x00B5502C);   /* the old rectangle minus the new one, row by row */
+    unsigned wall = fb_color(0x006E6E6E);   /* the old rectangle minus the new one, row by row */
     for (int j = 0; j < h; j++) {
         int y = oy + j, inside = y >= py && y < py + h, a = ox, b = ox + w;
         if (inside) { if (dx > 0) b = px < b ? px : b; else a = px + w > a ? px + w : a; }
@@ -2237,6 +2238,7 @@ static void splash_step(int n, const char *name) {
 static void splash_begin(void) {
     int W = (int)fb_w, H = (int)fb_h;
     fb_rect(0, 0, W, H, 0x00E5E5E7);
+    fb_flush(0, 0, W, H);
     splash_mark(W / 2, H / 2 - sg(30), sg(150), 0x001C1C1E, 0x00E5E5E7);
     splash_on = 1;
     uart_puts("splash up\n");
@@ -2348,13 +2350,13 @@ static void fb_desktop(void) {
        design system's dark fill at three corners, not the old 0x203040 fallback). Grey and white read the same either
        byte order; the rule and the fill are checked in fb_color order. */
 #ifdef QUIET_BOOT
-    unsigned well = fb_color(0x00B5502C);   /* no window was drawn: the spot where its well would end is bare wallpaper */
+    unsigned well = fb_color(0x006E6E6E);   /* no window was drawn: the spot where its well would end is bare wallpaper */
 #else
     unsigned well = 0x00ffffff;
 #endif
     int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == well && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
-    ok = ok && wall_ok && w0 == fb_color(0x00B5502C) && w1 == w0 && w2 == w0;
+    ok = ok && wall_ok && w0 == fb_color(0x006E6E6E) && w1 == w0 && w2 == w0;
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
 #ifdef QUIET_BOOT
     uart_puts("console quiet\n");

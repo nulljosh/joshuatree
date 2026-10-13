@@ -61,7 +61,7 @@ def run(name, heap, qemu_args, image, expect, screen):
         ink = sum(1 for c in win if max(c) < 0x90)
         soft = sum(1 for c in win if 0x30 < c[0] < 0xd0 and c[0] == c[1] == c[2])
         if name.startswith("pi"):   # 3.6.2: the Pi image draws no Console at boot, even with a bad heap; the log waits in its buffer (the virt run above checks the fallback font draws)
-            if "console quiet" not in lines or any(c != (0xb5, 0x50, 0x2c) for c in win): fails.append(f"{name}: the desktop is not quiet ({ink} text pixels where the Console would be)")
+            if "console quiet" not in lines or any(c != (0x6e, 0x6e, 0x6e) for c in win): fails.append(f"{name}: the desktop is not quiet ({ink} text pixels where the Console would be)")
             else: print(f"  ok: {name} desktop up with no Console window (the log is kept for a dock click)")
         elif ink < 300: fails.append(f"{name}: the boot log is not on screen ({ink} text pixels)")
         elif soft: fails.append(f"{name}: {soft} anti-aliased pixels: the smooth font drew although its allocation failed")
