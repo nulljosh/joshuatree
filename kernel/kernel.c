@@ -7,6 +7,7 @@
 #include "pmm.h"
 #include "paging.h"
 #include "kheap.h"
+#include "picker.h"
 #include "task.h"
 #include "ring3.h"
 #include "syscall.h"
@@ -5971,7 +5972,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest fputest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps calctest pngtest jpegtest chattest beep say listen\n");
+    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest fputest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps calctest pngtest jpegtest chattest beep say listen pick pickcheck\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
@@ -5999,6 +6000,21 @@ static void run(char *line){
     }
     else if (!strcmp(line, "say"))       puts(!*arg ? "usage: say <text>\n" : !net_init(0x0A00020F) ? "say: no NIC\n"
                                               : speak_text(llm_host, (unsigned short)llm_port, arg, 1500 /* ~15s at 100Hz */) ? "say: played\n" : "say: nothing played\n");
+    else if (!strcmp(line, "pick")) {
+        if (!*arg) puts("usage: pick <sentence>\n");
+        else { puts("pick: "); puts(picker_pick(arg)); puts("\n"); }
+    }
+    else if (!strcmp(line, "pickcheck")) {
+        int total, ok = picker_selfcheck(&total);
+        char m[48]; int p = 0;
+        const char *a = "pickcheck: "; while (*a) m[p++] = *a++;
+        char d[12]; int dn = 0; for (int v = ok; ; v /= 10) { d[dn++] = '0' + v % 10; if (v < 10) break; }
+        while (dn) m[p++] = d[--dn];
+        m[p++] = '/'; dn = 0; for (int v = total; ; v /= 10) { d[dn++] = '0' + v % 10; if (v < 10) break; }
+        while (dn) m[p++] = d[--dn];
+        a = ok == total ? " ok\n" : " FAIL\n"; while (*a) m[p++] = *a++;
+        m[p] = 0; puts(m);
+    }
     else if (!strcmp(line, "heaptest")) {
         char *a = kmalloc(16);
         char *b = kmalloc(32);

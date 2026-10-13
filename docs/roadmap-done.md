@@ -362,3 +362,8 @@ Check: `tools/checks/arm64-quietboot-check.py` (and `arm64-boot-quiet-check.py` 
 
 The splash ends on any FAIL or oom line the boot prints, so the desktop paints and the failure shows; a crash during the splash still draws the red panel and prints its UART lines. Two Pi checks (`arm64-crash-check.py`, `arm64-sd-check.py`) had waited for `M1c fb ok` before the splash existed; they now wait for `splash up` and the desktop after the first FAIL line.
 Check: `tools/checks/arm64-crash-check.py` (the Pi image faults behind the splash, the panel is drawn over terracotta) and `tools/checks/arm64-sd-check.py` (no card and a good card both end with the desktop up).
+
+## 3.8.0: a small picker in C
+
+`pick <sentence>` names the tool Samantha's hands would reach for, from a 15K-weight integer model in freestanding C (`kernel/picker.c`). On Turing's nine dev sets the Python reference gets 3,820 of 4,455 tool picks right (85.8 percent); the C matches it on all 297 golden sentences. Arguments and the guard stay with the full model, this picks the tool only.
+Check: `tools/checks/picker-check.sh` (QEMU, no network): `pickcheck: 297/297 ok` and four typed sentences.

@@ -109,6 +109,7 @@ retry|6|Samantha is full screen: room around her (her wall in the side bands, ey
 retry|2|Touch: a tap opens the on-screen keyboard on phone and a tapped key reaches the Notes editor|python3 ./tools/checks/touch-osk-check.py
 retry|5|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
 retry|2|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
+retry|2|Small tool picker in C agrees with its Python reference (pickcheck, no network)|./tools/checks/picker-check.sh
 retry|6|Ring-3 reference program against the v1 syscall ABI|./tools/checks/usertest-check.sh
 retry|3|Ring-3 program writing a real file against the v2 syscall ABI|./tools/checks/notetest-check.sh
 retry|4|Keyrate runs as a ring-3 process with its own window; crashing it leaves the desktop alive (v3 syscall ABI)|python3 ./tools/checks/ring3app-check.py
