@@ -371,3 +371,8 @@ Check: `tools/checks/arm64-crash-check.py` (the Pi image faults behind the splas
 
 `pick <sentence>` names the tool Samantha's hands would reach for, from a 15K-weight integer model in freestanding C (`kernel/picker.c`). On Turing's nine dev sets the Python reference gets 3,820 of 4,455 tool picks right (85.8 percent); the C matches it on all 297 golden sentences. Arguments and the guard stay with the full model, this picks the tool only.
 Check: `tools/checks/picker-check.sh` (QEMU, no network): `pickcheck: 297/297 ok` and four typed sentences.
+
+## 3.17.0: Reminders on the Pi
+
+The Reminders tile on the Pi used to open the Console with "not on ARM yet". Now it opens a real list in its own window: round check circles (terracotta when done), a text field along the bottom where you type and press Enter, Space or a click on the circle to tick, Backspace on a row to delete, and done items sink to the bottom. It saves to `JT/REMINDER.TXT` on the card in the line format i386 uses; with no card it says "memory only" under the title. Spotlight and Samantha's `[[open Reminders]]` open it too.
+Check: `tools/checks/arm64-reminders-check.py` (QEMU raspi4b: two adds and a tick on a card, the same item back after a second boot, and the no-card boot).
