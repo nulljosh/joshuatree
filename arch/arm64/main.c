@@ -2753,6 +2753,7 @@ static void m1_selftest(void) {
 
 /* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock, Brick, Browser and Settings are available; other names return 0. */
 int app_open_name(const char *name) {
+    if ((name[0] | 32) == 'm' && (name[1] | 32) == 'a' && (name[2] | 32) == 'i' && (name[3] | 32) == 'l' && !name[4]) { dock_activate(2); return 1; }   /* 3.15.0: the Mail tile */
     static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser", "settings"};
     for (unsigned a = 0; a < 6; a++) {
         const char *w = openable[a]; unsigned i = 0;

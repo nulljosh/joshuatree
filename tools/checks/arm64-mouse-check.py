@@ -10,7 +10,7 @@ input-send-event it:
   - moves it off onto the wallpaper: the capsule is gone, the dock's band matches the untouched boot screen pixel for
     pixel (no ghost of the arrow left in the band's saved copy), and the arrow shows at the new spot;
   - clicks the Console's red close button: "console closed", and the wallpaper is back where the window was;
-  - clicks the Mail tile: "console open" and "dock Mail: not on ARM yet", the window is back with its log;
+  - clicks the Stocks tile: "console open" and "dock Stocks: not on ARM yet", the window is back with its log;
   - clicks the Terminal tile: "terminal open", the same window empty with the ask> prompt on its bottom row;
   - plugs a second mouse into the hub after boot and moves it ("usb mouse ... port N.3", then a new "mouse X,Y").
 Then the cursortest build on QEMU's Raspberry Pi 4B model at 1080p (window_scale 2): the arrow and the label over
@@ -152,12 +152,12 @@ try:
                 # 2.65.0: the wallpaper is flat terracotta 0x00B5502C, so a closed window leaves exactly one colour, not a gradient
                 if white * 10 > len(well) or set(well) != {(0xB5, 0x50, 0x2C)}: fails.append(f"the window is still there after closing ({white} of {len(well)} white, {len(set(well))} colours)")
                 else: print(f"  ok: closing the Console puts the wallpaper back ({len(set(well))} colours where the window was)")
-        tx, ty = slot_centre(W, H, 2)
-        if not move_to(tx, ty): fails.append("could not move onto the Mail tile")
+        tx, ty = slot_centre(W, H, 9)
+        if not move_to(tx, ty): fails.append("could not move onto the Stocks tile")
         else:
             click()
-            if not (wait_for("console open", 30) and wait_for("dock Mail: not on ARM yet", 30)):
-                fails.append(f"clicking the Mail tile did not reopen the Console, got {uart()[-300:]!r}")
+            if not (wait_for("console open", 30) and wait_for("dock Stocks: not on ARM yet", 30)):
+                fails.append(f"clicking the Stocks tile did not reopen the Console, got {uart()[-300:]!r}")
             else:
                 time.sleep(0.3)
                 img = screendump(cmd, tmp)
@@ -167,7 +167,7 @@ try:
                     well = [px(img, x, y) for y in range(wy + 34, wy + win_h - 14) for x in range(wx + 8, wx + win_w - 4)]
                     ink = sum(1 for c in well if max(c) < 0x90)
                     if ink < 300: fails.append(f"the reopened Console shows no log ({ink} ink pixels)")
-                    else: print(f"  ok: a dock click reopens the Console with its log ({ink} ink pixels) and prints 'dock Mail: not on ARM yet'")
+                    else: print(f"  ok: a dock click reopens the Console with its log ({ink} ink pixels) and prints 'dock Stocks: not on ARM yet'")
         # the Terminal tile opens the Terminal in the same rectangle: an empty scrollback and the ask> prompt on its bottom row
         tx, ty = slot_centre(W, H, 6)
         if not move_to(tx, ty): fails.append("could not move onto the Terminal tile")

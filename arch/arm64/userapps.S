@@ -3,7 +3,7 @@
    user_load walks: { name, start, end } until a zero name. The image carries its own page split and relocation list in a
    16 byte trailer (user_c.ld), so the table needs nothing else. A new app is one `app` line and one table row. A row
    whose name matches a dock tile (case aside) is what that tile opens: calendar, and since M3d notes. music (M3e) has no
-   tile, a decision: Spotlight lists it (main.c SPOT_MUSIC). books (2.66) is the same: Spotlight only (SPOT_BOOKS), and finder (3.14.0): Spotlight and Samantha's open (SPOT_FINDER). */
+   tile, a decision: Spotlight lists it (main.c SPOT_MUSIC). books (2.66) is the same: Spotlight only (SPOT_BOOKS), and finder (3.14.0): Spotlight and Samantha's open (SPOT_FINDER). mail (3.15.0) is the Mail tile's, built from user/mailpi.c. */
 .macro app name
     .balign 16
     .global \name\()_img, \name\()_img_end
@@ -19,6 +19,7 @@
     app music
     app books
     app finder
+    app mail
 
 /* M3c part 2: loop, the scheduler's test program, made by hand in the same image format: one code page, then the trailer
    { "JTU1", 4096 bytes of code, an empty relocation list }. It asks for its window, then yields forever: it never polls,
@@ -100,6 +101,7 @@ fpkeep_img_end:
 .Lname_music:    .asciz "music"
 .Lname_books:    .asciz "books"
 .Lname_finder:   .asciz "finder"
+.Lname_mail:     .asciz "mail"
 .Lname_loop:     .asciz "loop"
 .Lname_fpkeep:   .asciz "fpkeep"
 
@@ -112,6 +114,7 @@ user_apps:
     .quad .Lname_music, music_img, music_img_end
     .quad .Lname_books, books_img, books_img_end
     .quad .Lname_finder, finder_img, finder_img_end
+    .quad .Lname_mail, mail_img, mail_img_end
     .quad .Lname_loop, loop_img, loop_img_end
     .quad .Lname_fpkeep, fpkeep_img, fpkeep_img_end
     .quad 0, 0, 0
