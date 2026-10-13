@@ -41,7 +41,7 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 
 ## Docs
 
-[Architecture](docs/ARCHITECTURE.md), [design rules](docs/DESIGN.md), [roadmap](docs/roadmap.md) and the [user guide](docs/GUIDE.md). The rest is indexed in [docs/README.md](docs/README.md).
+[Architecture](docs/ARCHITECTURE.md), [design rules](docs/DESIGN.md), [roadmap](docs/roadmap.md), the [changelog](docs/CHANGELOG.md) and the [user guide](docs/GUIDE.md). The rest is indexed in [docs/README.md](docs/README.md).
 
 ## License
 

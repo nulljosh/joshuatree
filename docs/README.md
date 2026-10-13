@@ -18,6 +18,7 @@
 - [Encrypted Pi relay](RELAY-TLS.md): certificates, the trusted-time bootstrap and remaining security limits
 - [The Claude app](CLAUDE-APP.md): Claude Code from inside Joshua Tree, through a relay on your Mac, and its security model
 - [Roadmap](roadmap.md): what is next
+- [Changelog](CHANGELOG.md): every release since the first commit
 
 ## Licenses
 

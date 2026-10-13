@@ -118,21 +118,21 @@
 <text x="550.25" y="537.0" fill="#333" font-size="10" text-anchor="middle">merge on green</text>
 <path d="M550.25 546v10H89.75v-6" fill="none" stroke="#b5502c" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/><text x="320.0" y="568" fill="#75726e" font-size="9" text-anchor="middle">next item</text>
 <text x="20" y="594" fill="#75726e" font-size="10" font-weight="600" letter-spacing="1">MEMORY, PC BUILD</text>
-<rect x="20.0" y="602" width="47.9" height="16" fill="#1c1c1e"/>
-<rect x="67.9" y="602" width="466.8" height="16" fill="#e3b7a4"/>
-<rect x="534.7" y="602" width="2.0" height="16" fill="#b5502c"/>
-<rect x="536.7" y="602" width="59.8" height="16" fill="#f0d9ce"/>
-<rect x="596.5" y="602" width="16.6" height="16" fill="#141413"/>
-<rect x="613.1" y="602" width="8.0" height="16" fill="#d97757"/>
-<rect x="20" y="626" width="8" height="8" fill="#1c1c1e"/><text x="31" y="634" fill="#555" font-size="9">code 382 KB</text>
-<rect x="220" y="626" width="8" height="8" fill="#e3b7a4"/><text x="231" y="634" fill="#555" font-size="9">fonts, images, text 3,720 KB</text>
+<rect x="20.0" y="602" width="47.8" height="16" fill="#1c1c1e"/>
+<rect x="67.8" y="602" width="467.7" height="16" fill="#e3b7a4"/>
+<rect x="535.5" y="602" width="2.0" height="16" fill="#b5502c"/>
+<rect x="537.5" y="602" width="59.3" height="16" fill="#f0d9ce"/>
+<rect x="596.8" y="602" width="16.4" height="16" fill="#141413"/>
+<rect x="613.2" y="602" width="8.0" height="16" fill="#d97757"/>
+<rect x="20" y="626" width="8" height="8" fill="#1c1c1e"/><text x="31" y="634" fill="#555" font-size="9">code 385 KB</text>
+<rect x="220" y="626" width="8" height="8" fill="#e3b7a4"/><text x="231" y="634" fill="#555" font-size="9">fonts, images, text 3,764 KB</text>
 <rect x="420" y="626" width="8" height="8" fill="#b5502c"/><text x="431" y="634" fill="#555" font-size="9">starting values 7 KB</text>
 <rect x="20" y="640" width="8" height="8" fill="#f0d9ce"/><text x="31" y="648" fill="#555" font-size="9">working memory 477 KB</text>
 <rect x="220" y="640" width="8" height="8" fill="#141413"/><text x="231" y="648" fill="#555" font-size="9">programs 132 KB</text>
 <rect x="420" y="640" width="8" height="8" fill="#d97757"/><text x="431" y="648" fill="#555" font-size="9">sound 64 KB</text>
 <text x="20" y="664" fill="#75726e" font-size="10" font-weight="600" letter-spacing="1">APPS SHIPPED</text>
 <path d="M20 674H620M20 714H620M20 754H620" stroke="#ece8df"/>
-<polyline points="20,754 34,754 49,754 63,754 77,754 93,737 107,734 121,717 136,709 151,704 166,702 180,702 194,702 210,702 224,694 239,692 253,692 269,692 283,689 297,689 311,689 327,689 341,689 356,689 370,689 386,692 400,694 414,694 429,689 444,689 459,689 473,684 487,679 503,679 517,679 531,679 546,679 561,677 576,677 590,677 604,677 620,674" fill="none" stroke="#1c1c1e" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="20,754 34,754 49,754 63,754 77,754 93,734 107,734 121,717 136,709 151,702 166,702 180,702 194,702 210,699 224,694 239,692 253,692 269,692 283,689 297,689 311,689 327,689 341,689 356,689 370,689 386,694 400,694 414,694 429,689 444,689 459,687 473,679 487,679 503,679 517,679 531,679 546,677 561,677 576,677 590,677 604,674 620,674" fill="none" stroke="#1c1c1e" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="620" cy="674" r="4" fill="#fff" stroke="#b5502c" stroke-width="2"/>
 <text x="612" y="696" fill="#1c1c1e" font-size="12" font-weight="600" text-anchor="end">32 apps</text>
 <text x="20" y="772" fill="#75726e" font-size="10">2026-08-31</text><text x="620" y="772" fill="#75726e" font-size="10" text-anchor="end">2026-10-12</text>
