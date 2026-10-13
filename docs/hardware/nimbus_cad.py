@@ -9,7 +9,7 @@
 # mm throughout. Face frame: X right, Y up, Z out of the face (face at z = 0, back at z = -D). Assembled frame: Z up, front looks to -Y.
 # Stand-in numbers (verify with calipers before printing): the official Raspberry Pi 7 inch touch display outline 194 x 110, active
 # area 154.08 x 86.0, about 6.4 thick with a driver board behind; its holes are not used, pegs from the cover hold it instead.
-import sys, os, math, re, json
+import sys, os, math, re, json, shutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from build123d import *
@@ -110,13 +110,16 @@ def mark_geoms():
         return Polygon([((cx + (ro if i % 2 == 0 else ri) * math.cos(rot + math.pi * i / n)), (cy + (ro if i % 2 == 0 else ri) * math.sin(rot + math.pi * i / n))) for i in range(2 * n)])
     parts = [arm([(0, 0), (0.2, 6), (0.2, 10)], 5.6),
              arm([(0, 8), (-4.5, 11.5), (-9, 15)], 3.4), arm([(0.2, 9.5), (0.4, 14), (0.2, 17.5)], 3.6), arm([(0, 7), (4.5, 10), (9.5, 12.5)], 3.2),
-             star(-10, 17.2, 6.3, 3.0, 9, 0.3), star(0.2, 22.0, 7.2, 3.4, 10, 0.1), star(10.5, 14.8, 5.8, 2.8, 9, 0.5)]
+             star(-10, 17.2, 6.3, 3.0, 8, 0.3), star(0.2, 22.0, 7.2, 3.4, 9, 0.1), star(10.5, 14.8, 5.8, 2.8, 8, 0.5)]
     g = unary_union(parts)
     x0, y0, x1, y1 = g.bounds; k = 30.0 / (y1 - y0)
     g = affinity.translate(affinity.scale(affinity.translate(g, -(x0 + x1) / 2, -(y0 + y1) / 2), k, k, origin=(0, 0)), MARK_X, MARK_Y)
     gb = g.bounds; gw = 0.85 * (gb[2] - gb[0])
     ground = LineString([(MARK_X - gw / 2, gb[1] - 2.6), (MARK_X + gw / 2, gb[1] - 2.6)]).buffer(0.55, 8)
-    return g.simplify(0.04), ground.simplify(0.01)
+    g = g.buffer(0.3, join_style=1).buffer(-0.3, join_style=1)         # close slivers where the arms meet the tufts, so no edge is shorter than a few tenths
+    from shapely.geometry import MultiPolygon as _MP
+    g = unary_union([Polygon(q.exterior) for q in (g.geoms if hasattr(g, 'geoms') else [g])])      # solid: no islands inside the mark
+    return g.simplify(0.25), ground.simplify(0.05)
 def poly_solid(geom, z0, depth):
     out = None
     from shapely.geometry.polygon import orient
@@ -138,6 +141,22 @@ sd_cut = Pos(0, 0, 1.0) * (Pos(SLOT_X, SLOT_Y, 0) * extrude(SlotOverall(SLOT_W, 
 shell = shell - sd_cut
 sd_liner = Pos(SLOT_X, SLOT_Y, -T - 3.0) * Box(SLOT_W + 6.0, SLOT_H + 6.0, 4.0)     # ink behind the slot, so it reads as a slot
 
+V1 = pta(0, 0, -D); V2 = pta(0, 1, -D)
+def y_back(zc): return V1[1] + (V2[1] - V1[1]) / (V2[2] - V1[2]) * (zc - V1[2])    # the outer back plane at height zc
+_ZC = ZB + 1.4 + 9.0; fx, fy = 0.0, ptf(0, y_back(_ZC), _ZC)[1]       # the back face, centred above the port strip (the strip is centred on x = 0)
+# the tree goes on the back, one flat deboss with its thin ground line, mirrored in x so it reads right from behind (mirrored as polygons, then built, so every prism is right way out)
+from shapely import affinity as _af
+def _rear(g): return _af.translate(_af.scale(g, -1, 1, origin=(0, 0)), fx, fy + 38.0)
+def cut_polys(shape, geom, z0, depth):
+    from shapely.geometry.polygon import orient
+    for p in (geom.geoms if hasattr(geom, "geoms") else [geom]):
+        p = orient(p, 1.0)
+        w = lambda ring: Wire.make_polygon([Vector(x, y, z0) for x, y in list(ring.coords)[:-1]], close=True)
+        shape = shape - Solid.extrude(Face(w(p.exterior), [w(h) for h in p.interiors]), Vector(0, 0, depth))
+    return shape
+tree_r, ground_r = _rear(tree_g), _rear(ground_g)
+shell = cut_polys(cut_polys(shell, tree_r, -D - 1.0, 1.0 + MARK_D), ground_r, -D - 1.0, 1.0 + MARK_D)
+ground_inlay = poly_solid(ground_r, -D + 0.05, MARK_D - 0.05)       # flush with the back plane, which sits 0.05 inside -D
 # ---- split: front shell and back cover, half-lap with a 0.5 reveal ----
 front = shell - Pos(0, 0, ZG - 200) * Box(900, 900, 400)
 front = front - (prism(1.1, ZG, ZG + 8.0) - prism(T, ZG, ZG + 8.0))
@@ -146,18 +165,6 @@ spigot = (prism(1.3, ZG - GAP, ZG + 7.8) - prism(T, ZG - GAP, ZG + 7.8)) - face_
 cover = cover + spigot
 
 # ---- the Pi, standing on its floor with the USB end at the back ----
-V1 = pta(0, 0, -D); V2 = pta(0, 1, -D)
-def y_back(zc): return V1[1] + (V2[1] - V1[1]) / (V2[2] - V1[2]) * (zc - V1[2])    # the outer back plane at height zc
-_ZC = ZB + 1.4 + 9.0; fx, fy = 0.0, ptf(0, y_back(_ZC), _ZC)[1]       # the back face, centred above the port strip (the strip is centred on x = 0)
-def _rear(sol): return Pos(fx, fy + 38.0, 0) * mirror(sol, Plane.YZ)         # mirrored in x so the tree reads right from behind
-def cut_polys(shape, geom, z0, depth):
-    """subtract each polygon's prism in turn"""
-    for p in (geom.geoms if hasattr(geom, "geoms") else [geom]):
-        w = lambda ring: Wire.make_polygon([Vector(x, y, z0) for x, y in list(ring.coords)[:-1]], close=True)
-        shape = shape - _rear(Solid.extrude(Face(w(p.exterior), [w(h) for h in p.interiors]), Vector(0, 0, depth)))
-    return shape
-cover = cut_polys(cut_polys(cover, tree_g, -D - 1.0, 1.0 + MARK_D), ground_g, -D - 1.0, 1.0 + MARK_D)
-ground_inlay = _rear(poly_solid(ground_g, -D, MARK_D))
 ZM = ZB + 1.4 + 8.0
 Y_EDGE = y_back(ZM) - 1.0 - USB_OVER                   # the board's rear edge; the USB block tip sits 1 mm inside the back face
 Y_PC = Y_EDGE - pi4b.BOARD_L / 2
@@ -230,8 +237,9 @@ cover = cover - Pos(fx, fy, -D - 1.0) * extrude(RectangleRounded(sx1 - sx0, (sz1
 for _sx in (-1, 1):
     for _sy in (-1, 1): win_corners.append(("strip", fx + _sx * (sx1 - sx0) / 2, fy + _sy * (sz1 - sz0) / 2 / math.cos(math.radians(LEAN))))
 # the lofted ends can bulge a few tenths of a millimetre past their planes: plane the back and the front exactly, so each is one flat face and a flat print surface
-cover = cover - Pos(0, 0, -D - 50.0) * Box(900, 900, 100)
-front = front - Pos(0, 0, 50.0) * Box(900, 900, 100)
+if not os.environ.get('NIMBUS_NOCLIP'):
+    cover = cover - Pos(0, 0, -D - 50.0 + 0.05) * Box(900, 900, 100)      # 0.05 mm into the body, so the cut meets the roll-over at a real angle, not a tangent sliver
+    front = front - Pos(0, 0, 50.0) * Box(900, 900, 100)
 # the tree mark goes on the back, centred above the port strip (mirrored in x so it reads right from behind), one flat deboss and its thin ground line
 # ---- stand-ins that are not printed: the display, its image, the Pi's ports ----
 glass = Pos(0, YC, -LIP - GLASS_T) * extrude(RectangleRounded(GLASS_W, GLASS_H, R - GAP), GLASS_T)
@@ -253,6 +261,14 @@ for name, x, y in win_corners:
 assert ZB - 6.0 >= 3.0, "standoff too short"
 # the display clears the Pi stack and its ports (display is high on the face, Pi at the bottom)
 assert ptf(0, 0, ZB + 1.4 + 16.5 + 3)[1] < YC - GLASS_H / 2 - 5, "Pi stack reaches the display"
+def heal(shp):
+    """sew and fix the solid: booleans on the lofted shells can leave hairline gaps that make an STL non-watertight"""
+    try:
+        h = shp.fix()
+        return h if h is not None and h.is_valid else shp
+    except Exception as ex:
+        print("heal skipped:", ex); return shp
+pass      # heal() is available but off: it broke the back face
 parts = {"front_shell": front, "back_cover": cover, "ground_inlay": ground_inlay}
 PRINT = {"front_shell": Rot(180, 0, 0), "back_cover": Pos(0, 0, D), "ground_inlay": Pos(0, 0, D)}
 os.makedirs(STL_DIR, exist_ok=True)
@@ -268,9 +284,9 @@ for name, shp in parts.items():
     print("%-13s %s  %.0f cm3" % (name, report[name], shp.volume / 1000))
 asm_parts = {k: asm(v) for k, v in parts.items()}
 bb = Compound([asm_parts["front_shell"], asm_parts["back_cover"]]).bounding_box()
-info = {"parts": report, "overall": [round(bb.size.X, 1), round(bb.size.Y, 1), round(bb.size.Z, 1)], "wall": T, "lean": LEAN, "reveal": GAP, "bed": BED,
+info = {"volumes_cm3": {k: round(v.volume / 1000, 1) for k, v in parts.items()}, "parts": report, "overall": [round(bb.size.X, 1), round(bb.size.Y, 1), round(bb.size.Z, 1)], "wall": T, "lean": LEAN, "reveal": GAP, "bed": BED,
         "screws_m3": [[round(x, 1), round(y, 1)] for x, y in SCREWS], "board_standoffs_m25": [[round(x, 1), round(y, 1)] for x, y in HOLES],
-        "vent": {"y": round(Y_FLOOR(11.5), 1), "length": 96, "width": 3.2}, "glass": [GLASS_W, GLASS_H], "active": [ACT_W, ACT_H], "glass_center": [round(v, 1) for v in pta(0, YC, 0)], "opening": [OPEN_W, OPEN_H], "strip": [round(v, 1) for v in STRIP], "scoop_center": [round(v, 1) for v in pta(0, PULL_Y, -D)], "scoop_half": [PULL_W / 2, 2.5], "mark": [MARK_W, round(MARK_Y, 1)], "squircle_n": SQUIRCLE_N, "radius": R, "front": [2 * A, 2 * B]}
+        "vent": {"y": round(Y_FLOOR(11.5), 1), "length": 96, "width": 3.2}, "glass": [GLASS_W, GLASS_H], "active": [ACT_W, ACT_H], "glass_center": [round(v, 1) for v in pta(0, YC, 0)], "opening": [OPEN_W, OPEN_H], "strip": [round(v, 1) for v in STRIP], "scoop_center": [round(v, 1) for v in pta(0, PULL_Y, -D)], "scoop_half": [PULL_W / 2, 2.5], "mark_rear": [round(pta(fx, fy + 38.0, -D)[0], 1), round(pta(fx, fy + 38.0, -D)[2], 1)], "pull": [PULL_W, PULL_H, PULL_Z], "sd_slot": [round(pta(SLOT_X, SLOT_Y, 0)[0], 1), round(pta(SLOT_X, SLOT_Y, 0)[2], 1), SLOT_W, SLOT_H], "squircle_n": SQUIRCLE_N, "radius": R, "front": [2 * A, 2 * B]}
 json.dump(info, open(os.path.join(STL_DIR, "info.json"), "w"), indent=1)
 asm_parts = {k: asm(v) for k, v in parts.items()}
 for _k, _v in asm_parts.items():
@@ -284,19 +300,20 @@ if MESH:
         export_stl(s, os.path.join(MESH, name + ".stl"), tolerance=0.02, angular_tolerance=0.1); meshes.append(name)
     json.dump({"meshes": meshes, "zoff": ZOFF, "lean": LEAN, "screen": [list(pta(sx * ACT_W / 2, YC + sy * ACT_H / 2, -LIP + 0.05)) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]}, open(os.path.join(MESH, "meshes.json"), "w"))
 PACK = os.environ.get("NIMBUS_PACK")
-if PACK:      # the print pack: fine STLs in print orientation, and the optional quarters for a 220 mm bed (45 degree scarf joints, no supports)
-    os.makedirs(os.path.join(PACK, "split-220"), exist_ok=True)
-    def halfspace(axis, sign, zm):
-        nv = Vector(sign, 0, -sign) if axis == "x" else Vector(0, sign, -sign)
-        return Plane(origin=(0, 0, zm), z_dir=nv.normalized()) * Pos(0, 0, 300) * Box(900, 900, 600)
+if PACK:      # the print pack: the finest STL in print orientation that stays under the 5 MB file limit (OCC keeps a finer mesh once it has made it, so go coarse to fine)
+    os.makedirs(PACK, exist_ok=True)
     for name, shp in parts.items():
-        P = PRINT[name] * shp
-        export_stl(P, os.path.join(PACK, name + ".stl"), tolerance=0.03, angular_tolerance=0.15)
-        if name == "ground_inlay": continue
-        zm = P.bounding_box().size.Z / 2
-        for sx, tx in ((1, "p"), (-1, "m")):
-            for sy, ty in ((1, "p"), (-1, "m")):
-                Q = P & halfspace("x", sx, zm) & halfspace("y", sy, zm)
-                export_stl(Q, os.path.join(PACK, "split-220", "%s_q%s%s.stl" % (name, tx, ty)), tolerance=0.03, angular_tolerance=0.15)
-                qb = Q.bounding_box(); print("split", name, tx + ty, [round(v, 1) for v in (qb.size.X, qb.size.Y, qb.size.Z)])
+        P = PRINT[name] * shp; best = None
+        try:
+            import trimesh as _tm
+        except ImportError:
+            _tm = None
+        for tol, ang in ((0.2, 0.5), (0.2, 0.35), (0.2, 0.25), (0.18, 0.22), (0.15, 0.2), (0.12, 0.17), (0.1, 0.15), (0.07, 0.13), (0.05, 0.12)):
+            tmp = os.path.join(PACK, name + ".tmp.stl"); export_stl(P, tmp, tolerance=tol, angular_tolerance=ang)
+            if os.path.getsize(tmp) > float(os.environ.get("NIMBUS_PACK_MB", 4.8)) * 1e6: break
+            wt = bool(_tm.load(tmp).is_watertight) if _tm else True
+            print("  try", name, tol, ang, "watertight", wt)
+            if wt or not (best and best[2]):
+                best = (tol, ang, wt); shutil.copyfile(tmp, os.path.join(PACK, name + ".stl"))
+        os.remove(tmp); print("pack mesh", name, best)
 print("valid", front.is_valid, cover.is_valid, "ok")

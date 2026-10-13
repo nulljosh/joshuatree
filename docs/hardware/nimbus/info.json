@@ -1,4 +1,9 @@
 {
+ "volumes_cm3": {
+  "front_shell": 192.0,
+  "back_cover": 176.6,
+  "ground_inlay": 0.0
+ },
  "parts": {
   "front_shell": [
    236.4,
@@ -11,9 +16,9 @@
    87.2
   ],
   "ground_inlay": [
-   27.1,
+   26.7,
    1.1,
-   0.6
+   0.5
   ]
  },
  "overall": [
@@ -90,9 +95,20 @@
   30.0,
   2.5
  ],
- "mark": [
-  26.0,
-  0.0
+ "mark_rear": [
+  0.0,
+  74.2
+ ],
+ "pull": [
+  60.0,
+  10.0,
+  3.5
+ ],
+ "sd_slot": [
+  56.0,
+  25.0,
+  27.0,
+  2.6
  ],
  "squircle_n": 4.8,
  "radius": 9.0,

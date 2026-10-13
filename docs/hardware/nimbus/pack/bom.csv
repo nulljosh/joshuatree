@@ -1,0 +1,15 @@
+item,qty,size or note,source of the number
+Raspberry Pi 4 Model B (any RAM),1,"85 x 56 x 17 mm, holes 58 x 49 mm (pi4b.py)",CAD
+"16:9 HDMI panel, 8 inch class, with touch if wanted",1,"outline 194 x 110 mm, active 176 x 99 mm, about 5 mm thick plus its driver board 100 x 58 x 12 mm",stand-in: measure the real panel before printing
+Cover glass or acrylic sheet,1,"194 x 110 x 1.6 mm, corners R 8.5, glued to the 2 mm ledge",CAD (optional; the panel's own glass can sit in the opening)
+Self-tapping screw M2.5 x 6,4,"Pi to the printed standoffs, pilot hole 2.1 mm","CAD pilot, screw length estimate"
+Self-tapping screw M3 x 12,2,"from underneath through the foot into the two ribs, clearance hole 3.4, pilot 2.6","CAD pilot, screw length estimate"
+microSD to SD card extension cable (short),1,card end sits in the front slot 27 x 2.6 mm,estimate
+USB-C panel-mount extension cable,2,slot 9.8 x 3.6 mm in the back strip,"CAD slot, part estimate"
+3.5 mm panel-mount jack (or 8 mm round connector),1,round hole 8 mm in the back strip,"CAD hole, part estimate"
+"Micro-HDMI to HDMI cable, right angle, 20 to 30 cm",1,Pi to the panel,estimate
+"USB-C power supply for the Pi, 5 V 3 A",1,"outside the case, into one back USB-C extender",estimate
+"Double-sided foam tape, 2 mm thick, 6 mm wide",about 1 m,holds the panel module and the glass,estimate
+Super glue or plastic cement,1,"for the terracotta ground line in its groove, and any loose join",estimate
+Heat-set inserts: not needed,0,the screws cut their own thread in the printed ribs,note
+Fan,0,none: one vent slot 96 x 3.2 in the foot and the shell is open behind the Pi,note

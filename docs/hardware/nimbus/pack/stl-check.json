@@ -1,0 +1,32 @@
+{
+ "back_cover.stl": {
+  "watertight": true,
+  "volume_cm3": 168.9,
+  "size_mm": [
+   236.0,
+   226.7,
+   87.1
+  ],
+  "mb": 2.36
+ },
+ "front_shell.stl": {
+  "watertight": true,
+  "volume_cm3": 192.0,
+  "size_mm": [
+   236.3,
+   228.2,
+   86.1
+  ],
+  "mb": 1.13
+ },
+ "ground_inlay.stl": {
+  "watertight": true,
+  "volume_cm3": 0.0,
+  "size_mm": [
+   26.7,
+   1.1,
+   0.6
+  ],
+  "mb": 0.0
+ }
+}
