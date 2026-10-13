@@ -371,3 +371,8 @@ Check: `tools/checks/arm64-crash-check.py` (the Pi image faults behind the splas
 
 `pick <sentence>` names the tool Samantha's hands would reach for, from a 15K-weight integer model in freestanding C (`kernel/picker.c`). On Turing's nine dev sets the Python reference gets 3,820 of 4,455 tool picks right (85.8 percent); the C matches it on all 297 golden sentences. Arguments and the guard stay with the full model, this picks the tool only.
 Check: `tools/checks/picker-check.sh` (QEMU, no network): `pickcheck: 297/297 ok` and four typed sentences.
+
+## 3.14.0: Finder on the Pi
+
+The Burrow tile and Spotlight open a Finder window on the Pi. A sidebar (Home, and Documents, Music and Trash when the card's `JT/` folder has them), a list with a small flat icon per type, the name and the size, rows 24 px tall. Up and Down choose, Enter opens a folder or previews a `.TXT` read-only, Backspace goes up. With no card it lists the apps built in and says so. Samantha's `[[open Finder]]` opens it too.
+Check: `tools/checks/arm64-finder-check.py` (QEMU, headless).
