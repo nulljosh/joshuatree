@@ -1140,9 +1140,13 @@ static void pane_putc(struct pane *p, char c) {
 static void console_putc(char c) { pane_putc(con_to_term ? &term_p : &con_p, c); }
 /* The console's type. DejaVu Sans Mono at the screen's scale, unless a quick test of the rasterizer says no: then the
    8x16 VGA font at a whole-number scale (2x on a 1080p screen), which needs nothing but integer stores. */
-static void con_layout(int win_x, int win_y, int win_w, int win_h) {
+static void con_place(int win_x, int win_y, int win_w, int win_h) {   /* where the grid sits and how many columns and rows fit the window, for the font already chosen */
     con_wx = win_x; con_wy = win_y; con_ww = win_w;
     con_x = win_x + sc(8); con_y = win_y + sc(32);
+    con_cols = (win_w - sc(12)) / con_cw;
+    con_rows = (win_h - sc(46)) / con_ch - 1;   /* then one row: the Console's wifi and usb status, or the Terminal's ask> prompt */
+}
+static void con_layout(int win_x, int win_y, int win_w, int win_h) {
     con_px10 = sc(133);
     mono_ok = text_ok && text_selftest(con_px10, &mono_w, &mono_h, &mono_adv);
     if (mono_ok) { con_vga = 0; con_cw = mono_adv; con_ch = sc(16); con_base = sc(12); }
@@ -1151,8 +1155,7 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
         if (con_vga < 1) con_vga = 1;
         con_cw = 8 * con_vga; con_ch = 16 * con_vga; con_base = 0;
     }
-    con_cols = (win_w - sc(12)) / con_cw;
-    con_rows = (win_h - sc(46)) / con_ch - 1;   /* then one row: the Console's wifi and usb status, or the Terminal's ask> prompt */
+    con_place(win_x, win_y, win_w, win_h);
 }
 const char *ask_prompt(void);   /* ask.c: "joshua@tree % " */
 /* The Terminal's bottom row: the prompt and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
@@ -1498,6 +1501,15 @@ static int cur_hold(void) {   /* the Console is about to draw: take the arrow of
     return 1;
 }
 static void cur_release(int held) { if (held) cur_show(); }
+static void con_fit(void) {   /* a resized Console or Terminal: the grid for the rectangle as it is now, kept inside the frame's white well */
+    int s = (int)window_scale();
+    con_place(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
+    int wx = (win_lx + 8) * s, wy = (win_ly + 30) * s + 2 * s, wr = (win_lx + win_lw - 8) * s, wb = (win_ly + win_lh - 8) * s;
+    if (con_x < wx) con_x = wx;
+    if (con_y < wy) con_y = wy;
+    if (con_x + con_cols * con_cw > wr) con_cols = (wr - con_x) / con_cw;
+    if (con_y + (con_rows + 1) * con_ch > wb) con_rows = (wb - con_y) / con_ch - 1;
+}
 static void console_frame(void) {   /* the i386 window frame, and a white well for the text */
     int s = (int)window_scale();
     gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? (term_index ? "Terminal 2" : "Terminal 1") : "Console");
@@ -1514,6 +1526,15 @@ static void wall_fill(int x, int y, int w, int h) {   /* physical px: the flat w
     unsigned c = fb_color(0x00B5502C);
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = c;
 }
+static void wall_minus(int ox, int oy, int ow, int oh, int nx, int ny, int nw, int nh) {   /* physical px: wallpaper over the old rectangle except where the new one is */
+    for (int j = 0; j < oh; j++) {
+        int y = oy + j, inside = y >= ny && y < ny + nh, a = ox, b = ox + ow;
+        if (inside) {   /* the row meets the new rectangle: keep its span, fill the left and right remainders */
+            int l = nx < b ? (nx > a ? nx : a) : b, r = nx + nw > a ? (nx + nw < b ? nx + nw : b) : a;
+            wall_fill(a, y, l - a, 1); wall_fill(r, y, b - r, 1);
+        } else wall_fill(a, y, b - a, 1);
+    }
+}
 static void console_close(void) {
     if (!con_live || !fb) return;
     int s = (int)window_scale(), x = win_lx * s, y = win_ly * s, w = win_lw * s, h = win_lh * s;
@@ -1527,14 +1548,8 @@ static void console_close(void) {
     if (app_wbytes) app_raise();   /* the same for an app's window */
 }
 void ask_redraw(void);   /* ask.c: the line being typed, back on the ask> row */
-static void pane_open(struct pane *p) {   /* the Console or the Terminal in front, its newest lines in view */
-    int raise = con_live && cp == p;   /* already open, behind the Calculator: bring it up and give it the keys */
-    if (raise && !calc_front && !app_front) return;
-    if (!fb) { cp = p; uart_puts(p == &term_p ? "terminal open\n" : "console open\n"); return; }   /* no screen: the keys still follow */
+static void pane_draw(void) {   /* the frame, the well and the newest lines of cp, in the rectangle as it is now; the caller hides the arrow */
     int s = (int)window_scale();
-    cur_hide();
-    calc_front = app_front = 0;   /* before any drawing: the pane's own draws are off while the Calculator or an app is on top */
-    cp = p;
     console_frame();
     con_live = 1; cp->scrolled = 0;
     unsigned nl = con_nlines(), keep = con_rows > 1 ? (unsigned)con_rows - 1 : 1;
@@ -1543,6 +1558,15 @@ static void pane_open(struct pane *p) {   /* the Console or the Terminal in fron
     for (unsigned k = cp->anchor; k < cp->len; k++) con_draw(k);
     con_summary(); con_hint(); ask_redraw();
     fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
+}
+static void pane_open(struct pane *p) {   /* the Console or the Terminal in front, its newest lines in view */
+    int raise = con_live && cp == p;   /* already open, behind the Calculator: bring it up and give it the keys */
+    if (raise && !calc_front && !app_front) return;
+    if (!fb) { cp = p; uart_puts(p == &term_p ? "terminal open\n" : "console open\n"); return; }   /* no screen: the keys still follow */
+    cur_hide();
+    calc_front = app_front = 0;   /* before any drawing: the pane's own draws are off while the Calculator or an app is on top */
+    cp = p;
+    pane_draw();
     if (raise) { con_quiet = 1; uart_puts(p == &term_p ? "focus terminal\n" : "focus console\n"); }
     else uart_puts(p == &term_p ? "terminal open\n" : "console open\n");
     cur_show();
@@ -1561,7 +1585,6 @@ const char *calc_input(void);
 const char *calc_output(void);
 int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
 static int calc_lx, calc_ly, calc_lw, calc_lh;   /* its frame on the logical grid, set in fb_init */
-static unsigned *calc_under;                    /* the wallpaper under it, saved at boot before any window was drawn */
 static int clock_live, brick_live, spot_live, browser_live;
 static void browser_open(void);
 static void browser_close(void);
@@ -1621,7 +1644,6 @@ static void calc_open(void) {
     clock_close();
     browser_close();
     app_kill("closed for the Calculator");   /* the two never share the screen, so there is no third window to stack */
-    if (!calc_under) return;   /* no saved wallpaper (a full heap): nothing to close it back to */
     if (calc_live) { calc_raise(); return; }
     calc_live = calc_front = 1;
     calc_paint();
@@ -1631,7 +1653,7 @@ static void calc_close(void) {
     if (!calc_live) return;
     int s = (int)window_scale(), x = calc_lx * s, y = calc_ly * s, w = calc_lw * s, h = calc_lh * s;
     cur_hide();
-    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = calc_under[j * w + i];
+    wall_fill(x, y, w, h);
     fb_flush(x, y, w, h);
     calc_live = calc_front = 0;
     uart_puts("calc closed\n");
@@ -1651,8 +1673,9 @@ static void calc_did(int ran) {   /* after a key: redraw, and log a finished sum
    second later. Closing puts back the wallpaper saved at boot and redraws the Console or
    the Terminal whole. Opening one closes the Calculator, and opening the Calculator ends the app. ---- */
 static int app_lx, app_ly, app_lw, app_lh;   /* the frame on the logical grid, set in fb_init */
-static unsigned *app_under;                  /* the wallpaper under it, saved at boot */
-static unsigned app_cw, app_ch;              /* the content, the app's buffer, pixel for pixel */
+static unsigned app_cw, app_ch;              /* the content area, what the frame holds */
+static unsigned app_bw, app_bh;              /* the app's buffer, pixel for pixel: the content's size as of its last JT_SYS_WINDOW_OPEN (a resize drag changes app_cw first, the app answers with a second open) */
+static int app_rs_log;                       /* a resized buffer is waiting for the app's first frame at the new size */
 static int app_shown;                        /* the app has presented a frame since its window opened */
 static void spot_close(void);
 static unsigned mix31(unsigned a, unsigned b) {   /* three parts a, one part b, in each colour lane */
@@ -1661,18 +1684,19 @@ static unsigned mix31(unsigned a, unsigned b) {   /* three parts a, one part b, 
 static void app_blit(void) {
     int s = (int)window_scale(), x0 = (app_lx + 8) * s, y0 = (app_ly + 32) * s;
     const unsigned *src = (const unsigned *)(USER_BASE + UP_WIN);
+    unsigned bw = app_bw, cw_ = app_bw < app_cw ? app_bw : app_cw, ch_ = app_bh < app_ch ? app_bh : app_ch;   /* while a resize is in flight the buffer is the old size: its pixels go where they fit */
     if (app_hi) {   /* 3.9.0: the app drew at device size (hires.h and JT_SYS_TEXT2): one buffer pixel per screen pixel, nothing to smooth */
-        unsigned bw = app_cw * 2;
-        for (unsigned y = 0; y < app_ch * 2; y++) {
-            const unsigned *r = src + y * bw; unsigned *d = fb + (unsigned)(y0 + (int)y) * fb_pitch + (unsigned)x0;
-            for (unsigned x = 0; x < bw; x++) d[x] = fb_color(r[x] & 0x00FFFFFFu);
+        unsigned hw = bw * 2;
+        for (unsigned y = 0; y < ch_ * 2; y++) {
+            const unsigned *r = src + y * hw; unsigned *d = fb + (unsigned)(y0 + (int)y) * fb_pitch + (unsigned)x0;
+            for (unsigned x = 0; x < cw_ * 2; x++) d[x] = fb_color(r[x] & 0x00FFFFFFu);
         }
         return;
     }
     if (s == 2) {   /* an app that did not ask: the apps draw on a 1x grid: spread each pixel over its 2x2 by bilinear weights (3/4 itself, 1/4 the near neighbour), so a stem is a soft ramp, not a 2x2 block */
-        int cw = (int)app_cw, ch = (int)app_ch;
+        int cw = (int)cw_, ch = (int)ch_;
         for (int y = 0; y < ch; y++) for (int j = 0; j < 2; j++) {
-            const unsigned *r0 = src + (unsigned)y * app_cw, *r1 = src + (unsigned)(j ? (y + 1 < ch ? y + 1 : y) : (y ? y - 1 : y)) * app_cw;
+            const unsigned *r0 = src + (unsigned)y * bw, *r1 = src + (unsigned)(j ? (y + 1 < ch ? y + 1 : y) : (y ? y - 1 : y)) * bw;
             unsigned *d = fb + (unsigned)(y0 + y * 2 + j) * fb_pitch + (unsigned)x0;
             for (int x = 0; x < cw; x++) for (int i = 0; i < 2; i++) {
                 int xn = i ? (x + 1 < cw ? x + 1 : x) : (x ? x - 1 : x);
@@ -1682,8 +1706,8 @@ static void app_blit(void) {
         }
         return;
     }
-    for (unsigned y = 0; y < app_ch; y++) for (unsigned x = 0; x < app_cw; x++) {
-        unsigned c = fb_color(src[y * app_cw + x] & 0x00FFFFFFu), *d = fb + (unsigned)(y0 + (int)y * s) * fb_pitch + (unsigned)(x0 + (int)x * s);
+    for (unsigned y = 0; y < ch_; y++) for (unsigned x = 0; x < cw_; x++) {
+        unsigned c = fb_color(src[y * bw + x] & 0x00FFFFFFu), *d = fb + (unsigned)(y0 + (int)y * s) * fb_pitch + (unsigned)(x0 + (int)x * s);
         for (int j = 0; j < s; j++) for (int i = 0; i < s; i++) d[(unsigned)j * fb_pitch + (unsigned)i] = c;
     }
 }
@@ -1715,9 +1739,9 @@ static void st32(unsigned long a, unsigned v) { for (int i = 0; i < 4; i++) ((un
    from the text shell). The first call maps the buffer, zeroed, EL0 read-write and never executable, and puts the window up
    in front; any call fills the LP64 struct jt_window_info: width, height, pitch, then the 64-bit pixels pointer at +16. */
 static long app_window_open(unsigned long info, unsigned long flags) {
-    if (!app_running || !fb || !app_under || !app_cw) return -19;
+    if (!app_running || !fb || !app_cw) return -19;
     if (!user_writable(info, 24)) return -14;
-    if (!app_wbytes) {
+    if (!app_wbytes || app_cw != app_bw || app_ch != app_bh) {   /* the first open, or the answer to JT_EV_RESIZE: a buffer of the content's size now, zeroed */
         const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
         int hi = (flags & 1) && window_scale() == 2;   /* hires.h's ask: only at scale 2, where there are device pixels to give */
         unsigned long bytes = ((unsigned long)app_cw * app_ch * (hi ? 16 : 4) + 4095) & ~4095UL;
@@ -1725,14 +1749,17 @@ static long app_window_open(unsigned long info, unsigned long flags) {
         for (unsigned long i = 0; i < bytes / 4096; i++) l3[(UP_WIN >> 12) + i] = (USER_BASE + UP_WIN + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
         __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
         for (unsigned long i = 0; i < bytes / 8; i++) ((unsigned long *)(USER_BASE + UP_WIN))[i] = 0;
-        app_wbytes = bytes; app_shown = 0; app_hi = hi;
-        spot_close(); calc_close(); browser_close();
-        app_front = 1;
-        app_paint();
-        uart_puts("M3c window "); uart_puts(app_cur->name); uart_putc(' '); uart_dec(app_cw); uart_putc('x'); uart_dec(app_ch);
-        uart_puts(" at "); uart_dec((unsigned)app_lx + 8); uart_putc(','); uart_dec((unsigned)app_ly + 32); uart_putc('\n');
+        int first = !app_wbytes;
+        app_wbytes = bytes; app_shown = 0; app_bw = app_cw; app_bh = app_ch; app_hi = hi;
+        if (first) { spot_close(); calc_close(); browser_close(); app_front = 1; app_rs_log = 0; }
+        else app_rs_log = 1;
+        if (app_front) app_paint();
+        con_quiet = !first; uart_puts("M3c window "); uart_puts(app_cur->name); uart_putc(' '); uart_dec(app_cw); uart_putc('x'); uart_dec(app_ch);
+        if (first) { uart_puts(" at "); uart_dec((unsigned)app_lx + 8); uart_putc(','); uart_dec((unsigned)app_ly + 32); }
+        else uart_puts(" resized");
+        uart_putc('\n');
     }
-    st32(info, app_cw); st32(info + 4, app_ch); st32(info + 8, app_cw * (app_hi ? 8 : 4));   /* width and height stay logical; the pitch (bytes) says the buffer is twice as wide */
+    st32(info, app_bw); st32(info + 4, app_bh); st32(info + 8, app_bw * (app_hi ? 8 : 4));   /* width and height stay logical; the pitch (bytes) says the buffer is twice as wide */
     st32(info + 12, 0); st32(info + 16, (unsigned)(USER_BASE + UP_WIN)); st32(info + 20, (unsigned)((USER_BASE + UP_WIN) >> 32));
     return 0;
 }
@@ -1770,7 +1797,11 @@ static long app_window_poll(unsigned long ev, unsigned long flags) {
     if (!user_writable(ev, 12)) return -14;
     if (flags & ~1UL) return -22;
     if (flags & 1) {
-        if (!app_shown) { con_quiet = 1; uart_puts("M3c window "); uart_puts(app_cur->name); uart_puts(" first frame\n"); }
+        if (!app_shown) {
+            con_quiet = 1; uart_puts("M3c window "); uart_puts(app_cur->name);
+            if (app_rs_log) { uart_puts(" redrawn "); uart_dec(app_bw); uart_putc('x'); uart_dec(app_bh); uart_putc('\n'); app_rs_log = 0; }   /* the first frame in the buffer a resize gave it */
+            else uart_puts(" first frame\n");
+        }
         app_shown = 1;
         if (app_front && !spot_live) {
             int s = (int)window_scale();
@@ -1780,7 +1811,7 @@ static long app_window_poll(unsigned long ev, unsigned long flags) {
     if (app_qh == app_qt) return -11;
     unsigned i = app_qh++ % APP_EVQ;
     st32(ev, app_q[i].kind); st32(ev + 4, (unsigned)app_q[i].a); st32(ev + 8, (unsigned)app_q[i].b);
-    con_quiet = 1; uart_puts("M3c event "); uart_puts(app_q[i].kind == 1 ? "key " : "click "); uart_dec((unsigned)app_q[i].a);
+    con_quiet = 1; uart_puts("M3c event "); uart_puts(app_q[i].kind == 1 ? "key " : app_q[i].kind == 4 ? "resize " : "click "); uart_dec((unsigned)app_q[i].a);
     if (app_q[i].kind != 1) { int y = app_q[i].b; uart_putc(','); if (y < 0) { uart_putc('-'); y = -y; } uart_dec((unsigned)y); }   /* a close click is above the content */
     uart_puts(" to "); uart_puts(app_cur->name); uart_putc('\n');
     return 1;
@@ -1789,7 +1820,7 @@ static void app_window_close(void) {
     if (!app_wbytes) return;
     int s = (int)window_scale(), x = app_lx * s, y = app_ly * s, w = app_lw * s, h = app_lh * s;
     cur_hide();
-    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = app_under[j * w + i];
+    wall_fill(x, y, w, h);
     fb_flush(x, y, w, h);
     app_front = app_shown = 0;
     if (con_live) { con_live = 0; pane_open(cp); }   /* the wallpaper went over its part of the Console too: draw it whole */
@@ -1812,57 +1843,154 @@ static int app_dock(const char *name) {
     }
     return 0;
 }
-/* ---- Window drag. The Console, the Terminal, Clock, Brick and the Browser all live in one rectangle (win_lx, win_ly, win_lw,
-   win_lh), so one function moves any of them: win_move_to copies the window's pixels to the new place (the contents come
-   along as they are, nothing is drawn again), fills what it uncovered with the flat wallpaper, shifts the Console's text
-   origin by the same amount, and cleans both rectangles out of the data cache. The window stays whole on the screen, below
-   the menu bar and above the dock's band and the line over it, so no band is ever under it. A press on the title band (not
-   on a dot) starts a drag, the grab offset kept; the left button going up ends it. The Calculator and an app's window keep
-   their boot places, and a Console with one of them open is not dragged (there is no stacking to repaint). ---- */
+/* ---- Window drag and resize. Every window the desktop draws (the Console, the Terminal, Clock, Brick and the Browser in one
+   rectangle win_lx..win_lh; the Calculator; an app's frame) is one target of the same path: a press picks the front window and
+   what the pointer took hold of, pointer_moved turns the pointer into a new rectangle, and win_set applies it. A press on the
+   title band (not on a dot) moves the window, the grab offset kept. A press within RS_ZONE = 12 px of the left, right or
+   bottom edge (the bottom-right corner is both) below the title band resizes it, the grabbed edge following the pointer and the
+   opposite one staying. The size is held between a minimum (win_limits) and the strip between the menu bar and the dock's
+   band, the position inside the screen and that strip, so no band is ever under a window. A move of the Console family copies
+   its pixels (the contents come along as they are, the uncovered part becomes wallpaper, the Console's text origin shifts);
+   anything else, a resize or a move of the Calculator or an app, puts wallpaper where the window was, draws the Console behind
+   whole if the old place met it, then draws the window again at the new rectangle, so it lays its content out to the new
+   size: the Console and Terminal re-fit their columns and rows, the Browser re-wraps, the Clock and Brick re-centre, the
+   Calculator re-spaces its keys, and an app gets JT_EV_RESIZE (the same event i386's compositor sends), answers it with a
+   second JT_SYS_WINDOW_OPEN and redraws. The left button going up ends it. The Console is not moved while the Calculator or
+   an app is open (it is behind: there is no stacking to repaint). ---- */
+#define WT_MAIN 0
+#define WT_CALC 1
+#define WT_APP  2
+#define RS_L 1
+#define RS_R 2
+#define RS_B 4
+#define RS_ZONE 12   /* logical px inside an edge that take hold of it */
+#define MIN_WIN_W 320   /* the smallest the Console, Terminal, Browser and Clock shrink to (Brick keeps its first size) */
+#define MIN_WIN_H 220
+#define MIN_CALC_W 220
+#define MIN_CALC_H 260
+#define MIN_APP_W 400
+#define MIN_APP_H 300
+#define GRAB_TITLE (-1)
 static int in_box(int x, int y, int bx, int by, int bw, int bh);
+static void clock_paint(void);
+static void brick_paint(void);
+static void browser_paint(int report);
+static int br_frame;
+static int win_def[3][2];   /* each window's size when the desktop drew it first: the Console family's, the Calculator's, an app's */
+static int *const win_rc[3][4] = { { &win_lx, &win_ly, &win_lw, &win_lh }, { &calc_lx, &calc_ly, &calc_lw, &calc_lh }, { &app_lx, &app_ly, &app_lw, &app_lh } };
 static int drag_on, drag_dx, drag_dy;   /* a title-band press is moving the window; where inside it the pointer took hold, logical px */
-static int win_draggable(void) { return !spot_live && (brick_live || clock_live || browser_live || (con_live && !calc_live && !app_wbytes)); }
-static int on_title_band(int x, int y) {   /* the top 30 px of the window, but not the three dots (radius 7, a pixel spare) */
-    if (!in_box(x, y, win_lx, win_ly, win_lw, 30)) return 0;
-    for (int d = 0; d < 3; d++) { int dx = x - (win_lx + 24 + 22 * d), dy = y - (win_ly + 16); if (dx * dx + dy * dy <= 8 * 8) return 0; }
-    return 1;
+static int rs_on, rs_dx, rs_dy;         /* an edge press is resizing it: the edges taken (RS_*), and how far the pointer was past the right and bottom edges */
+static int drag_t;                      /* which window (WT_*) either is acting on */
+static int win_sizing;                  /* win_set is redrawing a window at a new size: the Clock keeps its log line for the minute */
+static int win_target(void) {   /* the window that takes a drag: the one in front, -1 for none */
+    if (spot_live) return -1;
+    if (brick_live || clock_live || browser_live) return WT_MAIN;
+    if (app_wbytes && app_front) return WT_APP;
+    if (calc_live && calc_front) return WT_CALC;
+    if (con_live && !calc_live && !app_wbytes) return WT_MAIN;
+    return -1;
 }
-static void win_move_to(int nx, int ny) {
+static void win_limits(int t, int *minw, int *minh) {   /* a window opens at its default size and never has to be larger than that to fit its content: the Brick field has a fixed size, the rest shrink to a floor */
+    int dw = win_def[t][0], dh = win_def[t][1], fw = t == WT_APP ? MIN_APP_W : t == WT_CALC ? MIN_CALC_W : MIN_WIN_W, fh = t == WT_APP ? MIN_APP_H : t == WT_CALC ? MIN_CALC_H : MIN_WIN_H;
+    if (t == WT_MAIN && brick_live) { fw = dw; fh = dh; }
+    *minw = fw < dw ? fw : dw; *minh = fh < dh ? fh : dh;
+}
+static int win_grab(int t, int x, int y) {   /* what a press at (x, y) takes hold of: GRAB_TITLE, a mask of RS_* edges, or 0 for the window's inside */
+    int wx = *win_rc[t][0], wy = *win_rc[t][1], ww = *win_rc[t][2], wh = *win_rc[t][3];
+    if (!in_box(x, y, wx, wy, ww, wh)) return 0;
+    if (y < wy + 30) {   /* the title band, but not the three dots (radius 7, a pixel spare) */
+        for (int d = 0; d < 3; d++) { int dx = x - (wx + 24 + 22 * d), dy = y - (wy + 16); if (dx * dx + dy * dy <= 8 * 8) return 0; }
+        return GRAB_TITLE;
+    }
+    return (x < wx + RS_ZONE ? RS_L : 0) | (x >= wx + ww - RS_ZONE ? RS_R : 0) | (y >= wy + wh - RS_ZONE ? RS_B : 0);
+}
+static void app_note_resize(void) {   /* JT_EV_RESIZE for the app; one waiting event is updated rather than a second queued, so a long drag asks once for the size it ends on */
+    if (!app_cur) return;
+    for (unsigned i = app_qh; i != app_qt; i++) if (app_q[i % APP_EVQ].kind == 4) { app_q[i % APP_EVQ].a = (int)app_cw; app_q[i % APP_EVQ].b = (int)app_ch; app_kick = 1; return; }
+    app_push(4, (int)app_cw, (int)app_ch);
+}
+static void win_set(int t, int nx, int ny, int nw, int nh) {   /* the one place a window changes rectangle */
     if (!fb) return;
-    int s = (int)window_scale(), top = sg(MENUBAR_H) / s + 8, bottom = gui_dock_band_top() - 22, right = (int)fb_w / s - win_lw;
+    int *px_ = win_rc[t][0], *py_ = win_rc[t][1], *pw_ = win_rc[t][2], *ph_ = win_rc[t][3];
+    if (nx == *px_ && ny == *py_ && nw == *pw_ && nh == *ph_) return;
+    int s = (int)window_scale(), ox = *px_ * s, oy = *py_ * s, w = *pw_ * s, h = *ph_ * s, px = nx * s, py = ny * s, dx = px - ox, dy = py - oy;
+    int resized = nw != *pw_ || nh != *ph_;
+    cur_hide();
+    if (t == WT_MAIN && !resized) {
+        for (int j = 0; j < h; j++) {   /* a memmove by rows: the far rows first when moving down, the far columns first when moving right */
+            int r = dy > 0 ? h - 1 - j : j;
+            unsigned *src = fb + (unsigned)(oy + r) * fb_pitch + (unsigned)ox, *dst = fb + (unsigned)(py + r) * fb_pitch + (unsigned)px;
+            if (dx > 0) for (int i = w - 1; i >= 0; i--) dst[i] = src[i];
+            else for (int i = 0; i < w; i++) dst[i] = src[i];
+        }
+        wall_minus(ox, oy, w, h, px, py, w, h);
+        *px_ = nx; *py_ = ny;
+        con_x += dx; con_y += dy; con_wx += dx; con_wy += dy;   /* con_layout's origin and the title bar's "lines N-M" follow; the size, and so the rows and columns, are unchanged */
+        int ux = ox < px ? ox : px, uy = oy < py ? oy : py;
+        fb_flush(ux, uy, w + (dx < 0 ? -dx : dx), h + (dy < 0 ? -dy : dy));
+        return;
+    }
+    int old_meets_console = con_live && !(ox >= (win_lx + win_lw) * s || ox + w <= win_lx * s || oy >= (win_ly + win_lh) * s || oy + h <= win_ly * s);
+    wall_minus(ox, oy, w, h, px, py, nw * s, nh * s);
+    *px_ = nx; *py_ = ny; *pw_ = nw; *ph_ = nh;
+    win_sizing = resized;
+    if (t == WT_MAIN) {
+        if (brick_live) brick_paint();
+        else if (clock_live) clock_paint();
+        else if (browser_live) { br_frame = 1; browser_paint(0); }
+        else { con_fit(); pane_draw(); }
+    } else {
+        if (old_meets_console) { int cf = calc_front, af = app_front; calc_front = app_front = 0; pane_draw(); calc_front = cf; app_front = af; }   /* the Console behind, whole again where the window left it */
+        if (t == WT_CALC) calc_paint();
+        else { app_cw = (unsigned)(nw - 16); app_ch = (unsigned)(nh - 40); if (resized) app_note_resize(); app_paint(); }
+    }
+    win_sizing = 0;
+    int ux = ox < px ? ox : px, uy = oy < py ? oy : py, ex = ox + w > px + nw * s ? ox + w : px + nw * s, ey = oy + h > py + nh * s ? oy + h : py + nh * s;
+    fb_flush(ux, uy, ex - ux, ey - uy);
+}
+static void win_move_to(int nx, int ny) {   /* the front window (or the Console family's, when none is up) to this place, held whole between the menu bar and the dock's band */
+    int t = drag_on || rs_on ? drag_t : WT_MAIN;
+    int s = (int)window_scale(), top = sg(MENUBAR_H) / s + 8, bottom = gui_dock_band_top() - 22, w = *win_rc[t][2], h = *win_rc[t][3], right = (int)fb_w / s - w;
     if (nx > right) nx = right;
     if (nx < 0) nx = 0;
-    if (ny > bottom - win_lh) ny = bottom - win_lh;
+    if (ny > bottom - h) ny = bottom - h;
     if (ny < top) ny = top;
-    if (nx == win_lx && ny == win_ly) return;
-    int ox = win_lx * s, oy = win_ly * s, w = win_lw * s, h = win_lh * s, px = nx * s, py = ny * s, dx = px - ox, dy = py - oy;
-    cur_hide();
-    for (int j = 0; j < h; j++) {   /* a memmove by rows: the far rows first when moving down, the far columns first when moving right */
-        int r = dy > 0 ? h - 1 - j : j;
-        unsigned *src = fb + (unsigned)(oy + r) * fb_pitch + (unsigned)ox, *dst = fb + (unsigned)(py + r) * fb_pitch + (unsigned)px;
-        if (dx > 0) for (int i = w - 1; i >= 0; i--) dst[i] = src[i];
-        else for (int i = 0; i < w; i++) dst[i] = src[i];
-    }
-    unsigned wall = fb_color(0x00B5502C);   /* the old rectangle minus the new one, row by row */
-    for (int j = 0; j < h; j++) {
-        int y = oy + j, inside = y >= py && y < py + h, a = ox, b = ox + w;
-        if (inside) { if (dx > 0) b = px < b ? px : b; else a = px + w > a ? px + w : a; }
-        for (int x = a; x < b; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = wall;
-    }
-    win_lx = nx; win_ly = ny;
-    con_x += dx; con_y += dy; con_wx += dx; con_wy += dy;   /* con_layout's origin and the title bar's "lines N-M" follow; the size, and so the rows and columns, are unchanged */
-    int ux = ox < px ? ox : px, uy = oy < py ? oy : py;
-    fb_flush(ux, uy, w + (dx < 0 ? -dx : dx), h + (dy < 0 ? -dy : dy));
+    win_set(t, nx, ny, w, h);
+}
+static void win_resize_to(int lx, int ly) {   /* the pointer is at (lx, ly): the grabbed edges follow it, the others stay */
+    int t = drag_t, s = (int)window_scale(), bottom = gui_dock_band_top() - 22, sw = (int)fb_w / s, mnw, mnh;
+    int x = *win_rc[t][0], y = *win_rc[t][1], w = *win_rc[t][2], h = *win_rc[t][3], r = x + w, nx = x, nw = w, nh = h;
+    win_limits(t, &mnw, &mnh);
+    if (rs_on & RS_R) nw = lx - rs_dx - x;
+    if (rs_on & RS_L) { nx = lx - rs_dx; nw = r - nx; }
+    if (rs_on & RS_B) nh = ly - rs_dy - y;
+    if (rs_on & RS_R) { if (nw > sw - x) nw = sw - x; }
+    if (rs_on & RS_L) { if (nw > r) nw = r; }
+    if (nw < mnw) nw = mnw;
+    if (nh > bottom - y) nh = bottom - y;
+    if (nh < mnh) nh = mnh;
+    if (rs_on & RS_L) nx = r - nw;
+    if (t == WT_APP && (unsigned long)(nw - 16) * (unsigned)(nh - 40) * 4 > UWIN_MAX) return;   /* the app's buffer must fit its mapped window: the size stays where it last fit */
+    win_set(t, nx, y, nw, nh);
 }
 static void drag_end(void) {
-    if (!drag_on) return;
-    drag_on = 0;
-    con_quiet = 1; uart_puts("window at "); uart_dec((unsigned)win_lx); uart_putc(','); uart_dec((unsigned)win_ly); uart_putc('\n');
+    if (!drag_on && !rs_on) return;
+    int t = drag_t, was_sizing = rs_on;
+    drag_on = rs_on = 0;
+    con_quiet = 1; uart_puts("window at "); uart_dec((unsigned)*win_rc[t][0]); uart_putc(','); uart_dec((unsigned)*win_rc[t][1]); uart_putc('\n');
+    if (was_sizing) {
+        con_quiet = 1; uart_puts("window size "); uart_dec((unsigned)*win_rc[t][2]); uart_putc('x'); uart_dec((unsigned)*win_rc[t][3]); uart_putc('\n');
+        if (t == WT_APP && app_wbytes && (app_cw != app_bw || app_ch != app_bh)) app_note_resize();   /* an event the full ring dropped is asked again */
+    }
 }
 static void pointer_moved(void) {   /* one report done: the arrow to its new place, the dock's label to the slot under it */
     if (!fb) return;
     int s = (int)window_scale(), slot = gui_dock_hit_test((int)mouse_x / s, (int)mouse_y / s);
-    if (drag_on) { if (win_draggable()) win_move_to((int)mouse_x / s - drag_dx, (int)mouse_y / s - drag_dy); else drag_on = 0; }
+    if (drag_on || rs_on) {
+        if (win_target() != drag_t) drag_on = rs_on = 0;
+        else if (drag_on) win_move_to((int)mouse_x / s - drag_dx, (int)mouse_y / s - drag_dy);
+        else win_resize_to((int)mouse_x / s, (int)mouse_y / s);
+    }
     if (brick_live) brick_mouse((int)mouse_x / s, (int)mouse_y / s);
     cur_wanted = 1;
     cur_hide();
@@ -1883,7 +2011,9 @@ static void pointer_click(void) {   /* the left button went down */
     if (spot_live && slot < 0) return;   /* the bar is over the windows: a raise under it would leave its saved pixels stale */
     int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);
     int on_app = app_wbytes && in_box(lx, ly, app_lx, app_ly, app_lw, app_lh);
-    if (slot < 0 && win_draggable() && on_title_band(lx, ly)) { drag_on = 1; drag_dx = lx - win_lx; drag_dy = ly - win_ly; return; }   /* the title band takes hold of the window */
+    int wt = slot < 0 ? win_target() : -1, grab = wt >= 0 ? win_grab(wt, lx, ly) : 0;   /* the front window's title band or an edge takes hold of it */
+    if (grab == GRAB_TITLE) { drag_on = 1; drag_t = wt; drag_dx = lx - *win_rc[wt][0]; drag_dy = ly - *win_rc[wt][1]; return; }
+    if (grab) { rs_on = grab; drag_t = wt; rs_dx = lx - (*win_rc[wt][0] + *win_rc[wt][2]); rs_dy = ly - (*win_rc[wt][1] + *win_rc[wt][3]); if (grab & RS_L) rs_dx = lx - *win_rc[wt][0]; return; }
     if (slot == 0) calc_open();   /* Apps tile opens Calculator; Brick and Clock are in Spotlight. */
     else if (brick_live && slot < 0) {
         if (spot_live) return;
@@ -2358,9 +2488,6 @@ static void fb_desktop(void) {
     /* Slice 5: the Calculator's own frame, over the right of the Console's so both show, clear of the line above the dock */
     calc_lw = 280; calc_lx = lx + lw - 150; if (calc_lx + calc_lw > W / s - 8) calc_lx = W / s - 8 - calc_lw;
     calc_ly = ly + 40; calc_lh = gui_dock_band_top() - 22 - calc_ly; if (calc_lh > 300) calc_lh = 300;
-    calc_under = kmalloc((unsigned)(calc_lw * s * calc_lh * s) * 4);
-    if (calc_under) { for (int j = 0; j < calc_lh * s; j++) for (int i = 0; i < calc_lw * s; i++) calc_under[j * calc_lw * s + i] = fb[(unsigned)(calc_ly * s + j) * fb_pitch + (unsigned)(calc_lx * s + i)]; }
-    else uart_puts("oom calculator\n");                    /* the Apps tile then opens nothing */
     /* M3c part 2: an EL0 app's window, placed like the Calculator's, then moved up and cut to fit above the dock's band */
     /* Scale 1 keeps 576x400. At scale 2 (1080p) an app is the Console's size plus a little: its 1x buffer is smoothed up to 2x,
        so a window as big as the 576x400 one would be soft and look huge beside the Terminal. */
@@ -2372,9 +2499,7 @@ static void fb_desktop(void) {
         if (app_ly < top) { app_ly = top; app_lh = bottom - top; }
     }
     app_cw = (unsigned)(app_lw - 16); app_ch = (unsigned)(app_lh - 40);
-    app_under = kmalloc((unsigned)(app_lw * s * app_lh * s) * 4);
-    if (app_under) { for (int j = 0; j < app_lh * s; j++) for (int i = 0; i < app_lw * s; i++) app_under[j * app_lw * s + i] = fb[(unsigned)(app_ly * s + j) * fb_pitch + (unsigned)(app_lx * s + i)]; }
-    else uart_puts("oom app window\n");                    /* an app then gets -ENODEV for its window and says so */
+    win_def[WT_MAIN][0] = lw; win_def[WT_MAIN][1] = lh; win_def[WT_CALC][0] = calc_lw; win_def[WT_CALC][1] = calc_lh; win_def[WT_APP][0] = app_lw; win_def[WT_APP][1] = app_lh;
 #ifndef QUIET_BOOT
     console_frame();
 #endif
