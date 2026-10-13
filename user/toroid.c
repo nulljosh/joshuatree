@@ -3,7 +3,7 @@
  * The second app to leave the kernel (roadmap 2.0), done exactly the way
  * user/keyrate.c was. Same game drivers/app_toroid.c ran in ring 0: both
  * edges wrap, a quarter of the cells start alive, space pauses, r reseeds,
- * c clears (and pauses), a click toggles a cell, a click off the grid or
+ * c clears (and pauses), s steps one generation while paused, a click toggles a cell, a click off the grid or
  * esc closes. Built with no kernel include path, linked flat, loaded off
  * the VFS by exec_user, and it reaches the machine only through int 0x80:
  * SYS_WINDOW_OPEN for a framebuffer, SYS_WINDOW_POLL for input and the
@@ -105,7 +105,7 @@ static void tr_draw(void) {
     if (tr_paused) x = text("   paused", x, ly, HINT);
     {   const char *h = "space pause   r reseed   c clear   click a cell   esc closes";
         int hx = (int)win.width - TR_PAD - jt_text_width(JT_FACE_BODY, h);
-        if (hx < x + 24) { h = "space  r  c  esc"; hx = (int)win.width - TR_PAD - jt_text_width(JT_FACE_BODY, h); }
+        if (hx < x + 24) { h = "space  s  r  c  esc"; hx = (int)win.width - TR_PAD - jt_text_width(JT_FACE_BODY, h); }
         if (hx >= x + 24) text(h, hx, ly, HINT);
     }
 }
@@ -159,6 +159,7 @@ void _start(int argc, char **argv) {
                     *(volatile int *)0 = 1;
                 }
                 if (ev.a == ' ') tr_paused = !tr_paused;
+                else if (ev.a == 's' && tr_paused) tr_step(); /* paused: one generation per press */
                 else if (ev.a == 'r') tr_reseed();
                 else if (ev.a == 'c') { tr_clear(); tr_paused = 1; }
             }

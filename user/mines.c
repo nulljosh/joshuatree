@@ -110,8 +110,9 @@ static void draw(void) {
     text(won ? "You won." : over ? "Boom. r deals again." : "10 mines", tx, ty + 28, won ? NUM[2] : over ? NUM[3] : HINT);
     utoa10((unsigned)opened, num);
     int x2 = text("opened ", tx, ty + 52, HINT); text(num, x2, ty + 52, HINT);
-    text("click or space reveals   f flags   arrows move", tx, ty + 90, HINT);
-    text("r new board   esc closes", tx, ty + 112, HINT);
+    text("click or space reveals", tx, ty + 90, HINT);
+    text("f flags   arrows move", tx, ty + 112, HINT);
+    text("r new board   esc closes", tx, ty + 134, HINT);
 }
 
 __attribute__((section(".text.start"), used))

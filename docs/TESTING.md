@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (257 checks)
+## The suite (258 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -17,6 +17,7 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Pi screen sleep: idle deadline, wrap, active apps, refused mailbox requests and keyboard/mouse wake | `tools/checks/arm64-screen-idle-check.py` | once |
 | Brick on ARM: collision rules, lives and win under sanitizers; keyboard/mouse play, timed animation, pause, restart, Spotlight and close in QEMU | `tools/checks/arm64-brick-check.py` | once |
 | Spotlight on ARM lists every app including the Calculator on an empty query, typing calc shows it and Enter opens the window, in headless QEMU | `tools/checks/arm64-spotlight-check.py` | once |
+| Games on the Pi: Spotlight opens Mines, Toroid, Hamurapi and Keyrate at EL0, a reveal (key and click), a generation, a year and a typed word each change the pixels, Esc closes each, in headless QEMU | `tools/checks/arm64-games-check.py` | once |
 | Pi keyboard shutdown and restart: confirmed HID chords halt or reboot raspi4b, Escape cancels, busy and hidden prompts refuse (host and QEMU) | `tools/checks/arm64-power-check.py` | once |
 | CI tooling preserves shared ARM shard affinity and rejects fixed test paths before builds (host only) | `tools/checks/ci-tooling-check.py` | once |
 | Dock slot constants agree with kernel.c (static drift guard) | `tools/checks/dockslots-check.py` | once |
@@ -286,11 +287,11 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Samantha | `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-box-check.py`, `tools/checks/samantha-clock-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs` |
 | Curbfind | `tools/checks/ring3curbfind-check.py` |
-| Keyrate | `tools/checks/ring3app-check.py` |
+| Keyrate | `tools/checks/arm64-games-check.py`, `tools/checks/ring3app-check.py` |
 | Bookrank | `tools/checks/ring3bookrank-check.py`, `tools/checks/ring3bookrank-live-check.py` |
 | Quotes | `tools/checks/ring3quotes-check.py`, `tools/checks/stocks-live-check.mjs` |
 | Tonchi | `tools/checks/ring3tonchi-check.py`, `tools/checks/ring3tonchi-live-check.py` |
-| Toroid | `tools/checks/ring3toroid-check.py` |
+| Toroid | `tools/checks/arm64-games-check.py`, `tools/checks/ring3toroid-check.py` |
 | Hikko | `tools/checks/ring3hikko-check.py`, `tools/checks/ring3hikko-live-check.py` |
 | Fieldbook | `tools/checks/ring3fieldbook-check.py` |
 | Contacts | `tools/checks/ring3contacts-check.py` |
@@ -303,11 +304,11 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | Clock | `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-clock-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-music-check.py`, `tools/checks/clock-check.py`, `tools/checks/clockicon-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/movie-check.py`, `tools/checks/ring3clock-check.py`, `tools/checks/ring3windgate-check.py`, `tools/checks/samantha-clock-check.py` |
 | Music | `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-mascot-empty-check.py`, `tools/checks/arm64-music-check.py`, `tools/checks/music-check.py`, `tools/checks/music-qa-check.py` |
 | Movies | `tools/checks/movie-check.py` |
-| Hamurapi | `tools/checks/ring3hamurabi-check.py` |
+| Hamurapi | `tools/checks/arm64-games-check.py`, `tools/checks/ring3hamurabi-check.py` |
 | Windgate | `tools/checks/ring3windgate-check.py` |
 | Panes | `tools/checks/panes-check.py` |
 | Claude | `tools/checks/arm64-claude-console-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3claude-check.py` |
-| Mines | `tools/checks/ring3mines-check.py` |
+| Mines | `tools/checks/arm64-games-check.py`, `tools/checks/ring3mines-check.py` |
 | Books | `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-mascot-empty-check.py`, `tools/checks/books-check.py` |
 | Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | none yet |

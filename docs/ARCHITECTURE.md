@@ -168,7 +168,8 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `arch/arm64/notice.h` | One bounded menu message; a newer one replaces it and it expires after four seconds, including timer wrap. |
 | `arch/arm64/brick.h`, `arch/arm64/brick_ui.h`, `tools/checks/arm64-brick-check.py` | Original brick-breaker rules and ARM window: 32 bricks, three lives, arrows or mouse, pause and restart. Hardware-counter animation; host physics and QEMU input/pixel checks. |
 | `arch/arm64/power.h`, `tools/checks/arm64-power-check.py` | Pi keyboard shutdown and restart, explicit confirmation and cancellation, VideoCore SD power-off and watchdog reset; host safety checks and real raspi4b shutdown/reboot tests. |
-| `tools/checks/arm64-spotlight-check.py` | Boots the ARM kernel headless in QEMU, presses F1: an empty query lists all 17 apps, typing calc shows exactly Calculator, Enter opens its window. |
+| `tools/checks/arm64-spotlight-check.py` | Boots the ARM kernel headless in QEMU, presses F1: an empty query lists all 21 apps, typing calc shows exactly Calculator, Enter opens its window. |
+| `tools/checks/arm64-games-check.py` | Boots the ARM kernel headless in QEMU and opens Mines, Toroid, Hamurapi and Keyrate from Spotlight (the unchanged `user/*.c` at EL0): a reveal by key and by click, one Toroid generation (`s` while paused), one Classic 1968 year and a typed word each change the pixels, and Esc closes each. |
 | `tools/gen/ci-balance.py` | Rebalances the CI shards. Reads how long each check took in a finished run and rewrites the shard numbers in `tools/checks/ci-suite.sh` while preserving shard 6 for shared ARM builds. |
 | `tools/checks/ci-tooling-check.py` | Host fixtures prove ARM builds stay together when balancing and a fixed test path stops local CI before builds. |
 | `tools/ci-local.sh`, `tools/hooks/pre-push` | Run the fixed-path guard before builds; local CI then runs the release suite with two workers. |

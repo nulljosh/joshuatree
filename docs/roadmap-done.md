@@ -371,3 +371,7 @@ Check: `tools/checks/arm64-crash-check.py` (the Pi image faults behind the splas
 
 `pick <sentence>` names the tool Samantha's hands would reach for, from a 15K-weight integer model in freestanding C (`kernel/picker.c`). On Turing's nine dev sets the Python reference gets 3,820 of 4,455 tool picks right (85.8 percent); the C matches it on all 297 golden sentences. Arguments and the guard stay with the full model, this picks the tool only.
 Check: `tools/checks/picker-check.sh` (QEMU, no network): `pickcheck: 297/297 ok` and four typed sentences.
+
+## 3.19.0 development branch (2026-10-12)
+
+Four games run on the Pi: Mines, Toroid, Hamurapi and Keyrate open from Spotlight (21 rows now, a little tighter so the list clears the dock) as the same `user/*.c` the i386 build runs, built for EL0 with no fork. The ARM kernel gained the uptime call Hamurapi paces itself with (`JT_SYS_TASKS`, ticks only). Toroid steps one generation with `s` while paused, and Mines' help text no longer runs off its window. Check: `tools/checks/arm64-games-check.py`.

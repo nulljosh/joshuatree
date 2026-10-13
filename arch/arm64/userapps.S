@@ -18,6 +18,10 @@
     app notes
     app music
     app books
+    app mines
+    app toroid
+    app hamurabi
+    app keyrate
 
 /* M3c part 2: loop, the scheduler's test program, made by hand in the same image format: one code page, then the trailer
    { "JTU1", 4096 bytes of code, an empty relocation list }. It asks for its window, then yields forever: it never polls,
@@ -98,6 +102,10 @@ fpkeep_img_end:
 .Lname_notes:    .asciz "notes"
 .Lname_music:    .asciz "music"
 .Lname_books:    .asciz "books"
+.Lname_mines:    .asciz "mines"
+.Lname_toroid:   .asciz "toroid"
+.Lname_hamurabi: .asciz "hamurabi"
+.Lname_keyrate:  .asciz "keyrate"
 .Lname_loop:     .asciz "loop"
 .Lname_fpkeep:   .asciz "fpkeep"
 
@@ -109,6 +117,10 @@ user_apps:
     .quad .Lname_notes, notes_img, notes_img_end
     .quad .Lname_music, music_img, music_img_end
     .quad .Lname_books, books_img, books_img_end
+    .quad .Lname_mines, mines_img, mines_img_end
+    .quad .Lname_toroid, toroid_img, toroid_img_end
+    .quad .Lname_hamurabi, hamurabi_img, hamurabi_img_end
+    .quad .Lname_keyrate, keyrate_img, keyrate_img_end
     .quad .Lname_loop, loop_img, loop_img_end
     .quad .Lname_fpkeep, fpkeep_img, fpkeep_img_end
     .quad 0, 0, 0
