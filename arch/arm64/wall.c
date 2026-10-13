@@ -1,7 +1,7 @@
-/* The ARM desktop's wallpaper: one flat colour. The default is the brand terracotta #b5502c (docs/DESIGN.md); Settings can pick
+/* The ARM desktop's wallpaper: one flat colour. The default is calm graphite grey #6E6E6E (3.8.3, was the brand terracotta); Settings can pick
    another flat colour (settings.c). The Satellite photo this replaced (3.0.0) decoded a PNG at boot; this writes the screen in
    one pass and needs no decoder, no heap. */
-static unsigned wall_rgb = 0x00B5502Cu;
+static unsigned wall_rgb = 0x006E6E6Eu;
 
 void wall_set(unsigned rgb) { wall_rgb = rgb & 0x00FFFFFFu; }
 unsigned wall_get(void) { return wall_rgb; }

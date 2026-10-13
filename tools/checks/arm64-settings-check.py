@@ -59,25 +59,25 @@ void kdec(unsigned v) { printf("%u", v); }
 int main(void) {
     char out[64]; unsigned n = settings_format(out, 70, 0, 7);
     assert(n == 24 && !memcmp(out, "volume=70\nwall=0\ndock=7\n", 24));
-    n = settings_format(out, 100, 2, 25); assert(!memcmp(out, "volume=100\nwall=2\ndock=25\n", n));
+    n = settings_format(out, 100, 3, 25); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\n", n));
     int v = 1, w = 1, d = 7; const char *t;
-    t = "volume=40\nwall=2\ndock=12\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 40 && w == 2 && d == 12);
-    v = 1; w = 1; d = 7; t = "volume=101\nwall=3\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 1 && w == 1 && d == 7);
+    t = "volume=40\nwall=3\ndock=12\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 40 && w == 3 && d == 12);
+    v = 1; w = 1; d = 7; t = "volume=101\nwall=4\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 1 && w == 1 && d == 7);
     t = "volume=26\nwall=1\ndock=26\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 26 && w == 1 && d == 7);
     t = "volume=12345\nvolume\n=5\nwall=x\nwall=\ndock=9z\nvolumes=5\n"; v = 1; w = 1; d = 7; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 1 && w == 1 && d == 7);
-    t = "volume=55\r\nwall=2\r\ndock=20"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 55 && w == 2 && d == 20);   /* CRLF, and no final newline */
+    t = "volume=55\r\nwall=3\r\ndock=20"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 55 && w == 3 && d == 20);   /* CRLF, and no final newline */
     t = "dock=5"; settings_parse(t, 6, &v, &w, &d); assert(d == 5);
     t = "dock=55"; settings_parse(t, 6, &v, &w, &d); assert(d == 5);   /* cut at 6 bytes: 5 and a stray byte, taken as 5, never read past n */
     settings_parse("", 0, &v, &w, &d);
-    assert(settings_walls() == 3 && !strcmp(settings_wall_name(0), "Terracotta") && settings_wall_rgb(0) == 0x00B5502Cu && settings_wall_rgb(2) == 0x00141311u);
-    settings_set_wall(-1); assert(settings_wall() == 2 && wall_rgb == 0x00141311); settings_set_wall(3); assert(settings_wall() == 0 && wall_rgb == 0x00B5502C);
+    assert(settings_walls() == 4 && !strcmp(settings_wall_name(0), "Grey") && settings_wall_rgb(0) == 0x006E6E6Eu && !strcmp(settings_wall_name(1), "Terracotta") && settings_wall_rgb(1) == 0x00B5502Cu && settings_wall_rgb(3) == 0x00141311u);
+    settings_set_wall(-1); assert(settings_wall() == 3 && wall_rgb == 0x00141311); settings_set_wall(4); assert(settings_wall() == 0 && wall_rgb == 0x006E6E6E);
     settings_set_dock(2); assert(settings_dock() == 5); settings_set_dock(99); assert(settings_dock() == 25); settings_set_dock(7);
-    vol = 30; settings_set_wall(1); settings_set_dock(11); settings_save();
-    assert(settings_saved() == 1 && file_len == 25 && !memcmp(file, "volume=30\nwall=1\ndock=11\n", 25));
+    vol = 30; settings_set_wall(2); settings_set_dock(11); settings_save();
+    assert(settings_saved() == 1 && file_len == 25 && !memcmp(file, "volume=30\nwall=2\ndock=11\n", 25));
     vol = 70; settings_set_wall(0); settings_set_dock(7); repaints = 0; wall_rgb = 0; settings_load();
-    assert(vol == 30 && settings_wall() == 1 && wall_rgb == 0x00923F20 && settings_dock() == 11 && repaints == 1 && settings_saved() == 1);
+    assert(vol == 30 && settings_wall() == 2 && wall_rgb == 0x00923F20 && settings_dock() == 11 && repaints == 1 && settings_saved() == 1);
     repaints = 0; settings_load(); assert(repaints == 0);   /* nothing changed: no repaint */
-    card = 0; vol = 20; settings_save(); assert(settings_saved() == -1 && vol == 20 && settings_wall() == 1);   /* no card: said, and the choices stay */
+    card = 0; vol = 20; settings_save(); assert(settings_saved() == -1 && vol == 20 && settings_wall() == 2);   /* no card: said, and the choices stay */
     file_len = -1; card = 1; vol = 70; settings_load(); assert(vol == 70);                                         /* no file: nothing changes */
     puts("PASS: settings.c file text, bounded parsing, load, save and the no-card case");
     return 0;
@@ -107,6 +107,7 @@ if mt("mmd", "::JT").returncode: print("FAIL: mtools could not make JT/ on the c
 
 W, H = 800, 600
 WX, WY, WW, WH = (W - 500) // 2, 100, 500, 350      # the window: the Console's rectangle (fb_desktop)
+GREY = (0x6e, 0x6e, 0x6e)
 ACCENT, CLAY, INK, TERRA, RED, GLYPH = (0xb5, 0x50, 0x2c), (0x92, 0x3f, 0x20), (0x14, 0x13, 0x11), (0xb5, 0x50, 0x2c), (0xff, 0x5f, 0x57), (0xfa, 0xf8, 0xf4)
 def bar(c): return tuple(((v >> 1) & 0x7f) + 0x80 for v in c)    # the menu bar over a wallpaper colour: half itself, half white
 fails_boot = []
@@ -183,8 +184,8 @@ try:
         check("the desktop and the card come up", False, S.uart()[-600:]); raise SystemExit
     S.connect(); time.sleep(0.8)
     base = S.shot()
-    check("boot: no settings file on a fresh card, the wallpaper is terracotta and the clock page has no card message yet",
-          "settings loaded" not in S.uart() and px(base, 30, 300) == TERRA)
+    check("boot: no settings file on a fresh card, the wallpaper is grey (the default) and the clock page has no card message yet",
+          "settings loaded" not in S.uart() and px(base, 30, 300) == GREY)
     icons = re.search(r"menubar icons power (\d+)-(\d+) sound (\d+)-(\d+) wifi (\d+)-(\d+) clock (\d+)-(\d+)", S.uart())
     check("the menu bar says where its four status icons are, left to right: power, sound, Wi-Fi, clock",
           bool(icons) and all(int(icons.group(i)) < int(icons.group(i + 1)) for i in (1, 3, 5, 7)) and int(icons.group(2)) < int(icons.group(3)) and int(icons.group(4)) < int(icons.group(5)), S.uart()[-500:])
@@ -223,7 +224,11 @@ try:
     check("Up wraps to Date and Time", S.press("up", "settings section 4 Date and Time\n"))
     check("Up, Up, Up: Sound, Display ... ", S.press("up", "settings section 3 Dock\n") and S.press("up", "settings section 2 Sound\n") and S.press("up", "settings section 1 Display\n"))
     # ---- wallpaper ----
-    check("Right in Display: wallpaper 1, Clay", S.press("right", "settings wall 1 Clay\n"))
+    check("Right in Display: wallpaper 1, Terracotta (Grey is first and the default)", S.press("right", "settings wall 1 Terracotta\n"))
+    time.sleep(0.5)
+    t_ = S.shot()
+    check("Terracotta everywhere the wallpaper shows", all(px(t_, x, y) == TERRA for x, y in [(30, 300), (770, 300), (60, 560), (100, 90)]), [px(t_, x, y) for x, y in [(30, 300), (770, 300), (60, 560), (100, 90)]])
+    check("Right again: wallpaper 2, Clay", S.press("right", "settings wall 2 Clay\n"))
     check("... and it is saved", S.wait_for("settings saved\n", 6))
     time.sleep(0.5)
     c = S.shot()
@@ -231,11 +236,11 @@ try:
     check("the whole desktop is Clay: wallpaper at four places", all(px(c, x, y) == CLAY for x, y in spots), [px(c, x, y) for x, y in spots])
     check("the menu bar was blended again over the new colour (half Clay, half white)", px(c, 300, 8) == bar(CLAY), (px(c, 300, 8), bar(CLAY)))
     check("the window is back on top of the new desktop and the dock is whole (its cream tray, not Clay)", px(c, WX + 19, WY + 16) == RED and px(c, W // 2, H - 60) not in (CLAY, TERRA), (px(c, WX + 19, WY + 16), px(c, W // 2, H - 60)))
-    check("Right again: wallpaper 2, Ink", S.press("right", "settings wall 2 Ink\n"))
+    check("Right again: wallpaper 3, Ink", S.press("right", "settings wall 3 Ink\n"))
     time.sleep(0.5)
     d = S.shot()
     check("Ink everywhere the wallpaper shows", all(px(d, x, y) == INK for x, y in spots), [px(d, x, y) for x, y in spots])
-    check("Left: back to Clay", S.press("left", "settings wall 1 Clay\n"))
+    check("Left: back to Clay", S.press("left", "settings wall 2 Clay\n"))
     time.sleep(0.5)
     n = len(S.uart()); S.key("esc")
     check("Esc closes Settings", S.wait_for("settings closed\n", 6, n))
@@ -300,12 +305,12 @@ finally:
 # ---- the card: what the first boot left, and a second boot on the same card ----
 r = mt("mtype", "::JT/SETTINGS.TXT")
 text = r.stdout.decode(errors="replace")
-check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=1\ndock=8\n", text)
+check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\n", text)
 S = Session("b")
 try:
     if not S.wait_for("M2 input ready", 60) or not S.wait_for("settings loaded", 30):
         check("the second boot loads the file", False, S.uart()[-600:]); raise SystemExit
-    check("second boot: it says what it loaded", "settings loaded volume 20 wall 1 dock 8\n" in S.uart(), S.uart()[-400:])
+    check("second boot: it says what it loaded", "settings loaded volume 20 wall 2 dock 8\n" in S.uart(), S.uart()[-400:])
     S.connect(); time.sleep(1.0)
     g = S.shot()
     check("and the desktop is Clay without opening anything (the card was read after the desktop was drawn, which repainted it)", px(g, 30, 300) == CLAY and px(g, 400, 8) == bar(CLAY), (px(g, 30, 300), px(g, 400, 8)))

@@ -1380,6 +1380,7 @@ static void splash_mark(int cx, int cy, int T, unsigned ink, unsigned bg) {
         for (int sh = 0; sh <= 16; sh += 8) out |= ((((ink >> sh) & 0xFF) * a + ((bg >> sh) & 0xFF) * (255 - a)) / 255) << sh;
         fb_rect(ox + col, oy + row, 1, 1, out);
     }
+    fb_flush(ox, oy, T, T);   /* out of the data cache to RAM: the GPU reads RAM, so unflushed rows reached the Pi screen as torn slivers */
 }
 #endif
 static void menu_mark_paint(int cx, int cy, int T, unsigned ink) {
@@ -2517,6 +2518,7 @@ static void splash_step(int n, const char *name) {
 static void splash_begin(void) {
     int W = (int)fb_w, H = (int)fb_h;
     fb_rect(0, 0, W, H, 0x00E5E5E7);
+    fb_flush(0, 0, W, H);
     splash_mark(W / 2, H / 2 - sg(30), sg(150), 0x001C1C1E, 0x00E5E5E7);
     splash_on = 1;
     uart_puts("splash up\n");

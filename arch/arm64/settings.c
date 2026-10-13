@@ -13,11 +13,11 @@ void desktop_wall_changed(void);      /* main.c: repaint the desktop if it is up
 void kputs(const char *s); void kdec(unsigned v);   /* main.c: the UART (and the Console) */
 
 #define SET_FILE "SETTINGS.TXT"
-#define SET_WALLS 3
+#define SET_WALLS 4
 #define SET_DOCK_MIN 5
 #define SET_DOCK_MAX 25
 static const struct { const char *name; unsigned rgb; } walls[SET_WALLS] = {
-    { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u } };
+    { "Grey", 0x006E6E6Eu }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u } };
 static int wall_pick;                 /* index into walls */
 static int saved_state;               /* 0 not yet saved, 1 on the card, -1 no card or the card refused it */
 
