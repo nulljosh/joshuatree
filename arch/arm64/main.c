@@ -2754,11 +2754,11 @@ static void m1_selftest(void) {
 /* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock, Brick, Browser and Settings are available; other names return 0. */
 int app_open_name(const char *name) {
     if ((name[0] | 32) == 'm' && (name[1] | 32) == 'a' && (name[2] | 32) == 'i' && (name[3] | 32) == 'l' && !name[4]) { dock_activate(2); return 1; }   /* 3.15.0: the Mail tile */
-    static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser", "settings"};
-    for (unsigned a = 0; a < 6; a++) {
+    static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser", "settings", "weather"};
+    for (unsigned a = 0; a < 7; a++) {
         const char *w = openable[a]; unsigned i = 0;
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
-        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); else if (a == 5) settings_open(0); return 1; }
+        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); else if (a == 5) settings_open(0); else if (a == 6) dock_activate(8); return 1; }
     }
     static const char *const finder[] = {"finder", "burrow", "files"};   /* 3.14.0: Samantha's [[open Finder]] starts user/finder.c, as the Burrow tile and Spotlight do */
     for (unsigned a = 0; a < 3; a++) {
