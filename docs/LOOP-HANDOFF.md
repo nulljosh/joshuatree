@@ -1,27 +1,41 @@
-# Joshua Tree handoff (2026-10-12)
+# Joshua Tree loop handoff (2026-10-12, late night)
 
-## The goal
+## What the loop is
 
-Joshua, 2026-10-11: "/loop until v3", then "v3 today. No issues, no stale branches. All PRs merged safely. All changes flashed to SD." Version 3.0.0 "Hold it" cuts when the desktop boots on a real Raspberry Pi 4 and you can type and click on it, mouse included, with apps in user mode. The board pass that proves it is [BOARD-TEST.md](BOARD-TEST.md).
+A `/loop` that works Joshua Tree one tick at a time, all day and night until year end. Each tick reads `~/.claude/loops/joshuatree.md` and does the every-tick steps: the merge chain, one agent at a time, Nimbus grading, and the rules below. Goal order: 3.9.0 first, then 4.0 (many windows at once, mobile first), then 5.0 (talk to it).
 
-## Where it stands
+## Where things stand
 
-Every PR in the v3 queue is merged (2.43.0 to 2.62.0, twenty of them, 2026-10-11 into the night): typing into apps, Samantha from Turing through the Mac relay, relay discovery over UDP with pinned TLS, volume, user mode on ARM (hello, Calendar, Notes, Music at EL0 with windows, files and sound), Bluetooth radio and mouse pairing, Caps Lock and key repeat, SD card read and write, Notes autosave, the 3.0 mark, Samantha's clock, Pi screen sleep, Music's QA pass with ID3 titles, covers, durations and draggable bars, the Calendar landing tile, and Tree Sans with a type system on the landing page. Zero open issues, no stale branches.
+Main is 3.8.4: a grey boot splash with a crisp logo, a graphite grey ARM wallpaper, and a picker that leaves questions about its own topics alone.
 
-The dev card carries main 2.62.0 (flashed 2026-10-12 at the desk). The Tree Sans OS build (2.63.0, PR open) and this release are not on it yet.
+PR 594 (draft, branch feat/pi-stack, "3.9.0: the Pi gets every app") folds the ten Pi-stack PRs into one. Its local CI run (tools/ci-local.sh) is live from the jt-stack worktree. It is not merged.
 
-## State, 2026-10-12 late
+On the real Pi card tested tonight, the desktop boots and the Bluetooth mouse reconnects by itself. Multi-window is still broken, the boot bar is choppy, and the wallpaper still shows terracotta.
 
-Main is 3.7.0 (this PR, the mascot on the empty Music and Books screens). Merged since 3.5.0: 3.6.0 drag a window by its title, 3.6.1 the Browser stops flickering, 3.6.2 reboot works after Samantha answers, 3.6.3 guide chapters for the Pi apps. Remaining PRs: #560 docs and #563 quiet boot.
+PR 596 (draft, branch v10-picker-topics, 3.8.4) carries the small picker: parity 297 of 297, 81.2 percent right on pooled dev, and 20 false tool calls in 434 chat questions. Those numbers are tuned to dev. The sealed sets are still unread, so no done claim yet.
 
-## Not yet seen on the board
+PR 589 (draft, Nimbus, 3.11.0) reached round 7, graded A. PR 595 (draft) is the system design ideas doc, and PR 593 (draft) is the changelog and graphs.
 
-Bluetooth pairing has only run against QEMU's fake radio. Sound out of the jack, Music through DMA, SD writes, user mode apps and screen sleep are all proven in QEMU and never on the real Pi. The board pass is the gate: when it passes, 3.0.0 is released; what fails becomes the first 3.0.x.
+Other drafts from 568 to 591 cover the Pi apps (Finder, Mail, Weather, Stocks, Reminders, Settings, games), window resize, clipboard, sharp apps at 2x, the tree menu, sam as a Terminal chat, and Nimble on the Pi. Three PRs are open and not drafts: 574 (clay wallpaper), 569 (sample song) and 560 (daily driver gaps). Check their CI before the next merge chain.
 
-## After 3.0
+Bench is DEFERRED while ci-local runs for PR 594.
 
-4.0: many windows at once, mobile first. 5.0: talk to it. A Joshua Tree MCP server (boot, type, screenshot, serial, one check, flash, queue) is the first tool after 3.0.
+## Next, in order
+
+1. Let the ci-local run for PR 594 finish. If it is green, take it through the merge chain, flash the dev card only, and board-test multi-window, the boot bar and the wallpaper.
+2. Fix what the board finds on the 3.9 line: multi-window, the choppy boot bar, the terracotta wallpaper.
+3. Merge the open drafts one at a time, rebased on main, each with its own green CI.
+4. Run PR 596 through a full ci-local and a fresh sealed set before calling the picker done.
+5. Keep grading Nimbus rounds on PR 589 until it reaches A+.
+6. Run the bench once nothing else is running, then open a draft PR with clean numbers.
+7. Then 4.0: many windows at once, mobile first.
+
+## Restart prompt
+
+```
+/loop Joshua Tree, all day and night until year end. Read /Users/joshua/.claude/loops/joshuatree.md and do one tick exactly as it says (every-tick steps, merge chain, agents, Nimbus grading, rules), then update its State and Log and re-arm with this same prompt.
+```
 
 ## Rules kept
 
-No bare `git stash` (shared across worktrees). Generated files (VERSION, landing/*, docs/TESTING.md) take main's side in a merge and are regenerated. No keys on the public card. Flash only the dev card. Every X.0.0 ships a refreshed logo and UI; 3.0 has the crayon tree on terracotta and Tree Sans.
+Never push to a branch while its CI is running, because the workflow cancels in-flight runs. PRs stay draft until tools/ci-local.sh passes. No bare `git stash`, since it is shared across worktrees. Generated files (VERSION, landing, docs/TESTING.md) take main's side in a merge and are regenerated. No keys on the public card. Flash only the dev card. Every X.0.0 ships a refreshed logo and UI.
