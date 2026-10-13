@@ -1,39 +1,54 @@
 # SPDX-License-Identifier: CC-BY-NC-SA-4.0
 # Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
-# A flat retail box mock for Nimbus: a cream box, the tree mark centred, "Joshua Tree" small beneath, nothing else. 1600 px wide JPEG.
-#   python3 docs/hardware/nimbus_box.py [out.jpg]      (needs Pillow and rsvg-convert)
-import os, sys, subprocess, tempfile
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageChops
+# The Nimbus retail box, a real 3D model: a cream matte lidded box, one seam, the tree mark centred on the lid, "Joshua Tree" small beneath, nothing else.
+# render_nimbus.py calls label() outside Blender and build() inside it (NIMBUS_BOX=1 python3 docs/hardware/render_nimbus.py).
+import os, subprocess, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "nimbus-box.jpg")
-W, H = 1600, 1100
-CREAM, INK, SWEEP = (0xEF, 0xEB, 0xE4), (0x1C, 0x1C, 0x1E), (0xC9, 0xC4, 0xBB)
-tmp = tempfile.mkdtemp(); mk = os.path.join(tmp, "mark.png")
-subprocess.run(["rsvg-convert", "-h", "480", "-o", mk, os.path.join(HERE, "..", "..", "landing", "mark-tree.svg")], check=True)      # the current brand mark (tools/gen/logo.py), ink with its terracotta ground
-bg = Image.new("RGB", (W, H), SWEEP); px = bg.load(); d = ImageDraw.Draw(bg)
-for y in range(H):                      # a soft vertical falloff, lighter toward the top like the renders
-    t = y / H; c = tuple(int(a + (b - a) * t) for a, b in zip((0xDD, 0xD8, 0xCF), (0xC4, 0xBF, 0xB6))); d.line([(0, y), (W, y)], fill=c)
-bw, bh, top = 920, 700, 150          # the box front
-x0, y0 = (W - bw) // 2, 250
-sh = Image.new("L", (W, H), 0); ImageDraw.Draw(sh).rectangle([x0 - 10, y0 + bh - 20, x0 + bw + 10, y0 + bh + 40], fill=90)
-sh = sh.filter(ImageFilter.GaussianBlur(38)); bg.paste((120, 114, 104), (0, 0), sh)
-lid = Image.new("RGB", (bw, bh), CREAM); dl = ImageDraw.Draw(lid)
-for y in range(bh):                      # one soft top light: a touch brighter at the top, a touch deeper at the foot
-    k = y / bh; c = tuple(int(v * (1.02 - 0.06 * k)) if v * (1.02 - 0.06 * k) < 255 else 255 for v in CREAM); dl.line([(0, y), (bw, y)], fill=c)
-bg.paste(lid, (x0, y0))
-d = ImageDraw.Draw(bg)
-d.rectangle([x0, y0 - 26, x0 + bw, y0], fill=(0xF6, 0xF2, 0xEB))              # the lid's top face, seen a little from above
-d.line([(x0, y0), (x0 + bw, y0)], fill=(0xD9, 0xD3, 0xC8), width=2)
-d.line([(x0, y0 + bh - 1), (x0 + bw, y0 + bh - 1)], fill=(0xD2, 0xCC, 0xC0), width=3)
-m = Image.open(mk).convert("RGBA"); a = m.split()[3]
-ink = m
-mx, my = x0 + (bw - m.width) // 2, y0 + 40
-bg.paste(ink, (mx, my), ink)
-f = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 34)
-txt, sp = "Joshua Tree", 5
-tw = sum(d.textlength(ch, font=f) + sp for ch in txt) - sp
-cx = x0 + (bw - tw) / 2; ty = my + int(m.height * 0.93) + 40
-for ch in txt:
-    d.text((cx, ty), ch, font=f, fill=(0x5A, 0x56, 0x4F)); cx += d.textlength(ch, font=f) + sp
-bg.save(OUT, quality=92)
-print("wrote", OUT)
+BW, BD, BH, LID_H, OVER = 330.0, 300.0, 150.0, 64.0, 1.0      # mm: width, depth, height, lid height, how far the lid overhangs the base per side
+LABEL_MM = 170.0                                              # the printed square on the lid
+
+def label(path, px=1700):
+    """the lid print: the current brand mark (landing/mark-tree.svg) and the name beneath, transparent background"""
+    from PIL import Image, ImageDraw, ImageFont
+    mk = os.path.join(tempfile.mkdtemp(), "mark.png")
+    subprocess.run(["rsvg-convert", "-h", str(int(px * 0.56)), "-o", mk, os.path.join(HERE, "..", "..", "landing", "mark-tree.svg")], check=True)
+    m = Image.open(mk).convert("RGBA")
+    im = Image.new("RGBA", (px, px), (0, 0, 0, 0)); im.paste(m, ((px - m.width) // 2, int(px * 0.12)), m)
+    d = ImageDraw.Draw(im); f = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", int(px * 0.05))
+    txt, sp = "Joshua Tree", int(px * 0.008)
+    tw = sum(d.textlength(c, font=f) + sp for c in txt) - sp; x = (px - tw) / 2; y = int(px * 0.12) + m.height + int(px * 0.07)
+    for c in txt:
+        d.text((x, y), c, font=f, fill=(0x5A, 0x56, 0x4F, 255)); x += d.textlength(c, font=f) + sp
+    im.save(path)
+
+def build(bpy, M, label_png):
+    """cream matte base and lid with a 1 mm overhang seam, the print on the lid; sizes in metres (the scene is 0.001 scale)"""
+    import bmesh
+    S = 0.001
+    def block(name, w, d, z0, z1):
+        bm = bmesh.new(); bmesh.ops.create_cube(bm, size=1.0)
+        me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
+        o = bpy.data.objects.new(name, me); bpy.context.scene.collection.objects.link(o)
+        o.scale = (w * S, d * S, (z1 - z0) * S); o.location = (0, 0, (z0 + z1) / 2 * S)
+        bev = o.modifiers.new("bevel", "BEVEL"); bev.width = 0.0022; bev.segments = 4; bev.limit_method = "ANGLE"
+        bpy.context.view_layer.objects.active = o
+        o.data.materials.append(M["cream"])
+        for p in o.data.polygons: p.use_smooth = True
+        bpy.ops.object.select_all(action="DESELECT"); o.select_set(True)
+        bpy.ops.object.transform_apply(scale=True)           # keep the bevel the same size on every edge
+        return o
+    base = block("base", BW - 2 * OVER, BD - 2 * OVER, 0.0, BH - LID_H + 8.0)
+    lid = block("lid", BW, BD, BH - LID_H, BH)
+    # the print: a plane just above the lid top, the PNG's alpha cuts it to the mark and the name
+    me = bpy.data.meshes.new("print"); h = LABEL_MM / 2 * S; z = BH * S + 0.00005
+    me.from_pydata([(-h, -h, z), (h, -h, z), (h, h, z), (-h, h, z)], [], [(0, 1, 2, 3)]); uv = me.uv_layers.new(name="uv")
+    for i, c in enumerate(((0, 0), (1, 0), (1, 1), (0, 1))): uv.data[i].uv = c
+    o = bpy.data.objects.new("print", me); bpy.context.scene.collection.objects.link(o)
+    m = bpy.data.materials.new("print"); m.use_nodes = True; nt = m.node_tree
+    b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"); t = nt.nodes.new("ShaderNodeTexImage"); t.image = bpy.data.images.load(label_png)
+    nt.links.new(t.outputs["Color"], b.inputs["Base Color"]); nt.links.new(t.outputs["Alpha"], b.inputs["Alpha"])
+    b.inputs["Roughness"].default_value = 0.62
+    for k in ("Specular IOR Level", "Specular"):
+        if k in b.inputs: b.inputs[k].default_value = 0.15
+    me.materials.append(m)
+    return [base, lid, o]

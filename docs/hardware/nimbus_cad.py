@@ -92,8 +92,7 @@ def pta(x, y, z):
 PULL_W, PULL_H, PULL_Z, PULL_Y = 60.0, 10.0, 3.5, B - 27.0
 def pull(grow):
     return Pos(0, PULL_Y, -D - 1.0) * extrude(SlotOverall(PULL_W + 2 * grow, PULL_H + 2 * grow), 1.0 + PULL_Z + grow)
-outer = outer - pull(0)
-cavity = cavity - pull(T)
+# (the scoop is not cut: a hard recess read as a defect; the soft back roll is the grip)
 # the desk foot: flat pad, the cavity floor stays 2.4 above it
 outer_c = outer - face_of(Pos(0, 0, CUT - 450) * Box(900, 900, 900))
 cavity_c = cavity - face_of(Pos(0, 0, CUT + T - 450) * Box(900, 900, 900))
@@ -158,7 +157,8 @@ def y_back(zc): return V1[1] + (V2[1] - V1[1]) / (V2[2] - V1[2]) * (zc - V1[2]) 
 _ZC = ZB + 1.4 + 9.0; fx, fy = 0.0, ptf(0, y_back(_ZC), _ZC)[1]       # the back face, centred above the port strip (the strip is centred on x = 0)
 # the tree goes on the back, one flat deboss with its thin ground line, mirrored in x so it reads right from behind (mirrored as polygons, then built, so every prism is right way out)
 from shapely import affinity as _af
-def _rear(g): return _af.translate(_af.scale(g, -1, 1, origin=(0, 0)), fx, fy + 38.0)
+REAR_S, REAR_D = 1.4, 1.0      # the rear mark is drawn 1.4 times the front size and cut 1 mm deep, so it reads at product-photo size
+def _rear(g): return _af.translate(_af.scale(g, -REAR_S, REAR_S, origin=(0, 0)), fx, fy + 42.0)
 def cut_polys(shape, geom, z0, depth):
     from shapely.geometry.polygon import orient
     for p in (geom.geoms if hasattr(geom, "geoms") else [geom]):
@@ -167,8 +167,8 @@ def cut_polys(shape, geom, z0, depth):
         shape = shape - Solid.extrude(Face(w(p.exterior), [w(h) for h in p.interiors]), Vector(0, 0, depth))
     return shape
 tree_r, ground_r = _rear(tree_g), _rear(ground_g)
-shell = cut_polys(cut_polys(shell, tree_r, -D - 1.0, 1.0 + MARK_D), ground_r, -D - 1.0, 1.0 + MARK_D)
-ground_inlay = poly_solid(ground_r, -D + 0.05, MARK_D - 0.05)       # flush with the back plane, which sits 0.05 inside -D
+shell = cut_polys(cut_polys(shell, tree_r, -D - 1.0, 1.0 + REAR_D), ground_r, -D - 1.0, 1.0 + REAR_D)
+ground_inlay = poly_solid(ground_r, -D + 0.05, REAR_D - 0.05)      # flush with the back plane, which sits 0.05 inside -D
 # ---- split: front shell and back cover, half-lap with a 0.5 reveal ----
 front = shell - Pos(0, 0, ZG - 200) * Box(900, 900, 400)
 front = front - (prism(1.1, ZG, ZG + 8.0) - prism(T, ZG, ZG + 8.0))

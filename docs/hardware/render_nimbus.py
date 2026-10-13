@@ -20,6 +20,8 @@ DESKTOP = os.path.join(HERE, "nimbus", "nimbus-desktop.png")
 VIEWS = [("hero", (-620.0, -930.0, 430.0), (-30.0, 20.0, 100.0), 85.0),
          ("side", (15.0, -1250.0, 330.0), (15.0, 0.0, 100.0), 85.0),
          ("rear", (600.0, 920.0, 560.0), (0.0, 20.0, 85.0), 85.0)]
+BOX = bool(os.environ.get("NIMBUS_BOX"))      # NIMBUS_BOX=1: render the retail box (nimbus-box.jpg) in the same studio instead of the product
+if BOX: VIEWS = [("box", (-570.0, -1200.0, 1320.0), (0.0, 0.0, 70.0), 85.0)]
 
 try:
     import bpy
@@ -31,16 +33,38 @@ def make_screen(path):
     kept true. Only the motto line and its glyph above the dock are painted out with the wallpaper colour."""
     from PIL import Image
     img = Image.open(DESKTOP).convert("RGB")
-    img.paste(img.getpixel((400, 600)), (790, 820, 1120, 885))
+    img.paste(img.getpixel((400, 600)), (790, 830, 1120, 885))      # starts below the window's bottom edge (825), so the window is untouched
     img.save(path)
+
+def make_screen_big(path, scale=1.2):      # 1.2: the window grows 20 percent and its foot goes behind the dock like a real desktop
+    """the same real screendump re-composed so the Hamurapi window fills the glass: the window, scaled up, on the wallpaper, with the real
+    menu bar across the top and the real dock over its foot. No motto, no debug text."""
+    from PIL import Image
+    img = Image.open(DESKTOP).convert("RGB"); bgc = img.getpixel((400, 600))
+    out = Image.new("RGB", img.size, bgc); out.paste(img.crop((0, 0, 1920, 52)), (0, 0))
+    win = img.crop((852, 80, 1916, 836)); win = win.resize((round(win.width * scale), round(win.height * scale)), Image.LANCZOS)
+    out.paste(win, ((1920 - win.width) // 2, 60))
+    dk = img.crop((440, 900, 1480, 1060)).convert("RGBA"); px = dk.load()      # lift the dock off the wallpaper: its shadow becomes soft black alpha, so it floats over the window
+    for y in range(dk.height):
+        for x in range(dk.width):
+            r, g, b, _ = px[x, y]
+            if r <= bgc[0] and g <= bgc[1] and b <= bgc[2]:
+                px[x, y] = (0, 0, 0, round(255 * (1 - (r / bgc[0] + g / bgc[1] + b / bgc[2]) / 3)))
+    out = out.convert("RGBA"); out.alpha_composite(dk, (440, 900))
+    out.convert("RGB").save(path)
 
 if bpy is None:
     out = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else HERE)
     tmp = tempfile.mkdtemp(prefix="nimbus-")
     try:
         env = dict(os.environ, NIMBUS_MESH=os.path.join(tmp, "mesh"))
-        build("nimbus_cad.py", tmp, env=env, extra=("--with", "shapely"))
-        make_screen(os.path.join(tmp, "screen.png"))
+        if BOX:       # no CAD: a stub mesh list, the lid print, a throwaway screen
+            import nimbus_box
+            os.makedirs(os.path.join(tmp, "mesh")); nimbus_box.label(os.path.join(tmp, "label.png"))
+            json.dump({"meshes": [], "screen": [[0, 0, 0]] * 4}, open(os.path.join(tmp, "mesh", "meshes.json"), "w"))
+        else:
+            build("nimbus_cad.py", tmp, env=env, extra=("--with", "shapely"))
+        make_screen_big(os.path.join(tmp, "screen.png"), float(os.environ.get("WIN_SCALE", 1.2)))
         blender(__file__, os.path.join(tmp, "mesh"), tmp)
         for name, *_ in VIEWS:
             if not os.path.exists(os.path.join(tmp, name + ".png")): continue
@@ -134,7 +158,12 @@ nt.links.new(add.outputs[0], mrn.inputs["Value"])
 nt.links.new(mrn.outputs["Result"], mix.inputs["Factor"]); nt.links.new(img.outputs["Color"], mix.inputs["A"]); mix.inputs["B"].default_value = (1.0, 1.0, 1.0, 1.0)
 nt.links.new(mix.outputs["Result"], em.inputs["Color"]); nt.links.new(em.outputs["Emission"], outn.inputs["Surface"])
 me.materials.append(sm)
-PROD = [o for o in bpy.data.objects]      # everything so far is the product; the side view turns it a quarter turn so the backdrop matches the hero
+if BOX:
+    bpy.data.objects.remove(scr)
+    import nimbus_box
+    PROD = nimbus_box.build(bpy, M, os.path.join(tmp, "label.png"))
+else:
+    PROD = [o for o in bpy.data.objects]    # everything so far is the product; the side view turns it a quarter turn so the backdrop matches the hero
 # the sweep: a floor that curves up behind into a wall, off-white, seamless
 import math as _m
 prof = [(0.0, 0.0), (1.4, 0.0)] + [(1.4 + 1.2 * _m.sin(_m.radians(a)), 1.2 - 1.2 * _m.cos(_m.radians(a))) for a in range(10, 91, 10)] + [(2.6, 5.0)]
@@ -161,8 +190,9 @@ for name, loc, target, lens in VIEWS:
     if os.environ.get("VIEW") and name not in os.environ["VIEW"].split(","): continue
     cd.lens = lens
     for o in PROD: o.rotation_euler[2] = -math.pi / 2 if name == "side" else 0.0
-    sc.view_settings.exposure = float(os.environ.get("EXPOSURE", 0.0)) + (-1.0 if name == "rear" else 0.0)
+    sc.view_settings.exposure = float(os.environ.get("EXPOSURE", 0.0)) + (float(os.environ.get("REAR_EXP", -1.35)) if name == "rear" else 0.0)
     kl = (0.25, 0.8, 1.3) if name == "rear" else (0.0, 0.1, 1.5)      # the rear is lit from behind and above, so the back face is even
+    key.data.color = (1.0, 0.93, 0.82) if name == "rear" else (1.0, 1.0, 1.0)      # the back face gets the warm cast the front picks up from the sweep
     key.location = kl; key.rotation_euler = (Vector((0.0, -0.05, 0.1)) - Vector(kl)).to_track_quat("-Z", "Y").to_euler()
     l = Vector(loc) * S; t = Vector(target) * S
     cam.location = l; cam.rotation_euler = (t - l).to_track_quat("-Z", "Y").to_euler()
