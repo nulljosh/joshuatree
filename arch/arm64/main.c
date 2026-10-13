@@ -315,6 +315,10 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_WINDOW_POLL 385
 #define JT_SYS_AUDIO 393         /* M3e: play, status, stop (audio.c holds the queue) */
 #define JT_SYS_BRK 397           /* M3e: the heap top */
+#define JT_SYS_CLIPBOARD 399     /* 3.10.0: copy and paste, see clip_put below */
+#define JT_CLIP_SET 1
+#define JT_CLIP_GET 2
+#define JT_CLIP_MAX 4096
 struct user_app { const char *name, *start, *end; };   /* userapps.S: one row per program, ended by a zero name */
 extern const struct user_app user_apps[];
 static unsigned long user_status;
@@ -402,6 +406,37 @@ void fp_clobber(void);   /* fptest.c, linked into the musictest build only: the 
 #else
 #define APP_FP_CLOBBER() ((void)0)
 #endif
+/* 3.10.0: the system clipboard, one plain-text buffer of 4 KB (JT_CLIP_MAX) for the whole kernel: Notes reaches it through
+   JT_SYS_CLIPBOARD (399, the i386 contract in user/jtsys.h), the Terminal's input line and the Browser's address bar call
+   clip_put and clip_take directly. A copy over 4 KB is refused (-EINVAL, as on i386); a paste takes what fits the field and
+   says so with CLIPTRUNC. The UART lines are the length only, never the text (CLIPCOPY:n, CLIPPASTE:n). */
+static char clip_buf[JT_CLIP_MAX];
+static unsigned clip_len;
+static void clip_log(const char *tag, unsigned n) { con_quiet = 1; uart_puts(tag); uart_dec(n); uart_putc('\n'); }
+void clip_put(const char *s, unsigned n) {
+    if (n > JT_CLIP_MAX) n = JT_CLIP_MAX;
+    for (unsigned i = 0; i < n; i++) clip_buf[i] = s[i];
+    clip_len = n; clip_log("CLIPCOPY:", n);
+}
+unsigned clip_take(char *o, unsigned room) {   /* at most `room` bytes of the clipboard into o; 0 when it is empty */
+    unsigned n = clip_len < room ? clip_len : room;
+    for (unsigned i = 0; i < n; i++) o[i] = clip_buf[i];
+    if (n) { clip_log("CLIPPASTE:", n); if (n < clip_len) { con_quiet = 1; uart_puts("CLIPTRUNC\n"); } }
+    return n;
+}
+static long app_clip(unsigned long op, unsigned long buf, unsigned long len) {
+    if (op == JT_CLIP_SET) {
+        if (len > JT_CLIP_MAX) return -22;
+        if (len && !user_in_range(buf, len)) return -14;
+        clip_put((const char *)buf, (unsigned)len);
+        return (long)len;
+    }
+    if (op == JT_CLIP_GET) {
+        if (len && !user_writable(buf, len)) return -14;
+        return (long)clip_take((char *)buf, (unsigned)len);
+    }
+    return -22;
+}
 void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's FP registers, saved below the frame by el0_sync_entry */
     unsigned ec = (unsigned)(f->esr >> 26);
     APP_FP_CLOBBER();
@@ -434,6 +469,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             else if (n == JT_SYS_WINDOW_OPEN) r = app_window_open(a0);
             else if (n == JT_SYS_AUDIO) r = app_audio(a0, f->x[1], f->x[2]);   /* M3e */
             else if (n == JT_SYS_BRK) r = app_brk_set(a0);
+            else if (n == JT_SYS_CLIPBOARD) r = app_clip(a0, f->x[1], f->x[2]);   /* 3.10.0 */
             else r = ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: the file calls; -ENOSYS (-38) for every number the ARM kernel does not answer yet, JT_SYS_AUDIO_RECORD (394) among them */
             if (n != JT_SYS_READ && n != JT_SYS_AUDIO) svc_log(n, a0, r);   /* a read is every few hundred bytes of a file, audio a hundred calls a second: the UART would drown */
             f->x[0] = (unsigned long)r;
@@ -1950,6 +1986,17 @@ void power_run(int off) {   /* the same action the confirmed chord runs */
 #else
 void power_run(int off) { if (!power_refused()) uart_puts(off ? "power: shutdown (this build has no power control)\n" : "power: restart (this build has no power control)\n"); }   /* the virt test build: only the Pi has a watchdog to pull */
 #endif
+int ask_edit(unsigned code);   /* ask.c: C X V A on the Terminal's input line */
+static int front_close(void) {   /* the window in front, topmost first, ended the way its red dot ends it; always 1 (the chord is the desktop's) */
+    if (spot_live) spot_close();
+    else if (brick_live) brick_close();
+    else if (clock_live) clock_close();
+    else if (browser_live) browser_close();
+    else if (app_front) { app_push(2, 16, -16); if (!app_close_at) app_close_at = cnt_now() + cnt_hz() / 4; }
+    else if (calc_front) calc_close();
+    else if (con_live) console_close();
+    return 1;
+}
 int volume_key(unsigned code);   /* cmd.c: F11 and F12, Volume Down, Up and Mute */
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
     int chord = ctrl_held || gui_held || alt_held;
@@ -1957,6 +2004,7 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
     if (power_key(code)) return 1;
 #endif
     if (volume_key(code)) return 1;   /* before Spotlight and every pane, like the Spotlight shortcut */
+    if (gui_held && (code == 17 || code == 16)) return front_close();   /* Cmd+W closes the front window, Cmd+Q quits the front app: every window here is one app's, so both end it */
     if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
     if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); browser_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
     if (spot_live) return spot_key(code);
@@ -1973,6 +2021,7 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
         }
         return 1;
     }
+    if (term_front() && (ctrl_held || gui_held) && ask_edit(code)) return 1;   /* Cmd or Ctrl with C X V A on the input line */
     if (term_front()) { if (code == 1 && !ask_pending()) { console_open(); return 1; } return 0; }   /* Esc: the keys back to the desktop */
     if (!fb) return 0;
     if (code == 105 || code == 106) { dock_select(dock_sel < 0 ? (code == 106 ? 0 : GUI_ICON_COUNT - 1) : (dock_sel + (code == 106 ? 1 : GUI_ICON_COUNT - 1)) % GUI_ICON_COUNT); return 1; }
@@ -2472,7 +2521,7 @@ static void app_key(unsigned code) {   /* a key down for the app in front, as th
                                              {105, 261}, {106, 262}, {102, 305}, {107, 306}, {111, 307} };
     int k = 0;
     for (unsigned i = 0; i < sizeof map / sizeof map[0]; i++) if (map[i][0] == code) k = map[i][1];
-    if (!k && ctrl_held) k = code == 46 ? 302 : code == 45 ? 303 : code == 47 ? 304 : code == 31 ? 308 : code == 30 ? 315 : 0;   /* Ctrl+C X V S A */
+    if (!k && (ctrl_held || gui_held)) k = code == 46 ? 302 : code == 45 ? 303 : code == 47 ? 304 : code == 31 ? 308 : code == 30 ? 315 : 0;   /* Ctrl or Cmd with C X V S A */
     else if (!k) k = ask_char(code);
     if (k) app_push(1, k, 0);
 }
