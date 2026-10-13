@@ -85,7 +85,7 @@ row2 = 150 + h + 130
 g, box, w4, h4 = place("top", 56, row2); els.append(text(56, row2 - 10, "TOP", 14, weight=600)); els.append(shape(g, box))
 cx_, cy_ = at(box, info["scoop_center"][0], info["scoop_center"][1]); hx, hz = info["scoop_half"]
 els.append('<ellipse cx="%.1f" cy="%.1f" rx="%.1f" ry="%.1f" fill="none" stroke="%s" stroke-width="1" stroke-dasharray="5 3"/>' % (cx_, cy_, hx * K, hz * K, INK))
-els.append(vdim(box[0] + w4 / 2, row2, row2 + h4, "%.1f" % OD)); els.append(text(56, row2 + h4 + 24, "handle recess: a smooth scoop, wall kept at %.1f" % info["wall"], 12, fill=SOFT))
+els.append(vdim(box[0] + w4 / 2, row2, row2 + h4, "%.1f" % OD)); els.append(text(56, row2 + h4 + 24, "finger pull under the rear top edge, wall kept at %.1f" % info["wall"], 12, fill=SOFT))
 ux = 56 + w4 + 110
 g, box, w5, h5 = place("under", ux, row2); els.append(text(ux, row2 - 10, "UNDERSIDE", 14, weight=600)); els.append(shape(g, box))
 for sx, sy in info["screws_m3"]:
@@ -120,7 +120,7 @@ for i, (key, title, orient, sup, note) in enumerate(cards):
         els.append(text(x0 + bw + 14, y0 + 40 + j * 20, ln, 12, fill=INK if j < 3 else SOFT))
 els.append(text(1090, row3 + 40, "Fasteners and fit", 15, weight=600))
 facts = ["2 x M3 x 12 self-tapping from underneath, at %s" % ", ".join("(%.0f, %.0f)" % tuple(p) for p in info["screws_m3"]),
-         "4 x M2.5 x 6 for the Pi 4 on teardrop standoffs, board 24 mm off the floor",
+         "4 x M2.5 x 6 for the Pi 4 on teardrop standoffs, board 26 mm off the floor",
          "wall %.1f mm everywhere; one %.1f mm reveal, half-lap joint" % (info["wall"], info["reveal"]),
          "display: official Pi 7 inch touch, %.0f x %.0f glass, %.2f x %.0f active, glued to a 2 mm ledge" % (info["glass"][0], info["glass"][1], info["active"][0], info["active"][1]),
          "the display numbers are stand-ins: check them with calipers before printing",

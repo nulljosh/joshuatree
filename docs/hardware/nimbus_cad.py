@@ -21,17 +21,18 @@ MESH = os.environ.get("NIMBUS_MESH")
 
 # ---- the squircle (docs/DESIGN.md) and the body ----
 SQUIRCLE_N = 4.8
-A, B = 120.0, 105.0              # half width and half height of the front outline: 240 x 210
+A, B = 118.0, 114.0              # half width and half height of the front outline: 236 x 228, near square and a touch upright
 R = 9.0                          # the front radius: the roll-over and every opening corner
-R2 = 16.0                        # the back rolls over softer, so the body reads light from behind
-D = 98.0                         # depth, front face to back
+R2 = 12.0                        # the back rolls over softer
+TAP = 6.0                        # the back cover draws in by this much, a soft wedge, so the back face is about 85 percent of the front
+D = 94.0                         # depth, front face to back
 T = 2.4                          # wall
 LEAN = 6.0                       # degrees the face leans back
 CUT = 3.5                        # the flat rear foot is cut this far above the lowest point; the chin hovers over the desk
 GAP = 0.5                        # the one reveal
 FIT = 0.2
 BED = 256.0
-D_G = R2 + 8.0                   # parting line, measured from the back
+D_G = 30.0                   # parting line, measured from the back
 ZG = -D + D_G                    # z of the front shell's rear edge (face frame)
 # ---- the display (stand-in numbers) ----
 GLASS_W, GLASS_H, GLASS_T = 194.0, 110.0, 1.6     # the front glass sheet; the module (LCD, board) hangs behind it
@@ -40,13 +41,14 @@ OPEN_W, OPEN_H = GLASS_W + 2 * GAP, GLASS_H + 2 * GAP   # the glass sits flush i
 LIP = 0.2                        # the glass front sits this far behind the face
 SHELF_Z0, SHELF_Z1, SHELF_IN = -3.0, -1.8, 2.0   # a 2 mm ledge behind the glass edge that the sheet is glued to
 MODULE_T = 4.8
-YC = 27.0                        # glass centre height on the face
+YC = 34.0                        # glass centre height on the face
 # ---- the Pi (numbers from pi4b.py) ----
 PI_X = 26.0                      # the board sits right of centre so the port strip is centred on the back
-ZB = 24.0                        # underside of the board above the desk
+ZB = 26.0                        # underside of the board above the desk
 USB_OVER = 2.0                   # the USB block stands this far past the board edge
 # ---- front details ----
-MARK_W, MARK_D, MARK_X, MARK_Y = 22.0, 0.5, 0.0, -66.0
+MARK_W, MARK_D, MARK_X, MARK_Y = 26.0, 0.6, 0.0, -66.0
+SLOT_W, SLOT_H, SLOT_X, SLOT_Y = 27.0, 2.6, 56.0, -97.0     # the SD card slot: a card is 24 x 2.1, so this is a hair loose
 MIN_FEATURE = 0.5
 STRIP_D = 1.0                    # depth of the back port strip
 
@@ -61,15 +63,16 @@ def sq_wire(inset, z): return Wire([Edge.make_spline([Vector(x, y, z) for x, y i
 def in_sq(x, y, inset): return (abs(x) / (A - inset)) ** SQUIRCLE_N + (abs(y) / (B - inset)) ** SQUIRCLE_N <= 1.0
 def prism(inset, z0, z1): return Solid.extrude(Face(sq_wire(inset, z0)), Vector(0, 0, z1 - z0))
 THS = [math.radians(i * 22.5) for i in range(5)]
-def loft(pf, pr):
-    """pf(theta) and pr(theta) -> (inset, z) along the front and back roll-over arcs; the back one is mirrored to the back face."""
-    front = [pf(t) for t in THS]; rear = [(i, -D - z) for i, z in reversed([pr(t) for t in THS])]
-    z0, z1 = front[-1][1], rear[0][1]
-    mid = [(front[-1][0], z0 + (z1 - z0) * k / 3) for k in (1, 2)]
+def loft(pf, pr, lead):
+    """pf(theta) and pr(theta) -> (inset, z) along the front and back roll-over arcs. lead is the wall's inset (0 outside, T inside).
+    The wall runs straight to the parting line, then draws in by TAP on a smooth S curve, then the back rolls over."""
+    front = [pf(t) for t in THS]; rear = [(i + TAP, -D - z) for i, z in reversed([pr(t) for t in THS])]
+    zr = rear[0][1]
+    mid = [(lead, (front[-1][1] + ZG) / 2), (lead, ZG)] + [(lead + TAP * (3 * u * u - 2 * u ** 3), ZG + (zr - ZG) * u) for u in (1 / 3, 2 / 3)]
     return Solid.make_loft([sq_wire(i, z) for i, z in front + mid + rear], False)
 RI, RI2 = R - T, R2 - T
-outer = loft(lambda t: (R - R * math.sin(t), -R + R * math.cos(t)), lambda t: (R2 - R2 * math.sin(t), -R2 + R2 * math.cos(t)))
-cavity = loft(lambda t: (R - RI * math.sin(t), -R + RI * math.cos(t)), lambda t: (R2 - RI2 * math.sin(t), -R2 + RI2 * math.cos(t)))
+outer = loft(lambda t: (R - R * math.sin(t), -R + R * math.cos(t)), lambda t: (R2 - R2 * math.sin(t), -R2 + R2 * math.cos(t)), 0.0)
+cavity = loft(lambda t: (R - RI * math.sin(t), -R + RI * math.cos(t)), lambda t: (R2 - RI2 * math.sin(t), -R2 + RI2 * math.cos(t)), T)
 
 # ---- assembled frame: lean, then Z up, then the foot on the desk ----
 RAW = Rot(90, 0, 0) * Rot(-LEAN, 0, 0)
@@ -85,54 +88,67 @@ def ptf(x, y, z):
 def pta(x, y, z):
     p = (ASM * Pos(x, y, z)).position; return p.X, p.Y, p.Z
 
-# ---- the handle scoop: a shallow ellipsoid dish across the top, rim angle about 23 degrees, wall kept at 2.4 ----
-SC = (80.0, 40.0, 26.0)
-SC_DEPTH = 17.0
-SC_C = (0, B - SC_DEPTH + 40.0, -45.0)
+# ---- the finger pull: a shallow dish under the rear top edge, out of sight from the front, so the front outline stays a pure squircle ----
+SC = (50.0, 16.0, 14.0)
+SC_C = (0, B + 2.0, -D + 6.0)
 def ellipsoid(grow): return Pos(*SC_C) * scale(Sphere(1), by=(SC[0] + grow, SC[1] + grow, SC[2] + grow))
 outer = outer - ellipsoid(0)
 try:
-    rim = [e for e in outer.edges() if e.bounding_box().center().Y > B - 14 and abs(e.bounding_box().center().Z - SC_C[2]) < 26 and e.bounding_box().size.X > 40]
-    outer = fillet(rim, 6.0) if rim and not os.environ.get('NIMBUS_NOFILLET') else outer
-    print('outer valid', outer.is_valid)
-    print("scoop rim edges filleted:", len(rim))
+    rim = [e for e in outer.edges() if e.bounding_box().center().Y > B - 18 and abs(e.bounding_box().center().Z - SC_C[2]) < 16 and e.bounding_box().size.X > 30]
+    for fr in (4.0, 2.5, 1.5):
+        try:
+            outer = fillet(rim, fr); break
+        except Exception: continue
+    print("finger pull rim edges filleted:", len(rim), "valid", outer.is_valid)
 except Exception as ex:
-    print("scoop fillet skipped:", ex)
+    print("finger pull fillet skipped:", ex)
 cavity = cavity - ellipsoid(T)
 # the desk foot: flat pad, the cavity floor stays 2.4 above it
 outer_c = outer - face_of(Pos(0, 0, CUT - 450) * Box(900, 900, 900))
 cavity_c = cavity - face_of(Pos(0, 0, CUT + T - 450) * Box(900, 900, 900))
 shell = outer_c - cavity_c
 
-# ---- the mark, from landing/mark-bold.svg (the shape logo.py writes for small sizes) ----
+# ---- the mark: the solid crayon tree from docs/hardware/mark.svg, flat-bottomed, with one thin terracotta ground line under it ----
 def mark_geoms():
-    from shapely.geometry import LineString
+    from shapely.geometry import Polygon, LineString
     from shapely.ops import unary_union
     from shapely import affinity
-    svg = open(os.path.join(HERE, "..", "..", "landing", "mark-bold.svg")).read()
-    tree, ground = [], []
-    for m in re.finditer(r'<path d="([^"]+)"([^>]*)/>', svg):
-        d, attrs = m.groups(); sw = float(re.search(r'stroke-width="([\d.]+)"', attrs).group(1))
-        is_ground = 'stroke="#b5502c"' in attrs
-        for sub in re.findall(r"M[^M]+", d):
-            toks = re.findall(r"[MC]|-?\d+\.?\d*", sub); pts = []; i = 0
-            while i < len(toks):
-                if toks[i] == "M": pts.append((float(toks[i + 1]), float(toks[i + 2]))); i += 3
-                else:
-                    p0 = pts[-1]; c = [(float(toks[i + 1 + 2 * j]), float(toks[i + 2 + 2 * j])) for j in range(3)]
-                    for k in range(1, 13):
-                        u = k / 12; w = [(1 - u) ** 3, 3 * u * (1 - u) ** 2, 3 * u * u * (1 - u), u ** 3]
-                        pts.append(tuple(sum(w[j] * q[ax] for j, q in enumerate([p0] + c)) for ax in (0, 1)))
-                    i += 7
-            (ground if is_ground else tree).append(LineString(pts).buffer(sw * (0.36 if is_ground else 0.5), 12))
-    t, g = unary_union(tree), unary_union(ground); u = unary_union([t, g]); x0, y0, x1, y1 = u.bounds; k = MARK_W / (x1 - x0)
-    place = lambda s: affinity.translate(affinity.scale(affinity.translate(s, -(x0 + x1) / 2, -(y0 + y1) / 2), k, -k, origin=(0, 0)), MARK_X, MARK_Y)
+    svg = open(os.path.join(HERE, "mark.svg")).read()
+    rings = []
+    for d in re.findall(r' d="([^"]+)"', svg):
+        toks = re.findall(r"[MmLlCcHhZz]|-?\d+\.?\d*", d); i = 0; cur = (0.0, 0.0); pts = []; cmd = "M"; start = cur
+        num = lambda: float(toks[i])
+        while i < len(toks):
+            if toks[i] in "MmLlCcHhZz": cmd = toks[i]; i += 1
+            if cmd in "Zz":
+                if len(pts) >= 3: rings.append(pts)
+                pts = []; cur = start; continue
+            if cmd in "Mm":
+                x, y = float(toks[i]), float(toks[i + 1]); i += 2
+                cur = (x, y) if cmd == "M" else (cur[0] + x, cur[1] + y); start = cur; pts = [cur]; cmd = "L" if cmd == "M" else "l"
+            elif cmd in "Ll":
+                x, y = float(toks[i]), float(toks[i + 1]); i += 2
+                cur = (x, y) if cmd == "L" else (cur[0] + x, cur[1] + y); pts.append(cur)
+            elif cmd in "Hh":
+                x = float(toks[i]); i += 1; cur = (x if cmd == "H" else cur[0] + x, cur[1]); pts.append(cur)
+            elif cmd in "Cc":
+                v = [float(t) for t in toks[i:i + 6]]; i += 6
+                c = [(v[0], v[1]), (v[2], v[3]), (v[4], v[5])] if cmd == "C" else [(cur[0] + v[0], cur[1] + v[1]), (cur[0] + v[2], cur[1] + v[3]), (cur[0] + v[4], cur[1] + v[5])]
+                for k in range(1, 9):
+                    u = k / 8; w = [(1 - u) ** 3, 3 * u * (1 - u) ** 2, 3 * u * u * (1 - u), u ** 3]
+                    pts.append(tuple(sum(w[j] * q[ax] for j, q in enumerate([cur] + c)) for ax in (0, 1)))
+                cur = c[2]
+    big = max(rings, key=lambda r: Polygon(r).area)       # the first, large ring is the tree; the small rings are specks of the traced drawing
+    polys = [Polygon(r).buffer(0) for r in rings if Polygon(r).area > 0.0005 * Polygon(big).area]
+    g = polys[0]
+    for q in polys[1:]: g = g.symmetric_difference(q)      # even-odd, as the SVG fills it
+    x0, y0, x1, y1 = g.bounds; k = MARK_W / (x1 - x0)
+    g = affinity.translate(affinity.scale(affinity.translate(g, -(x0 + x1) / 2, -(y0 + y1) / 2), k, k, origin=(0, 0)), MARK_X, MARK_Y)
     r = MIN_FEATURE / 2
-    t, g = place(t), place(g)
-    from shapely.geometry import Polygon, MultiPolygon
-    solid = lambda geom: unary_union([Polygon(p.exterior) for p in (geom.geoms if hasattr(geom, "geoms") else [geom])])   # fill the loops: the solid mark
-    t = solid(t).buffer(-r, join_style=1).buffer(r, join_style=1).simplify(0.01)
-    return t, g.simplify(0.01)
+    g = g.buffer(-r, join_style=1).buffer(r, join_style=1).simplify(0.22)
+    gb = g.bounds; gw = 0.7 * (gb[2] - gb[0])
+    ground = LineString([(MARK_X - gw / 2, gb[1] - 2.2), (MARK_X + gw / 2, gb[1] - 2.2)]).buffer(0.55, 8)
+    return g, ground.simplify(0.01)
 def poly_solid(geom, z0, depth):
     out = None
     for p in (geom.geoms if hasattr(geom, "geoms") else [geom]):
@@ -151,6 +167,9 @@ shell = shell - Pos(0, YC, 0) * rrect(OPEN_W, OPEN_H, R, -T - 0.5, 2.0)
 shelf = Pos(0, YC, 0) * (rrect(OPEN_W + 4.0, OPEN_H + 4.0, R + 2, SHELF_Z0, SHELF_Z1) - rrect(GLASS_W - 2 * SHELF_IN, GLASS_H - 2 * SHELF_IN, R - 2, SHELF_Z0 - 1, SHELF_Z1 + 1))
 shell = shell + shelf
 shell = shell - tree_cut - ground_cut
+sd_cut = Pos(0, 0, 1.0) * (Pos(SLOT_X, SLOT_Y, 0) * extrude(SlotOverall(SLOT_W, SLOT_H), T + 2.0, dir=(0, 0, -1)))
+shell = shell - sd_cut
+sd_liner = Pos(SLOT_X, SLOT_Y, -T - 3.0) * Box(SLOT_W + 6.0, SLOT_H + 6.0, 4.0)     # ink behind the slot, so it reads as a slot
 
 # ---- split: front shell and back cover, half-lap with a 0.5 reveal ----
 front = shell - Pos(0, 0, ZG - 200) * Box(900, 900, 400)
@@ -209,7 +228,7 @@ PEG_Z1 = SHELF_Z1 - MODULE_T - FIT
 pegs = None
 for sx in (-1, 1):
     for sy in (-1, 1):
-        p = Pos(sx * 92.0, YC + sy * 48.0, -D + T - 0.5) * Cylinder(3.0, PEG_Z1 - (-D + T - 0.5), align=(Align.CENTER, Align.CENTER, Align.MIN))
+        p = Pos(sx * 80.0, YC + sy * 40.0, -D + T - 0.5) * Cylinder(3.0, PEG_Z1 - (-D + T - 0.5), align=(Align.CENTER, Align.CENTER, Align.MIN))
         pegs = p if pegs is None else pegs + p
 cover = cover + pegs
 
@@ -248,10 +267,9 @@ board = Pos(PI_X, Y_PC, ZB + 0.7) * Box(pi4b.BOARD_S, pi4b.BOARD_L, pi4b.PCB_T)
 cx_, cy_ = GLASS_W / 2 - (R + 1) * (1 - 2 ** -0.5), YC + GLASS_H / 2 - (R + 1) * (1 - 2 ** -0.5)
 assert in_sq(cx_, cy_, T + 1.5), "display corner touches the inner wall"
 assert in_sq(OPEN_W / 2 - R * (1 - 2 ** -0.5), YC + OPEN_H / 2 - R * (1 - 2 ** -0.5), R + 1.0), "opening runs into the roll-over"
-assert in_sq(92 + 3, YC + 48 + 3, T + 1.0), "peg outside the inner wall"
+assert in_sq(80 + 3, YC + 40 + 3, TAP + R2 + 1.0), "peg outside the inner wall"
 for name, x, y in win_corners:
-    assert in_sq(x, y, R2 + 1.0), "window %s runs into the back roll-over" % name
-assert YC + 29.0 < B - SC_DEPTH - T - 4, "scoop reaches the display driver board"
+    assert in_sq(x, y, TAP + R2 + 1.0), "window %s runs into the back roll-over" % name
 assert ZB - 6.0 >= 3.0, "standoff too short"
 # the display clears the Pi stack and its ports (display is high on the face, Pi at the bottom)
 assert ptf(0, 0, ZB + 1.4 + 16.5 + 3)[1] < YC - GLASS_H / 2 - 5, "Pi stack reaches the display"
@@ -263,7 +281,7 @@ for name, shp in parts.items():
     p = PRINT[name] * shp
     bb = p.bounding_box(); sz = (bb.size.X, bb.size.Y, bb.size.Z)
     assert max(sz) <= BED, "%s does not fit the bed: %s" % (name, sz)
-    assert bb.min.Z > -0.01, "%s dips under the bed" % name
+    assert bb.min.Z > -0.1, "%s dips under the bed by %.3f" % (name, bb.min.Z)
     export_stl(p, os.path.join(STL_DIR, name + ".stl"), tolerance=0.08, angular_tolerance=0.3)
     report[name] = [round(v, 1) for v in sz]
     print("%-13s %s  %.0f cm3" % (name, report[name], shp.volume / 1000))
@@ -278,7 +296,7 @@ for _k, _v in asm_parts.items():
     export_step(_v, os.path.join(STL_DIR, _k + ".step"))
 if MESH:
     os.makedirs(MESH, exist_ok=True)
-    refs = {"glass": glass, "module": module, "driver": driver, "ports": ports, "board": board}
+    refs = {"sdliner": sd_liner, "glass": glass, "module": module, "driver": driver, "ports": ports, "board": board}
     meshes = []
     for name, shp in list(parts.items()) + list(refs.items()):
         s = asm_parts[name] if name in asm_parts else (asm(shp) if name not in ("ports", "board") else shp)

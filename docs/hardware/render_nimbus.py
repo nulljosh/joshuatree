@@ -16,13 +16,11 @@ W = int(os.environ.get("NIMBUS_W", 640 if PREVIEW else 1600)); H = round(W * 0.6
 SS = int(os.environ.get("SS", 1 if PREVIEW else 2))      # render at SS times the size, then Lanczos down: tack sharp edges and screen text
 CREAM, INK, TERRA = (0xEF, 0xEB, 0xE4), (0x1C, 0x1C, 0x1E), (0xB5, 0x50, 0x2C)
 SWEEP = (0xC9, 0xC4, 0xBB)
-SHOT = os.path.join(HERE, "..", "..", "landing", "ad", "desktop-a.jpg")      # a real desktop capture: its dock is the real dock
-WALL = os.path.join(HERE, "..", "..", "drivers", "wallpaper.h")             # the tree photo, 960 x 540 raw RGB baked into the kernel
-FONT = os.path.join(HERE, "..", "..", "tools", "fonts", "treesans", "TreeSans-Bold.ttf")
+DESKTOP = os.path.join(HERE, "nimbus", "nimbus-desktop.png")
 VIEWS = [("hero", (-620.0, -930.0, 430.0), (-30.0, 20.0, 100.0), 85.0),
          ("top", (-620.0, -930.0, 880.0), (-25.0, 15.0, 100.0), 85.0),
-         ("side", (1250.0, -5.0, 100.0), (0.0, -5.0, 100.0), 85.0),
-         ("rear", (600.0, 920.0, 380.0), (0.0, 20.0, 85.0), 85.0)]
+         ("side", (1250.0, -5.0, 230.0), (0.0, -5.0, 105.0), 85.0),
+         ("rear", (600.0, 920.0, 560.0), (0.0, 20.0, 85.0), 85.0)]
 
 try:
     import bpy
@@ -30,22 +28,14 @@ except ImportError:
     bpy = None
 
 def make_screen(path):
-    """The Joshua Tree desktop at 1920 x 1080: the tree photo, the real menu bar (half white over the wallpaper, a 1 px rule, Tree Sans)
-    and the real dock tray cut from the desktop capture."""
-    import re
-    from PIL import Image, ImageDraw, ImageFont
-    nums = re.findall(r"\d+", open(WALL).read().split("{", 1)[1])
-    w, h = 960, 540
-    img = Image.frombytes("RGB", (w, h), bytes(int(n) for n in nums[: w * h * 3])).resize((1920, 1080), Image.LANCZOS)
-    bar = Image.blend(img.crop((0, 0, 1920, 52)), Image.new("RGB", (1920, 52), (255, 255, 255)), 0.5); img.paste(bar, (0, 0))
-    d = ImageDraw.Draw(img); d.rectangle((0, 51, 1919, 51), fill=(0xBD, 0xB8, 0xB0))
-    f = ImageFont.truetype(FONT, 27); ink = (0x1C, 0x1C, 0x1E)
-    d.text((28, 26), "Joshua Tree", font=f, fill=ink, anchor="lm")
-    d.text((1892, 26), "Fri Oct 2   12:30 PM", font=f, fill=ink, anchor="rm")
-    shot = Image.open(SHOT).convert("RGB"); tray = shot.crop((476, 920, 1444, 1032))
-    m = Image.new("L", tray.size, 0); ImageDraw.Draw(m).rounded_rectangle((0, 0, tray.size[0] - 1, tray.size[1] - 1), 34, fill=255)
-    img.paste(tray, ((1920 - tray.size[0]) // 2, 920), m)
-    img.save(path)
+    """The screen: a fresh headless screendump of the ARM desktop (docs/hardware/nimbus_desktop.py writes nimbus/nimbus-desktop.png),
+    1920 x 1080, with the motto line and its glyph above the dock painted over with wallpaper and the bottom 8 rows cropped to the
+    panel's 154.08 x 86 shape."""
+    from PIL import Image
+    img = Image.open(DESKTOP).convert("RGB")
+    wall = img.getpixel((600, 600))
+    img.paste(wall, (780, 815, 1140, 890))            # the motto line and the glyph beside it
+    img.crop((0, 0, 1920, 1072)).save(path)
 
 if bpy is None:
     out = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else HERE)
@@ -103,9 +93,18 @@ def mat(name, rgb, rough, sss=0.0, spec=0.35):
     return m
 
 meta = json.load(open(os.path.join(mesh_dir, "meshes.json")))
+def glass_sheen(m):
+    """one faint soft reflection of the sky, strongest along the top edge of the glass (Generated coordinates run 0 to 1 over the sheet)"""
+    nt = m.node_tree; b = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    tc = nt.nodes.new("ShaderNodeTexCoord"); sp = nt.nodes.new("ShaderNodeSeparateXYZ"); mr = nt.nodes.new("ShaderNodeMapRange")
+    nt.links.new(tc.outputs["Generated"], sp.inputs[0]); nt.links.new(sp.outputs["Z"], mr.inputs["Value"])
+    mr.inputs["From Min"].default_value = 0.35; mr.inputs["From Max"].default_value = 1.0; mr.inputs["To Min"].default_value = 0.0; mr.inputs["To Max"].default_value = float(os.environ.get("SHEEN", 0.045))
+    mr.clamp = True
+    b.inputs["Emission Color"].default_value = (0.82, 0.86, 0.95, 1.0); nt.links.new(mr.outputs["Result"], b.inputs["Emission Strength"])
 M = {"cream": mat("cream", tuple(min(c, 238) for c in CREAM), 0.45, float(os.environ.get("SSS", 0.1)), 0.6), "ink": mat("ink", INK, 0.3, 0.0, 0.5),
      "glass": mat("glass", INK, 0.06, 0.0, 0.25), "terra": mat("terra", TERRA, 0.6)}
-USE = {"front_shell": "cream", "back_cover": "cream", "ground_inlay": "terra", "slot_inlay": "ink", "glass": "glass", "module": "ink", "driver": "ink", "ports": "ink", "board": "ink"}
+glass_sheen(M["glass"])
+USE = {"front_shell": "cream", "back_cover": "cream", "ground_inlay": "terra", "slot_inlay": "ink", "glass": "glass", "module": "ink", "sdliner": "ink", "driver": "ink", "ports": "ink", "board": "ink"}
 for name in meta["meshes"]:
     if name in os.environ.get("SKIP", "").split(","): continue
     p = os.path.join(mesh_dir, name + ".stl")
@@ -139,7 +138,9 @@ bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=1e-5)
 me2 = bpy.data.meshes.new("sweep"); bm.to_mesh(me2); bm.free()
 sw = bpy.data.objects.new("sweep", me2); sc.collection.objects.link(sw)
 for pl in me2.polygons: pl.use_smooth = True
-sw.data.materials.append(mat("sweep", SWEEP, 0.5, 0.0, 0.12))
+sweep_m = mat("sweep", SWEEP, 0.5, 0.0, 0.12)
+_b = next(n for n in sweep_m.node_tree.nodes if n.type == "BSDF_PRINCIPLED"); _b.inputs["Emission Color"].default_value = lin(SWEEP); _b.inputs["Emission Strength"].default_value = float(os.environ.get("LIFT", 0.04))
+sw.data.materials.append(sweep_m)
 # light: one big soft area above, slightly forward; a dim world for the falloff down the face
 def area(name, size, power, loc, target):
     d = bpy.data.lights.new(name, "AREA"); d.shape = "RECTANGLE"; d.size, d.size_y = size; d.energy = power
@@ -152,7 +153,7 @@ cd = bpy.data.cameras.new("c"); cd.clip_end = 20.0; cam = bpy.data.objects.new("
 for name, loc, target, lens in VIEWS:
     if os.environ.get("VIEW") and name not in os.environ["VIEW"].split(","): continue
     cd.lens = lens
-    sc.view_settings.exposure = float(os.environ.get("EXPOSURE", 0.0)) + (-1.1 if name == "top" else 0.0)
+    sc.view_settings.exposure = float(os.environ.get("EXPOSURE", 0.0)) + (-1.1 if name == "top" else -0.6 if name == "rear" else 0.0)
     kl = (-0.9, -0.7, 0.95) if name == "top" else (0.0, 0.1, 1.5)      # the top view lights the scoop from the side so its walls show
     key.location = kl; key.rotation_euler = (Vector((0.0, -0.05, 0.1)) - Vector(kl)).to_track_quat("-Z", "Y").to_euler()
     l = Vector(loc) * S; t = Vector(target) * S
