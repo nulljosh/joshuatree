@@ -367,3 +367,8 @@ Check: `tools/checks/arm64-crash-check.py` (the Pi image faults behind the splas
 
 `pick <sentence>` names the tool Samantha's hands would reach for, from a 15K-weight integer model in freestanding C (`kernel/picker.c`). On Turing's nine dev sets the Python reference gets 3,820 of 4,455 tool picks right (85.8 percent); the C matches it on all 297 golden sentences. Arguments and the guard stay with the full model, this picks the tool only.
 Check: `tools/checks/picker-check.sh` (QEMU, no network): `pickcheck: 297/297 ok` and four typed sentences.
+
+## 3.8.1: the small picker learns to say "not a command"
+
+The 3.8.0 picker made a tool call on 26 percent of sentences that are only chat; it now abstains (a lean toward null and a margin rule) and was trained on 1,400 more chatty rows, down to 7 percent on the same sentences. The tool-level right rate on Turing's nine dev sets is 81.2 percent (3,617 of 4,455), still over the 80 percent bar.
+Check: `tools/checks/picker-check.sh` (QEMU, no network): the C agrees with the Python reference on 297 of 297 golden sentences, margin rule included.
