@@ -31,6 +31,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 #include "hamurabi_sprites.h"
 #include "hamurabi_rules.h"
 
@@ -107,6 +108,28 @@ static NOINL u32 rnd(u32 i, u32 salt) {
     x = (x ^ (x >> 12)) * 0x297A2D39u;
     x ^= x >> 15;
     return x % 100000u;
+}
+
+/* ---------- text ----------
+   The scene is painted into a 1x back buffer and copied over the window. At scale 2 the copy doubles each pixel (the art is
+   pixel art: whole blocks stay crisp) and the text is not painted into it at all: it is queued here, and after the copy
+   the kernel draws it at device size (hires.h), so the letters are sharp over the blocks. At scale 1 it paints straight in. */
+struct tq { int face, x, y, pct; u32 rgb; int off; };
+#define TQ_N 80
+#define TQ_CH 4096
+#define TQ_BYTES (TQ_N * sizeof(struct tq) + TQ_CH)
+static struct tq *tqs JT_DATA = 0;
+static char *tqc JT_DATA = 0;
+static int tq_n JT_DATA = 0, tq_ch JT_DATA = 0, dev2x JT_DATA = 0;
+static void qtext_pct(int face, int x, int y, u32 rgb, const char *s, int pct);
+static void qtext(int face, int x, int y, u32 rgb, const char *s) { qtext_pct(face, x, y, rgb, s, 100); }
+static void qtext_pct(int face, int x, int y, u32 rgb, const char *s, int pct) {
+    if (!dev2x) { jt_text_draw(&cv, face, x, y, rgb, s); return; }
+    int n = 0; while (s[n]) n++;
+    if (tq_n >= TQ_N || tq_ch + n + 1 > TQ_CH) return;
+    struct tq *q = &tqs[tq_n++];
+    q->face = face; q->x = x; q->y = y; q->rgb = rgb; q->pct = pct; q->off = tq_ch;
+    for (int i = 0; i <= n; i++) tqc[tq_ch++] = s[i];
 }
 
 /* ---------- pixels ---------- */
@@ -676,13 +699,17 @@ static void glass(int x, int y, int w, int h, int r) {
 
 static int text_c(int face, int cx, int y, u32 rgb, const char *s) {
     int w = jt_text_width(face, s);
-    jt_text_draw(&cv, face, cx - w / 2, y, rgb, s);
+    qtext(face, cx - w / 2, y, rgb, s);
     return w;
 }
 
 /* The title, a 16-pixel bold face enlarged f times, smoothed and then sharpened so the edges stay clean. */
 static void big_text(const char *s, int cx, int top, int f, u32 rgb, int alpha) {
     int tw = jt_text_width(JT_FACE_BOLD, s), mw = tw + 4, mh = 20;
+    if (dev2x) {   /* sharp: the bold face at f times its size, queued for the device-size pass (alpha is 255 on the title) */
+        qtext_pct(JT_FACE_BOLD, cx - tw * f / 2, top + f, rgb, s, 100 * f);
+        return;
+    }
     if ((u32)(mw * mh * 4) > MASK_BYTES) return;
     for (int i = 0; i < mw * mh; i++) mask[i] = 0xFFFFFF;
     struct jt_window_info m = { (u32)mw, (u32)mh, (u32)mw, mask };
@@ -774,14 +801,14 @@ static int wrap(int face, int x, int y, int maxw, int lh, u32 rgb, const char *s
         t[tn] = 0;
         if (n && (tn > 120 || jt_text_width(face, t) > maxw)) {
             if (lines >= maxl) return lines;
-            if (draw) jt_text_draw(&cv, face, x, y + lines * lh, rgb, line);
+            if (draw) qtext(face, x, y + lines * lh, rgb, line);
             lines++; n = 0; line[0] = 0;
             continue;
         }
         for (int i = 0; i <= tn; i++) line[i] = t[i];
         n = tn; s += wl;
     }
-    if (n && lines < maxl) { if (draw) jt_text_draw(&cv, face, x, y + lines * lh, rgb, line); lines++; }
+    if (n && lines < maxl) { if (draw) qtext(face, x, y + lines * lh, rgb, line); lines++; }
     return lines;
 }
 
@@ -1020,7 +1047,7 @@ static NOINL void ui_card(void) {
     int btns_h = two && !side ? 44 + 8 + 40 : 44;
     int ph = 14 + 22 + 4 + nl * 18 + 12 + btns_h + 14, py = chh - 10 - ph;
     glass(px, py, pw, ph, 22);
-    jt_text_draw(&cv, JT_FACE_BOLD, px + 14, py + 14, INK, card_title);
+    qtext(JT_FACE_BOLD, px + 14, py + 14, INK, card_title);
     wrap(JT_FACE_BODY, px + 14, py + 14 + 22 + 4, inner, 18, INK, card_text, 4, 1);
     int by = py + ph - 14 - btns_h;
     if (!two) { button(px + 14, by, inner, 44, "Continue", 1, 1, 0, A_CHOICE, 0); return; }
@@ -1054,11 +1081,11 @@ static NOINL void ui_orders(void) {
     for (int r = 0; r < 3; r++) {
         int x0 = px + 14 + r * (colw + gap), v = *rowp(r), lo = row_min(r), hi = row_max(r), en = hi > lo && mode != M_DEMO;
         if (r == row) ring(x0 - 6, y - 4, colw + 12, colh + 2);
-        jt_text_draw(&cv, JT_FACE_BOLD, x0, y, r == row ? ACCENT : INK, r == 0 ? "Land" : r == 1 ? "Feed" : "Plant");
+        qtext(JT_FACE_BOLD, x0, y, r == row ? ACCENT : INK, r == 0 ? "Land" : r == 1 ? "Feed" : "Plant");
         if (r > 0) {
             const char *q = r == 1 ? "Everyone" : "All I can";
             int qw = jt_text_width(JT_FACE_BODY, q);
-            jt_text_draw(&cv, JT_FACE_BODY, x0 + colw - qw, y, ACCENT, q);
+            qtext(JT_FACE_BODY, x0 + colw - qw, y, ACCENT, q);
             if (mode != M_DEMO) hit_add(x0 + colw - qw - 4, y - 2, qw + 8, 20, A_QUICK, r);
         }
         SB(vb); SB(db); SB(d2);
@@ -1074,9 +1101,9 @@ static NOINL void ui_orders(void) {
             sb_s(&db, "acres to sow");
             sb_s(&d2, "seed: "); sb_i(&d2, v, 1); sb_s(&d2, " bushels");
         }
-        jt_text_draw(&cv, JT_FACE_BOLD, x0, y + 18, INK, vb_buf);
-        jt_text_draw(&cv, JT_FACE_BODY, x0, y + 36, MUTED, db_buf);
-        jt_text_draw(&cv, JT_FACE_BODY, x0, y + 52, MUTED, d2_buf);
+        qtext(JT_FACE_BOLD, x0, y + 18, INK, vb_buf);
+        qtext(JT_FACE_BODY, x0, y + 36, MUTED, db_buf);
+        qtext(JT_FACE_BODY, x0, y + 52, MUTED, d2_buf);
         int cy = y + 83, bx = x0 + 28 + 12, bw = colw - 2 * (28 + 12);
         round_btn(x0, cy - 14, 28, 0, A_STEP, r * 2);
         round_btn(x0 + colw - 28, cy - 14, 28, 1, A_STEP, r * 2 + 1);
@@ -1101,8 +1128,8 @@ static NOINL void ui_orders(void) {
         sb_i(&wb, city.people - fed, 1); sb_s(&wb, " will go hungry.");
         if (ord.buy >= 0 && city.grain - ord.buy * city.price < city.people * HAMURABI_FOOD) sb_s(&wb, " Sell land to buy food.");
     } else sb_s(&wb, "Everyone eats");
-    jt_text_draw(&cv, JT_FACE_BODY, sx, y, MUTED, "Grain left");
-    jt_text_draw(&cv, JT_FACE_BOLD, sx + sumw - jt_text_width(JT_FACE_BOLD, lb_buf), y, INK, lb_buf);
+    qtext(JT_FACE_BODY, sx, y, MUTED, "Grain left");
+    qtext(JT_FACE_BOLD, sx + sumw - jt_text_width(JT_FACE_BOLD, lb_buf), y, INK, lb_buf);
     wrap(JT_FACE_BODY, sx, y + 20, sumw, 16, err || city.people - fed > 0 ? ACCENT : MUTED, wb_buf, 2, 1);
     button(sx, y + colh - 42, sumw, 42, "End the year", 1, !err && mode != M_DEMO, 0, A_SUBMIT, 0);
 }
@@ -1153,7 +1180,7 @@ static NOINL void ui_report(void) {
     glass(px, py, pw, ph, 22);
     SB(h);
     sb_s(&h, "Year "); sb_i(&h, yr.year, 0);
-    jt_text_draw(&cv, JT_FACE_BOLD, px + 14, y, INK, h_buf);
+    qtext(JT_FACE_BOLD, px + 14, y, INK, h_buf);
     y += 22;
     for (int i = 0; i < n; i++) y += 18 * wrap(JT_FACE_BODY, px + 14, y, tw, 18, bad[i] ? ACCENT : INK, txt[i], 2, 1);
     button(px + pw - 14 - bw, py + ph - 14 - 44, bw, 44, city.over ? "See your grade" : "Next year", 1, mode != M_DEMO, 0, A_NEXT, 0);
@@ -1187,8 +1214,8 @@ static NOINL void ui_over(void) {
             else if (i == 3) sb_i(&v, harvested, 1);
             else sb_i(&v, plagues, 0);
             int x = mx + i * mw / 5;
-            jt_text_draw(&cv, JT_FACE_BOLD, x, y, INK, v_buf);
-            jt_text_draw(&cv, JT_FACE_BODY, x, y + 18, MUTED, LAB[i]);
+            qtext(JT_FACE_BOLD, x, y, INK, v_buf);
+            qtext(JT_FACE_BODY, x, y + 18, MUTED, LAB[i]);
         }
     }
     if (mode == M_DEMO) wrap(JT_FACE_BODY, px + pw - 14 - bw, py + 14, bw, 18, MUTED, "Press any key to go back to the menu.", 3, 1);
@@ -1201,6 +1228,7 @@ static NOINL void ui_over(void) {
 /* One frame: paint it all into the back buffer, then copy it over the window in one quick pass. */
 static void draw(void) {
     cv.width = win.width; cv.height = win.height; cv.pitch = win.width;
+    dev2x = jt_scale(&win) == 2; tq_n = tq_ch = 0;
     layout();
     snapshot();
     scene();
@@ -1212,6 +1240,20 @@ static void draw(void) {
     case PH_ORDERS: ui_orders(); break;
     case PH_REPORT: ui_report(); break;
     default: ui_over(); break;
+    }
+    if (dev2x) {   /* device size: each back-buffer pixel is a 2 by 2 block, then the queued text over it */
+        u32 W2 = win.width * 2u;
+        for (u32 y = 0; y < win.height; y++) {
+            u32 *d0 = win.pixels + (y * 2u) * W2, *d1 = d0 + W2; const u32 *r = cv.pixels + y * win.width;
+            for (u32 x = 0; x < win.width; x++) { u32 c = r[x]; d0[2 * x] = d0[2 * x + 1] = d1[2 * x] = d1[2 * x + 1] = c; }
+        }
+        for (int i = 0; i < tq_n; i++) {
+            const struct tq *q = &tqs[i];
+            if (q->pct == 100) jt_text_draw(&win, q->face, q->x, q->y, q->rgb, tqc + q->off);
+            else jt_text_draw_pct(&win, q->face, q->x, q->y, q->rgb, tqc + q->off, q->pct);
+        }
+        tq_n = tq_ch = 0;
+        return;
     }
     u32 n = win.width * win.height;
     for (u32 i = 0; i < n; i++) win.pixels[i] = cv.pixels[i];
@@ -1315,7 +1357,7 @@ static void num(char *out, int *n, int v) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) {
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) {
         jt_write(2, "hamurabi: no window\n", 20);
         jt_exit(1);
     }
@@ -1327,7 +1369,7 @@ void _start(int argc, char **argv) {
         jt_write(1, line, (unsigned)l);
     }
     {   /* the sheet, the title's scratch, the walkers and the back buffer live on the SYS_BRK heap */
-        unsigned base = (unsigned)jt_brk(0), need = (SHEET_BYTES + MASK_BYTES + FOLK_BYTES + BB_BYTES + 4095u) & ~4095u;
+        unsigned base = (unsigned)jt_brk(0), need = (SHEET_BYTES + MASK_BYTES + FOLK_BYTES + BB_BYTES + (unsigned)TQ_BYTES + 4095u) & ~4095u;
         if (win.width * win.height * 4u > BB_BYTES) { jt_write(2, "hamurabi: window too big\n", 25); jt_exit(1); }
         unsigned top = (unsigned)jt_brk(base + need); /* the heap lives at 0xFF000000: "negative" as an int, so errors are -4095..-1 only */
         if (top >= 0xFFFFF000u || top < base + need) { jt_write(2, "hamurabi: no heap\n", 18); jt_exit(1); }
@@ -1335,6 +1377,8 @@ void _start(int argc, char **argv) {
         mask = (u32 *)(base + SHEET_BYTES);
         fk = (struct folk *)(base + SHEET_BYTES + MASK_BYTES);
         cv.pixels = (u32 *)(base + SHEET_BYTES + MASK_BYTES + FOLK_BYTES);
+        tqs = (struct tq *)(base + SHEET_BYTES + MASK_BYTES + FOLK_BYTES + BB_BYTES);
+        tqc = (char *)(tqs + TQ_N);
     }
     unpack();
 

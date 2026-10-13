@@ -93,8 +93,10 @@ jobs:
     # wedged QEMU is one named FAIL rather than a job-level timeout that
     # takes every check after it down with no result. 30 minutes leaves
     # room for the suite's one automatic retry of timing-sensitive checks
-    # on top of the ~6 minutes it really takes.
-    timeout-minutes: 30
+    # on top of the ~6 minutes it really takes. Shard 6 is the exception: every
+    # ARM app check shares it (they build in one arch/arm64 tree), and with the Pi
+    # apps ported it runs about 35 minutes, so the ceiling is 60.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

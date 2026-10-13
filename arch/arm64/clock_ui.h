@@ -18,21 +18,22 @@ static void clock_paint(void) {
         for (unsigned div = 1000; div; div /= 10) date[n++] = '0' + (unsigned)clock_year / div % 10;
         date[n] = 0;
     }
-    int s = (int)window_scale(), center = (win_lx + win_lw / 2) * s;
+    int s = (int)window_scale(), center = (win_lx + win_lw / 2) * s, ex = (win_lh - win_def[WT_MAIN][1]) / 2;   /* a taller window (resized) centres the three lines in it */
     cur_hide();
     gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Clock");
     window_rect(win_lx + 8, win_ly + 30, win_lw - 16, win_lh - 38, 0x00faf8f4);
-    text_draw(1, time, center - text_width(1, time, 400 * s) / 2, (win_ly + 120) * s,
+    text_draw(1, time, center - text_width(1, time, 400 * s) / 2, (win_ly + 120 + ex) * s,
               400 * s, fb_color(0x001C1C1E), fb, fb_pitch, fb_w, fb_h);
-    gui_text(date, win_lx + (win_lw - gui_text_width(date)) / 2, win_ly + 150, 0x001C1C1E);
-    gui_text("Vancouver", win_lx + (win_lw - gui_text_width("Vancouver")) / 2, win_ly + 180, 0x0075726E);
+    gui_text(date, win_lx + (win_lw - gui_text_width(date)) / 2, win_ly + 150 + ex, 0x001C1C1E);
+    gui_text("Vancouver", win_lx + (win_lw - gui_text_width("Vancouver")) / 2, win_ly + 180 + ex, 0x0075726E);
     fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
     cur_show(); clock_shown = utc / 60;
+    if (win_sizing) return;   /* a resize redraws the same minute: no second log line */
     con_quiet = 1; uart_puts("clock: "); uart_puts(time); uart_putc(' '); uart_puts(date); uart_putc('\n');
 }
 static void clock_open(void) {
     if (clock_live || !fb) return;
-    brick_close(); calc_close(); browser_close(); app_kill("closed for the Clock"); console_close(); clock_live = 1;
+    settings_close(); brick_close(); calc_close(); browser_close(); app_kill("closed for the Clock"); console_close(); clock_live = 1;
     clock_paint(); uart_puts("clock open\n");
 }
 static void clock_close(void) {

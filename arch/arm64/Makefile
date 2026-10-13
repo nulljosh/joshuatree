@@ -124,12 +124,15 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o
-PISDOBJ = pi-emmc.o fat.o ufile.o
+SDOBJ = emmc.o fat.o ufile.o settings.o
+PISDOBJ = pi-emmc.o fat.o ufile.o settings.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
+# Settings (3.13.0): the choices, JT/SETTINGS.TXT and the version the About page shows, read from VERSION at build time.
+settings.o: settings.c audio.h emmc.h ../../drivers/fat.h ../../VERSION
+	$(SDCC) -DJT_VERSION='"$(shell cat ../../VERSION)"' -c $< -o $@
 emmc.o: emmc.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 pi-emmc.o: emmc.c emmc.h ../../drivers/fat.h
@@ -148,7 +151,7 @@ user.o: user.S
 # mp3.c (minimp3) does its sums in floating point, so it alone is built without -mgeneral-regs-only (UFPCC); EL0 may use
 # the FPU and vectors.S keeps an app's FP registers across every call and park. The kernel stays integer-only.
 # userapps.S bakes the images in with .incbin and lists them; a new app is a name in UAPPS and a row there.
-UAPPS = hello calendar notes music books
+UAPPS = hello calendar notes music books finder mail weather stocks reminders mines toroid hamurabi keyrate
 USEROBJ = user.o userapps.o
 UCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fdirect-access-external-data -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
 UFPCC = $(filter-out -mgeneral-regs-only,$(UCC))
@@ -170,10 +173,21 @@ ujt_png.o: $(UJT)/png.c ../../drivers/png.c ../../drivers/inflate.c ../../driver
 	$(UCC) -c $< -o $@
 ujt_jpeg.o: $(UJT)/jpeg.c ../../drivers/jpeg.c ../../drivers/jpeg.h $(UJT)/stdlib.h $(UJT)/string.h
 	$(UCC) -c $< -o $@
-uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h
+# (the recipe line below was missing: make then built i386's weather.c through the pattern rule)
+uapp_weather.o: ../../user/weather_pi.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/hires.h
+	$(UCC) -c $< -o $@
+uapp_stocks.o: ../../user/stocks_pi.c ../../user/jtsys.h $(UJT)/text.h
+	$(UCC) -c $< -o $@
+uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h $(UJT)/hires.h
+	$(UCC) -c $< -o $@
+# 3.17.0: the app called reminders is user/remindpi.c (the Pi's macOS-shaped list), not user/reminders.c, which is the i386 one; this rule beats the pattern above.
+uapp_reminders.o: ../../user/remindpi.c ../../user/jtsys.h $(UJT)/text.h
 	$(UCC) -c $< -o $@
 uapp_music.o: $(UJT)/wav.h $(UJT)/mp3.h $(UJT)/stdlib.h $(UJT)/string.h $(UJT)/mascot.h mascot_art.h
 uapp_books.o: $(UJT)/mascot.h mascot_art.h
+# Mail (3.15.0) is the three-pane user/mailpi.c, not i386's user/mail.c: the app is still called mail.
+uapp_mail.o: ../../user/mailpi.c ../../user/jtsys.h $(UJT)/text.h
+	$(UCC) -c $< -o $@
 # notes.c finds its arena with (unsigned)_user_end, a 32-bit cast that is still exact here: the app window sits below 4 GiB.
 uapp_notes.o: UCC += -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
 uapp_%.bin: uapp_%.o $(UJTOBJ) user_c.ld
@@ -183,7 +197,7 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = settings_ui.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
@@ -286,6 +300,9 @@ sdwtest: sdw-kernel8.img sdr-kernel8.img
 $(eval $(call variant,notesw,-DNOTES_SELFTEST=1,,))
 $(eval $(call variant,notesr,-DNOTES_SELFTEST=2,,))
 notestest: notesw-kernel8.img notesr-kernel8.img
+$(eval $(call variant,remw,-DNOTES_SELFTEST=3,,))
+$(eval $(call variant,remr,-DNOTES_SELFTEST=4,,))
+reminderstest: remw-kernel8.img remr-kernel8.img
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
 run-pi: kernel8.img
@@ -293,7 +310,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest
+.PHONY: brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest reminderstest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))

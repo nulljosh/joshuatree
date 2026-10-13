@@ -13,6 +13,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 
 #define BG     0x00FAF8F6 /* GUI_BG */
 #define HIDDEN 0x00D9D3CA
@@ -77,16 +78,7 @@ static void reveal(int y, int x) {
     if (opened == MW * MH - NMINES && !won) { won = over = 1; say("mines: won\n"); }
 }
 
-static void rect(int x, int y, int w, int h, unsigned c) {
-    if (x < 0) { w += x; x = 0; }
-    if (y < 0) { h += y; y = 0; }
-    if (x + w > (int)win.width)  w = (int)win.width - x;
-    if (y + h > (int)win.height) h = (int)win.height - y;
-    for (int yy = 0; yy < h; yy++) {
-        unsigned *row = win.pixels + (unsigned)(y + yy) * win.width + (unsigned)x;
-        for (int xx = 0; xx < w; xx++) row[xx] = c;
-    }
-}
+static void rect(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
 static int text(const char *s, int x, int y, unsigned fg) { return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 
 static void draw(void) {
@@ -110,14 +102,15 @@ static void draw(void) {
     text(won ? "You won." : over ? "Boom. r deals again." : "10 mines", tx, ty + 28, won ? NUM[2] : over ? NUM[3] : HINT);
     utoa10((unsigned)opened, num);
     int x2 = text("opened ", tx, ty + 52, HINT); text(num, x2, ty + 52, HINT);
-    text("click or space reveals   f flags   arrows move", tx, ty + 90, HINT);
-    text("r new board   esc closes", tx, ty + 112, HINT);
+    text("click or space reveals", tx, ty + 90, HINT);
+    text("f flags   arrows move", tx, ty + 112, HINT);
+    text("r new board   esc closes", tx, ty + 134, HINT);
 }
 
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) { say("mines: no window\n"); jt_exit(1); }
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) { say("mines: no window\n"); jt_exit(1); }
     {   char line[48]; int l = 0;
         const char *pfx = "mines: ring-3 window ";
         while (*pfx) line[l++] = *pfx++;

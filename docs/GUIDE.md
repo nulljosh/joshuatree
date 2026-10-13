@@ -55,6 +55,19 @@ choose another match; Escape closes the search. Cmd+Space opens Spotlight
 too, like a Mac; Space on its own does nothing. A Mac keyboard may need its
 Fn key for F1. With nothing typed, Spotlight lists every app, Calculator
 included; type calc and press Enter to open it.
+### Copy, paste and the Cmd keys
+
+Cmd is the Windows or Super key on a PC keyboard; Ctrl does the same for
+copy and paste. There is one clipboard for the whole Pi, plain text, 4 KB.
+Cmd+A selects everything in a note, Cmd+C copies, Cmd+X cuts and Cmd+V pastes,
+in Notes, on the Terminal's input line and in the Browser's address bar. In
+the Terminal and the address bar the whole line is what copy and cut take, so
+Cmd+A has nothing to select there. A note copy longer than 4 KB keeps the
+first 4 KB. A paste takes what fits the field and drops the rest; line breaks
+become spaces and pasting never runs a command. Cmd+W closes the front window
+and Cmd+Q quits the front app; every window here belongs to one app, so both
+do the same as its red dot. Cmd+Space opens Spotlight.
+
 Some dock tiles are placeholders on the Pi. Calculator, Clock, Terminal
 and Console are available; the web demo's larger app collection is separate.
 
@@ -223,9 +236,11 @@ board's physical power supply. Restart boots the OS again. These paths
 pass in QEMU; confirm them on the board before relying on them. The current
 card has not been updated.
 
-## Drag a window
+## Drag and resize a window
 
-Press on a window's title bar between the dots and move the mouse: the Console, Terminal, Browser, Clock and Brick windows follow the pointer and stop at the menu bar, the screen edges and the dock. The Calculator and app windows stay where they open. Released in 3.6.0.
+Press on a window's title bar between the dots and move the mouse: every window on the Pi (Console, Terminal, Browser, Clock, Brick, Calculator, Calendar, Notes, Music and Books) follows the pointer and stops at the menu bar, the screen edges and the dock. Drag was released in 3.6.0 for the first five and reaches the rest in 3.12.0.
+
+To resize, press within 12 pixels of a window's right edge, bottom edge or left edge (below the title bar) and move: that edge follows the pointer. The bottom-right corner moves two edges at once. A window will not get smaller than a sensible minimum (320 by 220 for the Console, Terminal, Browser and Clock, 220 by 260 for the Calculator, 400 by 300 for an app), nor bigger than the screen above the dock. What is in the window lays itself out again to fit: the Console and Terminal fit more or fewer columns and rows, the Browser re-wraps its page, the Calculator spreads its keys, and Calendar, Notes, Music and Books redraw at the new size. The pointer stays an arrow. Brick has a fixed field and keeps its first size as its smallest. On a 720p, 768p or 4K screen an app's window also stops growing at about 376,000 pixels of content (it needs that much room in memory). A 1080p Pi never gets there.
 
 ## Play Brick
 

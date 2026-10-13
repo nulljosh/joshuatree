@@ -51,16 +51,29 @@ const DEV_WORDS = ['ns/op', 'MB/s', 'ns/switch', 'KB/s', 'tools/bench.sh'];
 const REPO_URL = 'https://github.com/nulljosh/joshuatree/';
 
 const launch = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {};
+// Playwright puts no timeout on launch's handshake, newContext, newPage or evaluate, and ci-suite.sh has no per-check
+// ceiling on a Mac without coreutils' timeout: WebKit's newPage once hung here for 52 minutes and took the shard with it.
+// (On macOS 27.0.1 Playwright 1.64's WebKit Networking process blocks at start in an XPC service lookup inside CFNetwork,
+// so the WebContent process waits forever for its network connection and newPage never returns.)
+// The whole check takes about 25 seconds, so after WATCHDOG_S without finishing it is one named FAIL, not a wedged shard.
+const WATCHDOG_S = 180;
+let stage = 'starting';
+setTimeout(() => { console.log(`FAIL: no answer from the browser for ${WATCHDOG_S}s, stuck at: ${stage}`); process.exit(1); }, WATCHDOG_S * 1000).unref();
 if (!await exists(join(ROOT, 'footer-landscape.svg'))) fail('footer landscape asset is missing');
 try {
 for (const engine of [chromium, webkit]) {
+stage = `${engine.name()} launch`;
 const browser = await engine.launch(engine === chromium ? launch : {});
 try {
   for (const scheme of ['light', 'dark']) for (const w of [320, 390, 768, 1280]) {
     const tag = `${engine.name()} ${w}px ${scheme}`;
+    stage = `${tag}: newContext`;
     const ctx = await browser.newContext({ viewport: { width: w, height: 900 }, colorScheme: scheme });
+    stage = `${tag}: newPage`;
     const page = await ctx.newPage();
+    stage = `${tag}: loading the page`;
     await page.goto(url, { waitUntil: 'load' });
+    stage = `${tag}: checks`;
     await page.waitForTimeout(500);
 
     // 1. structure and collapsed-by-default
