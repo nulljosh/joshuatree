@@ -2433,13 +2433,13 @@ static void m1_selftest(void) {
 #endif
 }
 
-/* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock and Brick are available; other names return 0. */
+/* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock, Brick, Browser and Stocks are available; other names return 0. */
 int app_open_name(const char *name) {
-    static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser"};
-    for (unsigned a = 0; a < 5; a++) {
+    static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser", "stocks"};
+    for (unsigned a = 0; a < 6; a++) {
         const char *w = openable[a]; unsigned i = 0;
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
-        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); return 1; }
+        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); else if (a == 5) dock_activate(9); return 1; }
     }
     return 0;
 }

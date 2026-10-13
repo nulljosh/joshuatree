@@ -18,6 +18,7 @@
     app notes
     app music
     app books
+    app stocks
 
 /* M3c part 2: loop, the scheduler's test program, made by hand in the same image format: one code page, then the trailer
    { "JTU1", 4096 bytes of code, an empty relocation list }. It asks for its window, then yields forever: it never polls,
@@ -98,6 +99,7 @@ fpkeep_img_end:
 .Lname_notes:    .asciz "notes"
 .Lname_music:    .asciz "music"
 .Lname_books:    .asciz "books"
+.Lname_stocks:   .asciz "stocks"
 .Lname_loop:     .asciz "loop"
 .Lname_fpkeep:   .asciz "fpkeep"
 
@@ -109,6 +111,7 @@ user_apps:
     .quad .Lname_notes, notes_img, notes_img_end
     .quad .Lname_music, music_img, music_img_end
     .quad .Lname_books, books_img, books_img_end
+    .quad .Lname_stocks, stocks_img, stocks_img_end
     .quad .Lname_loop, loop_img, loop_img_end
     .quad .Lname_fpkeep, fpkeep_img, fpkeep_img_end
     .quad 0, 0, 0

@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 3.18.0 development branch (2026-10-12)
+
+Stocks opens on the Pi. The dock tile and Spotlight (and Samantha's `[[open stocks]]`) open a window with a watchlist on the left (symbol, name, price, a green or red change pill and a small trend line) and an anti-aliased line chart of the selected symbol on the right, Up and Down to pick. It reads `JT/STOCKS.TXT` in the i386 app's format when the card has one ("Saved prices"), and otherwise draws a built-in sample labelled "Sample, not live prices". No network and no key, so nothing is claimed as live. Check: `tools/checks/arm64-stocks-check.py`.
+
 ## 3.7.3 development branch (2026-10-12)
 
 The Bluetooth mouse comes back by itself. Before, a saved pairing got one 20 second try at boot and nothing after, so a mouse that was asleep, or that slept later, stayed gone until `bt reconnect`. Now the reconnect is a run of tries (12 seconds each, then a pause of 2, 4, 8, 15 and 30 seconds, up to 30), it starts at boot, when the link drops and on `bt reconnect`, and it re-encrypts with the saved key and turns the mouse's reports on again each time. `bt status` shows searching, connected or idle, the saved address with only its last byte, the tries and the last error. A mouse that ignores boot protocol now has its report map read and its button, X, Y and wheel fields placed from it (12 bit packed X and Y checked), and `bt status` shows the last report's bytes. Proven in QEMU only against a fake mouse, not yet on the Pi. Check: `tools/checks/arm64-bt-check.py`.
