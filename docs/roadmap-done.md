@@ -367,3 +367,8 @@ Check: `tools/checks/arm64-crash-check.py` (the Pi image faults behind the splas
 
 `pick <sentence>` names the tool Samantha's hands would reach for, from a 15K-weight integer model in freestanding C (`kernel/picker.c`). On Turing's nine dev sets the Python reference gets 3,820 of 4,455 tool picks right (85.8 percent); the C matches it on all 297 golden sentences. Arguments and the guard stay with the full model, this picks the tool only.
 Check: `tools/checks/picker-check.sh` (QEMU, no network): `pickcheck: 297/297 ok` and four typed sentences.
+
+## 3.11.0: Nimbus, a small square computer
+
+A new printable body for the Pi 4 and the official 7 inch touch display: the front is the icon tile's superellipse (`SQUIRCLE_N = 4.8`) stood up and leaned back 6 degrees, one cream material, two printed shells with one 0.5 mm reveal, a smooth handle scoop on top, a debossed tree with one thin terracotta line, ports in one recessed strip on the back, one hidden vent underneath, screws only from below. Built by `docs/hardware/nimbus_cad.py` (every fit is asserted before a file is written), rendered from the real CAD in headless Blender by `docs/hardware/render_nimbus.py`, with a print blueprint from `docs/hardware/nimbus_blueprint.py`. Neo is untouched; the rename waits on the name check.
+Check: `uv run --with build123d --with shapely python docs/hardware/nimbus_cad.py docs/hardware` passes its asserts (parts under 256 mm, window and display clearances, each STEP under 5 MB).

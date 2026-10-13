@@ -188,6 +188,22 @@ stick, you bring the board) and a $349 Neo Complete.
   minute check against ASRock's official J4125B-ITX manual before
   ordering, since it's the whole reason for this pick.
 
+## Nimbus
+
+![Nimbus, front](hardware/nimbus-hero.jpg)
+
+Nimbus is the small square one: a Pi 4 and the official 7 inch touch display in a body whose front is the Joshua Tree icon tile stood up. Cream, matte, leaning back 6 degrees, a smooth scoop on top to carry it, a debossed tree with one thin terracotta line, and every port on the back in one recessed strip. The Pi sits low behind the chin with its USB and Ethernet end at the back; power and micro HDMI come through panel-mount extenders. Two printed shells (front and back cover) split on a 0.5 mm reveal, wall 2.4 mm, screws from underneath, each part under 256 x 256 mm and printed with no supports. The display numbers are stand-ins until the real panel is measured.
+
+![Nimbus, rear](hardware/nimbus-rear.jpg)
+
+```
+uv run --with build123d --with shapely python docs/hardware/nimbus_cad.py docs/hardware   # STL and STEP per part into docs/hardware/nimbus/
+python3 docs/hardware/render_nimbus.py docs/hardware                                       # the four renders, headless Blender
+uv run --with build123d --with shapely python docs/hardware/nimbus_blueprint.py docs/hardware   # the print blueprint (SVG and PDF)
+```
+
+The blueprint sheet is `hardware/nimbus/nimbus-blueprint.svg` (and `.pdf`): views, overall sizes, M3 screw positions, bed fit and print settings per part. Renders: `nimbus-hero.jpg`, `nimbus-rear.jpg`, plus `nimbus-top.jpg` (the scoop) and `nimbus-side.jpg` (the lean).
+
 ## Enclosure: Neo
 
 ![Neo, front](hardware/neo-hero.jpg)
