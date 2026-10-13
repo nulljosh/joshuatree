@@ -69,7 +69,7 @@ g, box, w, h = place("front", 56, 150); els.append(text(56, 140, "FRONT", 14, we
 ox, oy = at(box, gx[0], gx[2]); ow, oh = info["opening"][0] * K, info["opening"][1] * K
 els.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" fill="%s" fill-opacity="0.92"/>' % (ox - ow / 2, oy - oh / 2, ow, oh, info["radius"] * K, INK))
 els.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="none" stroke="%s" stroke-width="0.8"/>' % (ox - info["active"][0] * K / 2, oy - info["active"][1] * K / 2, info["active"][0] * K, info["active"][1] * K, PAPER))
-els.append(text(ox, oy + 4, "154 x 86 active", 11, "middle", PAPER))
+els.append(text(ox, oy + 4, "%.0f x %.0f active" % (info["active"][0], info["active"][1]), 11, "middle", PAPER))
 els.append(hdim(box[0] - w / 2, box[0] + w / 2, 150 + h, "%.1f" % OW)); els.append(vdim(box[0] + w / 2, 150, 150 + h, "%.1f" % OH))
 els.append(text(56, 150 + h + 58, "front %.0f x %.0f, squircle n = %.1f, wall %.1f" % (info["front"][0], info["front"][1], info["squircle_n"], info["wall"]), 12, fill=SOFT))
 sidex = 56 + w + 110
@@ -79,13 +79,13 @@ rx = sidex + w2 + 110
 g, box, w3, h3 = place("rear", rx, 150); els.append(text(rx, 140, "REAR", 14, weight=600)); els.append(shape(g, box))
 a, b = at(box, -sx1, sz1); c, d = at(box, -sx0, sz0)
 els.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="6" fill="none" stroke="%s" stroke-width="1"/>' % (a, b, c - a, d - b, INK))
-els.append(text(rx, 150 + h3 + 58, "one recessed port strip", 12, fill=SOFT))
+els.append(text(rx, 150 + h3 + 58, "one slim strip: two USB-C and a round jack", 12, fill=SOFT))
 # ---- top and underside ----
 row2 = 150 + h + 130
 g, box, w4, h4 = place("top", 56, row2); els.append(text(56, row2 - 10, "TOP", 14, weight=600)); els.append(shape(g, box))
 cx_, cy_ = at(box, info["scoop_center"][0], info["scoop_center"][1]); hx, hz = info["scoop_half"]
 els.append('<ellipse cx="%.1f" cy="%.1f" rx="%.1f" ry="%.1f" fill="none" stroke="%s" stroke-width="1" stroke-dasharray="5 3"/>' % (cx_, cy_, hx * K, hz * K, INK))
-els.append(vdim(box[0] + w4 / 2, row2, row2 + h4, "%.1f" % OD)); els.append(text(56, row2 + h4 + 24, "finger pull under the rear top edge, wall kept at %.1f" % info["wall"], 12, fill=SOFT))
+els.append(vdim(box[0] + w4 / 2, row2, row2 + h4, "%.1f" % OD)); els.append(text(56, row2 + h4 + 24, "finger pull: a small crescent in the back face, wall kept at %.1f" % info["wall"], 12, fill=SOFT))
 ux = 56 + w4 + 110
 g, box, w5, h5 = place("under", ux, row2); els.append(text(ux, row2 - 10, "UNDERSIDE", 14, weight=600)); els.append(shape(g, box))
 for sx, sy in info["screws_m3"]:
@@ -122,7 +122,7 @@ els.append(text(1090, row3 + 40, "Fasteners and fit", 15, weight=600))
 facts = ["2 x M3 x 12 self-tapping from underneath, at %s" % ", ".join("(%.0f, %.0f)" % tuple(p) for p in info["screws_m3"]),
          "4 x M2.5 x 6 for the Pi 4 on teardrop standoffs, board 26 mm off the floor",
          "wall %.1f mm everywhere; one %.1f mm reveal, half-lap joint" % (info["wall"], info["reveal"]),
-         "display: official Pi 7 inch touch, %.0f x %.0f glass, %.2f x %.0f active, glued to a 2 mm ledge" % (info["glass"][0], info["glass"][1], info["active"][0], info["active"][1]),
+         "display (stand-in 16:9 panel): %.0f x %.0f glass, %.0f x %.0f active, glued to a 2 mm ledge" % (info["glass"][0], info["glass"][1], info["active"][0], info["active"][1]),
          "the display numbers are stand-ins: check them with calipers before printing",
          "the front leans %d degrees back; the flat rear pad is the foot, so the chin hovers" % info["lean"]]
 for j, ln in enumerate(facts): els.append(text(1090, row3 + 66 + j * 22, ln, 12, fill=INK if j < 3 else SOFT))

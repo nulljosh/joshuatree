@@ -192,18 +192,18 @@ stick, you bring the board) and a $349 Neo Complete.
 
 ![Nimbus, front](hardware/nimbus-hero.jpg)
 
-Nimbus is the small square one: a Pi 4 and the official 7 inch touch display in a body whose front is the Joshua Tree icon tile stood up. Cream, matte, leaning back 6 degrees, a finger pull under the rear top edge to lift it, a small SD card slot in the chin, a debossed tree with one thin terracotta line, and every port on the back in one recessed strip. The Pi sits low behind the chin with its USB and Ethernet end at the back; power and micro HDMI come through panel-mount extenders. Two printed shells (front and back cover, the back drawing in a soft wedge) split on a 0.5 mm reveal, wall 2.4 mm, screws from underneath, each part under 256 x 256 mm and printed with no supports. The display numbers are stand-ins until the real panel is measured.
+Nimbus is the small square one: a Pi 4 and the official 7 inch touch display in a body whose front is the Joshua Tree icon tile stood up. Cream, matte, leaning back 6 degrees, a small crescent finger pull in the back, a small SD card slot in the chin, a debossed tree with one thin terracotta line, and two USB-C slots and a round jack on the back in one slim recessed strip. The Pi sits low behind the chin; its ports reach the back strip through panel-mount extenders. Two printed shells (front and back cover, the back drawing in a soft wedge) split on a 0.5 mm reveal, wall 2.4 mm, screws from underneath, each part under 256 x 256 mm and printed with no supports. The display numbers are stand-ins (a 16:9 panel with a slim black border, 194 x 110 glass, 176 x 99 active) until the real panel is measured; the official 7 inch touch display has a wider border.
 
 ![Nimbus, rear](hardware/nimbus-rear.jpg)
 
 ```
 uv run --with build123d --with shapely python docs/hardware/nimbus_cad.py docs/hardware   # STL and STEP per part into docs/hardware/nimbus/
 python3 docs/hardware/nimbus_desktop.py                                                    # optional: a fresh screendump of the desktop for the screen
-python3 docs/hardware/render_nimbus.py docs/hardware                                       # the four renders, headless Blender
+python3 docs/hardware/render_nimbus.py docs/hardware                                       # the three renders, headless Blender
 uv run --with build123d --with shapely python docs/hardware/nimbus_blueprint.py docs/hardware   # the print blueprint (SVG and PDF)
 ```
 
-The blueprint sheet is `hardware/nimbus/nimbus-blueprint.svg` (and `.pdf`): views, overall sizes, M3 screw positions, bed fit and print settings per part. Renders: `nimbus-hero.jpg`, `nimbus-rear.jpg`, plus `nimbus-top.jpg` (the top) and `nimbus-side.jpg` (the lean).
+The blueprint sheet is `hardware/nimbus/nimbus-blueprint.svg` (and `.pdf`): views, overall sizes, M3 screw positions, bed fit and print settings per part. Renders: `nimbus-hero.jpg`, `nimbus-rear.jpg`, plus `nimbus-side.jpg` (the lean).
 
 ## Enclosure: Neo
 

@@ -18,8 +18,7 @@ CREAM, INK, TERRA = (0xEF, 0xEB, 0xE4), (0x1C, 0x1C, 0x1E), (0xB5, 0x50, 0x2C)
 SWEEP = (0xC9, 0xC4, 0xBB)
 DESKTOP = os.path.join(HERE, "nimbus", "nimbus-desktop.png")
 VIEWS = [("hero", (-620.0, -930.0, 430.0), (-30.0, 20.0, 100.0), 85.0),
-         ("top", (-620.0, -930.0, 880.0), (-25.0, 15.0, 100.0), 85.0),
-         ("side", (1250.0, -5.0, 230.0), (0.0, -5.0, 105.0), 85.0),
+         ("side", (15.0, -1250.0, 330.0), (15.0, 0.0, 100.0), 85.0),
          ("rear", (600.0, 920.0, 560.0), (0.0, 20.0, 85.0), 85.0)]
 
 try:
@@ -28,14 +27,27 @@ except ImportError:
     bpy = None
 
 def make_screen(path):
-    """The screen: a fresh headless screendump of the ARM desktop (docs/hardware/nimbus_desktop.py writes nimbus/nimbus-desktop.png),
-    1920 x 1080, with the motto line and its glyph above the dock painted over with wallpaper and the bottom 8 rows cropped to the
-    panel's 154.08 x 86 shape."""
+    """The screen: a fresh headless screendump of the ARM desktop (docs/hardware/nimbus_desktop.py writes nimbus/nimbus-desktop.png), 1920 x 1080.
+    The motto line and its glyph above the dock are painted out. The desktop is shown on the grey wallpaper (#E5E5E7 family) Joshua wants:
+    until that lands in the kernel, the terracotta wallpaper pixels (and the dock's shadow on them) are remapped to grey, and the menu bar,
+    half white over the wallpaper, is rebuilt over grey. Text, the dock and its icons are untouched."""
+    import numpy as np
     from PIL import Image
     img = Image.open(DESKTOP).convert("RGB")
     wall = img.getpixel((600, 600))
     img.paste(wall, (780, 815, 1140, 890))            # the motto line and the glyph beside it
-    img.crop((0, 0, 1920, 1072)).save(path)
+    a = np.asarray(img).astype(np.float32); r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    grey = np.array([0xE5, 0xE5, 0xE7], np.float32)
+    f = r / float(wall[0])                                                         # 1 on flat wallpaper, below 1 in the dock's shadow
+    on_wall = (np.abs(g - r * wall[1] / wall[0]) < 7) & (np.abs(b - r * wall[2] / wall[0]) < 7)
+    out = np.where(on_wall[..., None], np.clip(grey[None, None, :] * f[..., None], 0, 255), a)
+    bar_old = np.asarray(img).astype(np.float32)[10, 900]                           # the old menu bar colour, a pale terracotta
+    bar_new = (grey + 255.0) / 2
+    ink = np.array([0x1C, 0x1C, 0x1E], np.float32); y0, y1 = 0, 51
+    lum = lambda c: c[..., 0] * 0.3 + c[..., 1] * 0.6 + c[..., 2] * 0.1
+    cov = np.clip((lum(bar_old) - lum(a[y0:y1])) / (lum(bar_old) - lum(ink)), 0, 1)[..., None]    # how much ink is on each pixel
+    out[y0:y1] = bar_new * (1 - cov) + ink * cov
+    Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)).save(path)
 
 if bpy is None:
     out = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else HERE)
@@ -101,7 +113,7 @@ def glass_sheen(m):
     mr.inputs["From Min"].default_value = 0.35; mr.inputs["From Max"].default_value = 1.0; mr.inputs["To Min"].default_value = 0.0; mr.inputs["To Max"].default_value = float(os.environ.get("SHEEN", 0.045))
     mr.clamp = True
     b.inputs["Emission Color"].default_value = (0.82, 0.86, 0.95, 1.0); nt.links.new(mr.outputs["Result"], b.inputs["Emission Strength"])
-M = {"cream": mat("cream", tuple(min(c, 238) for c in CREAM), 0.45, float(os.environ.get("SSS", 0.1)), 0.6), "ink": mat("ink", INK, 0.3, 0.0, 0.5),
+M = {"cream": mat("cream", tuple(min(c, 238) for c in CREAM), 0.55, float(os.environ.get("SSS", 0.1)), 0.22), "ink": mat("ink", INK, 0.3, 0.0, 0.5),
      "glass": mat("glass", INK, 0.06, 0.0, 0.25), "terra": mat("terra", TERRA, 0.6)}
 glass_sheen(M["glass"])
 USE = {"front_shell": "cream", "back_cover": "cream", "ground_inlay": "terra", "slot_inlay": "ink", "glass": "glass", "module": "ink", "sdliner": "ink", "driver": "ink", "ports": "ink", "board": "ink"}
@@ -114,7 +126,7 @@ for name in meta["meshes"]:
     bpy.context.view_layer.objects.active = o; bpy.ops.object.transform_apply(scale=True)
     o.data.materials.append(M[USE[name]])
     for poly in o.data.polygons: poly.use_smooth = True
-    mod = o.modifiers.new("edges", "EDGE_SPLIT"); mod.use_edge_angle = True; mod.split_angle = math.radians(32)
+    mod = o.modifiers.new("edges", "EDGE_SPLIT"); mod.use_edge_angle = True; mod.split_angle = math.radians(14)
 # the screen: the desktop screenshot on the active area, lit by itself
 q = [Vector(c) * S for c in meta["screen"]]
 me = bpy.data.meshes.new("screen"); me.from_pydata(q, [], [(0, 1, 2, 3)]); me.update()
@@ -124,10 +136,11 @@ scr = bpy.data.objects.new("screen", me); sc.collection.objects.link(scr)
 sm = bpy.data.materials.new("screen"); sm.use_nodes = True; nt = sm.node_tree
 for n in list(nt.nodes): nt.nodes.remove(n)
 img = nt.nodes.new("ShaderNodeTexImage"); img.image = bpy.data.images.load(os.path.join(tmp, "screen.png"))
-em = nt.nodes.new("ShaderNodeEmission"); em.inputs["Strength"].default_value = float(os.environ.get("SCREEN", 0.9))
+em = nt.nodes.new("ShaderNodeEmission"); em.inputs["Strength"].default_value = float(os.environ.get("SCREEN", 1.0))
 outn = nt.nodes.new("ShaderNodeOutputMaterial")
 nt.links.new(img.outputs["Color"], em.inputs["Color"]); nt.links.new(em.outputs["Emission"], outn.inputs["Surface"])
 me.materials.append(sm)
+PROD = [o for o in bpy.data.objects]      # everything so far is the product; the side view turns it a quarter turn so the backdrop matches the hero
 # the sweep: a floor that curves up behind into a wall, off-white, seamless
 import math as _m
 prof = [(0.0, 0.0), (1.4, 0.0)] + [(1.4 + 1.2 * _m.sin(_m.radians(a)), 1.2 - 1.2 * _m.cos(_m.radians(a))) for a in range(10, 91, 10)] + [(2.6, 5.0)]
@@ -153,8 +166,9 @@ cd = bpy.data.cameras.new("c"); cd.clip_end = 20.0; cam = bpy.data.objects.new("
 for name, loc, target, lens in VIEWS:
     if os.environ.get("VIEW") and name not in os.environ["VIEW"].split(","): continue
     cd.lens = lens
-    sc.view_settings.exposure = float(os.environ.get("EXPOSURE", 0.0)) + (-1.1 if name == "top" else -0.6 if name == "rear" else 0.0)
-    kl = (-0.9, -0.7, 0.95) if name == "top" else (0.0, 0.1, 1.5)      # the top view lights the scoop from the side so its walls show
+    for o in PROD: o.rotation_euler[2] = -math.pi / 2 if name == "side" else 0.0
+    sc.view_settings.exposure = float(os.environ.get("EXPOSURE", 0.0)) + (-0.8 if name == "rear" else 0.0)
+    kl = (0.25, 0.8, 1.3) if name == "rear" else (0.0, 0.1, 1.5)      # the rear is lit from behind and above, so the back face is even
     key.location = kl; key.rotation_euler = (Vector((0.0, -0.05, 0.1)) - Vector(kl)).to_track_quat("-Z", "Y").to_euler()
     l = Vector(loc) * S; t = Vector(target) * S
     cam.location = l; cam.rotation_euler = (t - l).to_track_quat("-Z", "Y").to_euler()

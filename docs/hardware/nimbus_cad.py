@@ -36,14 +36,14 @@ D_G = 30.0                   # parting line, measured from the back
 ZG = -D + D_G                    # z of the front shell's rear edge (face frame)
 # ---- the display (stand-in numbers) ----
 GLASS_W, GLASS_H, GLASS_T = 194.0, 110.0, 1.6     # the front glass sheet; the module (LCD, board) hangs behind it
-ACT_W, ACT_H = 154.08, 86.0
+ACT_W, ACT_H = 176.0, 99.0      # stand-in: a 16:9 panel with a slimmer black border than the official 7 inch (154.08 x 86), so the glass fills the face
 OPEN_W, OPEN_H = GLASS_W + 2 * GAP, GLASS_H + 2 * GAP   # the glass sits flush in the face with the 0.5 mm reveal all round
 LIP = 0.2                        # the glass front sits this far behind the face
 SHELF_Z0, SHELF_Z1, SHELF_IN = -3.0, -1.8, 2.0   # a 2 mm ledge behind the glass edge that the sheet is glued to
 MODULE_T = 4.8
 YC = 34.0                        # glass centre height on the face
 # ---- the Pi (numbers from pi4b.py) ----
-PI_X = 26.0                      # the board sits right of centre so the port strip is centred on the back
+PI_X = 0.0                       # the board sits on the centre line
 ZB = 26.0                        # underside of the board above the desk
 USB_OVER = 2.0                   # the USB block stands this far past the board edge
 # ---- front details ----
@@ -88,20 +88,11 @@ def ptf(x, y, z):
 def pta(x, y, z):
     p = (ASM * Pos(x, y, z)).position; return p.X, p.Y, p.Z
 
-# ---- the finger pull: a shallow dish under the rear top edge, out of sight from the front, so the front outline stays a pure squircle ----
-SC = (50.0, 16.0, 14.0)
-SC_C = (0, B + 2.0, -D + 6.0)
+# ---- the finger pull: a small crescent let into the back face under the rear top lip, out of sight from the front and the top ----
+SC = (34.0, 7.0, 5.0)
+SC_C = (0, B - 24.0, -D - 2.0)
 def ellipsoid(grow): return Pos(*SC_C) * scale(Sphere(1), by=(SC[0] + grow, SC[1] + grow, SC[2] + grow))
 outer = outer - ellipsoid(0)
-try:
-    rim = [e for e in outer.edges() if e.bounding_box().center().Y > B - 18 and abs(e.bounding_box().center().Z - SC_C[2]) < 16 and e.bounding_box().size.X > 30]
-    for fr in (4.0, 2.5, 1.5):
-        try:
-            outer = fillet(rim, fr); break
-        except Exception: continue
-    print("finger pull rim edges filleted:", len(rim), "valid", outer.is_valid)
-except Exception as ex:
-    print("finger pull fillet skipped:", ex)
 cavity = cavity - ellipsoid(T)
 # the desk foot: flat pad, the cavity floor stays 2.4 above it
 outer_c = outer - face_of(Pos(0, 0, CUT - 450) * Box(900, 900, 900))
@@ -110,45 +101,20 @@ shell = outer_c - cavity_c
 
 # ---- the mark: the solid crayon tree from docs/hardware/mark.svg, flat-bottomed, with one thin terracotta ground line under it ----
 def mark_geoms():
-    from shapely.geometry import Polygon, LineString
+    """a bold simplified Joshua tree, about 30 mm tall: one thick trunk, three fat tufts, drawn here (not traced), and one thin ground line"""
+    from shapely.geometry import LineString, Point
     from shapely.ops import unary_union
     from shapely import affinity
-    svg = open(os.path.join(HERE, "mark.svg")).read()
-    rings = []
-    for d in re.findall(r' d="([^"]+)"', svg):
-        toks = re.findall(r"[MmLlCcHhZz]|-?\d+\.?\d*", d); i = 0; cur = (0.0, 0.0); pts = []; cmd = "M"; start = cur
-        num = lambda: float(toks[i])
-        while i < len(toks):
-            if toks[i] in "MmLlCcHhZz": cmd = toks[i]; i += 1
-            if cmd in "Zz":
-                if len(pts) >= 3: rings.append(pts)
-                pts = []; cur = start; continue
-            if cmd in "Mm":
-                x, y = float(toks[i]), float(toks[i + 1]); i += 2
-                cur = (x, y) if cmd == "M" else (cur[0] + x, cur[1] + y); start = cur; pts = [cur]; cmd = "L" if cmd == "M" else "l"
-            elif cmd in "Ll":
-                x, y = float(toks[i]), float(toks[i + 1]); i += 2
-                cur = (x, y) if cmd == "L" else (cur[0] + x, cur[1] + y); pts.append(cur)
-            elif cmd in "Hh":
-                x = float(toks[i]); i += 1; cur = (x if cmd == "H" else cur[0] + x, cur[1]); pts.append(cur)
-            elif cmd in "Cc":
-                v = [float(t) for t in toks[i:i + 6]]; i += 6
-                c = [(v[0], v[1]), (v[2], v[3]), (v[4], v[5])] if cmd == "C" else [(cur[0] + v[0], cur[1] + v[1]), (cur[0] + v[2], cur[1] + v[3]), (cur[0] + v[4], cur[1] + v[5])]
-                for k in range(1, 9):
-                    u = k / 8; w = [(1 - u) ** 3, 3 * u * (1 - u) ** 2, 3 * u * u * (1 - u), u ** 3]
-                    pts.append(tuple(sum(w[j] * q[ax] for j, q in enumerate([cur] + c)) for ax in (0, 1)))
-                cur = c[2]
-    big = max(rings, key=lambda r: Polygon(r).area)       # the first, large ring is the tree; the small rings are specks of the traced drawing
-    polys = [Polygon(r).buffer(0) for r in rings if Polygon(r).area > 0.0005 * Polygon(big).area]
-    g = polys[0]
-    for q in polys[1:]: g = g.symmetric_difference(q)      # even-odd, as the SVG fills it
-    x0, y0, x1, y1 = g.bounds; k = MARK_W / (x1 - x0)
+    def arm(pts, w): return LineString(pts).buffer(w / 2, 16)
+    parts = [arm([(0, 0), (0.3, 6), (0.2, 11)], 5.0),
+             arm([(0, 9.5), (-4, 13), (-8.5, 17.5), (-10, 20)], 3.4), arm([(0.2, 10.5), (1.2, 16), (1.4, 22)], 3.6), arm([(0.2, 8), (4.5, 12), (8.5, 15.5), (10, 17.5)], 3.2),
+             Point(-10.2, 22.2).buffer(4.6, 24), Point(1.4, 25.4).buffer(5.4, 24), Point(10.2, 19.6).buffer(4.2, 24)]
+    g = unary_union(parts)
+    x0, y0, x1, y1 = g.bounds; k = 30.0 / (y1 - y0)
     g = affinity.translate(affinity.scale(affinity.translate(g, -(x0 + x1) / 2, -(y0 + y1) / 2), k, k, origin=(0, 0)), MARK_X, MARK_Y)
-    r = MIN_FEATURE / 2
-    g = g.buffer(-r, join_style=1).buffer(r, join_style=1).simplify(0.22)
-    gb = g.bounds; gw = 0.7 * (gb[2] - gb[0])
-    ground = LineString([(MARK_X - gw / 2, gb[1] - 2.2), (MARK_X + gw / 2, gb[1] - 2.2)]).buffer(0.55, 8)
-    return g, ground.simplify(0.01)
+    gb = g.bounds; gw = 0.85 * (gb[2] - gb[0])
+    ground = LineString([(MARK_X - gw / 2, gb[1] - 2.6), (MARK_X + gw / 2, gb[1] - 2.6)]).buffer(0.55, 8)
+    return g.simplify(0.05), ground.simplify(0.01)
 def poly_solid(geom, z0, depth):
     out = None
     for p in (geom.geoms if hasattr(geom, "geoms") else [geom]):
@@ -233,10 +199,9 @@ for sx in (-1, 1):
 cover = cover + pegs
 
 # ---- ports out the back: the Pi's USB and Ethernet block, plus panel-mount USB-C and micro HDMI ----
-usb_w = pi4b.RIGHT_WIN[1] + 1.0
-usb_cx = PI_X + pi4b.RIGHT_WIN[0]
-z_lo, z_hi = ZB + 1.4 + pi4b.RIGHT_WIN[2] - 0.5, ZB + 1.4 + pi4b.RIGHT_WIN[3] + 0.5
-WINDOWS = [("usb", usb_cx, usb_w, z_lo, z_hi, 1.5), ("usbc", -22.0, 10.2, ZB + 1.4 + 1.0, ZB + 1.4 + 5.6, 2.2), ("hdmi", -38.0, 8.0, ZB + 1.4 + 1.0, ZB + 1.4 + 5.6, 2.2)]
+ZC = ZB + 1.4 + 9.0              # height of the strip's centre line above the desk
+# one slim strip, three small ink recesses: two USB-C slots (power and data, panel-mount extenders from the Pi) and a round jack
+WINDOWS = [("usbc_a", -16.0, 9.8, ZC - 1.8, ZC + 1.8, 1.8), ("usbc_b", 0.0, 9.8, ZC - 1.8, ZC + 1.8, 1.8), ("jack", 16.0, 8.0, ZC - 4.0, ZC + 4.0, 3.9)]
 win_corners = []
 for name, cx, w, za, zb, rr in WINDOWS:
     zc = (za + zb) / 2
@@ -247,7 +212,7 @@ for name, cx, w, za, zb, rr in WINDOWS:
     for sx in (-1, 1):
         for sy in (-1, 1): win_corners.append((name, fx + sx * w / 2, fy + sy * hf / 2))
 
-STRIP = (-52.0, PI_X + 28.0, z_lo - 4.0, z_hi + 4.0)   # one recessed strip holds every port: x from, x to, z from, z to
+STRIP = (-26.0, 26.0, ZC - 7.0, ZC + 7.0)   # one recessed strip holds every port: x from, x to, z from, z to
 sx0, sx1, sz0, sz1 = STRIP; sc_, sz_ = (sx0 + sx1) / 2, (sz0 + sz1) / 2
 fx, fy, fz = ptf(sc_, y_back(sz_), sz_)
 cover = cover - Pos(fx, fy, -D - 1.0) * extrude(RectangleRounded(sx1 - sx0, (sz1 - sz0) / math.cos(math.radians(LEAN)), R - 3), 1.0 + STRIP_D)
@@ -260,7 +225,7 @@ driver = Pos(0, YC, SHELF_Z1 - MODULE_T - 12.0) * extrude(Rectangle(100, 58), 12
 def port_block(cx, w, za, zb, tip_in):
     zc = (za + zb) / 2; yt = y_back(zc) - tip_in
     return Pos(cx, yt - 14.0 / 2, zc) * Box(w, 14.0, zb - za)
-ports = port_block(usb_cx, pi4b.RIGHT_WIN[1], z_lo + 0.5, z_hi - 0.5, 1.0) + port_block(-22.0, 9.0, ZB + 2.9, ZB + 5.0, 1.0) + port_block(-38.0, 6.4, ZB + 2.9, ZB + 5.0, 1.0)
+ports = port_block(-16.0, 8.4, ZC - 1.5, ZC + 1.5, 1.0) + port_block(0.0, 8.4, ZC - 1.5, ZC + 1.5, 1.0) + port_block(16.0, 7.0, ZC - 3.5, ZC + 3.5, 1.0)
 board = Pos(PI_X, Y_PC, ZB + 0.7) * Box(pi4b.BOARD_S, pi4b.BOARD_L, pi4b.PCB_T)
 
 # ---- every fit is asserted before a file is written ----
@@ -289,7 +254,7 @@ asm_parts = {k: asm(v) for k, v in parts.items()}
 bb = Compound([asm_parts["front_shell"], asm_parts["back_cover"]]).bounding_box()
 info = {"parts": report, "overall": [round(bb.size.X, 1), round(bb.size.Y, 1), round(bb.size.Z, 1)], "wall": T, "lean": LEAN, "reveal": GAP, "bed": BED,
         "screws_m3": [[round(x, 1), round(y, 1)] for x, y in SCREWS], "board_standoffs_m25": [[round(x, 1), round(y, 1)] for x, y in HOLES],
-        "vent": {"y": round(Y_FLOOR(11.5), 1), "length": 96, "width": 3.2}, "glass": [GLASS_W, GLASS_H], "active": [ACT_W, ACT_H], "glass_center": [round(v, 1) for v in pta(0, YC, 0)], "opening": [OPEN_W, OPEN_H], "strip": [round(v, 1) for v in STRIP], "scoop_center": [round(v, 1) for v in pta(0, B, SC_C[2])], "scoop_half": [round(SC[0] * (1 - ((SC_C[1] - B) / SC[1]) ** 2) ** 0.5, 1), round(SC[2] * (1 - ((SC_C[1] - B) / SC[1]) ** 2) ** 0.5, 1)], "mark": [MARK_W, round(MARK_Y, 1)], "squircle_n": SQUIRCLE_N, "radius": R, "front": [2 * A, 2 * B]}
+        "vent": {"y": round(Y_FLOOR(11.5), 1), "length": 96, "width": 3.2}, "glass": [GLASS_W, GLASS_H], "active": [ACT_W, ACT_H], "glass_center": [round(v, 1) for v in pta(0, YC, 0)], "opening": [OPEN_W, OPEN_H], "strip": [round(v, 1) for v in STRIP], "scoop_center": [round(v, 1) for v in pta(0, SC_C[1], -D)], "scoop_half": [SC[0], 2.5], "mark": [MARK_W, round(MARK_Y, 1)], "squircle_n": SQUIRCLE_N, "radius": R, "front": [2 * A, 2 * B]}
 json.dump(info, open(os.path.join(STL_DIR, "info.json"), "w"), indent=1)
 asm_parts = {k: asm(v) for k, v in parts.items()}
 for _k, _v in asm_parts.items():
