@@ -16,7 +16,8 @@ Local CI and pre-push reject new fixed test paths before building. The balancer 
 | ARM menu notices: bounded messages, expiry, pixels and input | `tools/checks/arm64-notice-check.py` | once |
 | Pi screen sleep: idle deadline, wrap, active apps, refused mailbox requests and keyboard/mouse wake | `tools/checks/arm64-screen-idle-check.py` | once |
 | Brick on ARM: collision rules, lives and win under sanitizers; keyboard/mouse play, timed animation, pause, restart, Spotlight and close in QEMU | `tools/checks/arm64-brick-check.py` | once |
-| Spotlight on ARM lists every app including the Calculator on an empty query, typing calc shows it and Enter opens the window, in headless QEMU | `tools/checks/arm64-spotlight-check.py` | once |
+| Spotlight on ARM lists every app including the Calculator and Settings on an empty query, typing calc shows it and Enter opens the window, in headless QEMU | `tools/checks/arm64-spotlight-check.py` | once |
+| Settings on the Pi: settings.c parsing and file text under sanitizers; in headless QEMU Spotlight and the menu bar icons open the window, five sections with their own glyphs, a wallpaper change repaints the whole desktop and a window closed afterwards leaves the new colour, volume and dock size step, and JT/SETTINGS.TXT survives a reboot | `tools/checks/arm64-settings-check.py` | once |
 | Pi keyboard shutdown and restart: confirmed HID chords halt or reboot raspi4b, Escape cancels, busy and hidden prompts refuse (host and QEMU) | `tools/checks/arm64-power-check.py` | once |
 | CI tooling preserves shared ARM shard affinity and rejects fixed test paths before builds (host only) | `tools/checks/ci-tooling-check.py` | once |
 | Dock slot constants agree with kernel.c (static drift guard) | `tools/checks/dockslots-check.py` | once |

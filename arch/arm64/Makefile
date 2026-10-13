@@ -124,12 +124,15 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o
-PISDOBJ = pi-emmc.o fat.o ufile.o
+SDOBJ = emmc.o fat.o ufile.o settings.o
+PISDOBJ = pi-emmc.o fat.o ufile.o settings.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
+# Settings (3.13.0): the choices, JT/SETTINGS.TXT and the version the About page shows, read from VERSION at build time.
+settings.o: settings.c audio.h emmc.h ../../drivers/fat.h ../../VERSION
+	$(SDCC) -DJT_VERSION='"$(shell cat ../../VERSION)"' -c $< -o $@
 emmc.o: emmc.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 pi-emmc.o: emmc.c emmc.h ../../drivers/fat.h
@@ -183,7 +186,7 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = settings_ui.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c

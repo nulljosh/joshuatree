@@ -33,7 +33,7 @@ static void clock_paint(void) {
 }
 static void clock_open(void) {
     if (clock_live || !fb) return;
-    brick_close(); calc_close(); browser_close(); app_kill("closed for the Clock"); console_close(); clock_live = 1;
+    settings_close(); brick_close(); calc_close(); browser_close(); app_kill("closed for the Clock"); console_close(); clock_live = 1;
     clock_paint(); uart_puts("clock open\n");
 }
 static void clock_close(void) {
