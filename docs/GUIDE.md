@@ -223,9 +223,11 @@ board's physical power supply. Restart boots the OS again. These paths
 pass in QEMU; confirm them on the board before relying on them. The current
 card has not been updated.
 
-## Drag a window
+## Drag and resize a window
 
-Press on a window's title bar between the dots and move the mouse: the Console, Terminal, Browser, Clock and Brick windows follow the pointer and stop at the menu bar, the screen edges and the dock. The Calculator and app windows stay where they open. Released in 3.6.0.
+Press on a window's title bar between the dots and move the mouse: every window on the Pi (Console, Terminal, Browser, Clock, Brick, Calculator, Calendar, Notes, Music and Books) follows the pointer and stops at the menu bar, the screen edges and the dock. Drag was released in 3.6.0 for the first five and reaches the rest in 3.12.0.
+
+To resize, press within 12 pixels of a window's right edge, bottom edge or left edge (below the title bar) and move: that edge follows the pointer. The bottom-right corner moves two edges at once. A window will not get smaller than a sensible minimum (320 by 220 for the Console, Terminal, Browser and Clock, 220 by 260 for the Calculator, 400 by 300 for an app), nor bigger than the screen above the dock. What is in the window lays itself out again to fit: the Console and Terminal fit more or fewer columns and rows, the Browser re-wraps its page, the Calculator spreads its keys, and Calendar, Notes, Music and Books redraw at the new size. The pointer stays an arrow. Brick has a fixed field and keeps its first size as its smallest. On a 720 or 768 pixel tall screen an app's window also stops growing at about 390,000 pixels of content (it needs that much room in memory).
 
 ## Play Brick
 
