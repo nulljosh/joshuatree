@@ -1,4 +1,4 @@
-/* M3d: the file calls of user/jtsys.h for the one EL0 app, with the i386 semantics docs/SYSCALL-ABI.md gives them (the
+/* M3d: the file calls of user/jtsys.h for the one EL0 app, with the i386 semantics docs/ARCHITECTURE.md gives them (the
    same errnos, the 8 KB open() limit, 255 bytes a read or write, five descriptors, 3 to 7). They run over drivers/fat.c on
    the partition emmc.c mounted: the Pi's SD card, or the virtio disk on QEMU's virt machine. An app's paths are relative
    to the card's JT/ folder, its root: Notes asks for "NOTES/NOTES/N0000001.TXT" and gets JT/NOTES/NOTES/N0000001.TXT. No

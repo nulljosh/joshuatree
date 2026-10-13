@@ -17,7 +17,7 @@
  * entered at offset 0 with no crt0. What is new is the entry signature.
  * The loader leaves the i386 cdecl frame a plain C function expects, so
  * _start takes argc and argv directly with no assembly shim (see
- * kernel/exec.c's build_user_stack and docs/SYSCALL-ABI.md's v2 section).
+ * kernel/exec.c's build_user_stack and docs/ARCHITECTURE.md's v2 section).
  * It must not return: there is no caller, and the return address on the
  * stack is 0.
  */

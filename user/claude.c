@@ -27,7 +27,7 @@
 #include "libjt/stdlib.h"
 
 /* SYS_HTTP_POST's Claude selector and its longer wait, the same values as kernel/syscall.h
-   (docs/SYSCALL-ABI.md). Defined here, not in jtsys.h, because a jtsys.h edit marks every
+   (docs/ARCHITECTURE.md). Defined here, not in jtsys.h, because a jtsys.h edit marks every
    landing tile stale (tools/landing_shots_manifest.py) for a change that draws nothing. */
 #ifndef JT_POST_CLAUDE
 #define JT_POST_CLAUDE 4u
@@ -188,7 +188,7 @@ static void draw(void) {
     if (rows < 1) rows = 1;
     if (!nlines) {
         jt_text_draw(&win, JT_FACE_BODY, MARGIN, top + 8, MUTED, "Claude Code answers from the relay machine, with read-only tools.");
-        jt_text_draw(&win, JT_FACE_BODY, MARGIN, top + 8 + lh, MUTED, "Set it up: docs/CLAUDE-APP.md. Then Settings > Assistant > Claude relay and Claude token.");
+        jt_text_draw(&win, JT_FACE_BODY, MARGIN, top + 8 + lh, MUTED, "Set it up: docs/GUIDE.md. Then Settings > Assistant > Claude relay and Claude token.");
         return;
     }
     int max_scroll = nlines > rows ? nlines - rows : 0;

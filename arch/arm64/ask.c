@@ -2,7 +2,7 @@
    typed keys land there, Backspace takes one back, Enter runs the line. `browse`, `open N` and `llm` are commands, and so is
    `sam QUESTION`: it goes to the Claude relay on the Mac (tools/claude-relay/relay.py) as one POST through the shared
    IP stack, HTTPS on the Pi and loopback HTTP by default in QEMU. Everything a command prints goes into the Terminal, above the prompt, wrapped to 53 columns (the house
-   rule, so a photo of the Pi screen and the UART log read the same); the Console only keeps logs (docs/TERMINAL.md).
+   rule, so a photo of the Pi screen and the UART log read the same); the Console only keeps logs (docs/GUIDE.md).
    No app, no ring 3: the kernel asks.
 
    Where the relay is and the token it wants come from claude_cfg.h, generated at build time by claude_cfg.sh from the
@@ -11,7 +11,7 @@
    network` (no DHCP lease: on a Pi that means Wi-Fi has not joined yet), `claude: error -401` for a relay refusal,
    `claude: timeout`. The relay keeps a session per conversation, so a follow-up question knows what came before.
    An answer may end with actions for the Pi ([[note TEXT]], [[browse URL]] and the rest: see take_actions); the Pi
-   runs them and sends what they printed back as the next turn, up to AGENT_STEPS times (docs/AGENT.md).
+   runs them and sends what they printed back as the next turn, up to AGENT_STEPS times (docs/GUIDE.md).
 
    `sam` never blocks the prompt. The command only queues the question; ask_poll starts it on the next pass of the main
    loop, and while it waits on the network (drivers/net.c calls net_idle once a pass in every client wait loop) ask_service
@@ -161,7 +161,7 @@ int ask_edit(unsigned code) {
     return 1;
 }
 
-/* The agent loop's result buffer: what an action printed, sent back to the relay as the next turn (docs/AGENT.md).
+/* The agent loop's result buffer: what an action printed, sent back to the relay as the next turn (docs/GUIDE.md).
    Only filled while `capturing` is set, by say_wrapped and the action runner; cut at RESULT_MAX, never more. */
 #define RESULT_MAX 1200      /* escaped twice over it still fits the relay's 4 KB body */
 #define AGENT_STEPS 5
@@ -196,7 +196,7 @@ void say_wrapped(const char *prefix, const char *s, unsigned n) {   /* browser.c
 }
 
 /* pi-actions begin: pure, no kernel calls, so tools/checks/pi-actions-check.py compiles this block on the host.
-   Samantha may end an answer with actions, each alone on its line, 80 characters at most (docs/AGENT.md):
+   Samantha may end an answer with actions, each alone on its line, 80 characters at most (docs/GUIDE.md):
    [[note TEXT]] [[say TEXT]] [[led blink]] [[open APP]] [[browse URL]] (http or https only) [[calc EXPR]] [[status]]
    [[save NAME]] (the answer's first ``` block into JT/NAME, only when the question itself named NAME), [[list]] (the
    files in JT/) and [[read NAME]] (JT/NAME, the first 4 KB): both read only.
@@ -331,7 +331,7 @@ static unsigned pi_status(char *st) {   /* "ip 10.0.0.189, utc 1791..., wifi 3/3
     return k;
 }
 
-/* Slash commands run on the Pi and are never sent (docs/AGENT.md). Returns 1 when q was one. */
+/* Slash commands run on the Pi and are never sent (docs/GUIDE.md). Returns 1 when q was one. */
 static int word_is(const char *s, unsigned n, const char *w) { unsigned i = 0; for (; w[i]; i++) if (i >= n || s[i] != w[i]) return 0; return i == n; }
 static void choices(const char *label, const char *const *list, unsigned count, unsigned cur) {
     kputs(label); kputs(":");
@@ -754,7 +754,7 @@ static void ask_relay_steps(const char *q, unsigned n) {   /* the whole exchange
         fallback(q, n);                        /* the relay is out of reach: the local model answers */
         return;
     }
-    /* The agent loop (docs/AGENT.md): an answer that ends with actions gets them run, and what they printed goes back
+    /* The agent loop (docs/GUIDE.md): an answer that ends with actions gets them run, and what they printed goes back
        to the relay as the next turn, up to AGENT_STEPS times. Esc or "stop" between steps ends it. */
     stop_flag = 0;
     const char *prompt = q; unsigned plen = n;

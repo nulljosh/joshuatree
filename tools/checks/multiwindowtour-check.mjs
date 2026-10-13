@@ -38,7 +38,7 @@
 // sequential open-dwell-close for every app) and reproducibly failed
 // (never observed both points red at once across two full tour laps);
 // restoring the real fix and rerunning reproducibly passed. See
-// roadmap.md for both runs' real output.
+// ROADMAP.md for both runs' real output.
 //
 // Usage: node tools/checks/multiwindowtour-check.mjs [url]
 // (serve landing/ over plain HTTP first, e.g. `python3 -m http.server`
@@ -54,7 +54,7 @@ const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com/?desktop';
 // revision that didn't match the installed `playwright` package's own
 // expected revision; verified there with a one-off local
 // `executablePath` override rather than baking a sandbox-specific path
-// into this shared script (see roadmap.md for that run's real output).
+// into this shared script (see ROADMAP.md for that run's real output).
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 await page.goto(url, { waitUntil: 'load' });

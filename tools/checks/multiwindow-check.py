@@ -3,7 +3,7 @@
 same QMP absolute-pointer + pmemsave shape as appclose-check.py/
 dockhover-check.py.
 
-Before this pass, roadmap.md's "Multi-window, honestly scoped" entry
+Before this pass, ROADMAP.md's "Multi-window, honestly scoped" entry
 confirmed the honest state: window_open() is called exactly once at boot,
 one single framebuffer surface, every app a blocking function
 (gui_wait_close) that takes over the whole screen until its own X is
@@ -36,7 +36,7 @@ open (Notes, slot 4, while Files is still open) either does nothing
 leaves the screen fully stuck; either way NO second close button ever
 appears at (154, 116), so this test fails "second window not present"
 before the fix and passes after it. Verified both ways below the fold in
-roadmap.md's v0.73.0 entry.
+ROADMAP.md's v0.73.0 entry.
 
 v0.75.0 (multi-window batch 2) extends this in place with step 6: a real
 two-window combination involving an interactive app (Mail; it took over

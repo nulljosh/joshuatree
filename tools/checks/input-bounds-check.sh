@@ -4,7 +4,7 @@
 # Calculator, Search, Chat, Terminal, Settings, the auth.h login prompt).
 # That audit's real findings live in drivers/json.c (network JSON, an
 # unsigned-underflow guard was missing on maxlen==0/1) and kernel/auth.h
-# (auth_const_time_eq, the one place docs/THREAT-MODEL.md calls out as
+# (auth_const_time_eq, the one place docs/ARCHITECTURE.md calls out as
 # worth being paranoid about). Both compile clean on the host, so both get
 # fed over-long, adversarial input here under ASan+UBSan, same shape
 # tools/checks/html-host-check.sh and decoder-fuzz-check.sh already use --

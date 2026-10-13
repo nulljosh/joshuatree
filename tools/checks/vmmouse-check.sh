@@ -15,7 +15,7 @@
 # the hard way while writing this (the kernel then correctly ignored
 # them, which is its own small proof of the PS/2-ignore guard).
 #
-# Why this exists: roadmap.md's honest note for the PS/2 path is that the
+# Why this exists: ROADMAP.md's honest note for the PS/2 path is that the
 # monitor's mouse commands never reached the kernel's PS/2 driver
 # headlessly. The backdoor changes that, so the native QEMU side can be
 # verified from a script for the first time.

@@ -3,7 +3,7 @@
  * This is the first thing in this repo that is a real external consumer of
  * the kernel: it is compiled on its own, links against no kernel header,
  * calls no kernel function, and reaches the kernel only through the eight
- * numbers in docs/SYSCALL-ABI.md. If any of those numbers or their
+ * numbers in docs/ARCHITECTURE.md. If any of those numbers or their
  * argument meanings change, this program breaks, which is exactly what a
  * MAJOR version is supposed to protect.
  *

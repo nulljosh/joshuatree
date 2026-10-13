@@ -24,7 +24,7 @@
  *
  * 2026-10-01 (later): the image window grew from 7 pages to
  * JT_USER_IMAGE_PAGES (32, 128KB): Samantha and Stocks had both closed to
- * within 1KB of 28KB. JT_USER_BASE did not move (docs/SYSCALL-ABI.md names
+ * within 1KB of 28KB. JT_USER_BASE did not move (docs/ARCHITECTURE.md names
  * it); .dmabuf and .userfb slid up 128KB to make room, and the window end
  * (0xC0730000) still sits inside the second 4MB table. The page count is
  * hex so the Makefile's sed renders it into boot/memmap.ld too.

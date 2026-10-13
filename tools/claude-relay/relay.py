@@ -123,7 +123,7 @@ def to_ascii(text):
     return "".join(out)
 
 
-# The Pi's /model and /effort (docs/AGENT.md). The request may carry "model" and "effort"; each must be one of these
+# The Pi's /model and /effort (docs/GUIDE.md). The request may carry "model" and "effort"; each must be one of these
 # words. A model word picks a configured model id (--api-model and friends); a user-supplied id never reaches the API.
 MODELS = ("auto", "haiku", "sonnet", "opus")
 EFFORTS = {                    # name: (thinking budget tokens, max_tokens); medium is what the relay always did

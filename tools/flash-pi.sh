@@ -37,7 +37,7 @@ fi
 echo "flashing $CARD"
 
 # The dev card trusts our relay's private CA and nothing else for it (the Pi refuses a relay whose certificate is not signed by
-# a TLS_TA anchor, 2.46.0): without this the Terminal says "TLS failed" however well the relay runs. docs/RELAY-TLS.md.
+# a TLS_TA anchor, 2.46.0): without this the Terminal says "TLS failed" however well the relay runs. docs/GUIDE.md.
 CA="${JT_RELAY_CA:-$HOME/.config/joshuatree/relay-tls/ca.pem}"
 [ -f "$CA" ] && export TLS_TA="$CA"
 JT_WIFI_DEV=1 make -B -C arch/arm64 pi >/dev/null   # JT_WIFI_DEV: this card joins our network; release builds never carry it   # -B: the Makefile does not track headers
@@ -63,7 +63,7 @@ cp arch/arm64/kernel8.img "$CARD"/kernel8.img
 cp tools/pi-config.txt "$CARD"/config.txt
 # 2.66: Books' library, JT/BOOKS/ on the card. One public domain sample, The Yellow Wallpaper, with its
 # Project Gutenberg licence inside the file. Make Something Wonderful is not bundled (not public domain):
-# drop your own copy on the card as JT/BOOKS/JOBS.TXT (docs/BOARD-TEST.md).
+# drop your own copy on the card as JT/BOOKS/JOBS.TXT (docs/GUIDE.md).
 mkdir -p "$CARD"/JT/BOOKS
 cp tools/books/YELLOW.TXT "$CARD"/JT/BOOKS/YELLOW.TXT
 

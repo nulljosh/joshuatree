@@ -1,5 +1,5 @@
 #!/bin/sh
-# Verify that the landing page's announcement is in sync with docs/roadmap.md's
+# Verify that the landing page's announcement is in sync with docs/ROADMAP.md's
 # **Latest** field, and that it actually changes when the field changes.
 #
 # The announcement lives on the eyebrow's data-latest attribute, not the H1.
@@ -13,9 +13,9 @@ set -e
 cd "$(dirname "$0")/../.."
 
 # Read the current Latest line using awk
-original_latest=$(awk '/^\*\*Latest\*\*:/ {print; exit}' docs/roadmap.md)
+original_latest=$(awk '/^\*\*Latest\*\*:/ {print; exit}' docs/ROADMAP.md)
 if [ -z "$original_latest" ]; then
-  echo "FAIL: No **Latest**: line found in docs/roadmap.md"
+  echo "FAIL: No **Latest**: line found in docs/ROADMAP.md"
   exit 1
 fi
 
@@ -45,15 +45,15 @@ fi
 test_headline="Improved icons and weather display."
 
 # Make a backup
-cp docs/roadmap.md docs/roadmap.md.bak
+cp docs/ROADMAP.md docs/ROADMAP.md.bak
 
-# Temporarily modify docs/roadmap.md - replace line 8 which has the Latest line
+# Temporarily modify docs/ROADMAP.md - replace line 8 which has the Latest line
 awk -v new="**Latest**: ${test_headline}" '
   /^\*\*Latest\*\*:/ {print new; next}
   {print}
-' docs/roadmap.md.bak > docs/roadmap.md
+' docs/ROADMAP.md.bak > docs/ROADMAP.md
 
-trap "mv docs/roadmap.md.bak docs/roadmap.md" EXIT
+trap "mv docs/ROADMAP.md.bak docs/ROADMAP.md" EXIT
 
 # Regenerate the landing page
 ./tools/gen/inject-landing-headline.sh >/dev/null 2>&1
@@ -69,7 +69,7 @@ if [ "$new_latest" != "data-latest=\"${expected_new}\"" ]; then
 fi
 
 # Restore and regenerate again
-mv docs/roadmap.md.bak docs/roadmap.md
+mv docs/ROADMAP.md.bak docs/ROADMAP.md
 trap - EXIT  # Clear the trap
 
 ./tools/gen/inject-landing-headline.sh >/dev/null 2>&1

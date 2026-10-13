@@ -306,7 +306,7 @@ extern void leave_user(unsigned long status) __attribute__((noreturn));
 extern unsigned long resume_user(const struct frame *f, unsigned long sp, const unsigned long *fp);   /* vectors.S: back into a parked app (its FP registers too), returns like enter_user */
 #define SYS_WRITE 64   /* the Linux numbers the user.S self-test uses */
 #define SYS_EXIT 93
-#define JT_SYS_EXIT 1    /* Joshua Tree's own, the ones user/jtsys.h and docs/SYSCALL-ABI.md give every program (M3b) */
+#define JT_SYS_EXIT 1    /* Joshua Tree's own, the ones user/jtsys.h and docs/ARCHITECTURE.md give every program (M3b) */
 #define JT_SYS_READ 3    /* M3d: the file calls, answered by ufile.c */
 #define JT_SYS_WRITE 4
 #define JT_SYS_TIME 13    /* M3c */
@@ -369,7 +369,7 @@ int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may
         || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0) || span(a, n, USER_BASE + UP_WIN, app_wbytes)
         || span(a, n, USER_BASE + UP_HEAP, heap_len());
 }
-/* M3e: JT_SYS_BRK with i386's semantics (docs/SYSCALL-ABI.md, kernel/brk.c): 0 reads the top, a fresh app's is the heap's
+/* M3e: JT_SYS_BRK with i386's semantics (docs/ARCHITECTURE.md, kernel/brk.c): 0 reads the top, a fresh app's is the heap's
    base; any other value sets it, to the byte. Pages between the old and new top (rounded up to whole pages) are mapped EL0
    read-write and never executable, then zeroed, so no earlier app's bytes are ever seen; shrinking unmaps them. A top below
    the base or past the arena's end is -EINVAL and nothing moves. The memory is the arena's own (identity mapped, 14 MiB),
@@ -533,7 +533,7 @@ static void user_init(const char *img, unsigned long len) {
    APP_STACK_PAGES fresh zeroed pages; the pages around the window and the stack are unmapped, so running off either faults. */
 static unsigned rd32(const char *p) { const unsigned char *u = (const unsigned char *)p; return u[0] | (unsigned)u[1] << 8 | (unsigned)u[2] << 16 | (unsigned)u[3] << 24; }
 static unsigned long rd64(const char *p) { return rd32(p) | (unsigned long)rd32(p + 4) << 32; }
-/* M3e: JT_SYS_AUDIO, i386's contract (docs/SYSCALL-ABI.md): op 1 queues a struct jt_audio_play's PCM (at most 8192 bytes a
+/* M3e: JT_SYS_AUDIO, i386's contract (docs/ARCHITECTURE.md): op 1 queues a struct jt_audio_play's PCM (at most 8192 bytes a
    call, END dropped from a call that is cut), op 2 fills a struct jt_audio_status, op 3 stops. Every pointer is checked here
    before audio.c sees a byte. The LP64 jt_audio_play is { pcm 8, len 4, rate 4, flags 4 } padded to 24 bytes. There is
    always a jack (QEMU virt plays into nothing at the same pace), so never -ENODEV. */
@@ -759,7 +759,7 @@ static unsigned int *fb;
 static unsigned fb_pitch;   /* in pixels */
 static int fb_swap;         /* red and blue the other way round in memory */
 static int sc(int v) { return v * (int)fb_h / 600; }   /* a length on the 800x600 design, at this screen's size */
-static int sg(int v) { return v * (int)fb_h / 540; }   /* a length on the real desktop's 960x540 grid (docs/DESIGN.md), at this screen's size */
+static int sg(int v) { return v * (int)fb_h / 540; }   /* a length on the real desktop's 960x540 grid (docs/ARCHITECTURE.md), at this screen's size */
 static void dcache_clean(void *p, unsigned long n) {   /* push lines out to RAM, where a GPU or DMA engine reads */
     for (unsigned long a = (unsigned long)p & ~63UL; a < (unsigned long)p + n; a += 64) __asm__ volatile ("dc civac, %0" :: "r"(a) : "memory");
     __asm__ volatile ("dsb sy" ::: "memory");
@@ -931,8 +931,8 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
 #define CON_BG 0x00ffffff
 unsigned wall_get(void);   /* wall.c: the wallpaper colour, 0x00RRGGBB (Settings changes it) */
 int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);   /* arch/arm64/wall.c: the flat Navy wallpaper */
-#define MENUBAR_H 26             /* docs/DESIGN.md: GUI_MENUBAR_H, on the 960x540 grid */
-#define MENUBAR_RULE 0x00BDB8B0  /* docs/DESIGN.md: MENUBAR_RULE */
+#define MENUBAR_H 26             /* docs/ARCHITECTURE.md: GUI_MENUBAR_H, on the 960x540 grid */
+#define MENUBAR_RULE 0x00BDB8B0  /* docs/ARCHITECTURE.md: MENUBAR_RULE */
 int text_init(void);   /* arch/arm64/text.c: the DejaVu faces through drivers/ttf.c */
 int text_draw(int which, const char *s, int x, int baseline, int px10, unsigned fg, unsigned *fb, unsigned pitch, int w, int h);
 int text_width(int which, const char *s, int px10);
@@ -940,7 +940,7 @@ int text_selftest(int px10, int *w, int *h, int *adv);
 static int text_ok;     /* smooth text is up */
 static unsigned fb_color(unsigned c) { return fb_swap ? (c & 0xFF00FF00u) | (c >> 16 & 0xFF) | (c & 0xFF) << 16 : c; }
 /* Two windows share this renderer, each with its own text: the Console (the boot log, logs only, no input) and the
-   Terminal (the ask> command line, docs/TERMINAL.md). cp is the one in front; the other only keeps its text. */
+   Terminal (the ask> command line, docs/GUIDE.md). cp is the one in front; the other only keeps its text. */
 struct pane {
     char log[LOG_MAX];
     unsigned len, col, row;

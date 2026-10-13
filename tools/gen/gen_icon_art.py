@@ -35,7 +35,7 @@ and gui_icon_art_scale's exact area weights handle the other sizes.
 
 Kernel-image budget. Storing decoded RGBA was the first design: 24 artworks
 at 128*128*4 is 1.5MB, and that collided with the ring-3 program window
-boot/linker.ld pins at 0xC0501000, which docs/SYSCALL-ABI.md names as part
+boot/linker.ld pins at 0xC0501000, which docs/ARCHITECTURE.md names as part
 of the published v1 contract. As PNG the same 24 artworks are 141KB. Run
 this with --budget for the real figure.
 
@@ -112,7 +112,7 @@ def rasterize(name):
     with the real kernel image. 24 artworks at 128*128*4 is 1.5MB, which
     collided with the ring-3 program window boot/linker.ld pins at
     0xC0500000 (v0.80.0's syscall ABI), and that address is named in
-    docs/SYSCALL-ABI.md as part of the published v1 contract, so it is not
+    docs/ARCHITECTURE.md as part of the published v1 contract, so it is not
     something an icon pass gets to move. The same bytes as PNG are 141KB,
     a 10.9x saving, and they need no new decoder: drivers/png.c has shipped
     since v74 with byte-exact regression tests, and rsvg-convert emits

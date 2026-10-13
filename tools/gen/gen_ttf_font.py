@@ -36,7 +36,7 @@ FACES = [
 
 
 # 2.27.0 font library: open look-alikes, instanced at wght 400 and subset
-# to ASCII (recipe in docs/fonts-sources.md). Headers only here.
+# to ASCII (recipe in docs/ARCHITECTURE.md). Headers only here.
 LIBRARY = [
     (f"{n}-Regular-subset.ttf", f"lib_{a}_font.h", f"lib_{a}_font_data", pretty,
      f"{pretty} is SIL Open Font License 1.1, see tools/fonts/{n}-OFL.txt.")

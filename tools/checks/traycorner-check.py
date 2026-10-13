@@ -5,7 +5,7 @@ waits for the desktop's first frame, pmemsaves the real framebuffer, and
 asserts on actual pixels.
 
 Real, confirmed bug (not a guess, real macro photo + real pixel capture,
-see roadmap.md's v79 entry): the dock tray's own rounded corner
+see ROADMAP.md's v79 entry): the dock tray's own rounded corner
 (gui_rounded_rect_on_wallpaper in kernel.c) drew its AA band with ONE
 distance sample per PHYSICAL output pixel, thresholded into a 3-physical-
 pixel linear ramp. That is a single coverage value per pixel, not a real

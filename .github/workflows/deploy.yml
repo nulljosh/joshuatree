@@ -24,7 +24,7 @@ on:
       - 'landing/**'
       - 'wrangler.toml'
       - 'worker.js'
-      - 'docs/roadmap.md'
+      - 'docs/ROADMAP.md'
       - 'tools/gen/landing-roadmap.py'
       - 'tools/gen/inject-landing-facts.py'
       - 'tools/checks/ci-suite.sh'

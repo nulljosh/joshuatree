@@ -10,7 +10,7 @@
    0x10EC device 0x8029, an RTL8029 clone, confirmed against
    landing/v86/libv86.js's own pci_space table rather than assumed from
    general datasheet knowledge). This driver targets that chip. See
-   roadmap.md's "fetch-mode network relay" entry for the full investigation
+   ROADMAP.md's "fetch-mode network relay" entry for the full investigation
    that led here. */
 
 /* Resets and configures the card (RX ring, TX buffer, PROM MAC read).

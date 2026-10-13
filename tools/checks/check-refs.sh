@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Drift insurance, direct request ("work on drift insurance, so any
-# references don't drift too much"). Scans roadmap.md and CLAUDE.md for
+# references don't drift too much"). Scans ROADMAP.md and CLAUDE.md for
 # every backtick-quoted file path and checks it still exists somewhere in
 # the real tree, by basename, not just the exact written path: this
 # codebase's own prose style routinely writes bare filenames as shorthand
 # (`kheap.c`, not `kernel/kheap.c`), which is normal, not drift, so an
-# exact-path-only check would false-positive on most of roadmap.md.
+# exact-path-only check would false-positive on most of ROADMAP.md.
 #
 # Run this after any rename/move/delete, or periodically as part of the
 # loop's own verification step; a real hit here means a doc genuinely
@@ -26,7 +26,11 @@ fi
 python3 << 'PYEOF'
 import re, os, sys
 
-FILES_TO_SCAN = ["docs/roadmap.md", "CLAUDE.md", "docs/ARCHITECTURE.md"]
+# The three merged docs hold history and narrative too, which names files that
+# are long gone. Only the living parts are scanned, as before the merge: the plan
+# (the Roadmap part, up to "## Vision"), the file tables ("## Architecture") and CLAUDE.md.
+FILES_TO_SCAN = ["docs/ROADMAP.md", "CLAUDE.md", "docs/ARCHITECTURE.md"]
+SCOPE = {"docs/ROADMAP.md": ("## Roadmap\n", "\n## Vision\n"), "docs/ARCHITECTURE.md": ("## Architecture\n", "\n## ARM64 and the Raspberry Pi\n")}
 PATTERN = re.compile(r'`([A-Za-z0-9_./-]+\.(?:c|h|S|md|sh|py|js|html|svg|json|toml|tsv|txt|yml))`')
 # node_modules/.claude are noise (thousands of irrelevant basenames);
 # landing/v86/ (the vendored v86.wasm build) is real and indexed like
@@ -72,6 +76,10 @@ for f in FILES_TO_SCAN:
     if not os.path.exists(f):
         continue
     text = open(f).read()
+    if f in SCOPE:
+        a, b = SCOPE[f]
+        i, j = text.index(a), text.index(b)
+        text = text[i:j]
     for m in PATTERN.finditer(text):
         ref = m.group(1)
         checked += 1

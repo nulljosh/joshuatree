@@ -52,7 +52,7 @@ class RoadmapTests(unittest.TestCase):
                 generator.render(QUEUE, page)
 
     def test_real_page_can_be_regenerated(self):
-        roadmap = (ROOT / 'docs/roadmap.md').read_text()
+        roadmap = (ROOT / 'docs/ROADMAP.md').read_text()
         page = (ROOT / 'landing/index.html').read_text()
         updated = generator.render(roadmap, page)
         self.assertIn(html.escape(generator.summarize(roadmap)), updated)  # the page stores it escaped, so "can't" is &#x27;

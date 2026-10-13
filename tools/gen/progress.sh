@@ -7,8 +7,8 @@
 # cumulative checked-off roadmap items per tagged version. Two real
 # problems with that, not just a styling complaint: git tags stopped
 # being cut after jt-v27 (confirmed: `git tag -l 'jt-v*'` has nothing past
-# v27, though roadmap.md is well past v50), so everything after that had
-# no real per-version data to plot, only a live re-parse of roadmap.md's
+# v27, though ROADMAP.md is well past v50), so everything after that had
+# no real per-version data to plot, only a live re-parse of ROADMAP.md's
 # current (post-prune) state; and a checked-item count actively
 # undersells a polish phase, a version that fixes three real bugs and
 # ships zero new checkboxes looks like a flat line even though real work

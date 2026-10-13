@@ -357,7 +357,7 @@ static void gui_launch_settings(void){
                 const char *ct = claude_token[0] ? "set" : "(not set: Claude cannot ask)";
                 font_draw_string(ct, detail_right - font_string_width(ct), y, claude_token[0] ? 0x002F7B4F : 0x00807468, -1);
             } else {
-                /* v0.85.5: the Location field roadmap.md asked for. Empty
+                /* v0.85.5: the Location field ROADMAP.md asked for. Empty
                    means "no override", the same honest-label convention
                    Wallpaper's own row just above already uses: say what's
                    actually in effect, not what was typed. */
@@ -519,7 +519,7 @@ static void gui_launch_settings(void){
                    is exactly one real "current user" concept in this
                    kernel today (auth_current_user, set by auth_gate at
                    boot), matching the single-machine/single-visitor
-                   threat model docs/THREAT-MODEL.md lays out. 'a'/'d'
+                   threat model docs/ARCHITECTURE.md lays out. 'a'/'d'
                    (left/right, the stepper convention every other row
                    uses) don't apply to this row, only a real tap/enter. */
                 if (auth_current_user[0]) {

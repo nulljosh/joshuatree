@@ -595,7 +595,7 @@ matches = re.findall(rb'joshua:p2:\d+:([0-9a-f]{32}):([0-9a-f]{64})', raw)
 # still see the OLD hash: replacing a file on this FAT filesystem unlinks
 # its old cluster from the directory entry but does not zero the bytes
 # still sitting in what is now free space, ordinary filesystem behaviour
-# (docs/THREAT-MODEL.md already disclaims any disk-level secure-delete
+# (docs/ARCHITECTURE.md already disclaims any disk-level secure-delete
 # guarantee) and not a plaintext leak. What matters is that the real new
 # hash actually made it to disk and differs from the original.
 new_hashes = {h for _, h in matches if h != original_hash}

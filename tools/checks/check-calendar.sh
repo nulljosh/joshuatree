@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Real check for the Calendar's date math, the part tagged [Fable] in
-# roadmap.md for its "looks right, subtly isn't" risk: compiles the same
+# ROADMAP.md for its "looks right, subtly isn't" risk: compiles the same
 # cal_dow / cal_days_in_month / cal_is_leap the ring-3 program links
 # (user/calendar.c since 1.9.12, kernel/calendar.h before that; pulled in
 # under CALENDAR_MATH_ONLY, nothing else from the program) with the host

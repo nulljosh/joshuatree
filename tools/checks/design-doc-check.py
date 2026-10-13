@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""docs/DESIGN.md states numbers, colours and names; this fails when one of them is not what the source says.
+"""docs/ARCHITECTURE.md states numbers, colours and names; this fails when one of them is not what the source says.
 
 Every `NAME = value` code span in the doc is a fact. FACTS below says, for each NAME, which source file defines it
 and how to read it. The check fails (and prints both values) when:
@@ -15,7 +15,7 @@ Same shape as landing-facts-check.py: the doc is the claim, the source is the or
 so `#b5502c` and `0x00B5502C` are equal. A few facts are measured over art/icons (text, purple and teal, gradient hue).
 
 No QEMU, no build, under a second. Usage: python3 tools/checks/design-doc-check.py   (from anywhere)
-Proof it discriminates: change one value in docs/DESIGN.md or one constant in the source and it prints FAIL with both.
+Proof it discriminates: change one value in docs/ARCHITECTURE.md or one constant in the source and it prints FAIL with both.
 """
 import ast
 import colorsys
@@ -25,7 +25,7 @@ import re
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-DOC = os.path.join(ROOT, "docs", "DESIGN.md")
+DOC = os.path.join(ROOT, "docs", "ARCHITECTURE.md")
 HEADINGS = ["What the OS never does", "Brand mark", "Mascot", "Icons", "Type", "Colour and light", "Windows and dock", "Motion",
             "How it is enforced"]
 
@@ -430,14 +430,20 @@ def suite_checks():
 
 
 def main():
-    doc = open(DOC, encoding="utf-8").read()
+    whole = open(DOC, encoding="utf-8").read()
+    m = re.search(r"^## Design rules\n(.*?)(?=^## |\Z)", whole, re.S | re.M)
+    if not m:
+        print("FAIL: docs/ARCHITECTURE.md has no '## Design rules' section")
+        return 1
+    # the design rules are one H2 of the architecture doc; inside it each rule section is an H3
+    doc = re.sub(r"^### ", "## ", m.group(1), flags=re.M)
     bad = []
 
     if "\u2014" in doc:
-        bad.append("docs/DESIGN.md has an em dash; the house voice never uses one")
+        bad.append("the Design rules section of docs/ARCHITECTURE.md has an em dash; the house voice never uses one")
     heads = re.findall(r"^## (.+)$", doc, re.M)
     if heads != HEADINGS:
-        bad.append("docs/DESIGN.md sections are %s, want %s" % (heads, HEADINGS))
+        bad.append("docs/ARCHITECTURE.md sections are %s, want %s" % (heads, HEADINGS))
 
     stated = {}
     for name, value in re.findall(r"`([A-Za-z][A-Za-z0-9_]*) = ([^`]+)`", doc):
@@ -452,7 +458,7 @@ def main():
     ok = 0
     for name, (kind, read, where) in FACTS.items():
         if name not in stated:
-            bad.append("%s is missing from docs/DESIGN.md (source: %s)" % (name, where))
+            bad.append("%s is missing from docs/ARCHITECTURE.md (source: %s)" % (name, where))
             continue
         try:
             doc_v = parse_doc(kind, stated[name])
@@ -490,11 +496,11 @@ def main():
                     n, "in" if n in in_suite else "not in", label.rstrip(":")))
 
     if bad:
-        print("FAIL: docs/DESIGN.md and the source disagree:")
+        print("FAIL: docs/ARCHITECTURE.md and the source disagree:")
         for b in bad:
             print("  - " + b)
         return 1
-    print("PASS: docs/DESIGN.md matches the source (%d facts, %d checks named)" % (ok, len(re.findall(r"`[\w.-]+-check\.\w+`", enforced))))
+    print("PASS: docs/ARCHITECTURE.md matches the source (%d facts, %d checks named)" % (ok, len(re.findall(r"`[\w.-]+-check\.\w+`", enforced))))
     return 0
 
 

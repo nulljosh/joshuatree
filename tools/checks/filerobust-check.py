@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression coverage for docs/roadmap.md's 1.0.0 item "Nothing crashes:
+"""Regression coverage for docs/ROADMAP.md's 1.0.0 item "Nothing crashes:
 bad input in every text field, long lines, empty files, missing disk, no
 network." This is the file-side half: an EMPTY file, an OVERSIZED file, a
 CORRUPT FAT16 image, and a FULL disk, each proven headless against the

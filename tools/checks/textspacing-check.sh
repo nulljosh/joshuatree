@@ -8,7 +8,7 @@
 # via window_get_pixel_phys, and prints the inter-letter gap spread and
 # the lone-'W' ink width. Both lines must say ok. Discriminating: with the
 # fixed-16px-cell renderer this fails with spread 8 (C-l gap 1, l-o gap 9)
-# and W clipped to 16; see roadmap.md's v77 entry for the reverted run.
+# and W clipped to 16; see ROADMAP.md's v77 entry for the reverted run.
 #
 # v78 (0.67.2): also runs `wraptest`, the same shape for the sibling bug
 # v77 missed: render_wrapped_text (every HTML app view, every Chat answer)
@@ -16,7 +16,7 @@
 # instead of going through font_draw_string's real pen, so a real word
 # like "Curbfind" rendered as "Curbf ind" on a real framebuffer dump. Same
 # ink-run measurement, this time through render_wrapped_text itself. See
-# roadmap.md's v78 entry for the reverted run (spread 11 vs 3, FAILED).
+# ROADMAP.md's v78 entry for the reverted run (spread 11 vs 3, FAILED).
 set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf

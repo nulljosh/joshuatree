@@ -8,7 +8,7 @@
  * built-in sample and says so in its status line, "Sample, not a live reading". A file is called "Saved reading": this
  * program never claims a live one. Nothing is fetched here and no key is involved.
  *
- * House style (docs/DESIGN.md): flat, sans serif, terracotta #b5502c accent, glyphs from discs and capsules, no text in
+ * House style (docs/ARCHITECTURE.md): flat, sans serif, terracotta #b5502c accent, glyphs from discs and capsules, no text in
  * a glyph. Esc or the red dot closes it. One line per start tells tools/checks/arm64-weather-check.py what was drawn.
  */
 #include "jtsys.h"

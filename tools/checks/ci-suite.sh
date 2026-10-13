@@ -73,10 +73,10 @@ once |6|Pi keyboard shutdown and restart: confirmed HID chords halt or reboot ra
 once |7|CI tooling preserves shared ARM shard affinity and rejects fixed test paths before builds (host only)|python3 ./tools/checks/ci-tooling-check.py
 once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
 once |7|No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
-once |5|docs/DESIGN.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static)|python3 ./tools/checks/design-doc-check.py
+once |5|docs/ARCHITECTURE.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static)|python3 ./tools/checks/design-doc-check.py
 once |7|Kernel memory keeps 16KB clear of the program window (toolchain drift guard)|python3 ./tools/checks/bss-margin-check.py
 once |6|Samantha's face loops wrap without a seam|python3 ./tools/checks/face-frames-check.py
-once |7|docs/TESTING.md lists every check in this suite|./tools/checks/testing-doc-check.sh
+once |7|docs/ARCHITECTURE.md lists every check in this suite|./tools/checks/testing-doc-check.sh
 once |7|The landing logo rebuilds byte for byte from tools/gen/logo.py|./tools/checks/logo-check.sh
 once |7|Landing app tiles are not older than the app code that draws them (source hashes, no QEMU)|python3 ./tools/checks/landing-shots-fresh-check.py
 once |7|The landing demo downloads the kernel once, gzipped|./tools/checks/kernel-gz-check.sh
@@ -261,7 +261,7 @@ once |2|Portfolio voice: on by default, mute button top right, remembered across
 retry|2|Portfolio tour starts even when his face frames are slow and the first Escape presses are lost: his chat exits and Epiphany opens|node ./tools/checks/portfolio-slowframes-check.mjs
 once |0|Landing demo on a phone: the chat bar raises the keyboard, typed letters reach Samantha once each and Send is Enter|node ./tools/checks/mobile-type-check.mjs
 once |0|Landing: Tech specs accordions hold every developer number collapsed, and the footer is a four-column directory of real links|node ./tools/checks/landing-specs-footer-check.mjs
-once |7|Type system: every landing font size on the 9-step scale, line heights on the 4px grid, token block and TYPE.md current, Tree Sans files load|python3 ./tools/checks/type-grid-check.py
+once |7|Type system: every landing font size on the 9-step scale, line heights on the 4px grid, token block and ARCHITECTURE.md current, Tree Sans files load|python3 ./tools/checks/type-grid-check.py
 once |7|Landing demo: no keyboard trap, one main landmark, Full screen top right on phones|node ./tools/checks/landing-demo-ui-check.mjs
 once |5|Landing on a phone: exactly one visible "Message Samantha" input, focusable and typeable|node ./tools/checks/phone-one-input-check.mjs
 once |5|Landing on a desktop: her input is one sharp page field over her face, focusable and typeable|node ./tools/checks/desktop-pagebar-check.mjs

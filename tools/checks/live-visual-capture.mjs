@@ -4,7 +4,7 @@
 // correctly for a real visitor. This session runs in a cloud sandbox with
 // no physical display attached, and its own network egress policy blocks
 // joshuatree.heyitsmejosh.com directly (confirmed repeatedly, see
-// roadmap.md's CORS-fix entries) -- there's no way to screenshot the real
+// ROADMAP.md's CORS-fix entries) -- there's no way to screenshot the real
 // live site from in here. GitHub Actions runners have real, unrestricted
 // internet access (already proven by check.yml's own `network` job and
 // live-smoke.yml), so this runs a real headless Chromium there instead:

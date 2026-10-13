@@ -28,7 +28,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # A PR that only touches prose (any .md except docs/roadmap.md, which the
+  # A PR that only touches prose (any .md except docs/ROADMAP.md, which the
   # landing checks read) skips the QEMU suite; `check` still reports green.
   changes:
     runs-on: ubuntu-24.04
@@ -58,7 +58,7 @@ jobs:
           if [ "${{ github.event_name }}" != "pull_request" ]; then echo code=true >> "$GITHUB_OUTPUT"; echo kernel=true >> "$GITHUB_OUTPUT"; exit 0; fi
           files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
           echo "$files"
-          if echo "$files" | grep -qvE '\.md$' || echo "$files" | grep -qx 'docs/roadmap.md'; then
+          if echo "$files" | grep -qvE '\.md$' || echo "$files" | grep -qx 'docs/ROADMAP.md'; then
             echo code=true >> "$GITHUB_OUTPUT"
           else
             echo code=false >> "$GITHUB_OUTPUT"
@@ -268,10 +268,10 @@ jobs:
   # CLAUDE.md 4d's own candidate, "a second job for check-refs.sh": pure
   # drift insurance, no clang/qemu/PIL toolchain needed at all, so it runs
   # standalone rather than tacked onto the end of the full build-and-boot
-  # job above. Every backtick-quoted file path in roadmap.md/CLAUDE.md/
+  # job above. Every backtick-quoted file path in ROADMAP.md/CLAUDE.md/
   # docs/ARCHITECTURE.md must still exist somewhere in the real tree;
   # catches a doc left pointing at a renamed/moved/deleted file, the way
-  # roadmap.md's own `/tmp/zoomcap.py` reference (a one-off scratch script
+  # ROADMAP.md's own `/tmp/zoomcap.py` reference (a one-off scratch script
   # that was never meant to be a real path) drifted stale before this job
   # existed to catch it.
   check-refs:
@@ -340,7 +340,7 @@ jobs:
       # wallpaper-check.py, which never issues an explicit `wallpaper map`
       # and so silently captured whatever the first automatic weather-cycle
       # fetch produced. That code path is fixed in 1.1.1 (see docs/
-      # roadmap.md's 1.1.1 entry and tools/checks/wallcompose-check.py, the
+      # ROADMAP.md's 1.1.1 entry and tools/checks/wallcompose-check.py, the
       # new hermetic proof of it in the `suite` job above), but this exact
       # step still can't be proven green from here: this repo's own dev
       # sandbox has no route to a.tile.opentopomap.org/mt0.google.com/

@@ -5,7 +5,7 @@ name: Landing visual capture
 # real visitor. This session runs in a cloud sandbox with no physical
 # display attached, and its own network egress policy blocks
 # joshuatree.heyitsmejosh.com directly (confirmed repeatedly, see
-# roadmap.md's CORS-fix entries) -- there is no way to screenshot the
+# ROADMAP.md's CORS-fix entries) -- there is no way to screenshot the
 # real live site from in here. GitHub Actions runners have real,
 # unrestricted internet access (already proven by check.yml's own
 # `network` job and live-smoke.yml), so this installs a real Chromium

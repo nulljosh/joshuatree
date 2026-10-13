@@ -436,7 +436,7 @@ if (typeof document !== "undefined") (function () {
     // the wire, and answers it with a real browser fetch() to whatever
     // Host: header the guest actually sent, so the guest's own raw
     // ARP/IP/TCP/HTTP stack (drivers/net.c, drivers/http.c) never has to
-    // change at all. roadmap.md's "fetch-mode network relay" entry
+    // change at all. ROADMAP.md's "fetch-mode network relay" entry
     // investigated this exact flag back when the kernel had no driver for
     // any NIC v86 emulates at all (RTL8139-only) and correctly called it
     // a dead end at the time; drivers/ne2k.c is what closes that gap.
@@ -546,7 +546,7 @@ if (typeof document !== "undefined") (function () {
     // 72 face frames take longer than 15s to arrive and need no click), so it
     // counts as the visitor still being here. Without this the kiosk reset
     // below rebooted the demo mid-load, every time, with no kernel fault at all
-    // (docs/wip/samantha-reset.md). v86's "fetch" relay goes through window.fetch.
+    // (docs/ROADMAP.md). v86's "fetch" relay goes through window.fetch.
     if (typeof window.fetch === "function" && !window.__jtFetchWrapped) {
       var realFetch = window.fetch.bind(window);
       window.__jtFetchWrapped = true;
@@ -1517,7 +1517,7 @@ if (typeof document !== "undefined") (function () {
   // v71: rebuilt around a direct request ("cycle through every real app,
   // open it, use it for ~15s, close it from its own X, open the next,
   // then restart"), the honest version of "show off every app" at a time
-  // when roadmap.md's "Multi-window, honestly scoped" entry still
+  // when ROADMAP.md's "Multi-window, honestly scoped" entry still
   // confirmed real window stacking did not exist yet: every app was a
   // single, full takeover, and the dock stayed live only to switch which
   // ONE app was showing (v69), never to stack a second one on top.
@@ -1536,7 +1536,7 @@ if (typeof document !== "undefined") (function () {
   // window chrome and no X at all, confirmed by reading kernel.c, not
   // assumed. Scripting a close click for a button that doesn't exist
   // there would misrepresent what this kernel can do, so those 11 stay
-  // out of the tour; see roadmap.md for the real trace.
+  // out of the tour; see ROADMAP.md for the real trace.
   //
   // v71 real bug found and fixed here, not glossed over: the OLD tour
   // always sent its "close" click at the exact dock-tile position it had
@@ -2012,7 +2012,7 @@ if (typeof document !== "undefined") (function () {
   // whichever row a keyboard arrow-key press had left selected (`sel`
   // starts at row 0, Wind), so a click-only visitor -- this tour included,
   // it never sends arrow keys -- could never reach the Wallpaper row by
-  // clicking alone. Fixed kernel-side (settings_row_at, see roadmap.md);
+  // clicking alone. Fixed kernel-side (settings_row_at, see ROADMAP.md);
   // this step is what actually uses that fix.
   //
   // Settings has no close-X chrome (only Escape closes it, kernel.c's
@@ -2059,7 +2059,7 @@ if (typeof document !== "undefined") (function () {
   }
   // v0.76.13: direct report ("landing page still shows no satellite
   // wallpaper"), root-caused for real this time -- not the CORS proxy
-  // (already proven live, see roadmap.md's live-smoke entry), this
+  // (already proven live, see ROADMAP.md's live-smoke entry), this
   // function itself. It was written when kernel.c's own wall_theme
   // defaulted to WALL_WARM(1): "a tap always steps forward" through
   // Photo(0)->Warm(1)->Cool(2)->Raw(3)->Sat(4)->wraps to Photo, so 3

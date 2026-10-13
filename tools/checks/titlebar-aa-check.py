@@ -7,7 +7,7 @@ Files and then Notes dock icons on the real desktop (Notes opens as the
 second concurrent window, 1.9.20 gave it compositor hooks, which is how it
 replaced Weather here), waits for both windows to open, then pmemsaves the real physical framebuffer and asserts on actual pixels.
 
-Real, confirmed bug (not a guess, real pmemsave capture, see roadmap.md's
+Real, confirmed bug (not a guess, real pmemsave capture, see ROADMAP.md's
 v82 entry): gui_draw_app_titlebar's traffic-light dots (drawn by
 gui_fill_circle, on every single windowed app: Notes, Mail, Calendar,
 Contacts, Settings, ...) computed their AA ramp in LOGICAL pixel units and

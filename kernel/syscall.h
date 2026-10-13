@@ -5,7 +5,7 @@
    returned in eax, negative errno on failure. The numbers below are Linux
    i386's own (__NR_exit = 1, __NR_write = 4), so anything written against
    the real ABI's calling convention lines up here too.
-   docs/SYSCALL-ABI.md is the contract; this header and syscall.c are its
+   docs/ARCHITECTURE.md is the contract; this header and syscall.c are its
    implementation, and user/jtsys.h is the only thing a ring-3 program
    needs to speak it.
    v64 (0.61.0) shipped exit and write. The rest of the v1 set (read, open,

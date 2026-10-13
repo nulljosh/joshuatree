@@ -9,21 +9,17 @@
 ![release](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/release.yml?branch=main&label=release)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A whole computer, built from scratch: its own windows, dock, fonts, sound, internet and 31 apps, from the first chip instruction to the last pixel. No libc, no dependencies.
+A small operating system with its own windows, dock, sound, internet and 32 apps. It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it and answers out loud through a relay on your Mac.
 
-It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it and answers out loud. Where it is going: [Vision](docs/VISION.md).
+<p>
+  <img src="landing/shots/app-hamurapi.webp" width="32%" alt="Hamurapi, a game">
+  <img src="landing/shots/app-weather.webp" width="32%" alt="Weather">
+  <img src="landing/shots/app-terminal.webp" width="32%" alt="Terminal">
+</p>
 
 ## Try it
 
-Open [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com). For a PC USB stick, grab the [latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) and its [checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS). BIOS boot is checked in QEMU. UEFI and real PC hardware are not verified.
-
-To build it: `brew install lld qemu`, then `make run` to boot and `./check.sh` to test.
-
-## On a Raspberry Pi
-
-It boots a Pi 4 to the desktop with a USB keyboard and an HDMI screen. Calculator, Calendar, Notes, Music, Terminal, Console, Clock and Brick run there. Samantha answers through a relay on your Mac that uses your own Claude API key, which never goes on the Pi. Sound, the newest Clock and date icon, and Brick still need a check on the physical board.
-
-Flash a card with `tools/flash-pi.sh`. The steps are in [docs/RASPBERRY-PI.md](docs/RASPBERRY-PI.md).
+Open [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com). On a PC, boot the [latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) ([checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS)); BIOS boot is checked in QEMU, UEFI and real PCs are not. On a Pi 4, flash a card with `tools/flash-pi.sh` ([steps](docs/GUIDE.md#raspberry-pi)). To build it: `brew install lld qemu`, then `make run` to boot and `./check.sh` to test.
 
 ## How fast
 
@@ -41,7 +37,9 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 
 ## Docs
 
-[Architecture](docs/ARCHITECTURE.md), [design rules](docs/DESIGN.md), [roadmap](docs/roadmap.md) and the [user guide](docs/GUIDE.md). The rest is indexed in [docs/README.md](docs/README.md).
+- [Guide](docs/GUIDE.md): using it, the Raspberry Pi, building the hardware.
+- [Architecture](docs/ARCHITECTURE.md): how it is built, design rules, system calls, security, tests.
+- [Roadmap](docs/ROADMAP.md): what is next, what shipped, the story.
 
 ## License
 

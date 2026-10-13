@@ -1,6 +1,6 @@
 #!/bin/bash
 # Voice control for Joshua Tree, kept a separate host-side layer on purpose
-# (see roadmap.md's v10 note: no audio driver, no STT/TTS on bare metal,
+# (see ROADMAP.md's v10 note: no audio driver, no STT/TTS on bare metal,
 # that stays gato's job, not this kernel's). Records a short mic clip,
 # transcribes it with a local whisper.cpp model, asks a local Ollama model
 # to map the transcript onto one of this kernel's real shell commands, and

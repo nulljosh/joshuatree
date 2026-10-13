@@ -47,7 +47,7 @@ sec(320, 'What happens when you talk to Samantha')
 chain(330, [('You type', '"call Mom at 5"'), ('Turing', 'picks the tool'), ('Joshua Tree', 'does it'), ('She answers', 'voice and face')],
       ['host', 'host', 'core', 'core'])
 
-# The Pi, on the real board. done = seen working on the board (docs/LOOP-HANDOFF.md, docs/roadmap-done.md); the rest is proven in QEMU only.
+# The Pi, on the real board. done = seen working on the board (docs/ROADMAP.md, docs/ROADMAP.md); the rest is proven in QEMU only.
 sec(400, 'The Pi, on the real board')
 pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi', 'WPA2, joined', 1),
       ('Internet', 'DHCP and DNS', 1), ('Clock', 'from the net', 1), ('Terminal', 'zsh style, sam', 1),

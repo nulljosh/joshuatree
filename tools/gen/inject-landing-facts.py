@@ -4,7 +4,7 @@ rewrite the `data-fact="..."` spans in landing/index.html in place.
 
 Every number on the page that describes the project must come from the
 same place a human would look to check it, the way the headline already
-comes from docs/roadmap.md's **Latest** line (inject-landing-headline.sh)
+comes from docs/ROADMAP.md's **Latest** line (inject-landing-headline.sh)
 and the version comes from VERSION (landing/version.txt). This does the
 same job for four more facts:
 
