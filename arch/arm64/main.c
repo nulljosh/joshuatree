@@ -1840,6 +1840,7 @@ static void dock_activate(int slot);
 #define SPOT_BROWSER (GUI_ICON_COUNT + 3) /* the Browser is in Spotlight only too: the dock's 11 slots stay as they are */
 #define SPOT_BOOKS (GUI_ICON_COUNT + 4)   /* 2.66: Books, the same: Spotlight only, not on the dock */
 #define SPOT_CALC (GUI_ICON_COUNT + 5)    /* 3.7.5: the Calculator, in Spotlight too (its dock tile is Apps); opens the calc window */
+#define SPOT_FINDER (GUI_ICON_COUNT + 6)  /* 3.14.0: the Finder, user/finder.c at EL0; the dock has no Finder tile, so Spotlight and Samantha's open reach it */
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
@@ -1885,7 +1886,7 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     brick_close();
     clock_close();
     browser_close();
-    if (app_dock(slot == SPOT_MUSIC ? "Music" : slot == SPOT_BOOKS ? "Books" : dock_names[slot])) return;   /* Calendar, Notes, Music and Books: user/NAME.c at EL0, in its own window */
+    if (app_dock(slot == SPOT_MUSIC ? "Music" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_FINDER || slot == 1 ? "Finder" : dock_names[slot])) return;   /* slot 1 is the Burrow tile: the file window, called Finder on the Pi */   /* Calendar, Notes, Music and Books: user/NAME.c at EL0, in its own window */
     if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
     console_open();
     uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
@@ -1901,7 +1902,7 @@ int ask_select(unsigned pane);
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 #define SPOT_W 300
 #define SPOT_ROW 22
-#define SPOT_MAX (SPOT_CALC + 1)      /* every app fits: an empty query lists them all, no scrolling */
+#define SPOT_MAX (SPOT_FINDER + 1)      /* every app fits: an empty query lists them all, no scrolling */
 static char spot_text[24]; static unsigned spot_len;
 static int spot_sel, spot_hits[SPOT_MAX], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
 static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
@@ -1915,12 +1916,12 @@ static int spot_match(const char *name) {   /* the typed text, case folded, anyw
     }
     return 0;
 }
-static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : slot == SPOT_BROWSER ? "Browser" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_CALC ? "Calculator" : dock_names[slot]; }
+static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : slot == SPOT_BROWSER ? "Browser" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_CALC ? "Calculator" : slot == SPOT_FINDER ? "Finder" : dock_names[slot]; }
 static int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
 static void spot_paint(void) {
     int s = (int)window_scale();
     spot_n = 0;
-    for (int i = 0; i <= SPOT_CALC && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
+    for (int i = 0; i <= SPOT_FINDER && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
     if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
     cur_hide();
     int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;
@@ -2493,6 +2494,12 @@ int app_open_name(const char *name) {
         const char *w = openable[a]; unsigned i = 0;
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
         if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); return 1; }
+    }
+    static const char *const finder[] = {"finder", "burrow", "files"};   /* 3.14.0: Samantha's [[open Finder]] starts user/finder.c, as the Burrow tile and Spotlight do */
+    for (unsigned a = 0; a < 3; a++) {
+        const char *w = finder[a]; unsigned i = 0;
+        for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
+        if (!w[i] && !name[i]) { dock_activate(SPOT_FINDER); return 1; }
     }
     return 0;
 }
