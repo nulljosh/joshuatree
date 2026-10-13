@@ -9,7 +9,7 @@ OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "nimbus-box.jpg")
 W, H = 1600, 1100
 CREAM, INK, SWEEP = (0xEF, 0xEB, 0xE4), (0x1C, 0x1C, 0x1E), (0xC9, 0xC4, 0xBB)
 tmp = tempfile.mkdtemp(); mk = os.path.join(tmp, "mark.png")
-subprocess.run(["rsvg-convert", "-h", "420", "-o", mk, os.path.join(HERE, "mark.svg")], check=True)
+subprocess.run(["rsvg-convert", "-h", "480", "-o", mk, os.path.join(HERE, "..", "..", "landing", "mark-tree.svg")], check=True)      # the current brand mark (tools/gen/logo.py), ink with its terracotta ground
 bg = Image.new("RGB", (W, H), SWEEP); px = bg.load(); d = ImageDraw.Draw(bg)
 for y in range(H):                      # a soft vertical falloff, lighter toward the top like the renders
     t = y / H; c = tuple(int(a + (b - a) * t) for a, b in zip((0xDD, 0xD8, 0xCF), (0xC4, 0xBF, 0xB6))); d.line([(0, y), (W, y)], fill=c)
@@ -26,13 +26,13 @@ d.rectangle([x0, y0 - 26, x0 + bw, y0], fill=(0xF6, 0xF2, 0xEB))              # 
 d.line([(x0, y0), (x0 + bw, y0)], fill=(0xD9, 0xD3, 0xC8), width=2)
 d.line([(x0, y0 + bh - 1), (x0 + bw, y0 + bh - 1)], fill=(0xD2, 0xCC, 0xC0), width=3)
 m = Image.open(mk).convert("RGBA"); a = m.split()[3]
-ink = Image.new("RGBA", m.size, INK + (255,)); ink.putalpha(a.point(lambda v: int(v * 0.88)))
-mx, my = x0 + (bw - m.width) // 2, y0 + 92
+ink = m
+mx, my = x0 + (bw - m.width) // 2, y0 + 40
 bg.paste(ink, (mx, my), ink)
 f = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 34)
 txt, sp = "Joshua Tree", 5
 tw = sum(d.textlength(ch, font=f) + sp for ch in txt) - sp
-cx = x0 + (bw - tw) / 2; ty = my + m.height + 55
+cx = x0 + (bw - tw) / 2; ty = my + int(m.height * 0.93) + 40
 for ch in txt:
     d.text((cx, ty), ch, font=f, fill=(0x5A, 0x56, 0x4F)); cx += d.textlength(ch, font=f) + sp
 bg.save(OUT, quality=92)

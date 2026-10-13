@@ -1,4 +1,4 @@
 part,qty,material,layer,walls,infill,supports,orientation,size mm,volume cm3 (mesh),filament g (estimate),print hours (estimate),note
 front_shell,1,PLA (PETG works),0.20 mm,6 walls = 2.4 mm,15 percent gyroid,no,face down on the bed,236.3 x 228.2 x 86.1,192.0,238,5.9,teardrop standoffs and the screw holes are the only overhangs
-back_cover,1,PLA (PETG works),0.20 mm,6 walls = 2.4 mm,15 percent gyroid,no,back panel down on the bed,236.0 x 226.7 x 87.1,168.9,209,5.2,port windows and the scoop sit in the first layers
-ground_inlay,1,PLA (PETG works),0.20 mm,6 walls = 2.4 mm,15 percent gyroid,no,flat,26.7 x 1.1 x 0.6,0.0,,,print in terracotta; it sits flush in the groove on the back
+back_cover,1,PLA (PETG works),0.20 mm,6 walls = 2.4 mm,15 percent gyroid,no,back panel down on the bed,236.0 x 226.7 x 87.1,169.0,210,5.2,port windows and the scoop sit in the first layers
+ground_inlay,1,PLA (PETG works),0.20 mm,6 walls = 2.4 mm,15 percent gyroid,no,flat,27.1 x 1.1 x 0.6,0.0,,,print in terracotta; it sits flush in the groove on the back

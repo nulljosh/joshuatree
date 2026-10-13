@@ -1,7 +1,7 @@
 {
  "volumes_cm3": {
   "front_shell": 192.0,
-  "back_cover": 176.6,
+  "back_cover": 176.7,
   "ground_inlay": 0.0
  },
  "parts": {
@@ -16,7 +16,7 @@
    87.2
   ],
   "ground_inlay": [
-   26.7,
+   27.1,
    1.1,
    0.5
   ]

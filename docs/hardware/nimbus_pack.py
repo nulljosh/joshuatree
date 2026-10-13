@@ -2,8 +2,9 @@
 # Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
 # The Nimbus print pack, built from the CAD: checks every STL is watertight, writes the 1:1 blueprint (A3 PDF, plus A4 and Letter tiles),
 # the bill of materials, the per-part print sheet, six assembly diagrams and the one-page print-shop sheet into docs/hardware/nimbus/pack/.
-#   NIMBUS_PACK=docs/hardware/nimbus/pack uv run --with build123d --with shapely python docs/hardware/nimbus_cad.py docs/hardware   (STLs and quarters)
-#   uv run --with build123d --with shapely --with trimesh --with numpy python docs/hardware/nimbus_pack.py docs/hardware
+#   NIMBUS_PACK=docs/hardware/nimbus/pack uv run --with build123d --with shapely --with trimesh --with numpy --with networkx --with scipy python docs/hardware/nimbus_cad.py docs/hardware   (the pack STLs; trimesh makes it pick a watertight mesh)
+#   uv run --with build123d --with shapely --with trimesh --with numpy --with networkx --with scipy --with mapbox-earcut --with rtree python docs/hardware/nimbus_pack.py docs/hardware
+# Needs rsvg-convert and pdfunite (poppler) for the PDFs. Both shells fit a 256 x 256 bed whole, so there are no split files.
 # Every size comes from the CAD (nimbus/info.json, the STEP files and the STLs). Time, filament and cost are estimates and are marked so.
 import sys, os, json, math, csv, glob, shutil, subprocess
 import numpy as np
@@ -201,7 +202,10 @@ def step_svg(n, title, lines, draw):
     s += T(40, 60, "Step %d" % n, 14, weight=600) and '<text x="40" y="58" font-size="30" font-weight="600" font-family="Helvetica, Arial, sans-serif" fill="%s">Step %d: %s</text>' % (INK, n, title)
     for i, ln in enumerate(lines): s += '<text x="40" y="%d" font-size="17" font-family="Helvetica, Arial, sans-serif" fill="%s">%s</text>' % (95 + 26 * i, SOFT, ln)
     return s + draw + "</svg>"
-def arrow(x1, y1, x2, y2): return '<line x1="%g" y1="%g" x2="%g" y2="%g" stroke="%s" stroke-width="3"/><polygon points="%g,%g %g,%g %g,%g" fill="%s"/>' % (x1, y1, x2, y2, TERRA, x2, y2, x2 - 10 * math.copysign(1, x2 - x1 or 1) * (abs(x2 - x1) > abs(y2 - y1)), y2 - 6, x2 - 10 * math.copysign(1, x2 - x1 or 1) * (abs(x2 - x1) > abs(y2 - y1)), y2 + 6, TERRA)
+def arrow(x1, y1, x2, y2):
+    L_ = math.hypot(x2 - x1, y2 - y1) or 1.0; ux, uy = (x2 - x1) / L_, (y2 - y1) / L_; px, py = -uy, ux     # unit direction and its normal
+    bx, by = x2 - 14 * ux, y2 - 14 * uy
+    return '<line x1="%g" y1="%g" x2="%g" y2="%g" stroke="%s" stroke-width="3"/><polygon points="%g,%g %g,%g %g,%g" fill="%s"/>' % (x1, y1, bx, by, TERRA, x2, y2, bx + 7 * px, by + 7 * py, bx - 7 * px, by - 7 * py, TERRA)
 def shp(name, x, y, k, fill=CREAM):
     g = sil[name]; b = g.bounds; return '<path d="%s" fill="%s" stroke="%s" stroke-width="1.5" fill-rule="evenodd"/>' % (pathd(g, x, y, (b[0] + b[2]) / 2, (b[1] + b[3]) / 2).replace("", ""), fill, INK)
 def sh(name, x, y, k):
@@ -211,10 +215,10 @@ def sh(name, x, y, k):
 K1 = 1.4
 steps = [
  ("Glue the glass to the ledge", ["Front shell face down on a soft cloth.", "Run a bead of foam tape round the 2 mm ledge behind the opening.", "Lay the 194 x 110 glass in the opening: 0.5 mm gap all round."], lambda: sh("front", 450, 330, 1.35) + arrow(450, 140, 450, 215)),
- ("Seat the display", ["Tape the display module to the back of the glass, driver board in the middle.", "Keep the ribbon and power leads free for step 4."], lambda: sh("side", 450, 330, 1.7) + arrow(180, 330, 330, 330)),
+ ("Seat the display", ["Tape the display module to the back of the glass, driver board in the middle.", "Keep the ribbon and power leads free for step 4."], lambda: sh("side", 450, 330, 1.5) + arrow(180, 330, 330, 330)),
  ("Screw the Pi down", ["Four M2.5 x 6 screws into the teardrop standoffs on the floor.", "USB end toward the back; the board stands 26 mm off the desk."], lambda: sh("under", 450, 330, 1.45) + arrow(450, 140, 450, 235)),
  ("Fit the back ports", ["Push the two USB-C extenders and the jack into the strip on the back cover.", "Plug their cables into the Pi and the panel; run the SD extender out of the front slot."], lambda: sh("rear", 450, 330, 1.35) + arrow(450, 500, 450, 440)),
- ("Close the case", ["Fold the cables in and bring the back cover onto the lip: the 0.5 mm reveal shows all round.", "Turn the case over and drive the two M3 x 12 screws up through the foot."], lambda: sh("side", 450, 330, 1.7) + arrow(760, 330, 640, 330)),
+ ("Close the case", ["Fold the cables in and bring the back cover onto the lip: the 0.5 mm reveal shows all round.", "Turn the case over and drive the two M3 x 12 screws up through the foot."], lambda: sh("side", 450, 330, 1.5) + arrow(760, 330, 640, 330)),
  ("Fill the mark", ["Press the terracotta ground line into its groove under the tree on the back.", "A drop of glue holds it flush."], lambda: sh("rear", 450, 330, 1.35) + arrow(450, 170, 450, 250)),
 ]
 for i, (t, ls, d) in enumerate(steps, 1):

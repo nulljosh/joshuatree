@@ -108,9 +108,21 @@ def mark_geoms():
     def arm(pts, w): return LineString(pts).buffer(w / 2, 16)
     def star(cx, cy, ro, ri, n=9, rot=0.0):
         return Polygon([((cx + (ro if i % 2 == 0 else ri) * math.cos(rot + math.pi * i / n)), (cy + (ro if i % 2 == 0 else ri) * math.sin(rot + math.pi * i / n))) for i in range(2 * n)])
-    parts = [arm([(0, 0), (0.2, 6), (0.2, 10)], 5.6),
-             arm([(0, 8), (-4.5, 11.5), (-9, 15)], 3.4), arm([(0.2, 9.5), (0.4, 14), (0.2, 17.5)], 3.6), arm([(0, 7), (4.5, 10), (9.5, 12.5)], 3.2),
-             star(-10, 17.2, 6.3, 3.0, 8, 0.3), star(0.2, 22.0, 7.2, 3.4, 9, 0.1), star(10.5, 14.8, 5.8, 2.8, 8, 0.5)]
+    # the current brand mark: the strokes of landing/mark-bold.svg (made by tools/gen/logo.py), flipped upright, each stroke buffered to its width
+    txt = open(os.path.join(HERE, "..", "..", "landing", "mark-tree.svg")).read()
+    parts = []
+    tags = [t for t in re.findall(r"<path[^>]*>", txt) if "#b5502c" not in t]       # the ink strokes only; the terracotta ground is drawn separately below
+    for d, w in [(re.search(r' d="([^"]+)"', t).group(1), re.search(r'stroke-width="([0-9.]+)"', t).group(1)) for t in tags]:
+        for sub in d.split("M")[1:]:
+            nums = [float(v) for v in re.findall(r"-?[0-9.]+", sub.replace("C", " "))]
+            pts = [(nums[i], -nums[i + 1]) for i in range(0, len(nums), 2)]
+            line = [pts[0]]
+            for i in range(1, len(pts) - 2, 3):
+                p0, p1, p2, p3 = pts[i - 1], pts[i], pts[i + 1], pts[i + 2]
+                for k in range(1, 11):
+                    t = k / 10.0; u = 1 - t
+                    line.append((u ** 3 * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t ** 3 * p3[0], u ** 3 * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t ** 3 * p3[1]))
+            parts.append(LineString(line).buffer(float(w) / 2, 8))
     g = unary_union(parts)
     x0, y0, x1, y1 = g.bounds; k = 30.0 / (y1 - y0)
     g = affinity.translate(affinity.scale(affinity.translate(g, -(x0 + x1) / 2, -(y0 + y1) / 2), k, k, origin=(0, 0)), MARK_X, MARK_Y)
@@ -118,8 +130,8 @@ def mark_geoms():
     ground = LineString([(MARK_X - gw / 2, gb[1] - 2.6), (MARK_X + gw / 2, gb[1] - 2.6)]).buffer(0.55, 8)
     g = g.buffer(0.3, join_style=1).buffer(-0.3, join_style=1)         # close slivers where the arms meet the tufts, so no edge is shorter than a few tenths
     from shapely.geometry import MultiPolygon as _MP
-    g = unary_union([Polygon(q.exterior) for q in (g.geoms if hasattr(g, 'geoms') else [g])])      # solid: no islands inside the mark
-    return g.simplify(0.25), ground.simplify(0.05)
+    g = unary_union([Polygon(q.exterior, [h for h in q.interiors if Polygon(h).area > 2.0]) for q in (g.geoms if hasattr(g, 'geoms') else [g])])      # keep the paper showing through the tufts, drop pin holes
+    return g.simplify(0.04), ground.simplify(0.05)
 def poly_solid(geom, z0, depth):
     out = None
     from shapely.geometry.polygon import orient
