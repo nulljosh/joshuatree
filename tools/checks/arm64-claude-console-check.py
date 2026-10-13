@@ -76,6 +76,12 @@ turing_srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), TuringStub); turi
 threading.Thread(target=turing_srv.serve_forever, daemon=True).start()
 turing_url = "http://127.0.0.1:%d" % turing_srv.server_address[1]
 fails = []
+def untimed(lines):
+    """The answer text with the trailing 'sam: 1.2s (find ...)' timing line dropped."""
+    import re
+    return re.sub(r" sam: [\d.]+s \(find.*$", "", " ".join(" ".join(lines).split()))
+
+
 def check(name, ok, detail=""):
     print(("  ok: " if ok else "  FAIL: ") + name + (("  (" + detail + ")") if detail and not ok else ""))
     if not ok: fails.append(name)
@@ -226,7 +232,7 @@ try:
         check("Enter sent the question: the stub got exactly the typed text, Backspace applied",
               len(calls) == 1 and calls[0]["stdin"] == QUESTION, repr([c["stdin"] for c in calls]))
         lines = answer_after(out, 1) if got else []
-        check("the answer comes back as sam: and then the words", " ".join(" ".join(lines).split()) == "sam: " + ANSWER + " " + MARK, repr(lines))
+        check("the answer comes back as sam: and then the words", untimed(lines) == "sam: " + ANSWER + " " + MARK, repr(lines))
         check("it is wrapped to lines of at most 53 columns", len(lines) > 1 and all(len(l) <= 53 for l in lines),
               repr([len(l) for l in lines]))
         check("the line is echoed after the zsh prompt, joshua@tree % sam ...", DEFAULT + "sam " + QUESTION + "\n" in out, out[-400:])
@@ -265,7 +271,7 @@ try:
         b.wait_for("samantha: thinking", 10, 3); b.wait_for(MARK, 30, 3)
         out = b.uart()
         check("turing: the stub serve.py got the question", turing_seen[-1:] == ["turing"], repr(turing_seen))
-        check("turing: its answer prints in the Terminal", " ".join(" ".join(answer_after(out, 3)).split()) == "sam: " + ANSWER + " " + MARK,
+        check("turing: its answer prints in the Terminal", untimed(answer_after(out, 3)) == "sam: " + ANSWER + " " + MARK,
               repr(answer_after(out, 3)) if out.count("samantha: thinking") > 3 else out[-300:])
         check("turing: no claude -p ran", len(stub_calls()) == n_claude)
         # the relay now wants another token

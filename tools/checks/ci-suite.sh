@@ -314,6 +314,7 @@ once |6|ARM64 RNG200 full seeds, health faults, bounded waits and wiped failures
 once |6|ARM64 clock accepts bounded HTTPS dates only, never before the build or an accepted clock (host harness)|python3 ./tools/checks/arm64-clock-check.py
 retry|6|ARM64 Terminal asks the real relay over TLS, with session resume and wrong-token refusal|python3 ./tools/checks/arm64-claude-console-check.py --tls
 retry|6|ARM64 relay discovery: with a dead baked relay address the Pi finds the relay by a LAN broadcast probe, verifies its jt-relay certificate from the private CA, and refuses a right-CA certificate for the wrong name before the token is sent (skips where the tools are missing)|python3 ./tools/checks/arm64-relay-discovery-check.py
+retry|6|ARM64 sam speed: sums answered on the Pi with no relay traffic, the relay remembered in memory and on the card (0 UDP probes after the first), a stalled relay stops at 30 seconds with the relay address, the timing line prints (skips where the tools are missing)|python3 ./tools/checks/arm64-samfast-check.py
 EOF
 }
 
