@@ -151,7 +151,7 @@ user.o: user.S
 # mp3.c (minimp3) does its sums in floating point, so it alone is built without -mgeneral-regs-only (UFPCC); EL0 may use
 # the FPU and vectors.S keeps an app's FP registers across every call and park. The kernel stays integer-only.
 # userapps.S bakes the images in with .incbin and lists them; a new app is a name in UAPPS and a row there.
-UAPPS = hello calendar notes music books finder mail weather stocks
+UAPPS = hello calendar notes music books finder mail weather stocks reminders
 USEROBJ = user.o userapps.o
 UCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fdirect-access-external-data -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
 UFPCC = $(filter-out -mgeneral-regs-only,$(UCC))
@@ -177,6 +177,9 @@ uapp_weather.o: ../../user/weather_pi.c ../../user/jtsys.h $(UJT)/text.h
 uapp_stocks.o: ../../user/stocks_pi.c ../../user/jtsys.h $(UJT)/text.h
 	$(UCC) -c $< -o $@
 uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h
+	$(UCC) -c $< -o $@
+# 3.17.0: the app called reminders is user/remindpi.c (the Pi's macOS-shaped list), not user/reminders.c, which is the i386 one; this rule beats the pattern above.
+uapp_reminders.o: ../../user/remindpi.c ../../user/jtsys.h $(UJT)/text.h
 	$(UCC) -c $< -o $@
 uapp_music.o: $(UJT)/wav.h $(UJT)/mp3.h $(UJT)/stdlib.h $(UJT)/string.h $(UJT)/mascot.h mascot_art.h
 uapp_books.o: $(UJT)/mascot.h mascot_art.h
@@ -295,6 +298,9 @@ sdwtest: sdw-kernel8.img sdr-kernel8.img
 $(eval $(call variant,notesw,-DNOTES_SELFTEST=1,,))
 $(eval $(call variant,notesr,-DNOTES_SELFTEST=2,,))
 notestest: notesw-kernel8.img notesr-kernel8.img
+$(eval $(call variant,remw,-DNOTES_SELFTEST=3,,))
+$(eval $(call variant,remr,-DNOTES_SELFTEST=4,,))
+reminderstest: remw-kernel8.img remr-kernel8.img
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
 run-pi: kernel8.img
@@ -302,7 +308,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest
+.PHONY: brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest reminderstest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))

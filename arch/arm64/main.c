@@ -2753,6 +2753,7 @@ static void m1_selftest(void) {
 
 /* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock, Brick, Browser, Settings, Weather and Stocks are available; other names return 0. */
 int app_open_name(const char *name) {
+    if ((name[0] | 32) == 'r' && (name[1] | 32) == 'e' && (name[2] | 32) == 'm' && (name[3] | 32) == 'i' && (name[4] | 32) == 'n' && (name[5] | 32) == 'd' && (name[6] | 32) == 'e' && (name[7] | 32) == 'r' && (name[8] | 32) == 's' && !name[9]) return app_dock("Reminders");   /* 3.17.0: [[open Reminders]] */
     if ((name[0] | 32) == 'm' && (name[1] | 32) == 'a' && (name[2] | 32) == 'i' && (name[3] | 32) == 'l' && !name[4]) { dock_activate(2); return 1; }   /* 3.15.0: the Mail tile */
     static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser", "settings", "weather", "stocks"};
     for (unsigned a = 0; a < 8; a++) {
@@ -2900,7 +2901,8 @@ void usb_poll(void);
    Notes stays open for the check's screendump. */
 void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p);
 static void notes_tick(void) {
-    static const char *const script = NOTES_SELFTEST == 1 ? ">>>>>\n|nhello from the pi\033" : ">>>>>\n|\n";
+    static const char *const script = NOTES_SELFTEST == 1 ? ">>>>>\n|nhello from the pi\033" : NOTES_SELFTEST == 2 ? ">>>>>\n|\n"
+        : NOTES_SELFTEST == 3 ? ">>>>>>\n|buy milk\ncall mom\n^^ " : ">>>>>>\n|";   /* 3, 4: Reminders (arm64-reminders-check.py): the sixth tile, two adds, Up Up, Space on the first; then just open it */
     static unsigned at; static unsigned long next; static unsigned char last[8]; static int done;
     unsigned long now = cnt_now();
     if (!next) next = now + cnt_hz();   /* a second after the loop starts: the desktop has settled */
@@ -2915,7 +2917,7 @@ static void notes_tick(void) {
         return;
     }
     unsigned char down[8] = { 0 }, none[8] = { 0 };
-    down[2] = c == '>' ? 0x4F : c == '\n' ? 0x28 : c == '\033' ? 0x29 : c == ' ' ? 0x2C : (unsigned char)(0x04 + c - 'a');   /* HID usages: Right, Enter, Esc, Space, a to z */
+    down[2] = c == '>' ? 0x4F : c == '\n' ? 0x28 : c == '\033' ? 0x29 : c == ' ' ? 0x2C : c == '^' ? 0x52 : (unsigned char)(0x04 + c - 'a');   /* HID usages: Right, Enter, Esc, Space, a to z */
     hid_kbd(down, 8, last); hid_kbd(none, 8, last);
     if (!script[++at]) next = now + cnt_hz();
 }
