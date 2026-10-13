@@ -67,6 +67,13 @@ cp tools/pi-config.txt "$CARD"/config.txt
 mkdir -p "$CARD"/JT/BOOKS
 cp tools/books/YELLOW.TXT "$CARD"/JT/BOOKS/YELLOW.TXT
 
+# 3.7.7: Music's library, JT/MUSIC/. Music on a fresh card showed nothing, so when the folder holds no .WAV or .MP3 it gets the
+# self-made sample HELLO.WAV (tools/gen/sample-song.py, 16 s, three voices). A card with songs is never touched.
+mkdir -p "$CARD"/JT/MUSIC
+if ! ls "$CARD"/JT/MUSIC 2>/dev/null | grep -qi '\.\(wav\|mp3\)$'; then
+    python3 tools/gen/sample-song.py "$CARD"/JT/MUSIC/HELLO.WAV
+fi
+
 command -v dot_clean >/dev/null && dot_clean -m "$CARD"
 if [ "${FLASH_PI_NO_EJECT:-}" = 1 ]; then :
 elif [ "$(uname -s)" = "Darwin" ]; then diskutil eject "$CARD"; else /bin/sync; fi
