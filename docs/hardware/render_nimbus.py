@@ -136,9 +136,18 @@ scr = bpy.data.objects.new("screen", me); sc.collection.objects.link(scr)
 sm = bpy.data.materials.new("screen"); sm.use_nodes = True; nt = sm.node_tree
 for n in list(nt.nodes): nt.nodes.remove(n)
 img = nt.nodes.new("ShaderNodeTexImage"); img.image = bpy.data.images.load(os.path.join(tmp, "screen.png"))
-em = nt.nodes.new("ShaderNodeEmission"); em.inputs["Strength"].default_value = float(os.environ.get("SCREEN", 1.0))
+em = nt.nodes.new("ShaderNodeEmission"); em.inputs["Strength"].default_value = float(os.environ.get("SCREEN", 0.8))
 outn = nt.nodes.new("ShaderNodeOutputMaterial")
-nt.links.new(img.outputs["Color"], em.inputs["Color"]); nt.links.new(em.outputs["Emission"], outn.inputs["Surface"])
+# a soft diagonal sheen from the top left, so the screen reads as a lit display behind glass
+tcn = nt.nodes.new("ShaderNodeTexCoord"); sep = nt.nodes.new("ShaderNodeSeparateXYZ"); inv = nt.nodes.new("ShaderNodeMath"); add = nt.nodes.new("ShaderNodeMath")
+mrn = nt.nodes.new("ShaderNodeMapRange"); mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"
+nt.links.new(tcn.outputs["UV"], sep.inputs[0])
+inv.operation = "SUBTRACT"; inv.inputs[0].default_value = 1.0; nt.links.new(sep.outputs["X"], inv.inputs[1])
+add.operation = "ADD"; nt.links.new(inv.outputs[0], add.inputs[0]); nt.links.new(sep.outputs["Y"], add.inputs[1])
+mrn.inputs["From Min"].default_value = 1.0; mrn.inputs["From Max"].default_value = 1.8; mrn.inputs["To Min"].default_value = 0.0; mrn.inputs["To Max"].default_value = float(os.environ.get("GLARE", 0.2)); mrn.clamp = True
+nt.links.new(add.outputs[0], mrn.inputs["Value"])
+nt.links.new(mrn.outputs["Result"], mix.inputs["Factor"]); nt.links.new(img.outputs["Color"], mix.inputs["A"]); mix.inputs["B"].default_value = (1.0, 1.0, 1.0, 1.0)
+nt.links.new(mix.outputs["Result"], em.inputs["Color"]); nt.links.new(em.outputs["Emission"], outn.inputs["Surface"])
 me.materials.append(sm)
 PROD = [o for o in bpy.data.objects]      # everything so far is the product; the side view turns it a quarter turn so the backdrop matches the hero
 # the sweep: a floor that curves up behind into a wall, off-white, seamless
@@ -167,7 +176,7 @@ for name, loc, target, lens in VIEWS:
     if os.environ.get("VIEW") and name not in os.environ["VIEW"].split(","): continue
     cd.lens = lens
     for o in PROD: o.rotation_euler[2] = -math.pi / 2 if name == "side" else 0.0
-    sc.view_settings.exposure = float(os.environ.get("EXPOSURE", 0.0)) + (-0.8 if name == "rear" else 0.0)
+    sc.view_settings.exposure = float(os.environ.get("EXPOSURE", 0.0)) + (-1.0 if name == "rear" else 0.0)
     kl = (0.25, 0.8, 1.3) if name == "rear" else (0.0, 0.1, 1.5)      # the rear is lit from behind and above, so the back face is even
     key.location = kl; key.rotation_euler = (Vector((0.0, -0.05, 0.1)) - Vector(kl)).to_track_quat("-Z", "Y").to_euler()
     l = Vector(loc) * S; t = Vector(target) * S

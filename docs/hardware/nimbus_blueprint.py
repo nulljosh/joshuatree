@@ -85,7 +85,7 @@ row2 = 150 + h + 130
 g, box, w4, h4 = place("top", 56, row2); els.append(text(56, row2 - 10, "TOP", 14, weight=600)); els.append(shape(g, box))
 cx_, cy_ = at(box, info["scoop_center"][0], info["scoop_center"][1]); hx, hz = info["scoop_half"]
 els.append('<ellipse cx="%.1f" cy="%.1f" rx="%.1f" ry="%.1f" fill="none" stroke="%s" stroke-width="1" stroke-dasharray="5 3"/>' % (cx_, cy_, hx * K, hz * K, INK))
-els.append(vdim(box[0] + w4 / 2, row2, row2 + h4, "%.1f" % OD)); els.append(text(56, row2 + h4 + 24, "finger pull: a small crescent in the back face, wall kept at %.1f" % info["wall"], 12, fill=SOFT))
+els.append(vdim(box[0] + w4 / 2, row2, row2 + h4, "%.1f" % OD)); els.append(text(56, row2 + h4 + 24, "finger scoop: a small flat-floored recess in the back face, wall kept at %.1f" % info["wall"], 12, fill=SOFT))
 ux = 56 + w4 + 110
 g, box, w5, h5 = place("under", ux, row2); els.append(text(ux, row2 - 10, "UNDERSIDE", 14, weight=600)); els.append(shape(g, box))
 for sx, sy in info["screws_m3"]:

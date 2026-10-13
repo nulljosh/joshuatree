@@ -52,7 +52,7 @@ SLOT_W, SLOT_H, SLOT_X, SLOT_Y = 27.0, 2.6, 56.0, -97.0     # the SD card slot: 
 MIN_FEATURE = 0.5
 STRIP_D = 1.0                    # depth of the back port strip
 
-def sq_pts(a, b, k=56):
+def sq_pts(a, b, k=40):
     out = []
     for i in range(k):
         t = 2 * math.pi * i / k; c, s = math.cos(t), math.sin(t)
@@ -68,7 +68,7 @@ def loft(pf, pr, lead):
     The wall runs straight to the parting line, then draws in by TAP on a smooth S curve, then the back rolls over."""
     front = [pf(t) for t in THS]; rear = [(i + TAP, -D - z) for i, z in reversed([pr(t) for t in THS])]
     zr = rear[0][1]
-    mid = [(lead, (front[-1][1] + ZG) / 2), (lead, ZG)] + [(lead + TAP * (3 * u * u - 2 * u ** 3), ZG + (zr - ZG) * u) for u in (1 / 3, 2 / 3)]
+    mid = [(lead, front[-1][1] + (ZG - front[-1][1]) * k / 5) for k in (1, 2, 3, 4)] + [(lead, ZG)] + [(lead + TAP * (3 * u * u - 2 * u ** 3), ZG + (zr - ZG) * u) for u in (1 / 8, 2 / 8, 3 / 8, 4 / 8, 5 / 8, 6 / 8, 7 / 8)]
     return Solid.make_loft([sq_wire(i, z) for i, z in front + mid + rear], False)
 RI, RI2 = R - T, R2 - T
 outer = loft(lambda t: (R - R * math.sin(t), -R + R * math.cos(t)), lambda t: (R2 - R2 * math.sin(t), -R2 + R2 * math.cos(t)), 0.0)
@@ -88,12 +88,12 @@ def ptf(x, y, z):
 def pta(x, y, z):
     p = (ASM * Pos(x, y, z)).position; return p.X, p.Y, p.Z
 
-# ---- the finger pull: a small crescent let into the back face under the rear top lip, out of sight from the front and the top ----
-SC = (34.0, 7.0, 5.0)
-SC_C = (0, B - 24.0, -D - 2.0)
-def ellipsoid(grow): return Pos(*SC_C) * scale(Sphere(1), by=(SC[0] + grow, SC[1] + grow, SC[2] + grow))
-outer = outer - ellipsoid(0)
-cavity = cavity - ellipsoid(T)
+# ---- the finger pull: a crisp, flat-floored scoop let into the back face, out of sight from the front and the top ----
+PULL_W, PULL_H, PULL_Z, PULL_Y = 60.0, 10.0, 3.5, B - 27.0
+def pull(grow):
+    return Pos(0, PULL_Y, -D - 1.0) * extrude(SlotOverall(PULL_W + 2 * grow, PULL_H + 2 * grow), 1.0 + PULL_Z + grow)
+outer = outer - pull(0)
+cavity = cavity - pull(T)
 # the desk foot: flat pad, the cavity floor stays 2.4 above it
 outer_c = outer - face_of(Pos(0, 0, CUT - 450) * Box(900, 900, 900))
 cavity_c = cavity - face_of(Pos(0, 0, CUT + T - 450) * Box(900, 900, 900))
@@ -101,20 +101,22 @@ shell = outer_c - cavity_c
 
 # ---- the mark: the solid crayon tree from docs/hardware/mark.svg, flat-bottomed, with one thin terracotta ground line under it ----
 def mark_geoms():
-    """a bold simplified Joshua tree, about 30 mm tall: one thick trunk, three fat tufts, drawn here (not traced), and one thin ground line"""
-    from shapely.geometry import LineString, Point
+    """a bold flat Joshua tree, 30 mm tall, drawn here: a short thick trunk, three branches, three spiky star tufts like the app mark; one thin ground line"""
+    from shapely.geometry import LineString, Polygon
     from shapely.ops import unary_union
     from shapely import affinity
     def arm(pts, w): return LineString(pts).buffer(w / 2, 16)
-    parts = [arm([(0, 0), (0.3, 6), (0.2, 11)], 5.0),
-             arm([(0, 9.5), (-4, 13), (-8.5, 17.5), (-10, 20)], 3.4), arm([(0.2, 10.5), (1.2, 16), (1.4, 22)], 3.6), arm([(0.2, 8), (4.5, 12), (8.5, 15.5), (10, 17.5)], 3.2),
-             Point(-10.2, 22.2).buffer(4.6, 24), Point(1.4, 25.4).buffer(5.4, 24), Point(10.2, 19.6).buffer(4.2, 24)]
+    def star(cx, cy, ro, ri, n=9, rot=0.0):
+        return Polygon([((cx + (ro if i % 2 == 0 else ri) * math.cos(rot + math.pi * i / n)), (cy + (ro if i % 2 == 0 else ri) * math.sin(rot + math.pi * i / n))) for i in range(2 * n)])
+    parts = [arm([(0, 0), (0.2, 6), (0.2, 10)], 5.6),
+             arm([(0, 8), (-4.5, 11.5), (-9, 15)], 3.4), arm([(0.2, 9.5), (0.4, 14), (0.2, 17.5)], 3.6), arm([(0, 7), (4.5, 10), (9.5, 12.5)], 3.2),
+             star(-10, 17.2, 6.3, 3.0, 9, 0.3), star(0.2, 22.0, 7.2, 3.4, 10, 0.1), star(10.5, 14.8, 5.8, 2.8, 9, 0.5)]
     g = unary_union(parts)
     x0, y0, x1, y1 = g.bounds; k = 30.0 / (y1 - y0)
     g = affinity.translate(affinity.scale(affinity.translate(g, -(x0 + x1) / 2, -(y0 + y1) / 2), k, k, origin=(0, 0)), MARK_X, MARK_Y)
     gb = g.bounds; gw = 0.85 * (gb[2] - gb[0])
     ground = LineString([(MARK_X - gw / 2, gb[1] - 2.6), (MARK_X + gw / 2, gb[1] - 2.6)]).buffer(0.55, 8)
-    return g.simplify(0.05), ground.simplify(0.01)
+    return g.simplify(0.04), ground.simplify(0.01)
 def poly_solid(geom, z0, depth):
     out = None
     for p in (geom.geoms if hasattr(geom, "geoms") else [geom]):
@@ -254,7 +256,7 @@ asm_parts = {k: asm(v) for k, v in parts.items()}
 bb = Compound([asm_parts["front_shell"], asm_parts["back_cover"]]).bounding_box()
 info = {"parts": report, "overall": [round(bb.size.X, 1), round(bb.size.Y, 1), round(bb.size.Z, 1)], "wall": T, "lean": LEAN, "reveal": GAP, "bed": BED,
         "screws_m3": [[round(x, 1), round(y, 1)] for x, y in SCREWS], "board_standoffs_m25": [[round(x, 1), round(y, 1)] for x, y in HOLES],
-        "vent": {"y": round(Y_FLOOR(11.5), 1), "length": 96, "width": 3.2}, "glass": [GLASS_W, GLASS_H], "active": [ACT_W, ACT_H], "glass_center": [round(v, 1) for v in pta(0, YC, 0)], "opening": [OPEN_W, OPEN_H], "strip": [round(v, 1) for v in STRIP], "scoop_center": [round(v, 1) for v in pta(0, SC_C[1], -D)], "scoop_half": [SC[0], 2.5], "mark": [MARK_W, round(MARK_Y, 1)], "squircle_n": SQUIRCLE_N, "radius": R, "front": [2 * A, 2 * B]}
+        "vent": {"y": round(Y_FLOOR(11.5), 1), "length": 96, "width": 3.2}, "glass": [GLASS_W, GLASS_H], "active": [ACT_W, ACT_H], "glass_center": [round(v, 1) for v in pta(0, YC, 0)], "opening": [OPEN_W, OPEN_H], "strip": [round(v, 1) for v in STRIP], "scoop_center": [round(v, 1) for v in pta(0, PULL_Y, -D)], "scoop_half": [PULL_W / 2, 2.5], "mark": [MARK_W, round(MARK_Y, 1)], "squircle_n": SQUIRCLE_N, "radius": R, "front": [2 * A, 2 * B]}
 json.dump(info, open(os.path.join(STL_DIR, "info.json"), "w"), indent=1)
 asm_parts = {k: asm(v) for k, v in parts.items()}
 for _k, _v in asm_parts.items():
