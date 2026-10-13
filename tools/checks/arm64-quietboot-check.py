@@ -6,7 +6,7 @@ here -DQUIET_BOOT turns it on for virt, which can be clicked). WIFI_ICON_TEST ma
   - Build 1, not joined: `console quiet` is printed and the Console's whole rectangle on screen is one flat graphite grey
     (no frame, no dots, no white well, no boot log); the menu bar's closing rule is there; the fan is flat ink
     (0x1C1C1E) even though nothing is joined, with no grey and nothing blue (no pixel with blue above red) in it.
-    Then a click on the Mail tile opens the Console with the buffered boot log (white well, ink text, `console open`), and a
+    Then a click on the Trash tile (the one dock tile with no app, Mail now being one) opens the Console with the buffered boot log (white well, ink text, `console open`), and a
     click on the Terminal tile opens the Terminal (`terminal open`), so the log was kept the whole time.
   - Build 2, joined: the same fan is flat ink, 0x1C1C1E, the clock's ink, with no grey 0x909090 left in it (3.19.1: the speaker and power icons wear the same ink).
   - Build 3, the splash (-DSPLASH_STEP_MS=1500 holds each boot stage so screendumps can catch it): the first dump is solid
@@ -94,6 +94,14 @@ def fan(img, uart):
     return [px(img, x, y) for y in range(oy - R - 1, oy + 3) for x in range(ox - R - 1, ox + R + 2)]
 
 
+def dim_runs(img, uart):
+    """DIM (0x909090) pixels with a DIM neighbour. The fan is anti-aliased onto the grey bar, and a pixel a quarter covered by ink is
+    exactly 0x909090 there, so lone DIM pixels are legitimate edge pixels; the old dimmed fan was solid 0x909090, every pixel next to another."""
+    ox, oy, R = map(int, re.findall(r"wifi icon (\d+),(\d+),(\d+)", uart())[-1])
+    g = {(x, y): px(img, x, y) == DIM for y in range(oy - R - 1, oy + 3) for x in range(ox - R - 1, ox + R + 2)}
+    return sum(1 for (x, y), v in g.items() if v and (g.get((x + 1, y)) or g.get((x - 1, y)) or g.get((x, y + 1)) or g.get((x, y - 1))))
+
+
 def dump(img, uart):   # QB_DUMP=1: the fan as text, # ink-dark, + mid grey, . bar
     ox, oy, R = map(int, re.findall(r"wifi icon (\d+),(\d+),(\d+)", uart())[-1])
     if os.environ.get("QB_DUMP"):
@@ -116,9 +124,10 @@ try:
             else: print(f"  ok: after boot the Console's whole rectangle is flat graphite grey ({len(area)} samples)")
             if px(img, W // 2, 26 * H // 540 - 1) != (0xBD, 0xB8, 0xB0): fails.append("the menu bar's closing rule is missing: no desktop")
             dump(img, uart); f_ = fan(img, uart)
-            grey = sum(1 for c in f_ if c == DIM); blue = sum(1 for c in f_ if c[2] > c[0]); ink = sum(1 for c in f_ if max(c) < 0x50)
+            grey = sum(1 for c in f_ if c == DIM); blue = sum(1 for c in f_ if c[2] > c[0] + 4); ink = sum(1 for c in f_ if max(c) < 0x50)
             ink = sum(1 for c in f_ if c == INK)
-            if ink < 10 or grey or blue: fails.append(f"not joined, the fan should still be flat ink 0x1C1C1E: {ink} ink pixels, {grey} grey, {blue} bluish")
+            grey = dim_runs(img, uart)
+            if ink < 10 or grey or blue: fails.append(f"not joined, the fan should still be flat ink 0x1C1C1E: {ink} ink pixels, {grey} grey run pixels, {blue} bluish")
             else: print(f"  ok: not joined, the Wi-Fi fan is flat ink too, no grey ({ink} solid pixels, none blue)")
             # the log was kept: a dock click opens the Console with it, and the Terminal tile opens the Terminal
             pos = [W // 2, H // 2]
@@ -132,8 +141,8 @@ try:
             def click():
                 cmd("input-send-event", events=[{"type": "btn", "data": {"down": True, "button": "left"}}])
                 cmd("input-send-event", events=[{"type": "btn", "data": {"down": False, "button": "left"}}])
-            mx, my = slot_centre(W, H, 2)
-            if not move_to(mx, my): fails.append("could not move onto the Mail tile")
+            mx, my = slot_centre(W, H, 10)
+            if not move_to(mx, my): fails.append("could not move onto the Trash tile")
             else:
                 click()
                 if not wait_for("console open", 30): fails.append(f"a dock click did not open the Console, got {uart()[-300:]!r}")
@@ -208,7 +217,7 @@ try:
         try:
             time.sleep(0.5)
             img = screendump(cmd, tmp); dump(img, uart); f_ = fan(img, uart)
-            ink = sum(1 for c in f_ if c == INK); grey = sum(1 for c in f_ if c == DIM); blue = sum(1 for c in f_ if c[2] > c[0] + 4)
+            ink = sum(1 for c in f_ if c == INK); grey = dim_runs(img, uart); blue = sum(1 for c in f_ if c[2] > c[0] + 4)
             if ink < 10 or grey or blue: fails.append(f"joined, the fan should be flat ink 0x1C1C1E: {ink} ink pixels, {grey} grey, {blue} bluish")
             else: print(f"  ok: joined, the Wi-Fi fan is flat ink, the clock's ({ink} solid pixels, no grey, none blue)")
         finally:
