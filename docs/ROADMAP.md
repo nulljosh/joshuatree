@@ -29,6 +29,7 @@ Where it is going, what shipped, and the story so far.
 - [Money](#money)
 - [Research](#research)
 - [Whitepaper](#whitepaper)
+- [System design ideas](#system-design-ideas)
 - [The book](#the-book)
 - [Our story and launch drafts](#our-story-and-launch-drafts)
 - [Portfolio mode](#portfolio-mode)
@@ -1041,6 +1042,186 @@ Every version ships only after it is shown working, not just compiling. `check.s
 ### License
 
 Apache License 2.0. Copyright 2026 Joshua Trommel.
+
+## System design ideas
+
+Source: the library book "Acing the System Design Interview" by Zhiyong Tan (Manning), read from Joshua's phone photos. The book is about web services at scale. Most of it does not apply to one machine. The parts that do are the small habits behind a service that stays up: isolate faults, degrade instead of dying, measure, retry carefully, and turn requirements into checks.
+
+Plan only. No code changes in this PR. Each idea says what it is, where it lands in the tree (read from the code on 2026-10-12), and a first PR small enough for one branch.
+
+Reading note (updated 2026-10-12): every photographed chapter has now been read from the pages. Intro 27 of 27, chapters 1 to 8 in full, chapter 9 in full (pp. 196-222), chapters 10 to 12 in full. Chapters 13 to 17 and the appendixes are listed in the book's contents but were never photographed, so nothing here leans on them. Page numbers below are the book's. The ideas are plans to sanity-check against our own code, not book reports.
+
+### Ranked for the Pi
+
+The Pi is the target that matters most: a box in a case with no keyboard handy, flaky Wi-Fi, a relay on the LAN, one user. So the order is "what keeps the box usable when something below it breaks", then "what lets Joshua see why", then polish.
+
+#### 1. Retry with backoff, and a circuit breaker, for the relay and the network
+
+Book: ch 3 pp. 60-65 (circuit breaker: stop calling a failing dependency, then probe with a few requests; exponential backoff with random jitter so retries do not arrive in a wave) and ch 8 pp. 172-173 (do not serve what you know is bad, return a fast refusal).
+
+The idea: when a dependency fails, wait longer between tries (with a little randomness), and after enough failures stop calling it for a while instead of paying the full timeout on every request.
+
+Where it lands: `arch/arm64/ask.c` `relay_open()` tries the cached address (2 s), then a LAN broadcast probe (1.5 s), then a fresh connect (3 s), on every single question. `drivers/net.c` already has the tick constants (`LAN_TIMEOUT_TICKS`, `WAN_TIMEOUT_TICKS`, `net_connect_wait_ticks`) and a bounded DHCP retry (`DHCP_RETRIES`), but nothing remembers that the last five attempts failed. With the relay off, every `sam` question stalls the main loop for several seconds.
+
+First PR: a small header, `arch/arm64/breaker.h`, pure C so a host check can build it with clang like `btpair.h`. State is closed, open until tick T, or half-open. `relay_open()` asks it first and answers `claude: relay down, retry in 40s` at once while open. Check: a host check drives it with fake ticks (open after 3 failures, one probe after the wait, closed on success), plus the existing `arm64-relay-discovery-check.py` still passes.
+
+#### 2. A hardware watchdog and a heartbeat
+
+Book: ch 9 pp. 210-222 on an independent heartbeat daemon, and ch 3 p. 60 (fault tolerance buys time to fix, it does not remove the fault).
+
+The idea: a health check that something else acts on. If the main loop stops, the box restarts itself.
+
+Where it lands: `arch/arm64/main.c` main loop. The BCM2711 has a watchdog in its power-management block that the firmware already uses. Nothing in `arch/arm64` touches it (`power_run` in `main.c` is a stub that says the build has no power control). A hung desktop in a closed case means unplugging the box.
+
+First PR: `arch/arm64/wdog.c`, off by default behind a build flag. The main loop "pets" it once a pass; a stuck pass lets it expire and the board resets. Log `wdog: reset by watchdog` on the next boot if the reset cause register says so. Check: the register arithmetic and cause decoding on the host (the way `arm64-rng-check.py` exercises register faults); the real reset needs one board photo, noted in `docs/BOARD-TEST.md`.
+
+#### 3. Counters you can read: the golden signals for a kernel
+
+Book: ch 2 pp. 34-40 (four golden signals: latency, traffic, errors, saturation; structured logs with a unique ID, small entries, no secrets).
+
+The idea: latency, traffic, errors, saturation, kept as plain numbers you can ask for, plus structured log lines a check can parse.
+
+Where it lands: the numbers exist but are scattered. `heap_oom` in `arch/arm64/main.c`, `kheap_stats` and `pmm_free_frames` in `kernel/`, `net_last_error()` (typed: arp, dns, connect, reply timeouts) in `drivers/net.c`, `SYS_TASKS` and `struct jt_tasks` (ticks, free_kb, current, used) in `kernel/syscall.h`. Nothing counts faults reaped by `kernel/idt.c`, relay failures by reason, or fetch times.
+
+First PR: `kernel/metrics.h`, a fixed array of named 32-bit counters with `metric_inc(M_USER_FAULT)` and `metric_dump()`. Wire four: user faults reaped, heap oom, net errors by `NET_ERR_*`, relay breaker trips. Add a `stats` command in `arch/arm64/cmd.c` and one `metrics k=v k=v` UART line at boot end. Check: extend `arm64-boot-health-check.py` to require the line and assert user faults and oom are 0 on a clean boot.
+
+#### 4. Fault isolation as a tested promise (bulkheads)
+
+Book: ch 3 pp. 60-65 (bulkhead: separate pools so one heavy caller cannot starve the rest; cost is that pools cannot help each other in a spike).
+
+The idea: one noisy or broken part must not take the rest down. Resource pools are separated so a hog hits its own wall.
+
+Where it lands: much of this exists. `kernel/idt.c` kills a ring-3 task that faults and the kernel carries on. `kernel/brk.c` keeps `BRK_FLOOR_FRAMES` (4 MB) of free frames away from any one program. `kernel/syscall.c` caps file descriptors per task (`MAX_FDS 8`) and `HTTP_WAIT_TICKS` bounds how long a ring-3 fetch queues behind the desktop. `TASK_SLOTS 6` bounds the table. The 4.0 line in `docs/roadmap.md` says "three apps run at once, one crashes, the other two do not notice", which is exactly this, and `kernel/r3stress.c` is where such a test would live. What is missing is a proof for hogs, not just crashes: a task that spins, floods `SYS_TEXT`, or opens a fetch in a loop.
+
+First PR: add a "hog" mode to `kernel/r3stress.c` (spin forever, exhaust brk, loop `SYS_HTTP_GET`, flood the event poll) and a check that the other two tasks keep their frame rate and the fault counter from idea 3 says what happened. No kernel change unless the check finds one.
+
+#### 5. Graceful degradation as a written ladder, and a check per rung
+
+The idea: for every part, decide what happens when it is gone, and keep that decision tested.
+
+Where it lands: already real in places. `tools/checks/arm64-oom-check.py` proves that with no room for the framebuffer or fonts the boot reaches the desktop anyway (VGA font fallback). `sam` answers arithmetic locally in `sam_command` with no relay. The browser times out dead hosts fast (`arm64-browser-deadserver-check.py`). The clock refuses rollback. What is missing is the whole ladder in one place: no Wi-Fi, no relay, no clock, no SD card, no audio, each with the exact line the user sees.
+
+First PR: a table in `docs/ARM64.md` (part, what breaks, what still works, the line printed, the check that proves it), and one new check `arm64-nonet-check.py`: boot the Pi image with no NIC, open Calendar and Notes, type `ls`, ask `sam 2+2`, and assert nothing prints a crash or hangs past a deadline.
+
+#### 6. Timeouts as one budget per action
+
+The idea: give a user action a single deadline and let each step spend from it, instead of stacking independent timeouts.
+
+Where it lands: `drivers/net.c` has per-step waits (`net_dns_wait_ticks`, `net_connect_wait_ticks`, reply wait), and callers such as the Pi browser and clock set them short one by one. A browser fetch can still spend DNS plus connect plus TLS plus reply, each at its own limit. `arch/arm64/tls.c` already maps a stuck network to `TLS_ERR_TIMEOUT`.
+
+First PR: a `struct deadline { u32 end; }` in `drivers/nic.h` territory (`net_budget_start(ticks)`), read by the existing wait loops through the same variables they already use, so each step's wait becomes `min(step, remaining)`. Check: `arm64-browser-deadserver-check.py` gains a case that asserts total wall time under the budget for a server that accepts and then goes silent.
+
+#### 7. Crash-safe SD writes (write ahead, then commit)
+
+Book: ch 7 pp. 154-156 (see the migration lessons below) and ch 5 pp. 111-114 (the log is the source of truth, replay it).
+
+The idea: a write that is interrupted must leave either the old file or the new one, never half of each, and retried writes must be harmless.
+
+Where it lands: `arch/arm64/emmc.c` `sd_write()` writes files in the `JT/` folder, used by `ask.c` (RELAY.TXT), `bt.c` (pairing record, which has a version and a checksum, a good start) and `cmd.c`. Roadmap item 3, "the self-update path with a fallback kernel", needs exactly this: a new build that boots once and falls back.
+
+First PR: `sd_write` writes `NAME.NEW`, then renames over `NAME`; boot deletes any leftover `.NEW`. Check: extend `arm64-sd-check.py` to kill QEMU between the two steps (a test-only hook) and assert the old file reads back intact.
+
+#### 8. A periodic self-audit for silent failures
+
+The idea: a cheap independent check that runs on a timer and looks for the failures nobody reported.
+
+Where it lands: `kheap_check()` and the per-task stack guard (`task_stack_room()`) exist but run only in stress paths. `pmm` has free-frame accounting that could be compared against what tasks hold.
+
+First PR: in the idle path, once a minute, run `kheap_check()`, compare `pmm_free_frames()` against a boot baseline plus open windows, and emit `audit ok` or `audit FAIL what` and bump a counter. Check: a build flag that corrupts a heap header on purpose and asserts the audit line says FAIL.
+
+#### 9. Client-side rate limit (token bucket) for the network and the relay
+
+Book: ch 8 pp. 187-193. Token bucket is easy and uses one integer per caller. Leaky bucket is a fixed queue. Fixed window can pass twice the limit across a boundary (p. 191). Sliding window log is exact but costs memory (p. 193). Sliding window counter is a cheap middle. For one box with a few callers, a token bucket is enough.
+
+The idea: cap how fast any one caller can use something expensive.
+
+Where it lands: `tools/claude-relay/relay.py` already limits the server side (429 when busy, a per-day character cap for voice). The Pi side has only the agent loop's four-action cap per turn (`arch/arm64/ask.c`). Nothing stops a ring-3 app calling `SYS_HTTP_GET` in a tight loop beyond the one-at-a-time lock and `HTTP_WAIT_TICKS` in `kernel/syscall.c`, and the Samantha agent could ask the relay a question per loop pass.
+
+First PR: a ten-line token bucket in a pure header (`lib/bucket.h`), used for `SYS_HTTP_GET`/`SYS_HTTP_POST` per task slot and for `ask_poll` per minute. Over the limit returns `-EAGAIN` and counts a metric. Check: a host check on the arithmetic, and a hog case in idea 4.
+
+#### 10. Back-pressure and an explicit drop policy for queues
+
+Book: ch 3 pp. 60-65 (dead letter queue: decide what happens to what cannot be delivered) and ch 9 p. 205 (give each channel its own queue and thread pool so a slow consumer stays contained).
+
+The idea: every buffer needs a rule for when it fills (block, drop oldest, drop newest) and a count of what was lost.
+
+Where it lands: the window event queue behind `SYS_WINDOW_POLL` (`kernel/syscall.c`), the 2048-frame audio ring in `arch/arm64/audio.c`, the `SYS_TEXT` queue, the console log in `con_p` (`arch/arm64/main.c`) and the UART. The 4.0 compositor adds one more queue per window, and pipes add more.
+
+First PR: write the rule in a comment at each queue and count drops with the idea 3 counters. Check: flood the event queue with a ring-3 task that never polls and assert the desktop stays responsive and the drop counter moves.
+
+#### 11. Cache the slow, repeated things on the Pi
+
+Book: ch 4 pp. 99-106 (cache-aside, read-through, write-through, write-back, write-around; never cache private or real-time data; warming helps only the first user; expect a miss).
+
+The idea: keep results you will want again, always expecting a miss, and never depend on the cache for correctness.
+
+Where it lands: `grep` finds no DNS cache in `drivers/net.c` and no TLS session reuse in `arch/arm64/tls.c`; every HTTPS fetch resolves and does a full handshake. BearSSL has a session cache. `RELAY.TXT` on the card is already a tiny cache of the relay address.
+
+First PR: an 8-entry DNS cache keyed by name with a short TTL inside `resolve_host`, miss falls through to today's code. Check: `arm64-net-check.py` resolves the same name twice and the second makes no UDP query.
+
+#### 12. Non-functional requirements as numeric checks
+
+Book: ch 2 pp. 26-27 and ch 3 pp. 54-76 (ask for a number for each requirement, then trade them against each other).
+
+The idea: write requirements as numbers and let CI fail when one is broken.
+
+Where it lands: `tools/bench/`, `tools/checks/bss-margin-check.py` and `baseline-check.py` already do this for a few things. Missing for the Pi: time to desktop, free heap after boot, redraw time for a drag.
+
+First PR: `docs/BUDGETS.md` as a short table (boot to desktop under N seconds on the raspi4b model, free heap above N KB after boot, no `oom` line), and one check that reads the numbers from the boot log and fails over budget. Start with limits just above today's so it never flaps.
+
+#### 13. One structured log shape
+
+The idea: logs a person can read and a program can parse, one event per line, always the same fields.
+
+Where it lands: `kputs` lines across `arch/arm64` are free text. Checks grep them one by one.
+
+First PR: a `klog(level, key, value)` helper that prints `level key=value` and convert only the lines the existing health check greps. Do not rewrite the rest.
+
+#### 14. Shadow-run new code behind the old, with a fallback
+
+The idea (chapter 12, read from the page): ship a new path while still using the old one's output, with the new one wrapped so failure is only logged; switch over once clean, keep the old as backup, delete it last.
+
+Where it lands: roadmap item 3, the self-update path with a fallback kernel, and any large rewrite (the `kernel/kernel.c` split, the 4.0 compositor).
+
+First PR: none beyond a note in `docs/roadmap.md` item 3 that the update path must boot the new kernel once, record success, and fall back otherwise. Check: the fake-release check already named there.
+
+#### 15. A watcher that does not share fate with what it watches
+
+The idea (chapter 9, read from the page): availability alerts must not run on the thing being monitored, so a small independent daemon expects heartbeats and raises the alarm when they stop.
+
+Where it lands: the same as idea 2 (hardware watchdog), and for the Pi relay a heartbeat from the Mac side in `tools/claude-relay/relay.py`. No separate PR; fold into idea 2.
+
+#### 16. Idempotent writes plus a checkpoint for anything long
+
+The idea (chapter 7, pp. 154-156, read from the pages): a long copy will stop halfway, so every write must be safe to repeat and the job must record how far it got. Resume from the checkpoint, keep reading in the same order each time, log a bad record and keep going, then rerun only the failures. The author's conclusion is to pick the right store at the start, because a migration is costly.
+
+Where it lands: any multi-step Pi job. The self-update path in roadmap item 3 (copy a new kernel to the card, then switch), the SD `JT/` files, and Pi first-boot setup. A step that already ran must be a no-op when run again, and each completed step writes one line a later boot can read.
+
+First PR: none by itself. Add the rule to the update-path design in `docs/roadmap.md` item 3 and make idea 7's `NAME.NEW` then rename step idempotent: a leftover `.NEW` from an earlier cut is either finished or deleted at boot, never trusted. Check: the same cut-the-power test as idea 7, run twice in a row.
+
+#### 17. If the nodes ever sync, pick the cheapest scheme that fits
+
+The idea (chapter 8, pp. 185-186, read from the pages): when several hosts must agree on counts, the options are all-to-all (every node tells every node, quadratic, fine only for a handful), gossip (each node tells a random one, cheap, less exact), an external coordination service that elects a leader, and random leader selection (simple, may elect several leaders and waste messages). Push over UDP is acceptable if a lost update only means a slightly generous answer.
+
+Where it lands: not now. Joshua Tree is one box. It matters only if Pis ever share state, for example two boards sharing Samantha's relay address. Today `JT/RELAY.TXT` plus the LAN broadcast probe in `arch/arm64/ask.c` already does the gossip-shaped thing: ask the neighbours, trust the first valid answer.
+
+First PR: none. Keep the note so a future multi-board idea starts from the book's ranking: at two to four boards, all-to-all on UDP is fine and nothing else is worth building.
+
+#### 18. Pass big things by reference
+
+The idea (chapter 9, pp. 198 and 205, read from the pages): large things are passed by reference, not copied through every queue, so events stay small. Keep a message under a fixed size and send big media as a link.
+
+Where it lands: the Pi audio ring and any future pipe: pass a buffer handle, not the bytes, between producer and consumer. Folded into idea 10; no separate PR.
+
+### Already matching the book
+
+The syscall boundary already does what the book gives an API gateway: validate once, centrally, before anything reaches a subsystem. `SYS_HTTP_GET` allows only a fixed host and printable path bytes. A single fetch lock stands in for rate limiting. Keep this habit as new syscalls arrive in 4.0.
+
+Pull beats push, in the book's terms. `SYS_WINDOW_POLL` is a pull: the app decides when to read. Keep that shape for the compositor and for pipes.
+
+### Does not apply to one machine
+
+Sharding, replication, leader election, quorum writes, multi-region databases, GeoDNS, CDNs, load balancers, service mesh and sidecars, API gateways as a separate service, message brokers (Kafka, RabbitMQ), sagas and two-phase commit, CQRS, event sourcing as a storage design, GraphQL, WebSocket scaling, cloud versus bare metal, serverless. Joshua Tree is one box with one user; these solve problems it does not have. The one echo worth keeping from the transaction chapter is idea 7: write ahead, then commit.
 
 ## The book
 
