@@ -28,6 +28,10 @@ arch = os.path.join(root, "arch/arm64")
 SW, SH = 1920, 1080
 shots = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else None
 fails = []
+EL0 = ("calendar", "notes", "music", "books")
+ALL = EL0 + ("calculator", "clock", "brick", "browser", "terminal", "console")
+results = {}
+if os.environ.get("JT_SHARP_APPS"): ALL = tuple(os.environ["JT_SHARP_APPS"].split(","))   # a subset, for a before/after on another tree
 def check(name, ok, detail=""):
     print(("  ok: " if ok else "  FAIL: ") + name + ("" if ok or not detail else " -- " + str(detail)[-400:]))
     if not ok: fails.append(name)
@@ -77,13 +81,21 @@ def run(app):
                           "-kernel", os.path.join(arch, "app-kernel8.img")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     def uart(): return open(log, errors="replace").read() if os.path.exists(log) else ""
     try:
+        el0 = app in EL0
+        mark = (app + " first frame") if el0 else ("WINBOX %s %s" % (app, "")) 
         end = time.time() + 40
-        while time.time() < end and (app + " first frame") not in uart(): time.sleep(0.1)
+        while time.time() < end and not (re.search(r"WINBOX %s \d+ \d+ \d+ \d+\n" % app, uart()) if not el0 else mark in uart()): time.sleep(0.1)
         out = uart()
-        m = re.search(r"M3c window %s (\d+)x(\d+) at (\d+),(\d+)" % app, out)
-        check(app + ": the window opens and shows a first frame", bool(m) and (app + " first frame") in out, out[-300:])
-        if not m or (app + " first frame") not in out: return
-        cw, ch, cx, cy = map(int, m.groups())
+        if el0:
+            m = re.search(r"M3c window %s (\d+)x(\d+) at (\d+),(\d+)" % app, out)
+            ok = bool(m) and mark in out
+            if ok: cw, ch, cx, cy = map(int, m.groups())
+        else:   # a kernel-drawn window: its frame is on the UART, the content is inside the title band and the margins
+            m = re.search(r"WINBOX %s (\d+) (\d+) (\d+) (\d+)" % app, out)
+            ok = bool(m)
+            if ok: fx, fy, fw, fh = map(int, m.groups()); cx, cy, cw, ch = fx + 8, fy + 32, fw - 16, fh - 40
+        check(app + ": the window opens and is drawn", ok, out[-300:])
+        if not ok: return
         time.sleep(1.0)
         s_ = socket.socket(socket.AF_UNIX); s_.connect(sock); f = s_.makefile("rw"); f.readline()
         def cmd(c, **a):
@@ -103,6 +115,8 @@ def run(app):
             open("%s/%s.ppm" % (shots, app), "wb").write(b"P6\n%d %d\n255\n" % (w, h) + parts[3])
             png("%s/%s.png" % (shots, app), parts[3], w, h)
         n, soft_ok, full_ok, soft_avg = stems(parts[3], cx * 2, cy * 2, cw * 2, ch * 2)
+        results[app] = soft_ok
+        print("  %s: crisp-stem share %.0f%% (%d stems)" % (app, soft_ok * 100, n))
         check(app + ": %d text stems measured" % n, n >= (100 if app in ("calendar", "notes") else 40))
         check(app + ": %.0f%% of stems have at most 2 soft pixels (a blur ramp has 3 or more)" % (soft_ok * 100), soft_ok >= 0.85, "%.2f" % soft_ok)
         check(app + ": %.0f%% of stems are 2 or more full pixels wide" % (full_ok * 100), full_ok >= 0.50, "%.2f" % full_ok)
@@ -115,8 +129,9 @@ if __name__ == "__main__":
         print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
     if "raspi4b" not in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capture_output=True, text=True).stdout:
         print("SKIP: this QEMU has no raspi4b model (needs QEMU 9 or newer)"); sys.exit(0)
-    for a in ("calendar", "notes", "music", "books"):
+    for a in ALL:
         run(a)
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
     if fails: print("FAIL: %d: %s" % (len(fails), "; ".join(fails))); sys.exit(1)
-    print("ok: calendar, notes, music and books draw at 2x, text stems are crisp at scale 2")
+    print("shares: " + ", ".join("%s %.0f%%" % (kv[0], kv[1] * 100) for kv in results.items()))
+    print("ok: every app window is crisp at scale 2")

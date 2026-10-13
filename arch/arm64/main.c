@@ -2386,7 +2386,20 @@ static void fb_desktop(void) {
     drag_on = 1; win_move_to(win_lx + 100, win_ly + 60); drag_end();
 #endif
 #ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with) */
-    app_dock(APP_BOOT);
+    if (!app_dock(APP_BOOT)) {   /* 3.9.0: the kernel-drawn windows too (arm64-sharp2x-check.py), then their frame on the UART: WINBOX name x y w h, logical */
+        const char *nm = APP_BOOT; int bx, by, bw, bh;
+        #define NM_IS(w) ({ const char *a_ = nm, *b_ = w; while (*a_ && *a_ == *b_) { a_++; b_++; } !*a_ && !*b_; })
+        if (NM_IS("calculator")) { calc_open(); bx = calc_lx; by = calc_ly; bw = calc_lw; bh = calc_lh; }
+        else {
+            if (NM_IS("clock")) clock_open();
+            else if (NM_IS("brick")) brick_open();
+            else if (NM_IS("browser")) browser_open();
+            else if (NM_IS("terminal")) pane_open(&term_p);
+            else console_open();
+            bx = win_lx; by = win_ly; bw = win_lw; bh = win_lh;
+        }
+        uart_puts("WINBOX "); uart_puts(nm); uart_putc(' '); uart_dec((unsigned)bx); uart_putc(' '); uart_dec((unsigned)by); uart_putc(' '); uart_dec((unsigned)bw); uart_putc(' '); uart_dec((unsigned)bh); uart_putc('\n');
+    }
 #endif
 #ifdef AUDIO_TEST   /* the audiotest build: `beep` run at boot on virt, which has no PWM (arm64-audio-check.py) */
     void cmd_run(const char *q, unsigned n, void (*out)(const char *));
