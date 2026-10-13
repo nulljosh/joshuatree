@@ -8,6 +8,10 @@ The Bluetooth mouse comes back by itself. Before, a saved pairing got one 20 sec
 
 The Calculator is in Spotlight: type calc and Enter opens it. An empty Spotlight now lists every app (17 rows) instead of the first five. Board bug from Joshua on 3.6.3. Check: `tools/checks/arm64-spotlight-check.py`.
 
+## 3.7.6 development branch (2026-10-12)
+
+`sam` stops crawling on the board. Sums like `sam 10+10` are answered on the Pi at once with the Calculator's evaluator and never sent. The Pi remembers the relay that last answered, in memory and in `JT/RELAY.TXT` (no token), tries it first with a 2 second connect, and only searches the network when it fails. The request asks for one or two sentences through the relay's `pi` field, so `relay.py` is untouched. No answer in 30 seconds ends with `sam: no answer in 30s (relay at a.b.c.d)` and a free prompt, where it used to wait up to 180. The reply is read only until Content-Length is in, not until the server hangs up. Every question prints `sam: N.Ns (find a, tls b, wait c)` so the next board pass shows where the time goes. `arm64-relay-discovery-check.py` was silently skipping on QEMU 11 (its `-netdev help` probe needs `-machine`); fixed. Check: `tools/checks/arm64-samfast-check.py`.
+
 ## 3.6.3 development branch (2026-10-12)
 
 The user guide gains a chapter for each Pi app and tool: Terminal and the shell, Browser, Books, Music, Notes, Calendar, Clock, Samantha and Bluetooth. The Pi row of `architecture.svg` now lists them, solid only where the board has seen it. Browser bookmarks are on the roadmap. Check: `tools/checks/check-refs.sh`.

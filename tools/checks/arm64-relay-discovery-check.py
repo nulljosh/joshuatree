@@ -31,7 +31,7 @@ arch = os.path.join(root, "arch/arm64")
 relay_py = os.path.join(root, "tools/claude-relay/relay.py")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64", "openssl")):
     print("SKIP: clang, ld.lld, openssl or qemu-system-aarch64 not installed"); sys.exit(0)
-if "dgram" not in subprocess.run(["qemu-system-aarch64", "-netdev", "help"], capture_output=True, text=True).stdout:
+if "dgram" not in subprocess.run(["qemu-system-aarch64", "-machine", "virt", "-netdev", "help"], capture_output=True, text=True).stdout:
     print("SKIP: this QEMU has no dgram netdev (7.2 or later), so the check cannot put a LAN on the hub"); sys.exit(0)
 
 TOKEN = "arm-discovery-check-token-0123456789"
