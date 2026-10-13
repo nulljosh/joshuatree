@@ -28,7 +28,7 @@ No text, letters or wordmarks, so `ICON_TEXT_ELEMENTS = 0`. That includes Calend
 
 The house accent is terracotta, `ACCENT = #b5502c`, the landing page's accent and the colour of the Music, Movies and Hamurapi tiles. The one deliberate exception is Tonchi, which keeps its own sky blue, `LEXLY_BLUE = #2E86DE`, because that is the colour of its store icon.
 
-Fleet icons are the `FLEET_ICONS = 11` apps imported from their own repos. They keep their own tile colour and their own picture. They must still share the squircle, the anti-aliased edge, the top lip and the glyph margin. They do not get the tile falloff, so a fleet tile is flat. The importer clips each one to the squircle and lays the lip on it. The checks measure the squircle and the edge on all `ICON_FILES = 35` icons, but the glyph margin only on the `MARGIN_TILES = 21` that carry the shared tile header written by `restyle_icons.py`. A fleet icon's margin is held by eye, and the roadmap lists the fleet icons that still fall short.
+Fleet icons are the `FLEET_ICONS = 11` apps imported from their own repos. They keep their own tile colour and their own picture. They must still share the squircle, the anti-aliased edge, the top lip and the glyph margin. They do not get the tile falloff, so a fleet tile is flat. The importer clips each one to the squircle and lays the lip on it. The checks measure the squircle and the edge on all `ICON_FILES = 35` icons, but the glyph margin only on the `MARGIN_TILES = 22` that carry the shared tile header (`restyle_icons.py` writes it, and the importer writes Samantha's, whose portrait sits in an 88 unit disc so it keeps the margins). A fleet icon's margin is held by eye, and the roadmap lists the fleet icons that still fall short.
 
 ## Type
 
@@ -66,8 +66,8 @@ Apps move only when the movement is the app: Windgate's breathing circle, Samant
 
 The numbers above are checked by `design-doc-check.py` against the file that defines each one. It also reads every icon in `art/icons` for text, purple, teal and gradient hue.
 
-Run in the suite on every pull request: `iconinset-check.py` (the squircle and the edges on every icon, the glyph margin on the tiles with the shared header), `iconlight-check.py`, `iconhalo-check.py`, `iconedge-check.py` (its only hard assert is the Trash rim, the rest is a score to read), `calicon-check.py`, `clockicon-check.py`, `dockslots-check.py`, `dockband-check.py`, `dockhover-check.py`, `windowedge-check.py`, `windowsnap-check.py`, `windowdrag-check.py`, `launchpad-centered-check.py`, `textsharp-check.py`, `textspacing-check.sh` and `termsharp-check.py`.
+Run in the suite on every pull request: `iconinset-check.py` (the squircle and the edges on every icon, the glyph margin on the tiles with the shared header), `iconart-check.py` (the dock draws the colour each SVG states), `iconlight-check.py`, `iconhalo-check.py`, `iconedge-check.py` (its only hard assert is the Trash rim, the rest is a score to read), `calicon-check.py`, `clockicon-check.py`, `dockslots-check.py`, `dockband-check.py`, `dockhover-check.py`, `windowedge-check.py`, `windowsnap-check.py`, `windowdrag-check.py`, `launchpad-centered-check.py`, `textsharp-check.py`, `textspacing-check.sh` and `termsharp-check.py`.
 
-Run by hand, not in CI yet: `iconart-check.py`, `iconsync-check.sh` and `dockshadow-check.py`.
+Run by hand, not in CI yet: `iconsync-check.sh` and `dockshadow-check.py`.
 
-Not measured, held by eye: a bold glyph, one picture per icon, no emblem or speech bubble, no stripes or decorative borders, and the glyph margin of the icons without the shared tile header (the fleet icons, Movies, Panes and Portfolio).
+Not measured, held by eye: a bold glyph, one picture per icon, no emblem or speech bubble, no stripes or decorative borders, and the glyph margin of the icons without the shared tile header (the other fleet icons, Movies, Panes and Portfolio).

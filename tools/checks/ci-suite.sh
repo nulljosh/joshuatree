@@ -201,6 +201,7 @@ retry|4|QA gallery: every app opens, screenshots, closes, no crash|python3 ./too
 retry|2|Every app's main action, headless|python3 ./tools/checks/feature-drive.py
 retry|3|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|4|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
+retry|5|Dock tiles draw the colour their authored SVG states (incl. Samantha)|python3 ./tools/checks/iconart-check.py
 retry|5|Dock icon lighting (one soft top light, top highlight, no dark outline)|python3 ./tools/checks/iconlight-check.py
 once |1|Every authored icon shares one tile silhouette, AA edges, glyph margin|python3 ./tools/checks/iconinset-check.py
 retry|5|Calendar dock tile is a page-and-grid picture, no date or dash, same on every date|python3 ./tools/checks/calicon-check.py
