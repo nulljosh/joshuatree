@@ -371,3 +371,8 @@ Check: `tools/checks/arm64-crash-check.py` (the Pi image faults behind the splas
 
 `pick <sentence>` names the tool Samantha's hands would reach for, from a 15K-weight integer model in freestanding C (`kernel/picker.c`). On Turing's nine dev sets the Python reference gets 3,820 of 4,455 tool picks right (85.8 percent); the C matches it on all 297 golden sentences. Arguments and the guard stay with the full model, this picks the tool only.
 Check: `tools/checks/picker-check.sh` (QEMU, no network): `pickcheck: 297/297 ok` and four typed sentences.
+
+## 3.8.1: the Samantha chat icon carries the tile light
+
+`art/icons/chat.svg` stated no tile gradient, so `iconart-check.py` could not read what colour the dock should draw, and her portrait ran to the bottom of the tile where the glyph margin belongs to the tile's light. The importer (`tools/gen/import_fleet_icons.py`, not `restyle_icons.py`, writes this icon) now states `Tile #F3F1EE -> #F3F1EE` and fits the portrait disc into 88 of 128 units. `iconart-check.py` also stops failing on an idle desktop that presents no new frame, and joins `ci-suite.sh`.
+Check: `tools/checks/iconart-check.py` (all 11 dock tiles within 0.3, Samantha 0.0) and `tools/checks/iconinset-check.py` (chat margins 0.0).
