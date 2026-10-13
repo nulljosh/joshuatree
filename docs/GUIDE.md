@@ -55,6 +55,19 @@ choose another match; Escape closes the search. Cmd+Space opens Spotlight
 too, like a Mac; Space on its own does nothing. A Mac keyboard may need its
 Fn key for F1. With nothing typed, Spotlight lists every app, Calculator
 included; type calc and press Enter to open it.
+### Copy, paste and the Cmd keys
+
+Cmd is the Windows or Super key on a PC keyboard; Ctrl does the same for
+copy and paste. There is one clipboard for the whole Pi, plain text, 4 KB.
+Cmd+A selects everything in a note, Cmd+C copies, Cmd+X cuts and Cmd+V pastes,
+in Notes, on the Terminal's input line and in the Browser's address bar. In
+the Terminal and the address bar the whole line is what copy and cut take, so
+Cmd+A has nothing to select there. A note copy longer than 4 KB keeps the
+first 4 KB. A paste takes what fits the field and drops the rest; line breaks
+become spaces and pasting never runs a command. Cmd+W closes the front window
+and Cmd+Q quits the front app; every window here belongs to one app, so both
+do the same as its red dot. Cmd+Space opens Spotlight.
+
 Some dock tiles are placeholders on the Pi. Calculator, Clock, Terminal
 and Console are available; the web demo's larger app collection is separate.
 

@@ -1,5 +1,9 @@
 # Joshua Tree roadmap: done
 
+## 3.10.0 development branch (2026-10-12)
+
+Copy, paste and the Cmd keys on the Pi. One 4 KB plain-text clipboard in the kernel, reached by Notes through `JT_SYS_CLIPBOARD` (399, the i386 call) and directly by the Terminal's input line and the Browser's address bar. Cmd (or Ctrl) with A, C, X and V works in all three; Cmd+W closes the front window and Cmd+Q quits the front app. A paste that does not fit its field is cut and logs `CLIPTRUNC`. Check: `tools/checks/arm64-clipboard-check.py`.
+
 ## 3.7.3 development branch (2026-10-12)
 
 The Bluetooth mouse comes back by itself. Before, a saved pairing got one 20 second try at boot and nothing after, so a mouse that was asleep, or that slept later, stayed gone until `bt reconnect`. Now the reconnect is a run of tries (12 seconds each, then a pause of 2, 4, 8, 15 and 30 seconds, up to 30), it starts at boot, when the link drops and on `bt reconnect`, and it re-encrypts with the saved key and turns the mouse's reports on again each time. `bt status` shows searching, connected or idle, the saved address with only its last byte, the tries and the last error. A mouse that ignores boot protocol now has its report map read and its button, X, Y and wheel fields placed from it (12 bit packed X and Y checked), and `bt status` shows the last report's bytes. Proven in QEMU only against a fake mouse, not yet on the Pi. Check: `tools/checks/arm64-bt-check.py`.
