@@ -33,7 +33,7 @@ TILE = {"epiphany": "#D6DEE6", "curbfind": "#C8644F", "bookrank": "#3E5C86", "to
 
 
 # Art that is a bare shape, not a tile: the colour laid under it.
-GROUND = {"chat": "#F3F1EE"}
+GROUND = {"chat": ("#F5F5F8", "#E0E1E6")}   # top -> bottom, the light-tile gradient (quotes, settings); a flat cream ground vanished into the tray
 GROUND_FIT = 0.6875   # 88 of 128 units: 20 clear above and below, the bust stays inside the 16 top / 20 bottom margins
 
 
@@ -82,9 +82,11 @@ def main():
         if name in GROUND:   # art with no tile of its own (a round portrait): a full-size rect under it fills the squircle's corners
             w, h = box.split()[2:4]
             cx, cy = float(w) / 2, float(h) / 2   # the disc shrinks to GROUND_FIT of the tile so the portrait keeps out of the top and bottom glyph margins (DESIGN.md Icons)
-            inner = ('<rect x="0" y="0" width="%s" height="%s" fill="%s"/>' % (w, h, GROUND[name])
+            top, bot = GROUND[name]
+            inner = ('<linearGradient id="jt-ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="%s"/><stop offset="1" stop-color="%s"/></linearGradient>' % (top, bot)
+                     + '<rect x="0" y="0" width="%s" height="%s" fill="url(#jt-ground)"/>' % (w, h)
                      + '<g transform="translate(%g %g) scale(%g) translate(%g %g)">%s</g>' % (cx, cy, GROUND_FIT, -cx, -cy, inner))
-        open(os.path.join(ROOT, "art", "icons", name + ".svg"), "w").write(wrap(repo, box, inner, "\n       Tile %s -> %s, flat." % (GROUND[name], GROUND[name]) if name in GROUND else ""))
+        open(os.path.join(ROOT, "art", "icons", name + ".svg"), "w").write(wrap(repo, box, inner, "\n       Tile %s -> %s." % GROUND[name] if name in GROUND else ""))
         print("imported", name)
 
 
