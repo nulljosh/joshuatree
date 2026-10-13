@@ -2191,6 +2191,16 @@ void menubar_wifi(int state) {
     mb_hit[1][0] = sx - sg(5); mb_hit[1][1] = sx + isz + sg(5);         /* sound */
     mb_hit[2][0] = ox - R - sg(5); mb_hit[2][1] = ox + R + sg(5);       /* Wi-Fi */
     mb_hit[3][0] = cx - sg(5); mb_hit[3][1] = W;                        /* the clock */
+    {   static int said[4][2];   /* where the icons are, said when they move (the check clicks them; the clock's width changes with the minute) */
+        int moved = 0;
+        for (int i = 0; i < 4; i++) for (int j = 0; j < 2; j++) if (said[i][j] != mb_hit[i][j]) { said[i][j] = mb_hit[i][j]; moved = 1; }
+        if (moved) {
+            static const char *const nm[4] = { "power", "sound", "wifi", "clock" };
+            con_quiet = 1; uart_puts("menubar icons");
+            for (int i = 0; i < 4; i++) { uart_putc(' '); uart_puts(nm[i]); uart_putc(' '); uart_dec((unsigned)mb_hit[i][0]); uart_putc('-'); uart_dec((unsigned)mb_hit[i][1]); }
+            uart_putc('\n');
+        }
+    }
     int nx = mb_x0 + sg(12), nw = wx - sg(16) - nx;
     if (notice.text[0] && nw > 0)
         text_draw(2, notice.text, nx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, nx + nw, H);

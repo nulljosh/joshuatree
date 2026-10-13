@@ -10,6 +10,7 @@
 extern int dock_scale_pct;            /* main.c: the dock's tile size as a percent of the screen height (5 to 25, 7 by default) */
 void wall_set(unsigned rgb);          /* wall.c */
 void desktop_wall_changed(void);      /* main.c: repaint the desktop if it is up */
+void kputs(const char *s); void kdec(unsigned v);   /* main.c: the UART (and the Console) */
 
 #define SET_FILE "SETTINGS.TXT"
 #define SET_WALLS 3
@@ -91,4 +92,5 @@ void settings_load(void) {
     settings_set_dock(dock);
     if (wall != wall_pick) { settings_set_wall(wall); desktop_wall_changed(); }
     saved_state = 1;
+    kputs("settings loaded volume "); kdec((unsigned)audio_volume()); kputs(" wall "); kdec((unsigned)wall_pick); kputs(" dock "); kdec((unsigned)dock_scale_pct); kputs("\n");
 }

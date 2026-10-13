@@ -119,7 +119,7 @@ static void set_paint(void) {
         int y = wy + 42 + i * 34;
         if (i == set_sec) gui_rounded_rect_on_wallpaper(wx + 14, y - 4, SET_SB_W - 12, 30, 0x00E2D9C9, 8);
         gui_rounded_rect_on_wallpaper(wx + 20, y, 22, 22, SET_ACCENT, 6);
-        glyph_paint(set_glyph[i], 0, (wx + 23) * s, (y + 3) * s, 16 * s, 0x00FAF8F4);
+        glyph_paint(set_glyph[i], 2, (wx + 23) * s, (y + 3) * s, 16 * s, 0x00FAF8F4);
         gui_text(set_names[i], wx + 50, y + 3, SET_INK);
     }
     gui_icon_text(set_names[set_sec], cx, wy + 38, 1, s, SET_INK);
@@ -141,7 +141,10 @@ static void set_paint(void) {
             }
             set_step_box(cx, ry, 1, &px, &by);
             int tw = gui_text_width(v), vx = vx0 + (84 - tw) / 2;
-            if (set_sec == SET_DISPLAY) { gui_fill_circle(vx - 12, ry + 18, 6, settings_wall_rgb(settings_wall()), 0x00FFFFFF); vx += 8; }
+            if (set_sec == SET_DISPLAY) {   /* the colour itself, a small round chip, then its name */
+                vx = vx0 + (84 - tw - 18) / 2 + 18;
+                gui_rounded_rect_on_wallpaper(vx - 18, ry + 12, 12, 12, settings_wall_rgb(settings_wall()), 6);
+            }
             gui_text(v, vx, ry + (set_sec == SET_SOUND ? 5 : 10), SET_INK);
             if (set_sec == SET_SOUND) {   /* a thin bar under the number: the level, to the pixel */
                 window_rect(vx0, ry + 25, 84, 4, 0x00E2D9C9);
@@ -162,8 +165,8 @@ static void set_paint(void) {
     else if (set_sec == SET_DOCK) gui_text(settings_dock() == dock_pct_boot ? "A new size shows from the next restart." : "Restart to see the new size.", cx, hy, SET_HINT);
     else if (set_sec == SET_TIME) gui_text("The Pi has no battery clock; it asks the network.", cx, hy, SET_HINT);
     const char *st = settings_saved() > 0 ? "Saved on the card." : settings_saved() < 0 ? "No card: kept until restart." : "";
-    gui_text(st, cx, wy + wh - 50, SET_HINT);
-    gui_text("Up and Down section, Left and Right change, Esc closes", cx - 8, wy + wh - 30, SET_HINT);
+    gui_text(st, cx, wy + wh - 52, SET_HINT);
+    gui_text("Arrow keys pick and change, Esc closes", cx, wy + wh - 32, SET_HINT);
     fb_flush(wx * s, wy * s, ww * s, wh * s);
     cur_show();
 }
