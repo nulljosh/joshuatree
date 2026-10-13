@@ -151,7 +151,7 @@ user.o: user.S
 # mp3.c (minimp3) does its sums in floating point, so it alone is built without -mgeneral-regs-only (UFPCC); EL0 may use
 # the FPU and vectors.S keeps an app's FP registers across every call and park. The kernel stays integer-only.
 # userapps.S bakes the images in with .incbin and lists them; a new app is a name in UAPPS and a row there.
-UAPPS = hello calendar notes music books finder mail weather
+UAPPS = hello calendar notes music books finder mail weather stocks
 USEROBJ = user.o userapps.o
 UCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fdirect-access-external-data -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
 UFPCC = $(filter-out -mgeneral-regs-only,$(UCC))
@@ -174,6 +174,7 @@ ujt_png.o: $(UJT)/png.c ../../drivers/png.c ../../drivers/inflate.c ../../driver
 ujt_jpeg.o: $(UJT)/jpeg.c ../../drivers/jpeg.c ../../drivers/jpeg.h $(UJT)/stdlib.h $(UJT)/string.h
 	$(UCC) -c $< -o $@
 uapp_weather.o: ../../user/weather_pi.c ../../user/jtsys.h $(UJT)/text.h
+uapp_stocks.o: ../../user/stocks_pi.c ../../user/jtsys.h $(UJT)/text.h
 	$(UCC) -c $< -o $@
 uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h
 	$(UCC) -c $< -o $@

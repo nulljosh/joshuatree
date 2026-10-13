@@ -21,6 +21,7 @@
     app finder
     app mail
     app weather
+    app stocks
 
 /* M3c part 2: loop, the scheduler's test program, made by hand in the same image format: one code page, then the trailer
    { "JTU1", 4096 bytes of code, an empty relocation list }. It asks for its window, then yields forever: it never polls,
@@ -104,6 +105,7 @@ fpkeep_img_end:
 .Lname_finder:   .asciz "finder"
 .Lname_mail:     .asciz "mail"
 .Lname_weather:  .asciz "weather"
+.Lname_stocks:   .asciz "stocks"
 .Lname_loop:     .asciz "loop"
 .Lname_fpkeep:   .asciz "fpkeep"
 
@@ -118,6 +120,7 @@ user_apps:
     .quad .Lname_finder, finder_img, finder_img_end
     .quad .Lname_mail, mail_img, mail_img_end
     .quad .Lname_weather, weather_img, weather_img_end
+    .quad .Lname_stocks, stocks_img, stocks_img_end
     .quad .Lname_loop, loop_img, loop_img_end
     .quad .Lname_fpkeep, fpkeep_img, fpkeep_img_end
     .quad 0, 0, 0
