@@ -8,7 +8,7 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 
 The Pi does not have the i386 demo's full app collection. Its native windows are the Calculator, Calendar, Notes, Music, Terminal, Console, Clock and Brick (development branch). Calendar, Notes and Music run in user mode: the dock tile starts `user/calendar.c` or `user/notes.c`, and Spotlight (type music) starts `user/music.c`, the same programs the PC runs, each in its own window, one at a time. Music has no dock tile, a decision; see [Music on the Pi](#music-on-the-pi). Their files are on the card in `JT/` (see [Files on the card](#files-on-the-card)). In Calendar, arrows step the month. In Notes, n makes a note, Enter opens one, Esc saves it and goes back, and Esc again closes Notes. Its red dot closes it too, without saving an open note. The Apps tile opens Calculator, beside the Terminal or Console; a click on either one gives it the keys. F2 opens Terminal. Vancouver stays UTC-7 after March 8, 2026, following [B.C. permanent Pacific time](https://news.gov.bc.ca/releases/2026AG0013-000209). Search Brick in Spotlight for the brick-breaker game. Search Clock in Spotlight to open its time/date window; Escape closes it. The Samantha dock tile opens the assistant Terminal. Claude/Samantha and the text browser run as Terminal commands. The optional local model also runs there when weights are included in the image.
 
-Burrow, Mail, Reminders, Weather, Stocks and Trash dock tiles do not open their own ARM apps. They return to the Console and print `not on ARM yet`. The live Calendar icon shows the month and day number, and a click opens Calendar. Samantha's `note` action prints text; it does not save a Notes document yet.
+Burrow, Reminders, Weather, Stocks and Trash dock tiles do not open their own ARM apps. They return to the Console and print `not on ARM yet`. The live Calendar icon shows the month and day number, and a click opens Calendar. Samantha's `note` action prints text; it does not save a Notes document yet.
 
 This is the dispatch in `arch/arm64/main.c` (`dock_activate` and `app_open_name`), not a claim that every feature has passed a physical-board test. The x86 user programs use a different syscall and window layer and still need ARM ports. The Calendar Year-view improvement is for the i386 app.
 
@@ -214,7 +214,7 @@ QEMU proves the arrow, the label and the clicks, but not real mice or the real c
 
 1. Plug a wired USB mouse into the Pi before power-on. The Console should show `usb mouse addr N port ...`. Move it: an arrow appears and follows, with no trail left behind at 1080p.
 2. Hover the dock: the tile's name shows above it and goes away when the pointer leaves. No arrow-shaped mark stays in the dock.
-3. Click the Console's red button: the window goes and the wallpaper is back. Click Mail: the Console is back with `dock Mail: not on ARM yet` as its newest line. Click Calendar: its window opens over the Console with this month; Right steps a month, and the red dot closes it.
+3. Click the Console's red button: the window goes and the wallpaper is back. Click Stocks: the Console is back with `dock Stocks: not on ARM yet` as its newest line. Click Mail: a three-pane window opens on sample messages (or your `MAIL.TXT`); Down moves, Enter reads. Click Calendar: its window opens over the Console with this month; Right steps a month, and the red dot closes it.
 4. Unplug the mouse and plug it in again: `usb port ... disconnected`, then a new `usb mouse` line, and it moves the arrow again.
 5. Keyboard and mouse together, on the hub and on the Pi's own ports: typing at the Claude prompt still works while the arrow sits over the Console.
 6. A wireless keyboard and mouse receiver (one USB plug, two devices inside): both should show as `usb kbd` and `usb mouse` on one address.
@@ -281,7 +281,7 @@ Any failure is one plain line, and the Terminal keeps answering. `bt: the mouse 
 2. Put the mouse in pairing mode: switch it on with the switch underneath, then hold the pairing button underneath for about 5 seconds until the channel light flashes.
 3. F2 for the Terminal, type `bt scan`, Enter. A line with the mouse's name (an advert holds at most 29 letters, so a long name is cut) and an RSSI near -50 to -70 should print. Photograph it.
 4. Type `bt pair`, Enter. Photograph the `bt:` lines. All three stages should come within a few seconds.
-5. Move the mouse and click the Mail tile: the Console opens with `dock Mail: not on ARM yet`. Photograph the arrow on the dock.
+5. Move the mouse and click the Stocks tile: the Console opens with `dock Stocks: not on ARM yet`. Photograph the arrow on the dock.
 6. If it stops early, photograph the last `bt:` line. `bt: no answer from the radio` straight after boot means the chip never answered at 115200: power or the pins.
 
 The patch is `BCM4345C0.hcd` from RPi-Distro/bluez-firmware at the commit pinned in `tools/bt-fw.sh`, fetched into `build/bt-fw/` with `LICENSE.cypress` beside it and never committed, like the Wi-Fi firmware. QEMU has no Bluetooth chip, so `tools/checks/arm64-bt-check.py` runs the whole exchange against a fake controller and a fake mouse on a second serial port. The fake does the pairing math itself with its own AES, so a wrong byte order in the kernel's fails the check.

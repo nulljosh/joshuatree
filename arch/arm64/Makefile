@@ -148,7 +148,7 @@ user.o: user.S
 # mp3.c (minimp3) does its sums in floating point, so it alone is built without -mgeneral-regs-only (UFPCC); EL0 may use
 # the FPU and vectors.S keeps an app's FP registers across every call and park. The kernel stays integer-only.
 # userapps.S bakes the images in with .incbin and lists them; a new app is a name in UAPPS and a row there.
-UAPPS = hello calendar notes music books
+UAPPS = hello calendar notes music books mail
 USEROBJ = user.o userapps.o
 UCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fdirect-access-external-data -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
 UFPCC = $(filter-out -mgeneral-regs-only,$(UCC))
@@ -174,6 +174,9 @@ uapp_%.o: ../../user/%.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/osk.h
 	$(UCC) -c $< -o $@
 uapp_music.o: $(UJT)/wav.h $(UJT)/mp3.h $(UJT)/stdlib.h $(UJT)/string.h $(UJT)/mascot.h mascot_art.h
 uapp_books.o: $(UJT)/mascot.h mascot_art.h
+# Mail (3.15.0) is the three-pane user/mailpi.c, not i386's user/mail.c: the app is still called mail.
+uapp_mail.o: ../../user/mailpi.c ../../user/jtsys.h $(UJT)/text.h
+	$(UCC) -c $< -o $@
 # notes.c finds its arena with (unsigned)_user_end, a 32-bit cast that is still exact here: the app window sits below 4 GiB.
 uapp_notes.o: UCC += -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
 uapp_%.bin: uapp_%.o $(UJTOBJ) user_c.ld
