@@ -19,7 +19,7 @@ Also covers finder, mail, weather, stocks, reminders, the four games and Setting
 raspi4b model is missing.
 Usage: tools/checks/arm64-sharp2x-check.py [--shots DIR]   (from the repo root)
 """
-import json, os, re, shutil, socket, struct, subprocess, sys, time, zlib
+import atexit, json, os, re, shutil, socket, struct, subprocess, sys, tempfile, time, zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scratch import scratch_dir
@@ -77,7 +77,13 @@ def run(app):
     if subprocess.run(["make", "-C", arch, "APP_NAME=" + app, "apptest"], capture_output=True).returncode:
         check(app + ": `make apptest` builds", False); return
     tmp = scratch_dir("arm64-sharp2x-" + app)
-    log, sock, shot = tmp + "/uart", tmp + "/qmp", tmp + "/shot.ppm"
+    log, shot = tmp + "/uart", tmp + "/shot.ppm"
+    # A unix socket path must fit in 104 bytes on macOS. Inside the suite's own TMPDIR (/var/folders/.../T/jt-suite-XXXXXX/)
+    # the scratch dir for a longer app name (reminders, hamurabi, calculator) runs past that and connect() raises
+    # "AF_UNIX path too long", so the QMP socket lives in a short directory of its own under /tmp.
+    sockdir = tempfile.mkdtemp(prefix="jt-s2x-", dir="/tmp")
+    atexit.register(shutil.rmtree, sockdir, ignore_errors=True)
+    sock = sockdir + "/qmp"
     q = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-serial", "null", "-display", "none", "-serial", "file:" + log,
                           "-global", "bcm2835-fb.xres=%d" % SW, "-global", "bcm2835-fb.yres=%d" % SH, "-qmp", "unix:%s,server,nowait" % sock,
                           "-kernel", os.path.join(arch, "app-kernel8.img")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

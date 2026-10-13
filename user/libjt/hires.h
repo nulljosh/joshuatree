@@ -9,7 +9,15 @@
 
 /* The window's scale: 2 when the kernel mapped a device-size buffer (pitch in bytes is twice width * 4), else 1. A
    scratch struct whose pitch is not a byte pitch (calendar's small_date) comes out as 1. */
+#if defined(__i386__)
+/* The i386 kernel answers every window open with pitch = width * 4 (kernel/syscall.c), so the scale there is always 1. Saying
+   so at compile time lets -Os drop the 2x paths text.c, mono.c and the rest branch on from every i386 app; each app binary
+   is baked into kernel.elf's rodata, and the dead 2x code (about 1KB an app) took the gap
+   tools/checks/bss-margin-check.py guards under 16KB. */
+static inline int jt_scale(const struct jt_window_info *w) { (void)w; return 1; }
+#else
 static inline int jt_scale(const struct jt_window_info *w) { return w->pitch == w->width * 8u ? 2 : 1; }
+#endif
 
 /* Fills the logical rectangle x, y, cw by ch with colour c, clipped to the window. */
 static inline void jt_fill(struct jt_window_info *w, int x, int y, int cw, int ch, unsigned c) {

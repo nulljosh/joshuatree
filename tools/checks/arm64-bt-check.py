@@ -20,8 +20,8 @@ The kernel is built with BT_HCD= a small made-up patch file, so the upload is ch
              fragments, and a user description in front of the boot report's CCCD. The mouse also asks things of its
              own (a parameter update, Exchange MTU, a service search, an indication) and each must be answered. The UART
              says `bt: connected`, `bt: paired`, `bt: mouse ready`; Protocol Mode is written to boot with Write Command
-             and the CCCD to 01 00, both after encryption; four boot reports move the pointer onto the Stocks tile
-             (`mouse X,Y` at each step, the hover label), press and release: `dock Stocks: not on ARM yet`. Then the mouse
+             and the CCCD to 01 00, both after encryption; four boot reports move the pointer onto the Trash tile
+             (`mouse X,Y` at each step, the hover label), press and release: `dock Trash: not on ARM yet`. Then the mouse
              hangs up and the Terminal still answers.
   2. order:  the controller expects the records in another order, so it goes quiet at the first one: the driver prints
              "bt: no answer from the radio", never "bt: ready", and the Terminal still answers (`bt`, `help`).
@@ -400,7 +400,8 @@ class Boot:
         self.key("ret")
     def close(self): self.q.kill(); self.q.wait()
 
-# The dock's geometry, as in arm64-mouse-check.py (kernel/dock_geom.c and fb_init): Stocks (not ported yet, so its click still opens the Console) is slot 9.
+# The dock's geometry, as in arm64-mouse-check.py (kernel/dock_geom.c and fb_init): Trash (not ported yet, so its click still opens the Console) is slot 10.
+# It was Stocks (slot 9) until 3.9.0 ported Stocks to EL0 (arm64-stocks-check.py); at 800x600 each half-move onto slot 10 is 120 px, inside a report's signed byte.
 def slot_centre(w, h, slot):
     s = 2 if h >= 1080 else 1; lw, lh = w // s, h // s
     icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 10 * 6) // 11))
@@ -466,12 +467,12 @@ try:
         b.type("bt")
         check("the stray ACL packet was counted and skipped, nothing lost", b.wait_for("bt: acl in 1, rx errors 0, stray bytes 0", 10), b.uart()[-400:])
 
-        # BT2: pair, encrypt, find the boot mouse report, and four reports onto the Stocks tile and a click there.
+        # BT2: pair, encrypt, find the boot mouse report, and four reports onto the Trash tile and a click there.
         size = b.screen_size()
         check("ramfb gives the desktop a screen", bool(size), size)
         W, Hh = size or (800, 600)
         x0, y0 = W // 2, Hh // 2
-        tx, ty = slot_centre(W, Hh, 9)
+        tx, ty = slot_centre(W, Hh, 10)
         dx, dy = tx - x0, ty - y0
         hx, hy = dx // 2, dy // 2
         mid = (x0 + hx, y0 + hy)
@@ -501,10 +502,10 @@ try:
         check("the fake mouse found nothing wrong (c1 of the kernel's Mrand, s1 in Start Encryption, every packet)",
               not b.fake.problems, b.fake.problems)
         check("first report: the pointer moves by its deltas", b.wait_for("mouse %d,%d\n" % mid, 15), b.uart()[-400:])
-        check("second report (with a wheel byte): onto the Stocks tile", b.wait_for("mouse %d,%d\n" % (tx, ty), 10), b.uart()[-400:])
-        check("the hover label follows it", b.wait_for("M1d hover 9 Stocks", 10), b.uart()[-400:])
+        check("second report (with a wheel byte): onto the Trash tile", b.wait_for("mouse %d,%d\n" % (tx, ty), 10), b.uart()[-400:])
+        check("the hover label follows it", b.wait_for("M1d hover 10 Trash", 10), b.uart()[-400:])
         check("third report: the left button goes down", b.wait_for("key 272 down", 10), b.uart()[-400:])
-        check("the click lands on the dock: Stocks opens the Console", b.wait_for("dock Stocks: not on ARM yet", 10), b.uart()[-400:])
+        check("the click lands on the dock: Trash opens the Console", b.wait_for("dock Trash: not on ARM yet", 10), b.uart()[-400:])
         check("fourth report: the button comes up", b.wait_for("key 272 up", 10), b.uart()[-400:])
         check("F2 brings the Terminal back in front of the Console", b.terminal(2), b.uart()[-300:])
         b.type("bt")

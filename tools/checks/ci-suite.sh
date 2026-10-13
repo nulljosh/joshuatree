@@ -37,7 +37,10 @@ set -uo pipefail
 # disk on 2026-10-01. One scratch TMPDIR per suite run, gone on exit.
 . "$(dirname "$0")/../ci-lock.sh"
 ci_lock_acquire || exit 1
-export TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/jt-suite-XXXXXX")
+# Under /tmp, not inside the caller's TMPDIR: macOS sets that to /var/folders/<..>/T/, and nested
+# under it a check's QMP socket (jt-arm-discovery-XXXXXXXX/discovery.qmp, jt-arm64-sharp2x-reminders-...)
+# runs past the 104-byte unix socket limit and connect() fails with "AF_UNIX path too long".
+export TMPDIR=$(mktemp -d /tmp/jts.XXXXXX)
 trap 'rm -rf "$TMPDIR"; ci_lock_release' EXIT
 # SHARD=i runs only the checks assigned to shard i below, so CI can split the
 # suite across parallel runners. Unset, it runs everything, same as before.
