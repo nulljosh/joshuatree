@@ -33,6 +33,10 @@ browser emulator's cmdline config) to change how the kernel starts:
 | `phone` | Boots into portrait phone mode (430x932) instead of the desktop (960x540 retina). Handled in `kernel/kernel.c`'s `kmain` as `boot_to_phone`, used by `gui_run`. |
 | `samantha` | Skips the desktop and opens the ring-3 Samantha program (`user/samantha.c`) first. Handled in `kernel/kernel.c`'s `kmain` as `boot_to_samantha`, which launches dock slot 6. |
 
+## On the Raspberry Pi
+
+The same desktop also boots on a Raspberry Pi 4 from `arch/arm64/`, a second kernel with its own start code, drivers and linker script. It shares the i386 kernel's dock painters, window chrome, IP stack (`drivers/net.c`, `drivers/http.c`) and fonts rather than copying them. Four apps run as separate EL0 programs on it: Calendar, Notes, Music and Books (`arch/arm64/userapps.S`, listed in `UAPPS`). Calculator, Clock and the Browser draw inside the Console's rectangle and open from Spotlight. The Terminal is a zsh style shell with `sam`, the non-blocking Samantha command. The board also has USB keyboard and mouse (xHCI), Wi-Fi and Bluetooth on the CYW43455, an SD card it reads and writes, sound from the 3.5 mm jack and TLS to the relay. Each row for these files is in the layers table below. The release history is in `docs/CHANGELOG.md`.
+
 ## The layers
 
 Each layer only leans on the ones above it on this page, so it reads top to bottom.
@@ -509,6 +513,7 @@ The ad lives in `landing/ad/` and plays live from the same clock the video was c
 
 ## Where to go next
 
+- `docs/CHANGELOG.md` for every release since the first commit.
 - `docs/BENCHMARKS.md` for how fast it is, and `tools/bench.sh` to measure it yourself.
 - `docs/WHITEPAPER.md` for why this exists and what it is not yet.
 - `docs/SYSCALL-ABI.md` if you want to write a program for it.

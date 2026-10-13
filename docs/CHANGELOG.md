@@ -1,0 +1,499 @@
+# Changelog
+
+Joshua Tree began on 2026-08-31 as an i386 kernel written from scratch: boot, keyboard, clock and a shell.
+It grew a mouse-driven desktop, then a fleet of apps and a protected program for each one.
+Then it got an ARM64 port that boots on a real Raspberry Pi 4, and Samantha, who talks to you through it.
+
+This list is built from the git history: every change to `VERSION` is one release, newest first. 437 releases from 0.30.0 to 3.8.1, plus 30 numbered steps before semver. Some patch numbers were skipped or landed out of order when branches merged. The plan lives in `docs/VERSIONS.md` and the long form of each release in `docs/roadmap-done.md`.
+
+## 3.x: the Raspberry Pi
+
+Joshua Tree leaves the emulator. It boots on a real Raspberry Pi 4 and runs Notes, Calendar, Music, Books, Browser, a shell and Samantha on the board. Most of the Pi work this week was found in QEMU first and fixed after Joshua tried it on the card.
+
+- **3.8.1** (2026-10-12): sam never hangs after an answer
+- **3.8.0** (2026-10-12): A small tool picker in freestanding C (pick, pickcheck)
+- **3.7.12** (2026-10-12): sam is fast on the board
+- **3.7.11** (2026-10-12): Calculator in Spotlight, empty query lists every app
+- **3.7.10** (2026-10-12): The splash never hides a failure, crash and sd and wifi checks follow the splash
+- **3.7.4** (2026-10-12): Boot splash instead of the Console, Wi-Fi fan in ink
+- **3.7.3** (2026-10-12): The Bluetooth mouse reconnects by itself at boot and after a drop
+- **3.7.2** (2026-10-12): Pointer motion never repaints the Browser; wheel summed per report, page layout cached
+- **3.7.1** (2026-10-12): Pi app windows at a normal size and smooth at 1080p
+- **3.7.0** (2026-10-12): Mascot on the empty Music and Books screens on the Pi
+- **3.6.3** (2026-10-12): Guide chapters for the Pi apps, architecture Pi row
+- **3.6.2** (2026-10-12): Reboot and shutdown work after Samantha answers
+- **3.6.1** (2026-10-12): Browser stops flickering on the Pi
+- **3.6.0** (2026-10-12): Drag a window by its title band
+- **3.5.0** (2026-10-12): Bluetooth mouse remembers its pairing across reboots
+- **3.4.0** (2026-10-12): Reboot and shutdown commands in the Terminal
+- **3.3.0** (2026-10-12): Terminal is a zsh style shell; Samantha is the non-blocking `sam` command
+- **3.2.1** (2026-10-12): Graphs refreshed for v3
+- **3.2.0** (2026-10-12): Books, a plain-text reader
+- **3.1.0** (2026-10-12): Samantha lists and reads the card
+- **3.0.0** (2026-10-12): Joshua Tree on a real Pi
+
+## 2.x: protected apps, the ARM port, Samantha everywhere
+
+Every app becomes its own protected program, so one crash cannot take the machine down. Apps and the polish on Samantha follow, and the ARM64 port starts here: a second kernel for the Pi that grows from a blinking light to USB, Wi-Fi, a network stack, sound, Bluetooth and a desktop.
+
+- **2.65.0** (2026-10-12): Flat brand wallpaper, Tree Sans in the UI, the mark flat ink, the apple after the line
+- **2.63.0** (2026-10-11): Samantha saves code on the Pi, [[save NAME]] writes her code block to JT/NAME, only a name you typed
+- **2.62.0** (2026-10-11): Tree Sans, our own typeface, and a type system with constraints on the landing page
+- **2.61.4** (2026-10-11): Feat(pi): blank idle HDMI and wake on keyboard or mouse
+- **2.61.3** (2026-10-11): Music artwork from PNG tags and folder covers, and Apple Music's transport row
+- **2.61.2** (2026-10-11): Music QA pass, a 3:25 MP3 reads 3:25, a damaged MP3 frame no longer hangs it, and the wheel reaches app windows
+- **2.61.1** (2026-10-11): The Calendar tile shows Calendar
+- **2.60.2** (2026-10-11): Samantha tells the time from her own clock, and her desktop input is a sharp page field
+- **2.60.1** (2026-10-11): The Samantha box goes together
+- **2.60.0** (2026-10-11): The 3.0 mark, the crayon tree on a terracotta ground
+- **2.59.0** (2026-10-11): M3e, Music on the Pi
+- **2.58.0** (2026-10-11): M3d, file calls on ARM, and Notes runs on the Pi
+- **2.57.1** (2026-10-11): Wrangler: keep joshuatree.jaybulb.com on deploy
+- **2.57.0** (2026-10-11): The Pi writes its SD card, files in JT/ survive a reboot
+- **2.56.0** (2026-10-11): M3c part 2, Calendar in its own window on ARM, at EL0
+- **2.55.0** (2026-10-11): Notes saves itself two seconds after the last key
+- **2.54.0** (2026-10-11): Bluetooth BT2, the LE mouse pairs and drives the pointer
+- **2.53.0** (2026-10-11): The Pi reads its own SD card
+- **2.52.0** (2026-10-11): ARM: Caps Lock and key repeat
+- **2.51.0** (2026-10-11): Bluetooth BT1, HCI over the PL011, the radio's patch and bt scan
+- **2.49.0** (2026-10-11): M3b, hello.c runs in user mode on the ARM kernel
+- **2.48.0** (2026-10-11): Volume controls for the Pi
+- **2.47.0** (2026-10-11): Samantha answers the Pi from Turing
+- **2.46.0** (2026-10-11): The Pi finds the Claude relay by itself
+- **2.45.0** (2026-10-11): Samantha's voice through the Mac relay (POST /api/tts, key and caps on the Mac)
+- **2.44.0** (2026-10-11): Typing into apps on ARM, a click focuses a window
+- **2.43.0** (2026-10-11): Sound out of the Pi's 3.5 mm jack (polled PWM, beep command)
+- **2.42.0** (2026-10-11): The Samantha box, a printable desk case for a 7 inch screen and a Pi
+- **2.41.0** (2026-10-11): The boot splash draws the tree on
+- **2.40.0** (2026-10-10): Pi apps, shell wc, landing polish and repaired CI
+- **2.33.5** (2026-10-09): Require TLS for the Pi relay and authenticate network time
+- **2.33.4** (2026-10-09): Harden relay file reads, rebalance CI and add Wi-Fi guide
+- **2.33.3** (2026-10-09): Fix landing signup and mobile boot, redesign the welcome email, clean the roadmap
+- **2.33.2** (2026-10-09): Fix Spotlight shortcuts and keyboard-only Terminal access
+- **2.33.1** (2026-10-08): Docs batch
+- **2.33.0** (2026-10-08): 2.33.0 (integration of six agent branches)
+- **2.32.1** (2026-10-08): Browse fails fast
+- **2.32.0** (2026-10-08): Local LLM on the Pi
+- **2.30.9** (2026-10-08): Merge main, version 2.30.9
+- **2.30.8** (2026-10-08): Version bump with the landing page sync
+- **2.30.7** (2026-10-08): Version bump with the landing page sync
+- **2.30.6** (2026-10-08): Version bump with the landing page sync
+- **2.30.5** (2026-10-08): Graph: merge main and bump the version
+- **2.30.4** (2026-10-08): After merging the test fix
+- **2.30.3** (2026-10-08): After merging main
+- **2.30.2** (2026-10-08): Merge main; version after the Samantha release
+- **2.30.0** (2026-10-07): For the relay's Samantha API mode
+- **2.29.4** (2026-10-08): Landing: the Pi section says what works now (Wi-Fi, clock, Samantha, actions)
+- **2.29.2** (2026-10-07): 2.29.2 (the graph refresh took 2.29.1)
+- **2.29.1** (2026-10-07): Arm64: one 300 ms green-light blink at boot (three fast ones were too quick to see)
+- **2.29.0** (2026-10-07): For the green light blink
+- **2.28.0** (2026-10-07): One PR for the Pi stack (Wi-Fi scan, mouse, icon parity, fonts, scribble logo, README)
+- **2.25.0** (2026-10-07): The logo is a crayon scribble of one Joshua tree
+- **2.23.0** (2026-10-07): ARM desktop slice 3, the dock's hover label and window chrome shared with the Pi
+- **2.22.0** (2026-10-07): ARM desktop slice 2, shared dock painters and the real dock on the Pi
+- **2.21.2** (2026-10-07): ARM64 crash screen, FP state across IRQs, OOM handling, boot health check
+- **2.21.1** (2026-10-07): ARM desktop slice 1, the Satellite wallpaper and the real menu bar on the Pi build
+- **2.21.0** (2026-10-07): Claude in the ARM Console
+- **2.20.2** (2026-10-07): Make something wonderful, and a shopping list
+- **2.20.0** (2026-10-07): The i386 IP stack runs on ARM64 (DHCP and an HTTP POST over virtio-net)
+- **2.19.1** (2026-10-07): Ci-local lock, private temp dirs, caption-fade flake
+- **2.19.0** (2026-10-06): Console scrollback from the keyboard, with a position hint and a pinned wifi/usb row
+- **2.16.1** (2026-10-06): Wi-Fi actually powers the chip
+- **2.16.0** (2026-10-06): ARM64 M4 Wi-Fi stage 1: CYW43455 alive, networks on screen
+- **2.14.0** (2026-10-06): Claude, Claude Code from inside Joshua Tree (phase 1, via a relay)
+- **2.13.4** (2026-10-06): Pi log, full screen and USB first light
+- **2.13.2** (2026-10-06): USB hub port diagnostics, hot-plug rescan, composite HID
+- **2.13.0** (2026-10-06): USB keyboard and mouse on ARM64 through xHCI (M4)
+- **2.12.5** (2026-10-06): Pi console text, full screen, a line for Steve
+- **2.12.4** (2026-10-06): Flash the Pi card in one command
+- **2.12.3** (2026-10-06): Skip to the desktop button on the hero poster
+- **2.12.2** (2026-10-05): The design rules are written down
+- **2.12.1** (2026-10-05): Samantha gets a little room
+- **2.12.0** (2026-10-05): Brand mark refresh, one step from the 2.0 tree
+- **2.11.1** (2026-10-05): The landing hero opens on Samantha's face, never a blank box
+- **2.11.0** (2026-10-05): Panes, a cmux-style terminal app (Terminal unchanged)
+- **2.10.1** (2026-10-05): Harden samantha-fullscreen-check for slow CI runners
+- **2.10.0** (2026-10-05): Weather is much richer
+- **2.9.1** (2026-10-05): Samantha's mouth parts along her real lip seam, and she blinks
+- **2.9.0** (2026-10-05): Samantha full screen, captions that fade, two bugs fixed
+- **2.8.0** (2026-10-05): Windgate, guided breathing, in the Launchpad
+- **2.7.2** (2026-10-05): Icons and README. Calendar spacing, Quotestreak off-white, Burrow folder, Hikko synced, transparent README mark
+- **2.7.1** (2026-10-04): Apps are stored compressed, the kernel image gets room
+- **2.7.0** (2026-10-04): Hamurapi plays in Joshua Tree
+- **2.6.35** (2026-10-04): Launchpad is centered, icons 24 percent smaller, arrow keys move the selection
+- **2.6.34** (2026-10-04): The menu bar stays put after the full-screen Launchpad
+- **2.6.32** (2026-10-04): Burrow wraps long file names, Mail and Weather read their whole file
+- **2.6.31** (2026-10-04): Stocks fills all five watchlist rows again, status line says Retrying or Offline
+- **2.6.30** (2026-10-04): App names follow the fleet
+- **2.6.29** (2026-10-04): Sparkjar becomes Hikko and shows the real forum's top ideas, demo ideas stay as the offline fallback
+- **2.6.28** (2026-10-04): Landing tiles for the fleet apps, a stale-tile check, built binaries untracked
+- **2.6.27** (2026-10-04): Lexly becomes learn anything, with 72 live courses and the Spanish deck as the offline fallback
+- **2.6.26** (2026-10-04): Bookrank shows the real ranked shelf from the live API, samples stay as the offline fallback
+- **2.6.25** (2026-10-04): Strata becomes Neo, landing sheds three filler sections, handoff and roadmap brought up to date
+- **2.6.24** (2026-10-04): ARM64 M3a, EL0 program, syscalls, kernel-only page
+- **2.6.23** (2026-10-04): ARM64 screen draws smooth DejaVu text through the shared TrueType rasterizer
+- **2.6.22** (2026-10-04): ARM64 gets a Pi screen, boot log, keyboard, mouse, network and disk (QEMU)
+- **2.6.21** (2026-10-04): ARM64 M1c part one, ramfb framebuffer and a drawn desktop on QEMU virt
+- **2.6.20** (2026-10-03): Intro voice from a nine minute clone
+- **2.6.19** (2026-10-03): Intro re-rendered, lip spot gone, warmer expression
+- **2.6.18** (2026-10-03): Intro rebuilt with the v4 voice and aligned seams
+- **2.6.17** (2026-10-03): The portfolio demo starts at once and tours the launchpad too
+- **2.6.16** (2026-10-03): The roadmap says what is left
+- **2.6.13** (2026-10-03): Faster CI, Lexly blue icon, landing polish
+- **2.6.12** (2026-10-03): Docs back at 100 percent, Stocks check stops flaking
+- **2.6.10** (2026-10-03): ARM64 M1b, MMU, caches and a heap
+- **2.6.9** (2026-10-03): The tour resends Escape until the app really closes
+- **2.6.8** (2026-10-03): ARM64 M1a, exceptions and a timer tick
+- **2.6.7** (2026-10-03): Phone QA, Epiphany on a phone, the landing's latest line
+- **2.6.6** (2026-10-03): A better landing demo
+- **2.6.5** (2026-10-03): Phone tour, tear-free drawing, tidy bubbles, face keeps moving
+- **2.6.4** (2026-10-03): Speaker button replaces the Tap to hear pill, demo fixes
+- **2.6.3** (2026-10-03): Movies check stops flaking on slow runners
+- **2.6.2** (2026-10-03): Raspberry Pi 4 build, setup guide, printable case
+- **2.6.1** (2026-10-03): ARM64 M0 boots under QEMU, the Pi is the first real board
+- **2.6.0** (2026-10-03): Music and Movies, speaker button starts the intro sound, glass phone chat bar
+- **2.5.1** (2026-10-03): Joshua's face fills the screen again
+- **2.5.0** (2026-10-03): Joshua on the web
+- **2.0.2** (2026-10-03): The phone demo waits out a spoken reply before the next question and cannot lose its first letter
+- **2.0.1** (2026-10-03): Portfolio wears Joshua on the ring-3 chat, plus his 30 s intro video
+- **2.0.0** (2026-10-03): Every app is its own protected program
+
+## 1.x: Samantha, phone mode, real type
+
+The OS turns into a product. Samantha gets a voice and a face, there is a phone mode, a real type engine and a built-in benchmark suite, and the first apps start leaving the kernel to run on their own.
+
+- **1.9.40** (2026-10-02): Idle face blinks smoothly
+- **1.9.39** (2026-10-02): Portfolio hides the exit button, it does nothing there
+- **1.9.38** (2026-10-02): Apps icon in flat set colors, no purple or gradients
+- **1.9.37** (2026-10-02): Portfolio on a phone fills the screen, the end of the face clip is no console error
+- **1.9.36** (2026-10-02): Portfolio face edges, dock colors, Portfolio icon
+- **1.9.35** (2026-10-02): Portfolio face animates at full rate
+- **1.9.34** (2026-10-02): Landing ad v7: new 30s ad from the current OS
+- **1.9.33** (2026-10-02): Portfolio: Escape from his face lands on the desktop
+- **1.9.32** (2026-10-02): Remove HomeQi app
+- **1.9.31** (2026-10-02): Portfolio speaks in Joshua's voice
+- **1.9.30** (2026-10-02): Portfolio: his face fills the screen, a glass bar answers
+- **1.9.29** (2026-10-02): Phone demo keeps talking, Samantha's real logo, Clock face, weather on ask
+- **1.9.28** (2026-10-02): Portfolio mode wears Joshua's face
+- **1.9.27** (2026-10-02): Samantha's dock icon is her own mark from turing, cropped to her profile
+- **1.9.25** (2026-10-02): AA text in every ring-3 app (stacks on #334)
+- **1.9.23** (2026-10-01): Sharper Launchpad and Epiphany text
+- **1.9.22** (2026-10-01): Pixel-exact demo at dpr 1 (res=WxH)
+- **1.9.21** (2026-10-01): Waitlist email: no hard-coded app count
+- **1.9.20** (2026-10-01): Epiphany at ring 3, Notes gets compositor hooks
+- **1.9.16** (2026-10-01): Release posts are just the changelog note
+- **1.9.15** (2026-09-30): Landing announcement reads Burrow and protected apps; handoff notes for the next three ports
+- **1.9.14** (2026-09-30): Landing QA pass, tech specs and footer, crash check, Burrow
+- **1.9.13** (2026-09-30): Search runs at ring 3, the eighteenth app out of the kernel
+- **1.9.12** (2026-09-30): Calendar runs at ring 3, the seventeenth app out of the kernel
+- **1.9.11** (2026-09-30): Curbfind runs at ring 3, the sixteenth app out of the kernel
+- **1.9.10** (2026-09-30): Landing grade fixes
+- **1.9.9** (2026-09-29): Reminders runs at ring 3, the fifteenth app out of the kernel
+- **1.9.8** (2026-09-29): Sparkjar runs at ring 3, the fourteenth app out of the kernel
+- **1.9.7** (2026-09-29): Contacts runs at ring 3, the thirteenth app out of the kernel
+- **1.9.6** (2026-09-29): Activity runs at ring 3, the twelfth app out of the kernel
+- **1.9.5** (2026-09-29): Portfolio runs at ring 3, the eleventh app out of the kernel
+- **1.9.4** (2026-09-29): Clock runs at ring 3, the tenth app out of the kernel
+- **1.9.3** (2026-09-29): Fieldbook runs at ring 3
+- **1.9.2** (2026-09-29): Plan runs at ring 3
+- **1.9.1** (2026-09-29): Lexly runs at ring 3, the seventh app out of the kernel
+- **1.9.0** (2026-09-29): Touch and an on-screen keyboard
+- **1.8.23** (2026-09-28): Notes gets folders
+- **1.8.22** (2026-09-28): Homeqi runs at ring 3, the fourth app out of the kernel
+- **1.8.21** (2026-09-28): Bookrank runs at ring 3
+- **1.8.20** (2026-09-28): Landing fixes,consistent app counts, styled Samantha link, spaced benchmark labels
+- **1.8.19** (2026-09-28): Phone boot check picks a free QMP port per QEMU instead of PORT+N
+- **1.8.18** (2026-09-28): Samantha lands with open eyes and portrait dock icon
+- **1.8.17** (2026-09-28): Hardware blueprint and dev kit money plan
+- **1.8.16** (2026-09-28): Checks pick a free QMP port
+- **1.8.15** (2026-09-28): Waitlist sends a real email via Resend
+- **1.8.14** (2026-09-28): Landing gets the ad, the Strata concept, and small fixes
+- **1.8.13** (2026-09-28): Samantha opens eyes open, portrait dock icon
+- **1.8.12** (2026-09-28): Docs back to 100%: ARCHITECTURE rows for the new files
+- **1.8.11** (2026-09-28): Landing QA fixes
+- **1.8.10** (2026-09-28): Kernel.c dock drawing moves to its own file
+- **1.8.9** (2026-09-28): Demo: tap Samantha to talk; no keyboard hints on phones; varied lines per lap
+- **1.8.8** (2026-09-28): Tap to hear Samantha on phones, and she finishes talking before the tour moves on
+- **1.8.5** (2026-09-28): Audiodebug overlay gets a tone button and a live output meter
+- **1.8.3** (2026-09-28): Mail compose opens its own window
+- **1.8.2** (2026-09-28): A phone home screen
+- **1.8.1** (2026-09-28): Settings redesigned like macOS System Settings
+- **1.7.19** (2026-09-28): Quotes runs at ring 3, the fourth app out
+- **1.7.18** (2026-09-28): Esc on an empty desktop no longer quits the desktop
+- **1.7.17** (2026-09-28): Phone demo Samantha gets the clean sentence, not a stray n
+- **1.7.16** (2026-09-28): The tour's lap reboot keeps phone mode; untrack HANDOFF.md
+- **1.7.14** (2026-09-28): Phone audio: unlock on any tap, plus ?audiodebug
+- **1.7.13** (2026-09-28): Phone mode's windows and dock fit the real 430px screen
+- **1.7.12** (2026-09-28): Calculator runs at ring 3, the third app out of the kernel
+- **1.7.11** (2026-09-28): Toroid runs at ring 3, one table-driven launcher, in-kernel Keyrate and Toroid deleted
+- **1.7.10** (2026-09-28): Two load-flaky checks wait on the real condition
+- **1.7.9** (2026-09-28): Passwords move to PBKDF2-HMAC-SHA256 over BearSSL, legacy records upgrade on login
+- **1.7.8** (2026-09-28): Released window framebuffer goes back to supervisor-only
+- **1.7.7** (2026-09-28): First app leaves the kernel, real password salts, phone face fix, deploy-config CI
+- **1.7.6** (2026-09-28): Phone demo full width, iPhone audio, plain-words next-up line
+- **1.7.5** (2026-09-28): Fix the broken production deploy (ratelimit binding syntax)
+- **1.7.4** (2026-09-28): DHCP, drunk mode, voice-in scaffolding, landing polish
+- **1.7.3** (2026-09-27): Phone demo fits the screen and text is crisp
+- **1.7.1** (2026-09-27): Landing footer links @joshuatreeOS
+- **1.7.0** (2026-09-27): Samantha on your phone, app interface, mail, terminal, and more
+- **1.6.22** (2026-09-27): Every release posts to @joshuatreeOS
+- **1.6.21** (2026-09-27): Samantha: a natural video face, seamless loops, app renamed
+- **1.6.20** (2026-09-27): Boot splash draws the four-arm Joshua tree
+- **1.6.18** (2026-09-27): The landing demo shows the visitor's town, not Vancouver
+- **1.6.17** (2026-09-27): Samantha's face fills Chat and her mouth follows her voice
+- **1.6.16** (2026-09-27): Long replies play as her voice in the browser, not a beep
+- **1.6.15** (2026-09-27): The browser demo sees its real RAM, so her full reply plays
+- **1.6.14** (2026-09-27): Roadmap catches up to 1.6.9; gaps measured against peer OSes
+- **1.6.13** (2026-09-27): Her face loads on the live landing demo
+- **1.6.12** (2026-09-27): The landing demo shows Samantha's face and plays her voice
+- **1.6.10** (2026-09-27): CI runs the suite on 8 machines instead of 4
+- **1.6.9** (2026-09-27): Sound Blaster, speaking Chat, and Samantha's face -- crash fixed
+- **1.6.8** (2026-09-27): Landing: app screenshots all match, no stretching
+- **1.6.6** (2026-09-27): Checks for today's landing work: logo rebuilds exactly, kernel downloads once gzipped
+- **1.6.3** (2026-09-27): Joshua tree mark, landing loads twice as fast
+- **1.6.2** (2026-09-27): Portfolio demo: scripted tour, 40 live tickers, Curbfind local deals
+- **1.6.0** (2026-09-27): Built-in benchmarks
+- **1.5.18** (2026-09-25): Split the Files app out of kernel.c into kernel/files.h
+- **1.5.17** (2026-09-25): Add god-file guard for kernel.c
+- **1.5.16** (2026-09-25): Live Stocks and Weather landing shots
+- **1.5.15** (2026-09-25): Ci gate actually fails on a red suite shard
+- **1.5.14** (2026-09-25): Demo fills its frame, no black borders
+- **1.5.13** (2026-09-25): Integrate 1.5.11: landing sync, handoff, crisp demo, AA chart lines
+- **1.5.10** (2026-09-25): Gate CI on ready PRs, add tools/ci-local.sh
+- **1.5.6** (2026-09-25): Portfolio: boot ?full right away; queue live Epiphany and real app demos
+- **1.5.5** (2026-09-25): Add libjt: userland C library for ring-3 programs
+- **1.5.3** (2026-09-25): Landing A+ pass: chart clip, jargon, Files shot
+- **1.5.2** (2026-09-25): Files: List/Icons view toolbar, persisted
+- **1.5.1** (2026-09-25): Terminal text through the shared runtime-TTF path
+- **1.5.0** (2026-09-25): Real type in Notes, six fonts, 12 to 200, sharp at every size
+- **1.4.2** (2026-09-25): Landing polish and copy, TrueType font engine, handoff + README
+- **1.4.1** (2026-09-24): Landing design system, Meet Samantha and app sections, privacy page, demo weather freeze fixed, smoother Notes text
+- **1.4.0** (2026-09-24): New mark (engraved tree, circuit roots), friendlier Chat, smooth window corners, landing copy
+- **1.3.1** (2026-09-24): Calendar tile padding, weather matches the clock, CI shards balanced by real duration
+- **1.3.0** (2026-09-24): Notes text selection, Samantha shows every tool in Chat, notes filed, uptime gone
+- **1.1.5** (2026-09-24): Chat reply timeout bounded; clipboard check hardened; filerobust subprocess timeouts
+- **1.1.4** (2026-09-24): The landing demo's cursor glides instead of teleporting
+- **1.1.3** (2026-09-24): Docs sync: README, landing copy and roadmap cover Samantha, tools and live drag; progress graph regenerated
+- **1.1.2** (2026-09-24): Wallpaper checks compare the theme they boot in; tilehost/walltheme overrides; hermetic compose check; check.yml runs on PRs only
+- **1.1.1** (2026-09-24): CI gates skip on superseded runs, so a newer push no longer emails a failure
+- **1.1.0** (2026-09-23): Samantha's tools work from the Chat app
+- **1.0.13** (2026-09-23): Tour drags a window live, demo Chat render check in CI, bare version names
+- **1.0.12** (2026-09-23): Chat talks to Samantha (Turing) natively and in the demo
+- **1.0.11** (2026-09-23): Every app window drags live by its title bar; file-robustness check
+- **1.0.9** (2026-09-23): Typography at retina quality
+- **1.0.8** (2026-09-23): Icons at retina quality
+- **1.0.7** (2026-09-23): Calendar date, Location, copy and paste, every check in CI
+- **1.0.4** (2026-09-23): Fix Stocks demo prices in Joshua Tree and portfolio
+- **1.0.3** (2026-09-23): The lag, profiled and fixed (window open ~500 ms to ~100 ms), folds #137
+- **1.0.1** (2026-09-23): Keyboard-only navigation, Lock Screen, pre-push gate, CodeRabbit quiet
+- **1.0.0** (2026-09-23): Hidden Valley
+
+## 0.x: the desktop
+
+The desktop era. A mouse-driven GUI, a dock, windows, a filesystem, a real browser demo on the landing page, and ports of the whole app fleet. Version numbers start at 0.30 once Joshua adopts semver; before that the work was numbered v1 to v29.
+
+- **0.99.1** (2026-09-23): Shift works everywhere; gallery and feature drive in CI
+- **0.99.0** (2026-09-23): Curbfind runs natively
+- **0.98.0** (2026-09-22): Plan runs natively
+- **0.97.0** (2026-09-22): Homeqi runs natively
+- **0.96.0** (2026-09-22): Sparkjar runs natively
+- **0.95.0** (2026-09-22): Fieldbook runs natively
+- **0.94.0** (2026-09-22): Lexly runs natively
+- **0.93.0** (2026-09-22): Bookrank runs natively
+- **0.91.0** (2026-09-22): Every project in the dock shows its real icon
+- **0.90.0** (2026-09-22): Toroid and Quotes run natively
+- **0.89.0** (2026-09-22): Redrawn icon set and crisper text
+- **0.88.3** (2026-09-22): Calendar Day/Week/Month/Year, title-bar gap in 9 apps, dock label, QA fixes
+- **0.87.0** (2026-09-21): Portfolio app: catalog the fleet on the desktop
+- **0.85.3** (2026-09-20): Kernel: the pending-map placeholder is the baked satellite, never black
+- **0.85.2** (2026-09-20): Kernel: satellite wallpaper goes through the press
+- **0.85.1** (2026-09-20): Light-mode contrast fix, roadmap trim, releases backfilled
+- **0.85.0** (2026-09-20): The real cause of choppy dock hover, wind sway throttling the loop
+- **0.84.0** (2026-09-20): The v86 demo shows a real satellite wallpaper, not the tree
+- **0.83.0** (2026-09-20): A real glossy icon tile technique, matched to a direct reference
+- **0.82.0** (2026-09-20): Syscall v2, real file writes and argv, plus a CI flake and a README pass
+- **0.81.0** (2026-09-20): Every icon is authored artwork, real dock shadows
+- **0.80.0** (2026-09-20): The v1 syscall ABI, with a real program written against it
+- **0.79.2** (2026-09-20): The browser demo had a permanently black desktop
+- **0.79.1** (2026-09-19): Smooth dock animation, per-row damage, three real bugs fixed
+- **0.79.0** (2026-09-19): Authored icon artwork, wheel scrolling, and a real DNS bug fixed
+- **0.78.0** (2026-09-19): A real back buffer, so repaints stop flashing
+- **0.77.0** (2026-09-19): Real user accounts, and the demo headline says what is on screen
+- **0.76.58** (2026-09-19): Dock click no longer dropped at the multi-window cap
+- **0.76.57** (2026-09-19): Apps folder scoped repaint (PR #4 merged and fixed)
+- **0.76.56** (2026-09-19): Landing: fix headline swap, light-mode h1 contrast, eyebrow page shift
+- **0.76.55** (2026-09-16): Landing: releases link on H2 not H1, demo full viewport width
+- **0.76.54** (2026-09-16): Landing: cycling eyebrow with typewriter effect, demo flush with top
+- **0.76.53** (2026-09-16): Kernel: wallpaper dark fallback to pure black; log pre-existing dockhover flake
+- **0.76.52** (2026-09-16): Landing: reorder hero (H1 first, eyebrow below in white), drop tagline, tighter padding
+- **0.76.51** (2026-09-16): Kernel+landing: wallpaper still flashed the tree photo on startup; demo cropped on resize
+- **0.76.50** (2026-09-16): Kernel: replace pink/purple system chrome accent with neutral gray
+- **0.76.49** (2026-09-16): Kernel: notification panel shows memory percent used
+- **0.76.48** (2026-09-16): Kernel: boot loading bar was also hardcoded maroon
+- **0.76.47** (2026-09-16): Kernel: fix logo hardcoded to maroon regardless of caller's color
+- **0.76.46** (2026-09-16): Landing: icons now cover the full page, wider demo blend
+- **0.76.45** (2026-09-16): Boot wallpaper fix + wheel-scroll fix + demo UI tweak
+- **0.76.44** (2026-09-16): Landing: denser, faster floating background icons
+- **0.76.43** (2026-09-16): Landing: dedicated white boot logo, brighter float icons, tighter demo blend
+- **0.76.42** (2026-09-16): Landing: cap demo height directly, header still hidden on wide desktops
+- **0.76.41** (2026-09-16): Landing: drop forced full-viewport height on demo frame
+- **0.76.40** (2026-09-16): Landing: revert broken device-frame chrome, trim demo padding
+- **0.76.39** (2026-09-16): Fix mouse wheel scrolling in Apps folder 
+- **0.76.38** (2026-09-16): Apply device-frame treatment to landing page demo
+- **0.76.37** (2026-09-16): Landing: minor rounded corners on demo container
+- **0.76.36** (2026-09-16): Landing: fix real root cause of H1 scroll-fade (recede math measured from page top, not hero's own offset)
+- **0.76.35** (2026-09-16): Add full-page floating icon backdrop with animated drift
+- **0.76.34** (2026-09-16): Document docs coverage already at 100%
+- **0.76.33** (2026-09-16): Add padding frame around demo container on landing page
+- **0.76.32** (2026-09-16): Editor_qa.py: harden all 8 remaining raw assertions against the same CI race; drop muddying H1 text-shadow
+- **0.76.31** (2026-09-16): Notes demo: trim jargon, keep the real hook
+- **0.76.30** (2026-09-16): Dynamic H1 headline with typewriter animation
+- **0.76.29** (2026-09-16): Mouse wheel scroll in Apps folder, more reminders in demo
+- **0.76.28** (2026-09-16): Weather app: use real geo_city instead of hardcoded 'Vancouver'
+- **0.76.27** (2026-09-16): Fix Escape-key interceptor: move from container to window
+- **0.76.26** (2026-09-16): Icon rendering sharpness pass, two real scaling bugs fixed
+- **0.76.25** (2026-09-15): Chat app keystroke redraw: applied shared gui_prompt.h helper
+- **0.76.24** (2026-09-15): Extract shared GUI prompt helper to fix per-keystroke screen flashing
+- **0.76.23** (2026-09-15): Resync VERSION, landing files, and roadmap
+- **0.76.22** (2026-09-15): Idle tour autoplay resumes after exits, retail-kiosk idle-reset on focus
+- **0.76.21** (2026-09-15): Notification panel memory bar, always-visible live usage meter
+- **0.76.20** (2026-09-15): Notification panel shows plain macOS-style text, not raw boot-log lines
+- **0.76.19** (2026-09-16): Fix duplicated window toolbar on every multi-window app
+- **0.76.18** (2026-09-16): Multi-window keystroke flash + real CI flake fix + naming policy
+- **0.76.17** (2026-09-16): Apple-menu hover flash, stale clock, and a real 50% Liquid Glass blend
+- **0.76.16** (2026-09-16): Revert zoom to town-scale, the last two bumps went backwards
+- **0.76.15** (2026-09-16): Push zoom further, town-scale not city-scale
+- **0.76.14** (2026-09-16): Deepen satellite tiles to z15, explain the real geo ceiling
+- **0.76.13** (2026-09-16): About panel is a real small centered card, not full-screen
+- **0.76.12** (2026-09-16): Real version display fix + About-panel tour step
+- **0.76.11** (2026-09-16): Real fix, Terminal and Chat had the same per-keystroke flash bug
+- **0.76.10** (2026-09-16): Fix Notes' per-keystroke screen flash and the demo clock's timezone bug
+- **0.76.9** (2026-09-16): Fix llvm-nm portability bug in walldefault-check.sh, found by CI
+- **0.76.8** (2026-09-15): Root-cause fix for a real tasktest CI flake, plus CI hardening
+- **0.76.7** (2026-09-15): Satellite wallpaper is finally the real default, not just reachable
+- **0.76.6** (2026-09-15): Wire shell regression test suite into CI (heaptest, tasktest, preempttest, killtest, ring3test, ps)
+- **0.76.5** (2026-09-15): Portability fix for editor_qa.py, works on Linux
+- **0.76.4** (2026-09-15): Fix check-refs false-positive that's been breaking CI on every push
+- **0.76.3** (2026-09-15): Fix heap/task growth breaking after the GUI runs and exits
+- **0.76.2** (2026-09-15): Fix Linux CI coverage for FAT disk tests, keep macOS support intact
+- **0.76.1** (2026-09-15): Kheap: reduce MIN_SPLIT_PAYLOAD from 8 to 4 bytes for improved fragmentation recovery
+- **0.76.0** (2026-09-15): Settings clicks act on the clicked row; idle tour demos Satellite wallpaper
+- **0.75.0** (2026-09-15): Real multi-window, phase 3 -- batch 2 (Reminders/Calendar/Mail)
+- **0.74.2** (2026-09-15): Rate-of-change trend series in progress.svg
+- **0.74.1** (2026-09-15): Wire 15 orphaned regression tests into CI, fix a real QMP-quit crash bug
+- **0.74.0** (2026-09-15): Multi-window phase 2, real click-to-focus + real z-order compositing
+- **0.73.5** (2026-09-15): Real fix for the v0.73.4 ramfs-reset gap, kmain now actually reboots
+- **0.73.4** (2026-09-15): Landing v0.73.4: idle tour reboots ramfs between loops, real duplicate-mail bug (partial fix)
+- **0.73.3** (2026-09-15): NE2000 driver (drivers/ne2k.c) unlocks real browser networking
+- **0.73.2** (2026-09-15): Fix Google tile 403 (missing User-Agent), find real RX-burst blocker
+- **0.73.1** (2026-09-15): Satellite wallpaper wired, code path proven, end-to-end pixels blocked by this test environment's DNS
+- **0.73.0** (2026-09-15): Real multi-window, phase 1 (window list + two live simultaneous windows)
+- **0.72.3** (2026-09-15): Fix menu bar logo, AA halo was wider than the branch geometry
+- **0.72.2** (2026-09-15): Landing v0.72.2: idle tour restored to all 8 dock apps, DWELL_MS cut to 7s
+- **0.72.1** (2026-09-15): Fix rtl8139_receive returning unclamped NIC length, real OOB read
+- **0.72.0** (2026-09-15): Baseline JPEG decoder (drivers/jpeg.c), the prerequisite v75 named
+- **0.71.9** (2026-09-15): Trash icon under a real 10x zoom, shadow-rib stubs and integer taper fixed
+- **0.71.8** (2026-09-15): Fix real TCP length-field trust bug and FAT cyclic-chain hang
+- **0.71.7** (2026-09-14): Embed a real build-time version string, fixes the CI false-fail for good
+- **0.71.6** (2026-09-14): Tools: fix path resolution broken by v0.71.5's checks/ and gen/ move
+- **0.71.5** (2026-09-14): Organize tools/ into checks/ and gen/ subdirectories
+- **0.71.4** (2026-09-14): Landing: rebase VERSION/roadmap onto 0.71.3, bump to 0.71.4
+- **0.71.3** (2026-09-14): Landing v0.71.3: fix boot logo overlaying the header instead of the stage
+- **0.71.2** (2026-09-14): Landing v0.71.2: fix letterbox regression, label sandbox network limit
+- **0.71.1** (2026-09-14): Landing page layout fix: demo below header instead of overlay
+- **0.71.0** (2026-09-14): Fix browser demo Files empty-disk, launchpad clicks, dock-hover staleness
+- **0.70.0** (2026-09-14): Real Chat app, /api/chat history, buffer growth, Settings LLM config
+- **0.69.0** (2026-09-14): Version bump + roadmap entry for wallpaper themes
+- **0.68.3** (2026-09-14): Fix titlebar traffic-light staircase, second real instance of v79's pattern
+- **0.68.2** (2026-09-14): Root-cause and fix reaptest (task creation dying after GUI use)
+- **0.68.1** (2026-09-14): Real fix for the tray corner's macro-zoom staircase, grid glyph confirmed already clean
+- **0.68.0** (2026-09-14): Warm color grade for the map wallpaper, matching the Mojave desert palette
+- **0.67.3** (2026-09-14): Zoom the map wallpaper to real neighborhood level
+- **0.67.2** (2026-09-14): Restraint pass, real "Curbf ind" bug found and fixed
+- **0.67.1** (2026-09-14): Fix 'Cl oudy' letter spacing, proportional advance on the AA text path
+- **0.67.0** (2026-09-14): Real map wallpaper of the real town, honest satellite finding
+- **0.66.0** (2026-09-14): Minimal PNG decoder, plus the 4MB kernel-image cliff it uncovered
+- **0.65.2** (2026-09-14): Fix the three pristine-v70 QA failures: calctest real bug, two stale tests
+- **0.65.1** (2026-09-14): Slimmer menu bar, cleaner progress graph
+- **0.65.0** (2026-09-14): Real IP geolocation for weather, and the dashed horizon bar root-caused
+- **0.64.0** (2026-09-14): Contacts and Calculator apps
+- **0.63.0** (2026-09-14): Dock close-and-open; multi-window honestly scoped in roadmap (4 real steps, not started)
+- **0.62.3** (2026-09-14): Restraint pass, one flyout-panel chrome, real icon-glyph bleed fix
+- **0.62.2** (2026-09-14): 'stuck on Notes' root-caused and fixed, one app's mouse loop, not a kernel-wide freeze
+- **0.62.1** (2026-09-14): QA audit, 6 real gaps found in v56-v64, real tests added
+- **0.62.0** (2026-09-14): Wallpaper day/night tint + weather particle overlay
+- **0.61.0** (2026-09-14): Int 0x80 syscall gate, ring-3 tasks with a real lifecycle
+- **0.60.1** (2026-09-14): Dock hover root-caused, two real bugs, state was never stuck
+- **0.60.0** (2026-09-14): Absolute pointer, a tap lands the cursor where the finger is
+- **0.59.1** (2026-09-14): Dock top-edge seam + diagonal ray aliasing, both root-caused
+- **0.59.0** (2026-09-14): Wind sway reacts to real weather
+- **0.58.0** (2026-09-14): Mail, and a dock/Apps folder reorder that mirrors stock macOS
+- **0.57.1** (2026-09-14): Dock icon shadow + tray corner AA fix
+- **0.57.0** (2026-09-14): Kheap block splitting
+- **0.56.1** (2026-09-14): Notification panel font bug was the cursor backup, fixed
+- **0.56.0** (2026-09-14): Weather dropdown
+- **0.55.0** (2026-09-14): Real EVENTS.TXT (YYYY-MM-DD|text lines) through the same
+- **0.54.0** (2026-09-14): Calendar, a real month grid
+- **0.53.0** (2026-09-14): Scale down the dock; fix a real cover-fit regression
+- **0.52.0** (2026-09-14): Reminders, a real persisted checklist
+- **0.50.0** (2026-09-14): DejaVu Sans for system UI text, verified with real screenshots
+- **0.49.0** (2026-09-14): Real always-on-top, a real helper instead of a fake flag
+- **0.48.0** (2026-09-14): Drop boot wordmark, glass menu bar, native app icon
+- **0.47.0** (2026-09-14): Real Settings app + SETTINGS.TXT persistence for wind/dock scale
+- **0.46.0** (2026-09-14): 8fps wind + toggle, no wind in v86, dynamic Trash icon, centred boot splash
+- **0.45.1** (2026-09-14): Wind no longer erases the cursor; row-hoisted sampler (14t -> 7t); whitepaper rewritten for 0.45
+- **0.45.0** (2026-09-14): The tree sways in the wind, self-disabling on slow machines
+- **0.44.1** (2026-09-14): Wider AA inside icon supersample, crisp tray edge, antialiased triangles, soft glyph shadow
+- **0.44.0** (2026-09-14): Antialiased DejaVu typeface across the whole GUI, idle demo tour + tourtest.mjs, 16:9 phone stage
+- **0.43.0** (2026-09-14): Live menubar weather, icon and dock-band caches, corner halo fix, weathertest
+- **0.42.1** (2026-09-14): Gloss follows the tile curve (no bezel ring), dock tray at physical res, 6x icon supersample
+- **0.42.0** (2026-09-14): 1920x1080 native 16:9, PD sunset wallpaper drawn bilinearly at physical res, clock notification panel, arrow pointer
+- **0.41.0** (2026-09-14): 1600x1200 with 2x logical scaling; icons rendered at true physical resolution
+- **0.40.0** (2026-09-14): Dirty-region rendering, software cursor; dock no longer flashes on hover
+- **0.39.0** (2026-09-14): Real Trash with restore, dock reordered (Apps first, Trash last)
+- **0.38.0** (2026-09-14): Fallback font so the browser demo renders text at all
+- **0.37.1** (2026-09-13): Terminal and Apps folder now closable by tap and settle for v86
+- **0.37.0** (2026-09-13): Dock becomes pinned set + Apps folder; fix inverted rounded-corner math and hard icon shadows
+- **0.36.0** (2026-09-13): Real GUI terminal via putc output capture, auto-sizing dock
+- **0.35.1** (2026-09-13): Route Notes/exec through VFS, fix 64KB exec leak
+- **0.35.0** (2026-09-13): Port 6 more apps (Plan/Lexly/Toroid/Sparkjar/Homeqi/Fieldbook), fix dock overflow, add sync_apps.sh
+- **0.34.0** (2026-09-13): Real heap growth past the old 4MB wall
+- **0.33.0** (2026-09-13): Real block device abstraction, ata + ramdisk backends
+- **0.32.0** (2026-09-13): Real SIGKILL-equivalent via task_kill, ps/kill/killtest
+- **0.31.0** (2026-09-13): Real per-task memory isolation via per-task page directories
+- **0.30.0** (2026-09-13): Adopt semver from here on: VERSION file, 0.30.0 baseline
+
+## Before semver: the os and jt numbered steps (2026-08-31 to 2026-09-13)
+
+The first kernel steps were called os v0 to v4. After that came jt v5 to v29: libc, a file browser, a mouse, the first GUI, a real VFS. Each was a step on the road to the desktop, with no version file yet.
+
+- **os v0** (2026-08-31): Multiboot kernel with VGA text, PS/2 keyboard, RTC, shell
+- **os v1** (2026-09-12): PIC remap, IRQ-driven keyboard, PIT timer
+- **os v2** (2026-09-12): Kmalloc/kfree heap over pmm frames
+- **os v3** (2026-09-13): Cooperative task switching verified; landing page now boots real kernel.elf live via v86
+- **os v4** (2026-09-13): Load and exec a flat binary from disk, verified end to end
+- **jt v5** (2026-09-13): Libc subset, replaces real duplicate loops
+- **jt v6** (2026-09-13): Mostly done: minimal windowing surface, memory efficiency and product design as standing constraints
+- **jt v7** (2026-09-13): TCP client, real HTTP GET over the from-scratch stack
+- **jt v8** (2026-09-13): Real bitmap font renderer + link navigation
+- **jt v9** (2026-09-13): Serve a second real app, curbfind, v9 complete
+- **jt v10** (2026-09-13): Build stuff loop, wall-clock timeouts, voice I/O decision
+- **jt v11** (2026-09-13): Add a real mouse-driven GUI desktop
+- **jt v12** (2026-09-13): Add voice control: an LLM actually controlling this kernel
+- **jt v13** (2026-09-13): Add real file writing to FAT16
+- **jt v14** (2026-09-13): Grow the GUI dock to fit the rest of the codebase's apps
+- **jt v15** (2026-09-13): Real macOS-style Dock, drag-to-reorder icons, fix real tearing
+- **jt v16** (2026-09-13): Kernel sets up its own VGA text mode: v16, plus a real regression script
+- **jt v17** (2026-09-13): Kernel enables its own keyboard scanning
+- **jt v18** (2026-09-13): Kernel gets a real DAC palette, landing page gets a real live demo
+- **jt v19** (2026-09-13): Real Dock icons, anti-aliased edges, no more CLI flash
+- **jt v20** (2026-09-13): Real dmesg, richer dock icons, gradient wallpaper
+- **jt v21** (2026-09-13): Real close button, Mac palette, tree logo, smoother AA
+- **jt v22** (2026-09-13): Real close button, Mac palette, tree logo, smoother AA
+- **jt v23** (2026-09-13): Real mouse-delta fix: cursor drift, click-to-launch now works
+- **jt v24** (2026-09-13): App text render fix, traffic-light close button, remove redundant brand
+- **jt v25** (2026-09-13): Fix menu bar flicker regression, add (currently broken) GUI test script
+- **jt v26** (2026-09-13): Real testapps command + apptest.sh, catches a real corruption bug
+- **jt v27** (2026-09-13): Real gradient dock icons, real menu bar clock timezone fix
+- **jt v28** (2026-09-13): Real task_exit()/reap, closes the six-task-slot leak
+- **jt v29** (2026-09-13): Real VFS layer, fat + ramfs backends, fsuse switches live
