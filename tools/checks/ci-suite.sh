@@ -310,6 +310,7 @@ retry|6|ARM64 out of memory: a full heap prints oom fb or oom text and the kerne
 retry|6|ARM64 boot health: the Pi image boots on QEMU's raspi4b with no FAIL line beyond the listed expected ones, no oom, no crash, and the desktop up (skips where the tools are missing)|python3 ./tools/checks/arm64-boot-health-check.py
 retry|6|ARM64 quiet boot: the Pi image's boot log window is never drawn, no dock label plays by itself (raspi4b at 1080p)|python3 ./tools/checks/arm64-boot-quiet-check.py
 retry|6|ARM64 quiet boot and Wi-Fi fan: no Console window at boot (flat wallpaper where it was), a dock click opens it with the buffered log, the fan is dimmed grey when not joined and flat ink when joined, never blue|python3 ./tools/checks/arm64-quietboot-check.py
+retry|6|ARM64 boot splash: neutral grey ground, no terracotta pixel, the tree mark crisp in ink with strong edge contrast, a grey bar|python3 ./tools/checks/arm64-splash-check.py
 once |4|Pi card flasher: kernel, firmware and tools/pi-config.txt land on a stand-in card, and what was there is kept as .bak (skips where the tools are missing)|bash ./tools/checks/flash-pi-check.sh
 once |6|ARM64 RNG200 full seeds, health faults, bounded waits and wiped failures (host harness)|python3 ./tools/checks/arm64-rng-check.py
 once |6|ARM64 clock accepts bounded HTTPS dates only, never before the build or an accepted clock (host harness)|python3 ./tools/checks/arm64-clock-check.py

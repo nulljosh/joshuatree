@@ -9,7 +9,7 @@ up) and boots it on QEMU virt with ramfb and on the raspi4b model. For each, it 
     before the report);
   - a QMP screendump shows the panel: its red background, white text in the header row and the log rows, and the desktop
     around it untouched (so the panel was drawn over the screen, not a wipe of it). On the Pi image the fault lands while the
-    boot splash is up (`splash up`, no desktop yet): the screen around the panel must still be the splash's flat terracotta.
+    boot splash is up (`splash up`, no desktop yet): the screen around the panel must still be the splash's flat grey.
   - source: the crash path cleans the data cache over the panel (a real GPU reads RAM) and uses neither the TrueType
     rasterizer nor the console (integer 8x16 VGA font only).
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
@@ -80,7 +80,7 @@ def run(name, qemu_args, image, size=(800, 600)):
         s_ = max(1, (h * 10 // 600 + 5) // 10)                      # the kernel's panel rule: 16s, 32s, W-32s wide, 14 rows of 16s
         pxl, pyl, pw, ph = 16 * s_, 32 * s_, w - 32 * s_, 16 * s_ * 14
         for what, (x, y), c in (("panel background", (pxl + pw - 4, pyl + ph - 4), (0x90, 0, 0)), ("panel corner", (pxl + 1, pyl + 1), (0x90, 0, 0)),
-                                ("desktop beside the panel", (8, pyl + ph // 2), (0xB5, 0x50, 0x2C) if splash else None)):   # on the Pi it is the splash's terracotta: a crash during the splash still draws the panel over it
+                                ("desktop beside the panel", (8, pyl + ph // 2), (0xE5, 0xE5, 0xE7) if splash else None)):   # on the Pi it is the splash's grey: a crash during the splash still draws the panel over it
             got = pix(x, y)
             if c and got != c: fails.append(f"{name}: {what} at {(x, y)}: got {got}, want {c}"); return
         def white(y0, y1): return sum(1 for y in range(y0, y1) for x in range(pxl, pxl + pw) if pix(x, y) == (255, 255, 255))
