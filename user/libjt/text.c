@@ -2,6 +2,7 @@
 #include "text.h"
 #include "../../lib/text_ink.h"
 #include "aafont.h"
+#include "hires.h"
 
 struct face { const struct aa_glyph *g; int n, ascent, height; };
 
@@ -34,8 +35,40 @@ int jt_text_width(int face, const char *s) {
     return w;
 }
 
+/* A hi-res window (hires.h): the kernel draws each glyph with Tree Sans at the window's scale times the 1x size, and this
+   sends the 1x atlas's own advances times the scale, so a line is exactly as wide as at 1x and the caret, selection,
+   wrapping and centring the apps compute from jt_text_width stay where they were. pct 100 is the face's 1x size at the
+   scale, 50 half of it (calendar's small dates); a half-size run's advances are the 1x ones halved. Returns the logical
+   pen like the 1x path. */
+static int hi_draw(struct jt_window_info *w, int face, const struct face *f, int kind, int x, int y, unsigned rgb, const char *s, int pct) {
+    int k = jt_scale(w), pen = x * k, base = y * k + f->ascent * k * pct / 100;
+    unsigned char b[64], adv[64];
+    int n = 0;
+    for (; *s; s++) {
+        unsigned char c = (unsigned char)*s;
+        int ok = kind == 2 ? (c >= '0' && c <= '9') || c == '-' || c == 0xB0 : (c >= 0x20 && c <= 0x7E) || c == 0xB0;
+        if (!ok) c = kind == 2 ? ' ' : '?';
+        b[n] = c; adv[n] = (unsigned char)((find(f, kind, c)->adv * k * pct + 50) / 100);
+        if (++n == (int)sizeof b) { pen = jt_text2_run(face, pct, pen, base, rgb, b, adv, n); n = 0; }
+    }
+    if (n) pen = jt_text2_run(face, pct, pen, base, rgb, b, adv, n);
+    return (pen + k - 1) / k;
+}
+int jt_text_draw_half(struct jt_window_info *w, int face, int x, int y, unsigned rgb, const char *s) {
+    struct face f; int kind = face_info(face, &f);
+    if (jt_scale(w) < 2) return -1;
+    return hi_draw(w, face, &f, kind, x, y, rgb, s, 50);
+}
+
+int jt_text_draw_pct(struct jt_window_info *w, int face, int x, int y, unsigned rgb, const char *s, int pct) {
+    struct face f; int kind = face_info(face, &f);
+    if (jt_scale(w) < 2) return -1;
+    return hi_draw(w, face, &f, kind, x, y, rgb, s, pct);
+}
+
 int jt_text_draw(struct jt_window_info *w, int face, int x, int y, unsigned rgb, const char *s) {
     struct face f; int kind = face_info(face, &f);
+    if (jt_scale(w) > 1) return hi_draw(w, face, &f, kind, x, y, rgb, s, 100);
     int fr = (int)(rgb >> 16 & 255), fg = (int)(rgb >> 8 & 255), fb = (int)(rgb & 255);
     int base = y + f.ascent, W = (int)w->width, H = (int)w->height;
     for (; *s; s++) {

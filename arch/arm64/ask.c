@@ -144,6 +144,23 @@ int ask_key(unsigned code, unsigned value) {
     return 1;
 }
 
+void clip_put(const char *s, unsigned n);       /* main.c, 3.10.0: the system clipboard */
+unsigned clip_take(char *o, unsigned room);
+/* Cmd or Ctrl with a letter, while the Terminal is in front (main.c checked the modifier). C copies the whole input line, X
+   cuts it, V adds the clipboard at the end of the line (a line break or tab is a space, other control bytes are dropped; a
+   running question allows only C), A is taken but does nothing: the whole line is always what C and X use. 1 if it was one
+   of the four, so the letter is not typed. */
+int ask_edit(unsigned code) {
+    if (code != 46 && code != 45 && code != 47 && code != 30) return 0;
+    if (code == 46 || code == 45) { clip_put(ac->line, ac->len); if (code == 45 && !ac->pending) ac->len = 0; }
+    else if (code == 47 && !ac->pending) {
+        char b[ASK_MAX + 1]; unsigned n = clip_take(b, ASK_MAX - ac->len);
+        for (unsigned i = 0; i < n; i++) { char c = b[i] == '\n' || b[i] == '\t' ? ' ' : b[i]; if (c >= ' ' && c < 127) ac->line[ac->len++] = c; }
+    }
+    con_prompt(ac->line, ac->len);
+    return 1;
+}
+
 /* The agent loop's result buffer: what an action printed, sent back to the relay as the next turn (docs/GUIDE.md).
    Only filled while `capturing` is set, by say_wrapped and the action runner; cut at RESULT_MAX, never more. */
 #define RESULT_MAX 1200      /* escaped twice over it still fits the relay's 4 KB body */

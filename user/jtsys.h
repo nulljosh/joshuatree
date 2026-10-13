@@ -92,6 +92,11 @@ struct jt_sysinfo {
 };
 #define JT_SYS_READFILE    401 /* a whole file into one buffer, up to 6MB (open() stops at 8KB); see kernel/syscall.h */
 #define JT_SYS_TEXT        400 /* anti-aliased text for the window (389 is mkdir); see kernel/syscall.h */
+#define JT_SYS_TEXT2       402 /* ARM64 only (3.9.0): Tree Sans drawn into a hi-res window at device size; see user/libjt/hires.h. -ENOSYS on i386 */
+/* One JT_SYS_TEXT2 request, LP64 layout (the kernel reads the same offsets): x and y are device pixels (y the baseline),
+   rgb 0x00RRGGBB, face 0 body, 1 bold, 2 display, 3 mono, pct the size as a percent of the face's 1x size times the
+   scale (100 = twice the 1x size at scale 2), len bytes of s (1..255), adv one device-pixel advance per byte. */
+struct jt_text2 { int x, y; unsigned int rgb; int face, pct, len; unsigned long s, adv; };
 #define JT_TEXT_DRAW    0
 #define JT_TEXT_MEASURE 1
 #define JT_TEXT_CLEAR   2
@@ -229,6 +234,11 @@ static inline int jt_getpid(void)                                 { return jt_sy
 static inline int jt_sched_yield(void)                            { return jt_syscall(JT_SYS_SCHED_YIELD, 0, 0, 0); }
 static inline int jt_lseek(int fd, int off, int whence)           { return jt_syscall(JT_SYS_LSEEK, (jt_arg)fd, (jt_arg)off, (jt_arg)whence); }
 static inline int jt_window_open(struct jt_window_info *info)     { return jt_syscall(JT_SYS_WINDOW_OPEN, (jt_arg)info, 0, 0); }
+/* 3.9.0: the same call with the hi-res flag (argument 2). On the ARM64 kernel at scale 2 it maps a device-size buffer,
+   twice the width and height, and reports width and height in logical pixels with pitch (bytes) = 2 * width * 4; the app
+   draws through user/libjt/hires.h, which reads that scale off the pitch. Every other kernel (i386, ARM64 at scale 1)
+   ignores the flag and answers pitch = width * 4, so the same source runs unchanged. */
+static inline int jt_window_open_hires(struct jt_window_info *info) { return jt_syscall(JT_SYS_WINDOW_OPEN, (jt_arg)info, 1, 0); }
 static inline int jt_tasks(struct jt_tasks *t, int kill)          { return jt_syscall(JT_SYS_TASKS, (jt_arg)t, (jt_arg)kill, 0); }
 /* Body bytes on HTTP 200 (at most len), minus the status on any other reply
    (-100..-599), or -errno: -EINVAL bad path, -EFAULT bad pointer, -ENODEV no

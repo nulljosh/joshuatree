@@ -148,10 +148,13 @@ class Boot:
                                    "-device", "virtio-keyboard-device", "-display", "none", "-serial", "file:" + self.log,
                                    "-qmp", "unix:%s,server,nowait" % sock, "-kernel", os.path.join(arch, "kernel8.elf")],
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if not self.wait_for("M2 input ready", 30): raise SystemExit("FAIL: %s did not boot: %r" % (name, self.uart()[-600:]))
-        time.sleep(0.5)
-        self.s = socket.socket(socket.AF_UNIX); self.s.settimeout(20); self.s.connect(sock); self.f = self.s.makefile("rw")
-        self.f.readline(); self.cmd("qmp_capabilities")
+        try:   # a boot or QMP failure here must not leave the QEMU running after the check exits
+            if not self.wait_for("M2 input ready", 30): raise SystemExit("FAIL: %s did not boot: %r" % (name, self.uart()[-600:]))
+            time.sleep(0.5)
+            self.s = socket.socket(socket.AF_UNIX); self.s.settimeout(20); self.s.connect(sock); self.f = self.s.makefile("rw")
+            self.f.readline(); self.cmd("qmp_capabilities")
+        except BaseException:
+            self.close(); raise
     def uart(self): return open(self.log, errors="replace").read() if os.path.exists(self.log) else ""
     def wait_for(self, text, secs, count=1):
         end = time.time() + secs
@@ -201,7 +204,7 @@ try:
             try: c, _ = listener.accept(); conns.append(1); c.close()
             except socket.timeout: continue
             except OSError: break
-    th = threading.Thread(target=accept); th.start()
+    th = threading.Thread(target=accept, daemon=True); th.start()   # daemon: a SystemExit before the try below must end the run, not leave this loop holding the interpreter open
     lan = Lan()
     b = Boot("discovery", lan)
     try:

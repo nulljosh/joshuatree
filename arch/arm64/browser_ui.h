@@ -229,7 +229,7 @@ static void br_tab(void) {   /* Tab: the next link, wrapping, scrolled into view
 }
 static void browser_open(void) {
     if (browser_live || !fb) return;
-    clock_close(); brick_close(); calc_close(); app_kill("closed for the Browser"); console_close();
+    settings_close(); clock_close(); brick_close(); calc_close(); app_kill("closed for the Browser"); console_close();
     browser_live = 1; br_frame = 1; br_sel = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0; br_top = 0;
     br_wrap();
     browser_paint(0); uart_puts("browser open\n");
@@ -249,6 +249,16 @@ static int browser_key(unsigned code) {   /* a key down with the Browser in fron
     if (code == 104 || code == 109 || code == 102 || code == 107 || code == 103 || code == 108) {
         br_scroll(code == 104 ? br_top - page : code == 109 ? br_top + page : code == 102 ? 0 : code == 107 ? (int)br_n : code == 103 ? br_top - 1 : br_top + 1);
         br_msg[0] = 0; browser_paint(0); return 1;
+    }
+    if ((ctrl_held || gui_held) && (code == 46 || code == 45 || code == 47 || code == 30)) {   /* Cmd or Ctrl with C X V A on the address bar; the whole address is what copy takes, so A has nothing to select */
+        if (code == 46 || code == 45) { const char *a = br_edit ? br_addr : browser_url(); unsigned n = 0; while (a[n]) n++; clip_put(a, n); if (code == 45 && br_edit) { br_addr_n = 0; br_addr[0] = 0; browser_paint(0); } }
+        else if (code == 47) {
+            char b[BR_ADDR_MAX + 1]; unsigned n = clip_take(b, BR_ADDR_MAX);
+            if (!br_edit) { br_edit = 1; br_addr_n = 0; br_addr[0] = 0; }
+            for (unsigned i = 0; i < n && br_addr_n < BR_ADDR_MAX; i++) if (b[i] > ' ' && b[i] < 127) br_addr[br_addr_n++] = b[i];
+            br_addr[br_addr_n] = 0; browser_paint(0);
+        }
+        return 1;
     }
     if (ctrl_held || gui_held || alt_held) return 1;
     if (code == 15 && !(br_edit && br_addr_n)) { br_tab(); return 1; }

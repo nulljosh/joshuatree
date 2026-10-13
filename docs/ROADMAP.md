@@ -43,7 +43,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See the Blueprint: where the OS goes after 1.0 section for the structural plan of where this OS goes after 1.0.
 
-**Latest**: 3.7: Never an empty room. Music and Books greet you with the mascot on a real Raspberry Pi 4.
+**Latest**: 3.9: Every app on the Pi. Settings, Finder, Mail, Weather, Stocks, Reminders and four games, all sharp at 2x and one Spotlight away.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -120,7 +120,7 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 - [ ] [Sonnet] `sam "what is 5+5"` takes about a minute on the board while the relay answers in seconds. Read 2026-10-12, not fixed: relay discovery is already cached (`relay_ip` in `arch/arm64/ask.c`) and `ask_poll` adds no sleep, so the time is somewhere else. Suspects, in order: a fresh TLS handshake per question without session resume on the Pi (software crypto), a dead baked `CLAUDE_HOST` costing a 3 s connect plus two 1.5 s probes on each question, and the relay running several agent steps (each one a full POST) on the small local model. Time each step with `ticks()` stamps on the UART on the board first. Check: a stub-relay check that fails when a question costs more than one handshake.
 - [ ] [Sonnet] Calendar app on the Pi highlights the UTC day, not the local one: at 11:20 PM on 11 October the Clock and the dock tile said the 11th and the month grid circled the 12th. Use the same local date the Clock uses. Check: extend `tools/checks/arm64-calicon-check.py` with a UTC-after-midnight, local-before-midnight case that finds the circled day.
 - [ ] [Sonnet] Keyboard shortcuts in every app: the Command key (the GUI or Windows key on a PC keyboard) with A select all, C copy, X cut, V paste, Z undo, S save, W close the window, Q quit, N new, F find, Tab to switch windows, plus Ctrl for the same on a keyboard with no GUI key. One table in the shell, apps handle the actions. Check: an arm64 key check that sends each chord through QMP and sees its serial line.
-- [ ] [Sonnet] Finder, Mail and Stocks say "not on ARM yet" on the Pi, so do Weather and Reminders. Port them one at a time, Finder first (Files is the card and the Terminal already lists it), then Weather and Reminders, then Mail and Stocks (they need the live backends). Each one gets its own check.
+- [ ] [Sonnet] Mail and Stocks say "not on ARM yet" on the Pi, so do Weather and Reminders. Port them one at a time, Weather and Reminders first, then Mail and Stocks (they need the live backends). Each one gets its own check. (Finder shipped in 3.14.0.)
 
 - [ ] [Sonnet] Pi boots to a splash, not the log: the mark on the brand fill with the thin progress bar, held until the desktop is up, the Console never flashes on the way (the log stays one dock click away; a FAIL still raises it). Then a login screen. The first few seconds after the desktop appears take no keys; find why and fix it. Check: extend `tools/checks/arm64-m1c-check.py` to screendump the splash before the desktop and see no Console frame pixels.
 - [ ] [Fable] User accounts on the Pi: a login screen with a name and password, accounts stored on the card's `JT/` (salted hash, never the password), Notes and Music keyed to the signed-in user's folder, a `users` and `adduser` command in the Terminal. The i386 build already has Account (change password) and Add user rows in Settings; reuse that store. Check: a new accounts check that adds a user, logs out and in, and sees a wrong password refused.
@@ -745,6 +745,8 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **3.10.0 (2026-10-12)**: Copy, paste and the Cmd keys on the Pi: one 4 KB plain-text clipboard in the kernel, reached by Notes through `JT_SYS_CLIPBOARD` (399) and directly by the Terminal input line and the Browser address bar; Cmd or Ctrl with A, C, X and V, Cmd+W closes the front window and Cmd+Q quits the app. Check: `tools/checks/arm64-clipboard-check.py`.
+- **3.9.0 (2026-10-12)**: The Pi gets every app, sharp: Settings, Finder, Mail, Weather, Stocks, Reminders and four games (Mines, Toroid, Hamurapi, Keyrate), all in Spotlight, a clipboard and resizable windows, each drawn at 2x through `hires.h`. Menu bar icons are always ink, the wallpaper is graphite grey `#6E6E6E` with Settings offering Grey (default), Terracotta, Clay and Ink, and the boot splash flushes its rows to RAM. Checks: `arm64-sharp2x-check.py`, `arm64-settings-check.py`, `arm64-quietboot-check.py` and the per-app checks in the Testing section.
 - **3.8.3 (2026-10-12)**: The Pi boots behind a neutral grey splash with the tree mark crisp in the middle and a calm grey bar under it.
 - **3.7.3 (2026-10-12)**: The Bluetooth mouse comes back by itself.
 - **3.7.5 (2026-10-12)**: The Calculator is in Spotlight: type calc and Enter opens it.

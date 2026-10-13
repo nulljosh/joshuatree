@@ -4,7 +4,7 @@ static struct brick_game brick;
 static int brick_left, brick_right;
 static unsigned long brick_last;
 static int brick_x(void) { return win_lx + (win_lw - BRICK_W) / 2; }
-static int brick_y(void) { return win_ly + 54; }
+static int brick_y(void) { return win_ly + 54 + (win_lh - win_def[WT_MAIN][1]) / 2; }   /* a taller window (resized) centres the field in it */
 static void brick_paint(void) {
     int s = (int)window_scale(), x = brick_x(), y = brick_y();
     char score[] = "Bricks 00 / 32    Lives 0";
@@ -12,7 +12,7 @@ static void brick_paint(void) {
     score[sizeof score - 2] = '0' + brick.lives;
     cur_hide();
     gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Brick");
-    gui_text(score, x, win_ly + 32, 0x001C1C1E);
+    gui_text(score, x, y - 22, 0x001C1C1E);
     window_rect(x, y, BRICK_W, BRICK_H, 0x00EFEBE4);
     for (unsigned i = 0; i < 32; i++) if (brick.bricks & (1u << i))
         window_rect(x + 12 + (int)(i % 8) * 54, y + 16 + (int)(i / 8) * 24, 48, 16,
@@ -33,7 +33,7 @@ static void brick_paint(void) {
 }
 static void brick_open(void) {
     if (brick_live || !fb) return;
-    clock_close(); calc_close(); browser_close(); app_kill("closed for Brick"); console_close();
+    settings_close(); clock_close(); calc_close(); browser_close(); app_kill("closed for Brick"); console_close();
     brick_reset(&brick); brick_left = brick_right = 0; brick_last = 0; brick_live = 1;
     brick_paint(); uart_puts("brick open\n");
 }
