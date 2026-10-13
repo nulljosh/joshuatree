@@ -2975,8 +2975,8 @@ void main(void) {
 #endif
         }
 #else
-        for (;;) {
-            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy() || app_cur || audio_busy()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+        for (;;) {   /* ask_pending: a `sam` queued by Enter is run by the next pass, and a wfi with no timer would sleep through it (the key-up IRQ was already taken) */
+            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy() || app_cur || audio_busy() || ask_pending()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
             usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick();   /* an app parked on yield runs again here */
