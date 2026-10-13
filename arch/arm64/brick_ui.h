@@ -33,7 +33,7 @@ static void brick_paint(void) {
 }
 static void brick_open(void) {
     if (brick_live || !fb) return;
-    clock_close(); calc_close(); browser_close(); app_kill("closed for Brick"); console_close();
+    settings_close(); clock_close(); calc_close(); browser_close(); app_kill("closed for Brick"); console_close();
     brick_reset(&brick); brick_left = brick_right = 0; brick_last = 0; brick_live = 1;
     brick_paint(); uart_puts("brick open\n");
 }

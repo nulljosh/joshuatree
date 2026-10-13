@@ -883,6 +883,7 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
 #define LOG_MAX 16384
 #define CON_FG 0x00202020
 #define CON_BG 0x00ffffff
+unsigned wall_get(void);   /* wall.c: the wallpaper colour, 0x00RRGGBB (Settings changes it) */
 int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);   /* arch/arm64/wall.c: the flat Navy wallpaper */
 #define MENUBAR_H 26             /* docs/DESIGN.md: GUI_MENUBAR_H, on the 960x540 grid */
 #define MENUBAR_RULE 0x00BDB8B0  /* docs/DESIGN.md: MENUBAR_RULE */
@@ -1470,7 +1471,7 @@ static int term_front(void) { return cp == &term_p && !calc_front && !app_front 
 static void calc_raise(void);
 static void app_raise(void);
 static void wall_fill(int x, int y, int w, int h) {   /* physical px: the flat wallpaper colour (wall.c); there is no picture to save, so a window can leave from anywhere */
-    unsigned c = fb_color(0x00B5502C);
+    unsigned c = fb_color(wall_get());
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = c;
 }
 static void console_close(void) {
@@ -1521,7 +1522,12 @@ const char *calc_output(void);
 int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
 static int calc_lx, calc_ly, calc_lw, calc_lh;   /* its frame on the logical grid, set in fb_init */
 static unsigned *calc_under;                    /* the wallpaper under it, saved at boot before any window was drawn */
-static int clock_live, brick_live, spot_live, browser_live;
+static int clock_live, brick_live, spot_live, browser_live, settings_live;
+static void settings_open(int sec);
+static void settings_close(void);
+static int settings_key(unsigned code);
+static void settings_click(int lx, int ly);
+static int menubar_click(int x, int y);   /* 1 when the click landed on one of the status icons, which opened Settings */
 static void browser_open(void);
 static void browser_close(void);
 static int browser_key(unsigned code);
@@ -1576,6 +1582,7 @@ static void calc_raise(void) {   /* in front of the Console or the Terminal, wit
     if (!was) { con_quiet = 1; uart_puts("focus calc\n"); }
 }
 static void calc_open(void) {
+    settings_close();
     brick_close();
     clock_close();
     browser_close();
@@ -1676,7 +1683,7 @@ static long app_window_open(unsigned long info) {
         __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
         for (unsigned long i = 0; i < bytes / 8; i++) ((unsigned long *)(USER_BASE + UP_WIN))[i] = 0;
         app_wbytes = bytes; app_shown = 0;
-        spot_close(); calc_close(); browser_close();
+        spot_close(); calc_close(); browser_close(); settings_close();
         app_front = 1;
         app_paint();
         uart_puts("M3c window "); uart_puts(app_cur->name); uart_putc(' '); uart_dec(app_cw); uart_putc('x'); uart_dec(app_ch);
@@ -1745,7 +1752,7 @@ static int app_dock(const char *name) {
    their boot places, and a Console with one of them open is not dragged (there is no stacking to repaint). ---- */
 static int in_box(int x, int y, int bx, int by, int bw, int bh);
 static int drag_on, drag_dx, drag_dy;   /* a title-band press is moving the window; where inside it the pointer took hold, logical px */
-static int win_draggable(void) { return !spot_live && (brick_live || clock_live || browser_live || (con_live && !calc_live && !app_wbytes)); }
+static int win_draggable(void) { return !spot_live && (brick_live || clock_live || browser_live || settings_live || (con_live && !calc_live && !app_wbytes)); }
 static int on_title_band(int x, int y) {   /* the top 30 px of the window, but not the three dots (radius 7, a pixel spare) */
     if (!in_box(x, y, win_lx, win_ly, win_lw, 30)) return 0;
     for (int d = 0; d < 3; d++) { int dx = x - (win_lx + 24 + 22 * d), dy = y - (win_ly + 16); if (dx * dx + dy * dy <= 8 * 8) return 0; }
@@ -1767,7 +1774,7 @@ static void win_move_to(int nx, int ny) {
         if (dx > 0) for (int i = w - 1; i >= 0; i--) dst[i] = src[i];
         else for (int i = 0; i < w; i++) dst[i] = src[i];
     }
-    unsigned wall = fb_color(0x00B5502C);   /* the old rectangle minus the new one, row by row */
+    unsigned wall = fb_color(wall_get());   /* the old rectangle minus the new one, row by row */
     for (int j = 0; j < h; j++) {
         int y = oy + j, inside = y >= py && y < py + h, a = ox, b = ox + w;
         if (inside) { if (dx > 0) b = px < b ? px : b; else a = px + w > a ? px + w : a; }
@@ -1800,10 +1807,12 @@ static void dock_activate(int slot);
 #define SPOT_BROWSER (GUI_ICON_COUNT + 3) /* the Browser is in Spotlight only too: the dock's 11 slots stay as they are */
 #define SPOT_BOOKS (GUI_ICON_COUNT + 4)   /* 2.66: Books, the same: Spotlight only, not on the dock */
 #define SPOT_CALC (GUI_ICON_COUNT + 5)    /* 3.7.5: the Calculator, in Spotlight too (its dock tile is Apps); opens the calc window */
+#define SPOT_SETTINGS (GUI_ICON_COUNT + 6) /* 3.13.0: Settings, in Spotlight and the menu bar's status icons; the dock keeps its 11 tiles */
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
     if (spot_live && slot < 0) return;   /* the bar is over the windows: a raise under it would leave its saved pixels stale */
+    if (slot < 0 && menubar_click((int)mouse_x, (int)mouse_y)) return;   /* a status icon in the menu bar: Settings at its section */
     int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);
     int on_app = app_wbytes && in_box(lx, ly, app_lx, app_ly, app_lw, app_lh);
     if (slot < 0 && win_draggable() && on_title_band(lx, ly)) { drag_on = 1; drag_dx = lx - win_lx; drag_dy = ly - win_ly; return; }   /* the title band takes hold of the window */
@@ -1814,6 +1823,9 @@ static void pointer_click(void) {   /* the left button went down */
         else if (on_win && ly >= win_ly + 32) brick_key(57, 1);
     } else if (clock_live && slot < 0) {
         if (on_close_dot(lx, ly, win_lx, win_ly)) clock_close();
+    } else if (settings_live && slot < 0) {
+        if (on_close_dot(lx, ly, win_lx, win_ly)) settings_close();
+        else if (on_win) settings_click(lx, ly);
     } else if (browser_live && slot < 0) {
         if (spot_live) return;
         if (on_close_dot(lx, ly, win_lx, win_ly)) browser_close();
@@ -1841,7 +1853,9 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     if (slot == 0 || slot == SPOT_CALC) { calc_open(); return; }
     if (slot == GUI_ICON_COUNT) { clock_open(); return; }
     if (slot == GUI_ICON_COUNT + 1) { brick_open(); return; }
+    if (slot == SPOT_SETTINGS) { settings_open(0); return; }
     if (slot == SPOT_BROWSER) { browser_open(); return; }
+    settings_close();
     brick_close();
     clock_close();
     browser_close();
@@ -1861,7 +1875,7 @@ int ask_select(unsigned pane);
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 #define SPOT_W 300
 #define SPOT_ROW 22
-#define SPOT_MAX (SPOT_CALC + 1)      /* every app fits: an empty query lists them all, no scrolling */
+#define SPOT_MAX (SPOT_SETTINGS + 1)      /* every app fits: an empty query lists them all, no scrolling */
 static char spot_text[24]; static unsigned spot_len;
 static int spot_sel, spot_hits[SPOT_MAX], spot_n, dock_sel = -1, ctrl_held, gui_held, alt_held;   /* Ctrl, Cmd (the GUI key), Alt or Option: either side */
 static unsigned *spot_under;          /* the pixels under the bar's largest size, saved on open */
@@ -1875,12 +1889,12 @@ static int spot_match(const char *name) {   /* the typed text, case folded, anyw
     }
     return 0;
 }
-static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : slot == SPOT_BROWSER ? "Browser" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_CALC ? "Calculator" : dock_names[slot]; }
+static const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : slot == SPOT_BROWSER ? "Browser" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_CALC ? "Calculator" : slot == SPOT_SETTINGS ? "Settings" : dock_names[slot]; }
 static int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
 static void spot_paint(void) {
     int s = (int)window_scale();
     spot_n = 0;
-    for (int i = 0; i <= SPOT_CALC && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
+    for (int i = 0; i <= SPOT_SETTINGS && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i))) spot_hits[spot_n++] = i;
     if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
     cur_hide();
     int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;
@@ -1958,10 +1972,11 @@ static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 i
 #endif
     if (volume_key(code)) return 1;   /* before Spotlight and every pane, like the Spotlight shortcut */
     if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
-    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); brick_close(); clock_close(); browser_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
+    if (code == 60 || (ctrl_held && code == 20)) { spot_close(); settings_close(); brick_close(); clock_close(); browser_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
     if (spot_live) return spot_key(code);
     if (brick_live) return brick_key(code, 1);
     if (clock_live) { if (code == 1) clock_close(); return 1; }
+    if (settings_live) return settings_key(code);
     if (browser_live) return browser_key(code);
     if (calc_front || app_front) return 0;
     if (code == 61 && term_front()) {   /* F3: the other Terminal session; never move a running request. */
@@ -2094,6 +2109,7 @@ static unsigned notice_now(void) {
 }
 static struct menu_notice notice;
 static unsigned *mb_save; static int mb_h, mb_x0;
+static int mb_hit[4][2];   /* the status icons' columns in physical pixels: power, sound, Wi-Fi, clock (menubar_wifi sets them) */
 static int mb_wifi = -1;   /* the Wi-Fi state last shown (0 off, 1 working, 2 connected), so the clock can redraw alone each minute */
 static int clock_minute = -1;
 /* Vancouver stays UTC-7 from March 8, 2026. Earlier dates retain the seasonal rule. */
@@ -2125,6 +2141,8 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
 #include "clock_ui.h"
 #include "brick_ui.h"
 #include "browser_ui.h"
+#include "glyphs.h"
+#include "settings_ui.h"
 /* The right end of the menu bar: the clock in 12-hour form, and left of it the Wi-Fi fan, no name. Joined, the fan is flat
    ink, the same 0x001C1C1E as the clock; anything else (starting, joining, no network) is the same fan dimmed to a neutral grey.
    Each arc is anti-aliased (4x4 samples a pixel, blended onto the bar), so it stays crisp at scale 1 and 2. Each call puts the
@@ -2164,14 +2182,35 @@ void menubar_wifi(int state) {
 #ifdef WIFI_ICON_TEST   /* the wifiicon check's builds: where the fan is, for arm64-quietboot-check.py to look at its pixels */
     uart_puts("wifi icon "); uart_dec((unsigned)ox); uart_putc(','); uart_dec((unsigned)oy); uart_putc(','); uart_dec((unsigned)R); uart_putc('\n');
 #endif
-    int nx = mb_x0 + sg(12), nw = ox - R - sg(16) - nx;
+    /* 3.13.0: two more status icons left of the fan, a speaker (dim and without waves at volume 0) and a power symbol. A click on
+       any of them, the fan and the clock too, opens Settings at its section (menubar_click). */
+    int isz = sg(16), sx = ox - R - sg(14) - isz, wx = sx - sg(12) - isz, iy = (mb - 1 - isz) / 2, vol = audio_volume();
+    glyph_paint(GL_SOUND, vol == 0 ? 0 : vol <= 50 ? 1 : 2, sx, iy, isz, vol ? WIFI_INK : WIFI_DIM);
+    glyph_paint(GL_POWER, 0, wx, iy, isz, WIFI_INK);
+    mb_hit[0][0] = wx - sg(5); mb_hit[0][1] = wx + isz + sg(5);         /* power */
+    mb_hit[1][0] = sx - sg(5); mb_hit[1][1] = sx + isz + sg(5);         /* sound */
+    mb_hit[2][0] = ox - R - sg(5); mb_hit[2][1] = ox + R + sg(5);       /* Wi-Fi */
+    mb_hit[3][0] = cx - sg(5); mb_hit[3][1] = W;                        /* the clock */
+    int nx = mb_x0 + sg(12), nw = wx - sg(16) - nx;
     if (notice.text[0] && nw > 0)
         text_draw(2, notice.text, nx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, nx + nw, H);
     fb_flush(mb_x0, 0, W - mb_x0, mb);
 }
+static int menubar_click(int x, int y) {
+    static const int section[4] = { SET_ABOUT, SET_SOUND, SET_ABOUT, SET_TIME };
+    static const char *const name[4] = { "power", "sound", "wifi", "clock" };
+    if (!fb || y >= mb_h) return 0;
+    for (int i = 0; i < 4; i++) if (mb_hit[i][1] > mb_hit[i][0] && x >= mb_hit[i][0] && x < mb_hit[i][1]) {
+        con_quiet = 1; uart_puts("menubar click "); uart_puts(name[i]); uart_putc('\n');
+        settings_open(section[i]);
+        return 1;
+    }
+    return 0;
+}
 void menubar_notify(const char *message) {
     notice_set(&notice, message, notice_now());
     cur_hide(); menubar_wifi(mb_wifi); cur_show();
+    if (settings_live && !spot_live) set_paint();   /* the volume keys come through here: the Sound page shows the new level */
     uart_puts("notice: "); uart_puts(notice.text); uart_putc('\n');
 }
 static void cal_tick(void) {   /* the day has changed (or the clock just arrived): the Calendar tile again, the hover band's copy with it */
@@ -2193,6 +2232,7 @@ void menubar_tick(void) {   /* the poll loop calls this; it redraws only when th
     }
     cal_tick();
     clock_tick();
+    if (settings_live && !spot_live && set_sec == SET_TIME && cal_utc() / 60 != (unsigned long)set_minute) set_paint();   /* the Date and Time page follows the minute */
     unsigned long u = net_clock_utc();
     if (!u || mb_wifi < 0) return;
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
@@ -2228,8 +2268,46 @@ static void splash_begin(void) {
 #else
 #define SPLASH(n, name) ((void)0)
 #endif
+static int desktop_up;   /* fb_desktop has painted the desktop once: a wallpaper change may repaint it */
+static void menubar_base(void) {   /* the bar over bare wallpaper: half wallpaper, half white, per pixel, closed by a one pixel rule */
+    int W = (int)fb_w, mb = sg(MENUBAR_H);
+    for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {
+        unsigned c = fb[(unsigned)y * fb_pitch + (unsigned)x];
+        fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
+    }
+    fb_rect(0, mb - 1, W, 1, MENUBAR_RULE);
+}
+static void menubar_keep(void) {   /* the bare right half of the bar, kept for menubar_wifi's redraws */
+    int W = (int)fb_w;
+    if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) mb_save[y * (W - mb_x0) + (x - mb_x0)] = fb[(unsigned)y * fb_pitch + (unsigned)x];
+}
+static void desktop_chrome(int band_y) {   /* the mark, the title, the status icons and the quiet line above the dock */
+    int W = (int)fb_w, H = (int)fb_h, mb = sg(MENUBAR_H);
+    if (text_ok) {
+        menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
+        text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
+        menubar_wifi(mb_wifi < 0 ? 1 : mb_wifi);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
+        /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
+           of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
+        const char *thanks = "Seduce. Vilify. Ignore.";
+        int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 7 * ar / 2 - gapx) / 2, ty = band_y - sc(4);
+        text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
+        {   /* a small bitten apple after the line: apple_mask scaled to 3.5 ar square, 4x4 samples a pixel, onto the flat fill */
+            int S = 7 * ar / 2, x0 = tx + tw + gapx, y0 = ty - sc(4) + ar - S; unsigned ink = fb_color(0x00f0f4f8);
+            for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+                int sum = 0;
+                for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) sum += apple_mask[((y * 4 + j) * APPLE_N / (S * 4)) * APPLE_N + (x * 4 + i) * APPLE_N / (S * 4)];
+                unsigned al = (unsigned)sum / 16, d = fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)], out = 0;
+                if (!al) continue;
+                for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * al + ((d >> b) & 0xFF) * (255 - al)) / 255) << b;
+                fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)] = out;
+            }
+        }
+    } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
+}
 static void fb_desktop(void) {
     int W = (int)fb_w, H = (int)fb_h;
+    dock_pct_boot = dock_scale_pct;
     int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
     int mb = sg(MENUBAR_H);                               /* the menu bar's height on this screen: 26 on the 960x540 grid */
 #ifndef QUIET_BOOT
@@ -2245,14 +2323,10 @@ static void fb_desktop(void) {
 #endif
     int wall_ok = wall_paint(fb, fb_pitch, W, H, fb_swap);
     if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* Navy (clrs.cc), see wall.c; this fallback is now unreachable */
-    for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {   /* menu bar: half wallpaper, half white, per pixel */
-        unsigned c = fb[(unsigned)y * fb_pitch + (unsigned)x];
-        fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
-    }
-    fb_rect(0, mb - 1, W, 1, MENUBAR_RULE);               /* closed by a one pixel rule */
+    menubar_base();                                       /* the bar, half wallpaper and half white, closed by a one pixel rule */
     mb_h = mb - 1; mb_x0 = W / 2;                          /* keep the bare right half of the bar, for menubar_status() */
     mb_save = kmalloc((unsigned)(mb_h * (W - mb_x0)) * 4);
-    if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) mb_save[y * (W - mb_x0) + (x - mb_x0)] = fb[(unsigned)y * fb_pitch + (unsigned)x];
+    menubar_keep();
     text_ok = text_init();                                /* before the window (its title) */
     dock_paint();                                         /* the i386 dock, while only the wallpaper is under it */
     int band_y = gui_dock_band_top() * (int)window_scale();   /* the top of the dock's band, room for a hover label */
@@ -2288,27 +2362,7 @@ static void fb_desktop(void) {
 #ifndef QUIET_BOOT
     console_frame();
 #endif
-    if (text_ok) {
-        menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
-        text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
-        menubar_wifi(mb_wifi < 0 ? 1 : mb_wifi);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
-        /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
-           of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
-        const char *thanks = "Seduce. Vilify. Ignore.";
-        int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 7 * ar / 2 - gapx) / 2, ty = band_y - sc(4);
-        text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
-        {   /* a small bitten apple after the line: apple_mask scaled to 3.5 ar square, 4x4 samples a pixel, onto the flat fill */
-            int S = 7 * ar / 2, x0 = tx + tw + gapx, y0 = ty - sc(4) + ar - S; unsigned ink = fb_color(0x00f0f4f8);
-            for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
-                int sum = 0;
-                for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) sum += apple_mask[((y * 4 + j) * APPLE_N / (S * 4)) * APPLE_N + (x * 4 + i) * APPLE_N / (S * 4)];
-                unsigned al = (unsigned)sum / 16, d = fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)], out = 0;
-                if (!al) continue;
-                for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * al + ((d >> b) & 0xFF) * (255 - al)) / 255) << b;
-                fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)] = out;
-            }
-        }
-    } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
+    desktop_chrome(band_y);
     con_layout(win_x, win_y, win_w, win_h);
     {   /* keep the log inside the frame's white well: under the title band's hairline, clear of the cream margins */
         int wx = (lx + 8) * s, wy = (ly + 30) * s + 2 * s, wr = (lx + lw - 8) * s, wb = (ly + lh - 8) * s;
@@ -2330,14 +2384,15 @@ static void fb_desktop(void) {
        design system's dark fill at three corners, not the old 0x203040 fallback). Grey and white read the same either
        byte order; the rule and the fill are checked in fb_color order. */
 #ifdef QUIET_BOOT
-    unsigned well = fb_color(0x00B5502C);   /* no window was drawn: the spot where its well would end is bare wallpaper */
+    unsigned well = fb_color(wall_get());   /* no window was drawn: the spot where its well would end is bare wallpaper */
 #else
     unsigned well = 0x00ffffff;
 #endif
     int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == well && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
-    ok = ok && wall_ok && w0 == fb_color(0x00B5502C) && w1 == w0 && w2 == w0;
+    ok = ok && wall_ok && w0 == fb_color(wall_get()) && w1 == w0 && w2 == w0;
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
+    desktop_up = 1;
 #ifdef QUIET_BOOT
     uart_puts("console quiet\n");
 #endif
@@ -2358,6 +2413,32 @@ static void fb_desktop(void) {
     for (unsigned i = 0; i < 4; i++) { calc_press("C"); for (const char *p = sums[i]; *p; p++) calc_type(*p); calc_did(calc_type('\n')); }
     calc_press("Sci"); calc_press("M+"); calc_did(0);   /* end on the scientific pad, memory held, for the screendump */
 #endif
+}
+/* A new wallpaper colour (Settings, or a saved choice read once the card is up): the whole desktop again in the same order
+   fb_desktop painted it, over the buffers it already holds (the heap never frees, so nothing is allocated here). The wallpaper,
+   the bar and the dock go first; the pixels saved under the Calculator's and an app's windows are plain wallpaper, so they are
+   refilled with the new colour (a window closed later must not paint the old one back); the hover band is forgotten so its next
+   copy is taken from the new dock. Whatever window was open is drawn again on top. */
+static void wall_repaint(void) {
+    int W = (int)fb_w, H = (int)fb_h, s = (int)window_scale();
+    unsigned c = fb_color(wall_get());
+    cur_hide();
+    wall_paint(fb, fb_pitch, W, H, fb_swap);
+    menubar_base();
+    menubar_keep();
+    dock_band = 0; hover_slot = -1; dock_sel = -1;
+    dock_paint();
+    if (calc_under) for (int i = 0; i < calc_lw * s * calc_lh * s; i++) calc_under[i] = c;
+    if (app_under) for (int i = 0; i < app_lw * s * app_lh * s; i++) app_under[i] = c;
+    desktop_chrome(gui_dock_band_top() * s);
+    fb_flush(0, 0, W, H);
+    cur_show();
+}
+void desktop_wall_changed(void) {   /* settings.c: the colour is already set */
+    if (!fb || !desktop_up) return;
+    wall_repaint();
+    if (settings_live) set_paint();
+    else if (con_live) { con_live = 0; pane_open(cp); }
 }
 static void fb_init(void) {
     if (!fb_setup()) return;
@@ -2433,13 +2514,13 @@ static void m1_selftest(void) {
 #endif
 }
 
-/* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock and Brick are available; other names return 0. */
+/* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock, Brick, Browser and Settings are available; other names return 0. */
 int app_open_name(const char *name) {
-    static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser"};
-    for (unsigned a = 0; a < 5; a++) {
+    static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser", "settings"};
+    for (unsigned a = 0; a < 6; a++) {
         const char *w = openable[a]; unsigned i = 0;
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
-        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); return 1; }
+        if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); else if (a == 5) settings_open(0); return 1; }
     }
     return 0;
 }
@@ -2862,6 +2943,7 @@ void main(void) {
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
+    settings_load();           /* settings.c: JT/SETTINGS.TXT, before the Pi's desktop is first painted (the splash waits) */
     SPLASH(2, "sd");
 #ifdef SD_SELFTEST   /* the sd builds (arm64-sd-check.py) run the Terminal's own commands at boot on the check's card */
     {
