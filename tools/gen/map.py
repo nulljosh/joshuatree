@@ -40,7 +40,7 @@ lines.append('M87 128v16M242 128v16M397 128v16M552 128v16M87 144H552M210 144v14M
 box(110, 158, 200, 42, 'Desktop', f'windows, dock, {APPS} apps')
 box(330, 158, 200, 42, 'Samantha', 'you type, she runs it')
 lines.append('M210 200v14M430 200v14M210 214H430M320 214v14')
-box(110, 228, 420, 42, 'Kernel', 'tasks, drivers, fonts, network, disk, on i386 and ARM64')
+box(110, 228, 420, 42, 'Kernel', 'tasks, drivers, network, disk, a small tool picker, i386 and ARM64')
 out.append(f'<text x="{W / 2}" y="290" fill="{MUT}" font-size="10" text-anchor="middle">Calls out to a Cloudflare Worker, Turing (her brain), ElevenLabs (her voice) and Open-Meteo.</text>')
 
 sec(320, 'What happens when you talk to Samantha')
