@@ -3,10 +3,22 @@
 #include "text.h"
 #include "../../lib/text_ink.h"
 #include "aamono.h"
+#include "hires.h"
 
 int jt_mono_height(void) { return AA_MONO_HEIGHT; }
 
 int jt_mono_draw(struct jt_window_info *w, int x, int y, unsigned rgb, const char *s) {
+    if (jt_scale(w) > 1) {   /* a hi-res window (hires.h): Tree Sans Mono drawn by the kernel at twice the size, the same 8 px cell */
+        int k = jt_scale(w), pen = x * k, base = (y + AA_MONO_ASCENT) * k;
+        unsigned char b[64], adv[64];
+        int n = 0;
+        for (; *s; s++) {
+            b[n] = *s >= 0x20 && *s <= 0x7E ? (unsigned char)*s : '?'; adv[n] = (unsigned char)(JT_MONO_ADV * k);
+            if (++n == (int)sizeof b) { pen = jt_text2_run(3, 100, pen, base, rgb, b, adv, n); n = 0; }
+        }
+        if (n) pen = jt_text2_run(3, 100, pen, base, rgb, b, adv, n);
+        return pen / k;
+    }
     int fr = (int)(rgb >> 16 & 255), fg = (int)(rgb >> 8 & 255), fb = (int)(rgb & 255);
     int base = y + AA_MONO_ASCENT, W = (int)w->width, H = (int)w->height;
     for (; *s; s++) {

@@ -225,9 +225,10 @@ static unsigned long l3[ARENA_BLOCKS * 512] __attribute__((aligned(4096)));   /*
 #define APP_STACK_PAGES 16
 #define APP_ZERO_PAGES  8   /* zeroed pages after the image (and the rest of its last page): the pool user/calendar.c keeps its events in, and user/notes.c its 28 KB arena (M3d) */
 #define UAPP_MAX 0x40000UL  /* the largest image user_load takes, and what user_c.ld asserts */
-#define UP_WIN   0x90000UL  /* M3c part 2: the app's window buffer, read-write and never executable, a free page above the stack */
-#define UWIN_MAX (0x200000UL - UP_WIN)   /* the rest of the arena's first 2 MiB: room for 560x360 four times over */
-#define UP_HEAP  0x200000UL /* M3e: the app's brk heap, from the second block to the arena's end (14 MiB), EL0 read-write, never executable */
+#define UP_WIN   0xD00000UL /* M3c part 2: the app's window buffer, read-write and never executable. 3.9.0: the last 3 MiB of the arena, so a device-size
+                               buffer fits (504x328 at 2x is 2.6 MB); it was a page above the stack, with room for 560x360 four times over */
+#define UWIN_MAX (0x1000000UL - UP_WIN)   /* the arena's end, 16 MiB, less where the buffer starts */
+#define UP_HEAP  0x200000UL /* M3e: the app's brk heap, from the second block up to where the window buffer starts (11 MiB since 3.9.0), EL0 read-write, never executable */
 #define ARENA_SIZE ((unsigned long)ARENA_BLOCKS << 21)
 static unsigned long heap_next;
 #ifndef HEAP_SIZE   /* the oomtest builds (arch/arm64/Makefile) shrink it so an allocation fails on purpose */
@@ -315,6 +316,7 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_WINDOW_POLL 385
 #define JT_SYS_AUDIO 393         /* M3e: play, status, stop (audio.c holds the queue) */
 #define JT_SYS_BRK 397           /* M3e: the heap top */
+#define JT_SYS_TEXT2 402         /* 3.9.0: Tree Sans into a device-size window buffer (user/libjt/hires.h) */
 struct user_app { const char *name, *start, *end; };   /* userapps.S: one row per program, ended by a zero name */
 extern const struct user_app user_apps[];
 static unsigned long user_status;
@@ -330,6 +332,7 @@ static const struct user_app *app_cur;
 static struct frame app_frame;
 static unsigned long app_fp[66];                 /* M3e: its q0-q31, FPCR and FPSR where it parked (vectors.S's save_fp layout) */
 static unsigned long app_sp, app_last, app_wbytes;
+static int app_hi;   /* 3.9.0: the window buffer is device size (scale 2, the app asked for it): twice the width and height, pitch twice as long */
 static unsigned long app_brk;                    /* M3e: the heap top JT_SYS_BRK set, 0 while it has none */
 static unsigned long app_close_at;               /* the red dot was clicked: past this count, an app that did not close itself is ended */
 static unsigned long cnt_now(void) { unsigned long c; __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); return c; }
@@ -339,9 +342,10 @@ static unsigned app_runs;                        /* times the desktop's loop res
 #define APP_EVQ 16
 static struct { unsigned kind; int a, b; } app_q[APP_EVQ];
 static unsigned app_qh, app_qt;
-static long app_window_open(unsigned long info);                    /* the window half, with the other windows further down */
+static long app_window_open(unsigned long info, unsigned long flags);                    /* the window half, with the other windows further down */
 static long app_window_poll(unsigned long ev, unsigned long flags);
 static void app_window_close(void);
+static long app_text(unsigned long req);   /* 3.9.0: JT_SYS_TEXT2 */
 static long app_audio(unsigned long op, unsigned long arg, unsigned long size);   /* M3e: JT_SYS_AUDIO, with the app loader's byte readers */
 static int span(unsigned long a, unsigned long n, unsigned long base, unsigned long len) {   /* [a, a+n) inside [base, base+len), written so a + n can never wrap */
     return n <= len && a >= base && a - base <= len - n;
@@ -369,7 +373,7 @@ static long app_brk_set(unsigned long want) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
     unsigned long base = USER_BASE + UP_HEAP, top = app_brk ? app_brk : base;
     if (!want) return (long)top;
-    if (want < base || want > USER_BASE + ARENA_SIZE) return -22;
+    if (want < base || want > USER_BASE + UP_WIN) return -22;   /* the heap stops where the window buffer starts */
     unsigned long have = (top + 4095) & ~4095UL, need = (want + 4095) & ~4095UL;
     for (unsigned long v = have; v < need; v += 4096) l3[(v - USER_BASE) >> 12] = v | PAGE | AP_EL0_RW | PXN | UXN;
     for (unsigned long v = need; v < have; v += 4096) l3[(v - USER_BASE) >> 12] = 0;
@@ -431,11 +435,12 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
                     else for (int i = 0; i < 4; i++) ((unsigned char *)a0)[i] = (unsigned char)(t >> (8 * i));
                 }
             } else if (n == JT_SYS_GETPID) r = user_pid ? user_pid : 1;
-            else if (n == JT_SYS_WINDOW_OPEN) r = app_window_open(a0);
+            else if (n == JT_SYS_WINDOW_OPEN) r = app_window_open(a0, f->x[1]);
+            else if (n == JT_SYS_TEXT2) r = app_text(a0);
             else if (n == JT_SYS_AUDIO) r = app_audio(a0, f->x[1], f->x[2]);   /* M3e */
             else if (n == JT_SYS_BRK) r = app_brk_set(a0);
             else r = ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: the file calls; -ENOSYS (-38) for every number the ARM kernel does not answer yet, JT_SYS_AUDIO_RECORD (394) among them */
-            if (n != JT_SYS_READ && n != JT_SYS_AUDIO) svc_log(n, a0, r);   /* a read is every few hundred bytes of a file, audio a hundred calls a second: the UART would drown */
+            if (n != JT_SYS_READ && n != JT_SYS_AUDIO && n != JT_SYS_TEXT2) svc_log(n, a0, r);   /* a read is every few hundred bytes of a file, audio a hundred calls a second: the UART would drown */
             f->x[0] = (unsigned long)r;
         }
         return;
@@ -521,7 +526,7 @@ static const struct user_app *user_find(const char *name, unsigned n) {
     return 0;
 }
 static void app_unmap(void) {   /* its pages, its stack, its window buffer and (M3e) its heap */
-    app_len = app_code = app_img = app_wbytes = app_brk = 0;
+    app_len = app_code = app_img = app_wbytes = app_brk = 0; app_hi = 0;
     for (unsigned long i = UP_APP >> 12; i < ARENA_BLOCKS * 512; i++) l3[i] = 0;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
 }
@@ -1620,7 +1625,15 @@ static unsigned mix31(unsigned a, unsigned b) {   /* three parts a, one part b, 
 static void app_blit(void) {
     int s = (int)window_scale(), x0 = (app_lx + 8) * s, y0 = (app_ly + 32) * s;
     const unsigned *src = (const unsigned *)(USER_BASE + UP_WIN);
-    if (s == 2) {   /* the apps draw on a 1x grid: spread each pixel over its 2x2 by bilinear weights (3/4 itself, 1/4 the near neighbour), so a stem is a soft ramp, not a 2x2 block */
+    if (app_hi) {   /* 3.9.0: the app drew at device size (hires.h and JT_SYS_TEXT2): one buffer pixel per screen pixel, nothing to smooth */
+        unsigned bw = app_cw * 2;
+        for (unsigned y = 0; y < app_ch * 2; y++) {
+            const unsigned *r = src + y * bw; unsigned *d = fb + (unsigned)(y0 + (int)y) * fb_pitch + (unsigned)x0;
+            for (unsigned x = 0; x < bw; x++) d[x] = fb_color(r[x] & 0x00FFFFFFu);
+        }
+        return;
+    }
+    if (s == 2) {   /* an app that did not ask: the apps draw on a 1x grid: spread each pixel over its 2x2 by bilinear weights (3/4 itself, 1/4 the near neighbour), so a stem is a soft ramp, not a 2x2 block */
         int cw = (int)app_cw, ch = (int)app_ch;
         for (int y = 0; y < ch; y++) for (int j = 0; j < 2; j++) {
             const unsigned *r0 = src + (unsigned)y * app_cw, *r1 = src + (unsigned)(j ? (y + 1 < ch ? y + 1 : y) : (y ? y - 1 : y)) * app_cw;
@@ -1665,26 +1678,53 @@ static void st32(unsigned long a, unsigned v) { for (int i = 0; i < 4; i++) ((un
 /* JT_SYS_WINDOW_OPEN: only for an app the scheduler runs (the boot self-test gets -ENODEV, as i386 answers a program run
    from the text shell). The first call maps the buffer, zeroed, EL0 read-write and never executable, and puts the window up
    in front; any call fills the LP64 struct jt_window_info: width, height, pitch, then the 64-bit pixels pointer at +16. */
-static long app_window_open(unsigned long info) {
+static long app_window_open(unsigned long info, unsigned long flags) {
     if (!app_running || !fb || !app_under || !app_cw) return -19;
     if (!user_writable(info, 24)) return -14;
     if (!app_wbytes) {
         const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
-        unsigned long bytes = ((unsigned long)app_cw * app_ch * 4 + 4095) & ~4095UL;
+        int hi = (flags & 1) && window_scale() == 2;   /* hires.h's ask: only at scale 2, where there are device pixels to give */
+        unsigned long bytes = ((unsigned long)app_cw * app_ch * (hi ? 16 : 4) + 4095) & ~4095UL;
         if (bytes > UWIN_MAX) return -12;
         for (unsigned long i = 0; i < bytes / 4096; i++) l3[(UP_WIN >> 12) + i] = (USER_BASE + UP_WIN + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
         __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
         for (unsigned long i = 0; i < bytes / 8; i++) ((unsigned long *)(USER_BASE + UP_WIN))[i] = 0;
-        app_wbytes = bytes; app_shown = 0;
+        app_wbytes = bytes; app_shown = 0; app_hi = hi;
         spot_close(); calc_close(); browser_close();
         app_front = 1;
         app_paint();
         uart_puts("M3c window "); uart_puts(app_cur->name); uart_putc(' '); uart_dec(app_cw); uart_putc('x'); uart_dec(app_ch);
         uart_puts(" at "); uart_dec((unsigned)app_lx + 8); uart_putc(','); uart_dec((unsigned)app_ly + 32); uart_putc('\n');
     }
-    st32(info, app_cw); st32(info + 4, app_ch); st32(info + 8, app_cw * 4);
+    st32(info, app_cw); st32(info + 4, app_ch); st32(info + 8, app_cw * (app_hi ? 8 : 4));   /* width and height stay logical; the pitch (bytes) says the buffer is twice as wide */
     st32(info + 12, 0); st32(info + 16, (unsigned)(USER_BASE + UP_WIN)); st32(info + 20, (unsigned)((USER_BASE + UP_WIN) >> 32));
     return 0;
+}
+/* JT_SYS_TEXT2 (3.9.0): one run of Tree Sans into the device-size window buffer, for an app that opened it hi-res. The
+   request is user/jtsys.h's struct jt_text2 (LP64). Each byte is drawn alone at the pen, which then moves by that byte's
+   own advance from the app, so the app's 1x layout carries over exactly while the glyphs are rasterised at twice the size
+   by the same rasterizer the Console uses (text.c). Faces: 0 body, 1 bold, 2 display (digits), 3 mono; the sizes are the
+   ones tools/gen/gen_user_text.c gave the 1x atlas, times the scale, times pct/100. Answers the pen's x, or -EINVAL when
+   the window is not hi-res and -EFAULT for a request or string outside the app's memory. */
+struct jt_text2 { int x, y; unsigned rgb; int face, pct, len; unsigned long s, adv; };
+static long app_text(unsigned long req) {
+    if (!app_running || !app_wbytes || !app_hi || !text_ok) return -22;
+    if (!user_in_range(req, sizeof(struct jt_text2))) return -14;
+    const struct jt_text2 *t = (const struct jt_text2 *)req;
+    int x = t->x, y = t->y, face = t->face, pct = t->pct, n = t->len;
+    unsigned rgb = t->rgb; unsigned long sp = t->s, ap = t->adv;
+    if (face < 0 || face > 3 || pct < 25 || pct > 400 || n < 1 || n > 255) return -22;
+    if (!user_in_range(sp, (unsigned long)n) || !user_in_range(ap, (unsigned long)n)) return -14;
+    static const unsigned char which[4] = {2, 1, 2, 0};   /* text.c's faces: 0 mono, 1 sans bold, 2 sans */
+    static const int px10[4] = {140, 140, 560, 135};
+    int k = (int)window_scale(), bw = (int)app_cw * k, bh = (int)app_ch * k, px = px10[face] * k * pct / 100;
+    unsigned *buf = (unsigned *)(USER_BASE + UP_WIN);
+    for (int i = 0; i < n; i++) {
+        char one[2] = { ((const char *)sp)[i], 0 };
+        text_draw(which[face], one, x, y, px, rgb, buf, (unsigned)bw, bw, bh);
+        x += ((const unsigned char *)ap)[i];
+    }
+    return x;
 }
 /* JT_SYS_WINDOW_POLL, i386's semantics: with JT_POLL_PRESENT the buffer goes to the screen first (only while the window is
    in front and Spotlight is not over it; a raise draws it later), then one event (the LP64 struct jt_event: kind, a, b)
@@ -2346,7 +2386,20 @@ static void fb_desktop(void) {
     drag_on = 1; win_move_to(win_lx + 100, win_ly + 60); drag_end();
 #endif
 #ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with) */
-    app_dock(APP_BOOT);
+    if (!app_dock(APP_BOOT)) {   /* 3.9.0: the kernel-drawn windows too (arm64-sharp2x-check.py), then their frame on the UART: WINBOX name x y w h, logical */
+        const char *nm = APP_BOOT; int bx, by, bw, bh;
+        #define NM_IS(w) ({ const char *a_ = nm, *b_ = w; while (*a_ && *a_ == *b_) { a_++; b_++; } !*a_ && !*b_; })
+        if (NM_IS("calculator")) { calc_open(); bx = calc_lx; by = calc_ly; bw = calc_lw; bh = calc_lh; }
+        else {
+            if (NM_IS("clock")) clock_open();
+            else if (NM_IS("brick")) brick_open();
+            else if (NM_IS("browser")) browser_open();
+            else if (NM_IS("terminal")) pane_open(&term_p);
+            else console_open();
+            bx = win_lx; by = win_ly; bw = win_lw; bh = win_lh;
+        }
+        uart_puts("WINBOX "); uart_puts(nm); uart_putc(' '); uart_dec((unsigned)bx); uart_putc(' '); uart_dec((unsigned)by); uart_putc(' '); uart_dec((unsigned)bw); uart_putc(' '); uart_dec((unsigned)bh); uart_putc('\n');
+    }
 #endif
 #ifdef AUDIO_TEST   /* the audiotest build: `beep` run at boot on virt, which has no PWM (arm64-audio-check.py) */
     void cmd_run(const char *q, unsigned n, void (*out)(const char *));

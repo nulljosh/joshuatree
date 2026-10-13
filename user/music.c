@@ -21,6 +21,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/hires.h"
 #include "libjt/wav.h"
 #include "libjt/mp3.h"
 #include "libjt/string.h"
@@ -130,20 +131,12 @@ static void say2(const char *a, unsigned v, const char *b, unsigned u) { /* "<a>
 }
 static void set_msg(const char *s) { int i = 0; while (s[i] && i < 63) { msg[i] = s[i]; i++; } msg[i] = 0; }
 static unsigned xrand(void) { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng; }
-static void rect(int x, int y, int w_, int h_, unsigned c) {
-    if (x < 0) { w_ += x; x = 0; }
-    if (y < 0) { h_ += y; y = 0; }
-    if (x + w_ > (int)win.width)  w_ = (int)win.width - x;
-    if (y + h_ > (int)win.height) h_ = (int)win.height - y;
-    for (int yy = 0; yy < h_; yy++) {
-        unsigned *row = win.pixels + (unsigned)(y + yy) * win.width + (unsigned)x;
-        for (int xx = 0; xx < w_; xx++) row[xx] = c;
-    }
-}
+static void rect(int x, int y, int w_, int h_, unsigned c) { jt_fill(&win, x, y, w_, h_, c); }   /* hires.h: logical pixels, sharp at scale 2 */
 static unsigned mix(unsigned a, unsigned b) { /* half and half */
     return ((a >> 1) & 0x007F7F7F) + ((b >> 1) & 0x007F7F7F);
 }
 static void disc(int cx, int cy, int r, unsigned c) {
+    if (jt_scale(&win) > 1) { jt_disc(&win, cx, cy, r, c); return; }   /* the same footprint (radius r + 0.5), antialiased at device size */
     for (int dy = -r; dy <= r; dy++) {
         int y = cy + dy;
         if (y < 0 || y >= (int)win.height) continue;
@@ -156,6 +149,14 @@ static void disc(int cx, int cy, int r, unsigned c) {
     }
 }
 static void tri(int x, int cy, int tw, int th, int right, unsigned c) { /* flat triangle, tip on the right or left */
+    if (jt_scale(&win) > 1) {   /* hi-res: the same shape worked out in device pixels, so its slanted edges step at half the size */
+        int k = jt_scale(&win);
+        for (int i = 0; i < tw * k; i++) {
+            int half = th * k * (right ? tw * k - i : i + 1) / (2 * tw * k);
+            jt_fill_dev(&win, x * k + i, cy * k - half, 1, half * 2 + 1, c);
+        }
+        return;
+    }
     for (int i = 0; i < tw; i++) {
         int half = th * (right ? tw - i : i + 1) / (2 * tw);
         rect(x + i, cy - half, 1, half * 2 + 1, c);
@@ -584,7 +585,7 @@ static void draw(void) {
         if (have_art && cur >= 0) {   /* the cover */
             for (int yy = 0; yy < ART; yy++) for (int xx = 0; xx < ART; xx++) {
                 int X = rx + xx, Y = ty + yy;
-                if (X < (int)win.width && Y < (int)win.height) win.pixels[(unsigned)Y * win.width + (unsigned)X] = art[yy * ART + xx];
+                jt_pixel(&win, X, Y, art[yy * ART + xx]);   /* clipped to the window; a 2x2 block at scale 2 */
             }
         } else {
         /* a flat tile with two notes, no text: what shows when the song has no cover */
@@ -691,7 +692,7 @@ static int key(int k) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
-    if (jt_window_open(&win) != 0 || !win.pixels) {
+    if (jt_window_open_hires(&win) != 0 || !win.pixels) {
         jt_write(2, "music: no window\n", 17);
         jt_exit(1);
     }
