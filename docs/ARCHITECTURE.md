@@ -1746,6 +1746,27 @@ Steve Jobs, Aspen, 1983.
 
 The pro half is enforced by the checks (`tools/checks/`), the 100 percent docs rule and the merge-on-green rule. The rebel half is enforced by what the repo refuses to contain: no vendored kernel, no libc, no analytics, no third-party runtime. the Design rules section holds the never-do list; this page holds the why.
 
+
+### Rules we took from the book
+
+Joshua read "Acing the System Design Interview" (Zhiyong Tan) from phone photos. It is about web services, and most of it does not fit one box with one user. A few habits do. Each rule below is one of them, with the place in this tree where it already holds, or where it does not yet. Page numbers are the book's. The longer plan is `docs/SYSTEM-DESIGN-IDEAS.md`.
+
+**Name every tradeoff out loud.** The book says everything is a tradeoff and an unnamed one is a hidden bug (ch 2, pp. 24-25). Write the cost next to the choice. this file does it for the kernel page tables: preallocating every table is the textbook fix and the wrong trade here, because it costs 4 MB of BSS against 64 KB. `docs/DECISIONS.md` is where new ones go.
+
+**Clarify the requirement and give it a number.** Ask what, then how much (ch 2, pp. 26-27). A limit with no number cannot fail a check. `HTTP_WAIT_TICKS` in `kernel/syscall.c` is one second and `BRK_FLOOR_FRAMES` in `kernel/brk.c` is 4 MB of free frames no program may take. `tools/checks/bss-margin-check.py` fails when the margin goes. Next: time to desktop and free heap after boot (idea 12 in the plan).
+
+**Observability is part of the design.** Latency, traffic, errors, saturation, and logs a program can read (ch 2, pp. 34-40). If a part can fail, it must be able to say how. `net_last_error()` in `drivers/net.c` and `tls_last_error()` in `arch/arm64/tls.c` return typed reasons, and `tools/checks/arm64-boot-health-check.py` reads the boot log. A fault that nothing counts is a fault nobody saw. The counters are idea 3.
+
+**Fail gracefully.** The book's toolkit is bulkhead, circuit breaker, backoff with jitter, fallback and checkpoint (ch 3, pp. 60-65). We have some. A ring-3 task that faults is killed in `kernel/idt.c` and the desktop carries on. The Bluetooth pairing record in `arch/arm64/bt.c` carries a version and a checksum so a half-written file is refused. `drivers/net.c` retries DHCP `DHCP_RETRIES` times with a new transaction ID each time. `relay_open()` in `arch/arm64/ask.c` falls back from the cached address to a LAN probe to a fresh connect, and every outcome is one honest line. `tools/checks/arm64-oom-check.py` proves the boot reaches the desktop with no room for the fonts. We do not yet have a breaker or jitter: with the relay off, every `sam` question pays the full wait. That is idea 1.
+
+**Trust nothing, including ourselves.** Validate at the boundary, then audit what you think you know (ch 2, pp. 24-25). `paging_user_range_ok()` judges every syscall pointer by the caller's own tables. The relay's reply is untrusted: `ask.c` sends the token only after the handshake proves the name `jt-relay`. `paging_check_task_dirs` logs `BUG: paging: task directory drifted` when our own bookkeeping disagrees. The idle audit is idea 8.
+
+**Keep services stateless.** State is what makes things hard to replace (ch 4, p. 77). Keep it in a few named places. `SYS_WINDOW_POLL` is a pull, so the app owns its own pace. `SYS_SHELL_RUN` in `kernel/shellsys.c` uses static buffers and never moves the desktop's working directory. The relay in `tools/claude-relay/relay.py` answers one request at a time, and the session id travels with each request instead of living on the Pi. The only thing the card remembers about the network is `JT/RELAY.TXT`, one address and port.
+
+**Never cache private or real-time data.** Cache what is public and slow to fetch, and always expect a miss (ch 4, pp. 103-104). The token is the line we do not cross: it is never written to the card, never printed, and goes out only in the Authorization header of one request (`arch/arm64/ask.c`). If a DNS cache lands (idea 11) it holds names and short lifetimes, and nothing from Notes or Mail.
+
+**Blameless postmortems.** When something breaks, write what happened and the rule that stops it, not who did it (ch 2, pp. 34-40). the Lessons section is that page: one line of problem, one line of rule, with the commit. Add to it the day it happens.
+
 ## Lessons from the loop
 
 What keeps going wrong when agents work this repo, and the rule that stops it. Each lesson is one line of problem and one line of rule. The commits named are where it happened; `docs/ROADMAP.md` (Loop handoff) holds the standing rules these feed.
