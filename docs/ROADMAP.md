@@ -1016,6 +1016,8 @@ On the Pi, the CYW43455 Wi-Fi chip has no supplicant, so the WPA2 4-way handshak
 - **Map wallpaper.** The background can be a real topographic map pulled live from OpenTopoMap by IP geolocation, rendered by a PNG decoder in the kernel; the default is the colour Satellite wallpaper.
 - **The browser demo.** The landing page runs this exact i386 kernel in a JavaScript x86 emulator. The kernel does the four things a BIOS normally sets up (text mode, keyboard scanning, colour palette, font) itself. The demo tours itself if left alone.
 
+- **A small picker in the kernel.** Samantha's hands have a distilled picker in freestanding C (3.8.4, the Turing 10.0 slice): no floats, no network, 17,947 integer weights over hashed words and letter triples, and it abstains when unsure. On the nine dev sets it gets 81.2 percent of tools right (3,618 of 4,455) against 4,052 for her 1.5B model, which also has to get the argument right, so those two numbers are not the same test. It calls a tool on 20 of 434 sentences that are not commands, her model does 22, and the C agrees with its Python reference on all 297 checked sentences. Caveat: the chatty training rows were written after reading dev mistakes, so the numbers are tuned to dev and the sealed test sets are unread. It stays called a small picker distilled from her until a sealed run says more.
+
 ### Measured
 
 Pi 4, one run on one board, read off the screen (a first reading, not a benchmark): memcpy 1109 MB/s, alloc 30 ns/op, desktop up 0.2 s, Wi-Fi joined 6.4 s, clock set 8.7 s. The QEMU numbers are in the Benchmarks section.
