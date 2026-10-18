@@ -1,0 +1,2 @@
+A small operating system built from scratch: windows, a dock, 32 apps and Samantha, who answers out loud. Runs in your browser, on a Mac and a Raspberry Pi 4.
+https://joshuatree.jaybulb.com

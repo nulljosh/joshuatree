@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/nulljosh/joshuatree/releases/download/3.0.0/jt-mark-paper.png">
-  <img src="https://github.com/nulljosh/joshuatree/releases/download/3.0.0/jt-mark-ink.png" width="80" alt="Joshua Tree">
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/nulljosh/joshuatree/releases/download/4.6.1/jt-mark-paper.png">
+  <img src="https://github.com/nulljosh/joshuatree/releases/download/4.6.1/jt-mark-ink.png" width="80" alt="Joshua Tree">
 </picture>
 
 # Joshua Tree
@@ -9,7 +9,7 @@
 ![release](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/release.yml?branch=main&label=release)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A small operating system with its own windows, dock, sound, internet and 32 apps. It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it and answers out loud through a relay on your Mac. On the Pi you can talk to her with a USB mic.
+A small operating system with its own windows, dock, sound, internet and 32 apps. It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it and answers out loud through a relay on your Mac. On the Pi, talking to her through a USB mic is being tested on the real board.
 
 <p>
   <img src="landing/shots/app-hamurapi.webp" width="32%" alt="Hamurapi, a game">

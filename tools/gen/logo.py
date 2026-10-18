@@ -42,9 +42,10 @@ TRUNK = tilt([(48.8, 84.0), (49.6, 74.5), (50.9, 70.5), (51.8, 62.0)])
 LEFT = tilt([(49.0, 64.5), (39.0, 62.0), (30.0, 56.5), (23.5, 48.5), (22.0, 41.0)])
 MID = tilt([(52.0, 60.0), (53.8, 47.0), (53.0, 34.0)])
 RIGHT = tilt([(54.0, 59.5), (63.5, 59.5), (70.0, 53.5), (72.0, 47.5)])
-# 4.0, Many windows: a fourth, smaller tuft low on the left, hanging off the trunk below the long arm, so the tree
-# has four windows open instead of three. Same hand, same ground.
-LOW = tilt([(44.6, 77.2), (40.0, 78.8), (35.0, 78.0), (30.0, 74.0)])
+# 4.0, Many windows: a fourth, smaller tuft, forking up off the long left arm, so the tree has four windows open
+# instead of three. (It first hung off the foot of the trunk, which at avatar size read as something else
+# entirely.) Same hand, same ground.
+LOW = tilt([(37.5, 61.0), (36.0, 56.5), (34.5, 52.5), (33.5, 48.0)])
 ARMS = (LEFT, MID, RIGHT, LOW)
 CROTCH_L, CROTCH_R = tilt([(50.0, 59.0)])[0], tilt([(55.0, 57.0)])[0]
 # Each tuft its own size: (arm, knot radius, loops, blades, blade reach). The bold copy takes SMALL_R.
@@ -166,7 +167,7 @@ def big():
 def small():
     """The tree drawn down its middle for 16 to 48 px: one heavy line per limb, a tight knot per tuft, and the ground."""
     rnd = random.Random(1932)
-    lines = [TRUNK] + [[TRUNK[-1]] + a[1:] for a in ARMS[:3]] + [[TRUNK[0], (TRUNK[0][0] - 1.5, TRUNK[0][1] - 5.5)] + LOW[1:]]   # the low arm leaves the trunk near its foot
+    lines = [TRUNK] + [[TRUNK[-1]] + a[1:] for a in ARMS[:3]] + [LOW]   # the fourth arm leaves the long left arm
     knots = []
     for arm, r in zip(ARMS, SMALL_R):
         cx, cy, _ = tip(arm, 3.0)
