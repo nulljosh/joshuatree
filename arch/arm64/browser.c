@@ -364,6 +364,7 @@ int browse_command(const char *q, unsigned n) {
 
 /* The Browser window (browser_ui.h) reads the page through these instead of the printed lines. */
 const char *browser_text(unsigned *len) { *len = tlen; return text; }   /* the page as lines of text, '\n' between them, "[N]" after a link */
+const char *browser_title(void) { return title; }                     /* its <title>, up to 60 characters, "" when it has none */
 const char *browser_url(void) { return cur; }                          /* the page on screen, "" before the first */
 const char *browser_link(unsigned n) { return n && n <= nlinks ? links[n - 1] : 0; }
 unsigned browser_loads(void) { return loads; }
