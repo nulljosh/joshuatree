@@ -259,19 +259,6 @@ static int starts(const char *s, unsigned n, const char *w) {
     for (; w[i]; i++) if (i >= n || s[i] != w[i]) return 0;
     return 1;
 }
-/* A line that carries a password (`adduser NAME PASSWORD`, `deluser NAME PASSWORD`) is shown with the password starred out:
-   in the prompt row while it is typed, in the echo after Enter, and so on the UART too. out holds n + 1 bytes. 1 if starred. */
-static int hide_password(const char *s, unsigned n, char *out) {
-    unsigned i = 0, hit = 0;
-    for (; i < n; i++) out[i] = s[i];
-    out[n] = 0;
-    if (starts(s, n, "adduser ") || starts(s, n, "deluser ")) {
-        i = 8;
-        while (i < n && s[i] != ' ') i++;          /* the name stays; everything after the space after it is starred */
-        for (i++; i < n; i++) { out[i] = '*'; hit = 1; }
-    }
-    return hit;
-}
 static int act_word(const char *p, unsigned m, const char *w, int kind, unsigned *skip) {   /* "w TEXT": kind, TEXT at *skip */
     unsigned l = 0; while (w[l]) l++;
     if (m > l + 1 && starts(p, m, w) && p[l] == ' ') { *skip = l + 1; return kind; }
@@ -334,6 +321,19 @@ static int named_in(const char *q, unsigned qn, const char *name) {
     return 0;
 }
 /* pi-actions end */
+/* A line that carries a password (`adduser NAME PASSWORD`, `deluser NAME PASSWORD`) is shown with the password starred out:
+   in the prompt row while it is typed, in the echo after Enter, and so on the UART too. out holds n + 1 bytes. 1 if starred. */
+static int hide_password(const char *s, unsigned n, char *out) {
+    unsigned i = 0, hit = 0;
+    for (; i < n; i++) out[i] = s[i];
+    out[n] = 0;
+    if (starts(s, n, "adduser ") || starts(s, n, "deluser ")) {
+        i = 8;
+        while (i < n && s[i] != ' ') i++;          /* the name stays; everything after the space after it is starred */
+        for (i++; i < n; i++) { out[i] = '*'; hit = 1; }
+    }
+    return hit;
+}
 
 static int is_session(const char *s, unsigned n) {
     if (n != 36) return 0;
