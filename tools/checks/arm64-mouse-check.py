@@ -34,7 +34,7 @@ main_c = open(os.path.join(arch, "main.c")).read()
 def body(name):   # the definition, not a forward declaration
     m = re.search(r"\n(static )?void %s\([^)]*\) \{" % name, main_c)
     return main_c[m.start():main_c.find("\n}\n", m.start())] if m else ""
-for fn, call in (("cur_flush", "fb_flush("), ("cur_show", "cur_flush("), ("cur_hide", "cur_flush("), ("console_close", "fb_flush("), ("pane_draw", "fb_flush("), ("pane_open", "pane_draw(")):   # pane_open draws the Console and the Terminal through pane_draw, which a resize calls too
+for fn, call in (("cur_flush", "fb_flush("), ("cur_show", "cur_flush("), ("cur_hide", "cur_flush("), ("console_close", "wall_vacate("), ("wall_vacate", "fb_flush("), ("pane_draw", "fb_flush("), ("pane_open", "pane_draw(")):   # pane_open draws the Console and the Terminal through pane_draw, which a resize calls too
     if call not in body(fn): fails.append(f"main.c {fn}() no longer cleans the cache over what it drew: a real Pi will not show it")
 if "cur_hide();" not in body("dock_hover"):
     fails.append("main.c dock_hover() no longer takes the arrow off before copying the dock's band")
