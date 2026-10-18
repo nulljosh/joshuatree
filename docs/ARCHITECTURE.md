@@ -2336,7 +2336,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (279 checks)
+### The suite (280 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2591,6 +2591,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | ARM64 app windows at 1080p: Calendar, Notes, Music and Books each open at boot on the Pi image at scale 2, their frame is within 15% of the Console's size and a screen fraction and their content is not blank (skips where the tools are missing) | `tools/checks/arm64-appsize-check.py` | retry |
 | ARM64 4.0 gate: Calendar, Toroid and Notes run at once on the Pi image, Toroid crashes on purpose, the kernel survives, its slot is freed and the other two keep presenting frames (skips where the tools are missing) | `tools/checks/arm64-windows-check.py` | retry |
 | ARM64 three apps opened at boot on QEMU virt: the boot self-tests stand aside instead of loading over them, no kernel crash | `tools/checks/arm64-appboot-check.py` | retry |
+| ARM64 watchdog: a frozen app is stopped after 3 s and the other apps keep running | `tools/checks/arm64-watchdog-check.py` | retry |
 | ARM64 windows are sharp at 2x: Calendar, Notes, Music and Books draw at device size at 1080p (hi-res buffer, Tree Sans text through JT_SYS_TEXT2), and with the kernel-drawn Calculator, Clock, Brick, Browser, Terminal and Console every narrow text stem in a screendump has at most two soft pixels and two or more full ones, where a 1x picture smoothed up has three or four soft (skips where the tools are missing) | `tools/checks/arm64-sharp2x-check.py` | retry |
 | ARM64 window drag and resize, every window: Console, Browser, Clock, Brick, Calculator and the ring-3 apps Calendar, Notes, Music and Books are dragged by the title band (dots, flat wallpaper behind, held under the menu bar), resized by the bottom-right corner and the right and bottom edges (12 px zone, grows by the pointer's move, minimum size, stops at the screen's edge and above the dock), lay their content out again, apps get JT_EV_RESIZE and answer with a second window open and a redrawn frame, and a Calendar dragged off a Terminal leaves it drawn whole (skips where the tools are missing) | `tools/checks/arm64-resize-check.py` | retry |
 | ARM64 Mail: Spotlight opens user/mailpi.c at EL0 in its own window on sample messages, Down moves the selection and repaints the list, Enter fills the reading pane and clears the unread dot, Right changes mailbox, Esc closes (skips where the tools are missing) | `tools/checks/arm64-mail-check.py` | retry |
@@ -2658,7 +2659,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Claude | `tools/checks/arm64-claude-console-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3claude-check.py` |
 | Mines | `tools/checks/arm64-games-check.py`, `tools/checks/ring3mines-check.py` |
 | Books | `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-mascot-empty-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-sharp2x-check.py`, `tools/checks/books-check.py` |
-| Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-appboot-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-finder-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
+| Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-appboot-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-finder-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/arm64-watchdog-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | `tools/checks/arm64-launchpad-check.py` |
 
 Apps with no check yet: none.

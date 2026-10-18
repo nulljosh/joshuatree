@@ -278,6 +278,8 @@ $(eval $(call variant,drag,-DDRAG_TEST,,))
 APP_NAME ?= calendar
 $(eval $(call variant,app,-DAPP_BOOT=\"$(APP_NAME)\",,))
 $(eval $(call variant,wingate,-DWIN_GATE,,))
+$(eval $(call variant,hang,-DHANG_TEST,,))
+hangtest: hang-kernel8.elf
 wintest: wingate-kernel8.img
 apptest: app-kernel8.img
 $(eval $(call variant,brtrace,-DBR_TRACE,,))

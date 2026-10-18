@@ -164,6 +164,8 @@ static unsigned long timer_step;
 #define GICD(o) REG(GICD_BASE + (o))
 #define GICC(o) REG(GICC_BASE + (o))
 #define TIMER_INTID 30   /* the EL1 physical timer, a private interrupt on every GIC */
+static volatile int wd_live;           /* 4.5: an app is inside resume_user with the watchdog armed */
+static void wd_kill(void) __attribute__((noreturn));
 
 static void crash(const struct frame *f);   /* the crash screen, further down: it needs the framebuffer code */
 #ifdef FP_TEST
@@ -189,6 +191,13 @@ void exc_irq(struct frame *f) {   /* the timer stops after three ticks, so a cor
         REG(b + 0x64) = REG(b + 0x60);   /* acknowledge what the device raised, or a level interrupt never drops */
     }
 #endif
+    if (id == TIMER_INTID && wd_live) {   /* 4.5: the watchdog, not the boot tick: the timer is the app's three-second budget */
+        unsigned long spsr; __asm__ volatile ("mrs %0, spsr_el1" : "=r"(spsr));
+        __asm__ volatile ("msr cntp_ctl_el0, %0" :: "r"(0UL));
+        GICC(0x10) = iar;
+        if ((spsr & 0xF) == 0) wd_kill();   /* it was in EL0: never returns, leave_user hands the core back to app_tick */
+        return;
+    }
     if (id == TIMER_INTID) {
         __asm__ volatile ("msr cntp_tval_el0, %0" :: "r"(timer_step));   /* next tick */
         ticks++;
@@ -335,6 +344,9 @@ struct user_app { const char *name, *start, *end; };   /* userapps.S: one row pe
 extern const struct user_app user_apps[];
 static unsigned long user_status;
 static int user_faulted;    /* the last EL0 program ended on a fault, not an exit */
+#ifdef HANG_TEST
+static int hang_arm;       /* app_start sets it for slot 0, so the boot self-tests' own loads are left alone */
+#endif
 static int user_loud;       /* userrun: what the program writes reaches the screen too; the boot self-test keeps it on the UART */
 static unsigned user_pid;   /* programs started so far, what JT_SYS_GETPID answers */
 static unsigned long app_len, app_code, app_img;   /* the loaded app: bytes of window mapped, how many of those are code, and the image's own length */
@@ -399,6 +411,14 @@ static struct app *ap = &apps[0];         /* the app whose state the code below 
 #define UB (ap->base)
 static unsigned long cnt_now(void) { unsigned long c; __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); return c; }
 static unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f)); return f ? f : 54000000; }
+/* 4.5: the watchdog. An app that runs three seconds at EL0 without a syscall is stopped: the EL1 physical timer is its budget,
+   re-armed on every return to EL0 from a syscall (wd_rearm, called from vectors.S) so time spent inside the kernel, a slow SD
+   read or an HTTP wait, is never charged to it. IRQs are unmasked at EL0 only for apps (resume_user); the kernel itself still
+   runs with them masked. Counts as a fault: app_tick ends the app and the desktop carries on.
+   ponytail: one fixed budget, 3 s; per-app budgets if an app ever needs a long pure-compute stretch. */
+static void wd_arm(void) { unsigned long t = cnt_hz() * 3; __asm__ volatile ("msr cntp_tval_el0, %0\n msr cntp_ctl_el0, %1\n isb" :: "r"(t), "r"(1UL)); }
+static void wd_off(void) { __asm__ volatile ("msr cntp_ctl_el0, %0\n isb" :: "r"(0UL)); }
+void wd_rearm(void) { if (wd_live) wd_arm(); }
 static void apps_init(void) { for (unsigned i = 0; i < APP_SLOTS; i++) { apps[i].base = USER_BASE + i * ARENA_SIZE; apps[i].l3off = i * ARENA_BLOCKS * 512; apps[i].slot = i; } }
 /* The app windows' stacking: app_z lists the slots that have a window, front first. app_top is the front one (-1 with none); outside
    app_tick, `ap` always points at it, so the desktop's clicks, keys and drags land on the window in front. */
@@ -479,6 +499,12 @@ static void app_park(const struct frame *f, const unsigned long *fp) {
     __asm__ volatile ("mrs %0, sp_el0" : "=r"(app_sp));
     app_parked = 1;
     leave_user(0);
+}
+static void wd_kill(void) {   /* 4.5: from exc_irq, the app has had its three seconds at EL0 without a syscall */
+    wd_live = 0;
+    uart_puts("M4 watchdog: "); uart_puts(app_cur ? app_cur->name : "app"); uart_puts(" ran 3 s without a syscall, stopped\n");
+    user_faulted = 1;
+    leave_user((unsigned long)-1);
 }
 static void svc_log(unsigned long n, unsigned long a0, long r) {   /* the calls that are not write and exit, on the UART: how a program's progress shows with no debugger */
     static unsigned long last_n, last_a0; static long last_r = 1;   /* M3e: a call that repeats the last line exactly (Music asks the time on every pass) is not logged again */
@@ -679,6 +705,9 @@ static unsigned long user_load(const struct user_app *a) {
         }
         *(unsigned long *)(base + off) = (unsigned long)base + add;
     }
+#ifdef HANG_TEST   /* arm64-watchdog-check.py's build: the app in slot 0 spins on its first instruction, `b .`, no syscall ever */
+    if (hang_arm) *(unsigned *)base = 0x14000000;
+#endif
     for (unsigned long p = (unsigned long)base & ~63UL; p < (unsigned long)base + code_end; p += 64) __asm__ volatile ("dc cvau, %0" :: "r"(p) : "memory");
     __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
     for (unsigned long i = 0; i < code_end / 4096; i++) l3[ap->l3off + (UP_APP >> 12) + i] = (UB + UP_APP + i * 4096) | PAGE | AP_RO | PXN;   /* code: read-only, EL0 may execute */
@@ -742,7 +771,9 @@ static void app_tick(void) {   /* every app with something to do gets its turn: 
         app_parked = 0; user_faulted = 0; app_running = 1; ufile_owner = ap->slot + 1;
         APP_FP_CLOBBER();
         arena_only((int)ap->slot);
+        wd_live = 1; wd_arm();
         unsigned long st = resume_user(&app_frame, app_sp, app_fp);
+        wd_live = 0; wd_off();
         app_running = 0;
         if (!app_parked) app_end(st, user_faulted ? "stopped by a fault" : 0);
     }
@@ -753,7 +784,13 @@ static int app_start(const struct user_app *a) {   /* 0 started (it runs on the 
     while (sl < APP_SLOTS && apps[sl].cur) sl++;
     if (sl == APP_SLOTS) return -3;
     ap = &apps[sl];
+#ifdef HANG_TEST
+    hang_arm = sl == 0;
+#endif
     unsigned long entry = user_load(a);
+#ifdef HANG_TEST
+    hang_arm = 0;
+#endif
     if (!entry) return -2;
     if (a->name[0] == 'n' && a->name[1] == 'o' && a->name[2] == 't' && a->name[3] == 'e' && a->name[4] == 's' && !a->name[5])
         ufile_mkdirs("NOTES/NOTES");   /* M3d: Notes' default folder in JT/, made before it looks, as i386's notes_check_support does */
@@ -3193,6 +3230,9 @@ static void fb_desktop(void) {
 #ifdef WIN_GATE
 #define APP_BOOT "calendar,toroid,notes"   /* the windows gate's three apps (Makefile: wingate) */
 #endif
+#ifdef HANG_TEST
+#define APP_BOOT "calendar,notes"   /* 4.5: slot 0 hangs on its first instruction, slot 1 must keep going (Makefile: hang) */
+#endif
 #ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with). 4.0: "a,b,c" opens each in turn, for arm64-windows-check.py */
     int boot_multi = 0;
     {   const char *list = APP_BOOT;
@@ -3494,6 +3534,21 @@ static void wingate_tick(void) {
         con_quiet = 1; uart_puts("wingate:");
         for (unsigned i = 0; i < 3; i++) { uart_puts(" slot"); uart_dec(i); uart_puts(apps[i].cur ? " live " : " gone "); uart_dec(apps[i].presents - p0[i]); }
         uart_putc('\n'); phase = 4;
+    }
+}
+#endif
+#ifdef HANG_TEST
+/* hangtest builds only (arm64-watchdog-check.py). Slot 0's Calendar spins on its first instruction; the watchdog must end it
+   alone. Once it is gone, slot 1's Notes is poked and counted, and the UART says whether it kept presenting. */
+static void hang_tick(void) {
+    static unsigned long t0; static int phase; static unsigned p0;
+    unsigned long now = cnt_now();
+    if (phase == 0) { if (!apps[0].cur && apps[1].cur) { p0 = apps[1].presents; t0 = now; phase = 1; } }
+    else if (phase == 1 && now > t0 + cnt_hz()) {
+        struct app *keep = ap; ap = &apps[1]; app_push(1, ' ', 0); ap = keep;
+        t0 = now; phase = 2;
+    } else if (phase == 2 && now > t0 + cnt_hz()) {
+        con_quiet = 1; uart_puts("hang: slot0 gone slot1 "); uart_puts(apps[1].cur ? "live " : "gone "); uart_dec(apps[1].presents - p0); uart_putc('\n'); phase = 3;
     }
 }
 #endif
@@ -3923,6 +3978,9 @@ void main(void) {
 #ifdef WIN_GATE
             wingate_tick();
 #endif
+#ifdef HANG_TEST
+            hang_tick();
+#endif
         }
 #else
         for (;;) {   /* ask_pending: a `sam` queued by Enter is run by the next pass, and a wfi with no timer would sleep through it (the key-up IRQ was already taken) */
@@ -3930,6 +3988,9 @@ void main(void) {
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
             usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick();   /* an app parked on yield runs again here */
+#ifdef HANG_TEST
+            hang_tick();
+#endif
             audio_pump();   /* M3e: the app's sound, from its ring into the PWM's, never waiting */
         }
 #endif
