@@ -164,6 +164,8 @@ static unsigned long timer_step;
 #define GICD(o) REG(GICD_BASE + (o))
 #define GICC(o) REG(GICC_BASE + (o))
 #define TIMER_INTID 30   /* the EL1 physical timer, a private interrupt on every GIC */
+static volatile int wd_live;           /* 4.5: an app is inside resume_user with the watchdog armed */
+static void wd_kill(void) __attribute__((noreturn));
 
 static void crash(const struct frame *f);   /* the crash screen, further down: it needs the framebuffer code */
 #ifdef FP_TEST
@@ -189,6 +191,13 @@ void exc_irq(struct frame *f) {   /* the timer stops after three ticks, so a cor
         REG(b + 0x64) = REG(b + 0x60);   /* acknowledge what the device raised, or a level interrupt never drops */
     }
 #endif
+    if (id == TIMER_INTID && wd_live) {   /* 4.5: the watchdog, not the boot tick: the timer is the app's three-second budget */
+        unsigned long spsr; __asm__ volatile ("mrs %0, spsr_el1" : "=r"(spsr));
+        __asm__ volatile ("msr cntp_ctl_el0, %0" :: "r"(0UL));
+        GICC(0x10) = iar;
+        if ((spsr & 0xF) == 0) wd_kill();   /* it was in EL0: never returns, leave_user hands the core back to app_tick */
+        return;
+    }
     if (id == TIMER_INTID) {
         __asm__ volatile ("msr cntp_tval_el0, %0" :: "r"(timer_step));   /* next tick */
         ticks++;
@@ -309,7 +318,7 @@ static void m1b_selftest(void) {
    M3c: the same arena also holds the app window (UP_APP) and an app stack (UP_ASTACK). user_load puts a program from the app
    table there: code pages read-only and executable, then data pages and a zeroed pool read-write and never executable. */
 extern char _start[];
-extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[], user_entry_e[];
+extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[], user_entry_e[], user_entry_f[];
 extern unsigned long enter_user(unsigned long entry, unsigned long sp, unsigned long arg, unsigned long arg2);
 extern void leave_user(unsigned long status) __attribute__((noreturn));
 extern unsigned long resume_user(const struct frame *f, unsigned long sp, const unsigned long *fp);   /* vectors.S: back into a parked app (its FP registers too), returns like enter_user */
@@ -335,6 +344,9 @@ struct user_app { const char *name, *start, *end; };   /* userapps.S: one row pe
 extern const struct user_app user_apps[];
 static unsigned long user_status;
 static int user_faulted;    /* the last EL0 program ended on a fault, not an exit */
+#ifdef HANG_TEST
+static int hang_arm;       /* app_start sets it for slot 0, so the boot self-tests' own loads are left alone */
+#endif
 static int user_loud;       /* userrun: what the program writes reaches the screen too; the boot self-test keeps it on the UART */
 static unsigned user_pid;   /* programs started so far, what JT_SYS_GETPID answers */
 static unsigned long app_len, app_code, app_img;   /* the loaded app: bytes of window mapped, how many of those are code, and the image's own length */
@@ -399,10 +411,30 @@ static struct app *ap = &apps[0];         /* the app whose state the code below 
 #define UB (ap->base)
 static unsigned long cnt_now(void) { unsigned long c; __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); return c; }
 static unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f)); return f ? f : 54000000; }
+/* 4.5: the watchdog. An app that runs three seconds at EL0 without a syscall is stopped: the EL1 physical timer is its budget,
+   re-armed on every return to EL0 from a syscall (wd_rearm, called from vectors.S) so time spent inside the kernel, a slow SD
+   read or an HTTP wait, is never charged to it. IRQs are unmasked at EL0 only for apps (resume_user); the kernel itself still
+   runs with them masked. Counts as a fault: app_tick ends the app and the desktop carries on.
+   ponytail: one fixed budget, 3 s; per-app budgets if an app ever needs a long pure-compute stretch. */
+static void wd_arm(void) { unsigned long t = cnt_hz() * 3; __asm__ volatile ("msr cntp_tval_el0, %0\n msr cntp_ctl_el0, %1\n isb" :: "r"(t), "r"(1UL)); }
+static void wd_off(void) { __asm__ volatile ("msr cntp_ctl_el0, %0\n isb" :: "r"(0UL)); }
+void wd_rearm(void) { if (wd_live) wd_arm(); }
 static void apps_init(void) { for (unsigned i = 0; i < APP_SLOTS; i++) { apps[i].base = USER_BASE + i * ARENA_SIZE; apps[i].l3off = i * ARENA_BLOCKS * 512; apps[i].slot = i; } }
 /* The app windows' stacking: app_z lists the slots that have a window, front first. app_top is the front one (-1 with none); outside
    app_tick, `ap` always points at it, so the desktop's clicks, keys and drags land on the window in front. */
 static int app_top = -1;
+/* 4.4: an app reaches only its own arena. Every level-2 entry of the other slots carries APTable=01 (bit 61): EL0 may not
+   touch anything under it, while EL1 (the compositor reading their window buffers, a syscall copying for them) still can.
+   Set before each switch into EL0. -1 until the first switch: the boot self-tests run in slot 0 with nothing else loaded.
+   ponytail: one tlbi vmalle1 per switch; ASIDs, one per slot, when four busy apps make that show up in a profile. */
+static int el0_slot = -1;
+static void arena_only(int slot) {
+    if (slot == el0_slot) return;
+    unsigned long *e = &l2[(USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21];
+    for (int k = 0; k < APP_SLOTS * ARENA_BLOCKS; k++) e[k] = k / ARENA_BLOCKS == slot ? e[k] & ~(1UL << 61) : e[k] | (1UL << 61);
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    el0_slot = slot;
+}
 static unsigned char app_z[APP_SLOTS];
 static unsigned app_zn;
 static void app_z_drop(unsigned sl) {
@@ -467,6 +499,12 @@ static void app_park(const struct frame *f, const unsigned long *fp) {
     __asm__ volatile ("mrs %0, sp_el0" : "=r"(app_sp));
     app_parked = 1;
     leave_user(0);
+}
+static void wd_kill(void) {   /* 4.5: from exc_irq, the app has had its three seconds at EL0 without a syscall */
+    wd_live = 0;
+    uart_puts("M4 watchdog: "); uart_puts(app_cur ? app_cur->name : "app"); uart_puts(" ran 3 s without a syscall, stopped\n");
+    user_faulted = 1;
+    leave_user((unsigned long)-1);
 }
 static void svc_log(unsigned long n, unsigned long a0, long r) {   /* the calls that are not write and exit, on the UART: how a program's progress shows with no debugger */
     static unsigned long last_n, last_a0; static long last_r = 1;   /* M3e: a call that repeats the last line exactly (Music asks the time on every pass) is not logged again */
@@ -667,6 +705,9 @@ static unsigned long user_load(const struct user_app *a) {
         }
         *(unsigned long *)(base + off) = (unsigned long)base + add;
     }
+#ifdef HANG_TEST   /* arm64-watchdog-check.py's build: the app in slot 0 spins on its first instruction, `b .`, no syscall ever */
+    if (hang_arm) *(unsigned *)base = 0x14000000;
+#endif
     for (unsigned long p = (unsigned long)base & ~63UL; p < (unsigned long)base + code_end; p += 64) __asm__ volatile ("dc cvau, %0" :: "r"(p) : "memory");
     __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
     for (unsigned long i = 0; i < code_end / 4096; i++) l3[ap->l3off + (UP_APP >> 12) + i] = (UB + UP_APP + i * 4096) | PAGE | AP_RO | PXN;   /* code: read-only, EL0 may execute */
@@ -685,6 +726,7 @@ static int user_run(const struct user_app *a) {
     unsigned long entry = user_load(a);
     if (!entry) return -1;
     user_pid++; user_faulted = 0; ufile_owner = 0;
+    arena_only((int)ap->slot);
     user_status = enter_user(entry, UB + UP_ASTACK + APP_STACK_PAGES * 4096UL, 0, 0);
     ufile_release();   /* M3d: what it left open is closed for it, however it ended */
     return 0;
@@ -728,7 +770,10 @@ static void app_tick(void) {   /* every app with something to do gets its turn: 
         app_kick = 0; app_last = now; app_runs++;
         app_parked = 0; user_faulted = 0; app_running = 1; ufile_owner = ap->slot + 1;
         APP_FP_CLOBBER();
+        arena_only((int)ap->slot);
+        wd_live = 1; wd_arm();
         unsigned long st = resume_user(&app_frame, app_sp, app_fp);
+        wd_live = 0; wd_off();
         app_running = 0;
         if (!app_parked) app_end(st, user_faulted ? "stopped by a fault" : 0);
     }
@@ -739,7 +784,13 @@ static int app_start(const struct user_app *a) {   /* 0 started (it runs on the 
     while (sl < APP_SLOTS && apps[sl].cur) sl++;
     if (sl == APP_SLOTS) return -3;
     ap = &apps[sl];
+#ifdef HANG_TEST
+    hang_arm = sl == 0;
+#endif
     unsigned long entry = user_load(a);
+#ifdef HANG_TEST
+    hang_arm = 0;
+#endif
     if (!entry) return -2;
     if (a->name[0] == 'n' && a->name[1] == 'o' && a->name[2] == 't' && a->name[3] == 'e' && a->name[4] == 's' && !a->name[5])
         ufile_mkdirs("NOTES/NOTES");   /* M3d: Notes' default folder in JT/, made before it looks, as i386's notes_check_support does */
@@ -791,6 +842,11 @@ static void user_exec_probe(const char *what, unsigned long target) {
 }
 #endif
 static void user_demo(void) {
+    /* 4.5: an APP_BOOT build has opened its apps by now (fb_desktop runs first). These tests load programs into slot 0 and its
+       low pages, so with apps live they would write over them, or, with `ap` on another slot, into pages that slot never mapped
+       (a kernel data abort at the third app's arena on QEMU). They run only on a machine with no app open. */
+    if (apps_live()) { uart_puts("M3 self-tests skipped: apps are open\n"); return; }
+    ap = &apps[0];
     user_init(user_start, (unsigned long)(user_end - user_start));
     unsigned long code = UB + UP_CODE, sp = UB + UP_STACK + 4096, kpage = UB + UP_KERN;
     uart_puts("M3 EL0 task starts\n");
@@ -802,6 +858,18 @@ static void user_demo(void) {
     uart_puts("M3 EL0 second task starts\n");
     user_status = enter_user(code + (unsigned long)(user_entry_b - user_start), sp, kpage, 0);
     if (user_status == 7) uart_puts("M3 userland ok\n"); else uart_puts("M3 userland FAIL\n");
+    {   /* 4.4: slot 1 gets one page EL0 could use, and from slot 0 user.S's entry F loads from it, which must fault */
+        const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
+        unsigned long pg = apps[1].base + UP_STACK, *e = &l3[apps[1].l3off + (UP_STACK >> 12)];
+        *e = pg | PAGE | AP_EL0_RW | PXN | UXN;
+        arena_only(0);
+        uart_puts("M4 arena probe starts\n");
+        user_faulted = 0;
+        enter_user(code + (unsigned long)(user_entry_f - user_start), sp, pg, 0);
+        uart_puts(user_faulted ? "M4 arena isolation ok\n" : "M4 arena isolation FAIL: slot 1 was readable from slot 0\n");
+        *e = 0;
+        __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    }
 #ifndef PI_BUILD
     /* M3b: user/hello.c itself, built for aarch64 and talking Joshua Tree syscall numbers over svc. This runs before any
        card is mounted, so since M3d its open of HELLO.TXT is answered -ENOENT (-2), which hello.c reports and answers with
@@ -1325,27 +1393,65 @@ void con_prompt(const char *s, unsigned n) { con_input_row(ask_prompt(), s, n); 
 #define TUI_ROWS 96
 #define TUI_COLS 128
 static char tui_shadow[TUI_ROWS][TUI_COLS];
-int con_rows_total(void) { return con_live && fb && cp == &term_p && !calc_front && !app_front ? con_rows : 0; }   /* text rows above the input row; 0 with no window to draw in */
+static int tui_face_rows;   /* the chat view's face takes the top rows (con_tui_begin), 0 when the window is short or the view is closed */
+int con_rows_total(void) { return con_live && fb && cp == &term_p && !calc_front && !app_front ? con_rows - tui_face_rows : 0; }   /* text rows above the input row; 0 with no window to draw in */
+#include "face_art.h"
+void tui_log(const char *s);   /* below: a line to the UART only */
+int png_decode(const unsigned char *data, unsigned int len, unsigned char **out, unsigned int *w, unsigned int *h, unsigned int *channels);   /* drivers/png.c */
+/* The chat view's face (5.0, "Samantha is the interface"): her portrait above the rows, from face_art.h (two frames of the
+   web Samantha's face, mouth closed and mouth open), blended by how loud her voice is at that moment (ask.c voice_level,
+   from the clip the sound path is playing), so her mouth opens with what she says. Seven rows when the window has room
+   for them, none in a short window. "face: on" on the UART when it is drawn; ask.c logs the mouth. */
+static unsigned char *face_idle, *face_talk; static int face_tried, face_mouth = -1;
+static void face_blit(int mouth) {
+    if (!face_tried) {
+        face_tried = 1; unsigned w, h, ch;
+        if (png_decode(face_idle_png, FACE_IDLE_LEN, &face_idle, &w, &h, &ch) || w != FACE_PX || h != FACE_PX || ch != 4) face_idle = 0;
+        if (png_decode(face_talk_png, FACE_TALK_LEN, &face_talk, &w, &h, &ch) || w != FACE_PX || h != FACE_PX || ch != 4) face_talk = 0;
+    }
+    int D = con_ch * (tui_face_rows - 1), x0 = con_x + (con_cols * con_cw - D) / 2, y0 = con_y + con_ch / 2;
+    if (mouth < 0) mouth = 0;
+    if (mouth > 100) mouth = 100;
+    if (!face_idle) { fb_rect(x0, y0, D, D, CON_BG); fb_flush(x0, y0, D, D); face_mouth = mouth; return; }
+    const unsigned char *talk = face_talk ? face_talk : face_idle;
+    for (int y = 0; y < D; y++) for (int x = 0; x < D; x++) {   /* 2x2 samples a pixel, the two frames mixed by the mouth */
+        unsigned r = 0, g = 0, b = 0;
+        for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) {
+            unsigned o = (((y * 2 + j) * FACE_PX / (D * 2)) * FACE_PX + (x * 2 + i) * FACE_PX / (D * 2)) * 4;
+            const unsigned char *p = face_idle + o, *q = talk + o;
+            r += p[0] * (100 - mouth) + q[0] * mouth; g += p[1] * (100 - mouth) + q[1] * mouth; b += p[2] * (100 - mouth) + q[2] * mouth;
+        }
+        fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)] = fb_color(((r / 400) << 16) | ((g / 400) << 8) | (b / 400));
+    }
+    fb_flush(x0, y0, D, D);
+    face_mouth = mouth;
+}
+void con_tui_mouth(int mouth) {   /* ask.c, while her voice plays: only the face is repainted */
+    if (!tui_face_rows || !con_rows_total() || mouth == face_mouth) return;
+    int held = cur_hold(); face_blit(mouth); cur_release(held);
+}
 void con_tui_begin(void) {
     if (!con_rows_total()) return;
     int held = cur_hold();
+    tui_face_rows = con_rows >= 14 ? 7 : 0;
     con_wipe();
     for (unsigned r = 0; r < TUI_ROWS; r++) tui_shadow[r][0] = 0;
+    if (tui_face_rows) { face_mouth = -1; face_blit(0); tui_log("face: on"); }   /* the UART only, never the window */
     cur_release(held);
 }
 void con_tui_rows(const char *const *rows, unsigned n) {
     if (!con_rows_total()) return;
     int held = cur_hold();
-    for (unsigned r = 0; r < n && r < TUI_ROWS && r < (unsigned)con_rows; r++) {
+    for (unsigned r = 0; r < n && r < TUI_ROWS && r < (unsigned)(con_rows - tui_face_rows); r++) {
         const char *t = rows[r] ? rows[r] : "";
         unsigned k = 0, lim = (unsigned)con_cols < TUI_COLS - 1 ? (unsigned)con_cols : TUI_COLS - 1;
         while (k < lim && t[k] && t[k] == tui_shadow[r][k]) k++;
         if (k == lim || (!t[k] && !tui_shadow[r][k])) continue;   /* the same text */
-        int y = con_y + (int)r * con_ch;
+        int y = con_y + ((int)r + tui_face_rows) * con_ch;
         fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
         fb_flush(con_x - 4, y, con_cols * con_cw + 8, con_ch);
         unsigned i = 0;
-        for (; i < lim && t[i]; i++) { tui_shadow[r][i] = t[i]; if (t[i] != ' ') con_glyph(i, r, t[i]); }
+        for (; i < lim && t[i]; i++) { tui_shadow[r][i] = t[i]; if (t[i] != ' ') con_glyph(i, r + (unsigned)tui_face_rows, t[i]); }
         tui_shadow[r][i] = 0;
     }
     cur_release(held);
@@ -1809,6 +1915,7 @@ static void pane_open(struct pane *p) {   /* the Console or the Terminal in fron
 static void console_open(void) { pane_open(&con_p); }
 void con_tui_end(void) {   /* back to the shell: the Terminal's own text and prompt */
     if (!con_rows_total()) return;
+    tui_face_rows = 0; face_mouth = -1;
     int held = cur_hold(), sc_ = (int)window_scale();
     cp->scrolled = 0;
     unsigned nl = con_nlines(), keep = con_rows > 1 ? (unsigned)con_rows - 1 : 1;
@@ -2871,6 +2978,14 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
    Each arc is anti-aliased (4x4 samples a pixel, blended onto the bar), so it stays crisp at scale 1 and 2. Each call puts the
    saved bare bar back first, so old pixels never show through. */
 #define WIFI_INK 0x001C1C1E
+static int mb_mic;
+void menubar_mic(int on) {   /* ask.c: voice mode started or ended; the bar is redrawn with or without the mark */
+    if (mb_mic == (on != 0)) return;
+    mb_mic = on != 0;
+    uart_puts(mb_mic ? "mic mark on\n" : "mic mark off\n");
+    if (!fb || !text_ok) return;
+    cur_hide(); menubar_wifi(mb_wifi); cur_show();
+}
 void menubar_wifi(int state) {
     mb_wifi = state;   /* kept even before the desktop exists (the boot splash), so its first paint shows the right fan */
     if (!fb || !text_ok) return;
@@ -2909,6 +3024,13 @@ void menubar_wifi(int state) {
     int isz = sg(16), sx = ox - R - sg(14) - isz, wx = sx - sg(12) - isz, iy = (mb - 1 - isz) / 2, vol = audio_volume();
     glyph_paint(GL_SOUND, vol == 0 ? 0 : vol <= 50 ? 1 : 2, sx, iy, isz, WIFI_INK);   /* ink at every volume: the waves say the level, not a grey */
     glyph_paint(GL_POWER, 0, wx, iy, isz, WIFI_INK);
+    if (mb_mic) {   /* voice mode is listening (ask.c): a terracotta microphone left of the power symbol, a capsule on a stem */
+        int mx = wx - sg(12) - isz, cw = isz * 2 / 5, ch = isz * 3 / 5, cx0 = mx + (isz - cw) / 2;
+        unsigned t = fb_color(0x00B5502C);
+        fb_rect(cx0, iy, cw, ch, t);
+        fb_rect(mx + isz / 2 - sg(1), iy + ch, sg(2), isz - ch - sg(2), t);
+        fb_rect(cx0 - sg(1), iy + isz - sg(2), cw + sg(2), sg(2), t);
+    }
     mb_hit[0][0] = wx - sg(5); mb_hit[0][1] = wx + isz + sg(5);         /* power */
     mb_hit[1][0] = sx - sg(5); mb_hit[1][1] = sx + isz + sg(5);         /* sound */
     mb_hit[2][0] = ox - R - sg(5); mb_hit[2][1] = ox + R + sg(5);       /* Wi-Fi */
@@ -3161,6 +3283,9 @@ static void fb_desktop(void) {
 #endif
 #ifdef WIN_GATE
 #define APP_BOOT "calendar,toroid,notes"   /* the windows gate's three apps (Makefile: wingate) */
+#endif
+#ifdef HANG_TEST
+#define APP_BOOT "calendar,notes"   /* 4.5: slot 0 hangs on its first instruction, slot 1 must keep going (Makefile: hang) */
 #endif
 #ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with). 4.0: "a,b,c" opens each in turn, for arm64-windows-check.py */
     int boot_multi = 0;
@@ -3466,6 +3591,21 @@ static void wingate_tick(void) {
     }
 }
 #endif
+#ifdef HANG_TEST
+/* hangtest builds only (arm64-watchdog-check.py). Slot 0's Calendar spins on its first instruction; the watchdog must end it
+   alone. Once it is gone, slot 1's Notes is poked and counted, and the UART says whether it kept presenting. */
+static void hang_tick(void) {
+    static unsigned long t0; static int phase; static unsigned p0;
+    unsigned long now = cnt_now();
+    if (phase == 0) { if (!apps[0].cur && apps[1].cur) { p0 = apps[1].presents; t0 = now; phase = 1; } }
+    else if (phase == 1 && now > t0 + cnt_hz()) {
+        struct app *keep = ap; ap = &apps[1]; app_push(1, ' ', 0); ap = keep;
+        t0 = now; phase = 2;
+    } else if (phase == 2 && now > t0 + cnt_hz()) {
+        con_quiet = 1; uart_puts("hang: slot0 gone slot1 "); uart_puts(apps[1].cur ? "live " : "gone "); uart_dec(apps[1].presents - p0); uart_putc('\n'); phase = 3;
+    }
+}
+#endif
 void usb_poll(void);
 #ifdef NOTES_SELFTEST
 /* notesw-kernel8.img and notesr-kernel8.img only (arm64-notes-check.py). QEMU's raspi4b has no USB, so made-up boot
@@ -3740,6 +3880,16 @@ void net_stack_demo(void);
 void net_clock_sync(void);
 int bt_starting(void);   /* bt.c: the radio is still loading its patch */
 void tls_demo(void);
+unsigned hear_fake(short *pcm, unsigned max) {   /* ask.c's `hear` on the heartest build: half a second of a 440 Hz square wave instead of a microphone; (0, 0) asks whether this is that build */
+#ifdef HEAR_TEST
+    if (!pcm) return 1;
+    unsigned n = 8000 < max ? 8000 : max;
+    for (unsigned i = 0; i < n; i++) pcm[i] = (short)(((i * 440 / 16000) & 1) ? 6000 : -6000);
+    return n;
+#else
+    (void)pcm; (void)max; return 0;
+#endif
+}
 void input_drain(void) { usb_poll(); input_poll(); key_repeat_tick(); audio_pump(); }   /* ask.c, between agent steps and in every wait while `sam` thinks: the keys that queued, a held key repeating, and the sound */
 
 void main(void) {
@@ -3763,6 +3913,9 @@ void main(void) {
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
+#ifdef USB_AUDIO_TEST   /* the usbaudiotest build: a USB speaker plays 440 Hz for half a second at boot (arm64-usbaudio-check.py) */
+    { int usb_spk_tone(int freq, int ms); usb_spk_tone(440, 500); }
+#endif
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
     settings_load();           /* settings.c: JT/SETTINGS.TXT, before the Pi's desktop is first painted (the splash waits) */
     SPLASH(2, "sd");
@@ -3892,6 +4045,9 @@ void main(void) {
 #ifdef WIN_GATE
             wingate_tick();
 #endif
+#ifdef HANG_TEST
+            hang_tick();
+#endif
         }
 #else
         for (;;) {   /* ask_pending: a `sam` queued by Enter is run by the next pass, and a wfi with no timer would sleep through it (the key-up IRQ was already taken) */
@@ -3899,6 +4055,9 @@ void main(void) {
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
             usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick();   /* an app parked on yield runs again here */
+#ifdef HANG_TEST
+            hang_tick();
+#endif
             audio_pump();   /* M3e: the app's sound, from its ring into the PWM's, never waiting */
         }
 #endif

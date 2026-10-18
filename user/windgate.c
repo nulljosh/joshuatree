@@ -257,7 +257,7 @@ static void draw(void) {
     int idle = (!running && ex_ms == 0);
 
     /* the right column */
-    text(JT_FACE_BOLD, g_rx, 16, INK, "Windgate");
+    text(JT_FACE_BOLD, g_rx, 16, INK, "Airwell");
     text(JT_FACE_BODY, g_rx, 16 + jt_text_height(JT_FACE_BOLD), MUTED, "Guided breathing");
     for (int i = 0; i < 4; i++) button(g_pb[i], P_NAME[i], P_TIMES[i], i == preset);
 

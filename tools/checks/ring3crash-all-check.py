@@ -52,8 +52,10 @@ DOCK_TRAY = (0xEF, 0xEB, 0xE4)
 PARK = (480, 200)
 
 
-# Hamurapi is shown under its product name but its files, flag letters and log lines kept the old spelling Hamurabi.
-SOURCE_NAME = {"hamurapi": "hamurabi"}
+# Renamed apps show their product name but their files and log lines kept the old spelling (Hamurabi, Tonchi, Hikko, Windgate).
+SOURCE_NAME = {"hamurapi": "hamurabi", "patois": "tonchi", "thinkpond": "hikko", "airwell": "windgate"}
+# Their boot flags and files kept the old names too, except Hamurapi, whose flag is already hamurapi.
+FLAG_NAME = {"patois": "tonchi", "thinkpond": "hikko", "airwell": "windgate"}
 
 
 def parse_apps():
@@ -68,17 +70,18 @@ def parse_apps():
         m = re.search(r'serial_puts\("autoopen=(\w+)\\n"\)', line)
         if not m or "pc[" not in line: continue
         chars = sorted((int(i), c) for i, c in re.findall(r"pc\[(\d+)\]\s*==\s*'(.)'", line))
-        flags[m.group(1)] = "".join(c for i, c in chars if i >= 5)
+        flags.setdefault(m.group(1), "".join(c for i, c in chars if i >= 5))   # first line wins: later ones are old-name aliases
     out = []
     for name, binf in apps:
         key = name.lower()
-        if key not in flags:
+        flag_key = FLAG_NAME.get(key, key)
+        if flag_key not in flags:
             sys.exit(f"FAIL: {name} is in RING3_APPS but ring3app_autoopen_arm has no open= flag for it; the crash check cannot open it")
         src = SOURCE_NAME.get(key, key)   # the row's shown name can differ from the source's spelling
         path = f"user/{src}.c"
         if not os.path.exists(path) or f"{src}: crashing on purpose" not in open(path).read():
             sys.exit(f"FAIL: {name} ({path}) has no `{src}: crashing on purpose` crash key; the crash check cannot crash it")
-        out.append((name, key, binf, flags[key], src))
+        out.append((name, flag_key, binf, flags[flag_key], src))
     return out
 
 

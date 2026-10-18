@@ -141,6 +141,7 @@ el0_sync_entry:
     save_fp
     mov x1, sp
     bl exc_el0_sync
+    bl wd_rearm                 /* 4.5: the app's three-second budget starts again, so time in the kernel is never charged to it */
     restore_fp
     restore_all
     eret
@@ -246,7 +247,7 @@ resume_user:                    /* x0 = the parked frame (x0-x30, elr: 32 words)
     add x2, x2, #8
     cmp x2, #256
     b.lo 1b
-    mov x4, #0x3c0              /* EL0t, interrupts masked, as enter_user */
+    mov x4, #0x340              /* EL0t, D A and F masked, IRQ open: the watchdog's timer can reach an app that never makes a syscall */
     msr spsr_el1, x4
     restore_all
     eret

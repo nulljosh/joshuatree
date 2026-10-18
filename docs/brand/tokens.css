@@ -1,0 +1,46 @@
+/* Joshua Tree design tokens: the one place the colours, type scale, space ladder and radii are written down.
+   docs/brand/index.html links this file; tools/gen/map.py reads the light colours out of it for architecture.svg.
+   The type and space numbers are the ones tools/gen/typetokens.py generates into landing/index.html (nine sizes,
+   a 4 px grid, one space ladder); the desktop colours are the kernel's constants, named in docs/ARCHITECTURE.md. */
+:root {
+  color-scheme: light dark;
+  /* Colour: paper, ink and one terracotta. */
+  --bg: #faf8f4;        /* paper */
+  --fg: #161513;        /* ink */
+  --sub: #5c584f;       /* ink soft: secondary text */
+  --rule: #ded9cd;      /* hairline: rules and card edges */
+  --card: #ffffff;      /* a card on paper */
+  --accent: #b5502c;    /* terracotta: the mark's ground, focus rings, links */
+  /* The desktop (kernel constants). */
+  --window-body: #f5f0eb;  /* WINDOW_BODY */
+  --window-ink: #1c1c1e;   /* WINDOW_INK */
+  --window-rule: #d9d3cb;  /* WINDOW_RULE */
+  --dock-tray: #efebe4;    /* DOCK_TRAY_COLOR */
+  --tray-edge: #d6d0c6;    /* TRAY_EDGE */
+  --menubar-rule: #bdb8b0; /* MENUBAR_RULE */
+  --dock-label: #f4f1ec;   /* DOCK_LABEL_BG */
+  --close-dot: #ff5f57;    /* CLOSE_DOT */
+  --splash: #e5e5e7;       /* the Pi boot splash grey */
+  --wallpaper: #6e6e6e;    /* graphite, the flat wallpaper since 3.9.0 */
+  --night-floor: #201009;  /* NIGHT_FLOOR */
+  --day-tint: #dddddd;     /* DAY_TINT */
+  /* Type: Tree Sans, Text below 22 px and Display from 22 px up. */
+  --sans: "Tree Sans", system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --display: "Tree Sans Display", var(--sans);
+  --t11: 11px; --lh11: 16px; --tr11: 0.01em;    /* caption */
+  --t13: 13px; --lh13: 20px; --tr13: 0;         /* footnote */
+  --t15: 15px; --lh15: 20px; --tr15: 0;         /* callout */
+  --t17: 17px; --lh17: 24px; --tr17: -0.01em;   /* body */
+  --t22: 22px; --lh22: 32px; --tr22: -0.01em;   /* title3 */
+  --t28: 28px; --lh28: 40px; --tr28: -0.02em;   /* title2 */
+  --t36: 36px; --lh36: 48px; --tr36: -0.02em;   /* title1 */
+  --t48: 48px; --lh48: 64px; --tr48: -0.02em;   /* large */
+  --t64: 64px; --lh64: 84px; --tr64: -0.02em;   /* hero */
+  /* Space, one ladder. */
+  --s4: 4px; --s8: 8px; --s12: 12px; --s16: 16px; --s24: 24px; --s32: 32px; --s48: 48px; --s64: 64px; --s96: 96px;
+  /* Radii: windows and cards 18, chips 12, small 8 and 4. Icons are a superellipse, not a radius. */
+  --r18: 18px; --r12: 12px; --r8: 8px; --r4: 4px;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #141311; --fg: #f3f0e9; --sub: #b3ada0; --rule: #3a362e; --card: #1d1b17; --accent: #e08a5f; }
+}

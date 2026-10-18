@@ -199,7 +199,7 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = ../../VERSION settings_ui.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = ../../VERSION settings_ui.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
@@ -278,6 +278,8 @@ $(eval $(call variant,drag,-DDRAG_TEST,,))
 APP_NAME ?= calendar
 $(eval $(call variant,app,-DAPP_BOOT=\"$(APP_NAME)\",,))
 $(eval $(call variant,wingate,-DWIN_GATE,,))
+$(eval $(call variant,hang,-DHANG_TEST,,))
+hangtest: hang-kernel8.elf
 wintest: wingate-kernel8.img
 apptest: app-kernel8.img
 $(eval $(call variant,brtrace,-DBR_TRACE,,))
@@ -335,6 +337,14 @@ $(eval $(call variant,screen,-DSCREEN_SELFTEST,,))
 $(eval $(call variant,audio,-DAUDIO_TEST,,))
 audiotest: audio-kernel8.elf
 .PHONY: audiotest
+# usbaudiotest: a USB speaker (QEMU's usb-audio) is fed 440 Hz through isochronous OUT transfers at boot; arm64-usbaudio-check.py reads the WAV QEMU wrote.
+$(eval $(call variant,usbaudio,-DUSB_AUDIO_TEST,,))
+usbaudiotest: usbaudio-kernel8.elf
+.PHONY: usbaudiotest
+# heartest: `hear` sends half a second of a tone instead of recording (virt has no microphone); arm64-hear-check.py stubs the words service.
+$(eval $(call variant,hear,-DHEAR_TEST,,))
+heartest: hear-kernel8.elf
+.PHONY: heartest
 # musictest: Music's clock (JT_SYS_TIME) ticks from MUSIC_UTC with the generic counter, so its `music: at` lines come once a
 # second on virt, which has no network time, and fptest.c's fp_clobber wipes the FPU inside every app call and before every
 # resume, so `userrun fpkeep` proves vectors.S keeps an app's FP registers (tools/checks/arm64-music-check.py).

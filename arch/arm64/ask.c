@@ -78,6 +78,10 @@ static int sam_state;        /* 0 idle, 1 queued by `sam`, 2 waiting on the rela
 static int tui_on, tui_quit;         /* the chat view has the window; leave it when the question in flight ends */
 static unsigned tui_n, tui_up;       /* history lines held; how many lines the view is scrolled back from the newest */
 void sam_command(const char *q, unsigned n);
+static void voice_fetch(const char *t, unsigned k);   /* [[say]]: her voice from the relay */
+static int vm_key(unsigned code, unsigned value);
+static void vm_poll(void);
+unsigned hear_fake(short *pcm, unsigned max);   /* main.c */
 static void tui_enter(void);
 static void tui_paint(int full);
 static void tui_escape(void);
@@ -158,6 +162,7 @@ int ask_key(unsigned code, unsigned value) {
     if (code == KEY_ESC && tui_on) { if (value) tui_escape(); return 1; }
     if (tui_on && (code == 103 || code == 108)) { if (value) tui_move(code == 103); return 1; }   /* Up and Down scroll the history */
     if (code == KEY_ESC) { if (value && (ac->pending || sam_state)) stop_flag = 1; return 0; }
+    if (vm_key(code, value)) return 1;         /* voice mode: a held Space is not a space */
     int typed = code < 58 && plain[code];
     if (!typed && code != KEY_BACKSPACE && code != KEY_ENTER && code != KEY_KPENTER) return 0;
     if (!value) return 1;                      /* key up: nothing to do, but it is still ours */
@@ -526,30 +531,33 @@ done:
     return (int)ret;
 }
 
-static int relay_post_tls(const char *body, unsigned body_len, const char *token, char *reply, int *status) {
+static int relay_post_tls_to(const char *path, const char *body, unsigned body_len, const char *token, char *reply, unsigned reply_max, int *status) {
     static char req[2 * RESULT_MAX + 512 + sizeof(RELAY_NAME)];
     char digits[10]; unsigned n = 0, dn = 0, v = body_len;
     *status = 0;
     if (relay_open() < 0) return -1;          /* nothing sent: the token stays home */
     do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
-    const char *parts[] = {"POST /api/claude HTTP/1.0\r\nHost: ", RELAY_NAME, "\r\nAuthorization: Bearer ", token,
+    const char *parts[] = {"POST ", path, " HTTP/1.0\r\nHost: ", RELAY_NAME, "\r\nAuthorization: Bearer ", token,
                           "\r\nContent-Type: application/json\r\nContent-Length: "};
-    for (unsigned i = 0; i < 5; i++) for (const char *p = parts[i]; *p; p++) req[n++] = *p;
+    for (unsigned i = 0; i < 7; i++) for (const char *p = parts[i]; *p; p++) req[n++] = *p;
     while (dn) req[n++] = digits[--dn];
     for (const char *p = "\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
     for (unsigned i = 0; i < body_len; i++) req[n++] = body[i];
-    char *raw = kmalloc(REPLY_MAX + 2048);
+    char *raw = kmalloc(reply_max + 2048);
     request_sent = 1;
-    int got = raw ? tls_exchange_timeout(req, n, raw, REPLY_MAX + 2048, ASK_TICKS) : -1;
+    int got = raw ? tls_exchange_timeout(req, n, raw, reply_max + 2048, ASK_TICKS) : -1;
     if (!raw) tcp_close();
     for (unsigned i = 0; i < n; i++) ((volatile char *)req)[i] = 0;
     *status = got > 0 ? http_status_of(raw, (unsigned)got) : 0;
     if (got <= 0) return -1;
     int start = http_body_start(raw, (unsigned)got);
-    if (start < 0 || (unsigned)(got - start) > REPLY_MAX) return -1;
+    if (start < 0 || (unsigned)(got - start) > reply_max) return -1;
     got -= start;
     for (int i = 0; i < got; i++) reply[i] = raw[start + i];
     return got;
+}
+static int relay_post_tls(const char *body, unsigned body_len, const char *token, char *reply, int *status) {
+    return relay_post_tls_to("/api/claude", body, body_len, token, reply, REPLY_MAX, status);
 }
 #endif
 
@@ -664,7 +672,7 @@ static void run_actions(void) {
         result_puts(names[act_kind[a]]); if (k) { result_puts(" "); result_puts(t); } result_puts(": ");
         switch (act_kind[a]) {
         case ACT_NOTE: say_wrapped("pi: ", t, k); break;
-        case ACT_SAY: say_wrapped("say: ", t, k); break;   /* no voice on ARM yet: a caption */
+        case ACT_SAY: say_wrapped("say: ", t, k); voice_fetch(t, k); break;   /* the caption, then her voice from the relay */
         case ACT_LED:
 #ifdef PI_BUILD
             led_blink(4); result_puts("blinked\n");
@@ -898,6 +906,236 @@ static void tui_submit(void) {   /* Enter in the chat view: your line, then the 
     cmd_out = saved;
     tui_paint(0);
 }
+/* Her voice on the Pi: [[say TEXT]] posts the text to the relay's /api/tts and 22050 Hz 16-bit mono PCM comes back. It is
+   boxed to the app sound path's 8-bit unsigned mono (audio.c, DMA on the Pi) and queued a piece at a time from ask_poll,
+   so the desktop never waits on the speaker. A clip is capped at VOICE_MAX samples (8 seconds). The relay's 413 and 429
+   (text or day cap) and a missing key (503) print as "voice: no audio (N)" and the caption stands on its own. */
+#define VOICE_RATE 22050
+#define VOICE_MAX (VOICE_RATE * 8)
+#define VOICE_TEXT_MAX 400                                       /* relay.py --tts-max-chars */
+int audio_app_queue(const unsigned char *pcm, unsigned len, unsigned rate, int end);   /* audio.c: bytes taken */
+static unsigned char voice_pcm[VOICE_MAX];
+static unsigned voice_len, voice_pos;
+static void voice_pump(void) {
+    if (voice_pos >= voice_len) return;
+    int took = audio_app_queue(voice_pcm + voice_pos, voice_len - voice_pos, VOICE_RATE, 1);
+    if (took > 0) voice_pos += (unsigned)took;
+    if (voice_pos >= voice_len) { kputs("voice: queued "); kdec(voice_len); kputs(" samples\n"); }
+}
+void audio_app_status(unsigned st[7]);     /* audio.c */
+void con_tui_mouth(int mouth);             /* main.c: the chat view's face */
+int voice_level(void) {   /* 0 to 100, how open her mouth is right now: the loudness of the clip at the point the sound path has reached */
+    if (!voice_len) return 0;
+    unsigned st[7]; audio_app_status(st);
+    if (!st[2]) return 0;
+    unsigned at = st[6], win = VOICE_RATE / 25;
+    if (at >= voice_len) return 0;
+    if (at + win > voice_len) win = voice_len - at;
+    unsigned sum = 0;
+    for (unsigned i = 0; i < win; i++) { int d = (int)voice_pcm[at + i] - 128; sum += (unsigned)(d < 0 ? -d : d); }
+    unsigned m = win ? sum * 100 / (win * 24) : 0;   /* 24 of 127 is a loud vowel: a wide-open mouth */
+    return m > 100 ? 100 : (int)m;
+}
+static void face_tick(void) {   /* ask_poll: the mouth follows the voice, 25 times a second, while the chat view is up */
+    static unsigned t; static int last = -1;
+    if (!tui_on || !voice_len) return;
+    unsigned now = ticks();
+    if (now - t < 4) return;
+    t = now;
+    int m = voice_level();
+    con_tui_mouth(m);
+    if (m / 25 != last) { last = m / 25; kputs("face: mouth="); kdec((unsigned)m); kputs("\n"); }
+}
+static void voice_fetch(const char *t, unsigned k) {
+    if (!CLAUDE_TOKEN_LEN || !net_get_gateway()) return;        /* no relay: the caption is all there is */
+    static char body[VOICE_TEXT_MAX * 2 + 16];
+    unsigned b = 0;
+    for (const char *p = "{\"text\":\""; *p; p++) body[b++] = *p;
+    if (k > VOICE_TEXT_MAX) k = VOICE_TEXT_MAX;
+    for (unsigned i = 0; i < k; i++) {
+        char c = t[i];
+        if (c == '"' || c == '\\') { body[b++] = '\\'; body[b++] = c; }
+        else body[b++] = (unsigned char)c < 32 ? ' ' : c;
+    }
+    body[b++] = '"'; body[b++] = '}';
+    static char token[64];
+    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
+    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    unsigned long mark = heap_mark();
+    char *raw = kmalloc(VOICE_MAX * 2);
+    int status = 0, got = -1;
+    if (raw) {
+#if defined(PI_BUILD) || CLAUDE_TLS
+        got = relay_post_tls_to("/api/tts", body, b, token, raw, VOICE_MAX * 2, &status);
+#else
+        http_post_set_bearer(token);
+        got = http_post_timeout(CLAUDE_HOST, "/api/tts", CLAUDE_PORT, body, b, raw, VOICE_MAX * 2, ASK_TICKS);
+        http_post_set_bearer(0);
+        status = http_last_status();
+#endif
+    }
+    for (int i = 0; i < 64; i++) token[i] = 0;
+    if (got <= 1 || status != 200) { kputs("voice: no audio ("); kdec((unsigned)status); kputs(")\n"); heap_release(mark); return; }
+    unsigned n = (unsigned)got / 2;
+    if (n > VOICE_MAX) n = VOICE_MAX;
+    for (unsigned i = 0; i < n; i++) {
+        int v = (short)((unsigned char)raw[2 * i] | (unsigned char)raw[2 * i + 1] << 8);
+        voice_pcm[i] = (unsigned char)((v >> 8) + 128);
+    }
+    heap_release(mark);
+    voice_len = n; voice_pos = 0;
+    kputs("voice: "); kdec(n); kputs(" samples at 22050 Hz\n");
+    voice_pump();
+}
+
+/* `hear`: the USB microphone for a few seconds, the samples to the Mac's words service (tools/claude-relay/stt.py, the relay's
+   port plus one, the same token and on the Pi the same TLS name), the words printed as "you: ..." and handed to `sam`. The
+   recording blocks the Terminal for those seconds; the post waits like a `sam` turn. HEAR_TEST (arm64-hear-check.py on QEMU
+   virt, which has no microphone) sends half a second of a 440 Hz tone instead of recording. */
+int usb_mic_ok(void);                                             /* xhci.c */
+unsigned usb_mic_record(short *dst, unsigned max, unsigned ms);
+#define HEAR_HZ 16000
+#define HEAR_MAX_SECS 10
+static void hear_post(const short *pcm, unsigned got, char *raw) {   /* the samples to the words service, the words to sam; raw: REPLY_MAX + 2048 */
+    static char token[64];
+    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
+    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    kputs("hear: sending "); kdec(got * 10 / HEAR_HZ); kputs(" tenths of a second\n");
+    int status = 0, n;
+#if defined(PI_BUILD) || CLAUDE_TLS
+    /* one request buffer: the header, then the samples; the words service sits beside the relay, one port up */
+    if (!relay_ip && relay_open() < 0) { kputs("hear: no relay\n"); return; }
+    if (relay_ip) tcp_close();
+    char *req = kmalloc(got * 2 + 512);
+    if (!req) { kputs("hear: out of memory\n"); return; }
+    unsigned k = 0; char digits[10]; unsigned dn = 0, v = got * 2;
+    do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    const char *parts[] = {"POST /api/stt HTTP/1.0\r\nHost: ", RELAY_NAME, "\r\nAuthorization: Bearer ", token,
+                          "\r\nContent-Type: application/octet-stream\r\nContent-Length: "};
+    for (unsigned i = 0; i < 5; i++) for (const char *p = parts[i]; *p; p++) req[k++] = *p;
+    while (dn) req[k++] = digits[--dn];
+    for (const char *p = "\r\nConnection: close\r\n\r\n"; *p; p++) req[k++] = *p;
+    for (unsigned i = 0; i < got * 2; i++) req[k++] = ((const char *)pcm)[i];
+    n = tls_connect_private(relay_ip, (unsigned short)(relay_port + 1), RELAY_NAME) < 0 || tls_handshake() < 0 ? -1
+        : tls_exchange_timeout(req, k, raw, REPLY_MAX + 2048, ASK_TICKS);
+    for (unsigned i = 0; i < k; i++) ((volatile char *)req)[i] = 0;
+    if (n > 0) {
+        status = http_status_of(raw, (unsigned)n);
+        int start = http_body_start(raw, (unsigned)n);
+        n = start < 0 ? -1 : n - start;
+        for (int i = 0; i < n; i++) raw[i] = raw[start + i];
+    }
+#else
+    http_post_set_bearer(token);
+    n = http_post_timeout(CLAUDE_HOST, "/api/stt", (unsigned short)(CLAUDE_PORT + 1), (const char *)pcm, got * 2, raw, REPLY_MAX, ASK_TICKS);
+    http_post_set_bearer(0);
+    status = http_last_status();
+#endif
+    for (int i = 0; i < 64; i++) token[i] = 0;
+    if (n < 0 || status != 200) { kputs("hear: no words ("); kdec((unsigned)status); kputs(")\n"); return; }
+    unsigned len = 0;
+    while (len < (unsigned)n && len < ASK_MAX && raw[len] >= 32 && raw[len] < 127) len++;
+    while (len && raw[len - 1] == ' ') len--;
+    if (!len) { kputs("you: (nothing)\n"); return; }
+    static char said[ASK_MAX + 1];
+    for (unsigned i = 0; i < len; i++) said[i] = raw[i];
+    said[len] = 0;
+    kputs("you: "); kputs(said); kputs("\n");
+    sam_command(said, len);
+}
+void hear_command(unsigned secs) {
+    if (secs < 1) secs = 3;
+    if (secs > HEAR_MAX_SECS) secs = HEAR_MAX_SECS;
+    if (sam_state) { kputs("hear: sam is busy, wait for her answer\n"); return; }   /* ac->pending is this very command */
+    if (!CLAUDE_TOKEN_LEN) { kputs("hear: no relay token in this build\n"); return; }
+    unsigned long mark = heap_mark();
+    unsigned max = secs * HEAR_HZ, got;
+    short *pcm = kmalloc(max * 2);
+    char *raw = kmalloc(REPLY_MAX + 2048);
+    if (!pcm || !raw) { kputs("hear: out of memory\n"); heap_release(mark); return; }
+    got = hear_fake(pcm, max);   /* main.c: half a second of a tone on the heartest build, 0 otherwise */
+    if (!got) {
+        if (!usb_mic_ok()) { kputs("hear: no USB microphone found (plug it into a Pi port, then wait a second)\n"); heap_release(mark); return; }
+        kputs("hear: listening for "); kdec(secs); kputs(" s\n");
+        got = usb_mic_record(pcm, max, secs * 1000 + 300);
+    }
+    if (got < HEAR_HZ / 4) kputs("hear: heard nothing\n");
+    else hear_post(pcm, got, raw);
+    heap_release(mark);
+}
+
+/* Voice mode (docs/ROADMAP.md, Joshua 2026-10-07): double-tap Space and hold the second tap; release to send. The two taps
+   are swallowed once the hold is confirmed (a quick double tap stays two spaces). While held: "voice: listening" on the
+   UART, a mic mark in the menu bar (main.c menubar_mic) and a "listening [####......]" line with a live level bar in the
+   prompt row. The samples gather in xhci.c's ring while the key is down; the release hands them to hear_post from
+   ask_poll, never from the key handler. HEAR_TEST: the tone stands in for the ring and the level bar moves on its own. */
+#define KEY_SPACE 57
+#define VM_TAP_TICKS 40      /* the second tap within 400 ms of the first */
+#define VM_HOLD_TICKS 25     /* held 250 ms: it is a hold, not a tap */
+#define VM_MAX_SECS 10
+void usb_mic_arm(int on);                  /* xhci.c */
+unsigned usb_mic_take(short *dst, unsigned max);
+unsigned usb_mic_peak(void);
+void menubar_mic(int on);                  /* main.c */
+static int vm_state;                       /* 0 off, 1 one tap seen, 2 second tap down, 3 listening, 4 released: send */
+static unsigned vm_t, vm_bar_t, vm_level;
+static short *vm_pcm; static unsigned vm_got; static unsigned long vm_mark;
+int ask_listening(void) { return vm_state == 3; }
+static void vm_cue(void) {
+    char cue[48]; unsigned k = 0;
+    for (const char *p = "listening ["; *p; p++) cue[k++] = *p;
+    unsigned bars = vm_level * 10 / 32768; if (vm_level && !bars) bars = 1; if (bars > 10) bars = 10;
+    for (unsigned i = 0; i < 10; i++) cue[k++] = i < bars ? '#' : '.';
+    for (const char *p = "] release to send"; *p; p++) cue[k++] = *p;
+    con_prompt(cue, k);
+    static unsigned last; cue[k] = 0;
+    if (bars != last) { last = bars; kputs("voice: "); kputs(cue); kputs("\n"); }   /* the UART sees the bar move, not every repaint */
+}
+static int vm_key(unsigned code, unsigned value) {   /* from ask_key, before the line editing; 1 when the key was taken */
+    if (code != KEY_SPACE || ac->pending || sam_state) { if (code != KEY_SPACE && value && vm_state < 3) vm_state = 0; return 0; }
+    unsigned now = ticks();
+    if (value) {                                                   /* down */
+        if (vm_state == 1 && now - vm_t <= VM_TAP_TICKS) { vm_state = 2; vm_t = now; return 0; }   /* the space is typed; swallowed if the hold comes */
+        if (vm_state >= 2) return 1;                               /* repeats while held */
+        vm_state = 0; return 0;
+    }
+    if (vm_state == 3) { vm_state = 4; return 1; }                /* released: ask_poll sends */
+    if (vm_state == 2) { vm_state = 0; return 0; }                /* a quick double tap: two spaces, as typed */
+    vm_state = 1; vm_t = now; return 0;
+}
+static void vm_poll(void) {
+    unsigned now = ticks();
+    if (vm_state == 2 && now - vm_t >= VM_HOLD_TICKS) {           /* the hold is real */
+        unsigned n = 0; while (n < 2 && ac->len && ac->line[ac->len - 1] == ' ') { ac->len--; n++; }   /* the two taps' spaces */
+        vm_mark = heap_mark(); vm_pcm = kmalloc(VM_MAX_SECS * HEAR_HZ * 2); vm_got = 0; vm_level = 0;
+        if (!vm_pcm) { heap_release(vm_mark); vm_state = 0; prompt_row(ac->line, ac->len); return; }
+        vm_state = 3; vm_bar_t = now; vm_t = now;
+        usb_mic_arm(1); menubar_mic(1);
+        kputs("voice: listening\n"); vm_cue();
+        return;
+    }
+    if (vm_state == 3) {
+        vm_got += usb_mic_take(vm_pcm + vm_got, VM_MAX_SECS * HEAR_HZ - vm_got);
+        unsigned p = usb_mic_peak();
+        if (hear_fake(0, 0)) p = 4000 + ((now - vm_t) % 40) * 600;  /* no microphone on the test build: a bar that moves */
+        if (p > vm_level) vm_level = p; else vm_level = vm_level * 7 / 8;
+        if (now - vm_bar_t >= 10) { vm_bar_t = now; vm_cue(); }
+        if (now - vm_t >= VM_MAX_SECS * 100) vm_state = 4;        /* ten seconds is the most one turn holds */
+        return;
+    }
+    if (vm_state == 4) {
+        usb_mic_arm(0); menubar_mic(0);
+        vm_got += usb_mic_take(vm_pcm + vm_got, VM_MAX_SECS * HEAR_HZ - vm_got);
+        if (!vm_got) vm_got = hear_fake(vm_pcm, VM_MAX_SECS * HEAR_HZ);
+        kputs("voice: released after "); kdec((now - vm_t) / 100); kputs(" s\n");
+        prompt_row(ac->line, ac->len);
+        char *raw = kmalloc(REPLY_MAX + 2048);
+        if (vm_got < HEAR_HZ / 4 || !raw) kputs("hear: heard nothing\n");
+        else hear_post(vm_pcm, vm_got, raw);
+        heap_release(vm_mark); vm_pcm = 0; vm_state = 0;
+    }
+}
+
 void sam_command(const char *q, unsigned n) {   /* cmd.c: `sam QUESTION` queues the question and returns; ask_poll sends it */
     while (n && q[0] == ' ') { q++; n--; }
     if (!n) { if (!tui_on) tui_enter(); return; }   /* `sam` alone opens the chat view */
@@ -975,6 +1213,9 @@ static void sam_run(void) {   /* the queued question, on a main loop pass of its
     prompt_row(ac->line, ac->len);
 }
 void ask_poll(void) {
+    voice_pump();                              /* the rest of a clip, as the sound ring makes room */
+    vm_poll();                                 /* voice mode: the hold, the level bar, the release */
+    face_tick();                               /* the chat view's mouth, while she speaks */
     if (ac->pending) run_typed();
     else if (sam_state == 1) sam_run();
 }

@@ -19,7 +19,7 @@
     svc #0
 .endm
 .section .user, "ax"
-.global user_start, user_end, user_entry_a, user_entry_b, user_entry_c, user_entry_d, user_entry_e
+.global user_start, user_end, user_entry_a, user_entry_b, user_entry_c, user_entry_d, user_entry_e, user_entry_f
 user_start:
 user_entry_a:
     sub sp, sp, #16
@@ -72,6 +72,9 @@ fail:
     mov x8, #93
     svc #0
 1:  b 1b
+user_entry_f:                   /* 4.4: x0 = a page in another app's arena: the load must fault */
+    ldr x2, [x0]
+    b fail
 user_entry_c:                   /* x1 = a kernel text address: branching there must fault */
     br x1
     b fail

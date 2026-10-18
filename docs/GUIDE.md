@@ -115,6 +115,11 @@ Files behind it: `tools/flash-pi.sh` (builds and copies the image), `arch/arm64/
 | `browse`, `open`, `back`, `forward`, `reload`, `links`, `more`, `up`, `down`, `top`, `bottom`, `find` | The text browser. |
 | `bt` | Bluetooth (below). |
 | `beep`, `vol` | `beep` plays a short tone. `vol 40`, `vol up`, `vol down` set the volume 0 to 100. |
+| `mic`, `mic 5` | Listens through a USB microphone for 3 seconds (or 1 to 5) and shows how loud it was. Nothing is saved or sent. |
+| `hear`, `hear 5` | Speak to Samantha. Records 3 seconds (or 1 to 10) from the USB microphone, sends it to the Mac's words service, prints what it heard as `you: ...` and asks her. |
+| hold Space | Talk to Samantha: tap Space twice and keep it held the second time. A mic mark shows in the menu bar and the prompt row shows a level bar; let go to send. Needs a USB microphone and the words service on the Mac. |
+| `sam` | Opens the chat view: her face at the top, the conversation below, your line at the bottom. Her mouth moves while she speaks. Esc closes it. |
+| `sam QUESTION` | Ask Samantha. When her answer carries a `[[say ...]]` line she says it out loud through the jack, with the words printed as `say: ...`. |
 | `userrun NAME` | Starts a user program by name, for testing. |
 | `llm PROMPT` | Asks the tiny model in the kernel. A normal release has none and stays quiet. |
 | `reboot`, `shutdown` | Restart or switch off. |
@@ -298,6 +303,8 @@ Start the relay from the repo root:
 
 ```sh
 python3 tools/claude-relay/relay.py --token-file ~/.claude-relay-token
+
+For speech, run the words service next to it with the same token: `python3 tools/claude-relay/stt.py --token-file ~/.claude-relay-token` (port 8766, whisper.cpp from Homebrew and its base English model, nothing leaves the Mac). The Pi posts what its microphone heard and gets the words back.
 ```
 
 It listens on `127.0.0.1:8765`. QEMU's network reaches your Mac's loopback at `10.0.2.2`, so boot with a network card:
@@ -420,6 +427,7 @@ From the repository root, start the reviewed relay with TLS:
 
 ```sh
 python3 tools/claude-relay/relay.py --lan --turing --token-file ~/.claude-relay-token --tls-cert ~/.config/joshuatree/relay-tls/server.pem --tls-key ~/.config/joshuatree/relay-tls/server.key
+python3 tools/claude-relay/stt.py --lan --token-file ~/.claude-relay-token --tls-cert ~/.config/joshuatree/relay-tls/server.pem --tls-key ~/.config/joshuatree/relay-tls/server.key
 ```
 
 - `--turing` answers as Samantha from Turing's `app/serve.py`, so start that first. Leave it off to use `claude -p`.
