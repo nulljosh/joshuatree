@@ -33,7 +33,7 @@ Any QEMU run with a `-d` trace and `-D <file>` gets `timeout` in front: `timeout
 
 ## Theme
 
-The wallpaper is one flat colour, the brand terracotta `#b5502c`; the UI face is Tree Sans; the mark is flat ink. Landing page: off-white `#faf8f4`, near-black ink, one terracotta accent `#b5502c`, rounded cards, no teal, purple or gradients. Dark mode is `#141311`. The logo comes from `tools/gen/logo.py`. The rest is in `docs/ARCHITECTURE.md` (Design rules).
+The Pi wallpaper is one flat colour, graphite grey `#6E6E6E` by default (Settings offers Grey, Terracotta, Clay and Ink; terracotta `#b5502c` stays the brand accent); the UI face is Tree Sans; the mark is flat ink. Landing page: off-white `#faf8f4`, near-black ink, one terracotta accent `#b5502c`, rounded cards, no teal, purple or gradients. Dark mode is `#141311`. The logo comes from `tools/gen/logo.py`. The rest is in `docs/ARCHITECTURE.md` (Design rules).
 
 ## ARM64 and the Pi
 
