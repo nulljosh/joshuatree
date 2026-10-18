@@ -444,8 +444,8 @@ static long app_brk_set(unsigned long want) {
     if (!want) return (long)top;
     if (want < base || want > UB + UP_WIN) return -22;   /* the heap stops where the window buffer starts */
     unsigned long have = (top + 4095) & ~4095UL, need = (want + 4095) & ~4095UL;
-    for (unsigned long v = have; v < need; v += 4096) l3[(v - UB) >> 12] = v | PAGE | AP_EL0_RW | PXN | UXN;
-    for (unsigned long v = need; v < have; v += 4096) l3[(v - UB) >> 12] = 0;
+    for (unsigned long v = have; v < need; v += 4096) l3[ap->l3off + ((v - UB) >> 12)] = v | PAGE | AP_EL0_RW | PXN | UXN;
+    for (unsigned long v = need; v < have; v += 4096) l3[ap->l3off + ((v - UB) >> 12)] = 0;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
     for (unsigned long v = have; v < need; v += 8) *(unsigned long *)v = 0;
     app_brk = want;
@@ -572,18 +572,18 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
 static void user_init(const char *img, unsigned long len) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);   /* valid page, normal memory, inner shareable, access flag */
     const unsigned long AP_EL0_RW = 1UL << 6, AP_RO = 3UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
-    l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable for now, so the kernel can copy the program in */
-    l3[UP_STACK >> 12] = (USER_BASE + UP_STACK) | PAGE | AP_EL0_RW | PXN | UXN;
-    l3[UP_KERN >> 12] = (USER_BASE + UP_KERN) | PAGE | PXN | UXN;               /* AP=00: EL1 only */
+    l3[UP_CODE >> 12] = (UB + UP_CODE) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable for now, so the kernel can copy the program in */
+    l3[UP_STACK >> 12] = (UB + UP_STACK) | PAGE | AP_EL0_RW | PXN | UXN;
+    l3[UP_KERN >> 12] = (UB + UP_KERN) | PAGE | PXN | UXN;               /* AP=00: EL1 only */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
-    char *code = (char *)(USER_BASE + UP_CODE);
+    char *code = (char *)(UB + UP_CODE);
     for (unsigned long i = 0; i < len; i++) code[i] = img[i];
     const char *secret = "KERNEL-ONLY-SECRET";
-    for (int i = 0; secret[i]; i++) ((char *)(USER_BASE + UP_KERN))[i] = secret[i];
+    for (int i = 0; secret[i]; i++) ((char *)(UB + UP_KERN))[i] = secret[i];
     for (unsigned long a = (unsigned long)code & ~63UL; a < (unsigned long)code + len; a += 64)
         __asm__ volatile ("dc cvau, %0" :: "r"(a) : "memory");
     __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
-    l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_RO | PXN;             /* now read-only for everyone, executable by EL0 only */
+    l3[UP_CODE >> 12] = (UB + UP_CODE) | PAGE | AP_RO | PXN;             /* now read-only for everyone, executable by EL0 only */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
 }
 
@@ -678,7 +678,7 @@ static int user_run(const struct user_app *a) {
     unsigned long entry = user_load(a);
     if (!entry) return -1;
     user_pid++; user_faulted = 0; ufile_owner = 0;
-    user_status = enter_user(entry, USER_BASE + UP_ASTACK + APP_STACK_PAGES * 4096UL, 0, 0);
+    user_status = enter_user(entry, UB + UP_ASTACK + APP_STACK_PAGES * 4096UL, 0, 0);
     ufile_release();   /* M3d: what it left open is closed for it, however it ended */
     return 0;
 }
@@ -765,11 +765,11 @@ int userrun(const char *name, unsigned n, unsigned long *status, int *faulted) {
    in a block at the bottom of its own stack page and checks them (see user.S). It ends on a store to the code page, which must
    fault; the kernel survives and says so. */
 static void user_probe(int pass) {
-    unsigned long base = USER_BASE + UP_APP, *args = (unsigned long *)(USER_BASE + UP_STACK);
+    unsigned long base = UB + UP_APP, *args = (unsigned long *)(UB + UP_STACK);
     args[0] = base + ((app_img + 15) & ~15UL); args[1] = base + app_code; args[2] = base; args[3] = UAPP_MAX;
     uart_puts("M3c probe "); uart_dec((unsigned)pass); uart_puts(" starts\n");
     user_faulted = 0;
-    enter_user(USER_BASE + UP_CODE + (unsigned long)(user_entry_d - user_start), USER_BASE + UP_STACK + 4096, (unsigned long)args, 0);
+    enter_user(UB + UP_CODE + (unsigned long)(user_entry_d - user_start), UB + UP_STACK + 4096, (unsigned long)args, 0);
     uart_puts(user_faulted ? "M3c probe survived the code write\n" : "M3c probe FAIL: the code write did not fault\n");
 }
 /* Branch to an address inside the loaded app that is not code: user.S's entry C does the `br`, which must be an instruction
@@ -777,13 +777,13 @@ static void user_probe(int pass) {
 static void user_exec_probe(const char *what, unsigned long target) {
     uart_puts("M3c exec "); uart_puts(what); uart_putc(' '); uart_hex(target); uart_putc('\n');
     user_faulted = 0;
-    enter_user(USER_BASE + UP_CODE + (unsigned long)(user_entry_c - user_start), USER_BASE + UP_STACK + 4096, USER_BASE + UP_KERN, target);
+    enter_user(UB + UP_CODE + (unsigned long)(user_entry_c - user_start), UB + UP_STACK + 4096, UB + UP_KERN, target);
     uart_puts(user_faulted ? "M3c exec refused\n" : "M3c exec FAIL: it ran\n");
 }
 #endif
 static void user_demo(void) {
     user_init(user_start, (unsigned long)(user_end - user_start));
-    unsigned long code = USER_BASE + UP_CODE, sp = USER_BASE + UP_STACK + 4096, kpage = USER_BASE + UP_KERN;
+    unsigned long code = UB + UP_CODE, sp = UB + UP_STACK + 4096, kpage = UB + UP_KERN;
     uart_puts("M3 EL0 task starts\n");
     enter_user(code + (unsigned long)(user_entry_a - user_start), sp, kpage, 0);
     uart_puts("M3 kernel survived the fault\n");
@@ -818,10 +818,10 @@ static void user_demo(void) {
     if (cal) {
         user_probe(1);
         if (user_load(cal)) user_probe(2); else uart_puts("M3c probe FAIL: calendar did not load again\n");
-        unsigned long base = USER_BASE + UP_APP;   /* never executable: a data page, the first whole page of the zeroed pool, the stack */
+        unsigned long base = UB + UP_APP;   /* never executable: a data page, the first whole page of the zeroed pool, the stack */
         user_exec_probe("data", base + app_code);
         user_exec_probe("pool", base + (app_img + 4095) / 4096 * 4096);
-        user_exec_probe("stack", USER_BASE + UP_ASTACK);
+        user_exec_probe("stack", UB + UP_ASTACK);
     }
 #endif
 }
@@ -1858,9 +1858,9 @@ static long app_window_open(unsigned long info, unsigned long flags) {
         int hi = ((flags & 1) || (app_wbytes && app_hi)) && window_scale() == 2;   /* hires.h's ask: only at scale 2, where there are device pixels to give */
         unsigned long bytes = ((unsigned long)app_cw * app_ch * (hi ? 16 : 4) + 4095) & ~4095UL;
         if (bytes > UWIN_MAX) return -12;
-        for (unsigned long i = 0; i < bytes / 4096; i++) l3[(UP_WIN >> 12) + i] = (USER_BASE + UP_WIN + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
+        for (unsigned long i = 0; i < bytes / 4096; i++) l3[ap->l3off + (UP_WIN >> 12) + i] = (UB + UP_WIN + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
         __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
-        for (unsigned long i = 0; i < bytes / 8; i++) ((unsigned long *)(USER_BASE + UP_WIN))[i] = 0;
+        for (unsigned long i = 0; i < bytes / 8; i++) ((unsigned long *)(UB + UP_WIN))[i] = 0;
         int first = !app_wbytes;
         app_wbytes = bytes; app_shown = 0; app_bw = app_cw; app_bh = app_ch; app_hi = hi;
         if (first) { spot_close(); calc_close(); browser_close(); settings_close(); app_front = 1; app_z_front(ap->slot); app_rs_log = 0; }
@@ -1872,7 +1872,7 @@ static long app_window_open(unsigned long info, unsigned long flags) {
         uart_putc('\n');
     }
     st32(info, app_bw); st32(info + 4, app_bh); st32(info + 8, app_bw * (app_hi ? 8 : 4));   /* width and height stay logical; the pitch (bytes) says the buffer is twice as wide */
-    st32(info + 12, 0); st32(info + 16, (unsigned)(USER_BASE + UP_WIN)); st32(info + 20, (unsigned)((USER_BASE + UP_WIN) >> 32));
+    st32(info + 12, 0); st32(info + 16, (unsigned)(UB + UP_WIN)); st32(info + 20, (unsigned)((UB + UP_WIN) >> 32));
     return 0;
 }
 /* JT_SYS_TEXT2 (3.9.0): one run of Tree Sans into the device-size window buffer, for an app that opened it hi-res. The
@@ -1893,7 +1893,7 @@ static long app_text(unsigned long req) {
     static const unsigned char which[4] = {2, 1, 2, 0};   /* text.c's faces: 0 mono, 1 sans bold, 2 sans */
     static const int px10[4] = {140, 140, 560, 135};
     int k = (int)window_scale(), bw = (int)app_cw * k, bh = (int)app_ch * k, px = px10[face] * k * pct / 100;
-    unsigned *buf = (unsigned *)(USER_BASE + UP_WIN);
+    unsigned *buf = (unsigned *)(UB + UP_WIN);
     for (int i = 0; i < n; i++) {
         char one[2] = { ((const char *)sp)[i], 0 };
         text_draw(which[face], one, x, y, px, rgb, buf, (unsigned)bw, bw, bh);
@@ -2756,8 +2756,19 @@ static void fb_desktop(void) {
     pane_open(&con_p);   /* the Console is not up at boot: bring it up to be dragged */
     drag_on = 1; win_move_to(win_lx + 100, win_ly + 60); drag_end();
 #endif
-#ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with) */
-    if (!app_dock(APP_BOOT)) {   /* 3.9.0: the kernel-drawn windows too (arm64-sharp2x-check.py), then their frame on the UART: WINBOX name x y w h, logical */
+#ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with). 4.0: "a,b,c" opens each in turn, for arm64-windows-check.py */
+    int boot_multi = 0;
+    {   const char *list = APP_BOOT;
+        for (const char *c = list; *c; c++) if (*c == ',') boot_multi = 1;
+        if (boot_multi) {
+            char one[24]; unsigned n = 0;
+            for (const char *c = list;; c++) {
+                if (*c == ',' || !*c) { one[n] = 0; app_dock(one); n = 0; if (!*c) break; }
+                else if (n < sizeof one - 1) one[n++] = *c;
+            }
+        }
+    }
+    if (!boot_multi && !app_dock(APP_BOOT)) {   /* 3.9.0: the kernel-drawn windows too (arm64-sharp2x-check.py), then their frame on the UART: WINBOX name x y w h, logical */
         const char *nm = APP_BOOT; int bx, by, bw, bh;
         #define NM_IS(w) ({ const char *a_ = nm, *b_ = w; while (*a_ && *a_ == *b_) { a_++; b_++; } !*a_ && !*b_; })
         if (NM_IS("calculator")) { calc_open(); bx = calc_lx; by = calc_ly; bw = calc_lw; bh = calc_lh; }
