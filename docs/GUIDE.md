@@ -115,6 +115,7 @@ Files behind it: `tools/flash-pi.sh` (builds and copies the image), `arch/arm64/
 | `browse`, `open`, `back`, `forward`, `reload`, `links`, `more`, `up`, `down`, `top`, `bottom`, `find` | The text browser. |
 | `bt` | Bluetooth (below). |
 | `beep`, `vol` | `beep` plays a short tone. `vol 40`, `vol up`, `vol down` set the volume 0 to 100. |
+| `mic`, `mic 5` | Listens through a USB microphone for 3 seconds (or 1 to 5) and shows how loud it was. Nothing is saved or sent. |
 | `userrun NAME` | Starts a user program by name, for testing. |
 | `llm PROMPT` | Asks the tiny model in the kernel. A normal release has none and stays quiet. |
 | `reboot`, `shutdown` | Restart or switch off. |
