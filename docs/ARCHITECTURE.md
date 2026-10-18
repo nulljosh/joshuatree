@@ -886,7 +886,7 @@ Failures:
 
 ## Design rules
 
-This is the one page of rules for how Joshua Tree looks and what it never does. Every number in a code span below is read back from the source by `tools/checks/design-doc-check.py`, so when a rule drifts the suite says so.
+This is the one page of rules for how Joshua Tree looks and what it never does. The brand kit, every mark, colour, type size and icon on one page you can open in a browser, is `docs/brand/index.html`. Every number in a code span below is read back from the source by `tools/checks/design-doc-check.py`, so when a rule drifts the suite says so.
 
 ### What the OS never does
 
