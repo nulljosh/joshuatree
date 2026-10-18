@@ -354,6 +354,7 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
     unsigned cw, ch;                      /* the content area, what the frame holds */
     unsigned bw, bh;                      /* the app's buffer, pixel for pixel: the content's size as of its last JT_SYS_WINDOW_OPEN */
     int rs_log;                           /* a resized buffer is waiting for the app's first frame at the new size */
+    unsigned presents;                    /* frames it has handed to JT_SYS_WINDOW_POLL, for the windows gate */
     int shown;                            /* the app has presented a frame since its window opened */
     unsigned long base;                   /* its arena: USER_BASE + slot * ARENA_SIZE (apps are position independent, so each loads where its arena is) */
     unsigned l3off, slot;                 /* its first l3 entry; its index in apps */
@@ -698,7 +699,9 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     ufile_owner = ap->slot + 1;
     ufile_release();   /* M3d: its open files are written back and closed, after an exit, a fault or its red dot alike */
     audio_app_stop();  /* M3e: and its sound stops (what is already in the PWM ring plays out) */
-    app_window_close();
+    struct app *me = ap;
+    app_window_close();   /* leaves `ap` on the window now in front... */
+    ap = me;              /* ...so put it back: the pages unmapped and the line printed below are this app's, not the front one's */
     app_unmap();
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
@@ -1909,6 +1912,7 @@ static long app_window_poll(unsigned long ev, unsigned long flags) {
     if (!user_writable(ev, 12)) return -14;
     if (flags & ~1UL) return -22;
     if (flags & 1) {
+        ap->presents++;
         if (!app_shown) {
             con_quiet = 1; uart_puts("M3c window "); uart_puts(app_cur->name);
             if (app_rs_log) { uart_puts(" redrawn "); uart_dec(app_bw); uart_putc('x'); uart_dec(app_bh); uart_putc('\n'); app_rs_log = 0; }   /* the first frame in the buffer a resize gave it */
@@ -2756,6 +2760,9 @@ static void fb_desktop(void) {
     pane_open(&con_p);   /* the Console is not up at boot: bring it up to be dragged */
     drag_on = 1; win_move_to(win_lx + 100, win_ly + 60); drag_end();
 #endif
+#ifdef WIN_GATE
+#define APP_BOOT "calendar,toroid,notes"   /* the windows gate's three apps (Makefile: wingate) */
+#endif
 #ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with). 4.0: "a,b,c" opens each in turn, for arm64-windows-check.py */
     int boot_multi = 0;
     {   const char *list = APP_BOOT;
@@ -3032,6 +3039,30 @@ int wifi_init(void);
 #else
 #define WIFI_ON_PI 0
 #endif   /* wifi.c: M4 Wi-Fi stage 1, polled, every wait bounded */
+#ifdef WIN_GATE
+/* wingate-kernel8.img only (arm64-windows-check.py): three apps booted, slot 1 is Toroid. A second after all three have drawn,
+   the backquote it crashes on is queued for it; two seconds later the UART says which slots still have an app and how many
+   frames each has presented since, so the check can see the other two kept running. */
+static void wingate_tick(void) {
+    static unsigned long t0; static int phase; static unsigned p0[APP_SLOTS];
+    unsigned long now = cnt_now();
+    if (phase == 0) {
+        if (!(apps[0].shown && apps[1].shown && apps[2].shown)) return;
+        t0 = now; phase = 1;
+    } else if (phase == 1 && now > t0 + cnt_hz()) {
+        struct app *keep = ap; ap = &apps[1]; app_push(1, '`', 0); ap = keep;
+        for (unsigned i = 0; i < APP_SLOTS; i++) p0[i] = apps[i].presents;
+        t0 = now; phase = 2;
+    } else if (phase == 2 && now > t0 + 3 * cnt_hz()) {
+        for (unsigned i = 0; i < 3; i++) { struct app *keep = ap; ap = &apps[i]; if (i != 1) app_push(1, ' ', 0); ap = keep; }   /* poke the survivors */
+        t0 = now; phase = 3;
+    } else if (phase == 3 && now > t0 + 2 * cnt_hz()) {
+        con_quiet = 1; uart_puts("wingate:");
+        for (unsigned i = 0; i < 3; i++) { uart_puts(" slot"); uart_dec(i); uart_puts(apps[i].cur ? " live " : " gone "); uart_dec(apps[i].presents - p0[i]); }
+        uart_putc('\n'); phase = 4;
+    }
+}
+#endif
 void usb_poll(void);
 #ifdef NOTES_SELFTEST
 /* notesw-kernel8.img and notesr-kernel8.img only (arm64-notes-check.py). QEMU's raspi4b has no USB, so made-up boot
@@ -3441,6 +3472,9 @@ void main(void) {
             usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); audio_pump(); screen_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
+#endif
+#ifdef WIN_GATE
+            wingate_tick();
 #endif
         }
 #else
