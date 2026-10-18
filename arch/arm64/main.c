@@ -2973,6 +2973,7 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
 #include "browser_ui.h"
 #include "glyphs.h"
 #include "settings_ui.h"
+#include "accounts.h"
 /* The right end of the menu bar: the clock in 12-hour form, and left of it the Wi-Fi fan, no name. The fan, the speaker and the power
    symbol are all flat ink, the same 0x001C1C1E as the clock, in every state.
    Each arc is anti-aliased (4x4 samples a pixel, blended onto the bar), so it stays crisp at scale 1 and 2. Each call puts the
@@ -3917,6 +3918,7 @@ void main(void) {
     { int usb_spk_tone(int freq, int ms); usb_spk_tone(440, 500); }
 #endif
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
+    accounts_load();           /* accounts.c: JT/USERS.TXT, the names `users` lists */
     settings_load();           /* settings.c: JT/SETTINGS.TXT, before the Pi's desktop is first painted (the splash waits) */
     SPLASH(2, "sd");
 #ifdef SD_SELFTEST   /* the sd builds (arm64-sd-check.py) run the Terminal's own commands at boot on the check's card */
