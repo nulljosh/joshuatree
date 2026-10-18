@@ -661,10 +661,13 @@ try:
         # gui_draw_hint(20, T+52, ...) -- T=0 full screen. Sample the whole
         # hint row's x-span (past where even a short "No mail yet." string
         # would sit) for any ink at all.
-        hint_row_has_ink = any(
-            not close4(px_at(px_mail, x, 52), GUI_BG4, 25)
-            for x in range(18, 340, 4)
-        )
+        def hint_ink(px): return any(not close4(px_at(px, x, 52), GUI_BG4, 25) for x in range(18, 340, 4))
+        hint_row_has_ink = hint_ink(px_mail)
+        for _ in range(25):   # a loaded runner paints Mail a beat late: give the row time to settle before calling it ink
+            if not hint_row_has_ink: break
+            time.sleep(0.4); dump4(TAP_MAIL)
+            img_mail, px_mail = load4(TAP_MAIL); img_mail.save(TAP_MAIL_PNG)
+            hint_row_has_ink = hint_ink(px_mail)
         if hint_row_has_ink:
             fail = 1; print("FAIL: Mail's hint row has ink on a phone boot -- gui_draw_hint should no-op for boot_to_phone")
         else:

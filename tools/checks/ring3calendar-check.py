@@ -270,6 +270,9 @@ try:
         fails.append("the kernel faulted or ring3app logged a BUG line")
     move(*PARK); time.sleep(0.5)
     dock = pixel(480, 511)
+    for _ in range(100):   # her full-screen face is slow to leave on a loaded runner: wait for the dock instead of a fixed beat
+        if dock == (0xEF, 0xEB, 0xE4): break
+        time.sleep(0.2); dock = pixel(480, 511)
     if dock != (0xEF, 0xEB, 0xE4):
         fails.append(f"desktop dock not on screen after the close (got {dock})")
     move(SLOT0_X + 2 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()

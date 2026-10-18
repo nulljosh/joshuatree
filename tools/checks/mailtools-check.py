@@ -170,7 +170,8 @@ def main():
         mark = len(serial())
         type_msg("read my email")
         wait_for("chattool=read_mail:", 20, "scenario a: no chattool=read_mail: marker", after=mark)
-        time.sleep(1.0)
+        wait_for(",28,0", 30, "scenario a: her reply caption never finished rising", after=mark + serial()[mark:].find("chattool=read_mail:"))
+        time.sleep(0.5)
         reply_a = reply_ink(dump()) - before_ink
         print("scenario a: new reply-band ink = %d" % reply_a)
         if reply_a < 100: fails.append("scenario a: read_mail reply did not render in her transcript (%d new ink px)" % reply_a)
