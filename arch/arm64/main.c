@@ -2184,6 +2184,7 @@ static void pointer_moved(void) {   /* one report done: the arrow to its new pla
 static int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx && x < bx + bw && y >= by && y < by + bh; }
 static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
 static void dock_activate(int slot);
+void ask_prefill(const char *s);   /* ask.c: type s on the Terminal's empty line */
 #define SPOT_MUSIC (GUI_ICON_COUNT + 2)   /* M3e: Music is in Spotlight (and the app table) but not on the dock, a decision */
 #define SPOT_BROWSER (GUI_ICON_COUNT + 3) /* the Browser is in Spotlight only too: the dock's 11 slots stay as they are */
 #define SPOT_BOOKS (GUI_ICON_COUNT + 4)   /* 2.66: Books, the same: Spotlight only, not on the dock */
@@ -2255,7 +2256,8 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     clock_close();
     browser_close();
     if (app_dock(slot == SPOT_MUSIC ? "Music" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_FINDER || slot == 1 ? "Finder" : slot >= SPOT_GAME0 ? game_names[slot - SPOT_GAME0] : dock_names[slot])) return;   /* slot 1 is the Burrow tile: the file window, called Finder on the Pi */   /* Calendar, Notes, Music and Books: user/NAME.c at EL0, in its own window */
-    if (slot == 6 || slot == 7) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
+    if (slot == 7) { ask_prefill("sam "); pane_open(&term_p); ask_redraw(); con_quiet = 1; uart_puts("dock Samantha: sam ready\n"); return; }   /* 3.9.8: the Samantha tile is the Terminal with `sam ` already typed */
+    if (slot == 6) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
     console_open();
     uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
 }
@@ -2736,17 +2738,42 @@ void menubar_tick(void) {   /* the poll loop calls this; it redraws only when th
    not the desktop, not the Console, until splash_finish: Wi-Fi joined or given up, the clock synced or given up, Bluetooth
    up or given up. Then fb_desktop paints the desktop once. The UART says `splash step N name` and `boot done`. */
 #ifdef QUIET_BOOT
+static int splash_pm;   /* the bar's fill, in thousandths of the track */
+static void splash_wait_ms(unsigned ms) {
+    unsigned long f, c, end; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    end = c + (f ? f : 54000000) / 1000 * ms;
+    do __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); while (c < end);
+}
+static void splash_draw(int pm) {   /* 3.9.8: the fill is any width, not one of six */
+    int W = (int)fb_w, H = (int)fb_h, bw = sg(140), bh = sg(4) > 2 ? sg(4) : 2, bx = (W - bw) / 2, by = H / 2 + sg(62);
+    splash_pm = pm;
+    fb_rect(bx, by, bw, bh, 0x00C8C8CC);              /* the track, a calm darker grey */
+    fb_rect(bx, by, bw * pm / 1000, bh, 0x00636366);  /* the part of boot done, mid grey */
+    fb_flush(bx, by, bw, bh);
+}
+static void splash_ease(int to) {   /* glide to a new fill in small frames, so the bar never jumps a third */
+    int from = splash_pm;
+    for (int i = 1; i <= 12; i++) {
+        splash_draw(from + (to - from) * i / 12);
+        uart_puts("splash bar "); uart_dec((unsigned)splash_pm); uart_putc('\n');
+        splash_wait_ms(10);
+    }
+}
+static void splash_creep(void) {   /* inside a long wait (the radio loading): move toward the next stage as time passes, never past it */
+    static unsigned long t0;
+    unsigned long f, c; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    if (!splash_on) return;
+    if (!t0) t0 = c;
+    unsigned long ms = (c - t0) / ((f ? f : 54000000) / 1000);
+    int pm = 667 + (int)(166 * ms / (ms + 6000));
+    if (pm >= splash_pm + 4) splash_draw(pm);
+}
 static void splash_step(int n, const char *name) {
     if (!splash_on) return;
-    int W = (int)fb_w, H = (int)fb_h, bw = sg(140), bh = sg(4) > 2 ? sg(4) : 2, bx = (W - bw) / 2, by = H / 2 + sg(62);
-    fb_rect(bx, by, bw, bh, 0x00C8C8CC);              /* the track, a calm darker grey */
-    fb_rect(bx, by, bw * n / 6, bh, 0x00636366);      /* the stages done, mid grey */
-    fb_flush(bx, by, bw, bh);
+    splash_ease(1000 * n / 6);
     uart_puts("splash step "); uart_dec((unsigned)n); uart_putc(' '); uart_puts(name); uart_putc('\n');
 #ifdef SPLASH_STEP_MS   /* the splash checks: hold each step so a screendump can catch it */
-    unsigned long f, c, end; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
-    end = c + (f ? f : 54000000) / 1000 * SPLASH_STEP_MS;
-    do __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); while (c < end);
+    splash_wait_ms(SPLASH_STEP_MS);
 #endif
 }
 static void splash_begin(void) {
@@ -3556,7 +3583,7 @@ void main(void) {
 #ifdef QUIET_BOOT
     if (splash_on) {   /* the splash waits for the radio to load its patch (about half a minute on a Pi), or to say it will not: 60 s at most */
         unsigned long t0 = key_ms();
-        while (bt_starting() && key_ms() - t0 < 60000) bt_poll();
+        while (bt_starting() && key_ms() - t0 < 60000) { bt_poll(); splash_creep(); }
     }
     SPLASH(5, "bt");
     splash_finish();
