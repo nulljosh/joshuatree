@@ -299,6 +299,8 @@ Start the relay from the repo root:
 
 ```sh
 python3 tools/claude-relay/relay.py --token-file ~/.claude-relay-token
+
+For speech, run the words service next to it with the same token: `python3 tools/claude-relay/stt.py --token-file ~/.claude-relay-token` (port 8766, whisper.cpp from Homebrew and its base English model, nothing leaves the Mac). The Pi posts what its microphone heard and gets the words back.
 ```
 
 It listens on `127.0.0.1:8765`. QEMU's network reaches your Mac's loopback at `10.0.2.2`, so boot with a network card:
