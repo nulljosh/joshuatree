@@ -1940,6 +1940,9 @@ const char *calc_input(void);
 const char *calc_output(void);
 int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
 static int clock_live, brick_live, spot_live, browser_live, settings_live;
+#include "accounts.h"
+#include "login.h"
+static int login_live;   /* login_ui.h: the login screen covers everything; the bar, the notices and the clock stand back */
 static void set_paint(void);
 static void settings_open(int sec);
 static void settings_close(void);
@@ -2764,12 +2767,16 @@ static void tree_open(void) {
     con_quiet = 1; uart_puts("treemenu open\n");
     tree_paint();
 }
-/* ponytail: there is no login screen yet, so Log Out only closes every window and says so on the menu bar. The 4.0 login
-   screen (roadmap: Joshua Tree 4.0) replaces this body with a real sign-out back to it. */
-static void tree_logout(void) {
-    con_quiet = 1; uart_puts("treemenu: logout\n");
+/* Log Out closes every window; with no accounts it says so on the menu bar, with accounts the login screen (login_ui.h) comes back. */
+static void tree_close_all(void) {
     power_pending = 0; if (dock_sel >= 0) dock_select(-1);
     calc_close(); brick_close(); clock_close(); browser_close(); app_kill("logged out"); console_close();
+}
+void logout_request(void);   /* login_ui.h */
+static void tree_logout(void) {
+    con_quiet = 1; uart_puts("treemenu: logout\n");
+    if (accounts_count()) { logout_request(); return; }   /* 4.9.0: with accounts the main loop closes everything and shows the login screen */
+    tree_close_all();
     menubar_notify("Logged out");
 }
 static void tree_pick(int r) {
@@ -2973,7 +2980,6 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
 #include "browser_ui.h"
 #include "glyphs.h"
 #include "settings_ui.h"
-#include "accounts.h"
 /* The right end of the menu bar: the clock in 12-hour form, and left of it the Wi-Fi fan, no name. The fan, the speaker and the power
    symbol are all flat ink, the same 0x001C1C1E as the clock, in every state.
    Each arc is anti-aliased (4x4 samples a pixel, blended onto the bar), so it stays crisp at scale 1 and 2. Each call puts the
@@ -2989,7 +2995,7 @@ void menubar_mic(int on) {   /* ask.c: voice mode started or ended; the bar is r
 }
 void menubar_wifi(int state) {
     mb_wifi = state;   /* kept even before the desktop exists (the boot splash), so its first paint shows the right fan */
-    if (!fb || !text_ok) return;
+    if (!fb || !text_ok || login_live) return;   /* the login screen is over the bar: wall_repaint draws it again when it goes */
     int W = (int)fb_w, H = (int)fb_h, mb = sg(MENUBAR_H);
     if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = mb_save[y * (W - mb_x0) + (x - mb_x0)];
     char clkbuf[12] = "--:--"; const char *clk = clkbuf;   /* the clock slot: dashes until the network has told us the time */
@@ -3064,12 +3070,13 @@ static int menubar_click(int x, int y) {
 }
 void menubar_notify(const char *message) {
     notice_set(&notice, message, notice_now());
+    if (login_live) { uart_puts("notice: "); uart_puts(notice.text); uart_putc('\n'); return; }
     cur_hide(); menubar_wifi(mb_wifi); cur_show();
     if (settings_live && !spot_live) set_paint();   /* the volume keys come through here: the Sound page shows the new level */
     uart_puts("notice: "); uart_puts(notice.text); uart_putc('\n');
 }
 static void cal_tick(void) {   /* the day has changed (or the clock just arrived): the Calendar tile again, the hover band's copy with it */
-    if (!fb || cal_today() == cal_shown) return;
+    if (!fb || login_live || cal_today() == cal_shown) return;
     int s = (int)window_scale(), h = hover_slot, top = gui_dock_band_top() * s, rows = (int)fb_h - top;
     if (dock_band) dock_hover(-1);   /* the plain band back first, so the copy below holds no label */
     cur_hide();
@@ -3167,6 +3174,7 @@ static void desktop_chrome(int band_y) {   /* the mark, the title, the status ic
     if (text_ok) {
         menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
         text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
+        if (current_user[0]) text_draw(1, current_user, sg(40) + text_width(1, "Joshua Tree", sg(130)) + sg(14), (mb + sg(8)) / 2, sg(130), fb_color(0x00B5502C), fb, fb_pitch, W, H);   /* 4.9.0: who is signed in, after the title */
         menubar_wifi(mb_wifi < 0 ? 1 : mb_wifi);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
@@ -3456,6 +3464,7 @@ void ask_poll(void);
 #ifdef PI_BUILD
 #include "screen_idle.h"
 #endif
+#include "login_ui.h"   /* 4.9.0: the login screen, over everything while JT/USERS.TXT has an account and nobody has signed in */
 /* Key repeat. A USB keyboard (SET_IDLE(0)) reports only a change, so a held key sends one press and then nothing.
    The last typed key down (a typed character or Backspace; not a function key, Brick's keys, a modifier or a chord)
    is remembered with the generic counter's time. After KEY_REPEAT_DELAY_MS the main loop feeds it back through
@@ -3489,6 +3498,7 @@ static void input_event(struct input_event e) {
             rep_code = e.code; rep_next = key_ms() + KEY_REPEAT_DELAY_MS;
         } else rep_code = 0;
     }
+    if (login_live) { login_event(e); return; }                                                            /* the login screen has every key; the mouse is dropped */
     if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                 /* BTN_LEFT, RIGHT, MIDDLE */
         con_quiet = 1;   /* the UART only */
         uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
@@ -3984,6 +3994,7 @@ void main(void) {
     SPLASH(5, "bt");
     splash_finish();
 #endif
+    login_show();   /* login_ui.h: with an account on the card the desktop waits behind the login screen; with none this does nothing */
 #ifdef NOTICE_SELFTEST
     menubar_notify("Note kept in memory");
 #endif
@@ -4040,7 +4051,7 @@ void main(void) {
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); audio_pump(); screen_tick();   /* only the display sleeps: USB stays polled */
+            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); audio_pump(); screen_tick(); login_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
@@ -4056,7 +4067,7 @@ void main(void) {
             if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy() || apps_live() || audio_busy() || ask_pending()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
-            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick();   /* an app parked on yield runs again here */
+            usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); login_tick();   /* an app parked on yield runs again here */
 #ifdef HANG_TEST
             hang_tick();
 #endif

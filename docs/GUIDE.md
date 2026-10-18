@@ -714,7 +714,7 @@ For Notes: press n, type a line, Esc, Esc, pull the power, boot, open Notes. The
 
 ### Accounts
 
-The Terminal keeps user accounts on the card. `users` lists the names, `adduser NAME PASSWORD` makes one and `deluser NAME PASSWORD` removes one (it needs the right password). A name is 1 to 24 of a to z, 0 to 9, `_` and `-`; a password is 4 to 64 characters with no spaces; eight accounts at most. The password is stored only as a salted hash in `JT/USERS.TXT`, and the Terminal shows it as stars as you type and in the echoed line. With no SD card `adduser` says so and keeps nothing. There is no login screen yet; that is the next step.
+The Terminal keeps user accounts on the card. `users` lists the names, `adduser NAME PASSWORD` makes one and `deluser NAME PASSWORD` removes one (it needs the right password). A name is 1 to 24 of a to z, 0 to 9, `_` and `-`; a password is 4 to 64 characters with no spaces; eight accounts at most. The password is stored only as a salted hash in `JT/USERS.TXT`, and the Terminal shows it as stars as you type and in the echoed line. With no SD card `adduser` says so and keeps nothing. With at least one account the Pi boots to a login screen before the desktop: type a name, press Return (or Tab) and type the password, then Return. A wrong password says `Wrong name or password.`, clears the password and makes you wait a second, so guessing is slow. The name you signed in as shows in the menu bar. `logout` in the Terminal, or Log Out in the tree menu, closes every window and returns to the login screen. With no account the Pi boots straight to the desktop as before. The mouse does nothing on the login screen, and there is no way to shut down from it yet; pull the power if you must.
 
 ### Music on the Pi
 
