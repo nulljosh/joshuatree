@@ -4,18 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Joshua Tree Brand Kit</title>
+<link rel="stylesheet" href="tokens.css">
 <style>
 /* One page of the brand: the mark, the mascot, colour, type, icons and the desktop pieces.
-   Every value is read from docs/ARCHITECTURE.md (Design rules) and the landing page; open this file straight from disk. */
+   The tokens (colour, type, space, radii) are in tokens.css next to this file, which tools/gen/map.py also reads; open this file straight from disk. */
 @font-face { font-family: "Tree Sans"; font-weight: 400; src: url(../../landing/fonts/TreeSans-Regular.woff2) format("woff2"); }
 @font-face { font-family: "Tree Sans"; font-weight: 500; src: url(../../landing/fonts/TreeSans-Medium.woff2) format("woff2"); }
 @font-face { font-family: "Tree Sans"; font-weight: 600; src: url(../../landing/fonts/TreeSans-SemiBold.woff2) format("woff2"); }
 @font-face { font-family: "Tree Sans"; font-weight: 700; src: url(../../landing/fonts/TreeSans-Bold.woff2) format("woff2"); }
 @font-face { font-family: "Tree Sans Display"; font-weight: 600; src: url(../../landing/fonts/TreeSansDisplay-SemiBold.woff2) format("woff2"); }
 @font-face { font-family: "Tree Sans Display"; font-weight: 700; src: url(../../landing/fonts/TreeSansDisplay-Bold.woff2) format("woff2"); }
-:root { color-scheme: light dark; --bg: #faf8f4; --fg: #161513; --sub: #5c584f; --rule: #ded9cd; --card: #ffffff; --accent: #b5502c;
-  --sans: "Tree Sans", system-ui, -apple-system, "Helvetica Neue", sans-serif; --display: "Tree Sans Display", var(--sans); }
-@media (prefers-color-scheme: dark) { :root { --bg: #141311; --fg: #f3f0e9; --sub: #b3ada0; --rule: #3a362e; --card: #1d1b17; --accent: #e08a5f; } }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 400 17px/24px var(--sans); letter-spacing: -0.01em; -webkit-font-smoothing: antialiased; }
 main { max-width: 1040px; margin: 0 auto; padding: 64px 24px 96px; }
@@ -59,7 +57,7 @@ h3.sub { margin: 48px 0 16px; }
 .icons figcaption { font-size: 11px; line-height: 16px; color: var(--sub); text-transform: capitalize; }
 .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px 32px; margin-bottom: 40px; }
 .rules p { color: var(--sub); font-size: 15px; line-height: 20px; }
-.desk { border-radius: 18px; padding: 48px 24px 24px; display: grid; justify-items: center; gap: 40px; background: #8f9a88; overflow: hidden; }
+.desk { border-radius: var(--r18); padding: 48px 24px 24px; display: grid; justify-items: center; gap: 40px; background: var(--wallpaper); overflow: hidden; }
 .win { width: min(520px, 100%); background: #f5f0eb; color: #1c1c1e; border-radius: 18px; box-shadow: 0 12px 32px rgba(32,16,9,.25); overflow: hidden; }
 .win .bar { height: 44px; display: grid; grid-template-columns: 64px 1fr 64px; align-items: center; border-bottom: 1px solid #d9d3cb; font: 600 15px/20px var(--sans); text-align: center; }
 .win .dots { display: flex; gap: 8px; padding-left: 16px; }
@@ -151,6 +149,7 @@ footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--rule);
 <li class="sw"><span class="chip" style="background:#f4f1ec;color:#161513">#f4f1ec</span><b>Dock label</b><span>DOCK_LABEL_BG</span></li>
 <li class="sw"><span class="chip" style="background:#ff5f57;color:#faf8f4">#ff5f57</span><b>Close dot</b><span>CLOSE_DOT</span></li>
 <li class="sw"><span class="chip" style="background:#e5e5e7;color:#161513">#e5e5e7</span><b>Splash grey</b><span>the Pi boot splash</span></li>
+    <li class="sw"><span class="chip" style="background:#6e6e6e;color:#faf8f4">#6e6e6e</span><b>Wallpaper</b><span>graphite, one flat colour since 3.9.0</span></li>
 <li class="sw"><span class="chip" style="background:#201009;color:#faf8f4">#201009</span><b>Night floor</b><span>NIGHT_FLOOR, where the wallpaper goes at night</span></li>
 <li class="sw"><span class="chip" style="background:#dddddd;color:#161513">#dddddd</span><b>Day tint</b><span>DAY_TINT</span></li>
   </ul>
@@ -185,7 +184,7 @@ footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--rule);
 
 <section id="desktop">
   <h2>Window and dock</h2>
-  <p>One frame for every window: an 18 px corner, a hairline under the title, the name centred in ink, a red close dot on the left. The dock is a warm cream tray with a soft shadow.</p>
+  <p>One frame for every window: an 18 px corner, a hairline under the title, the name centred in ink, a red close dot on the left. The dock is a warm cream tray with a soft shadow. Behind them the wallpaper is one flat graphite grey.</p>
   <div class="desk">
     <div class="win" role="img" aria-label="A Joshua Tree window">
       <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span>Notes</span><span></span></div>
@@ -219,11 +218,11 @@ footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--rule);
     <li><b>2.12</b><span>The same tree finished more carefully: rounded joints, alternating blades, crowns that stay separate at 32 px.</span></li>
     <li><b>2.25</b><span>A new, much simpler mark: one tree scribbled in crayon like a hand-drawn album cover.</span></li>
     <li><b>3.0</b><span>The crayon tree tightened: steadier lines, denser tufts, and the ground in terracotta, its first colour.</span></li>
-    <li><b>4.0</b><span>Next.</span></li>
+    <li><b>4.0</b><span>One more crayon stroke at the foot of the trunk. From here the mark is touched with every major release.</span></li>
   </ul>
 </section>
 
-<footer>35 icons from art/icons. Sources: docs/ARCHITECTURE.md (Design rules), landing/, tools/gen/logo.py, tools/gen/mascot.py. Apache 2.0.</footer>
+<footer>35 icons from art/icons. Sources: tokens.css, docs/ARCHITECTURE.md (Design rules), landing/, tools/gen/logo.py, tools/gen/mascot.py. Apache 2.0.</footer>
 </main>
 </body>
 </html>

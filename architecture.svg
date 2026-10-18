@@ -1,143 +1,164 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="1062" viewBox="0 0 640 1062" style="background:#faf8f4;font-family:Tree Sans,-apple-system,BlinkMacSystemFont,Helvetica,sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="1232" viewBox="0 0 640 1232" style="background:#faf8f4;font-family:Tree Sans,-apple-system,BlinkMacSystemFont,Helvetica,sans-serif">
 <defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="#b5502c"/></marker></defs>
-<rect width="100%" height="100%" fill="#fff"/>
-<path d="M87 128v16M242 128v16M397 128v16M552 128v16M87 144H552M210 144v14M430 144v14M210 200v14M430 200v14M210 214H430M320 214v14" stroke="#d1d1d6" fill="none"/>
-<text x="320.0" y="30" fill="#1c1c1e" font-size="18" font-weight="700" text-anchor="middle">Joshua Tree at a glance</text>
-<text x="320.0" y="48" fill="#75726e" font-size="11" text-anchor="middle">A computer that knows what you want before you ask, and keeps it on your machine.</text>
-<text x="20" y="78" fill="#75726e" font-size="10" font-weight="600" letter-spacing="1">WHERE IT RUNS</text>
-<rect x="20" y="86" width="135" height="42" rx="8" fill="#f5f5f7" stroke="#d1d1d6"/>
-<text x="87.5" y="105.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Browser</text>
-<text x="87.5" y="118.0" fill="#333" font-size="10" text-anchor="middle">the landing page</text>
-<rect x="175" y="86" width="135" height="42" rx="8" fill="#f5f5f7" stroke="#d1d1d6"/>
-<text x="242.5" y="105.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">QEMU</text>
-<text x="242.5" y="118.0" fill="#333" font-size="10" text-anchor="middle">dev and CI</text>
+<rect width="100%" height="100%" fill="#faf8f4"/>
+<path d="" stroke="#ded9cd" fill="none"/>
+<text x="320.0" y="30" fill="#161513" font-size="18" font-weight="700" text-anchor="middle">Joshua Tree at a glance</text>
+<text x="320.0" y="48" fill="#5c584f" font-size="11" text-anchor="middle">A computer that knows what you want before you ask, and keeps it on your machine.</text>
+<text x="20" y="78" fill="#5c584f" font-size="10" font-weight="600" letter-spacing="1">WHERE IT RUNS</text>
+<rect x="20" y="86" width="135" height="42" rx="8" fill="#ffffff" stroke="#ded9cd"/>
+<text x="87.5" y="105.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Browser</text>
+<text x="87.5" y="118.0" fill="#161513" font-size="10" text-anchor="middle">the landing page</text>
+<rect x="175" y="86" width="135" height="42" rx="8" fill="#ffffff" stroke="#ded9cd"/>
+<text x="242.5" y="105.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">QEMU</text>
+<text x="242.5" y="118.0" fill="#161513" font-size="10" text-anchor="middle">dev and CI</text>
 <rect x="330" y="86" width="135" height="42" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="397.5" y="105.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Raspberry Pi 4</text>
-<text x="397.5" y="118.0" fill="#333" font-size="10" text-anchor="middle">the real board</text>
-<rect x="485" y="86" width="135" height="42" rx="8" fill="#f5f5f7" stroke="#d1d1d6"/>
-<text x="552.5" y="105.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Real PC</text>
-<text x="552.5" y="118.0" fill="#333" font-size="10" text-anchor="middle">from a USB stick</text>
-<rect x="110" y="158" width="200" height="42" rx="8" fill="#1c1c1e" fill-opacity=".15" stroke="#1c1c1e"/>
-<text x="210.0" y="177.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Desktop</text>
-<text x="210.0" y="190.0" fill="#333" font-size="10" text-anchor="middle">windows, dock, 32 apps</text>
-<rect x="330" y="158" width="200" height="42" rx="8" fill="#1c1c1e" fill-opacity=".15" stroke="#1c1c1e"/>
-<text x="430.0" y="177.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Samantha</text>
-<text x="430.0" y="190.0" fill="#333" font-size="10" text-anchor="middle">you type, she runs it</text>
-<rect x="110" y="228" width="420" height="42" rx="8" fill="#1c1c1e" fill-opacity=".15" stroke="#1c1c1e"/>
-<text x="320.0" y="247.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Kernel</text>
-<text x="320.0" y="260.0" fill="#333" font-size="10" text-anchor="middle">tasks, drivers, network, disk, a small tool picker, i386 and ARM64</text>
-<text x="320.0" y="290" fill="#75726e" font-size="10" text-anchor="middle">Calls out to a Cloudflare Worker, Turing (her brain), ElevenLabs (her voice) and Open-Meteo.</text>
-<text x="20" y="320" fill="#75726e" font-size="10" font-weight="600" letter-spacing="1">WHAT HAPPENS WHEN YOU TALK TO SAMANTHA</text>
-<rect x="20.0" y="330" width="139.5" height="40" rx="8" fill="#f5f5f7" stroke="#d1d1d6"/>
-<text x="89.75" y="348.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">You type</text>
-<text x="89.75" y="361.0" fill="#333" font-size="10" text-anchor="middle">"call Mom at 5"</text>
+<text x="397.5" y="105.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Raspberry Pi 4</text>
+<text x="397.5" y="118.0" fill="#161513" font-size="10" text-anchor="middle">the real board</text>
+<rect x="485" y="86" width="135" height="42" rx="8" fill="#ffffff" stroke="#ded9cd"/>
+<text x="552.5" y="105.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Real PC</text>
+<text x="552.5" y="118.0" fill="#161513" font-size="10" text-anchor="middle">from a USB stick</text>
+<text x="320.0" y="146" fill="#5c584f" font-size="10" text-anchor="middle">The same layers in all four places. Each one only talks to the one under it:</text>
+<rect x="20" y="154" width="600" height="38" rx="8" fill="#1c1c1e" fill-opacity=".12" stroke="#1c1c1e"/>
+<text x="320.0" y="171.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Apps</text>
+<text x="320.0" y="184.0" fill="#161513" font-size="10" text-anchor="middle">32 apps, each in its own walled-off memory, so one crash stays one crash</text>
+<path d="M80 193v9" stroke="#b5502c" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="90" y="201" fill="#5c584f" font-size="9">asks by system call</text>
+<rect x="20" y="204" width="600" height="38" rx="8" fill="#1c1c1e" fill-opacity=".12" stroke="#1c1c1e"/>
+<text x="320.0" y="221.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Desktop and Samantha</text>
+<text x="320.0" y="234.0" fill="#161513" font-size="10" text-anchor="middle">windows, dock and menu bar; Samantha runs what you type or say</text>
+<path d="M80 243v9" stroke="#b5502c" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="90" y="251" fill="#5c584f" font-size="9">draws off-screen, then shows it</text>
+<rect x="20" y="254" width="600" height="38" rx="8" fill="#1c1c1e" fill-opacity=".12" stroke="#1c1c1e"/>
+<text x="320.0" y="271.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Kernel</text>
+<text x="320.0" y="284.0" fill="#161513" font-size="10" text-anchor="middle">takes turns between apps, stops one frozen for 3 s, files, network</text>
+<path d="M80 293v9" stroke="#b5502c" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="90" y="301" fill="#5c584f" font-size="9">drives the parts</text>
+<rect x="20" y="304" width="600" height="38" rx="8" fill="#1c1c1e" fill-opacity=".12" stroke="#1c1c1e"/>
+<text x="320.0" y="321.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Drivers</text>
+<text x="320.0" y="334.0" fill="#161513" font-size="10" text-anchor="middle">screen, USB keyboard, mouse and mic, Wi-Fi, Bluetooth, SD card, sound</text>
+<rect x="20" y="354" width="600" height="38" rx="8" fill="#ffffff" stroke="#ded9cd"/>
+<text x="320.0" y="371.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">The machine</text>
+<text x="320.0" y="384.0" fill="#161513" font-size="10" text-anchor="middle">a Raspberry Pi 4, a PC, or QEMU pretending to be one</text>
+<text x="320.0" y="420" fill="#5c584f" font-size="10" text-anchor="middle">Out on the internet: Turing (her brain), ElevenLabs (her voice), a Cloudflare Worker and Open-Meteo.</text>
+<g transform="translate(0,130)">
+<text x="20" y="320" fill="#5c584f" font-size="10" font-weight="600" letter-spacing="1">WHAT HAPPENS WHEN YOU TALK TO SAMANTHA</text>
+<rect x="20.0" y="330" width="139.5" height="40" rx="8" fill="#ffffff" stroke="#ded9cd"/>
+<text x="89.75" y="348.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">You type or say</text>
+<text x="89.75" y="361.0" fill="#161513" font-size="10" text-anchor="middle">"call Mom at 5"</text>
 <path d="M161.5 350h8.0" stroke="#b5502c" stroke-width="1.5" marker-end="url(#a)"/>
-<rect x="173.5" y="330" width="139.5" height="40" rx="8" fill="#f5f5f7" stroke="#d1d1d6"/>
-<text x="243.25" y="348.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Turing</text>
-<text x="243.25" y="361.0" fill="#333" font-size="10" text-anchor="middle">picks the tool</text>
+<rect x="173.5" y="330" width="139.5" height="40" rx="8" fill="#ffffff" stroke="#ded9cd"/>
+<text x="243.25" y="348.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Turing</text>
+<text x="243.25" y="361.0" fill="#161513" font-size="10" text-anchor="middle">picks the tool</text>
 <path d="M315.0 350h8.0" stroke="#b5502c" stroke-width="1.5" marker-end="url(#a)"/>
-<rect x="327.0" y="330" width="139.5" height="40" rx="8" fill="#1c1c1e" fill-opacity=".15" stroke="#1c1c1e"/>
-<text x="396.75" y="348.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Joshua Tree</text>
-<text x="396.75" y="361.0" fill="#333" font-size="10" text-anchor="middle">does it</text>
+<rect x="327.0" y="330" width="139.5" height="40" rx="8" fill="#1c1c1e" fill-opacity=".12" stroke="#1c1c1e"/>
+<text x="396.75" y="348.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Joshua Tree</text>
+<text x="396.75" y="361.0" fill="#161513" font-size="10" text-anchor="middle">does it</text>
 <path d="M468.5 350h8.0" stroke="#b5502c" stroke-width="1.5" marker-end="url(#a)"/>
-<rect x="480.5" y="330" width="139.5" height="40" rx="8" fill="#1c1c1e" fill-opacity=".15" stroke="#1c1c1e"/>
-<text x="550.25" y="348.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">She answers</text>
-<text x="550.25" y="361.0" fill="#333" font-size="10" text-anchor="middle">voice and face</text>
-<text x="20" y="400" fill="#75726e" font-size="10" font-weight="600" letter-spacing="1">THE PI, ON THE REAL BOARD</text>
+<rect x="480.5" y="330" width="139.5" height="40" rx="8" fill="#1c1c1e" fill-opacity=".12" stroke="#1c1c1e"/>
+<text x="550.25" y="348.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">She answers</text>
+<text x="550.25" y="361.0" fill="#161513" font-size="10" text-anchor="middle">voice and face</text>
+<text x="20" y="400" fill="#5c584f" font-size="10" font-weight="600" letter-spacing="1">THE PI, ON THE REAL BOARD</text>
 <rect x="20.0" y="410" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="89.75" y="428.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Screen</text>
-<text x="89.75" y="441.0" fill="#333" font-size="10" text-anchor="middle">1080p desktop</text>
+<text x="89.75" y="428.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Screen</text>
+<text x="89.75" y="441.0" fill="#161513" font-size="10" text-anchor="middle">1080p desktop</text>
 <rect x="173.5" y="410" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="243.25" y="428.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Keyboard</text>
-<text x="243.25" y="441.0" fill="#333" font-size="10" text-anchor="middle">USB, hot-plug</text>
+<text x="243.25" y="428.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Keyboard</text>
+<text x="243.25" y="441.0" fill="#161513" font-size="10" text-anchor="middle">USB, hot-plug</text>
 <rect x="327.0" y="410" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="396.75" y="428.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Wi-Fi</text>
-<text x="396.75" y="441.0" fill="#333" font-size="10" text-anchor="middle">WPA2, joined</text>
+<text x="396.75" y="428.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Wi-Fi</text>
+<text x="396.75" y="441.0" fill="#161513" font-size="10" text-anchor="middle">WPA2, joined</text>
 <rect x="480.5" y="410" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="550.25" y="428.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Internet</text>
-<text x="550.25" y="441.0" fill="#333" font-size="10" text-anchor="middle">DHCP and DNS</text>
+<text x="550.25" y="428.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Internet</text>
+<text x="550.25" y="441.0" fill="#161513" font-size="10" text-anchor="middle">DHCP and DNS</text>
 <rect x="20.0" y="464" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="89.75" y="482.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Clock</text>
-<text x="89.75" y="495.0" fill="#333" font-size="10" text-anchor="middle">from the net</text>
+<text x="89.75" y="482.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Clock</text>
+<text x="89.75" y="495.0" fill="#161513" font-size="10" text-anchor="middle">from the net</text>
 <rect x="173.5" y="464" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="243.25" y="482.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Terminal</text>
-<text x="243.25" y="495.0" fill="#333" font-size="10" text-anchor="middle">zsh style, sam</text>
+<text x="243.25" y="482.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Terminal</text>
+<text x="243.25" y="495.0" fill="#161513" font-size="10" text-anchor="middle">zsh style, sam</text>
 <rect x="327.0" y="464" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="396.75" y="482.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Samantha</text>
-<text x="396.75" y="495.0" fill="#333" font-size="10" text-anchor="middle">chat on the Pi</text>
+<text x="396.75" y="482.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Samantha</text>
+<text x="396.75" y="495.0" fill="#161513" font-size="10" text-anchor="middle">chat on the Pi</text>
 <rect x="480.5" y="464" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="550.25" y="482.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Pi actions</text>
-<text x="550.25" y="495.0" fill="#333" font-size="10" text-anchor="middle">note, green light</text>
+<text x="550.25" y="482.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Pi actions</text>
+<text x="550.25" y="495.0" fill="#161513" font-size="10" text-anchor="middle">note, green light</text>
 <rect x="20.0" y="518" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="89.75" y="536.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">HTTPS</text>
-<text x="89.75" y="549.0" fill="#333" font-size="10" text-anchor="middle">Browser, 37 roots</text>
+<text x="89.75" y="536.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">HTTPS</text>
+<text x="89.75" y="549.0" fill="#161513" font-size="10" text-anchor="middle">Browser, 37 roots</text>
 <rect x="173.5" y="518" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="243.25" y="536.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Browser</text>
-<text x="243.25" y="549.0" fill="#333" font-size="10" text-anchor="middle">window, links</text>
+<text x="243.25" y="536.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Browser</text>
+<text x="243.25" y="549.0" fill="#161513" font-size="10" text-anchor="middle">window, links</text>
 <rect x="327.0" y="518" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="396.75" y="536.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Books</text>
-<text x="396.75" y="549.0" fill="#333" font-size="10" text-anchor="middle">plain text</text>
+<text x="396.75" y="536.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Books</text>
+<text x="396.75" y="549.0" fill="#161513" font-size="10" text-anchor="middle">plain text</text>
 <rect x="480.5" y="518" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="550.25" y="536.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Music</text>
-<text x="550.25" y="549.0" fill="#333" font-size="10" text-anchor="middle">wav, mp3, covers</text>
+<text x="550.25" y="536.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Music</text>
+<text x="550.25" y="549.0" fill="#161513" font-size="10" text-anchor="middle">wav, mp3, covers</text>
 <rect x="20.0" y="572" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="89.75" y="590.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Notes</text>
-<text x="89.75" y="603.0" fill="#333" font-size="10" text-anchor="middle">saved to the card</text>
+<text x="89.75" y="590.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Notes</text>
+<text x="89.75" y="603.0" fill="#161513" font-size="10" text-anchor="middle">saved to the card</text>
 <rect x="173.5" y="572" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="243.25" y="590.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Calendar</text>
-<text x="243.25" y="603.0" fill="#333" font-size="10" text-anchor="middle">four views</text>
+<text x="243.25" y="590.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Calendar</text>
+<text x="243.25" y="603.0" fill="#161513" font-size="10" text-anchor="middle">four views</text>
 <rect x="327.0" y="572" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="396.75" y="590.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Bluetooth</text>
-<text x="396.75" y="603.0" fill="#333" font-size="10" text-anchor="middle">mouse pairs</text>
-<rect x="480.5" y="572" width="139.5" height="40" rx="8" fill="#fff" stroke="#ccc" stroke-dasharray="3 3"/>
-<text x="550.25" y="590.0" fill="#666" font-size="9" font-weight="600" text-anchor="middle">Power</text>
-<text x="550.25" y="603.0" fill="#666" font-size="8" text-anchor="middle">reboot, shutdown</text>
-<rect x="20.0" y="626" width="139.5" height="40" rx="8" fill="#fff" stroke="#ccc" stroke-dasharray="3 3"/>
-<text x="89.75" y="644.0" fill="#666" font-size="9" font-weight="600" text-anchor="middle">Sound</text>
-<text x="89.75" y="657.0" fill="#666" font-size="8" text-anchor="middle">headphone jack</text>
-<rect x="173.5" y="626" width="139.5" height="40" rx="8" fill="#fff" stroke="#ccc" stroke-dasharray="3 3"/>
-<text x="243.25" y="644.0" fill="#666" font-size="9" font-weight="600" text-anchor="middle">Mic</text>
-<text x="243.25" y="657.0" fill="#666" font-size="8" text-anchor="middle">Yeti, USB</text>
-<text x="20" y="688" fill="#75726e" font-size="9">Solid boxes are seen working on the real board (2026-10-12, v3); dashed are built and checked in QEMU, not yet seen there.</text>
-<g transform="translate(0,220)">
-<text x="20" y="496" fill="#75726e" font-size="10" font-weight="600" letter-spacing="1">HOW IT GETS BUILT</text>
-<rect x="20.0" y="506" width="139.5" height="40" rx="8" fill="#f5f5f7" stroke="#d1d1d6"/>
-<text x="89.75" y="524.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Roadmap</text>
-<text x="89.75" y="537.0" fill="#333" font-size="10" text-anchor="middle">the queue</text>
+<text x="396.75" y="590.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Bluetooth</text>
+<text x="396.75" y="603.0" fill="#161513" font-size="10" text-anchor="middle">mouse pairs</text>
+<rect x="480.5" y="572" width="139.5" height="40" rx="8" fill="#ffffff" stroke="#5c584f" stroke-dasharray="3 3"/>
+<text x="550.25" y="590.0" fill="#5c584f" font-size="9" font-weight="600" text-anchor="middle">Sound</text>
+<text x="550.25" y="603.0" fill="#5c584f" font-size="8" text-anchor="middle">headphone jack</text>
+<rect x="20.0" y="626" width="139.5" height="40" rx="8" fill="#ffffff" stroke="#5c584f" stroke-dasharray="3 3"/>
+<text x="89.75" y="644.0" fill="#5c584f" font-size="9" font-weight="600" text-anchor="middle">Many windows</text>
+<text x="89.75" y="657.0" fill="#5c584f" font-size="8" text-anchor="middle">apps side by side</text>
+<rect x="173.5" y="626" width="139.5" height="40" rx="8" fill="#ffffff" stroke="#5c584f" stroke-dasharray="3 3"/>
+<text x="243.25" y="644.0" fill="#5c584f" font-size="9" font-weight="600" text-anchor="middle">Walled memory</text>
+<text x="243.25" y="657.0" fill="#5c584f" font-size="8" text-anchor="middle">one app, one arena</text>
+<rect x="327.0" y="626" width="139.5" height="40" rx="8" fill="#ffffff" stroke="#5c584f" stroke-dasharray="3 3"/>
+<text x="396.75" y="644.0" fill="#5c584f" font-size="9" font-weight="600" text-anchor="middle">Watchdog</text>
+<text x="396.75" y="657.0" fill="#5c584f" font-size="8" text-anchor="middle">frozen app stopped</text>
+<rect x="480.5" y="626" width="139.5" height="40" rx="8" fill="#ffffff" stroke="#5c584f" stroke-dasharray="3 3"/>
+<text x="550.25" y="644.0" fill="#5c584f" font-size="9" font-weight="600" text-anchor="middle">Mic</text>
+<text x="550.25" y="657.0" fill="#5c584f" font-size="8" text-anchor="middle">Yeti, USB</text>
+<text x="20" y="688" fill="#5c584f" font-size="9">Solid boxes are seen working on the real board (2026-10-12, v3); dashed are built and checked in QEMU, not yet seen there.</text>
+<g transform="translate(0,224)">
+<text x="20" y="496" fill="#5c584f" font-size="10" font-weight="600" letter-spacing="1">HOW IT GETS BUILT</text>
+<rect x="20.0" y="506" width="139.5" height="40" rx="8" fill="#ffffff" stroke="#ded9cd"/>
+<text x="89.75" y="524.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Roadmap</text>
+<text x="89.75" y="537.0" fill="#161513" font-size="10" text-anchor="middle">the queue</text>
 <path d="M161.5 526h8.0" stroke="#b5502c" stroke-width="1.5" marker-end="url(#a)"/>
-<rect x="173.5" y="506" width="139.5" height="40" rx="8" fill="#1c1c1e" fill-opacity=".15" stroke="#1c1c1e"/>
-<text x="243.25" y="524.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Build it</text>
-<text x="243.25" y="537.0" fill="#333" font-size="10" text-anchor="middle">one agent, own branch</text>
+<rect x="173.5" y="506" width="139.5" height="40" rx="8" fill="#1c1c1e" fill-opacity=".12" stroke="#1c1c1e"/>
+<text x="243.25" y="524.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Build it</text>
+<text x="243.25" y="537.0" fill="#161513" font-size="10" text-anchor="middle">one agent, own branch</text>
 <path d="M315.0 526h8.0" stroke="#b5502c" stroke-width="1.5" marker-end="url(#a)"/>
-<rect x="327.0" y="506" width="139.5" height="40" rx="8" fill="#1c1c1e" fill-opacity=".15" stroke="#1c1c1e"/>
-<text x="396.75" y="524.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Prove it</text>
-<text x="396.75" y="537.0" fill="#333" font-size="10" text-anchor="middle">tests, real frames</text>
+<rect x="327.0" y="506" width="139.5" height="40" rx="8" fill="#1c1c1e" fill-opacity=".12" stroke="#1c1c1e"/>
+<text x="396.75" y="524.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Prove it</text>
+<text x="396.75" y="537.0" fill="#161513" font-size="10" text-anchor="middle">tests, real frames</text>
 <path d="M468.5 526h8.0" stroke="#b5502c" stroke-width="1.5" marker-end="url(#a)"/>
 <rect x="480.5" y="506" width="139.5" height="40" rx="8" fill="#b5502c" fill-opacity=".12" stroke="#b5502c"/>
-<text x="550.25" y="524.0" fill="#333" font-size="11" font-weight="600" text-anchor="middle">Ship it</text>
-<text x="550.25" y="537.0" fill="#333" font-size="10" text-anchor="middle">merge on green</text>
-<path d="M550.25 546v10H89.75v-6" fill="none" stroke="#b5502c" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/><text x="320.0" y="568" fill="#75726e" font-size="9" text-anchor="middle">next item</text>
-<text x="20" y="594" fill="#75726e" font-size="10" font-weight="600" letter-spacing="1">MEMORY, PC BUILD</text>
+<text x="550.25" y="524.0" fill="#161513" font-size="11" font-weight="600" text-anchor="middle">Ship it</text>
+<text x="550.25" y="537.0" fill="#161513" font-size="10" text-anchor="middle">merge on green</text>
+<path d="M550.25 546v10H89.75v-6" fill="none" stroke="#b5502c" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/><text x="320.0" y="568" fill="#5c584f" font-size="9" text-anchor="middle">next item</text>
+<text x="20" y="594" fill="#5c584f" font-size="10" font-weight="600" letter-spacing="1">MEMORY, PC BUILD</text>
 <rect x="20.0" y="602" width="47.9" height="16" fill="#1c1c1e"/>
 <rect x="67.9" y="602" width="466.8" height="16" fill="#e3b7a4"/>
 <rect x="534.7" y="602" width="2.0" height="16" fill="#b5502c"/>
 <rect x="536.7" y="602" width="59.8" height="16" fill="#f0d9ce"/>
 <rect x="596.5" y="602" width="16.6" height="16" fill="#141413"/>
 <rect x="613.1" y="602" width="8.0" height="16" fill="#d97757"/>
-<rect x="20" y="626" width="8" height="8" fill="#1c1c1e"/><text x="31" y="634" fill="#555" font-size="9">code 382 KB</text>
-<rect x="220" y="626" width="8" height="8" fill="#e3b7a4"/><text x="231" y="634" fill="#555" font-size="9">fonts, images, text 3,720 KB</text>
-<rect x="420" y="626" width="8" height="8" fill="#b5502c"/><text x="431" y="634" fill="#555" font-size="9">starting values 7 KB</text>
-<rect x="20" y="640" width="8" height="8" fill="#f0d9ce"/><text x="31" y="648" fill="#555" font-size="9">working memory 477 KB</text>
-<rect x="220" y="640" width="8" height="8" fill="#141413"/><text x="231" y="648" fill="#555" font-size="9">programs 132 KB</text>
-<rect x="420" y="640" width="8" height="8" fill="#d97757"/><text x="431" y="648" fill="#555" font-size="9">sound 64 KB</text>
+<rect x="20" y="626" width="8" height="8" fill="#1c1c1e"/><text x="31" y="634" fill="#5c584f" font-size="9">code 382 KB</text>
+<rect x="220" y="626" width="8" height="8" fill="#e3b7a4"/><text x="231" y="634" fill="#5c584f" font-size="9">fonts, images, text 3,720 KB</text>
+<rect x="420" y="626" width="8" height="8" fill="#b5502c"/><text x="431" y="634" fill="#5c584f" font-size="9">starting values 7 KB</text>
+<rect x="20" y="640" width="8" height="8" fill="#f0d9ce"/><text x="31" y="648" fill="#5c584f" font-size="9">working memory 477 KB</text>
+<rect x="220" y="640" width="8" height="8" fill="#141413"/><text x="231" y="648" fill="#5c584f" font-size="9">programs 132 KB</text>
+<rect x="420" y="640" width="8" height="8" fill="#d97757"/><text x="431" y="648" fill="#5c584f" font-size="9">sound 64 KB</text>
 <g transform="translate(0,28)">
-<text x="20" y="664" fill="#75726e" font-size="10" font-weight="600" letter-spacing="1">APPS SHIPPED</text>
-<path d="M20 674H620M20 714H620M20 754H620" stroke="#ece8df"/>
-<polyline points="20,754 34,754 49,754 63,754 77,754 93,737 107,734 121,717 136,709 151,704 166,702 180,702 194,702 210,702 224,694 239,692 253,692 269,692 283,689 297,689 311,689 327,689 341,689 356,689 370,689 386,692 400,694 414,694 429,689 444,689 459,689 473,684 487,679 503,679 517,679 531,679 546,679 561,677 576,677 590,677 604,677 620,674" fill="none" stroke="#1c1c1e" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="620" cy="674" r="4" fill="#fff" stroke="#b5502c" stroke-width="2"/>
-<text x="612" y="696" fill="#1c1c1e" font-size="12" font-weight="600" text-anchor="end">32 apps</text>
-<text x="20" y="772" fill="#75726e" font-size="10">2026-08-31</text><text x="620" y="772" fill="#75726e" font-size="10" text-anchor="end">2026-10-12</text>
-<text x="320.0" y="798" fill="#75726e" font-size="10" text-anchor="middle">Terracotta: the newest piece. Drawn by tools/gen/map.py; the detail graphs live in docs/.</text>
+<text x="20" y="664" fill="#5c584f" font-size="10" font-weight="600" letter-spacing="1">APPS SHIPPED</text>
+<path d="M20 674H620M20 714H620M20 754H620" stroke="#ded9cd"/>
+<polyline points="20,754 34,754 49,754 63,754 77,754 93,737 107,734 121,717 136,709 151,704 166,702 180,702 194,702 210,702 224,694 239,692 253,692 269,692 283,689 297,689 311,689 327,689 341,689 356,689 370,689 386,692 400,694 414,694 429,689 444,689 459,689 473,684 487,679 503,679 517,679 531,679 546,679 561,677 576,677 590,677 604,677 620,674" fill="none" stroke="#161513" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="620" cy="674" r="4" fill="#faf8f4" stroke="#b5502c" stroke-width="2"/>
+<text x="612" y="696" fill="#161513" font-size="12" font-weight="600" text-anchor="end">32 apps</text>
+<text x="20" y="772" fill="#5c584f" font-size="10">2026-08-31</text><text x="620" y="772" fill="#5c584f" font-size="10" text-anchor="end">2026-10-12</text>
+<text x="320.0" y="798" fill="#5c584f" font-size="10" text-anchor="middle">Terracotta: the newest piece. Drawn by tools/gen/map.py; the detail graphs live in docs/.</text>
+</g>
 </g>
 </g>
 </svg>
