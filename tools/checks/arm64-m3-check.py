@@ -11,6 +11,7 @@ Boots arch/arm64 on QEMU's virt machine and reads the UART. Checks, in this orde
     (the first kernel instruction) is an instruction abort, printed, and the kernel carries on to the next task.
   - "M3 EL0 fault: data abort, permission fault level 3, address 0x0000000044004000": a direct EL0 load from the kernel-only
     page faults, and the kernel prints the fault.
+  - 4.4, "M4 arena isolation ok": with slot 0 running, a load from a page mapped for EL0 in slot 1's arena faults.
   - "M3 kernel survived the fault", then a second EL0 task that prints and exits with status 7 ("M3 EL0 exit 7",
     "M3 userland ok"): the kernel kept running and can enter EL0 again.
   - M3b, a C program: user/hello.c itself, built for aarch64 (uapp_hello.bin, a flat -pie image with no relocations), is
@@ -64,6 +65,9 @@ want = ["M3 EL0 task starts",
         "EL0: second task",
         "M3 EL0 exit 7",
         "M3 userland ok",
+        # 4.4: slot 1 holds a page EL0 could use; from slot 0 a load from it must fault (arena_only's APTable bits)
+        "M4 arena probe starts",
+        "M4 arena isolation ok",
         # M3b: user/hello.c, built for aarch64, over svc with the Joshua Tree numbers (write 4, exit 1). No card is mounted
         # yet, so hello's open comes back -ENOENT (-2, M3d) and the program takes its own failure path: exit 1.
         "M3b EL0 C task starts",
@@ -76,7 +80,7 @@ for w in want:
     nxt = next((i for i in range(at + 1, len(lines)) if lines[i] == w), -1)
     if nxt < 0: fails.append(f"missing or out of order serial line {w!r}, got {out[-600:]!r}"); break
     at = nxt; print(f"  ok: {w}")
-for bad in ("EL0: reached code after the blocked access", "M3 userland FAIL", "M3b userland C FAIL", "jt-hello: nosys="):
+for bad in ("EL0: reached code after the blocked access", "M3 userland FAIL", "M3b userland C FAIL", "jt-hello: nosys=", "M4 arena isolation FAIL"):
     if bad in out: fails.append(f"{bad!r} printed: the EL0 program got past the blocked access")
 for m in fails: print("FAIL: " + m)
 if fails: sys.exit(1)

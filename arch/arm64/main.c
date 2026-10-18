@@ -309,7 +309,7 @@ static void m1b_selftest(void) {
    M3c: the same arena also holds the app window (UP_APP) and an app stack (UP_ASTACK). user_load puts a program from the app
    table there: code pages read-only and executable, then data pages and a zeroed pool read-write and never executable. */
 extern char _start[];
-extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[], user_entry_e[];
+extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[], user_entry_e[], user_entry_f[];
 extern unsigned long enter_user(unsigned long entry, unsigned long sp, unsigned long arg, unsigned long arg2);
 extern void leave_user(unsigned long status) __attribute__((noreturn));
 extern unsigned long resume_user(const struct frame *f, unsigned long sp, const unsigned long *fp);   /* vectors.S: back into a parked app (its FP registers too), returns like enter_user */
@@ -403,6 +403,18 @@ static void apps_init(void) { for (unsigned i = 0; i < APP_SLOTS; i++) { apps[i]
 /* The app windows' stacking: app_z lists the slots that have a window, front first. app_top is the front one (-1 with none); outside
    app_tick, `ap` always points at it, so the desktop's clicks, keys and drags land on the window in front. */
 static int app_top = -1;
+/* 4.4: an app reaches only its own arena. Every level-2 entry of the other slots carries APTable=01 (bit 61): EL0 may not
+   touch anything under it, while EL1 (the compositor reading their window buffers, a syscall copying for them) still can.
+   Set before each switch into EL0. -1 until the first switch: the boot self-tests run in slot 0 with nothing else loaded.
+   ponytail: one tlbi vmalle1 per switch; ASIDs, one per slot, when four busy apps make that show up in a profile. */
+static int el0_slot = -1;
+static void arena_only(int slot) {
+    if (slot == el0_slot) return;
+    unsigned long *e = &l2[(USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21];
+    for (int k = 0; k < APP_SLOTS * ARENA_BLOCKS; k++) e[k] = k / ARENA_BLOCKS == slot ? e[k] & ~(1UL << 61) : e[k] | (1UL << 61);
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    el0_slot = slot;
+}
 static unsigned char app_z[APP_SLOTS];
 static unsigned app_zn;
 static void app_z_drop(unsigned sl) {
@@ -685,6 +697,7 @@ static int user_run(const struct user_app *a) {
     unsigned long entry = user_load(a);
     if (!entry) return -1;
     user_pid++; user_faulted = 0; ufile_owner = 0;
+    arena_only((int)ap->slot);
     user_status = enter_user(entry, UB + UP_ASTACK + APP_STACK_PAGES * 4096UL, 0, 0);
     ufile_release();   /* M3d: what it left open is closed for it, however it ended */
     return 0;
@@ -728,6 +741,7 @@ static void app_tick(void) {   /* every app with something to do gets its turn: 
         app_kick = 0; app_last = now; app_runs++;
         app_parked = 0; user_faulted = 0; app_running = 1; ufile_owner = ap->slot + 1;
         APP_FP_CLOBBER();
+        arena_only((int)ap->slot);
         unsigned long st = resume_user(&app_frame, app_sp, app_fp);
         app_running = 0;
         if (!app_parked) app_end(st, user_faulted ? "stopped by a fault" : 0);
@@ -802,6 +816,18 @@ static void user_demo(void) {
     uart_puts("M3 EL0 second task starts\n");
     user_status = enter_user(code + (unsigned long)(user_entry_b - user_start), sp, kpage, 0);
     if (user_status == 7) uart_puts("M3 userland ok\n"); else uart_puts("M3 userland FAIL\n");
+    {   /* 4.4: slot 1 gets one page EL0 could use, and from slot 0 user.S's entry F loads from it, which must fault */
+        const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
+        unsigned long pg = apps[1].base + UP_STACK, *e = &l3[apps[1].l3off + (UP_STACK >> 12)];
+        *e = pg | PAGE | AP_EL0_RW | PXN | UXN;
+        arena_only(0);
+        uart_puts("M4 arena probe starts\n");
+        user_faulted = 0;
+        enter_user(code + (unsigned long)(user_entry_f - user_start), sp, pg, 0);
+        uart_puts(user_faulted ? "M4 arena isolation ok\n" : "M4 arena isolation FAIL: slot 1 was readable from slot 0\n");
+        *e = 0;
+        __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    }
 #ifndef PI_BUILD
     /* M3b: user/hello.c itself, built for aarch64 and talking Joshua Tree syscall numbers over svc. This runs before any
        card is mounted, so since M3d its open of HELLO.TXT is answered -ENOENT (-2), which hello.c reports and answers with
