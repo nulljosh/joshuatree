@@ -44,7 +44,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See the Blueprint: where the OS goes after 1.0 section for the structural plan of where this OS goes after 1.0.
 
-**Latest**: 3.9: Every app on the Pi. Settings, Finder, Mail, Weather, Stocks, Reminders and four games, all sharp at 2x and one Spotlight away.
+**Latest**: 4.0: Many windows. Run Calendar, Notes, Music and Books at once, each in its own space. If one crashes, the others never notice.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -748,6 +748,7 @@ One line per version. The full release notes live in the GitHub releases and `gi
 
 - **3.10.0 (2026-10-12)**: Copy, paste and the Cmd keys on the Pi: one 4 KB plain-text clipboard in the kernel, reached by Notes through `JT_SYS_CLIPBOARD` (399) and directly by the Terminal input line and the Browser address bar; Cmd or Ctrl with A, C, X and V, Cmd+W closes the front window and Cmd+Q quits the app. Check: `tools/checks/arm64-clipboard-check.py`.
 - **3.9.3 (2026-10-13)**: A sample song on every fresh Pi card: `tools/flash-pi.sh` puts a self-made `HELLO.WAV` (16 seconds, bass, arpeggio and melody, from `tools/gen/sample-song.py`) in `JT/MUSIC/` when the folder has no songs, and never when it has. `tools/checks/arm64-music-check.py` plays it as a third song and checks its length and title; `tools/checks/flash-pi-check.sh` checks the flash rule.
+- **4.0.0 (2026-10-18)**: Many windows on the Pi. Up to four apps run at once, each in its own 16 MiB arena with its own window, files and heap; a click raises the window under the pointer, the dock opens or raises, closing repaints what was behind. A fault ends only the app that made it (`app_end` keeps its own slot through the window close). The gate is `tools/checks/arm64-windows-check.py`: Calendar, Toroid and Notes run together, Toroid crashes on purpose, the other two keep presenting frames. Apps are not isolated from each other's memory yet (one table, no per-app address space); that, a back buffer and dirty rectangles are the next windows work.
 - **3.9.0 (2026-10-12)**: The Pi gets every app, sharp: Settings, Finder, Mail, Weather, Stocks, Reminders and four games (Mines, Toroid, Hamurapi, Keyrate), all in Spotlight, a clipboard and resizable windows, each drawn at 2x through `hires.h`. Menu bar icons are always ink, the wallpaper is graphite grey `#6E6E6E` with Settings offering Grey (default), Terracotta, Clay and Ink, and the boot splash flushes its rows to RAM. Checks: `arm64-sharp2x-check.py`, `arm64-settings-check.py`, `arm64-quietboot-check.py` and the per-app checks in the Testing section.
 - **3.8.3 (2026-10-12)**: The Pi boots behind a neutral grey splash with the tree mark crisp in the middle and a calm grey bar under it.
 - **3.7.3 (2026-10-12)**: The Bluetooth mouse comes back by itself.
