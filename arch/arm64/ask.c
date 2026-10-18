@@ -78,6 +78,7 @@ static int sam_state;        /* 0 idle, 1 queued by `sam`, 2 waiting on the rela
 static int tui_on, tui_quit;         /* the chat view has the window; leave it when the question in flight ends */
 static unsigned tui_n, tui_up;       /* history lines held; how many lines the view is scrolled back from the newest */
 void sam_command(const char *q, unsigned n);
+static void voice_fetch(const char *t, unsigned k);   /* [[say]]: her voice from the relay */
 static void tui_enter(void);
 static void tui_paint(int full);
 static void tui_escape(void);
@@ -526,30 +527,33 @@ done:
     return (int)ret;
 }
 
-static int relay_post_tls(const char *body, unsigned body_len, const char *token, char *reply, int *status) {
+static int relay_post_tls_to(const char *path, const char *body, unsigned body_len, const char *token, char *reply, unsigned reply_max, int *status) {
     static char req[2 * RESULT_MAX + 512 + sizeof(RELAY_NAME)];
     char digits[10]; unsigned n = 0, dn = 0, v = body_len;
     *status = 0;
     if (relay_open() < 0) return -1;          /* nothing sent: the token stays home */
     do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
-    const char *parts[] = {"POST /api/claude HTTP/1.0\r\nHost: ", RELAY_NAME, "\r\nAuthorization: Bearer ", token,
+    const char *parts[] = {"POST ", path, " HTTP/1.0\r\nHost: ", RELAY_NAME, "\r\nAuthorization: Bearer ", token,
                           "\r\nContent-Type: application/json\r\nContent-Length: "};
-    for (unsigned i = 0; i < 5; i++) for (const char *p = parts[i]; *p; p++) req[n++] = *p;
+    for (unsigned i = 0; i < 7; i++) for (const char *p = parts[i]; *p; p++) req[n++] = *p;
     while (dn) req[n++] = digits[--dn];
     for (const char *p = "\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
     for (unsigned i = 0; i < body_len; i++) req[n++] = body[i];
-    char *raw = kmalloc(REPLY_MAX + 2048);
+    char *raw = kmalloc(reply_max + 2048);
     request_sent = 1;
-    int got = raw ? tls_exchange_timeout(req, n, raw, REPLY_MAX + 2048, ASK_TICKS) : -1;
+    int got = raw ? tls_exchange_timeout(req, n, raw, reply_max + 2048, ASK_TICKS) : -1;
     if (!raw) tcp_close();
     for (unsigned i = 0; i < n; i++) ((volatile char *)req)[i] = 0;
     *status = got > 0 ? http_status_of(raw, (unsigned)got) : 0;
     if (got <= 0) return -1;
     int start = http_body_start(raw, (unsigned)got);
-    if (start < 0 || (unsigned)(got - start) > REPLY_MAX) return -1;
+    if (start < 0 || (unsigned)(got - start) > reply_max) return -1;
     got -= start;
     for (int i = 0; i < got; i++) reply[i] = raw[start + i];
     return got;
+}
+static int relay_post_tls(const char *body, unsigned body_len, const char *token, char *reply, int *status) {
+    return relay_post_tls_to("/api/claude", body, body_len, token, reply, REPLY_MAX, status);
 }
 #endif
 
@@ -664,7 +668,7 @@ static void run_actions(void) {
         result_puts(names[act_kind[a]]); if (k) { result_puts(" "); result_puts(t); } result_puts(": ");
         switch (act_kind[a]) {
         case ACT_NOTE: say_wrapped("pi: ", t, k); break;
-        case ACT_SAY: say_wrapped("say: ", t, k); break;   /* no voice on ARM yet: a caption */
+        case ACT_SAY: say_wrapped("say: ", t, k); voice_fetch(t, k); break;   /* the caption, then her voice from the relay */
         case ACT_LED:
 #ifdef PI_BUILD
             led_blink(4); result_puts("blinked\n");
@@ -898,6 +902,64 @@ static void tui_submit(void) {   /* Enter in the chat view: your line, then the 
     cmd_out = saved;
     tui_paint(0);
 }
+/* Her voice on the Pi: [[say TEXT]] posts the text to the relay's /api/tts and 22050 Hz 16-bit mono PCM comes back. It is
+   boxed to the app sound path's 8-bit unsigned mono (audio.c, DMA on the Pi) and queued a piece at a time from ask_poll,
+   so the desktop never waits on the speaker. A clip is capped at VOICE_MAX samples (8 seconds). The relay's 413 and 429
+   (text or day cap) and a missing key (503) print as "voice: no audio (N)" and the caption stands on its own. */
+#define VOICE_RATE 22050
+#define VOICE_MAX (VOICE_RATE * 8)
+#define VOICE_TEXT_MAX 400                                       /* relay.py --tts-max-chars */
+int audio_app_queue(const unsigned char *pcm, unsigned len, unsigned rate, int end);   /* audio.c: bytes taken */
+static unsigned char voice_pcm[VOICE_MAX];
+static unsigned voice_len, voice_pos;
+static void voice_pump(void) {
+    if (voice_pos >= voice_len) return;
+    int took = audio_app_queue(voice_pcm + voice_pos, voice_len - voice_pos, VOICE_RATE, 1);
+    if (took > 0) voice_pos += (unsigned)took;
+    if (voice_pos >= voice_len) { kputs("voice: queued "); kdec(voice_len); kputs(" samples\n"); }
+}
+static void voice_fetch(const char *t, unsigned k) {
+    if (!CLAUDE_TOKEN_LEN || !net_get_gateway()) return;        /* no relay: the caption is all there is */
+    static char body[VOICE_TEXT_MAX * 2 + 16];
+    unsigned b = 0;
+    for (const char *p = "{\"text\":\""; *p; p++) body[b++] = *p;
+    if (k > VOICE_TEXT_MAX) k = VOICE_TEXT_MAX;
+    for (unsigned i = 0; i < k; i++) {
+        char c = t[i];
+        if (c == '"' || c == '\\') { body[b++] = '\\'; body[b++] = c; }
+        else body[b++] = (unsigned char)c < 32 ? ' ' : c;
+    }
+    body[b++] = '"'; body[b++] = '}';
+    static char token[64];
+    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
+    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    unsigned long mark = heap_mark();
+    char *raw = kmalloc(VOICE_MAX * 2);
+    int status = 0, got = -1;
+    if (raw) {
+#if defined(PI_BUILD) || CLAUDE_TLS
+        got = relay_post_tls_to("/api/tts", body, b, token, raw, VOICE_MAX * 2, &status);
+#else
+        http_post_set_bearer(token);
+        got = http_post_timeout(CLAUDE_HOST, "/api/tts", CLAUDE_PORT, body, b, raw, VOICE_MAX * 2, ASK_TICKS);
+        http_post_set_bearer(0);
+        status = http_last_status();
+#endif
+    }
+    for (int i = 0; i < 64; i++) token[i] = 0;
+    if (got <= 1 || status != 200) { kputs("voice: no audio ("); kdec((unsigned)status); kputs(")\n"); heap_release(mark); return; }
+    unsigned n = (unsigned)got / 2;
+    if (n > VOICE_MAX) n = VOICE_MAX;
+    for (unsigned i = 0; i < n; i++) {
+        int v = (short)((unsigned char)raw[2 * i] | (unsigned char)raw[2 * i + 1] << 8);
+        voice_pcm[i] = (unsigned char)((v >> 8) + 128);
+    }
+    heap_release(mark);
+    voice_len = n; voice_pos = 0;
+    kputs("voice: "); kdec(n); kputs(" samples at 22050 Hz\n");
+    voice_pump();
+}
+
 /* `hear`: the USB microphone for a few seconds, the samples to the Mac's words service (tools/claude-relay/stt.py, the relay's
    port plus one, the same token and on the Pi the same TLS name), the words printed as "you: ..." and handed to `sam`. The
    recording blocks the Terminal for those seconds; the post waits like a `sam` turn. HEAR_TEST (arm64-hear-check.py on QEMU
@@ -1049,6 +1111,7 @@ static void sam_run(void) {   /* the queued question, on a main loop pass of its
     prompt_row(ac->line, ac->len);
 }
 void ask_poll(void) {
+    voice_pump();                              /* the rest of a clip, as the sound ring makes room */
     if (ac->pending) run_typed();
     else if (sam_state == 1) sam_run();
 }
