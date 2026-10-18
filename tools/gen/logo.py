@@ -167,9 +167,9 @@ def big():
 def small():
     """The tree drawn down its middle for 16 to 48 px: one heavy line per limb, a tight knot per tuft, and the ground."""
     rnd = random.Random(1932)
-    lines = [TRUNK] + [[TRUNK[-1]] + a[1:] for a in ARMS[:3]] + [LOW]   # the fourth arm leaves the long left arm
+    lines = [TRUNK] + [[TRUNK[-1]] + a[1:] for a in ARMS[:3]]   # three arms: at 16 to 48 px the fourth tuft only closes a light pocket against the left arm
     knots = []
-    for arm, r in zip(ARMS, SMALL_R):
+    for arm, r in zip(ARMS[:3], SMALL_R):
         cx, cy, _ = tip(arm, 3.0)
         knots.append(scribble(rnd, cx, cy, r, 3, 0.2, (0.6, 0.5)))
     ground = [(26, SMALL_GROUND_Y), (50, SMALL_GROUND_Y), (75, SMALL_GROUND_Y)]
