@@ -1,0 +1,50 @@
+{
+ "rows": [
+  [
+   "front_shell",
+   1,
+   "PLA (PETG works)",
+   "0.20 mm",
+   "6 walls = 2.4 mm",
+   "15 percent gyroid",
+   "no",
+   "face down on the bed",
+   "236.3 x 228.3 x 86.1",
+   209.3,
+   260,
+   "6.5",
+   "teardrop standoffs and the screw holes are the only overhangs"
+  ],
+  [
+   "back_cover",
+   1,
+   "PLA (PETG works)",
+   "0.20 mm",
+   "6 walls = 2.4 mm",
+   "15 percent gyroid",
+   "no",
+   "back panel down on the bed",
+   "236.0 x 226.7 x 87.1",
+   169.0,
+   210,
+   "5.2",
+   "port windows and the scoop sit in the first layers"
+  ],
+  [
+   "ground_inlay",
+   1,
+   "PLA (PETG works)",
+   "0.20 mm",
+   "6 walls = 2.4 mm",
+   "15 percent gyroid",
+   "no",
+   "flat",
+   "37.9 x 1.5 x 0.9",
+   0.1,
+   0,
+   "0.0",
+   "print in terracotta; it sits flush in the groove on the back"
+  ]
+ ],
+ "assumptions": "density PLA 1.24 g/cm3; average volumetric speed 9 mm3/s; both are estimates and the shell volume is almost all walls, so infill barely changes the weight"
+}
