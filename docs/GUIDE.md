@@ -1132,7 +1132,16 @@ Nimbus is the small square one: a Pi 4 and the official 7 inch touch display in 
 
 ![Nimbus, rear](hardware/nimbus-rear.jpg)
 
-The CAD, the blueprint, the retail box and the print pack (STLs, a 1:1 blueprint, a bill of materials, a print sheet and assembly steps) are on their way in from the Nimbus branch; the commands will be listed here when they land.
+The print pack in `docs/hardware/nimbus/pack/` has the STLs checked against a 256 mm bed, a 1:1 blueprint on A3 (and tiled on A4 and Letter), a bill of materials, a print sheet and six assembly step drawings. Everything is generated:
+
+```
+uv run --with build123d --with shapely python docs/hardware/nimbus_cad.py docs/hardware        # STL and STEP per part into docs/hardware/nimbus/
+python3 docs/hardware/nimbus_desktop.py --compose                                               # the desktop picture for the screen
+blender -b -t 4 -P docs/hardware/render_nimbus.py -- docs/hardware                             # hero, rear and side renders, headless
+blender -b -P docs/hardware/nimbus_box.py -- docs/hardware                                     # the retail box render
+uv run --with build123d --with shapely python docs/hardware/nimbus_blueprint.py docs/hardware  # the print blueprint (SVG and PDF)
+uv run --with build123d --with shapely --with trimesh python docs/hardware/nimbus_pack.py docs/hardware   # the print pack
+```
 
 ### Enclosure: Neo
 
