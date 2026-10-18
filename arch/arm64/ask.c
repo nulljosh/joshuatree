@@ -922,6 +922,30 @@ static void voice_pump(void) {
     if (took > 0) voice_pos += (unsigned)took;
     if (voice_pos >= voice_len) { kputs("voice: queued "); kdec(voice_len); kputs(" samples\n"); }
 }
+void audio_app_status(unsigned st[7]);     /* audio.c */
+void con_tui_mouth(int mouth);             /* main.c: the chat view's face */
+int voice_level(void) {   /* 0 to 100, how open her mouth is right now: the loudness of the clip at the point the sound path has reached */
+    if (!voice_len) return 0;
+    unsigned st[7]; audio_app_status(st);
+    if (!st[2]) return 0;
+    unsigned at = st[6], win = VOICE_RATE / 25;
+    if (at >= voice_len) return 0;
+    if (at + win > voice_len) win = voice_len - at;
+    unsigned sum = 0;
+    for (unsigned i = 0; i < win; i++) { int d = (int)voice_pcm[at + i] - 128; sum += (unsigned)(d < 0 ? -d : d); }
+    unsigned m = win ? sum * 100 / (win * 24) : 0;   /* 24 of 127 is a loud vowel: a wide-open mouth */
+    return m > 100 ? 100 : (int)m;
+}
+static void face_tick(void) {   /* ask_poll: the mouth follows the voice, 25 times a second, while the chat view is up */
+    static unsigned t; static int last = -1;
+    if (!tui_on || !voice_len) return;
+    unsigned now = ticks();
+    if (now - t < 4) return;
+    t = now;
+    int m = voice_level();
+    con_tui_mouth(m);
+    if (m / 25 != last) { last = m / 25; kputs("face: mouth="); kdec((unsigned)m); kputs("\n"); }
+}
 static void voice_fetch(const char *t, unsigned k) {
     if (!CLAUDE_TOKEN_LEN || !net_get_gateway()) return;        /* no relay: the caption is all there is */
     static char body[VOICE_TEXT_MAX * 2 + 16];
@@ -1191,6 +1215,7 @@ static void sam_run(void) {   /* the queued question, on a main loop pass of its
 void ask_poll(void) {
     voice_pump();                              /* the rest of a clip, as the sound ring makes room */
     vm_poll();                                 /* voice mode: the hold, the level bar, the release */
+    face_tick();                               /* the chat view's mouth, while she speaks */
     if (ac->pending) run_typed();
     else if (sam_state == 1) sam_run();
 }

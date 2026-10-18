@@ -1393,27 +1393,68 @@ void con_prompt(const char *s, unsigned n) { con_input_row(ask_prompt(), s, n); 
 #define TUI_ROWS 96
 #define TUI_COLS 128
 static char tui_shadow[TUI_ROWS][TUI_COLS];
-int con_rows_total(void) { return con_live && fb && cp == &term_p && !calc_front && !app_front ? con_rows : 0; }   /* text rows above the input row; 0 with no window to draw in */
+static int tui_face_rows;   /* the chat view's face takes the top rows (con_tui_begin), 0 when the window is short or the view is closed */
+int con_rows_total(void) { return con_live && fb && cp == &term_p && !calc_front && !app_front ? con_rows - tui_face_rows : 0; }   /* text rows above the input row; 0 with no window to draw in */
+#include "mascot_art.h"
+int png_decode(const unsigned char *data, unsigned int len, unsigned char **out, unsigned int *w, unsigned int *h, unsigned int *channels);   /* drivers/png.c */
+/* The chat view's face (5.0, "Samantha is the interface"): the mascot above the rows, drawn from mascot_art.h, with a coded mouth
+   over its smile that opens with her voice (ask.c voice_level, from the clip the sound path is playing). Seven rows when the
+   window has room for them, none in a short window. "face: on" on the UART when it is drawn; ask.c logs the mouth. */
+static unsigned char *face_rgba; static int face_tried, face_mouth = -1;
+static void face_blit(int mouth) {
+    if (!face_tried) {
+        face_tried = 1; unsigned w, h, ch;
+        if (png_decode(mascot_png, MASCOT_PNG_LEN, &face_rgba, &w, &h, &ch) || w != MASCOT_PX || h != MASCOT_PX || ch != 4) face_rgba = 0;
+    }
+    int D = con_ch * (tui_face_rows - 1), x0 = con_x + (con_cols * con_cw - D) / 2, y0 = con_y + con_ch / 2;
+    fb_rect(x0, y0, D, D, CON_BG);
+    if (face_rgba) for (int y = 0; y < D; y++) for (int x = 0; x < D; x++) {   /* 2x2 samples a pixel, blended onto the background */
+        unsigned r = 0, g = 0, b = 0, a = 0;
+        for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) {
+            const unsigned char *q = face_rgba + (((y * 2 + j) * MASCOT_PX / (D * 2)) * MASCOT_PX + (x * 2 + i) * MASCOT_PX / (D * 2)) * 4;
+            r += q[0] * q[3]; g += q[1] * q[3]; b += q[2] * q[3]; a += q[3];
+        }
+        if (!a) continue;
+        unsigned ink = fb_color(((r / a) << 16) | ((g / a) << 8) | (b / a)), al = a / 4;
+        unsigned *px = &fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)], d = *px, out = 0;
+        for (int sh = 0; sh <= 16; sh += 8) out |= ((((ink >> sh) & 0xFF) * al + ((d >> sh) & 0xFF) * (255 - al)) / 255) << sh;
+        *px = out;
+    }
+    if (mouth > 0) {   /* the mouth: an ink ellipse over the smile (the art's x 47 to 53, y 77 to 79 of 100), taller the louder she is */
+        int mx = x0 + D / 2, my = y0 + D * 78 / 100, rw = D * 3 / 100 + 1, rh = 1 + (D * 4 / 100) * mouth / 100;
+        unsigned ink = fb_color(0x00161513);
+        for (int dy = -rh; dy <= rh; dy++) for (int dx = -rw; dx <= rw; dx++)
+            if (dx * dx * rh * rh + dy * dy * rw * rw <= rw * rw * rh * rh) fb[(unsigned)(my + dy) * fb_pitch + (unsigned)(mx + dx)] = ink;
+    }
+    fb_flush(x0, y0, D, D);
+    face_mouth = mouth;
+}
+void con_tui_mouth(int mouth) {   /* ask.c, while her voice plays: only the face is repainted */
+    if (!tui_face_rows || !con_rows_total() || mouth == face_mouth) return;
+    int held = cur_hold(); face_blit(mouth); cur_release(held);
+}
 void con_tui_begin(void) {
     if (!con_rows_total()) return;
     int held = cur_hold();
+    tui_face_rows = con_rows >= 14 ? 7 : 0;
     con_wipe();
     for (unsigned r = 0; r < TUI_ROWS; r++) tui_shadow[r][0] = 0;
+    if (tui_face_rows) { face_mouth = -1; face_blit(0); uart_puts("face: on\n"); }
     cur_release(held);
 }
 void con_tui_rows(const char *const *rows, unsigned n) {
     if (!con_rows_total()) return;
     int held = cur_hold();
-    for (unsigned r = 0; r < n && r < TUI_ROWS && r < (unsigned)con_rows; r++) {
+    for (unsigned r = 0; r < n && r < TUI_ROWS && r < (unsigned)(con_rows - tui_face_rows); r++) {
         const char *t = rows[r] ? rows[r] : "";
         unsigned k = 0, lim = (unsigned)con_cols < TUI_COLS - 1 ? (unsigned)con_cols : TUI_COLS - 1;
         while (k < lim && t[k] && t[k] == tui_shadow[r][k]) k++;
         if (k == lim || (!t[k] && !tui_shadow[r][k])) continue;   /* the same text */
-        int y = con_y + (int)r * con_ch;
+        int y = con_y + ((int)r + tui_face_rows) * con_ch;
         fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
         fb_flush(con_x - 4, y, con_cols * con_cw + 8, con_ch);
         unsigned i = 0;
-        for (; i < lim && t[i]; i++) { tui_shadow[r][i] = t[i]; if (t[i] != ' ') con_glyph(i, r, t[i]); }
+        for (; i < lim && t[i]; i++) { tui_shadow[r][i] = t[i]; if (t[i] != ' ') con_glyph(i, r + (unsigned)tui_face_rows, t[i]); }
         tui_shadow[r][i] = 0;
     }
     cur_release(held);
@@ -1877,6 +1918,7 @@ static void pane_open(struct pane *p) {   /* the Console or the Terminal in fron
 static void console_open(void) { pane_open(&con_p); }
 void con_tui_end(void) {   /* back to the shell: the Terminal's own text and prompt */
     if (!con_rows_total()) return;
+    tui_face_rows = 0; face_mouth = -1;
     int held = cur_hold(), sc_ = (int)window_scale();
     cp->scrolled = 0;
     unsigned nl = con_nlines(), keep = con_rows > 1 ? (unsigned)con_rows - 1 : 1;

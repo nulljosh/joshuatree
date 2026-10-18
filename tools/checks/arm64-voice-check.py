@@ -7,7 +7,7 @@ answers /api/tts with 413 and the caption stands alone with "voice: no audio (41
 Skips where clang, ld.lld or qemu is missing.
 Usage: tools/checks/arm64-voice-check.py   (from the repo root)
 """
-import http.server, json, math, os, shutil, socket, struct, subprocess, sys, tempfile, threading, time
+import http.server, json, math, re, os, shutil, socket, struct, subprocess, sys, tempfile, threading, time
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 arch = os.path.join(root, "arch/arm64")
@@ -90,6 +90,17 @@ try:
     check("the clip's size is reported", "voice: 8820 samples at 22050 Hz" in out, out[-500:])
     check("every sample reached the sound ring", "voice: queued 8820 samples" in out, out[-500:])
     check("the token never appears on the UART", TOKEN not in out)
+    # the chat view: the face above the rows, the mouth moving with the clip
+    b.ask("sam"); b.wait_for("face: on", 10); time.sleep(0.5)
+    for ch in "hi": b.key(ch)
+    b.key("ret")
+    b.wait_for("voice: queued", 60); time.sleep(2)
+    outf = b.uart()[len(out):]
+    mouths = sorted(set(int(m) for m in re.findall(r"face: mouth=(\d+)", outf)))
+    check("the chat view drew the face", "face: on" in outf, outf[-300:])
+    check("the mouth moved with her voice", len(mouths) >= 2 and max(mouths) > 0, repr(mouths) + outf[-300:])
+    b.key("esc"); time.sleep(0.5)
+    out = b.uart()
     refuse[0] = True
     b.ask("sam again")
     b.wait_for("voice: no audio", 60); time.sleep(0.5)

@@ -347,7 +347,7 @@ retry|6|ARM64 sam chat view: bare `sam` opens a full-window Samantha in the Term
 retry|6|ARM64 USB audio: a UAC1 speaker behind xHCI is configured and streamed 440 Hz over isochronous transfers, and the tone arrives intact|python3 tools/checks/arm64-usbaudio-check.py
 retry|6|ARM64 hear: the Terminal posts the microphone (a tone on virt) to the words service beside the relay with the token, prints "you: ..." and hands it to sam; a refusal stops there and a bad count is refused|python3 tools/checks/arm64-hear-check.py
 retry|6|ARM64 voice mode: double-tap and hold Space listens with a mic mark in the menu bar and a live level bar, the release posts the samples and the words reach sam, the taps leave no spaces, a quick double tap stays two spaces|python3 tools/checks/arm64-voicemode-check.py
-retry|6|ARM64 voice: [[say TEXT]] fetches Samantha's voice from the relay's /api/tts with the token and queues every sample into the Pi's sound ring; a 413 leaves the caption with "voice: no audio"|python3 tools/checks/arm64-voice-check.py
+retry|6|ARM64 voice and face: [[say TEXT]] fetches Samantha's voice from the relay's /api/tts with the token and queues every sample into the Pi's sound ring, the chat view draws the mascot's face and its mouth moves with the clip, and a 413 leaves the caption with "voice: no audio"|python3 tools/checks/arm64-voice-check.py
 EOF
 }
 

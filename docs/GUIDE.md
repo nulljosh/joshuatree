@@ -118,6 +118,7 @@ Files behind it: `tools/flash-pi.sh` (builds and copies the image), `arch/arm64/
 | `mic`, `mic 5` | Listens through a USB microphone for 3 seconds (or 1 to 5) and shows how loud it was. Nothing is saved or sent. |
 | `hear`, `hear 5` | Speak to Samantha. Records 3 seconds (or 1 to 10) from the USB microphone, sends it to the Mac's words service, prints what it heard as `you: ...` and asks her. |
 | hold Space | Talk to Samantha: tap Space twice and keep it held the second time. A mic mark shows in the menu bar and the prompt row shows a level bar; let go to send. Needs a USB microphone and the words service on the Mac. |
+| `sam` | Opens the chat view: her face at the top (the mascot), the conversation below, your line at the bottom. Her mouth moves while she speaks. Esc closes it. |
 | `sam QUESTION` | Ask Samantha. When her answer carries a `[[say ...]]` line she says it out loud through the jack, with the words printed as `say: ...`. |
 | `userrun NAME` | Starts a user program by name, for testing. |
 | `llm PROMPT` | Asks the tiny model in the kernel. A normal release has none and stays quiet. |
