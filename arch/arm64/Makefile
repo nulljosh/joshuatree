@@ -341,6 +341,10 @@ audiotest: audio-kernel8.elf
 $(eval $(call variant,usbaudio,-DUSB_AUDIO_TEST,,))
 usbaudiotest: usbaudio-kernel8.elf
 .PHONY: usbaudiotest
+# heartest: `hear` sends half a second of a tone instead of recording (virt has no microphone); arm64-hear-check.py stubs the words service.
+$(eval $(call variant,hear,-DHEAR_TEST,,))
+heartest: hear-kernel8.elf
+.PHONY: heartest
 # musictest: Music's clock (JT_SYS_TIME) ticks from MUSIC_UTC with the generic counter, so its `music: at` lines come once a
 # second on virt, which has no network time, and fptest.c's fp_clobber wipes the FPU inside every app call and before every
 # resume, so `userrun fpkeep` proves vectors.S keeps an app's FP registers (tools/checks/arm64-music-check.py).

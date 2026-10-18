@@ -4,7 +4,7 @@
     POST /api/stt        Authorization: Bearer <token>   (the relay's token file, same rules)
     Content-Type: application/octet-stream
     body: raw PCM, signed 16-bit little-endian, mono, 16000 Hz, no header, at most --max-seconds of it
-    200 application/json {"text": "what was said", "seconds": 2.9, "took": 0.8}
+    200 text/plain: the words, one line (empty when nothing was said); X-Took says the seconds whisper needed
     400 bad body (empty, odd length, too long)   401 no or wrong token   404 other path   405 not POST   500 whisper failed
 
 The words come from whisper.cpp (`brew install whisper-cpp`) with its base English model; nothing leaves the Mac.
@@ -12,7 +12,7 @@ The Pi's `hear` command records from the USB microphone (arch/arm64/xhci.c, 16 k
 
     python3 tools/claude-relay/stt.py --token-file ~/.claude-relay-token      (port 8766)
 """
-import argparse, hmac, http.server, json, os, shutil, struct, subprocess, sys, tempfile, time
+import argparse, hmac, http.server, os, shutil, struct, subprocess, sys, tempfile, time
 
 DEFAULT_PORT = 8766
 RATE = 16000
@@ -34,22 +34,23 @@ def transcribe(pcm, model, threads):
 class Handler(http.server.BaseHTTPRequestHandler):
     token = ""; model = MODEL; max_bytes = 0; threads = 4
     def log_message(self, fmt, *a): sys.stderr.write("stt %s %s\n" % (self.address_string(), fmt % a))
-    def reply(self, status, obj):
-        body = json.dumps(obj).encode()
-        self.send_response(status); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
-        self.end_headers(); self.wfile.write(body)
-    def do_GET(self): self.reply(405, {"error": "POST /api/stt"})
+    def reply(self, status, text, took=None):
+        body = text.encode("utf-8", "replace")
+        self.send_response(status); self.send_header("Content-Type", "text/plain; charset=utf-8"); self.send_header("Content-Length", str(len(body)))
+        if took is not None: self.send_header("X-Took", "%.2f" % took)
+        self.send_header("Connection", "close"); self.end_headers(); self.wfile.write(body)
+    def do_GET(self): self.reply(405, "POST /api/stt")
     def do_POST(self):
-        if self.path != "/api/stt": return self.reply(404, {"error": "not here, POST /api/stt"})
+        if self.path != "/api/stt": return self.reply(404, "not here, POST /api/stt")
         auth = self.headers.get("Authorization", "")
-        if not (auth.startswith("Bearer ") and hmac.compare_digest(auth[7:].strip(), self.token)): return self.reply(401, {"error": "no or wrong token"})
+        if not (auth.startswith("Bearer ") and hmac.compare_digest(auth[7:].strip(), self.token)): return self.reply(401, "no or wrong token")
         n = int(self.headers.get("Content-Length") or 0)
-        if n <= 0 or n % 2 or n > self.max_bytes: return self.reply(400, {"error": "body must be 16-bit mono PCM at 16 kHz, up to %d bytes" % self.max_bytes})
+        if n <= 0 or n % 2 or n > self.max_bytes: return self.reply(400, "body must be 16-bit mono PCM at 16 kHz, up to %d bytes" % self.max_bytes)
         pcm = self.rfile.read(n)
         t0 = time.time()
         try: text = transcribe(pcm, self.model, self.threads)
-        except Exception as e: return self.reply(500, {"error": "whisper: %s" % e})
-        self.reply(200, {"text": text, "seconds": round(n / (2 * RATE), 2), "took": round(time.time() - t0, 2)})
+        except Exception as e: return self.reply(500, "whisper: %s" % e)
+        self.reply(200, text, time.time() - t0)
 
 
 def main():

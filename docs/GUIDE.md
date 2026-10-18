@@ -116,6 +116,7 @@ Files behind it: `tools/flash-pi.sh` (builds and copies the image), `arch/arm64/
 | `bt` | Bluetooth (below). |
 | `beep`, `vol` | `beep` plays a short tone. `vol 40`, `vol up`, `vol down` set the volume 0 to 100. |
 | `mic`, `mic 5` | Listens through a USB microphone for 3 seconds (or 1 to 5) and shows how loud it was. Nothing is saved or sent. |
+| `hear`, `hear 5` | Speak to Samantha. Records 3 seconds (or 1 to 10) from the USB microphone, sends it to the Mac's words service, prints what it heard as `you: ...` and asks her. |
 | `userrun NAME` | Starts a user program by name, for testing. |
 | `llm PROMPT` | Asks the tiny model in the kernel. A normal release has none and stays quiet. |
 | `reboot`, `shutdown` | Restart or switch off. |

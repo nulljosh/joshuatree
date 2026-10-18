@@ -898,6 +898,80 @@ static void tui_submit(void) {   /* Enter in the chat view: your line, then the 
     cmd_out = saved;
     tui_paint(0);
 }
+/* `hear`: the USB microphone for a few seconds, the samples to the Mac's words service (tools/claude-relay/stt.py, the relay's
+   port plus one, the same token and on the Pi the same TLS name), the words printed as "you: ..." and handed to `sam`. The
+   recording blocks the Terminal for those seconds; the post waits like a `sam` turn. HEAR_TEST (arm64-hear-check.py on QEMU
+   virt, which has no microphone) sends half a second of a 440 Hz tone instead of recording. */
+int usb_mic_ok(void);                                             /* xhci.c */
+unsigned usb_mic_record(short *dst, unsigned max, unsigned ms);
+unsigned hear_fake(short *pcm, unsigned max);                     /* main.c */
+#define HEAR_HZ 16000
+#define HEAR_MAX_SECS 10
+void hear_command(unsigned secs) {
+    if (secs < 1) secs = 3;
+    if (secs > HEAR_MAX_SECS) secs = HEAR_MAX_SECS;
+    if (sam_state) { kputs("hear: sam is busy, wait for her answer\n"); return; }   /* ac->pending is this very command */
+    if (!CLAUDE_TOKEN_LEN) { kputs("hear: no relay token in this build\n"); return; }
+    unsigned long mark = heap_mark();
+    unsigned max = secs * HEAR_HZ, got;
+    short *pcm = kmalloc(max * 2);
+    char *raw = kmalloc(REPLY_MAX + 2048);
+    if (!pcm || !raw) { kputs("hear: out of memory\n"); heap_release(mark); return; }
+    got = hear_fake(pcm, max);   /* main.c: half a second of a tone on the heartest build, 0 otherwise */
+    if (!got) {
+        if (!usb_mic_ok()) { kputs("hear: no USB microphone found (plug it into a Pi port, then wait a second)\n"); heap_release(mark); return; }
+        kputs("hear: listening for "); kdec(secs); kputs(" s\n");
+        got = usb_mic_record(pcm, max, secs * 1000 + 300);
+    }
+    if (got < HEAR_HZ / 4) { kputs("hear: heard nothing\n"); heap_release(mark); return; }
+    static char token[64];
+    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
+    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    kputs("hear: sending "); kdec(got * 10 / HEAR_HZ); kputs(" tenths of a second\n");
+    int status = 0, n;
+#if defined(PI_BUILD) || CLAUDE_TLS
+    /* one request buffer: the header, then the samples; the words service sits beside the relay, one port up */
+    if (!relay_ip && relay_open() < 0) { kputs("hear: no relay\n"); heap_release(mark); return; }
+    if (relay_ip) tcp_close();
+    char *req = kmalloc(got * 2 + 512);
+    if (!req) { kputs("hear: out of memory\n"); heap_release(mark); return; }
+    unsigned k = 0; char digits[10]; unsigned dn = 0, v = got * 2;
+    do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    const char *parts[] = {"POST /api/stt HTTP/1.0\r\nHost: ", RELAY_NAME, "\r\nAuthorization: Bearer ", token,
+                          "\r\nContent-Type: application/octet-stream\r\nContent-Length: "};
+    for (unsigned i = 0; i < 5; i++) for (const char *p = parts[i]; *p; p++) req[k++] = *p;
+    while (dn) req[k++] = digits[--dn];
+    for (const char *p = "\r\nConnection: close\r\n\r\n"; *p; p++) req[k++] = *p;
+    for (unsigned i = 0; i < got * 2; i++) req[k++] = ((const char *)pcm)[i];
+    n = tls_connect_private(relay_ip, (unsigned short)(relay_port + 1), RELAY_NAME) < 0 || tls_handshake() < 0 ? -1
+        : tls_exchange_timeout(req, k, raw, REPLY_MAX + 2048, ASK_TICKS);
+    for (unsigned i = 0; i < k; i++) ((volatile char *)req)[i] = 0;
+    if (n > 0) {
+        status = http_status_of(raw, (unsigned)n);
+        int start = http_body_start(raw, (unsigned)n);
+        n = start < 0 ? -1 : n - start;
+        for (int i = 0; i < n; i++) raw[i] = raw[start + i];
+    }
+#else
+    http_post_set_bearer(token);
+    n = http_post_timeout(CLAUDE_HOST, "/api/stt", (unsigned short)(CLAUDE_PORT + 1), (const char *)pcm, got * 2, raw, REPLY_MAX, ASK_TICKS);
+    http_post_set_bearer(0);
+    status = http_last_status();
+#endif
+    for (int i = 0; i < 64; i++) token[i] = 0;
+    if (n < 0 || status != 200) { kputs("hear: no words ("); kdec((unsigned)status); kputs(")\n"); heap_release(mark); return; }
+    unsigned len = 0;
+    while (len < (unsigned)n && len < ASK_MAX && raw[len] >= 32 && raw[len] < 127) len++;
+    while (len && raw[len - 1] == ' ') len--;
+    if (!len) { kputs("you: (nothing)\n"); heap_release(mark); return; }
+    static char said[ASK_MAX + 1];
+    for (unsigned i = 0; i < len; i++) said[i] = raw[i];
+    said[len] = 0;
+    heap_release(mark);
+    kputs("you: "); kputs(said); kputs("\n");
+    sam_command(said, len);
+}
+
 void sam_command(const char *q, unsigned n) {   /* cmd.c: `sam QUESTION` queues the question and returns; ask_poll sends it */
     while (n && q[0] == ' ') { q++; n--; }
     if (!n) { if (!tui_on) tui_enter(); return; }   /* `sam` alone opens the chat view */

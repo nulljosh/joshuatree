@@ -3826,6 +3826,15 @@ void net_stack_demo(void);
 void net_clock_sync(void);
 int bt_starting(void);   /* bt.c: the radio is still loading its patch */
 void tls_demo(void);
+unsigned hear_fake(short *pcm, unsigned max) {   /* ask.c's `hear` on the heartest build: half a second of a 440 Hz square wave instead of a microphone */
+#ifdef HEAR_TEST
+    unsigned n = 8000 < max ? 8000 : max;
+    for (unsigned i = 0; i < n; i++) pcm[i] = (short)(((i * 440 / 16000) & 1) ? 6000 : -6000);
+    return n;
+#else
+    (void)pcm; (void)max; return 0;
+#endif
+}
 void input_drain(void) { usb_poll(); input_poll(); key_repeat_tick(); audio_pump(); }   /* ask.c, between agent steps and in every wait while `sam` thinks: the keys that queued, a held key repeating, and the sound */
 
 void main(void) {

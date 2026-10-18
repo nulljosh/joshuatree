@@ -5,7 +5,7 @@ stt.py runs on a free port with a throwaway token, and the reply must hold "quic
 odd-length body 400, and a GET 405. Skips (exit 0) where say, ffmpeg, whisper-cli or the base model is missing.
 Usage: tools/checks/stt-check.py   (from the repo root)
 """
-import json, os, shutil, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
+import os, shutil, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 model = os.path.expanduser("~/.cache/whisper-cpp/ggml-base.en.bin")
@@ -23,14 +23,14 @@ def post(body, token=tok, path="/api/stt", method="POST"):
     req = urllib.request.Request("http://127.0.0.1:%d%s" % (port, path), data=body, method=method,
                                  headers={"Authorization": "Bearer " + token, "Content-Type": "application/octet-stream"})
     try:
-        with urllib.request.urlopen(req, timeout=120) as r: return r.status, json.loads(r.read())
-    except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
+        with urllib.request.urlopen(req, timeout=120) as r: return r.status, (r.read().decode(), r.headers.get("X-Took"))
+    except urllib.error.HTTPError as e: return e.code, (e.read().decode(), None)
 try:
     for _ in range(50):
         if p.stdout.readline().startswith("stt: listening"): break
         time.sleep(0.1)
     st, j = post(pcm)
-    if st == 200 and "quick brown fox" in j.get("text", "").lower(): print("  ok: %r in %ss" % (j["text"], j["took"]))
+    if st == 200 and "quick brown fox" in j[0].lower(): print("  ok: %r in %ss" % (j[0], j[1]))
     else: fails.append("spoken sentence came back as %s %r" % (st, j))
     for want, (st, j), what in ((401, post(pcm, token="wrong-token-0123456789"), "a wrong token"), (400, post(pcm[:-1]), "an odd-length body"),
                                  (405, post(None, method="GET"), "a GET")):
