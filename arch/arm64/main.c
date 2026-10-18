@@ -1395,36 +1395,33 @@ void con_prompt(const char *s, unsigned n) { con_input_row(ask_prompt(), s, n); 
 static char tui_shadow[TUI_ROWS][TUI_COLS];
 static int tui_face_rows;   /* the chat view's face takes the top rows (con_tui_begin), 0 when the window is short or the view is closed */
 int con_rows_total(void) { return con_live && fb && cp == &term_p && !calc_front && !app_front ? con_rows - tui_face_rows : 0; }   /* text rows above the input row; 0 with no window to draw in */
-#include "mascot_art.h"
+#include "face_art.h"
+void tui_log(const char *s);   /* below: a line to the UART only */
 int png_decode(const unsigned char *data, unsigned int len, unsigned char **out, unsigned int *w, unsigned int *h, unsigned int *channels);   /* drivers/png.c */
-/* The chat view's face (5.0, "Samantha is the interface"): the mascot above the rows, drawn from mascot_art.h, with a coded mouth
-   over its smile that opens with her voice (ask.c voice_level, from the clip the sound path is playing). Seven rows when the
-   window has room for them, none in a short window. "face: on" on the UART when it is drawn; ask.c logs the mouth. */
-static unsigned char *face_rgba; static int face_tried, face_mouth = -1;
+/* The chat view's face (5.0, "Samantha is the interface"): her portrait above the rows, from face_art.h (two frames of the
+   web Samantha's face, mouth closed and mouth open), blended by how loud her voice is at that moment (ask.c voice_level,
+   from the clip the sound path is playing), so her mouth opens with what she says. Seven rows when the window has room
+   for them, none in a short window. "face: on" on the UART when it is drawn; ask.c logs the mouth. */
+static unsigned char *face_idle, *face_talk; static int face_tried, face_mouth = -1;
 static void face_blit(int mouth) {
     if (!face_tried) {
         face_tried = 1; unsigned w, h, ch;
-        if (png_decode(mascot_png, MASCOT_PNG_LEN, &face_rgba, &w, &h, &ch) || w != MASCOT_PX || h != MASCOT_PX || ch != 4) face_rgba = 0;
+        if (png_decode(face_idle_png, FACE_IDLE_LEN, &face_idle, &w, &h, &ch) || w != FACE_PX || h != FACE_PX || ch != 4) face_idle = 0;
+        if (png_decode(face_talk_png, FACE_TALK_LEN, &face_talk, &w, &h, &ch) || w != FACE_PX || h != FACE_PX || ch != 4) face_talk = 0;
     }
     int D = con_ch * (tui_face_rows - 1), x0 = con_x + (con_cols * con_cw - D) / 2, y0 = con_y + con_ch / 2;
-    fb_rect(x0, y0, D, D, CON_BG);
-    if (face_rgba) for (int y = 0; y < D; y++) for (int x = 0; x < D; x++) {   /* 2x2 samples a pixel, blended onto the background */
-        unsigned r = 0, g = 0, b = 0, a = 0;
+    if (mouth < 0) mouth = 0;
+    if (mouth > 100) mouth = 100;
+    if (!face_idle) { fb_rect(x0, y0, D, D, CON_BG); fb_flush(x0, y0, D, D); face_mouth = mouth; return; }
+    const unsigned char *talk = face_talk ? face_talk : face_idle;
+    for (int y = 0; y < D; y++) for (int x = 0; x < D; x++) {   /* 2x2 samples a pixel, the two frames mixed by the mouth */
+        unsigned r = 0, g = 0, b = 0;
         for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) {
-            const unsigned char *q = face_rgba + (((y * 2 + j) * MASCOT_PX / (D * 2)) * MASCOT_PX + (x * 2 + i) * MASCOT_PX / (D * 2)) * 4;
-            r += q[0] * q[3]; g += q[1] * q[3]; b += q[2] * q[3]; a += q[3];
+            unsigned o = (((y * 2 + j) * FACE_PX / (D * 2)) * FACE_PX + (x * 2 + i) * FACE_PX / (D * 2)) * 4;
+            const unsigned char *p = face_idle + o, *q = talk + o;
+            r += p[0] * (100 - mouth) + q[0] * mouth; g += p[1] * (100 - mouth) + q[1] * mouth; b += p[2] * (100 - mouth) + q[2] * mouth;
         }
-        if (!a) continue;
-        unsigned ink = fb_color(((r / a) << 16) | ((g / a) << 8) | (b / a)), al = a / 4;
-        unsigned *px = &fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)], d = *px, out = 0;
-        for (int sh = 0; sh <= 16; sh += 8) out |= ((((ink >> sh) & 0xFF) * al + ((d >> sh) & 0xFF) * (255 - al)) / 255) << sh;
-        *px = out;
-    }
-    if (mouth > 0) {   /* the mouth: an ink ellipse over the smile (the art's x 47 to 53, y 77 to 79 of 100), taller the louder she is */
-        int mx = x0 + D / 2, my = y0 + D * 78 / 100, rw = D * 3 / 100 + 1, rh = 1 + (D * 4 / 100) * mouth / 100;
-        unsigned ink = fb_color(0x00161513);
-        for (int dy = -rh; dy <= rh; dy++) for (int dx = -rw; dx <= rw; dx++)
-            if (dx * dx * rh * rh + dy * dy * rw * rw <= rw * rw * rh * rh) fb[(unsigned)(my + dy) * fb_pitch + (unsigned)(mx + dx)] = ink;
+        fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)] = fb_color(((r / 400) << 16) | ((g / 400) << 8) | (b / 400));
     }
     fb_flush(x0, y0, D, D);
     face_mouth = mouth;
@@ -1439,7 +1436,7 @@ void con_tui_begin(void) {
     tui_face_rows = con_rows >= 14 ? 7 : 0;
     con_wipe();
     for (unsigned r = 0; r < TUI_ROWS; r++) tui_shadow[r][0] = 0;
-    if (tui_face_rows) { face_mouth = -1; face_blit(0); uart_puts("face: on\n"); }
+    if (tui_face_rows) { face_mouth = -1; face_blit(0); tui_log("face: on"); }   /* the UART only, never the window */
     cur_release(held);
 }
 void con_tui_rows(const char *const *rows, unsigned n) {

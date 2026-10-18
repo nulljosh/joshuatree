@@ -83,6 +83,7 @@ class Boot:
     def close(self): self.q.kill(); self.q.wait()
 
 try:
+    subprocess.run(["make", "-C", arch, "clean"], capture_output=True)   # a plain `make` before leaves claude_cfg.h without the token
     env = dict({k: v for k, v in os.environ.items() if not k.startswith("CLAUDE_RELAY")}, CLAUDE_RELAY_HOST="10.0.2.2",
                CLAUDE_RELAY_PORT=str(port), CLAUDE_RELAY_TOKEN_FILE=token_file)
     r = subprocess.run(["make", "-C", arch, "heartest"], env=env, capture_output=True, text=True, timeout=300)
