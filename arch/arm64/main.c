@@ -805,6 +805,11 @@ static void user_exec_probe(const char *what, unsigned long target) {
 }
 #endif
 static void user_demo(void) {
+    /* 4.5: an APP_BOOT build has opened its apps by now (fb_desktop runs first). These tests load programs into slot 0 and its
+       low pages, so with apps live they would write over them, or, with `ap` on another slot, into pages that slot never mapped
+       (a kernel data abort at the third app's arena on QEMU). They run only on a machine with no app open. */
+    if (apps_live()) { uart_puts("M3 self-tests skipped: apps are open\n"); return; }
+    ap = &apps[0];
     user_init(user_start, (unsigned long)(user_end - user_start));
     unsigned long code = UB + UP_CODE, sp = UB + UP_STACK + 4096, kpage = UB + UP_KERN;
     uart_puts("M3 EL0 task starts\n");
