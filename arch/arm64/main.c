@@ -205,7 +205,8 @@ extern char _heap_start[];
 static unsigned long l1[512] __attribute__((aligned(4096)));   /* one table of 1 GiB blocks, enough for a flat map */
 static unsigned long l2[512] __attribute__((aligned(4096)));   /* M3a: the RAM GiB split into 2 MiB blocks... */
 #define ARENA_BLOCKS 8   /* M3e: the EL0 arena is 16 MiB, eight of those blocks... */
-static unsigned long l3[ARENA_BLOCKS * 512] __attribute__((aligned(4096)));   /* ...each one a table of 4 KiB pages, back to back, so l3[page] works across all eight */
+#define APP_SLOTS 4      /* 4.0: apps that can run at once, one 16 MiB arena each, back to back above USER_BASE */
+static unsigned long l3[APP_SLOTS * ARENA_BLOCKS * 512] __attribute__((aligned(4096)));   /* ...each one a table of 4 KiB pages, back to back, so l3[page] works across all eight */
 #ifdef PI_BUILD
 #define RAM_GIB 0
 #else
@@ -244,6 +245,7 @@ void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects; 0
 /* Identity map the first 4 GiB in four 1 GiB blocks: RAM is normal write-back memory, the peripherals are device
    memory (strongly ordered, no caching, no unaligned access). QEMU's virt keeps its devices in the first GiB and RAM in
    the second; a Pi 4 has RAM from 0 and its peripherals in the last GiB. */
+static void apps_init(void);
 static void mmu_init(void) {
     const unsigned long NORMAL = 0x1UL | (1UL << 2) /* attr 1 */ | (3UL << 8) /* inner shareable */ | (1UL << 10) /* access flag */ | (1UL << 54) /* EL0 may not execute it: only the user code page can */;
     const unsigned long DEVICE = 0x1UL | (0UL << 2) /* attr 0 */ | (1UL << 10) | (1UL << 53) | (1UL << 54);   /* never executable */
@@ -266,8 +268,8 @@ static void mmu_init(void) {
 #endif
     /* M3a: the RAM GiB becomes a table of 2 MiB blocks (all kernel-only, as before), and the arena block a table of 4 KiB pages */
     for (int i = 0; i < 512; i++) l2[i] = (((unsigned long)RAM_GIB << 30) + ((unsigned long)i << 21)) | NORMAL;
-    for (int i = 0; i < ARENA_BLOCKS * 512; i++) l3[i] = 0;
-    for (int k = 0; k < ARENA_BLOCKS; k++) l2[((USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21) + k] = (unsigned long)(l3 + k * 512) | 3;
+    for (int i = 0; i < APP_SLOTS * ARENA_BLOCKS * 512; i++) l3[i] = 0;
+    for (int k = 0; k < APP_SLOTS * ARENA_BLOCKS; k++) l2[((USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21) + k] = (unsigned long)(l3 + k * 512) | 3;
     l1[RAM_GIB] = (unsigned long)l2 | 3;
     unsigned long mair = (0xFFUL << 8) | 0x00UL;                       /* attr 1 normal write-back, attr 0 device-nGnRnE */
     unsigned long tcr = 25UL | (1UL << 8) | (1UL << 10) | (3UL << 12) | (1UL << 23) | (2UL << 32);   /* 39-bit VA, 4 KiB pages, write-back, TTBR1 off, 40-bit PA */
@@ -283,6 +285,7 @@ void heap_release(unsigned long m) { heap_next = m; }
 static void m1b_selftest(void) {
     heap_next = (unsigned long)_heap_start;
     mmu_init();
+    apps_init();
     uart_puts("M1b mmu on\n");
     unsigned long *a = kmalloc(4096), *b = kmalloc(100), *c = kmalloc(8);
     if (!a || !b || !c || (unsigned long)a % 16 || (unsigned long)b % 16 || b == a || c <= b) { uart_puts("M1b heap FAIL\n"); return; }
@@ -333,20 +336,63 @@ static unsigned long cal_utc(void);   /* the clock the Calendar tile reads, furt
 /* M3c part 2, the scheduler's state: one app at a time, since the arena has one app window. app_cur is the app it holds,
    running or parked; app_frame and app_sp are where it parked (every register, its pc and its stack). Its window buffer is
    app_wbytes at UP_WIN, 0 with no window, and app_q is the ring of events the desktop queued for it. */
-static const struct user_app *app_cur;
-static struct frame app_frame;
-static unsigned long app_fp[66];                 /* M3e: its q0-q31, FPCR and FPSR where it parked (vectors.S's save_fp layout) */
-static unsigned long app_sp, app_last, app_wbytes;
-static int app_hi;   /* 3.9.0: the window buffer is device size (scale 2, the app asked for it): twice the width and height, pitch twice as long */
-static unsigned long app_brk;                    /* M3e: the heap top JT_SYS_BRK set, 0 while it has none */
-static unsigned long app_close_at;               /* the red dot was clicked: past this count, an app that did not close itself is ended */
+#define APP_EVQ 16
+struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app_* names below are macros onto `ap`, the slot being run or shown */
+    const struct user_app *cur;
+    struct frame frame;
+    unsigned long fp[66];                 /* M3e: its q0-q31, FPCR and FPSR where it parked (vectors.S's save_fp layout) */
+    unsigned long sp, last, wbytes;
+    int hi;                               /* 3.9.0: the window buffer is device size (scale 2, the app asked for it) */
+    unsigned long brk;                    /* M3e: the heap top JT_SYS_BRK set, 0 while it has none */
+    unsigned long close_at;               /* the red dot was clicked: past this count, an app that did not close itself is ended */
+    int running, parked, kick;            /* inside resume_user now; it yielded rather than ended; run it on the next pass */
+    unsigned runs;                        /* times the desktop's loop resumed it, said when it ends */
+    struct { unsigned kind; int a, b; } q[APP_EVQ];
+    unsigned qh, qt;
+    unsigned long len, code, img;         /* the loaded app: bytes of window mapped, how many of those are code, and the image's own length */
+    int lx, ly, lw, lh;                   /* the frame on the logical grid, set in fb_init */
+    unsigned cw, ch;                      /* the content area, what the frame holds */
+    unsigned bw, bh;                      /* the app's buffer, pixel for pixel: the content's size as of its last JT_SYS_WINDOW_OPEN */
+    int rs_log;                           /* a resized buffer is waiting for the app's first frame at the new size */
+    int shown;                            /* the app has presented a frame since its window opened */
+    unsigned long base;                   /* its arena: USER_BASE + slot * ARENA_SIZE (apps are position independent, so each loads where its arena is) */
+    unsigned l3off, slot;                 /* its first l3 entry; its index in apps */
+};
+static struct app apps[APP_SLOTS];
+static struct app *ap = &apps[0];         /* the app whose state the code below means: the one resume_user is in, else the one in front */
+#define app_cur (ap->cur)
+#define app_frame (ap->frame)
+#define app_fp (ap->fp)
+#define app_sp (ap->sp)
+#define app_last (ap->last)
+#define app_wbytes (ap->wbytes)
+#define app_hi (ap->hi)
+#define app_brk (ap->brk)
+#define app_close_at (ap->close_at)
+#define app_running (ap->running)
+#define app_parked (ap->parked)
+#define app_kick (ap->kick)
+#define app_runs (ap->runs)
+#define app_q (ap->q)
+#define app_qh (ap->qh)
+#define app_qt (ap->qt)
+#define app_len (ap->len)
+#define app_code (ap->code)
+#define app_img (ap->img)
+#define app_lx (ap->lx)
+#define app_ly (ap->ly)
+#define app_lw (ap->lw)
+#define app_lh (ap->lh)
+#define app_cw (ap->cw)
+#define app_ch (ap->ch)
+#define app_bw (ap->bw)
+#define app_bh (ap->bh)
+#define app_rs_log (ap->rs_log)
+#define app_shown (ap->shown)
+#define UB (ap->base)
 static unsigned long cnt_now(void) { unsigned long c; __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); return c; }
 static unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f)); return f ? f : 54000000; }
-static int app_running, app_parked, app_kick;   /* inside resume_user now; it yielded rather than ended; run it on the next pass */
-static unsigned app_runs;                        /* times the desktop's loop resumed it, said when it ends */
-#define APP_EVQ 16
-static struct { unsigned kind; int a, b; } app_q[APP_EVQ];
-static unsigned app_qh, app_qt;
+static void apps_init(void) { for (unsigned i = 0; i < APP_SLOTS; i++) { apps[i].base = USER_BASE + i * ARENA_SIZE; apps[i].l3off = i * ARENA_BLOCKS * 512; apps[i].slot = i; } }
 static long app_window_open(unsigned long info, unsigned long flags);                    /* the window half, with the other windows further down */
 static long app_window_poll(unsigned long ev, unsigned long flags);
 static void app_window_close(void);
@@ -358,16 +404,16 @@ static int span(unsigned long a, unsigned long n, unsigned long base, unsigned l
 long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned long a2);   /* ufile.c, M3d: open, read, write (fd 3 and up), close, lseek, readdir, readfile, mkdir, unlink */
 void ufile_release(void);                 /* ...every descriptor the app left open, closed and written back */
 void ufile_mkdirs(const char *path);      /* ...folders inside JT/ an app expects */
-static unsigned long heap_len(void) { return app_brk ? app_brk - (USER_BASE + UP_HEAP) : 0; }   /* M3e: the heap below its top */
+static unsigned long heap_len(void) { return app_brk ? app_brk - (UB + UP_HEAP) : 0; }   /* M3e: the heap below its top */
 int user_in_range(unsigned long a, unsigned long n) {   /* memory the program may have the kernel read: the M3a code and stack pages, and the loaded app's whole window, stack and heap */
-    return span(a, n, USER_BASE + UP_CODE, 4096) || span(a, n, USER_BASE + UP_STACK, 4096)
-        || span(a, n, USER_BASE + UP_APP, app_len) || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0)
-        || span(a, n, USER_BASE + UP_WIN, app_wbytes) || span(a, n, USER_BASE + UP_HEAP, heap_len());
+    return span(a, n, UB + UP_CODE, 4096) || span(a, n, UB + UP_STACK, 4096)
+        || span(a, n, UB + UP_APP, app_len) || span(a, n, UB + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0)
+        || span(a, n, UB + UP_WIN, app_wbytes) || span(a, n, UB + UP_HEAP, heap_len());
 }
 int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may store into for the program: data, zeroed pool, stacks and heap, never code (read-only at EL1 too: a store there would be a kernel fault) */
-    return span(a, n, USER_BASE + UP_STACK, 4096) || span(a, n, USER_BASE + UP_APP + app_code, app_len - app_code)
-        || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0) || span(a, n, USER_BASE + UP_WIN, app_wbytes)
-        || span(a, n, USER_BASE + UP_HEAP, heap_len());
+    return span(a, n, UB + UP_STACK, 4096) || span(a, n, UB + UP_APP + app_code, app_len - app_code)
+        || span(a, n, UB + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0) || span(a, n, UB + UP_WIN, app_wbytes)
+        || span(a, n, UB + UP_HEAP, heap_len());
 }
 /* M3e: JT_SYS_BRK with i386's semantics (docs/ARCHITECTURE.md, kernel/brk.c): 0 reads the top, a fresh app's is the heap's
    base; any other value sets it, to the byte. Pages between the old and new top (rounded up to whole pages) are mapped EL0
@@ -376,12 +422,12 @@ int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may
    so there is nothing to run out of below that cap. app_unmap drops the whole heap when the app ends. */
 static long app_brk_set(unsigned long want) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
-    unsigned long base = USER_BASE + UP_HEAP, top = app_brk ? app_brk : base;
+    unsigned long base = UB + UP_HEAP, top = app_brk ? app_brk : base;
     if (!want) return (long)top;
-    if (want < base || want > USER_BASE + UP_WIN) return -22;   /* the heap stops where the window buffer starts */
+    if (want < base || want > UB + UP_WIN) return -22;   /* the heap stops where the window buffer starts */
     unsigned long have = (top + 4095) & ~4095UL, need = (want + 4095) & ~4095UL;
-    for (unsigned long v = have; v < need; v += 4096) l3[(v - USER_BASE) >> 12] = v | PAGE | AP_EL0_RW | PXN | UXN;
-    for (unsigned long v = need; v < have; v += 4096) l3[(v - USER_BASE) >> 12] = 0;
+    for (unsigned long v = have; v < need; v += 4096) l3[(v - UB) >> 12] = v | PAGE | AP_EL0_RW | PXN | UXN;
+    for (unsigned long v = need; v < have; v += 4096) l3[(v - UB) >> 12] = 0;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
     for (unsigned long v = have; v < need; v += 8) *(unsigned long *)v = 0;
     app_brk = want;
@@ -568,7 +614,7 @@ static const struct user_app *user_find(const char *name, unsigned n) {
 }
 static void app_unmap(void) {   /* its pages, its stack, its window buffer and (M3e) its heap */
     app_len = app_code = app_img = app_wbytes = app_brk = 0; app_hi = 0;
-    for (unsigned long i = UP_APP >> 12; i < ARENA_BLOCKS * 512; i++) l3[i] = 0;
+    for (unsigned long i = UP_APP >> 12; i < ARENA_BLOCKS * 512; i++) l3[ap->l3off + i] = 0;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
 }
 static unsigned long user_load(const struct user_app *a) {
@@ -581,13 +627,13 @@ static unsigned long user_load(const struct user_app *a) {
         uart_puts("M3c load FAIL "); uart_puts(a->name); uart_puts(": not a user image\n"); return 0;
     }
     unsigned long pages = (len + 4095) / 4096 + APP_ZERO_PAGES;
-    char *base = (char *)(USER_BASE + UP_APP);
+    char *base = (char *)(UB + UP_APP);
     app_unmap();
-    for (unsigned long i = 0; i < pages; i++) l3[(UP_APP >> 12) + i] = (USER_BASE + UP_APP + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable while the kernel fills it in */
-    for (unsigned long i = 0; i < APP_STACK_PAGES; i++) l3[(UP_ASTACK >> 12) + i] = (USER_BASE + UP_ASTACK + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
+    for (unsigned long i = 0; i < pages; i++) l3[ap->l3off + (UP_APP >> 12) + i] = (UB + UP_APP + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable while the kernel fills it in */
+    for (unsigned long i = 0; i < APP_STACK_PAGES; i++) l3[ap->l3off + (UP_ASTACK >> 12) + i] = (UB + UP_ASTACK + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
     for (unsigned long i = 0; i < pages * 512; i++) ((unsigned long *)base)[i] = 0;   /* a stale program's bytes never reach this one */
-    for (unsigned long i = 0; i < APP_STACK_PAGES * 512; i++) ((unsigned long *)(USER_BASE + UP_ASTACK))[i] = 0;
+    for (unsigned long i = 0; i < APP_STACK_PAGES * 512; i++) ((unsigned long *)(UB + UP_ASTACK))[i] = 0;
     for (unsigned long i = 0; i < len; i++) base[i] = a->start[i];
     for (unsigned long r = rela_s; r < rela_e; r += 24) {
         unsigned long off = rd64(base + r), info = rd64(base + r + 8), add = rd64(base + r + 16);
@@ -598,7 +644,7 @@ static unsigned long user_load(const struct user_app *a) {
     }
     for (unsigned long p = (unsigned long)base & ~63UL; p < (unsigned long)base + code_end; p += 64) __asm__ volatile ("dc cvau, %0" :: "r"(p) : "memory");
     __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
-    for (unsigned long i = 0; i < code_end / 4096; i++) l3[(UP_APP >> 12) + i] = (USER_BASE + UP_APP + i * 4096) | PAGE | AP_RO | PXN;   /* code: read-only, EL0 may execute */
+    for (unsigned long i = 0; i < code_end / 4096; i++) l3[ap->l3off + (UP_APP >> 12) + i] = (UB + UP_APP + i * 4096) | PAGE | AP_RO | PXN;   /* code: read-only, EL0 may execute */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
     app_len = pages * 4096; app_code = code_end; app_img = len;
     uart_puts("M3c load "); uart_puts(a->name); uart_puts(": "); uart_dec((unsigned)len); uart_puts(" bytes, ");
@@ -663,7 +709,7 @@ static int app_start(const struct user_app *a) {   /* 0 started (it runs on the 
         ufile_mkdirs("BOOKS");         /* 2.66: Books' library, JT/BOOKS/, the books the card ships with and the ones dropped there */
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
-    app_frame.elr = entry; app_sp = USER_BASE + UP_ASTACK + APP_STACK_PAGES * 4096UL;
+    app_frame.elr = entry; app_sp = UB + UP_ASTACK + APP_STACK_PAGES * 4096UL;
     app_cur = a; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
     uart_puts("M3c app "); uart_puts(a->name); uart_puts(" starts\n");
     return 0;
@@ -1704,18 +1750,13 @@ static void calc_did(int ran) {   /* after a key: redraw, and log a finished sum
    is i386's close, a click above the content that the app answers by exiting, and an app that ignores it is ended a quarter
    second later. Closing puts back the wallpaper saved at boot and redraws the Console or
    the Terminal whole. Opening one closes the Calculator, and opening the Calculator ends the app. ---- */
-static int app_lx, app_ly, app_lw, app_lh;   /* the frame on the logical grid, set in fb_init */
-static unsigned app_cw, app_ch;              /* the content area, what the frame holds */
-static unsigned app_bw, app_bh;              /* the app's buffer, pixel for pixel: the content's size as of its last JT_SYS_WINDOW_OPEN (a resize drag changes app_cw first, the app answers with a second open) */
-static int app_rs_log;                       /* a resized buffer is waiting for the app's first frame at the new size */
-static int app_shown;                        /* the app has presented a frame since its window opened */
 static void spot_close(void);
 static unsigned mix31(unsigned a, unsigned b) {   /* three parts a, one part b, in each colour lane */
     return ((((a & 0xFF00FFu) * 3 + (b & 0xFF00FFu)) >> 2) & 0xFF00FFu) | ((((a & 0x00FF00u) * 3 + (b & 0x00FF00u)) >> 2) & 0x00FF00u);
 }
 static void app_blit(void) {
     int s = (int)window_scale(), x0 = (app_lx + 8) * s, y0 = (app_ly + 32) * s;
-    const unsigned *src = (const unsigned *)(USER_BASE + UP_WIN);
+    const unsigned *src = (const unsigned *)(UB + UP_WIN);
     unsigned bw = app_bw, cw_ = app_bw < app_cw ? app_bw : app_cw, ch_ = app_bh < app_ch ? app_bh : app_ch;   /* while a resize is in flight the buffer is the old size: its pixels go where they fit */
     if (app_hi) {   /* 3.9.0: the app drew at device size (hires.h and JT_SYS_TEXT2): one buffer pixel per screen pixel, nothing to smooth */
         unsigned hw = bw * 2;
@@ -1808,9 +1849,9 @@ static long app_text(unsigned long req) {
     if (!user_in_range(req, sizeof(struct jt_text2))) return -14;
     const struct jt_text2 *t = (const struct jt_text2 *)req;
     int x = t->x, y = t->y, face = t->face, pct = t->pct, n = t->len;
-    unsigned rgb = t->rgb; unsigned long sp = t->s, ap = t->adv;
+    unsigned rgb = t->rgb; unsigned long sp = t->s, adv = t->adv;
     if (face < 0 || face > 3 || pct < 25 || pct > 400 || n < 1 || n > 255) return -22;
-    if (!user_in_range(sp, (unsigned long)n) || !user_in_range(ap, (unsigned long)n)) return -14;
+    if (!user_in_range(sp, (unsigned long)n) || !user_in_range(adv, (unsigned long)n)) return -14;
     static const unsigned char which[4] = {2, 1, 2, 0};   /* text.c's faces: 0 mono, 1 sans bold, 2 sans */
     static const int px10[4] = {140, 140, 560, 135};
     int k = (int)window_scale(), bw = (int)app_cw * k, bh = (int)app_ch * k, px = px10[face] * k * pct / 100;
@@ -1818,7 +1859,7 @@ static long app_text(unsigned long req) {
     for (int i = 0; i < n; i++) {
         char one[2] = { ((const char *)sp)[i], 0 };
         text_draw(which[face], one, x, y, px, rgb, buf, (unsigned)bw, bw, bh);
-        x += ((const unsigned char *)ap)[i];
+        x += ((const unsigned char *)adv)[i];
     }
     return x;
 }
@@ -1910,7 +1951,11 @@ static void brick_paint(void);
 static void browser_paint(int report);
 static int br_frame;
 static int win_def[3][2];   /* each window's size when the desktop drew it first: the Console family's, the Calculator's, an app's */
-static int *const win_rc[3][4] = { { &win_lx, &win_ly, &win_lw, &win_lh }, { &calc_lx, &calc_ly, &calc_lw, &calc_lh }, { &app_lx, &app_ly, &app_lw, &app_lh } };
+static int *win_rc(int t, int i) {   /* window t's x, y, w, h (i = 0..3); the app's are the front app's, so no table can hold their addresses */
+    static int *const a[2][4] = { { &win_lx, &win_ly, &win_lw, &win_lh }, { &calc_lx, &calc_ly, &calc_lw, &calc_lh } };
+    int *b[4] = { &app_lx, &app_ly, &app_lw, &app_lh };
+    return t == WT_APP ? b[i] : a[t][i];
+}
 static int drag_on, drag_dx, drag_dy;   /* a title-band press is moving the window; where inside it the pointer took hold, logical px */
 static int rs_on, rs_dx, rs_dy;         /* an edge press is resizing it: the edges taken (RS_*), and how far the pointer was past the right and bottom edges */
 static int drag_t;                      /* which window (WT_*) either is acting on */
@@ -1929,7 +1974,7 @@ static void win_limits(int t, int *minw, int *minh) {   /* a window opens at its
     *minw = fw < dw ? fw : dw; *minh = fh < dh ? fh : dh;
 }
 static int win_grab(int t, int x, int y) {   /* what a press at (x, y) takes hold of: GRAB_TITLE, a mask of RS_* edges, or 0 for the window's inside */
-    int wx = *win_rc[t][0], wy = *win_rc[t][1], ww = *win_rc[t][2], wh = *win_rc[t][3];
+    int wx = *win_rc(t, 0), wy = *win_rc(t, 1), ww = *win_rc(t, 2), wh = *win_rc(t, 3);
     if (!in_box(x, y, wx, wy, ww, wh)) return 0;
     if (y < wy + 30) {   /* the title band, but not the three dots (radius 7, a pixel spare) */
         for (int d = 0; d < 3; d++) { int dx = x - (wx + 24 + 22 * d), dy = y - (wy + 16); if (dx * dx + dy * dy <= 8 * 8) return 0; }
@@ -1944,7 +1989,7 @@ static void app_note_resize(void) {   /* JT_EV_RESIZE for the app; one waiting e
 }
 static void win_set(int t, int nx, int ny, int nw, int nh) {   /* the one place a window changes rectangle */
     if (!fb) return;
-    int *px_ = win_rc[t][0], *py_ = win_rc[t][1], *pw_ = win_rc[t][2], *ph_ = win_rc[t][3];
+    int *px_ = win_rc(t, 0), *py_ = win_rc(t, 1), *pw_ = win_rc(t, 2), *ph_ = win_rc(t, 3);
     if (nx == *px_ && ny == *py_ && nw == *pw_ && nh == *ph_) return;
     int s = (int)window_scale(), ox = *px_ * s, oy = *py_ * s, w = *pw_ * s, h = *ph_ * s, px = nx * s, py = ny * s, dx = px - ox, dy = py - oy;
     int resized = nw != *pw_ || nh != *ph_;
@@ -1984,7 +2029,7 @@ static void win_set(int t, int nx, int ny, int nw, int nh) {   /* the one place 
 }
 static void win_move_to(int nx, int ny) {   /* the front window (or the Console family's, when none is up) to this place, held whole between the menu bar and the dock's band */
     int t = drag_on || rs_on ? drag_t : WT_MAIN;
-    int s = (int)window_scale(), top = sg(MENUBAR_H) / s + 8, bottom = gui_dock_band_top() - 22, w = *win_rc[t][2], h = *win_rc[t][3], right = (int)fb_w / s - w;
+    int s = (int)window_scale(), top = sg(MENUBAR_H) / s + 8, bottom = gui_dock_band_top() - 22, w = *win_rc(t, 2), h = *win_rc(t, 3), right = (int)fb_w / s - w;
     if (nx > right) nx = right;
     if (nx < 0) nx = 0;
     if (ny > bottom - h) ny = bottom - h;
@@ -1993,7 +2038,7 @@ static void win_move_to(int nx, int ny) {   /* the front window (or the Console 
 }
 static void win_resize_to(int lx, int ly) {   /* the pointer is at (lx, ly): the grabbed edges follow it, the others stay */
     int t = drag_t, s = (int)window_scale(), bottom = gui_dock_band_top() - 22, sw = (int)fb_w / s, mnw, mnh;
-    int x = *win_rc[t][0], y = *win_rc[t][1], w = *win_rc[t][2], h = *win_rc[t][3], r = x + w, nx = x, nw = w, nh = h;
+    int x = *win_rc(t, 0), y = *win_rc(t, 1), w = *win_rc(t, 2), h = *win_rc(t, 3), r = x + w, nx = x, nw = w, nh = h;
     win_limits(t, &mnw, &mnh);
     if (rs_on & RS_R) nw = lx - rs_dx - x;
     if (rs_on & RS_L) { nx = lx - rs_dx; nw = r - nx; }
@@ -2011,9 +2056,9 @@ static void drag_end(void) {
     if (!drag_on && !rs_on) return;
     int t = drag_t, was_sizing = rs_on;
     drag_on = rs_on = 0;
-    con_quiet = 1; uart_puts("window at "); uart_dec((unsigned)*win_rc[t][0]); uart_putc(','); uart_dec((unsigned)*win_rc[t][1]); uart_putc('\n');
+    con_quiet = 1; uart_puts("window at "); uart_dec((unsigned)*win_rc(t, 0)); uart_putc(','); uart_dec((unsigned)*win_rc(t, 1)); uart_putc('\n');
     if (was_sizing) {
-        con_quiet = 1; uart_puts("window size "); uart_dec((unsigned)*win_rc[t][2]); uart_putc('x'); uart_dec((unsigned)*win_rc[t][3]); uart_putc('\n');
+        con_quiet = 1; uart_puts("window size "); uart_dec((unsigned)*win_rc(t, 2)); uart_putc('x'); uart_dec((unsigned)*win_rc(t, 3)); uart_putc('\n');
         if (t == WT_APP && app_wbytes && (app_cw != app_bw || app_ch != app_bh)) app_note_resize();   /* an event the full ring dropped is asked again */
     }
 }
@@ -2051,8 +2096,8 @@ static void pointer_click(void) {   /* the left button went down */
     int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);
     int on_app = app_wbytes && in_box(lx, ly, app_lx, app_ly, app_lw, app_lh);
     int wt = slot < 0 ? win_target() : -1, grab = wt >= 0 ? win_grab(wt, lx, ly) : 0;   /* the front window's title band or an edge takes hold of it */
-    if (grab == GRAB_TITLE) { drag_on = 1; drag_t = wt; drag_dx = lx - *win_rc[wt][0]; drag_dy = ly - *win_rc[wt][1]; return; }
-    if (grab) { rs_on = grab; drag_t = wt; rs_dx = lx - (*win_rc[wt][0] + *win_rc[wt][2]); rs_dy = ly - (*win_rc[wt][1] + *win_rc[wt][3]); if (grab & RS_L) rs_dx = lx - *win_rc[wt][0]; return; }
+    if (grab == GRAB_TITLE) { drag_on = 1; drag_t = wt; drag_dx = lx - *win_rc(wt, 0); drag_dy = ly - *win_rc(wt, 1); return; }
+    if (grab) { rs_on = grab; drag_t = wt; rs_dx = lx - (*win_rc(wt, 0) + *win_rc(wt, 2)); rs_dy = ly - (*win_rc(wt, 1) + *win_rc(wt, 3)); if (grab & RS_L) rs_dx = lx - *win_rc(wt, 0); return; }
     if (slot == 0) calc_open();   /* Apps tile opens Calculator; Brick and Clock are in Spotlight. */
     else if (brick_live && slot < 0) {
         if (spot_live) return;
