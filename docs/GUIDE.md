@@ -425,6 +425,7 @@ From the repository root, start the reviewed relay with TLS:
 
 ```sh
 python3 tools/claude-relay/relay.py --lan --turing --token-file ~/.claude-relay-token --tls-cert ~/.config/joshuatree/relay-tls/server.pem --tls-key ~/.config/joshuatree/relay-tls/server.key
+python3 tools/claude-relay/stt.py --lan --token-file ~/.claude-relay-token --tls-cert ~/.config/joshuatree/relay-tls/server.pem --tls-key ~/.config/joshuatree/relay-tls/server.key
 ```
 
 - `--turing` answers as Samantha from Turing's `app/serve.py`, so start that first. Leave it off to use `claude -p`.

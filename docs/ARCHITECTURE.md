@@ -2342,7 +2342,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (284 checks)
+### The suite (285 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2554,6 +2554,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files | `tools/checks/screenshot-check.py` | retry |
 | Drunk mode easter egg: horizontal sway applied to framebuffer rows | `tools/checks/drunk-mode-check.py` | retry |
 | Mac speech to text: stt.py turns a spoken sentence (macOS say, 16 kHz PCM) into words through whisper.cpp, and refuses a wrong token, an odd body and a GET (skips off a Mac) | `tools/checks/stt-check.py` | retry |
+| Brand tokens: docs/brand/tokens.css matches the kernel's desktop colours, the accent, the brand page links it and the map reads it | `tools/checks/brand-tokens-check.py` | retry |
 | ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing) | `tools/checks/arm64-m0-check.py` | retry |
 | ARM64: a tiny local language model answers under QEMU (skips where the tools are missing) | `tools/checks/arm64-llm-check.py` | retry |
 | ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing) | `tools/checks/arm64-m1c-check.py` | retry |
