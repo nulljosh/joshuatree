@@ -183,7 +183,11 @@ try {
         }).map(a => a.textContent.trim()) : [],
         landscape: (() => {
           const e = document.querySelector('footer .foot-landscape[aria-hidden="true"]');
-          return !!e && e.getBoundingClientRect().height >= 240 && getComputedStyle(e).maskImage.includes('footer-landscape.svg');
+          if (!e || e.getBoundingClientRect().height < 240) return false;
+          // 4.3.2: the shader engraving when WebGL runs (.live, its canvas filling the box), else the flat masked silhouette
+          const c = e.querySelector('canvas');
+          if (e.classList.contains('live')) return !!c && c.getBoundingClientRect().height >= 240 && c.width > 0;
+          return getComputedStyle(e).maskImage.includes('footer-landscape.svg');
         })(),
         hasNav: !!nav, hasRule: !!document.querySelector('footer .sheet-rule'),
         cols: cols.map(c => ({ h: c.querySelector('h3, h2, h4')?.textContent.trim(), n: c.querySelectorAll('a').length, x: Math.round(c.getBoundingClientRect().x), y: Math.round(c.getBoundingClientRect().y) })),
