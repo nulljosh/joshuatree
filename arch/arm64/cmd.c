@@ -32,7 +32,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, beep [FREQ MS], vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
+                           "top, bottom, find WORD, beep [FREQ MS], mic [SECONDS], vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
@@ -86,6 +86,31 @@ static int beep_command(const char *q, unsigned n) {   /* `beep` is 440 Hz for 2
         if (i == an || !num(a, i, &f) || !num(a + i + 1, an - i - 1, &ms)) { cmd_out("beep: use beep, or beep FREQ MS\n"); return 1; }
     }
     beep(f, ms);
+    return 1;
+}
+int usb_mic_ok(void);   /* xhci.c */
+unsigned usb_mic_record(short *dst, unsigned max, unsigned ms);
+void usb_mic_stat(unsigned st[6]);
+static short mic_buf[16000 * 5];
+static int mic_command(const char *q, unsigned n) {   /* `mic` listens for 3 seconds; `mic N` for N (1 to 5). It reports what the USB microphone heard; nothing is kept or sent. */
+    int secs = 3;
+    if (n < 3 || q[0] != 'm' || q[1] != 'i' || q[2] != 'c' || (n > 3 && q[3] != ' ')) return 0;
+    if (n > 3 && (!num(q + 4, n - 4, &secs) || secs < 1 || secs > 5)) { cmd_out("mic: use mic, or mic 1 to 5 (seconds)\n"); return 1; }
+    if (!usb_mic_ok()) { cmd_out("mic: no USB microphone found (plug it into a Pi port, then wait a second)\n"); return 1; }
+    cmd_out("mic: listening for "); cmd_dec((unsigned)secs); cmd_out(" s, say something\n");
+    unsigned got = usb_mic_record(mic_buf, (unsigned)secs * 16000, (unsigned)secs * 1000 + 300), peak = 0;
+    unsigned long long sq = 0;
+    for (unsigned i = 0; i < got; i++) { int v = mic_buf[i]; unsigned a = (unsigned)(v < 0 ? -v : v); if (a > peak) peak = a; sq += (unsigned long long)(a * a); }
+    unsigned rms = 0;
+    if (got) { unsigned long long m = sq / got, r = 0; while ((r + 1) * (r + 1) <= m) r++; rms = (unsigned)r; }
+    unsigned st[6]; usb_mic_stat(st);
+    cmd_out("mic: "); cmd_dec(got); cmd_out(" samples at 16 kHz, loudest "); cmd_dec(peak); cmd_out(" of 32767, average "); cmd_dec(rms); cmd_out("\n");
+    char bar[33]; unsigned k = peak * 32 / 32768; if (peak && !k) k = 1;
+    for (unsigned i = 0; i < 32; i++) bar[i] = i < k ? '#' : '.';
+    bar[32] = 0; cmd_out("mic: ["); cmd_out(bar); cmd_out("]\n");
+    cmd_out("mic: device "); cmd_dec(st[0]); cmd_out(" Hz, "); cmd_dec(st[1]); cmd_out(" ch, "); cmd_dec(st[2]); cmd_out(" transfers, "); cmd_dec(st[3]); cmd_out(" errors, last code "); cmd_dec(st[4]); cmd_out("\n");
+    if (got < (unsigned)secs * 16000 * 9 / 10) cmd_out("mic: fewer samples than the time asked for, the USB stream is dropping frames\n");
+    else if (peak < 100) cmd_out("mic: only silence. Check the mic's mute button and gain knob\n");
     return 1;
 }
 static void vol_text(char *m) {   /* "Volume 70" */
@@ -214,6 +239,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (word_is(q, n, "shutdown") || word_is(q, n, "poweroff")) { power_run(1); return; }
     if (bt_command(q, n)) return;
     if (beep_command(q, n)) return;
+    if (mic_command(q, n)) return;
     if (vol_command(q, n)) return;
     if (n > 8 && q[0] == 'u' && q[1] == 's' && q[2] == 'e' && q[3] == 'r' && q[4] == 'r' && q[5] == 'u' && q[6] == 'n' && q[7] == ' ') {
         const char *name = q + 8; unsigned m = n - 8;

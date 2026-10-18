@@ -3849,6 +3849,9 @@ void main(void) {
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
+#ifdef USB_AUDIO_TEST   /* the usbaudiotest build: a USB speaker plays 440 Hz for half a second at boot (arm64-usbaudio-check.py) */
+    { int usb_spk_tone(int freq, int ms); usb_spk_tone(440, 500); }
+#endif
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
     settings_load();           /* settings.c: JT/SETTINGS.TXT, before the Pi's desktop is first painted (the splash waits) */
     SPLASH(2, "sd");

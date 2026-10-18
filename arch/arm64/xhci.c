@@ -69,8 +69,9 @@ static unsigned max_slots, max_ports, csz;
 /* ---- Rings: TRBs are four 32-bit words. The last slot of every ring is a Link TRB back to the start, with the
    toggle-cycle flag, so the producer's cycle bit flips each lap. ---- */
 #define RING_N 32
-struct ring { volatile unsigned *t; unsigned idx, cycle; };
+struct ring { volatile unsigned *t; unsigned idx, cycle, n; };
 #define TRB_NORMAL 1
+#define TRB_ISOCH 5
 #define TRB_SETUP 2
 #define TRB_DATA 3
 #define TRB_STATUS 4
@@ -84,23 +85,24 @@ struct ring { volatile unsigned *t; unsigned idx, cycle; };
 #define TRB_IOC (1u << 5)
 #define TRB_ISP (1u << 2)
 #define TRB_IDT (1u << 6)
-static int ring_init(struct ring *r) {
-    r->t = dma_alloc(RING_N * 16, 4096);
+static int ring_init_n(struct ring *r, unsigned n) {   /* n TRBs, the last of them the link: n - 1 usable */
+    r->t = dma_alloc(n * 16, 4096);
     if (!r->t) return 0;
-    r->idx = 0; r->cycle = 1;
-    volatile unsigned *l = r->t + (RING_N - 1) * 4;
+    r->idx = 0; r->cycle = 1; r->n = n;
+    volatile unsigned *l = r->t + (n - 1) * 4;
     l[0] = lo32(r->t); l[1] = hi32(r->t); l[2] = 0; l[3] = (TRB_LINK << 10) | 2;   /* toggle cycle; its own cycle bit is set when we reach it */
-    dma_sync(r->t, RING_N * 16);
+    dma_sync(r->t, n * 16);
     return 1;
 }
+static int ring_init(struct ring *r) { return ring_init_n(r, RING_N); }
 static unsigned long ring_push(struct ring *r, unsigned p0, unsigned p1, unsigned st, unsigned ctl) {
     volatile unsigned *v = r->t + r->idx * 4;
     v[0] = p0; v[1] = p1; v[2] = st;
     __asm__ volatile ("dmb sy" ::: "memory");
     v[3] = (ctl & ~1u) | r->cycle;                 /* the cycle bit last: it hands the TRB over */
     dma_sync(v, 16);
-    if (++r->idx == RING_N - 1) {                  /* reached the link: hand it over too, wrap, flip */
-        volatile unsigned *l = r->t + (RING_N - 1) * 4;
+    if (++r->idx == r->n - 1) {                    /* reached the link: hand it over too, wrap, flip */
+        volatile unsigned *l = r->t + (r->n - 1) * 4;
         l[3] = (TRB_LINK << 10) | 2 | r->cycle;
         dma_sync(l, 16);
         r->idx = 0; r->cycle ^= 1;
@@ -111,7 +113,7 @@ static unsigned long ring_push(struct ring *r, unsigned p0, unsigned p1, unsigne
 static struct ring cmd_ring;
 static volatile unsigned *ev_ring;
 static unsigned ev_idx, ev_cycle;
-#define EV_N 64
+#define EV_N 256                                  /* 4 KiB: an audio stream posts an event per millisecond, and the main loop can be slow */
 static unsigned long *dcbaa;
 
 #define TRB_DISABLE_SLOT 10
@@ -134,7 +136,7 @@ struct usbdev {
     unsigned tt_slot, tt_port;                     /* the high-speed hub whose transaction translator a LS/FS device sits behind */
     unsigned is_hub, nports, ttt, mtt;
     unsigned up;                                   /* hub ports already handled, one bit per port number */
-    unsigned mps0;
+    unsigned mps0, entries;                        /* entries: the highest endpoint context in use (Context Entries) */
     struct ring ep0;
     void *in_ctx, *out_ctx;
     unsigned nfn;
@@ -151,6 +153,7 @@ static int cmd_done, ctl_done;
 static unsigned cmd_cc, cmd_slot, ctl_cc;
 static void hid_report(struct hidfn *f, unsigned len);
 static void queue_intr(struct usbdev *d, struct hidfn *f);
+static int uac_event(unsigned slot, unsigned dci, unsigned cc, unsigned resid);
 static int handle_events(void) {   /* everything the controller has posted; returns how many */
     int n = 0;
     for (;;) {
@@ -167,6 +170,7 @@ static int handle_events(void) {   /* everything the controller has posted; retu
                 struct usbdev *d = &devs[i];
                 if (!d->used || d->slot != slot) continue;
                 if (dci == 1) { ctl_done = 1; ctl_cc = cc; continue; }
+                if (uac_event(slot, dci, cc, st & 0xFFFFFF)) continue;
                 for (unsigned j = 0; j < d->nfn; j++) {
                     struct hidfn *f = &d->fn[j];
                     if (!f->kind || f->dci != dci) continue;
@@ -328,7 +332,9 @@ static void px4(unsigned v) {   /* exactly four hex digits: hub port status word
 static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsigned speed, struct usbdev *parent, unsigned parent_port);
 
 /* Take a device away: its children first, then the controller forgets its slot. Memory is not given back (a bump heap). */
+static void uac_gone(unsigned slot);
 static void remove_dev(struct usbdev *d) {
+    uac_gone(d->slot);
     for (unsigned i = 0; i < MAX_DEV; i++)
         if (devs[i].used && &devs[i] != d && devs[i].phub == d->slot) remove_dev(&devs[i]);
     for (unsigned j = 0; j < d->nfn; j++) if (d->fn[j].kind) { if (d->fn[j].kind == 1) nkbd--; else if (d->fn[j].kind == 2) nmouse--; d->fn[j].kind = 0; }
@@ -418,6 +424,159 @@ static void hub_init(struct usbdev *h) {
     hub_scan(h);
 }
 
+/* ---- USB audio class 1 (UAC1): one isochronous stream each way. A microphone (IN, uacs[0]) is boxed down to 16 kHz mono
+   and kept in a ring that only fills while something has armed it; a speaker (OUT, uacs[1]) plays a tone for the
+   self-test. Each stream is a ring of UAC_TRBS one-millisecond transfers, UAC_FLIGHT of them queued at a time, and
+   every completion queues the next one. Prior art: the USB Audio 1.0 specification (sections 4.5 and 4.6), xHCI
+   1.2 section 4.14 (isochronous transfers, SIA) and Linux's sound/usb/endpoint.c. ---- */
+#define UAC_TRBS 128
+#define UAC_FLIGHT 120
+struct uac {
+    unsigned on, slot, dci, mps, stride, rate, ch, iface, alt, addr;
+    struct ring r;
+    unsigned char *buf;
+    unsigned rd, flight, pkts, errs, lastcc;
+};
+static struct uac uacs[2];
+struct audcand { unsigned found, score, iface, alt, addr, mps, interval, rate, ch; };
+
+#define MIC_HZ 16000
+#define MIC_N (MIC_HZ * 6)
+static short mic_ring[MIC_N];
+static unsigned mic_w, mic_r, mic_armed, mic_ph, mic_cnt, mic_peak;
+static int mic_sum;
+static void mic_feed(struct uac *u, const unsigned char *p, unsigned n) {   /* 16-bit frames of 1 or 2 channels at u->rate in; 16 kHz mono out */
+    unsigned fb = 2 * u->ch;
+    for (unsigned i = 0; i + fb <= n; i += fb) {
+        int v = (short)(p[i] | p[i + 1] << 8);
+        if (u->ch == 2) v = (v + (short)(p[i + 2] | p[i + 3] << 8)) / 2;
+        mic_sum += v; mic_cnt++; mic_ph += MIC_HZ;
+        if (mic_ph < u->rate) continue;
+        mic_ph -= u->rate;
+        v = mic_sum / (int)mic_cnt; mic_sum = 0; mic_cnt = 0;
+        unsigned a = v < 0 ? (unsigned)-v : (unsigned)v;
+        if (a > mic_peak) mic_peak = a;
+        if (!mic_armed) continue;
+        mic_ring[mic_w++ % MIC_N] = (short)v;
+        if (mic_w - mic_r > MIC_N) mic_r = mic_w - MIC_N;   /* full: the oldest goes */
+    }
+}
+static void uac_push_in(struct uac *u) {
+    unsigned char *b = u->buf + u->r.idx * u->stride;
+    dma_sync(b, u->mps);
+    ring_push(&u->r, lo32(b), hi32(b), u->mps, (TRB_ISOCH << 10) | TRB_IOC | TRB_ISP | 1u << 31);   /* SIA: start in the next frame that fits */
+}
+static unsigned spk_freq, spk_total, spk_sent, spk_phase, spk_rem, spk_done;
+static void spk_fill(struct uac *u) {
+    while (u->flight < UAC_FLIGHT && spk_sent < spk_total) {
+        unsigned n = u->rate / 1000, room = u->mps / (2 * u->ch);
+        spk_rem += u->rate % 1000;
+        if (spk_rem >= 1000) { spk_rem -= 1000; n++; }
+        if (n > room) n = room;
+        if (n > spk_total - spk_sent) n = spk_total - spk_sent;
+        short *b = (short *)(u->buf + u->r.idx * u->stride);
+        for (unsigned j = 0; j < n; j++) {
+            spk_phase += spk_freq; if (spk_phase >= u->rate) spk_phase -= u->rate;
+            short v = spk_phase < u->rate / 2 ? 8000 : -8000;   /* a square wave: loud enough to find, simple enough to count */
+            for (unsigned c = 0; c < u->ch; c++) b[j * u->ch + c] = v;
+        }
+        spk_sent += n;
+        dma_sync(b, n * 2 * u->ch);
+        ring_push(&u->r, lo32(b), hi32(b), n * 2 * u->ch, (TRB_ISOCH << 10) | TRB_IOC | 1u << 31);
+        u->flight++;
+    }
+    doorbell(u->slot, u->dci);
+    if (spk_total && !u->flight && spk_sent == spk_total && !spk_done) {
+        spk_done = 1;
+        kputs("usb audio out: "); kdec(spk_sent); kputs(" frames played, "); kdec(u->errs); kputs(" errors\n");
+    }
+}
+static int uac_event(unsigned slot, unsigned dci, unsigned cc, unsigned resid) {   /* 1 when the event was an audio stream's */
+    for (unsigned k = 0; k < 2; k++) {
+        struct uac *u = &uacs[k];
+        if (!u->on || u->slot != slot || u->dci != dci) continue;
+        unsigned i = u->rd;
+        u->rd = (i + 1) % UAC_TRBS;
+        u->pkts++; u->lastcc = cc;
+        if (u->flight) u->flight--;
+        if (cc != 1 && cc != 13) u->errs++;   /* a missed frame (23), an under or overrun: the stream keeps going */
+        if (k == 0) {
+            unsigned char *b = u->buf + i * u->stride;
+            if ((cc == 1 || cc == 13) && resid < u->mps) { dma_sync(b, u->mps); mic_feed(u, b, u->mps - resid); }
+            uac_push_in(u); u->flight++;
+            doorbell(u->slot, u->dci);
+        } else spk_fill(u);
+        return 1;
+    }
+    return 0;
+}
+/* After Set Configuration: add the endpoint, pick the alternate setting, tell the device the rate, start the stream. */
+static void uac_start(struct usbdev *d, unsigned k, struct audcand *c) {
+    struct uac *u = &uacs[k];
+    if (!c->found || u->on) return;
+    unsigned dci = 2 * (c->addr & 0xF) + (c->addr & 0x80 ? 1 : 0);
+    if (!ring_init_n(&u->r, UAC_TRBS + 1)) return;
+    u->stride = (c->mps + 63) & ~63u;
+    u->buf = dma_alloc(u->stride * UAC_TRBS, 64);
+    if (!u->buf) return;
+    unsigned ival = d->speed >= 3 ? (c->interval ? c->interval - 1 : 0) : c->interval + 2;   /* FS: 2^(bInterval-1) frames of 8 x 125 us */
+    if (ival > 15) ival = 15;
+    clear_in(d);
+    volatile unsigned *e = ctx(d->in_ctx, dci + 1);
+    e[0] = ival << 16;
+    e[1] = (k == 0 ? 5u : 1u) << 3 | c->mps << 16;       /* isochronous IN or OUT; no retries, bursts or multiples */
+    e[2] = lo32(u->r.t) | 1; e[3] = hi32(u->r.t);
+    e[4] = c->mps | c->mps << 16;
+    ctx(d->in_ctx, 0)[1] = 1 | 1u << dci;
+    if (dci > d->entries) d->entries = dci;
+    fill_slot(d, ctx(d->in_ctx, 1), d->entries);
+    dma_sync(d->in_ctx, 33 * csz);
+    if (!command(lo32(d->in_ctx), hi32(d->in_ctx), (TRB_CONFIGURE_EP << 10) | d->slot << 24)) {
+        kputs("usb audio configure endpoint FAIL, code "); kdec(cmd_cc); kputs("\n"); return;
+    }
+    if (!control(d, 0x01, 11, c->alt, c->iface, 0, 0)) { kputs("usb audio set interface FAIL\n"); return; }
+    ubuf[0] = (unsigned char)c->rate; ubuf[1] = (unsigned char)(c->rate >> 8); ubuf[2] = (unsigned char)(c->rate >> 16);
+    control(d, 0x22, 0x01, 0x0100, c->addr, 3, ubuf);   /* SET_CUR sampling frequency; a device with one fixed rate may stall it */
+    u->slot = d->slot; u->dci = dci; u->mps = c->mps; u->rate = c->rate; u->ch = c->ch; u->iface = c->iface; u->alt = c->alt; u->addr = c->addr;
+    u->rd = 0; u->flight = 0; u->on = 1;
+    kputs(k == 0 ? "usb audio in" : "usb audio out"); kputs(" addr "); kdec(d->slot); kputs(" port "); print_where(d);
+    kputs(" "); kdec(c->rate); kputs(" Hz "); kdec(c->ch); kputs(" ch ep "); kx(c->addr); kputs(" mps "); kdec(c->mps); kputs("\n");
+    if (k == 0) {
+        for (unsigned i = 0; i < UAC_FLIGHT; i++) uac_push_in(u);
+        u->flight = UAC_FLIGHT;
+        doorbell(u->slot, u->dci);
+    }
+}
+
+static void uac_gone(unsigned slot) { for (unsigned k = 0; k < 2; k++) if (uacs[k].on && uacs[k].slot == slot) uacs[k].on = 0; }   /* unplugged: the buffers stay, nobody reads them */
+
+/* The sound layer's way in. usb_mic_record blocks for up to ms milliseconds (it keeps the controller's events drained) and
+   returns how many 16 kHz mono samples it got; nothing is kept when nothing has armed the ring. */
+int usb_mic_ok(void) { return uacs[0].on; }
+unsigned usb_mic_record(short *dst, unsigned max, unsigned ms) {
+    if (!uacs[0].on) return 0;
+    mic_r = mic_w = 0; mic_armed = 1;
+    unsigned long t0 = now(), lim = ticks_per_ms() * ms;
+    unsigned got = 0;
+    while (got < max && now() - t0 < lim) {
+        handle_events();
+        while (mic_r != mic_w && got < max) dst[got++] = mic_ring[mic_r++ % MIC_N];
+    }
+    mic_armed = 0;
+    return got;
+}
+void usb_mic_stat(unsigned st[6]) {   /* rate, channels, transfers, errors, last completion code, loudest sample since the last call */
+    st[0] = uacs[0].rate; st[1] = uacs[0].ch; st[2] = uacs[0].pkts; st[3] = uacs[0].errs; st[4] = uacs[0].lastcc; st[5] = mic_peak;
+    mic_peak = 0;
+}
+int usb_spk_tone(int freq, int ms) {   /* a USB speaker plays a square wave; 0 started, -1 no speaker */
+    struct uac *u = &uacs[1];
+    if (!u->on || freq < 20 || freq > 20000 || ms < 1) return -1;
+    spk_freq = (unsigned)freq; spk_total = u->rate * (unsigned)ms / 1000; spk_sent = spk_phase = spk_rem = spk_done = 0;
+    spk_fill(u);
+    return 0;
+}
+
 static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsigned speed, struct usbdev *parent, unsigned parent_port) {
     if (depth > 5) return;
     struct usbdev *d = 0;
@@ -466,14 +625,34 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
        alternate setting, on any interface number, with its interrupt IN endpoint. Other HID interfaces are only reported. */
     struct { unsigned kind, iface, addr, mps, interval; } cand[MAX_FN];
     unsigned nc = 0, want = 0, c_if = 0, c_proto = 0, has_kbd = 0, has_other = 0;
+    struct audcand ac[2] = { { 0 }, { 0 } };               /* the best audio stream each way: [0] in (a microphone), [1] out */
+    unsigned a_on = 0, a_good = 0, a_if = 0, a_alt = 0, a_rate = 0, a_ch = 0;
     for (unsigned i = 0; i + 2 <= total && b[i] >= 2 && i + b[i] <= total; i += b[i]) {
         if (b[i + 1] == 4 && b[i] >= 9) {   /* interface: number, alternate, class, subclass, protocol at 2, 3, 5, 6, 7 */
             c_if = b[i + 2]; c_proto = b[i + 7]; want = 0;
+            a_on = b[i + 5] == 1 && b[i + 6] == 2 && b[i + 3] != 0; a_good = 0; a_if = b[i + 2]; a_alt = b[i + 3];   /* an audio streaming interface, alternate 1 or more */
             if (b[i + 5] == 9) is_hub = 1;
             if (b[i + 3] == 0 && b[i + 5] == 3) {
                 if (b[i + 6] == 1 && (b[i + 7] == 1 || b[i + 7] == 2)) { want = 1; if (b[i + 7] == 1) has_kbd = 1; }
                 else if (has_kbd && !has_other) { want = 1; c_proto = 3; has_other = 1; }   /* a Mac-style top row: media keys */
                 else { kputs("usb hid if "); kdec(c_if); kputs(" sub "); kdec(b[i + 6]); kputs(" proto "); kdec(b[i + 7]); kputs("\n"); }
+            }
+        } else if (b[i + 1] == 0x24 && a_on && b[i] >= 8 && b[i + 2] == 2 && b[i + 3] == 1) {   /* FORMAT_TYPE_I: channels, bytes a sample, bits, rates */
+            unsigned nf = b[i + 7], ok48 = 0, ok44 = 0;
+            if (nf == 0 && b[i] >= 14) {
+                unsigned lo = b[i + 8] | b[i + 9] << 8 | b[i + 10] << 16, hi = b[i + 11] | b[i + 12] << 8 | b[i + 13] << 16;
+                ok48 = lo <= 48000 && 48000 <= hi; ok44 = lo <= 44100 && 44100 <= hi;
+            } else for (unsigned n = 0; n < nf && i + 11 + 3 * n <= i + b[i]; n++) {
+                unsigned r = b[i + 8 + 3 * n] | b[i + 9 + 3 * n] << 8 | b[i + 10 + 3 * n] << 16;
+                if (r == 48000) ok48 = 1;
+                if (r == 44100) ok44 = 1;
+            }
+            a_rate = ok48 ? 48000 : ok44 ? 44100 : 0; a_ch = b[i + 4];
+            a_good = a_rate && b[i + 5] == 2 && b[i + 6] == 16 && a_ch >= 1 && a_ch <= 2;   /* 16-bit PCM, mono or stereo, 48 or 44.1 kHz */
+        } else if (b[i + 1] == 5 && a_on && a_good && b[i] >= 7 && (b[i + 3] & 3) == 1 && (b[i + 3] & 0x30) == 0) {   /* isochronous data endpoint (not the feedback one) */
+            unsigned dir = (b[i + 2] & 0x80) ? 0 : 1, score = (a_rate == 48000) * 2 + (a_ch == 1);
+            if (!ac[dir].found || score > ac[dir].score) {
+                ac[dir] = (struct audcand){ 1, score, a_if, a_alt, b[i + 2], (b[i + 4] | b[i + 5] << 8) & 0x7FF, b[i + 6], a_rate, a_ch };
             }
         } else if (b[i + 1] == 5 && want && b[i] >= 7 && (b[i + 2] & 0x80) && (b[i + 3] & 3) == 3 && nc < MAX_FN) {   /* interrupt IN endpoint */
             cand[nc].kind = c_proto; cand[nc].iface = c_if; cand[nc].addr = b[i + 2];
@@ -488,11 +667,13 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
         hub_init(d);
         return;
     }
-    if (!nc) {
+    d->entries = 1;
+    if (!nc && !ac[0].found && !ac[1].found) {
         kputs("usb other addr "); kdec(d->slot); kputs(" port "); print_where(d); kputs(" "); kputs(speed_name(speed)); kputs(" ");
         kx(vid); kputs(":"); kx(pid); kputs("\n");
         return;
     }
+    if (!nc) { uac_start(d, 0, &ac[0]); uac_start(d, 1, &ac[1]); return; }
     /* Configure every chosen interrupt IN endpoint at once: DCI = 2 * number + 1. The interval is in 125 us frames, as a power of two. */
     clear_in(d);
     unsigned flags = 1, entries = 1;
@@ -518,7 +699,7 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
     if (!command(lo32(d->in_ctx), hi32(d->in_ctx), (TRB_CONFIGURE_EP << 10) | d->slot << 24)) {
         kputs("usb configure endpoint FAIL, code "); kdec(cmd_cc); kputs("\n"); return;
     }
-    d->nfn = nc;
+    d->nfn = nc; d->entries = entries;
     for (unsigned k = 0; k < nc; k++) {
         struct hidfn *f = &d->fn[k];
         if (cand[k].kind != 3 && !control(d, 0x21, 0x0B, 0, f->iface, 0, 0)) {   /* SET_PROTOCOL(boot) */
@@ -532,6 +713,7 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
         kputs(" if "); kdec(f->iface); kputs(" ep "); kx(cand[k].addr); kputs("\n");
         queue_intr(d, f);
     }
+    uac_start(d, 0, &ac[0]); uac_start(d, 1, &ac[1]);
 }
 
 /* ---- Root ports: the same idea. A new connection is reset and enumerated, a vanished one removed. ---- */

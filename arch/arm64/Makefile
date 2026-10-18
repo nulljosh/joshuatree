@@ -337,6 +337,10 @@ $(eval $(call variant,screen,-DSCREEN_SELFTEST,,))
 $(eval $(call variant,audio,-DAUDIO_TEST,,))
 audiotest: audio-kernel8.elf
 .PHONY: audiotest
+# usbaudiotest: a USB speaker (QEMU's usb-audio) is fed 440 Hz through isochronous OUT transfers at boot; arm64-usbaudio-check.py reads the WAV QEMU wrote.
+$(eval $(call variant,usbaudio,-DUSB_AUDIO_TEST,,))
+usbaudiotest: usbaudio-kernel8.elf
+.PHONY: usbaudiotest
 # musictest: Music's clock (JT_SYS_TIME) ticks from MUSIC_UTC with the generic counter, so its `music: at` lines come once a
 # second on virt, which has no network time, and fptest.c's fp_clobber wipes the FPU inside every app call and before every
 # resume, so `userrun fpkeep` proves vectors.S keeps an app's FP registers (tools/checks/arm64-music-check.py).
