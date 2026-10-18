@@ -35,7 +35,7 @@ function makeFakeKV() {
 
 function postReq(body, headers = {}) {
   const encoded = typeof body === "string" ? body : JSON.stringify(body);
-  return new Request("https://joshuatree.heyitsmejosh.com/api/waitlist", {
+  return new Request("https://joshuatree.jaybulb.com/api/waitlist", {
     method: "POST",
     headers: { "content-type": "application/json", "content-length": String(Buffer.byteLength(encoded)), ...headers },
     body: encoded,

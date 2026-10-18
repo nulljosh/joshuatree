@@ -840,7 +840,7 @@ static void reboot(void){
    rather than a hardcoded 21/22, so this is the only place the shift needed
    to happen. */
 /* v0.87.0: Portfolio, an Apps-folder-only catalog of the fleet apps that
-   live outside this kernel (heyitsmejosh.com), same launch shape as
+   live outside this kernel (jaybulb.com), same launch shape as
    Search/Contacts/Calculator/Stocks. Inserted before GUI_APPS_FOLDER, so
    it grew GUI_APP_COUNT from 25 to 26 and pushed GUI_APPS_FOLDER/GUI_TRASH
    up by one each, same shift the v0.86.0 comment above describes for
@@ -888,7 +888,7 @@ static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER; /* g
    this whole desktop's one-screen, nothing-persisted scope). */
 int gui_order[GUI_ICON_COUNT];
 /* Portfolio mode ("portfolio" on the multiboot command line, sent by the
-   landing's embed.js when heyitsmejosh.com/os.html frames it): the dock is
+   landing's embed.js when jaybulb.com/os.html frames it): the dock is
    Joshua's own apps instead of the system set. Same slot count, Apps folder
    and Trash stay at the ends; everything left out is still in the Apps folder. */
 static int portfolio_dock;
@@ -1006,7 +1006,7 @@ static char loc_err[48] = "";
    that could silently drift apart); now one source of truth both read.
    1.0.12 (direct owner request, "hook Chat up to our Samantha LLM, the
    Turing project"): the compiled-in default is now the Turing project's
-   own Cloudflare Worker (turing.heyitsmejosh.com, plain HTTP port 80,
+   own Cloudflare Worker (turing.jaybulb.com, plain HTTP port 80,
    model "samantha"), reachable both natively (this file, straight over
    the internet, no VPN/gateway address involved) and from the v86 browser
    demo through worker.js's own `/api/proxy` exception for exactly this
@@ -1016,7 +1016,7 @@ static char loc_err[48] = "";
 #define LLM_MODEL_MAX 32
 #define LLM_HOST_MAX 40
 static char llm_model[LLM_MODEL_MAX] = "samantha";
-static char llm_host[LLM_HOST_MAX] = "turing.heyitsmejosh.com";
+static char llm_host[LLM_HOST_MAX] = "turing.jaybulb.com";
 static int llm_port = 80;
 /* 1.9.26: read-only view for SYS_HTTP_POST (kernel/syscall.c). Settings still owns the write. */
 const char *llm_host_get(void) { return llm_host; }
@@ -1028,7 +1028,7 @@ static char mail_token[MAIL_TOKEN_MAX] = "";
 const char *mail_token_get(void) { return mail_token; }
 /* 2.14.0: the Claude relay (tools/claude-relay/relay.py) Settings owns: SETTINGS.TXT claudehost=,
    claudeport=, claudetoken=. Its own host, never the LLM host: the token must only ever go to a
-   relay the owner pointed at, not to turing.heyitsmejosh.com. Empty host or token means "not set
+   relay the owner pointed at, not to turing.jaybulb.com. Empty host or token means "not set
    up", and SYS_HTTP_POST refuses JT_POST_CLAUDE without touching the network. Only SYS_HTTP_POST
    reads the token, to build the bearer for /api/claude; no syscall hands it to ring 3. */
 #define CLAUDE_HOST_MAX 40
@@ -1177,7 +1177,7 @@ static void settings_load(void){
             int j = 0, k = eq + 1;
             while (k < line_end && j < LLM_HOST_MAX - 1) llm_host[j++] = buf[k++];
             llm_host[j] = 0;
-            if (j == 0) { const char *d = "turing.heyitsmejosh.com"; int p=0; while (d[p]) llm_host[p]=d[p], p++; llm_host[p]=0; }
+            if (j == 0) { const char *d = "turing.jaybulb.com"; int p=0; while (d[p]) llm_host[p]=d[p], p++; llm_host[p]=0; }
             continue;
         }
         int val = 0, neg = 0, k = eq + 1;
@@ -7818,7 +7818,7 @@ void kmain(unsigned int multiboot_info_addr){
            internet-facing Turing default, headlessly and without touching
            SETTINGS.TXT. Unlike wxhost's dotted-quad-only host, this takes
            any hostname byte up to the next space or end of string, the
-           same real hostnames (turing.heyitsmejosh.com) llm_host itself
+           same real hostnames (turing.jaybulb.com) llm_host itself
            already accepts, not just an IP literal. Applied to llm_host/
            llm_port after settings_load() runs, not here -- see that call
            site for why. */

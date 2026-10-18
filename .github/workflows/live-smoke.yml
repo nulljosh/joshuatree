@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Landing page loads
         run: |
-          code=$(curl -s -o /tmp/index.html -w "%{http_code}" https://joshuatree.heyitsmejosh.com/)
+          code=$(curl -s -o /tmp/index.html -w "%{http_code}" https://joshuatree.jaybulb.com/)
           echo "GET / -> $code"
           echo "--- hero headline (h1) ---"
           grep -o '<h1>[^<]*</h1>' /tmp/index.html || echo "(no h1 found)"
@@ -35,13 +35,13 @@ jobs:
 
       - name: /api/proxy allowlist sanity (disallowed host must 403)
         run: |
-          code=$(curl -s -o /dev/null -w "%{http_code}" "https://joshuatree.heyitsmejosh.com/api/proxy?url=http://evil.example.com/")
+          code=$(curl -s -o /dev/null -w "%{http_code}" "https://joshuatree.jaybulb.com/api/proxy?url=http://evil.example.com/")
           echo "GET /api/proxy?url=http://evil.example.com/ -> $code (expect 403)"
           if [ "$code" != "403" ]; then echo "FAIL: disallowed host was not rejected"; exit 1; fi
 
       - name: /api/proxy -> ip-api.com (real geolocation fetch, real network)
         run: |
-          code=$(curl -s -o /tmp/geo.json -w "%{http_code}" "https://joshuatree.heyitsmejosh.com/api/proxy?url=$(python3 -c "import urllib.parse;print(urllib.parse.quote('http://ip-api.com/json/'))")")
+          code=$(curl -s -o /tmp/geo.json -w "%{http_code}" "https://joshuatree.jaybulb.com/api/proxy?url=$(python3 -c "import urllib.parse;print(urllib.parse.quote('http://ip-api.com/json/'))")")
           echo "status: $code"
           echo "body:"
           cat /tmp/geo.json
@@ -49,7 +49,7 @@ jobs:
 
       - name: /api/proxy -> a.tile.opentopomap.org (real map tile fetch, real network)
         run: |
-          code=$(curl -s -o /tmp/topo.bin -w "%{http_code}" "https://joshuatree.heyitsmejosh.com/api/proxy?url=$(python3 -c "import urllib.parse;print(urllib.parse.quote('http://a.tile.opentopomap.org/14/2622/6336.png'))")")
+          code=$(curl -s -o /tmp/topo.bin -w "%{http_code}" "https://joshuatree.jaybulb.com/api/proxy?url=$(python3 -c "import urllib.parse;print(urllib.parse.quote('http://a.tile.opentopomap.org/14/2622/6336.png'))")")
           echo "status: $code"
           echo "bytes: $(wc -c < /tmp/topo.bin)"
           file /tmp/topo.bin || true
@@ -57,7 +57,7 @@ jobs:
 
       - name: /api/proxy -> mt0.google.com (real satellite tile fetch, real network)
         run: |
-          code=$(curl -s -o /tmp/sat.bin -w "%{http_code}" "https://joshuatree.heyitsmejosh.com/api/proxy?url=$(python3 -c "import urllib.parse;print(urllib.parse.quote('http://mt0.google.com/vt/lyrs=s&x=2622&y=6336&z=14'))")")
+          code=$(curl -s -o /tmp/sat.bin -w "%{http_code}" "https://joshuatree.jaybulb.com/api/proxy?url=$(python3 -c "import urllib.parse;print(urllib.parse.quote('http://mt0.google.com/vt/lyrs=s&x=2622&y=6336&z=14'))")")
           echo "status: $code"
           echo "bytes: $(wc -c < /tmp/sat.bin)"
           file /tmp/sat.bin || true

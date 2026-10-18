@@ -76,7 +76,7 @@ try {
   // 1) The plain-GET branch: exactly what geo_fetch/weather_fetch/
   //    wall_fetch all funnel through, real reproduction of "the weather
   //    call hangs the desktop" against a silent api.open-meteo.com.
-  const weatherReq = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url="
+  const weatherReq = new Request("https://joshuatree.jaybulb.com/api/proxy?url="
     + encodeURIComponent("https://api.open-meteo.com/v1/forecast?latitude=49.1&longitude=-122.6&current=temperature_2m,weather_code"));
   const weatherResp = await withDeadline("weather (open-meteo GET) proxy call", handleProxy(weatherReq));
   if (weatherResp) check("weather proxy call answers with a real gateway-timeout status, not a fabricated success", weatherResp.status === 504);
@@ -84,8 +84,8 @@ try {
   // 2) The Samantha chat/pick POST branch: same shared fetchWithTimeout,
   //    proves the fix covers Chat's own network calls too, not weather
   //    alone -- "the shared function all callers use."
-  const chatReq = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url="
-    + encodeURIComponent("https://turing.heyitsmejosh.com/api/chat"), {
+  const chatReq = new Request("https://joshuatree.jaybulb.com/api/proxy?url="
+    + encodeURIComponent("https://turing.jaybulb.com/api/chat"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ model: "samantha", messages: [{ role: "user", content: "what is the capital of france" }] }),

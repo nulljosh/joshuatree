@@ -9,7 +9,7 @@ real Mail store -- not just that the picker names the tool.
 "syscall: write(1) from ring 3: " serial prefix. Same fake HTTP server shape
 as tools/checks/chattools-check.py, answering both POST /api/pick and POST
 /api/chat, reached from the guest at 10.0.2.2 via the kernel's
-llmhost=/llmport= override -- turing.heyitsmejosh.com never touched.
+llmhost=/llmport= override -- turing.jaybulb.com never touched.
 
 Scenarios (one continuous boot, in order):
   (a) "read my email" -> pick answers {"tool":"read_mail","arg":""}.
@@ -170,7 +170,8 @@ def main():
         mark = len(serial())
         type_msg("read my email")
         wait_for("chattool=read_mail:", 20, "scenario a: no chattool=read_mail: marker", after=mark)
-        time.sleep(1.0)
+        wait_for(",28,0", 30, "scenario a: her reply caption never finished rising", after=mark + serial()[mark:].find("chattool=read_mail:"))
+        time.sleep(0.5)
         reply_a = reply_ink(dump()) - before_ink
         print("scenario a: new reply-band ink = %d" % reply_a)
         if reply_a < 100: fails.append("scenario a: read_mail reply did not render in her transcript (%d new ink px)" % reply_a)

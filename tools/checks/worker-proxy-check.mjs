@@ -32,10 +32,10 @@ check("rejects a private IP", !isAllowedTarget(new URL("http://169.254.169.254/"
 check("rejects a non-http(s) protocol", !isAllowedTarget(new URL("file:///etc/passwd")));
 check("rejects a lookalike host (suffix match would be a real bypass)", !isAllowedTarget(new URL("http://evil-ip-api.com/")));
 
-const missingUrlResp = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy"));
+const missingUrlResp = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy"));
 check("missing url param -> 400", missingUrlResp.status === 400);
 
-const invalidUrlResp = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=not-a-url"));
+const invalidUrlResp = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=not-a-url"));
 check("invalid url param -> 400", invalidUrlResp.status === 400);
 
 {
@@ -43,7 +43,7 @@ check("invalid url param -> 400", invalidUrlResp.status === 400);
   let fetchCalled = false;
   globalThis.fetch = async () => { fetchCalled = true; return new Response("should never be reached"); };
   try {
-    const disallowedResp = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("http://evil.example.com/steal")));
+    const disallowedResp = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent("http://evil.example.com/steal")));
     check("disallowed host -> 403", disallowedResp.status === 403);
     check("disallowed host never reaches the real fetch call", !fetchCalled);
   } finally {
@@ -68,7 +68,7 @@ globalThis.fetch = async (url, init) => {
 };
 try {
   const target = "http://a.tile.opentopomap.org/14/1234/5678.png";
-  const okResp = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+  const okResp = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target)));
   check("allowed host -> 200", okResp.status === 200);
   check("fetched exactly the requested target URL", fetchedUrl === target);
   check("response carries Access-Control-Allow-Origin", okResp.headers.get("access-control-allow-origin") === "*");
@@ -98,7 +98,7 @@ try {
   globalThis.fetch = async (url) => { fetchedUrl = url; return new Response("{}", { status: 200 }); };
   try {
     const httpsTarget = "https://ip-api.com/json/";
-    await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(httpsTarget)));
+    await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(httpsTarget)));
     check("ip-api.com forced back to http:// even when the browser relayed https://", fetchedUrl === "http://ip-api.com/json/");
   } finally {
     globalThis.fetch = realFetch;
@@ -113,7 +113,7 @@ try {
   let called = false;
   globalThis.fetch = async () => { called = true; return new Response("{}", { status: 200 }); };
   try {
-    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("http://ip-api.com/json/"));
+    const req = new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent("http://ip-api.com/json/"));
     Object.defineProperty(req, "cf", { value: { latitude: "49.10107", longitude: "-122.65883", city: "Langley", region: "British Columbia", country: "CA" } });
     const res = await handleProxy(req);
     const body = await res.json();
@@ -133,7 +133,7 @@ try {
   globalThis.fetch = async (url) => { fetchedUrl = url; return new Response("tile", { status: 200 }); };
   try {
     const httpsTarget = "https://a.tile.opentopomap.org/14/1234/5678.png";
-    await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(httpsTarget)));
+    await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(httpsTarget)));
     check("a.tile.opentopomap.org's own scheme left untouched", fetchedUrl === httpsTarget);
   } finally {
     globalThis.fetch = realFetch;
@@ -153,9 +153,9 @@ try {
     { status: 200, headers: { "content-type": "application/json" } });
   };
   try {
-    const target = "https://turing.heyitsmejosh.com/api/chat";
+    const target = "https://turing.jaybulb.com/api/chat";
     const body = JSON.stringify({ model: "samantha", stream: false, think: false, messages: [{ role: "user", content: "hello" }] });
-    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), {
+    const req = new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body,
@@ -185,9 +185,9 @@ try {
     { status: 200, headers: { "content-type": "application/json" } });
   };
   try {
-    const target = "https://turing.heyitsmejosh.com/api/pick";
+    const target = "https://turing.jaybulb.com/api/pick";
     const body = JSON.stringify({ q: "remind me to buy milk", sections: [] });
-    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), {
+    const req = new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body,
@@ -205,7 +205,7 @@ try {
   }
 }
 
-// A POST to any OTHER path on turing.heyitsmejosh.com -- not /api/chat, not
+// A POST to any OTHER path on turing.jaybulb.com -- not /api/chat, not
 // /api/pick -- is still refused: the exception is exactly these two paths,
 // nothing wider slipped in with /api/pick joining it.
 {
@@ -213,14 +213,14 @@ try {
   let fetchCalled = false;
   globalThis.fetch = async () => { fetchCalled = true; return new Response("should never be reached"); };
   try {
-    const target = "https://turing.heyitsmejosh.com/api/anything-else";
-    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), {
+    const target = "https://turing.jaybulb.com/api/anything-else";
+    const req = new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "{}",
     });
     const resp = await handleProxy(req);
-    check("a POST to turing.heyitsmejosh.com/api/anything-else still 403s (not part of the two-path exception)", resp.status === 403);
+    check("a POST to turing.jaybulb.com/api/anything-else still 403s (not part of the two-path exception)", resp.status === 403);
     check("...and never reaches the real fetch call", !fetchCalled);
   } finally {
     globalThis.fetch = realFetch;
@@ -238,7 +238,7 @@ try {
   globalThis.fetch = async (url, init) => { fetchedInit = init; return new Response("tile", { status: 200 }); };
   try {
     const target = "http://a.tile.opentopomap.org/14/1234/5678.png";
-    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), {
+    const req = new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "should never be forwarded",
@@ -257,9 +257,9 @@ try {
   let fetchCalled = false;
   globalThis.fetch = async () => { fetchCalled = true; return new Response("should never be reached"); };
   try {
-    const target = "https://turing.heyitsmejosh.com/api/chat";
+    const target = "https://turing.jaybulb.com/api/chat";
     const oversized = "x".repeat(8193);
-    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), {
+    const req = new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: oversized,
@@ -280,21 +280,21 @@ try {
   globalThis.fetch = async () => { fetchCalled = true; return new Response("should never be reached"); };
   try {
     // A GET to the same host+path is not the exception (wrong method) and
-    // turing.heyitsmejosh.com is still not in ALLOWED_HOSTS, so it 403s
+    // turing.jaybulb.com is still not in ALLOWED_HOSTS, so it 403s
     // exactly like any other unlisted host, same as before this pass.
-    const getReq = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://turing.heyitsmejosh.com/api/chat"));
+    const getReq = new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent("https://turing.jaybulb.com/api/chat"));
     const getResp = await handleProxy(getReq);
-    check("a bare GET to turing.heyitsmejosh.com/api/chat still 403s (not part of the allowlist)", getResp.status === 403);
+    check("a bare GET to turing.jaybulb.com/api/chat still 403s (not part of the allowlist)", getResp.status === 403);
 
     // A POST to a different path on the same host is not the exception either.
-    const wrongPathReq = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://turing.heyitsmejosh.com/api/other"), {
+    const wrongPathReq = new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent("https://turing.jaybulb.com/api/other"), {
       method: "POST", headers: { "content-type": "application/json" }, body: "{}",
     });
     const wrongPathResp = await handleProxy(wrongPathReq);
-    check("a POST to a different path on turing.heyitsmejosh.com still 403s", wrongPathResp.status === 403);
+    check("a POST to a different path on turing.jaybulb.com still 403s", wrongPathResp.status === 403);
 
     // Wrong content-type on the real chat path is rejected, not silently forwarded.
-    const wrongTypeReq = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://turing.heyitsmejosh.com/api/chat"), {
+    const wrongTypeReq = new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent("https://turing.jaybulb.com/api/chat"), {
       method: "POST", headers: { "content-type": "text/plain" }, body: "{}",
     });
     const wrongTypeResp = await handleProxy(wrongTypeReq);
@@ -305,7 +305,7 @@ try {
     globalThis.fetch = realFetch;
   }
 }
-check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the exception is narrow, checked separately)", !isAllowedTarget(new URL("https://turing.heyitsmejosh.com/api/chat")));
+check("turing.jaybulb.com is deliberately NOT in the general allowlist (the exception is narrow, checked separately)", !isAllowedTarget(new URL("https://turing.jaybulb.com/api/chat")));
 
 // The kernel counts face frames by asking for the next one until it fails, so
 // the end of the clip must not be a 404 (a red console error for every visitor).
@@ -313,7 +313,7 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
   const env = { ASSETS: { fetch: async (req) => new URL(req.url).pathname.endsWith("talk-0.jpg")
     ? new Response("jpegbytes", { status: 200, headers: { "Content-Type": "image/jpeg" } })
     : new Response("nope", { status: 404 }) } };
-  const face = (n) => handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(`https://joshuatree.heyitsmejosh.com/face-joshua/talk-${n}.jpg`)), env);
+  const face = (n) => handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(`https://joshuatree.jaybulb.com/face-joshua/talk-${n}.jpg`)), env);
   const real = await face(0), past = await face(48);
   check("an existing face frame passes through with its bytes", real.status === 200 && (await real.text()) === "jpegbytes");
   check("the frame past the end of the clip is an empty 200, not a console-error 404", past.status === 200 && (await past.text()) === "");
@@ -333,26 +333,26 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
   ] };
   globalThis.fetch = async (url) => { calls++; fetchedUrl = String(url); return Response.json(upstream); };
   try {
-    const target = "https://joshuatree.heyitsmejosh.com/api/books";
-    const res = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+    const target = "https://joshuatree.jaybulb.com/api/books";
+    const res = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target)));
     const lines = (await res.text()).split("\n");
-    check("/api/books reaches the real Bookrank API, ranked, capped at 12", /^https:\/\/bookrank\.heyitsmejosh\.com\/api\/books\?section=ranked&limit=12$/.test(fetchedUrl));
+    check("/api/books reaches the real Bookrank API, ranked, capped at 12", /^https:\/\/bookrank\.jaybulb\.com\/api\/books\?section=ranked&limit=12$/.test(fetchedUrl));
     check("/api/books answers 200 text with CORS and no-store", res.status === 200 && res.headers.get("access-control-allow-origin") === "*" && res.headers.get("cache-control") === "no-store");
     check("/api/books first line is the shelf total", lines[0] === "110");
     check("/api/books row is rank|rating|reviews|badge|title|author|notes, ASCII only, no stray pipe or newline", lines[1] === "1|438|131k+ ratings|Very popular|Cafe \"One\" x|Ana Mendez|Line one line two");
     check("/api/books null fields become empty fields and rank falls back to position", lines[2] === "2|0|||Second||");
     check("/api/books drops a book with no title", lines.length === 4 && lines[3] === "");
     globalThis.fetch = async () => new Response("down", { status: 503 });
-    const down = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+    const down = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target)));
     check("/api/books upstream 503 -> 502 with an empty body, so the guest keeps its samples", down.status === 502 && (await down.text()) === "");
     globalThis.fetch = async () => Response.json({ total: 0, results: [] });
-    const empty = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+    const empty = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target)));
     check("/api/books with no usable rows -> 502", empty.status === 502);
     globalThis.fetch = async () => { throw new Error("offline"); };
-    const dead = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+    const dead = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target)));
     check("/api/books upstream unreachable -> 502", dead.status === 502);
     const before = calls;
-    const other = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://bookrank.heyitsmejosh.com/api/books")));
+    const other = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent("https://bookrank.jaybulb.com/api/books")));
     check("the real bookrank host is still not an open proxy target", other.status === 403 && calls === before);
   } finally {
     globalThis.fetch = realFetch;
@@ -395,18 +395,18 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
     ...rows,
   ] }] }] };
   globalThis.fetch = async (url) => { asked.push(String(url)); return String(url).endsWith("catalog.json") ? Response.json(catalog) : Response.json(pack); };
-  const via = (path) => handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://joshuatree.heyitsmejosh.com" + path)));
+  const via = (path) => handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent("https://joshuatree.jaybulb.com" + path)));
   try {
     const list = await via("/api/lexly");
     const lines = (await list.text()).split("\n");
-    check("/api/lexly reads the real Tonchi catalog", asked[0] === "https://lexly.heyitsmejosh.com/content/catalog.json");
+    check("/api/lexly reads the real Tonchi catalog", asked[0] === "https://lexly.jaybulb.com/content/catalog.json");
     check("/api/lexly answers 200 text with CORS and no-store", list.status === 200 && list.headers.get("access-control-allow-origin") === "*" && list.headers.get("cache-control") === "no-store");
     check("/api/lexly first line is the course count, then id|name|category", lines[0] === "2" && lines[1] === "spanish|Spanish|languages");
     check("/api/lexly drops a course outside the allowlist, a repeat, a bad id and an empty name, and cuts a long name", lines[2] === "dsa|Data Structures and Algorithms and a ver|programming" && lines.length === 4 && lines[3] === "");
 
     const q = await via("/api/lexly?c=spanish");
     const ql = (await q.text()).split("\n");
-    check("/api/lexly?c= reads that course's real pack", asked[1] === "https://lexly.heyitsmejosh.com/content/courses/spanish.json");
+    check("/api/lexly?c= reads that course's real pack", asked[1] === "https://lexly.jaybulb.com/content/courses/spanish.json");
     check("a question row is answer|question|c0|c1|c2|c3, accents stripped, inverted marks and smart quotes made plain", ql[1] === '0|Como estas? "bien"|Muy bien|Mal|Asi asi|Nada');
     check("the first line is the question count, capped at 20", ql[0] === "20" && ql.length === 22 && ql[21] === "");
     const bad = ql.slice(1, 21).filter(l => /Pipe|Japanese|not offered|Repeated|Three|Too long|hear|Pairs/.test(l));
@@ -433,7 +433,7 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
     check("/api/lexly upstream unreachable -> 502", (await via("/api/lexly")).status === 502);
     const n = asked.length;
     globalThis.fetch = async (u) => { asked.push(String(u)); return Response.json({}); };
-    const other = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://lexly.heyitsmejosh.com/content/catalog.json")));
+    const other = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent("https://lexly.jaybulb.com/content/catalog.json")));
     check("the real Tonchi host is still not an open proxy target", other.status === 403 && asked.length === n);
   } finally {
     globalThis.fetch = realFetch;
@@ -465,19 +465,19 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
   };
   const upstream = async (url, init) => {
     const u = String(url); asked.push([u, init]);
-    const m = u.match(/^https:\/\/hikko\.heyitsmejosh\.com\/api\/posts\?id=([A-Za-z0-9_-]+)$/);
+    const m = u.match(/^https:\/\/hikko\.jaybulb\.com\/api\/posts\?id=([A-Za-z0-9_-]+)$/);
     if (m) return bodies[m[1]] ? Response.json({ post: bodies[m[1]] }) : new Response("gone", { status: 404 });
-    if (u === "https://hikko.heyitsmejosh.com/api/posts?limit=12") return Response.json({ posts: list });
+    if (u === "https://hikko.jaybulb.com/api/posts?limit=12") return Response.json({ posts: list });
     return new Response("no", { status: 404 });
   };
   globalThis.fetch = upstream;
-  const target = "https://joshuatree.heyitsmejosh.com/api/hikko";
-  const via = () => handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+  const target = "https://joshuatree.jaybulb.com/api/hikko";
+  const via = () => handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target)));
   try {
     const res = await via();
     const lines = (await res.text()).split("\n");
     check("/api/hikko answers 200 text with CORS and no-store", res.status === 200 && res.headers.get("access-control-allow-origin") === "*" && res.headers.get("cache-control") === "no-store");
-    check("/api/hikko reads only the real forum feed, as plain GETs", asked.length > 1 && asked.every(([u, init]) => u.startsWith("https://hikko.heyitsmejosh.com/api/posts?") && !(init && (init.method || init.body || init.headers))));
+    check("/api/hikko reads only the real forum feed, as plain GETs", asked.length > 1 && asked.every(([u, init]) => u.startsWith("https://hikko.jaybulb.com/api/posts?") && !(init && (init.method || init.body || init.headers))));
     check("/api/hikko never fetches a post for an id that is not a plain id", !asked.some(([u]) => u.includes("passwd") || u.includes("id=7")));
     check("/api/hikko first line is the row count", lines[0] === "4");
     check("/api/hikko row is votes|category|title|text|plan, ASCII only, no stray pipe or newline", lines[1] === "5|Suste|Cafe \"One\" x|Line one line - two with a pipe|Step one... step two");
@@ -497,11 +497,11 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
     check("/api/hikko upstream unreachable -> 502", (await via()).status === 502);
     const n = asked.length;
     globalThis.fetch = upstream;
-    const other = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://hikko.heyitsmejosh.com/api/posts")));
+    const other = await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent("https://hikko.jaybulb.com/api/posts")));
     check("the real Hikko host is still not an open proxy target", other.status === 403 && asked.length === n);
     const mark = asked.length;
-    await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), { method: "POST", body: '{"vote":1}', headers: { Authorization: "Bearer x", Cookie: "s=1" } }));
-    check("/api/hikko takes no write path: a guest body, token or cookie never reaches the forum", asked.length > mark && asked.slice(mark).every(([u, init]) => u.startsWith("https://hikko.heyitsmejosh.com/api/posts?") && !(init && (init.method || init.body || init.headers))));
+    await handleProxy(new Request("https://joshuatree.jaybulb.com/api/proxy?url=" + encodeURIComponent(target), { method: "POST", body: '{"vote":1}', headers: { Authorization: "Bearer x", Cookie: "s=1" } }));
+    check("/api/hikko takes no write path: a guest body, token or cookie never reaches the forum", asked.length > mark && asked.slice(mark).every(([u, init]) => u.startsWith("https://hikko.jaybulb.com/api/posts?") && !(init && (init.method || init.body || init.headers))));
   } finally {
     globalThis.fetch = realFetch;
   }

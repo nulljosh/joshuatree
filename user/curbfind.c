@@ -7,7 +7,7 @@
  * title, price, neighbourhood, a ten-segment score bar and the reason on
  * the right. Up and down (or a click) select, Esc closes.
  *
- * Live rows come from joshuatree.heyitsmejosh.com/api/deals, the first
+ * Live rows come from joshuatree.jaybulb.com/api/deals, the first
  * time a ring-3 program reaches the network, through the one new call this
  * port needed: SYS_HTTP_GET (387, 1.9.11). The kernel fixes the host and
  * port; this program hands it only the path and a buffer. When that fetch

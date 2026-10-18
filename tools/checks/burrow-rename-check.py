@@ -119,7 +119,7 @@ purl = dict(rows)
 for old in ("Roost", "Voxprint", "Siftbox", "Lexly", "Sparkjar", "Hotaru", "Wiretext", "Charwork"):
     check(old not in pnames, "Portfolio catalog has no %r row" % old)
 for new, host in (("Brick", "brick"), ("Notate", "notate"), ("Hagaki", "hagaki"), ("Hikko", "hikko"), ("Tonchi", "lexly")):
-    check(purl.get(new, "").startswith(host + ".heyitsmejosh.com"), "Portfolio row %s answers at %s.heyitsmejosh.com (got %r)" % (new, host, purl.get(new)))
+    check(purl.get(new, "").startswith(host + ".jaybulb.com"), "Portfolio row %s answers at %s.jaybulb.com (got %r)" % (new, host, purl.get(new)))
 for old_host in ("roost.", "siftbox.", "voxprint."):
     check(old_host not in pf, "Portfolio never shows the %s address" % old_host)
 

@@ -12,7 +12,7 @@
 // fetch-relay turns the guest's plain-HTTP request into this real,
 // same-origin browser fetch -- see embed.js's `cors_proxy` and worker.js's
 // isSamanthaChat exception) and answers with a fixed, recognisable reply.
-// turing.heyitsmejosh.com is never touched, same reasoning
+// turing.jaybulb.com is never touched, same reasoning
 // chat-samantha-check.py / chatapp-check.py already use for the native
 // kernel path. Every OTHER proxied request (geo/weather/map tiles) gets a
 // flat 403, so this never depends on this sandbox's real network access.
@@ -144,8 +144,8 @@ await page.route('**/api/proxy**', async (route) => {
   try { target = new URL(req.url()).searchParams.get('url') || ''; } catch (e) { /* fall through to 403 below */ }
   let targetUrl = null;
   try { targetUrl = new URL(target); } catch (e) { /* not a valid absolute url -> 403 below */ }
-  const isSamanthaChat = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/chat';
-  const isSamanthaPick = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/pick';
+  const isSamanthaChat = targetUrl && targetUrl.hostname === 'turing.jaybulb.com' && targetUrl.pathname === '/api/chat';
+  const isSamanthaPick = targetUrl && targetUrl.hostname === 'turing.jaybulb.com' && targetUrl.pathname === '/api/pick';
   if (isSamanthaChat && req.method() === 'POST') {
     recordedBody = req.postData();
     recordedMethod = req.method();
@@ -270,7 +270,7 @@ try {
 
   const t0 = Date.now();
   while (Date.now() - t0 < 30000 && !proxyPostSeen) await page.waitForTimeout(200);
-  if (!proxyPostSeen) fail('the demo never made the intercepted POST to turing.heyitsmejosh.com/api/chat through /api/proxy');
+  if (!proxyPostSeen) fail('the demo never made the intercepted POST to turing.jaybulb.com/api/chat through /api/proxy');
   else ok('intercepted the guest\'s real POST through /api/proxy (v86\'s fetch relay)');
 
   await page.waitForFunction(() => window.__jt.serial.includes('chatreply='), null, { timeout: 30000 }).catch(() => fail('no chatreply= marker within 30s of the intercepted reply'));
@@ -344,7 +344,7 @@ try {
     try { target = new URL(req.url()).searchParams.get('url') || ''; } catch (e) { /* fall through to 403 below */ }
     let targetUrl = null;
     try { targetUrl = new URL(target); } catch (e) { /* not a valid absolute url -> 403 below */ }
-    const isPick = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/pick';
+    const isPick = targetUrl && targetUrl.hostname === 'turing.jaybulb.com' && targetUrl.pathname === '/api/pick';
     if (isPick && req.method() === 'POST') {
       phonePickBody = req.postData();
       phonePickSeen = true;

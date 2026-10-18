@@ -5,7 +5,7 @@ Headless only (-display none). CI never touches the live site: the reply comes f
 loopback stub, the way tools/checks/httpstress-check.py serves Samantha's face frames. The
 stub's good reply is not hand-written. It is what worker.js's own handleBooks() produces when
 its upstream fetch returns tools/checks/bookrank-fixture.json, a captured answer of the real
-bookrank.heyitsmejosh.com/api/books, so a change to the Worker's wire format changes what the
+bookrank.jaybulb.com/api/books, so a change to the Worker's wire format changes what the
 guest sees and this check notices.
 
 Each scenario boots a fresh guest with `open=bookr` and a rtl8139 NIC (or none) and reads the
@@ -50,7 +50,7 @@ const fixture = JSON.parse(fs.readFileSync('tools/checks/bookrank-fixture.json',
 let asked = null;
 globalThis.fetch = async (url) => { asked = String(url); return Response.json(fixture); };
 const res = await handleBooks();
-if (res.status !== 200 || !/^https:\/\/bookrank\.heyitsmejosh\.com\/api\/books\?/.test(asked)) { console.error('worker did not fetch the real API: ' + asked + ' ' + res.status); process.exit(1); }
+if (res.status !== 200 || !/^https:\/\/bookrank\.jaybulb\.com\/api\/books\?/.test(asked)) { console.error('worker did not fetch the real API: ' + asked + ' ' + res.status); process.exit(1); }
 process.stdout.write(await res.text());
 """
 r = subprocess.run(["node", "--input-type=module", "-e", NODE], capture_output=True, text=True)

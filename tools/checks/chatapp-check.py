@@ -14,7 +14,7 @@ a turn exists, so ink is counted per region instead of against one band.
 
 The fake Samantha is a loopback HTTP server reached through QEMU's user-mode
 NAT at 10.0.2.2 (the kernel's `llmhost=`/`llmport=` multiboot override);
-turing.heyitsmejosh.com is never touched. /api/pick answers an empty object so
+turing.jaybulb.com is never touched. /api/pick answers an empty object so
 no tool fires and the question goes on to /api/chat.
 
 Asserts, in order: her window opened (samfocus on serial, red close light at

@@ -853,7 +853,7 @@ static int sys_tasks(u32 out, u32 kill, u32 c) {
    calling while a fetch is in flight is -EBUSY, since the bounce buffer
    and net.c's one-connection stack are both singletons. */
 #define HTTP_HOST_MAX 64
-static char http_host_buf[HTTP_HOST_MAX] = "joshuatree.heyitsmejosh.com";
+static char http_host_buf[HTTP_HOST_MAX] = "joshuatree.jaybulb.com";
 static unsigned short http_port_val = 80;
 #define HTTP_HOST http_host_buf
 #define HTTP_PORT http_port_val

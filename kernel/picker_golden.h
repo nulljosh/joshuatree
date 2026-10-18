@@ -50,7 +50,7 @@ static const struct { const char *text; unsigned char want; } pick_golden[PICK_G
     {"move old-notes.txt out of desktop into notes", 60},
     {"launch talli in vscode for me", 67},
     {"give me a random number between 1 and 100", 72},
-    {"check what nimble.heyitsmejosh.com says", 65},
+    {"check what nimble.jaybulb.com says", 65},
     {"make the background transparent on portrait.jpg", 79},
     {"show me resume.pdf in finder", 84},
     {"rotate photo.jpg by 90 degrees", 88},

@@ -10,7 +10,7 @@
 # not runnable in CI or this sandbox) and tools/checks/weather-app-check.sh
 # (a local fake server standing in for the real host, driven the same
 # "-net nic,model=rtl8139 -net user -append wxhost=..." way): never
-# touches turing.heyitsmejosh.com for real, and never needs to -- the
+# touches turing.jaybulb.com for real, and never needs to -- the
 # real endpoint is proven live by .github/workflows/check.yml's `network`
 # job instead (a real GitHub runner, real internet, this sandbox's
 # outbound proxy blocks that host).
@@ -88,7 +88,7 @@ def make_server(mode_holder, recorded):
             recorded["content_type"] = self.headers.get("Content-Type", "")
             if mode_holder["mode"] == "redirect":
                 self.send_response(301)
-                self.send_header("Location", "https://turing.heyitsmejosh.com/api/chat")
+                self.send_header("Location", "https://turing.jaybulb.com/api/chat")
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
@@ -129,7 +129,7 @@ def boot_and_ask(name, append, wait_secs):
     polls serial for a chatreply=/chathttps= marker up to wait_secs, quits,
     and returns the full serial log. Shared by the fake-server scenarios
     below and --live's real-network run (append=None there: no override,
-    so the kernel's own compiled-in defaults -- turing.heyitsmejosh.com,
+    so the kernel's own compiled-in defaults -- turing.jaybulb.com,
     port 80, model samantha -- are what's actually exercised)."""
     workdir = tempfile.mkdtemp(prefix="jt-chatsam-" + name + "-")
     log = os.path.join(workdir, "serial.log")
@@ -195,7 +195,7 @@ def run_scenario(name, mode):
 
 def run_live():
     # No -append override at all: the kernel's own compiled-in defaults
-    # (turing.heyitsmejosh.com, port 80, model samantha) are what's really
+    # (turing.jaybulb.com, port 80, model samantha) are what's really
     # exercised here, over the runner's real internet, real DNS, real TLS-
     # or-not answer. Longer timeout than the fake-server scenarios: real
     # DNS + a real cross-internet round trip (plus whatever Turing's own
@@ -207,16 +207,16 @@ def run_live():
             print(l)
     print("-----------------------------------------")
     if "chathttps=1" in serial:
-        print("FAIL: turing.heyitsmejosh.com forces HTTPS -- this kernel speaks HTTP only "
+        print("FAIL: turing.jaybulb.com forces HTTPS -- this kernel speaks HTTP only "
               "(chat_send's own chathttps=1 marker fired, the exact status Chat now shows in "
               "Settings/the shell instead of a blank or garbage reply)")
         sys.exit(1)
     reply_lines = marker_lines(serial, "chatreply=")
     if not reply_lines:
-        print("FAIL: no chatreply= and no chathttps=1 on serial -- turing.heyitsmejosh.com:80 "
+        print("FAIL: no chatreply= and no chathttps=1 on serial -- turing.jaybulb.com:80 "
               "never answered within the timeout (network unreachable, DNS failure, or a real hang)")
         sys.exit(1)
-    print("PASS: turing.heyitsmejosh.com:80 answered a real POST /api/chat over plain HTTP:")
+    print("PASS: turing.jaybulb.com:80 answered a real POST /api/chat over plain HTTP:")
     print("  " + reply_lines[-1])
 
 

@@ -10,7 +10,7 @@
  * readout) and Situation (macro pulse and a brief). The / command bar runs
  * "TICKER GP" and "TICKER DES".
  *
- * Live prices come from joshuatree.heyitsmejosh.com/api/quotes through
+ * Live prices come from joshuatree.jaybulb.com/api/quotes through
  * SYS_HTTP_GET (387), one "SYM price prev" line per ticker, about 700
  * bytes, well inside JT_HTTP_BODY_MAX. Any failure leaves the compiled-in
  * prices on screen and the hint line says offline.

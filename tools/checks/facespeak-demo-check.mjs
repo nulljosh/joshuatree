@@ -9,10 +9,10 @@
 // instead of the idle tour.
 //
 // Hermetic, same reasoning as demochat-check.mjs: page.route intercepts
-// every /api/proxy request. turing.heyitsmejosh.com/api/chat gets a fixed
-// reply; turing.heyitsmejosh.com/api/speak gets a real raw PCM8 buffer
+// every /api/proxy request. turing.jaybulb.com/api/chat gets a fixed
+// reply; turing.jaybulb.com/api/speak gets a real raw PCM8 buffer
 // (a synthetic tone, not silence, so sb16_play has real samples to push);
-// joshuatree.heyitsmejosh.com/face/*.jpg gets the REAL committed frame
+// joshuatree.jaybulb.com/face/*.jpg gets the REAL committed frame
 // files (landing/face/*.jpg) read straight off disk -- proving embed.js's
 // facehost= cmdline value actually reaches chat_face.h's fetches, and that
 // worker.js's own /face/ proxy exception (see worker.js's handleProxy) is
@@ -131,11 +131,11 @@ await page.route('**/api/proxy**', async (route) => {
   try { target = new URL(req.url()).searchParams.get('url') || ''; } catch (e) { /* 403 below */ }
   let targetUrl = null;
   try { targetUrl = new URL(target); } catch (e) { /* 403 below */ }
-  const isFace = targetUrl && targetUrl.hostname === 'joshuatree.heyitsmejosh.com' && /^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname);
-  const isChat = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/chat';
-  const isPick = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/pick';
+  const isFace = targetUrl && targetUrl.hostname === 'joshuatree.jaybulb.com' && /^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname);
+  const isChat = targetUrl && targetUrl.hostname === 'turing.jaybulb.com' && targetUrl.pathname === '/api/chat';
+  const isPick = targetUrl && targetUrl.hostname === 'turing.jaybulb.com' && targetUrl.pathname === '/api/pick';
   // the ring-3 Samantha's GET /api/speak?t= goes to the Worker host (the old kernel chat POSTed to turing's)
-  const isSpeak = targetUrl && (targetUrl.hostname === 'turing.heyitsmejosh.com' || targetUrl.hostname === 'joshuatree.heyitsmejosh.com') && targetUrl.pathname === '/api/speak';
+  const isSpeak = targetUrl && (targetUrl.hostname === 'turing.jaybulb.com' || targetUrl.hostname === 'joshuatree.jaybulb.com') && targetUrl.pathname === '/api/speak';
   if (isFace && req.method() === 'GET') {
     const file = path.join(root, 'face', path.basename(targetUrl.pathname));
     if (fs.existsSync(file)) {
