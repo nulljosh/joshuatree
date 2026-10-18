@@ -3655,7 +3655,7 @@ void gui_draw_app_titlebar(const char *title){
     gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
     gui_fill_circle(46, 20, 6, 0x00FFD64A, 0x00FAF8F6);
     gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
-    font_draw_string("x", 23, 12, 0x00602B28, -1);
+    gui_close_glyph(26, 20, 0x00FF5F57);
     font_draw_string("-", 43, 12, 0x00624A20, -1);
     font_draw_string(title, 84, 12, 0x00555555, -1);
 }
@@ -4758,7 +4758,7 @@ static void gui_launch_about(void){
     gui_fill_circle(bx + 26, by + 20, 6, 0x00FF5F57, 0x00FAF8F6);
     gui_fill_circle(bx + 46, by + 20, 6, 0x00FFD64A, 0x00FAF8F6);
     gui_fill_circle(bx + 66, by + 20, 6, 0x00D8D4CE, 0x00FAF8F6);
-    font_draw_string("x", bx + 23, by + 12, 0x00602B28, -1);
+    gui_close_glyph(bx + 26, by + 20, 0x00FF5F57);
     font_draw_string("-", bx + 43, by + 12, 0x00624A20, -1);
     { const char *title = "About Joshua Tree";
       font_draw_string(title, bx + (ABOUT_W - font_string_width(title)) / 2, by + 12, 0x00555555, -1); }

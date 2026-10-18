@@ -635,6 +635,20 @@ void gui_draw_dock_label(int cx_center, int y0, const char *name){
     gui_text(name, cx_center - label_w / 2, ly, 0x001C1C1E);
 }
 
+/* The X on a red close dot: both diagonals, a half-tone pixel either side so the strokes read smooth at every scale.
+   The same shape as Samantha's full-screen dot (user/samantha.c), so every window closes with the same mark. */
+void gui_close_glyph(int cx, int cy, unsigned int on){
+    unsigned int ink = 0x007A1E1A, soft = gui_lerp(ink, on, 1, 2);
+    int sc = (!window_has_target() && window_scale() > 1) ? (int)window_scale() : 1;   /* on the screen the strokes are physical pixels, like the hairline */
+    int pcx = cx * sc, pcy = cy * sc, L = 3 * sc;
+    for (int dy = -L; dy <= L; dy++) for (int dx = -L; dx <= L; dx++) {
+        int a = dx > dy ? dx - dy : dy - dx, b = dx + dy < 0 ? -dx - dy : dx + dy, m = a < b ? a : b;
+        if (!(dx || dy) || m > sc) continue;
+        unsigned int c = m < sc ? ink : soft;
+        if (sc > 1) window_pixel_phys(pcx + dx, pcy + dy, c); else window_pixel(cx + dx, cy + dy, c);
+    }
+}
+
 /* One app window's frame: rounded body, content well, traffic lights, title. */
 void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
     gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
@@ -643,7 +657,7 @@ void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
     gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
     gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
     gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
-    gui_text("x", x + 21, y + 8, 0x00602B28);
+    gui_close_glyph(x + 24, y + 16, 0x00FF5F57);
     gui_text("-", x + 43, y + 8, 0x00624A20);
     gui_text(name, x + (w - gui_text_width(name)) / 2, y + 8, 0x001C1C1E); /* 2.0: centered, full ink */
 }
