@@ -19,8 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from restyle_icons import squircle_path, HL_WIDTH, HL_ALPHA, HL_FADE  # single source of truth for the shared shape/light
 
 # art/icons name -> repo folder
-FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "tonchi": "tonchi", "hikko": "hikko",
-         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook", "windgate": "breathe",
+FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "tonchi": "patois", "hikko": "thinkpond",
+         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook", "windgate": "airwell",
          "chat": "turing:web/mascot.svg"}   # Samantha: her mascot, Turing's app icon since v5.12.4 (a flat portrait: copper hair, tortoise-shell glasses). A "repo:path" value names the file when it is not repo/icon.svg.
 
 # Dock tile color per app. Most projects ship a near-black tile, so eight of
