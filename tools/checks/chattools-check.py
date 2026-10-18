@@ -217,7 +217,8 @@ def main():
         mark = len(serial())
         type_msg("remind me to buy milk")
         wait_for("chattool=new_reminder:", 20, "no chattool=new_reminder: marker", after=mark)
-        time.sleep(1.2)
+        wait_for(",28,0", 30, "scenario a: her reply caption never finished rising", after=mark + serial()[mark:].find("chattool=new_reminder:"))
+        time.sleep(0.5)
         reply_a = reply_ink(dump()) - before_ink
         print("scenario a: new reply-band ink = %d" % reply_a)
         if reply_a < 100: fails.append("scenario a: confirmation reply did not render in her transcript (%d new ink px)" % reply_a)
@@ -241,7 +242,8 @@ def main():
         mark = len(serial())
         type_msg("what is the capital of france")
         wait_for("chatreply=", 30, "scenario b: no chatreply= marker", after=mark)
-        time.sleep(1.5)
+        wait_for(",28,0", 30, "scenario b: her reply caption never finished rising", after=mark + serial()[mark:].find("chatreply="))
+        time.sleep(0.5)
         after_b = reply_ink(dump()) - before_b
         print("scenario b: new reply-band ink = %d" % after_b)
         if after_b < 200: fails.append("scenario b: her reply did not render (%d new ink px)" % after_b)
