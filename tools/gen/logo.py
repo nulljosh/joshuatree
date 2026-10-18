@@ -42,11 +42,14 @@ TRUNK = tilt([(48.8, 84.0), (49.6, 74.5), (50.9, 70.5), (51.8, 62.0)])
 LEFT = tilt([(49.0, 64.5), (39.0, 62.0), (30.0, 56.5), (23.5, 48.5), (22.0, 41.0)])
 MID = tilt([(52.0, 60.0), (53.8, 47.0), (53.0, 34.0)])
 RIGHT = tilt([(54.0, 59.5), (63.5, 59.5), (70.0, 53.5), (72.0, 47.5)])
-ARMS = (LEFT, MID, RIGHT)
+# 4.0, Many windows: a fourth, smaller tuft low on the left, hanging off the trunk below the long arm, so the tree
+# has four windows open instead of three. Same hand, same ground.
+LOW = tilt([(44.6, 77.2), (40.0, 78.8), (35.0, 78.0), (30.0, 74.0)])
+ARMS = (LEFT, MID, RIGHT, LOW)
 CROTCH_L, CROTCH_R = tilt([(50.0, 59.0)])[0], tilt([(55.0, 57.0)])[0]
 # Each tuft its own size: (arm, knot radius, loops, blades, blade reach). The bold copy takes SMALL_R.
-TUFTS = ((LEFT, 7.2, 5, 3, 3.6), (MID, 9.4, 6, 4, 3.4), (RIGHT, 8.0, 5, 3, 3.2))
-SMALL_R = (6.6, 8.2, 7.0)
+TUFTS = ((LEFT, 7.2, 5, 3, 3.6), (MID, 9.4, 6, 4, 3.4), (RIGHT, 8.0, 5, 3, 3.2), (LOW, 5.4, 4, 3, 2.6))
+SMALL_R = (6.6, 8.2, 7.0, 4.8)
 # The bold copy's ground, flat so it lands on one pixel row at 16 px (bold_box puts it there).
 SMALL_GROUND_Y = 87.8
 
@@ -139,7 +142,9 @@ def big():
     tl, tr = offset(TRUNK, 5.4, 3.6, -1), offset(TRUNK, 5.4, 3.6, +1)
     tl = [(tl[0][0] - 0.3, tl[0][1] + 3.6)] + tl
     tr = [(tr[0][0] + 0.4, tr[0][1] + 3.0)] + tr
-    le, me, re = ((offset(a, 3.2, 2.4, -1), offset(a, 3.2, 2.4, +1)) for a in ARMS)
+    le, me, re = ((offset(a, 3.2, 2.4, -1), offset(a, 3.2, 2.4, +1)) for a in (LEFT, MID, RIGHT))
+    own = random.Random(40)   # its own pen, so the first three tufts stay exactly as 3.0 drew them
+    lo = shaky(own, offset(LOW, 2.6, 1.8, -1), 0.3), shaky(own, offset(LOW, 2.6, 1.8, +1), 0.3)
     outer_l = shaky(rnd, tl[:-1] + le[0][1:], 0.4)
     outer_r = shaky(rnd, list(reversed(re[1][1:])) + list(reversed(tr[:-1])), 0.4)
     crotch_l = shaky(rnd, list(reversed(le[1][1:])) + [CROTCH_L] + me[0][1:], 0.4)
@@ -151,16 +156,17 @@ def big():
     knots, blades = [], []
     for arm, r, loops, count, reach in TUFTS:
         cx, cy, up = tip(arm, 4.5)
+        if arm is LOW: rnd = own
         knots.append(scribble(rnd, cx, cy, r, loops, 0.6, (0.8, 0.66)))
         blades += flicks(rnd, cx, cy, up, r, count, reach)
-    return [(2.6, accent, [ground]), (1.8, None, [outer_l, outer_r, crotch_l, crotch_r]), (2.7, None, press),
+    return [(2.6, accent, [ground]), (1.8, None, [outer_l, outer_r, crotch_l, crotch_r, lo[0], lo[1]]), (2.7, None, press),
             (3.5, None, press2), (1.6, None, knots), (2.0, None, blades)]
 
 
 def small():
     """The tree drawn down its middle for 16 to 48 px: one heavy line per limb, a tight knot per tuft, and the ground."""
     rnd = random.Random(1932)
-    lines = [TRUNK] + [[TRUNK[-1]] + a[1:] for a in ARMS]
+    lines = [TRUNK] + [[TRUNK[-1]] + a[1:] for a in ARMS[:3]] + [[TRUNK[0], (TRUNK[0][0] - 1.5, TRUNK[0][1] - 5.5)] + LOW[1:]]   # the low arm leaves the trunk near its foot
     knots = []
     for arm, r in zip(ARMS, SMALL_R):
         cx, cy, _ = tip(arm, 3.0)

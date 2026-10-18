@@ -205,7 +205,8 @@ extern char _heap_start[];
 static unsigned long l1[512] __attribute__((aligned(4096)));   /* one table of 1 GiB blocks, enough for a flat map */
 static unsigned long l2[512] __attribute__((aligned(4096)));   /* M3a: the RAM GiB split into 2 MiB blocks... */
 #define ARENA_BLOCKS 8   /* M3e: the EL0 arena is 16 MiB, eight of those blocks... */
-static unsigned long l3[ARENA_BLOCKS * 512] __attribute__((aligned(4096)));   /* ...each one a table of 4 KiB pages, back to back, so l3[page] works across all eight */
+#define APP_SLOTS 4      /* 4.0: apps that can run at once, one 16 MiB arena each, back to back above USER_BASE */
+static unsigned long l3[APP_SLOTS * ARENA_BLOCKS * 512] __attribute__((aligned(4096)));   /* ...each one a table of 4 KiB pages, back to back, so l3[page] works across all eight */
 #ifdef PI_BUILD
 #define RAM_GIB 0
 #else
@@ -244,6 +245,7 @@ void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects; 0
 /* Identity map the first 4 GiB in four 1 GiB blocks: RAM is normal write-back memory, the peripherals are device
    memory (strongly ordered, no caching, no unaligned access). QEMU's virt keeps its devices in the first GiB and RAM in
    the second; a Pi 4 has RAM from 0 and its peripherals in the last GiB. */
+static void apps_init(void);
 static void mmu_init(void) {
     const unsigned long NORMAL = 0x1UL | (1UL << 2) /* attr 1 */ | (3UL << 8) /* inner shareable */ | (1UL << 10) /* access flag */ | (1UL << 54) /* EL0 may not execute it: only the user code page can */;
     const unsigned long DEVICE = 0x1UL | (0UL << 2) /* attr 0 */ | (1UL << 10) | (1UL << 53) | (1UL << 54);   /* never executable */
@@ -266,8 +268,8 @@ static void mmu_init(void) {
 #endif
     /* M3a: the RAM GiB becomes a table of 2 MiB blocks (all kernel-only, as before), and the arena block a table of 4 KiB pages */
     for (int i = 0; i < 512; i++) l2[i] = (((unsigned long)RAM_GIB << 30) + ((unsigned long)i << 21)) | NORMAL;
-    for (int i = 0; i < ARENA_BLOCKS * 512; i++) l3[i] = 0;
-    for (int k = 0; k < ARENA_BLOCKS; k++) l2[((USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21) + k] = (unsigned long)(l3 + k * 512) | 3;
+    for (int i = 0; i < APP_SLOTS * ARENA_BLOCKS * 512; i++) l3[i] = 0;
+    for (int k = 0; k < APP_SLOTS * ARENA_BLOCKS; k++) l2[((USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21) + k] = (unsigned long)(l3 + k * 512) | 3;
     l1[RAM_GIB] = (unsigned long)l2 | 3;
     unsigned long mair = (0xFFUL << 8) | 0x00UL;                       /* attr 1 normal write-back, attr 0 device-nGnRnE */
     unsigned long tcr = 25UL | (1UL << 8) | (1UL << 10) | (3UL << 12) | (1UL << 23) | (2UL << 32);   /* 39-bit VA, 4 KiB pages, write-back, TTBR1 off, 40-bit PA */
@@ -283,6 +285,7 @@ void heap_release(unsigned long m) { heap_next = m; }
 static void m1b_selftest(void) {
     heap_next = (unsigned long)_heap_start;
     mmu_init();
+    apps_init();
     uart_puts("M1b mmu on\n");
     unsigned long *a = kmalloc(4096), *b = kmalloc(100), *c = kmalloc(8);
     if (!a || !b || !c || (unsigned long)a % 16 || (unsigned long)b % 16 || b == a || c <= b) { uart_puts("M1b heap FAIL\n"); return; }
@@ -333,20 +336,81 @@ static unsigned long cal_utc(void);   /* the clock the Calendar tile reads, furt
 /* M3c part 2, the scheduler's state: one app at a time, since the arena has one app window. app_cur is the app it holds,
    running or parked; app_frame and app_sp are where it parked (every register, its pc and its stack). Its window buffer is
    app_wbytes at UP_WIN, 0 with no window, and app_q is the ring of events the desktop queued for it. */
-static const struct user_app *app_cur;
-static struct frame app_frame;
-static unsigned long app_fp[66];                 /* M3e: its q0-q31, FPCR and FPSR where it parked (vectors.S's save_fp layout) */
-static unsigned long app_sp, app_last, app_wbytes;
-static int app_hi;   /* 3.9.0: the window buffer is device size (scale 2, the app asked for it): twice the width and height, pitch twice as long */
-static unsigned long app_brk;                    /* M3e: the heap top JT_SYS_BRK set, 0 while it has none */
-static unsigned long app_close_at;               /* the red dot was clicked: past this count, an app that did not close itself is ended */
+#define APP_EVQ 16
+struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app_* names below are macros onto `ap`, the slot being run or shown */
+    const struct user_app *cur;
+    struct frame frame;
+    unsigned long fp[66];                 /* M3e: its q0-q31, FPCR and FPSR where it parked (vectors.S's save_fp layout) */
+    unsigned long sp, last, wbytes;
+    int hi;                               /* 3.9.0: the window buffer is device size (scale 2, the app asked for it) */
+    unsigned long brk;                    /* M3e: the heap top JT_SYS_BRK set, 0 while it has none */
+    unsigned long close_at;               /* the red dot was clicked: past this count, an app that did not close itself is ended */
+    int running, parked, kick;            /* inside resume_user now; it yielded rather than ended; run it on the next pass */
+    unsigned runs;                        /* times the desktop's loop resumed it, said when it ends */
+    struct { unsigned kind; int a, b; } q[APP_EVQ];
+    unsigned qh, qt;
+    unsigned long len, code, img;         /* the loaded app: bytes of window mapped, how many of those are code, and the image's own length */
+    int lx, ly, lw, lh;                   /* the frame on the logical grid, set in fb_init */
+    unsigned cw, ch;                      /* the content area, what the frame holds */
+    unsigned bw, bh;                      /* the app's buffer, pixel for pixel: the content's size as of its last JT_SYS_WINDOW_OPEN */
+    int rs_log;                           /* a resized buffer is waiting for the app's first frame at the new size */
+    unsigned presents;                    /* frames it has handed to JT_SYS_WINDOW_POLL, for the windows gate */
+    int shown;                            /* the app has presented a frame since its window opened */
+    unsigned long base;                   /* its arena: USER_BASE + slot * ARENA_SIZE (apps are position independent, so each loads where its arena is) */
+    unsigned l3off, slot;                 /* its first l3 entry; its index in apps */
+};
+static struct app apps[APP_SLOTS];
+static struct app *ap = &apps[0];         /* the app whose state the code below means: the one resume_user is in, else the one in front */
+#define app_cur (ap->cur)
+#define app_frame (ap->frame)
+#define app_fp (ap->fp)
+#define app_sp (ap->sp)
+#define app_last (ap->last)
+#define app_wbytes (ap->wbytes)
+#define app_hi (ap->hi)
+#define app_brk (ap->brk)
+#define app_close_at (ap->close_at)
+#define app_running (ap->running)
+#define app_parked (ap->parked)
+#define app_kick (ap->kick)
+#define app_runs (ap->runs)
+#define app_q (ap->q)
+#define app_qh (ap->qh)
+#define app_qt (ap->qt)
+#define app_len (ap->len)
+#define app_code (ap->code)
+#define app_img (ap->img)
+#define app_lx (ap->lx)
+#define app_ly (ap->ly)
+#define app_lw (ap->lw)
+#define app_lh (ap->lh)
+#define app_cw (ap->cw)
+#define app_ch (ap->ch)
+#define app_bw (ap->bw)
+#define app_bh (ap->bh)
+#define app_rs_log (ap->rs_log)
+#define app_shown (ap->shown)
+#define UB (ap->base)
 static unsigned long cnt_now(void) { unsigned long c; __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); return c; }
 static unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f)); return f ? f : 54000000; }
-static int app_running, app_parked, app_kick;   /* inside resume_user now; it yielded rather than ended; run it on the next pass */
-static unsigned app_runs;                        /* times the desktop's loop resumed it, said when it ends */
-#define APP_EVQ 16
-static struct { unsigned kind; int a, b; } app_q[APP_EVQ];
-static unsigned app_qh, app_qt;
+static void apps_init(void) { for (unsigned i = 0; i < APP_SLOTS; i++) { apps[i].base = USER_BASE + i * ARENA_SIZE; apps[i].l3off = i * ARENA_BLOCKS * 512; apps[i].slot = i; } }
+/* The app windows' stacking: app_z lists the slots that have a window, front first. app_top is the front one (-1 with none); outside
+   app_tick, `ap` always points at it, so the desktop's clicks, keys and drags land on the window in front. */
+static int app_top = -1;
+static unsigned char app_z[APP_SLOTS];
+static unsigned app_zn;
+static void app_z_drop(unsigned sl) {
+    unsigned o = 0;
+    for (unsigned i = 0; i < app_zn; i++) if (app_z[i] != sl) app_z[o++] = app_z[i];
+    app_zn = o;
+}
+static void app_z_front(unsigned sl) {
+    app_z_drop(sl);
+    for (unsigned i = app_zn; i > 0; i--) app_z[i] = app_z[i - 1];
+    app_z[0] = (unsigned char)sl; app_zn++;
+    app_top = (int)sl; ap = &apps[sl];
+}
+static int apps_live(void) { for (unsigned i = 0; i < APP_SLOTS; i++) if (apps[i].cur) return 1; return 0; }
 static long app_window_open(unsigned long info, unsigned long flags);                    /* the window half, with the other windows further down */
 static long app_window_poll(unsigned long ev, unsigned long flags);
 static void app_window_close(void);
@@ -357,17 +421,18 @@ static int span(unsigned long a, unsigned long n, unsigned long base, unsigned l
 }
 long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned long a2);   /* ufile.c, M3d: open, read, write (fd 3 and up), close, lseek, readdir, readfile, mkdir, unlink */
 void ufile_release(void);                 /* ...every descriptor the app left open, closed and written back */
+extern unsigned ufile_owner;              /* 4.0: whose descriptors the file calls mean: 0 the boot self-test, else app slot + 1 */
 void ufile_mkdirs(const char *path);      /* ...folders inside JT/ an app expects */
-static unsigned long heap_len(void) { return app_brk ? app_brk - (USER_BASE + UP_HEAP) : 0; }   /* M3e: the heap below its top */
+static unsigned long heap_len(void) { return app_brk ? app_brk - (UB + UP_HEAP) : 0; }   /* M3e: the heap below its top */
 int user_in_range(unsigned long a, unsigned long n) {   /* memory the program may have the kernel read: the M3a code and stack pages, and the loaded app's whole window, stack and heap */
-    return span(a, n, USER_BASE + UP_CODE, 4096) || span(a, n, USER_BASE + UP_STACK, 4096)
-        || span(a, n, USER_BASE + UP_APP, app_len) || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0)
-        || span(a, n, USER_BASE + UP_WIN, app_wbytes) || span(a, n, USER_BASE + UP_HEAP, heap_len());
+    return span(a, n, UB + UP_CODE, 4096) || span(a, n, UB + UP_STACK, 4096)
+        || span(a, n, UB + UP_APP, app_len) || span(a, n, UB + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0)
+        || span(a, n, UB + UP_WIN, app_wbytes) || span(a, n, UB + UP_HEAP, heap_len());
 }
 int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may store into for the program: data, zeroed pool, stacks and heap, never code (read-only at EL1 too: a store there would be a kernel fault) */
-    return span(a, n, USER_BASE + UP_STACK, 4096) || span(a, n, USER_BASE + UP_APP + app_code, app_len - app_code)
-        || span(a, n, USER_BASE + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0) || span(a, n, USER_BASE + UP_WIN, app_wbytes)
-        || span(a, n, USER_BASE + UP_HEAP, heap_len());
+    return span(a, n, UB + UP_STACK, 4096) || span(a, n, UB + UP_APP + app_code, app_len - app_code)
+        || span(a, n, UB + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0) || span(a, n, UB + UP_WIN, app_wbytes)
+        || span(a, n, UB + UP_HEAP, heap_len());
 }
 /* M3e: JT_SYS_BRK with i386's semantics (docs/ARCHITECTURE.md, kernel/brk.c): 0 reads the top, a fresh app's is the heap's
    base; any other value sets it, to the byte. Pages between the old and new top (rounded up to whole pages) are mapped EL0
@@ -376,12 +441,12 @@ int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may
    so there is nothing to run out of below that cap. app_unmap drops the whole heap when the app ends. */
 static long app_brk_set(unsigned long want) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
-    unsigned long base = USER_BASE + UP_HEAP, top = app_brk ? app_brk : base;
+    unsigned long base = UB + UP_HEAP, top = app_brk ? app_brk : base;
     if (!want) return (long)top;
-    if (want < base || want > USER_BASE + UP_WIN) return -22;   /* the heap stops where the window buffer starts */
+    if (want < base || want > UB + UP_WIN) return -22;   /* the heap stops where the window buffer starts */
     unsigned long have = (top + 4095) & ~4095UL, need = (want + 4095) & ~4095UL;
-    for (unsigned long v = have; v < need; v += 4096) l3[(v - USER_BASE) >> 12] = v | PAGE | AP_EL0_RW | PXN | UXN;
-    for (unsigned long v = need; v < have; v += 4096) l3[(v - USER_BASE) >> 12] = 0;
+    for (unsigned long v = have; v < need; v += 4096) l3[ap->l3off + ((v - UB) >> 12)] = v | PAGE | AP_EL0_RW | PXN | UXN;
+    for (unsigned long v = need; v < have; v += 4096) l3[ap->l3off + ((v - UB) >> 12)] = 0;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
     for (unsigned long v = have; v < need; v += 8) *(unsigned long *)v = 0;
     app_brk = want;
@@ -508,18 +573,18 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
 static void user_init(const char *img, unsigned long len) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);   /* valid page, normal memory, inner shareable, access flag */
     const unsigned long AP_EL0_RW = 1UL << 6, AP_RO = 3UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
-    l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable for now, so the kernel can copy the program in */
-    l3[UP_STACK >> 12] = (USER_BASE + UP_STACK) | PAGE | AP_EL0_RW | PXN | UXN;
-    l3[UP_KERN >> 12] = (USER_BASE + UP_KERN) | PAGE | PXN | UXN;               /* AP=00: EL1 only */
+    l3[UP_CODE >> 12] = (UB + UP_CODE) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable for now, so the kernel can copy the program in */
+    l3[UP_STACK >> 12] = (UB + UP_STACK) | PAGE | AP_EL0_RW | PXN | UXN;
+    l3[UP_KERN >> 12] = (UB + UP_KERN) | PAGE | PXN | UXN;               /* AP=00: EL1 only */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
-    char *code = (char *)(USER_BASE + UP_CODE);
+    char *code = (char *)(UB + UP_CODE);
     for (unsigned long i = 0; i < len; i++) code[i] = img[i];
     const char *secret = "KERNEL-ONLY-SECRET";
-    for (int i = 0; secret[i]; i++) ((char *)(USER_BASE + UP_KERN))[i] = secret[i];
+    for (int i = 0; secret[i]; i++) ((char *)(UB + UP_KERN))[i] = secret[i];
     for (unsigned long a = (unsigned long)code & ~63UL; a < (unsigned long)code + len; a += 64)
         __asm__ volatile ("dc cvau, %0" :: "r"(a) : "memory");
     __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
-    l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_RO | PXN;             /* now read-only for everyone, executable by EL0 only */
+    l3[UP_CODE >> 12] = (UB + UP_CODE) | PAGE | AP_RO | PXN;             /* now read-only for everyone, executable by EL0 only */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
 }
 
@@ -568,7 +633,7 @@ static const struct user_app *user_find(const char *name, unsigned n) {
 }
 static void app_unmap(void) {   /* its pages, its stack, its window buffer and (M3e) its heap */
     app_len = app_code = app_img = app_wbytes = app_brk = 0; app_hi = 0;
-    for (unsigned long i = UP_APP >> 12; i < ARENA_BLOCKS * 512; i++) l3[i] = 0;
+    for (unsigned long i = UP_APP >> 12; i < ARENA_BLOCKS * 512; i++) l3[ap->l3off + i] = 0;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
 }
 static unsigned long user_load(const struct user_app *a) {
@@ -581,13 +646,13 @@ static unsigned long user_load(const struct user_app *a) {
         uart_puts("M3c load FAIL "); uart_puts(a->name); uart_puts(": not a user image\n"); return 0;
     }
     unsigned long pages = (len + 4095) / 4096 + APP_ZERO_PAGES;
-    char *base = (char *)(USER_BASE + UP_APP);
+    char *base = (char *)(UB + UP_APP);
     app_unmap();
-    for (unsigned long i = 0; i < pages; i++) l3[(UP_APP >> 12) + i] = (USER_BASE + UP_APP + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable while the kernel fills it in */
-    for (unsigned long i = 0; i < APP_STACK_PAGES; i++) l3[(UP_ASTACK >> 12) + i] = (USER_BASE + UP_ASTACK + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
+    for (unsigned long i = 0; i < pages; i++) l3[ap->l3off + (UP_APP >> 12) + i] = (UB + UP_APP + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable while the kernel fills it in */
+    for (unsigned long i = 0; i < APP_STACK_PAGES; i++) l3[ap->l3off + (UP_ASTACK >> 12) + i] = (UB + UP_ASTACK + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
     for (unsigned long i = 0; i < pages * 512; i++) ((unsigned long *)base)[i] = 0;   /* a stale program's bytes never reach this one */
-    for (unsigned long i = 0; i < APP_STACK_PAGES * 512; i++) ((unsigned long *)(USER_BASE + UP_ASTACK))[i] = 0;
+    for (unsigned long i = 0; i < APP_STACK_PAGES * 512; i++) ((unsigned long *)(UB + UP_ASTACK))[i] = 0;
     for (unsigned long i = 0; i < len; i++) base[i] = a->start[i];
     for (unsigned long r = rela_s; r < rela_e; r += 24) {
         unsigned long off = rd64(base + r), info = rd64(base + r + 8), add = rd64(base + r + 16);
@@ -598,7 +663,7 @@ static unsigned long user_load(const struct user_app *a) {
     }
     for (unsigned long p = (unsigned long)base & ~63UL; p < (unsigned long)base + code_end; p += 64) __asm__ volatile ("dc cvau, %0" :: "r"(p) : "memory");
     __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
-    for (unsigned long i = 0; i < code_end / 4096; i++) l3[(UP_APP >> 12) + i] = (USER_BASE + UP_APP + i * 4096) | PAGE | AP_RO | PXN;   /* code: read-only, EL0 may execute */
+    for (unsigned long i = 0; i < code_end / 4096; i++) l3[ap->l3off + (UP_APP >> 12) + i] = (UB + UP_APP + i * 4096) | PAGE | AP_RO | PXN;   /* code: read-only, EL0 may execute */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
     app_len = pages * 4096; app_code = code_end; app_img = len;
     uart_puts("M3c load "); uart_puts(a->name); uart_puts(": "); uart_dec((unsigned)len); uart_puts(" bytes, ");
@@ -613,8 +678,8 @@ static unsigned long user_load(const struct user_app *a) {
 static int user_run(const struct user_app *a) {
     unsigned long entry = user_load(a);
     if (!entry) return -1;
-    user_pid++; user_faulted = 0;
-    user_status = enter_user(entry, USER_BASE + UP_ASTACK + APP_STACK_PAGES * 4096UL, 0, 0);
+    user_pid++; user_faulted = 0; ufile_owner = 0;
+    user_status = enter_user(entry, UB + UP_ASTACK + APP_STACK_PAGES * 4096UL, 0, 0);
     ufile_release();   /* M3d: what it left open is closed for it, however it ended */
     return 0;
 }
@@ -627,32 +692,47 @@ static int user_run(const struct user_app *a) {
    with a window does, leaves the desktop responsive; only an app run this way gets a window. A parked app runs again on the
    next pass that has an event for it, and every 10 ms (the generic counter, never `ticks`) in case it is animating. An app
    that loops without ever making a syscall still holds the core: preempting one needs IRQs unmasked at EL0, not done yet. */
+static void app_kill_one(const char *how);
 static void app_end(unsigned long status, const char *how) {   /* an exit, a fault or a kill: the window goes, then the pages */
     const struct user_app *a = app_cur;
     app_cur = 0; app_parked = app_kick = 0; app_close_at = 0; user_status = status;
+    ufile_owner = ap->slot + 1;
     ufile_release();   /* M3d: its open files are written back and closed, after an exit, a fault or its red dot alike */
     audio_app_stop();  /* M3e: and its sound stops (what is already in the PWM ring plays out) */
-    app_window_close();
+    struct app *me = ap;
+    app_window_close();   /* leaves `ap` on the window now in front... */
+    ap = me;              /* ...so put it back: the pages unmapped and the line printed below are this app's, not the front one's */
     app_unmap();
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
     uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times\n");
 }
-static void app_kill(const char *how) { if (app_cur && !app_running) app_end((unsigned long)-1, how); }
-static void app_tick(void) {
-    if (!app_cur || app_running) return;
-    unsigned long now = cnt_now();
-    if (app_close_at && now > app_close_at) { app_kill("closed by its red dot"); return; }   /* it never read the close click */
-    if (!app_kick && now - app_last < cnt_hz() / 100) return;
-    app_kick = 0; app_last = now; app_runs++;
-    app_parked = 0; user_faulted = 0; app_running = 1;
-    APP_FP_CLOBBER();
-    unsigned long st = resume_user(&app_frame, app_sp, app_fp);
-    app_running = 0;
-    if (!app_parked) app_end(st, user_faulted ? "stopped by a fault" : 0);
+static void app_kill_one(const char *how) { if (app_cur && !app_running) app_end((unsigned long)-1, how); }
+static void app_kill(const char *how) {   /* every app ends: a kernel-drawn window is opening where the apps' windows were */
+    for (unsigned i = 0; i < APP_SLOTS; i++) { ap = &apps[i]; if (app_cur && !app_running) app_end((unsigned long)-1, how); }
+    ap = &apps[app_top >= 0 ? app_top : 0];
 }
-static int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pass), -2 it would not load, -3 one is already running */
-    if (app_cur) return -3;
+static void app_tick(void) {   /* every app with something to do gets its turn: it runs until it yields, exits or faults, and a fault ends that app alone */
+    for (unsigned i = 0; i < APP_SLOTS; i++) {
+        ap = &apps[i];
+        if (!app_cur || app_running) continue;
+        unsigned long now = cnt_now();
+        if (app_close_at && now > app_close_at) { app_kill_one("closed by its red dot"); continue; }   /* it never read the close click */
+        if (!app_kick && now - app_last < cnt_hz() / 100) continue;
+        app_kick = 0; app_last = now; app_runs++;
+        app_parked = 0; user_faulted = 0; app_running = 1; ufile_owner = ap->slot + 1;
+        APP_FP_CLOBBER();
+        unsigned long st = resume_user(&app_frame, app_sp, app_fp);
+        app_running = 0;
+        if (!app_parked) app_end(st, user_faulted ? "stopped by a fault" : 0);
+    }
+    ap = &apps[app_top >= 0 ? app_top : 0];
+}
+static int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pass), -2 it would not load, -3 every slot is taken */
+    unsigned sl = 0;
+    while (sl < APP_SLOTS && apps[sl].cur) sl++;
+    if (sl == APP_SLOTS) return -3;
+    ap = &apps[sl];
     unsigned long entry = user_load(a);
     if (!entry) return -2;
     if (a->name[0] == 'n' && a->name[1] == 'o' && a->name[2] == 't' && a->name[3] == 'e' && a->name[4] == 's' && !a->name[5])
@@ -663,7 +743,7 @@ static int app_start(const struct user_app *a) {   /* 0 started (it runs on the 
         ufile_mkdirs("BOOKS");         /* 2.66: Books' library, JT/BOOKS/, the books the card ships with and the ones dropped there */
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
-    app_frame.elr = entry; app_sp = USER_BASE + UP_ASTACK + APP_STACK_PAGES * 4096UL;
+    app_frame.elr = entry; app_sp = UB + UP_ASTACK + APP_STACK_PAGES * 4096UL;
     app_cur = a; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
     uart_puts("M3c app "); uart_puts(a->name); uart_puts(" starts\n");
     return 0;
@@ -675,10 +755,11 @@ int userrun(const char *name, unsigned n, unsigned long *status, int *faulted) {
     if (!a) return -1;
     int r = app_start(a);
     if (r) return r;
+    struct app *me = ap;
     user_loud = 1;
     app_tick();
     user_loud = 0;
-    if (app_cur == a) return app_wbytes ? 2 : 1;
+    if (me->cur == a) return me->wbytes ? 2 : 1;
     *status = user_status; *faulted = user_faulted;
     return 0;
 }
@@ -687,11 +768,11 @@ int userrun(const char *name, unsigned n, unsigned long *status, int *faulted) {
    in a block at the bottom of its own stack page and checks them (see user.S). It ends on a store to the code page, which must
    fault; the kernel survives and says so. */
 static void user_probe(int pass) {
-    unsigned long base = USER_BASE + UP_APP, *args = (unsigned long *)(USER_BASE + UP_STACK);
+    unsigned long base = UB + UP_APP, *args = (unsigned long *)(UB + UP_STACK);
     args[0] = base + ((app_img + 15) & ~15UL); args[1] = base + app_code; args[2] = base; args[3] = UAPP_MAX;
     uart_puts("M3c probe "); uart_dec((unsigned)pass); uart_puts(" starts\n");
     user_faulted = 0;
-    enter_user(USER_BASE + UP_CODE + (unsigned long)(user_entry_d - user_start), USER_BASE + UP_STACK + 4096, (unsigned long)args, 0);
+    enter_user(UB + UP_CODE + (unsigned long)(user_entry_d - user_start), UB + UP_STACK + 4096, (unsigned long)args, 0);
     uart_puts(user_faulted ? "M3c probe survived the code write\n" : "M3c probe FAIL: the code write did not fault\n");
 }
 /* Branch to an address inside the loaded app that is not code: user.S's entry C does the `br`, which must be an instruction
@@ -699,13 +780,13 @@ static void user_probe(int pass) {
 static void user_exec_probe(const char *what, unsigned long target) {
     uart_puts("M3c exec "); uart_puts(what); uart_putc(' '); uart_hex(target); uart_putc('\n');
     user_faulted = 0;
-    enter_user(USER_BASE + UP_CODE + (unsigned long)(user_entry_c - user_start), USER_BASE + UP_STACK + 4096, USER_BASE + UP_KERN, target);
+    enter_user(UB + UP_CODE + (unsigned long)(user_entry_c - user_start), UB + UP_STACK + 4096, UB + UP_KERN, target);
     uart_puts(user_faulted ? "M3c exec refused\n" : "M3c exec FAIL: it ran\n");
 }
 #endif
 static void user_demo(void) {
     user_init(user_start, (unsigned long)(user_end - user_start));
-    unsigned long code = USER_BASE + UP_CODE, sp = USER_BASE + UP_STACK + 4096, kpage = USER_BASE + UP_KERN;
+    unsigned long code = UB + UP_CODE, sp = UB + UP_STACK + 4096, kpage = UB + UP_KERN;
     uart_puts("M3 EL0 task starts\n");
     enter_user(code + (unsigned long)(user_entry_a - user_start), sp, kpage, 0);
     uart_puts("M3 kernel survived the fault\n");
@@ -740,10 +821,10 @@ static void user_demo(void) {
     if (cal) {
         user_probe(1);
         if (user_load(cal)) user_probe(2); else uart_puts("M3c probe FAIL: calendar did not load again\n");
-        unsigned long base = USER_BASE + UP_APP;   /* never executable: a data page, the first whole page of the zeroed pool, the stack */
+        unsigned long base = UB + UP_APP;   /* never executable: a data page, the first whole page of the zeroed pool, the stack */
         user_exec_probe("data", base + app_code);
         user_exec_probe("pool", base + (app_img + 4095) / 4096 * 4096);
-        user_exec_probe("stack", USER_BASE + UP_ASTACK);
+        user_exec_probe("stack", UB + UP_ASTACK);
     }
 #endif
 }
@@ -1704,18 +1785,13 @@ static void calc_did(int ran) {   /* after a key: redraw, and log a finished sum
    is i386's close, a click above the content that the app answers by exiting, and an app that ignores it is ended a quarter
    second later. Closing puts back the wallpaper saved at boot and redraws the Console or
    the Terminal whole. Opening one closes the Calculator, and opening the Calculator ends the app. ---- */
-static int app_lx, app_ly, app_lw, app_lh;   /* the frame on the logical grid, set in fb_init */
-static unsigned app_cw, app_ch;              /* the content area, what the frame holds */
-static unsigned app_bw, app_bh;              /* the app's buffer, pixel for pixel: the content's size as of its last JT_SYS_WINDOW_OPEN (a resize drag changes app_cw first, the app answers with a second open) */
-static int app_rs_log;                       /* a resized buffer is waiting for the app's first frame at the new size */
-static int app_shown;                        /* the app has presented a frame since its window opened */
 static void spot_close(void);
 static unsigned mix31(unsigned a, unsigned b) {   /* three parts a, one part b, in each colour lane */
     return ((((a & 0xFF00FFu) * 3 + (b & 0xFF00FFu)) >> 2) & 0xFF00FFu) | ((((a & 0x00FF00u) * 3 + (b & 0x00FF00u)) >> 2) & 0x00FF00u);
 }
 static void app_blit(void) {
     int s = (int)window_scale(), x0 = (app_lx + 8) * s, y0 = (app_ly + 32) * s;
-    const unsigned *src = (const unsigned *)(USER_BASE + UP_WIN);
+    const unsigned *src = (const unsigned *)(UB + UP_WIN);
     unsigned bw = app_bw, cw_ = app_bw < app_cw ? app_bw : app_cw, ch_ = app_bh < app_ch ? app_bh : app_ch;   /* while a resize is in flight the buffer is the old size: its pixels go where they fit */
     if (app_hi) {   /* 3.9.0: the app drew at device size (hires.h and JT_SYS_TEXT2): one buffer pixel per screen pixel, nothing to smooth */
         unsigned hw = bw * 2;
@@ -1755,11 +1831,17 @@ static void app_paint(void) {   /* the frame, then the last frame the app presen
     fb_flush(app_lx * s, app_ly * s, app_lw * s, app_lh * s);
     cur_show();
 }
-static void app_raise(void) {   /* in front of the Console or the Terminal, with the keys */
+static void app_repaint_all(void) {   /* every app window, back to front: what a moved, raised or closed window uncovered comes back whole */
+    struct app *keep = ap;
+    for (int z = (int)app_zn - 1; z >= 0; z--) { ap = &apps[app_z[z]]; app_paint(); }
+    ap = keep;
+}
+static void app_raise(void) {   /* this app's window in front of the Console, the Terminal and the other apps, with the keys */
     if (!app_wbytes) return;
-    int was = app_front;
+    int was = app_front && app_top == (int)ap->slot;
     app_front = 1;
-    app_paint();
+    app_z_front(ap->slot);
+    if (was) app_paint(); else app_repaint_all();
     if (!was) { con_quiet = 1; uart_puts("focus app\n"); }
 }
 static void app_push(unsigned kind, int a, int b) {   /* one event for the app; a full ring drops the newest, as on i386 */
@@ -1779,12 +1861,12 @@ static long app_window_open(unsigned long info, unsigned long flags) {
         int hi = ((flags & 1) || (app_wbytes && app_hi)) && window_scale() == 2;   /* hires.h's ask: only at scale 2, where there are device pixels to give */
         unsigned long bytes = ((unsigned long)app_cw * app_ch * (hi ? 16 : 4) + 4095) & ~4095UL;
         if (bytes > UWIN_MAX) return -12;
-        for (unsigned long i = 0; i < bytes / 4096; i++) l3[(UP_WIN >> 12) + i] = (USER_BASE + UP_WIN + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
+        for (unsigned long i = 0; i < bytes / 4096; i++) l3[ap->l3off + (UP_WIN >> 12) + i] = (UB + UP_WIN + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
         __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
-        for (unsigned long i = 0; i < bytes / 8; i++) ((unsigned long *)(USER_BASE + UP_WIN))[i] = 0;
+        for (unsigned long i = 0; i < bytes / 8; i++) ((unsigned long *)(UB + UP_WIN))[i] = 0;
         int first = !app_wbytes;
         app_wbytes = bytes; app_shown = 0; app_bw = app_cw; app_bh = app_ch; app_hi = hi;
-        if (first) { spot_close(); calc_close(); browser_close(); settings_close(); app_front = 1; app_rs_log = 0; }
+        if (first) { spot_close(); calc_close(); browser_close(); settings_close(); app_front = 1; app_z_front(ap->slot); app_rs_log = 0; }
         else app_rs_log = 1;
         if (app_front) app_paint();
         con_quiet = !first; uart_puts("M3c window "); uart_puts(app_cur->name); uart_putc(' '); uart_dec(app_cw); uart_putc('x'); uart_dec(app_ch);
@@ -1793,7 +1875,7 @@ static long app_window_open(unsigned long info, unsigned long flags) {
         uart_putc('\n');
     }
     st32(info, app_bw); st32(info + 4, app_bh); st32(info + 8, app_bw * (app_hi ? 8 : 4));   /* width and height stay logical; the pitch (bytes) says the buffer is twice as wide */
-    st32(info + 12, 0); st32(info + 16, (unsigned)(USER_BASE + UP_WIN)); st32(info + 20, (unsigned)((USER_BASE + UP_WIN) >> 32));
+    st32(info + 12, 0); st32(info + 16, (unsigned)(UB + UP_WIN)); st32(info + 20, (unsigned)((UB + UP_WIN) >> 32));
     return 0;
 }
 /* JT_SYS_TEXT2 (3.9.0): one run of Tree Sans into the device-size window buffer, for an app that opened it hi-res. The
@@ -1808,17 +1890,17 @@ static long app_text(unsigned long req) {
     if (!user_in_range(req, sizeof(struct jt_text2))) return -14;
     const struct jt_text2 *t = (const struct jt_text2 *)req;
     int x = t->x, y = t->y, face = t->face, pct = t->pct, n = t->len;
-    unsigned rgb = t->rgb; unsigned long sp = t->s, ap = t->adv;
+    unsigned rgb = t->rgb; unsigned long sp = t->s, adv = t->adv;
     if (face < 0 || face > 3 || pct < 25 || pct > 400 || n < 1 || n > 255) return -22;
-    if (!user_in_range(sp, (unsigned long)n) || !user_in_range(ap, (unsigned long)n)) return -14;
+    if (!user_in_range(sp, (unsigned long)n) || !user_in_range(adv, (unsigned long)n)) return -14;
     static const unsigned char which[4] = {2, 1, 2, 0};   /* text.c's faces: 0 mono, 1 sans bold, 2 sans */
     static const int px10[4] = {140, 140, 560, 135};
     int k = (int)window_scale(), bw = (int)app_cw * k, bh = (int)app_ch * k, px = px10[face] * k * pct / 100;
-    unsigned *buf = (unsigned *)(USER_BASE + UP_WIN);
+    unsigned *buf = (unsigned *)(UB + UP_WIN);
     for (int i = 0; i < n; i++) {
         char one[2] = { ((const char *)sp)[i], 0 };
         text_draw(which[face], one, x, y, px, rgb, buf, (unsigned)bw, bw, bh);
-        x += ((const unsigned char *)ap)[i];
+        x += ((const unsigned char *)adv)[i];
     }
     return x;
 }
@@ -1830,13 +1912,14 @@ static long app_window_poll(unsigned long ev, unsigned long flags) {
     if (!user_writable(ev, 12)) return -14;
     if (flags & ~1UL) return -22;
     if (flags & 1) {
+        ap->presents++;
         if (!app_shown) {
             con_quiet = 1; uart_puts("M3c window "); uart_puts(app_cur->name);
             if (app_rs_log) { uart_puts(" redrawn "); uart_dec(app_bw); uart_putc('x'); uart_dec(app_bh); uart_putc('\n'); app_rs_log = 0; }   /* the first frame in the buffer a resize gave it */
             else uart_puts(" first frame\n");
         }
         app_shown = 1;
-        if (app_front && !spot_live) {
+        if (app_front && app_top == (int)ap->slot && !spot_live) {
             int s = (int)window_scale();
             cur_hide(); app_blit(); fb_flush((app_lx + 8) * s, (app_ly + 32) * s, (int)app_cw * s, (int)app_ch * s); cur_show();
         }
@@ -1855,8 +1938,14 @@ static void app_window_close(void) {
     cur_hide();
     wall_fill(x, y, w, h);
     fb_flush(x, y, w, h);
-    app_front = app_shown = 0;
-    if (con_live) { con_live = 0; pane_open(cp); }   /* the wallpaper went over its part of the Console too: draw it whole */
+    app_shown = 0;
+    unsigned gone = ap->slot;
+    app_z_drop(gone);
+    app_top = app_zn ? (int)app_z[0] : -1;
+    ap = &apps[app_top >= 0 ? app_top : gone];
+    app_front = app_top >= 0;
+    if (app_front) app_repaint_all();   /* the other apps' windows the closed one covered or was covered by */
+    else if (con_live) { con_live = 0; pane_open(cp); }   /* the wallpaper went over its part of the Console too: draw it whole */
     cur_show();
 }
 /* A dock tile whose name is an app in the table (Calendar, and any later one): start it, or bring its window up. */
@@ -1865,13 +1954,13 @@ static int app_dock(const char *name) {
         unsigned i = 0;
         while (name[i] && (name[i] | 32) == a->name[i]) i++;
         if (name[i] || a->name[i]) continue;
-        if (app_cur == a) app_raise();
-        else if (app_cur) {   /* one app at a time: a tile for another app swaps to it (the one in front is closed, its files written back), as clicking a second app does on any desktop */
+        for (unsigned k = 0; k < APP_SLOTS; k++) if (apps[k].cur == a) { ap = &apps[k]; app_raise(); return 1; }   /* already open: its window comes to the front */
+        if (app_start(a) == -3 && app_zn) {   /* every slot is taken: the window furthest back closes for it, files written back */
+            ap = &apps[app_z[app_zn - 1]];
             con_quiet = 1; uart_puts("M3c app swap: "); uart_puts(app_cur->name); uart_puts(" closed for "); uart_puts(a->name); uart_putc('\n');
-            app_kill("closed for another app");
-            if (!app_cur) app_start(a);
+            app_kill_one("closed for another app");
+            app_start(a);
         }
-        else app_start(a);
         return 1;
     }
     return 0;
@@ -1910,7 +1999,11 @@ static void brick_paint(void);
 static void browser_paint(int report);
 static int br_frame;
 static int win_def[3][2];   /* each window's size when the desktop drew it first: the Console family's, the Calculator's, an app's */
-static int *const win_rc[3][4] = { { &win_lx, &win_ly, &win_lw, &win_lh }, { &calc_lx, &calc_ly, &calc_lw, &calc_lh }, { &app_lx, &app_ly, &app_lw, &app_lh } };
+static int *win_rc(int t, int i) {   /* window t's x, y, w, h (i = 0..3); the app's are the front app's, so no table can hold their addresses */
+    static int *const a[2][4] = { { &win_lx, &win_ly, &win_lw, &win_lh }, { &calc_lx, &calc_ly, &calc_lw, &calc_lh } };
+    int *b[4] = { &app_lx, &app_ly, &app_lw, &app_lh };
+    return t == WT_APP ? b[i] : a[t][i];
+}
 static int drag_on, drag_dx, drag_dy;   /* a title-band press is moving the window; where inside it the pointer took hold, logical px */
 static int rs_on, rs_dx, rs_dy;         /* an edge press is resizing it: the edges taken (RS_*), and how far the pointer was past the right and bottom edges */
 static int drag_t;                      /* which window (WT_*) either is acting on */
@@ -1929,7 +2022,7 @@ static void win_limits(int t, int *minw, int *minh) {   /* a window opens at its
     *minw = fw < dw ? fw : dw; *minh = fh < dh ? fh : dh;
 }
 static int win_grab(int t, int x, int y) {   /* what a press at (x, y) takes hold of: GRAB_TITLE, a mask of RS_* edges, or 0 for the window's inside */
-    int wx = *win_rc[t][0], wy = *win_rc[t][1], ww = *win_rc[t][2], wh = *win_rc[t][3];
+    int wx = *win_rc(t, 0), wy = *win_rc(t, 1), ww = *win_rc(t, 2), wh = *win_rc(t, 3);
     if (!in_box(x, y, wx, wy, ww, wh)) return 0;
     if (y < wy + 30) {   /* the title band, but not the three dots (radius 7, a pixel spare) */
         for (int d = 0; d < 3; d++) { int dx = x - (wx + 24 + 22 * d), dy = y - (wy + 16); if (dx * dx + dy * dy <= 8 * 8) return 0; }
@@ -1944,7 +2037,7 @@ static void app_note_resize(void) {   /* JT_EV_RESIZE for the app; one waiting e
 }
 static void win_set(int t, int nx, int ny, int nw, int nh) {   /* the one place a window changes rectangle */
     if (!fb) return;
-    int *px_ = win_rc[t][0], *py_ = win_rc[t][1], *pw_ = win_rc[t][2], *ph_ = win_rc[t][3];
+    int *px_ = win_rc(t, 0), *py_ = win_rc(t, 1), *pw_ = win_rc(t, 2), *ph_ = win_rc(t, 3);
     if (nx == *px_ && ny == *py_ && nw == *pw_ && nh == *ph_) return;
     int s = (int)window_scale(), ox = *px_ * s, oy = *py_ * s, w = *pw_ * s, h = *ph_ * s, px = nx * s, py = ny * s, dx = px - ox, dy = py - oy;
     int resized = nw != *pw_ || nh != *ph_;
@@ -1984,7 +2077,7 @@ static void win_set(int t, int nx, int ny, int nw, int nh) {   /* the one place 
 }
 static void win_move_to(int nx, int ny) {   /* the front window (or the Console family's, when none is up) to this place, held whole between the menu bar and the dock's band */
     int t = drag_on || rs_on ? drag_t : WT_MAIN;
-    int s = (int)window_scale(), top = sg(MENUBAR_H) / s + 8, bottom = gui_dock_band_top() - 22, w = *win_rc[t][2], h = *win_rc[t][3], right = (int)fb_w / s - w;
+    int s = (int)window_scale(), top = sg(MENUBAR_H) / s + 8, bottom = gui_dock_band_top() - 22, w = *win_rc(t, 2), h = *win_rc(t, 3), right = (int)fb_w / s - w;
     if (nx > right) nx = right;
     if (nx < 0) nx = 0;
     if (ny > bottom - h) ny = bottom - h;
@@ -1993,7 +2086,7 @@ static void win_move_to(int nx, int ny) {   /* the front window (or the Console 
 }
 static void win_resize_to(int lx, int ly) {   /* the pointer is at (lx, ly): the grabbed edges follow it, the others stay */
     int t = drag_t, s = (int)window_scale(), bottom = gui_dock_band_top() - 22, sw = (int)fb_w / s, mnw, mnh;
-    int x = *win_rc[t][0], y = *win_rc[t][1], w = *win_rc[t][2], h = *win_rc[t][3], r = x + w, nx = x, nw = w, nh = h;
+    int x = *win_rc(t, 0), y = *win_rc(t, 1), w = *win_rc(t, 2), h = *win_rc(t, 3), r = x + w, nx = x, nw = w, nh = h;
     win_limits(t, &mnw, &mnh);
     if (rs_on & RS_R) nw = lx - rs_dx - x;
     if (rs_on & RS_L) { nx = lx - rs_dx; nw = r - nx; }
@@ -2011,9 +2104,9 @@ static void drag_end(void) {
     if (!drag_on && !rs_on) return;
     int t = drag_t, was_sizing = rs_on;
     drag_on = rs_on = 0;
-    con_quiet = 1; uart_puts("window at "); uart_dec((unsigned)*win_rc[t][0]); uart_putc(','); uart_dec((unsigned)*win_rc[t][1]); uart_putc('\n');
+    con_quiet = 1; uart_puts("window at "); uart_dec((unsigned)*win_rc(t, 0)); uart_putc(','); uart_dec((unsigned)*win_rc(t, 1)); uart_putc('\n');
     if (was_sizing) {
-        con_quiet = 1; uart_puts("window size "); uart_dec((unsigned)*win_rc[t][2]); uart_putc('x'); uart_dec((unsigned)*win_rc[t][3]); uart_putc('\n');
+        con_quiet = 1; uart_puts("window size "); uart_dec((unsigned)*win_rc(t, 2)); uart_putc('x'); uart_dec((unsigned)*win_rc(t, 3)); uart_putc('\n');
         if (t == WT_APP && app_wbytes && (app_cw != app_bw || app_ch != app_bh)) app_note_resize();   /* an event the full ring dropped is asked again */
     }
 }
@@ -2049,10 +2142,16 @@ static void pointer_click(void) {   /* the left button went down */
     if (spot_live && slot < 0) return;   /* the bar is over the windows: a raise under it would leave its saved pixels stale */
     if (slot < 0 && menubar_click((int)mouse_x, (int)mouse_y)) return;   /* a status icon in the menu bar: Settings at its section */
     int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);
+    if (slot < 0 && app_front) {   /* a press on an app window that is not the front one raises it first */
+        for (unsigned z = 0; z < app_zn; z++) {
+            struct app *w = &apps[app_z[z]];
+            if (w->wbytes && in_box(lx, ly, w->lx, w->ly, w->lw, w->lh)) { if ((int)w->slot != app_top) { ap = w; app_raise(); return; } break; }
+        }
+    }
     int on_app = app_wbytes && in_box(lx, ly, app_lx, app_ly, app_lw, app_lh);
     int wt = slot < 0 ? win_target() : -1, grab = wt >= 0 ? win_grab(wt, lx, ly) : 0;   /* the front window's title band or an edge takes hold of it */
-    if (grab == GRAB_TITLE) { drag_on = 1; drag_t = wt; drag_dx = lx - *win_rc[wt][0]; drag_dy = ly - *win_rc[wt][1]; return; }
-    if (grab) { rs_on = grab; drag_t = wt; rs_dx = lx - (*win_rc[wt][0] + *win_rc[wt][2]); rs_dy = ly - (*win_rc[wt][1] + *win_rc[wt][3]); if (grab & RS_L) rs_dx = lx - *win_rc[wt][0]; return; }
+    if (grab == GRAB_TITLE) { drag_on = 1; drag_t = wt; drag_dx = lx - *win_rc(wt, 0); drag_dy = ly - *win_rc(wt, 1); return; }
+    if (grab) { rs_on = grab; drag_t = wt; rs_dx = lx - (*win_rc(wt, 0) + *win_rc(wt, 2)); rs_dy = ly - (*win_rc(wt, 1) + *win_rc(wt, 3)); if (grab & RS_L) rs_dx = lx - *win_rc(wt, 0); return; }
     if (slot == 0) calc_open();   /* Apps tile opens Calculator; Brick and Clock are in Spotlight. */
     else if (brick_live && slot < 0) {
         if (spot_live) return;
@@ -2613,6 +2712,12 @@ static void fb_desktop(void) {
         if (app_ly < top) { app_ly = top; app_lh = bottom - top; }
     }
     app_cw = (unsigned)(app_lw - 16); app_ch = (unsigned)(app_lh - 40);
+    for (unsigned i = 1; i < APP_SLOTS; i++) {   /* 4.0: the other slots open cascaded down and to the left, a title band apart, so a second window leaves the first's title showing */
+        struct app *o = &apps[i];
+        o->lw = app_lw; o->lh = app_lh; o->cw = app_cw; o->ch = app_ch;
+        o->lx = app_lx - (int)i * 36; if (o->lx < 8) o->lx = 8;
+        o->ly = app_ly + (int)i * 28; if (o->ly + o->lh > gui_dock_band_top() - 22) o->ly = gui_dock_band_top() - 22 - o->lh;
+    }
     win_def[WT_MAIN][0] = lw; win_def[WT_MAIN][1] = lh; win_def[WT_CALC][0] = calc_lw; win_def[WT_CALC][1] = calc_lh; win_def[WT_APP][0] = app_lw; win_def[WT_APP][1] = app_lh;
 #ifndef QUIET_BOOT
     console_frame();
@@ -2655,8 +2760,22 @@ static void fb_desktop(void) {
     pane_open(&con_p);   /* the Console is not up at boot: bring it up to be dragged */
     drag_on = 1; win_move_to(win_lx + 100, win_ly + 60); drag_end();
 #endif
-#ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with) */
-    if (!app_dock(APP_BOOT)) {   /* 3.9.0: the kernel-drawn windows too (arm64-sharp2x-check.py), then their frame on the UART: WINBOX name x y w h, logical */
+#ifdef WIN_GATE
+#define APP_BOOT "calendar,toroid,notes"   /* the windows gate's three apps (Makefile: wingate) */
+#endif
+#ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with). 4.0: "a,b,c" opens each in turn, for arm64-windows-check.py */
+    int boot_multi = 0;
+    {   const char *list = APP_BOOT;
+        for (const char *c = list; *c; c++) if (*c == ',') boot_multi = 1;
+        if (boot_multi) {
+            char one[24]; unsigned n = 0;
+            for (const char *c = list;; c++) {
+                if (*c == ',' || !*c) { one[n] = 0; app_dock(one); n = 0; if (!*c) break; }
+                else if (n < sizeof one - 1) one[n++] = *c;
+            }
+        }
+    }
+    if (!boot_multi && !app_dock(APP_BOOT)) {   /* 3.9.0: the kernel-drawn windows too (arm64-sharp2x-check.py), then their frame on the UART: WINBOX name x y w h, logical */
         const char *nm = APP_BOOT; int bx, by, bw, bh;
         #define NM_IS(w) ({ const char *a_ = nm, *b_ = w; while (*a_ && *a_ == *b_) { a_++; b_++; } !*a_ && !*b_; })
         if (NM_IS("calculator")) { calc_open(); bx = calc_lx; by = calc_ly; bw = calc_lw; bh = calc_lh; }
@@ -2920,6 +3039,30 @@ int wifi_init(void);
 #else
 #define WIFI_ON_PI 0
 #endif   /* wifi.c: M4 Wi-Fi stage 1, polled, every wait bounded */
+#ifdef WIN_GATE
+/* wingate-kernel8.img only (arm64-windows-check.py): three apps booted, slot 1 is Toroid. A second after all three have drawn,
+   the backquote it crashes on is queued for it; two seconds later the UART says which slots still have an app and how many
+   frames each has presented since, so the check can see the other two kept running. */
+static void wingate_tick(void) {
+    static unsigned long t0; static int phase; static unsigned p0[APP_SLOTS];
+    unsigned long now = cnt_now();
+    if (phase == 0) {
+        if (!(apps[0].shown && apps[1].shown && apps[2].shown)) return;
+        t0 = now; phase = 1;
+    } else if (phase == 1 && now > t0 + cnt_hz()) {
+        struct app *keep = ap; ap = &apps[1]; app_push(1, '`', 0); ap = keep;
+        for (unsigned i = 0; i < APP_SLOTS; i++) p0[i] = apps[i].presents;
+        t0 = now; phase = 2;
+    } else if (phase == 2 && now > t0 + 3 * cnt_hz()) {
+        for (unsigned i = 0; i < 3; i++) { struct app *keep = ap; ap = &apps[i]; if (i != 1) app_push(1, ' ', 0); ap = keep; }   /* poke the survivors */
+        t0 = now; phase = 3;
+    } else if (phase == 3 && now > t0 + 2 * cnt_hz()) {
+        con_quiet = 1; uart_puts("wingate:");
+        for (unsigned i = 0; i < 3; i++) { uart_puts(" slot"); uart_dec(i); uart_puts(apps[i].cur ? " live " : " gone "); uart_dec(apps[i].presents - p0[i]); }
+        uart_putc('\n'); phase = 4;
+    }
+}
+#endif
 void usb_poll(void);
 #ifdef NOTES_SELFTEST
 /* notesw-kernel8.img and notesr-kernel8.img only (arm64-notes-check.py). QEMU's raspi4b has no USB, so made-up boot
@@ -3330,10 +3473,13 @@ void main(void) {
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
+#ifdef WIN_GATE
+            wingate_tick();
+#endif
         }
 #else
         for (;;) {   /* ask_pending: a `sam` queued by Enter is run by the next pass, and a wfi with no timer would sleep through it (the key-up IRQ was already taken) */
-            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy() || app_cur || audio_busy() || ask_pending()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy() || apps_live() || audio_busy() || ask_pending()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
             usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick();   /* an app parked on yield runs again here */

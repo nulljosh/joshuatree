@@ -54,6 +54,14 @@ DARK = 90; GREY = 170
 recorded = {}
 class Hd(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
+    def do_GET(self):   # her portrait, from the repo: CI must not reach the live site for it
+        if self.path == "/face/hd.jpg":
+            body = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "landing", "face", "hd.jpg"), "rb").read()
+            self.send_response(200); self.send_header("Content-Type", "image/jpeg")
+        else:
+            body = b"not found"; self.send_response(404); self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+
     def do_POST(self):
         n = int(self.headers.get("Content-Length", "0")); body = self.rfile.read(n)
         if self.path == "/api/pick":
@@ -76,7 +84,7 @@ for f in (LOG, DUMP):
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                       "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG,
                       "-net", "nic,model=rtl8139", "-net", "user",
-                      "-append", f"samantha llmhost=10.0.2.2 llmport={port}"],
+                      "-append", f"samantha llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port}"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 fails = []
 try:

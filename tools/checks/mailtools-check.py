@@ -34,7 +34,7 @@ each of those.
 Usage: python3 tools/checks/mailtools-check.py
 """
 from freeport import free_port
-import http.server, json, os, socket, subprocess, sys, threading, time
+import http.server, re, json, os, socket, subprocess, sys, threading, time
 from PIL import Image
 
 LOG = "/tmp/jt-mailtools-serial.log"; DUMP = "/tmp/jt-mailtools.raw"
@@ -59,6 +59,14 @@ state = {"chat_calls": [], "pick_calls": []}
 
 class Hd(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
+
+    def do_GET(self):   # her portrait, from the repo: CI must not reach the live site for it
+        if self.path == "/face/hd.jpg":
+            body = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "landing", "face", "hd.jpg"), "rb").read()
+            self.send_response(200); self.send_header("Content-Type", "image/jpeg")
+        else:
+            body = b"not found"; self.send_response(404); self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
 
     def do_POST(self):
         n = int(self.headers.get("Content-Length", "0")); body = self.rfile.read(n)
@@ -106,7 +114,7 @@ def main():
     q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                           "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG,
                           "-net", "nic,model=rtl8139", "-net", "user",
-                          "-append", f"samantha llmhost=10.0.2.2 llmport={port}"],
+                          "-append", f"samantha llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port}"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     fails = []
     try:
@@ -148,6 +156,14 @@ def main():
             try: return open(LOG, "r", encoding="latin-1").read()
             except FileNotFoundError: return ""
 
+        def wait_rise(timeout_s, label, after=0):
+            """Her newest caption has finished easing in: a samface: rise=<tick>,<y>,0 line after `after`."""
+            for _ in range(int(timeout_s / 0.5)):
+                time.sleep(0.5)
+                if re.search(r"samface: rise=\d+,\d+,0\b", serial()[after:]): return True
+            fails.append("%s within %ss" % (label, timeout_s))
+            return False
+
         def wait_for(marker, timeout_s, label, after=0):
             for _ in range(int(timeout_s / 0.5)):
                 time.sleep(0.5)
@@ -170,7 +186,7 @@ def main():
         mark = len(serial())
         type_msg("read my email")
         wait_for("chattool=read_mail:", 20, "scenario a: no chattool=read_mail: marker", after=mark)
-        wait_for(",28,0", 30, "scenario a: her reply caption never finished rising", after=mark + serial()[mark:].find("chattool=read_mail:"))
+        wait_rise(30, "scenario a: her reply caption never finished rising", after=mark + serial()[mark:].find("chattool=read_mail:"))
         time.sleep(0.5)
         reply_a = reply_ink(dump()) - before_ink
         print("scenario a: new reply-band ink = %d" % reply_a)

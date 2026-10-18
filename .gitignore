@@ -87,3 +87,5 @@ arch/arm64/screen-pi-kernel8.elf
 arch/arm64/audio-kernel8.elf
 arch/arm64/audio-pi-kernel8.elf
 arch/arm64/audio-kernel8.img
+arch/arm64/*-kernel8.img
+arch/arm64/*-kernel8.elf
