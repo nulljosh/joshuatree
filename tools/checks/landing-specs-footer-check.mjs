@@ -212,7 +212,7 @@ try {
     if (w === 1280 && scheme === 'light') {
       for (const h of f.allHrefs) {
         if (h.startsWith(REPO_URL + 'blob/main/') || h.startsWith(REPO_URL + 'tree/main/')) {
-          const p = h.replace(REPO_URL, '').replace(/^(blob|tree)\/main\//, '');
+          const p = h.replace(REPO_URL, '').replace(/^(blob|tree)\/main\//, '').split('#')[0];   // a heading anchor is not a path
           if (!await exists(join(REPO, p))) fail(`link ${h} points at ${p}, which is not in the repo`);
         } else if (!/^(https?:|#|mailto:|\?)/.test(h)) {
           if (!await exists(join(ROOT, h.split('#')[0]))) fail(`relative link ${h} points at a file not in landing/`);

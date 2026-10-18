@@ -13,7 +13,7 @@
 //      now "See the desktop" (#desktop-boot-link); same styling rule, new element.
 //   4. The key sections are visible (opacity > 0) on load. They used to sit
 //      at opacity 0 until a scroll observer fired.
-//   5. The "Want one?" section carries the ad video and the Neo render.
+//   5. The "Want one?" section carries the ad video and the Nimbus render.
 // Headless Chromium only, local static server.
 import { chromium } from 'playwright';
 import { createServer } from 'http';
@@ -91,7 +91,7 @@ try {
         facts, counts, sections,
         linkColor: ls && ls.color, bodyColor: body,
         ad: !!(want && want.querySelector('video source[src*="joshua-tree-ad-v"][src$=".mp4"]')),
-        neo: !!(want && want.querySelector('img[src="neo-hero.jpg"]')),
+        neo: !!(want && want.querySelector('img[src="nimbus-hero.jpg"]')),
         scrolled: scrollY,
       };
     }, KEY);
@@ -127,7 +127,7 @@ try {
     }
     // 5. Want one
     if (!d.ad) fail(`${tag}: "Want one?" has no joshua-tree-ad video`);
-    if (!d.neo) fail(`${tag}: "Want one?" has no Neo render`);
+    if (!d.neo) fail(`${tag}: "Want one?" has no Nimbus render`);
     await page.close();
   }
   // 7. Portfolio on a phone: his face fills the stage right down to the composer,

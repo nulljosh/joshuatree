@@ -9,7 +9,7 @@ A from-scratch OS: a freestanding i386 kernel plus an ARM64 build that runs on a
 - `make` links `kernel.elf`. `make run` boots it. `./check.sh` is the boot test.
 - Build with stock Apple clang (`-target i386-unknown-none`). Do not add a cross-toolchain.
 - `check.sh` reads VGA memory through the QEMU monitor. It proves the kernel boots, nothing more. Check paging, disk and task switches against real artifacts.
-- `tools/ci-local.sh` runs the full suite locally (one run at a time). `.github/workflows/check.yml` runs it on pull requests only (never on push); keep it current.
+- `.github/workflows/check.yml` runs the suite on pull requests and is the merge gate; keep it current. Locally run only targeted checks, one at a time. `tools/ci-local.sh` is for a full local run when nothing else is going.
 - Every shipped feature gets a permanent test that fails when the fix is reverted: a shell command in `kernel/kernel.c` (like `heaptest`) or a `tools/checks/` script.
 - After any rename, move or delete, run `bash tools/checks/check-refs.sh`. `make hooks` installs the pre-push hook once per clone.
 
@@ -47,7 +47,7 @@ The Pi wallpaper is one flat colour, graphite grey `#6E6E6E` by default (Setting
 
 ## Loop rules
 
-- PRs open as drafts (`gh pr create --draft`). Run `tools/ci-local.sh`; only when it passes, `gh pr ready`.
+- PRs open as drafts (`gh pr create --draft`). Run the targeted checks for what you changed; `gh pr ready` before the first push, then merge on green CI. The repo requires up-to-date PRs, so merge one at a time.
 - On a conflict in a generated file (`VERSION`, `landing/index.html`, `landing/version.txt`, the generated blocks in `docs/ARCHITECTURE.md`), take main's side, then regenerate.
 - Never resolve a Makefile conflict by taking one side blindly. Merge both by hand.
 - Never push with conflict markers in any file.

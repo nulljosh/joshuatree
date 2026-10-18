@@ -3,6 +3,8 @@
 
 Usage: tools/release-tweet.py "<version>" "<title>" [url, unused]
        tools/release-tweet.py --avatar landing/brand/x-avatar.png   (set the profile picture)
+       tools/release-tweet.py --banner landing/brand/x-banner.png   (set the cover)
+       tools/release-tweet.py --bio landing/brand/x-bio.txt         (bio on line 1, website on line 2)
 Needs X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET (an X app
 with read and write, OAuth 1.0a user keys). Without them it prints the post
 and exits 0: a dry run, so releases never fail over a missing key.
@@ -10,7 +12,8 @@ Stdlib only: OAuth 1.0a signing is a few lines of HMAC-SHA1.
 """
 import base64, hashlib, hmac, json, os, re, secrets, sys, time, urllib.parse, urllib.request
 
-AVATAR = sys.argv[2] if sys.argv[1:2] == ["--avatar"] else None
+MODE = sys.argv[1] if sys.argv[1:2] in (["--avatar"], ["--banner"], ["--bio"]) else None
+AVATAR = sys.argv[2] if MODE else None   # the file a profile mode sends
 v, title = (None, None) if AVATAR else sys.argv[1:3]
 # No link in the post: X charges $0.20 for a post with a URL and $0.015
 # without (pay-per-use, 2026-09). The profile bio links the site.
@@ -20,12 +23,19 @@ note = re.split(r";\s*", title or "")[0].strip()
 text = "" if AVATAR else f"Joshua Tree {v}: {note}"[:280]
 keys = [os.environ.get(k, "") for k in ("X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET")]
 if not all(keys):
-    print("dry run (no X keys), would " + (f"set avatar {AVATAR}" if AVATAR else "post:\n" + text))
+    print("dry run (no X keys), would " + (f"send {MODE} {AVATAR}" if AVATAR else "post:\n" + text))
     sys.exit(0)
 ck, cs, tk, ts = keys
-if AVATAR:   # v1.1 profile image: form-encoded, so the image field is signed too
+if MODE == "--avatar":   # v1.1 profile calls are form-encoded, so every field is signed too
     endpoint = "https://api.twitter.com/1.1/account/update_profile_image.json"
     form = {"image": base64.b64encode(open(AVATAR, "rb").read()).decode()}
+elif MODE == "--banner":
+    endpoint = "https://api.twitter.com/1.1/account/update_profile_banner.json"
+    form = {"banner": base64.b64encode(open(AVATAR, "rb").read()).decode()}
+elif MODE == "--bio":
+    endpoint = "https://api.twitter.com/1.1/account/update_profile.json"
+    bio, url = open(AVATAR).read().splitlines()[:2]
+    form = {"description": bio[:160], "url": url}
 else:
     endpoint, form = "https://api.twitter.com/2/tweets", {}
 q = lambda s: urllib.parse.quote(s, safe="")
@@ -42,7 +52,7 @@ else:
     req = urllib.request.Request(endpoint, data=json.dumps({"text": text}).encode(), method="POST",
                                  headers={"Authorization": auth, "Content-Type": "application/json"})
 try:
-    r = json.load(urllib.request.urlopen(req, timeout=30))
-    print("avatar set" if AVATAR else "posted: " + r["data"]["id"])
+    body = urllib.request.urlopen(req, timeout=30).read()   # the banner call answers with an empty body
+    print(f"{MODE[2:]} set" if AVATAR else "posted: " + json.loads(body)["data"]["id"])
 except Exception as e:   # never fail a release over a post
     print("post failed:", e)

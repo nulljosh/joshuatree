@@ -1124,6 +1124,16 @@ Risks:
 - The BOM exceeds the old price before margin.
 - Nothing in Phases 0 to 2 can start without the physical board, a case, RAM, an SSD, a serial adapter and a monitor, keyboard and mouse.
 
+### Nimbus
+
+![Nimbus, front](hardware/nimbus-hero.jpg)
+
+Nimbus is the small square one: a Pi 4 and the official 7 inch touch display in a body whose front is the Joshua Tree icon tile stood up. Cream, matte, leaning back 6 degrees, a finger scoop on top, the card slot in the chin, and on the back a debossed tree over one thin terracotta line, two USB-C slots and a round jack in one slim recessed strip. Two printed shells split on a 0.5 mm reveal, wall 2.4 mm, screws from underneath, each part under 256 mm and printed with no supports. About 236 mm wide, 230 tall and 115 deep. The display numbers are stand-ins until the real panel is measured.
+
+![Nimbus, rear](hardware/nimbus-rear.jpg)
+
+The CAD, the blueprint, the retail box and the print pack (STLs, a 1:1 blueprint, a bill of materials, a print sheet and assembly steps) are on their way in from the Nimbus branch; the commands will be listed here when they land.
+
 ### Enclosure: Neo
 
 ![Neo, front](hardware/neo-hero.jpg)

@@ -1,10 +1,19 @@
-name: Clean up X posts
+name: X housekeeping
 
-# Manual only: deletes old release posts that repeated the tagline.
-on: workflow_dispatch
+# Manual only. `job: cleanup` deletes old release posts that repeated the tagline. `job: profile` sends
+# landing/brand/x-avatar.png, x-banner.png and x-bio.txt to @joshuatreeOS (the release workflow does that on
+# its own when one of them changes; this is for running it by hand).
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: cleanup or profile
+        default: profile
+        type: choice
+        options: [profile, cleanup]
 
 jobs:
-  cleanup:
+  run:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -14,4 +23,11 @@ jobs:
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
-        run: python3 tools/tweet-cleanup.py
+        run: |
+          if [ "${{ inputs.job }}" = cleanup ]; then
+            python3 tools/tweet-cleanup.py
+          else
+            python3 tools/release-tweet.py --avatar landing/brand/x-avatar.png
+            python3 tools/release-tweet.py --banner landing/brand/x-banner.png
+            python3 tools/release-tweet.py --bio landing/brand/x-bio.txt
+          fi
