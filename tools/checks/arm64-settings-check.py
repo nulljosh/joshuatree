@@ -54,6 +54,8 @@ void wall_set(unsigned rgb) { wall_rgb = (int)rgb; }
 void desktop_wall_changed(void) { repaints++; }
 void kputs(const char *s) { fputs(s, stdout); }
 void kdec(unsigned v) { printf("%u", v); }
+static int may = 1;
+int sudo_may_write(void) { return may; }
 #define dock_scale_pct dock_scale_pct
 #include "arch/arm64/settings.c"
 int main(void) {
@@ -77,6 +79,8 @@ int main(void) {
     vol = 70; settings_set_wall(0); settings_set_dock(7); repaints = 0; wall_rgb = 0; settings_load();
     assert(vol == 30 && settings_wall() == 2 && wall_rgb == 0x00923F20 && settings_dock() == 11 && repaints == 1 && settings_saved() == 1);
     repaints = 0; settings_load(); assert(repaints == 0);   /* nothing changed: no repaint */
+    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 25); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
+    may = 1;
     card = 0; vol = 20; settings_save(); assert(settings_saved() == -1 && vol == 20 && settings_wall() == 2);   /* no card: said, and the choices stay */
     file_len = -1; card = 1; vol = 70; settings_load(); assert(vol == 70);                                         /* no file: nothing changes */
     puts("PASS: settings.c file text, bounded parsing, load, save and the no-card case");

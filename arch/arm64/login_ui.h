@@ -12,6 +12,21 @@
 #define LG_HINT 0x0075726E
 #define LG_EDGE 0x00DDD8CE
 #define LG_ACCENT 0x00B5502C
+#ifndef SUDO_TTL_MS
+#define SUDO_TTL_MS 300000   /* sudo.c: how long a right sudo password is remembered; the sudo check's build shortens it */
+#endif
+unsigned long sudo_now_ms(void) {   /* sudo.c: the generic counter in milliseconds, which keeps counting where `ticks` does not */
+    unsigned long f, c; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    return c / ((f ? f : 54000000) / 1000);
+}
+unsigned sudo_ttl_ms(void) { return SUDO_TTL_MS; }
+void ask_forget(void);   /* ask.c */
+static void terminals_forget(void) {   /* a sign-out empties both Terminals' scrollback, so the next person starts on a clean page */
+    for (unsigned t = 0; t < 2; t++) {
+        accounts_wipe(terminals[t].log, sizeof terminals[t].log);
+        terminals[t].len = terminals[t].col = terminals[t].row = terminals[t].anchor = 0; terminals[t].scrolled = 0; terminals[t].vtop = terminals[t].vlast = 0;
+    }
+}
 static int logout_flag;
 void logout_request(void) { logout_flag = 1; }   /* cmd.c: the next pass of the main loop does it, outside the command */
 void login_wait_ms(unsigned ms) {
@@ -63,6 +78,8 @@ static void login_paint(void) {
 static void login_show(void) {
     if (!fb || !text_ok || !accounts_count()) return;     /* no screen, or nobody to ask: the desktop as before */
     login_reset();
+    sudo_drop(); ask_forget();                            /* a sign-out forgets sudo, any half-typed password and the chat */
+    terminals_forget();                                   /* and clears the Terminals' scrollback */
     login_live = 1;
     cur_hide();
     fb_rect(0, 0, (int)fb_w, (int)fb_h, wall_get());
@@ -73,7 +90,8 @@ static void login_show(void) {
 static void login_done(void) {
     login_live = 0;
     con_quiet = 1; uart_puts("login: signed in "); uart_puts(current_user); uart_putc('\n');
-    wall_repaint();                                       /* the desktop again, the name in its bar */
+    if (desktop_deferred) { desktop_deferred = 0; fb_desktop(); fb_diag(); }   /* the Pi's first desktop paint waited for this */
+    else wall_repaint();                                  /* the desktop again, the name in its bar */
     if (con_live) { con_live = 0; pane_open(cp); }        /* the boot log's window, drawn whole again as a wallpaper change does */
     con_quiet = 1; uart_puts("login: desktop up\n");
 }

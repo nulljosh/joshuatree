@@ -87,7 +87,7 @@ text.o: text.c ../../drivers/ttf.h ../../lib/text_ink.h
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
 # The Calculator's evaluator: the FPU does the sums, so it is built like text.c; main.c draws its window.
-cmd.o: cmd.c bt.h emmc.h ../../drivers/fat.h
+cmd.o: cmd.c bt.h emmc.h accounts.h sudo.h login.h ../../drivers/fat.h
 	$(CC) -c $< -o $@
 calc.o: calc.c
 	$(FPCC) -c $< -o $@
@@ -126,8 +126,8 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o
-PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o
+SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o
+PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c emmc.h ../../drivers/fat.h
@@ -142,6 +142,9 @@ accounts.o: accounts.c accounts.h rng.h emmc.h ../../drivers/fat.h ../../kernel/
 	$(SDCC) -c $< -o $@
 # The login form (4.9.0): its keys and the wrong-password delay; the screen is login_ui.h.
 login.o: login.c login.h accounts.h
+	$(SDCC) -c $< -o $@
+# Admins and sudo (4.10.0): JT/SUDOERS.TXT, the password check and the five minutes it is remembered.
+sudo.o: sudo.c sudo.h accounts.h login.h emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 emmc.o: emmc.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
@@ -207,7 +210,7 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = ../../VERSION settings_ui.h login_ui.h login.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = ../../VERSION settings_ui.h login_ui.h login.h sudo.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
@@ -339,6 +342,7 @@ $(eval $(call variant,treerestart,-DTREEMENU_SELFTEST=1,,))
 $(eval $(call variant,treeshutdown,-DTREEMENU_SELFTEST=2,,))
 $(eval $(call variant,notice,-DNOTICE_SELFTEST,,))
 $(eval $(call variant,screen,-DSCREEN_SELFTEST,,))
+$(eval $(call variant,sudoshort,-DSUDO_TTL_MS=12000,,))   # sudo remembers a password for 12 s, for tools/checks/arm64-sudo-check.py
 
 
 # audiotest: runs `beep` at boot on virt, which has no PWM, so arm64-audio-check.py reads back the tone's ring checksum.

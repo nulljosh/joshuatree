@@ -157,24 +157,61 @@ int accounts_add(const char *name, const char *pass) {
 }
 int accounts_check(const char *name, const char *pass) {
     int i = find(name);
-    if (i < 0) return ACC_E_NOUSER;
+    if (i < 0) {   /* the same work as a real check, so an unknown name takes as long as a wrong password and the time tells nothing */
+        static const struct acc dummy = { "", ACC_ITERS, { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }, { 0 } };
+        unsigned char h[ACC_HASH];
+        derive(&dummy, pass, h);
+        accounts_wipe(h, sizeof h);
+        return ACC_E_NOUSER;
+    }
     unsigned char h[ACC_HASH];
     derive(&users[i], pass, h);
     int ok = ct_eq(h, users[i].hash, ACC_HASH);
     accounts_wipe(h, sizeof h);
     return ok ? ACC_OK : ACC_E_WRONG;
 }
-int accounts_remove(const char *name, const char *pass) {
-    int r = accounts_check(name, pass), at = find(name);
+int accounts_has(const char *name) { return find(name) >= 0; }
+int accounts_protected(const char *name) {   /* the two account files, whatever the case: a file command must not touch them */
+    static const char *const files[] = { "USERS.TXT", "SUDOERS.TXT" };
+    for (unsigned f = 0; f < 2; f++) {
+        const char *a = name, *b = files[f];
+        while (*a && *b && (*a >= 'a' && *a <= 'z' ? *a - 32 : *a) == *b) { a++; b++; }
+        if (!*a && !*b) return 1;
+    }
+    return 0;
+}
+int accounts_passwd(const char *name, const char *pass) {   /* a new password: fresh salt, written to the card first */
+    int at = find(name);
+    if (at < 0) return ACC_E_NOUSER;
+    if (!pass_ok(pass)) return ACC_E_PASS;
+    if (!sd_ready()) return ACC_E_NOCARD;
+    struct acc u = users[at];
+    u.iters = ACC_ITERS;
+    if (!tls_entropy(u.salt, ACC_SALT)) return ACC_E_ENTROPY;
+    derive(&u, pass, u.hash);
+    struct acc all[ACC_USERS_MAX];
+    for (unsigned i = 0; i < nusers; i++) all[i] = users[i];
+    all[at] = u;
+    int r = store(all, nusers);
     if (r) return r;
+    users[at] = u;
+    return ACC_OK;
+}
+int accounts_delete(const char *name) {   /* an admin's removal: no password of the account's own needed */
+    int at = find(name);
+    if (at < 0) return ACC_E_NOUSER;
     struct acc rest[ACC_USERS_MAX];
     unsigned m = 0;
     for (unsigned i = 0; i < nusers; i++) if ((int)i != at) rest[m++] = users[i];
-    r = store(rest, m);
+    int r = store(rest, m);
     if (r) return r;
     for (unsigned i = 0; i < m; i++) users[i] = rest[i];
     nusers = m;
     return ACC_OK;
+}
+int accounts_remove(const char *name, const char *pass) {
+    int r = accounts_check(name, pass);
+    return r ? r : accounts_delete(name);
 }
 const char *accounts_reason(int code) {
     switch (code) {

@@ -15,12 +15,14 @@
    safe because one EL0 app runs at a time and is only ever parked at a yield, never inside a call: two apps, or an app
    preempted mid-call, would need fat.c's state per caller first. */
 #include "emmc.h"
+#include "accounts.h"
 #include "../../drivers/fat.h"
 
 int user_in_range(unsigned long a, unsigned long n);   /* main.c: memory the app may have the kernel read */
 int user_writable(unsigned long a, unsigned long n);   /* main.c: memory the kernel may store into for it (never code) */
 
 #define EIO     5
+#define EACCES 13
 #define EBADF   9
 #define EAGAIN 11
 #define EFAULT 14
@@ -84,6 +86,7 @@ static long path_enter(char *path, int keep, char **leaf, int make) {
         }
     }
     if (n < keep || n - keep > PATH_DEPTH) return -EINVAL;
+    if (n == 1 && accounts_protected(comp[0])) return -EACCES;   /* 4.10.0: JT/USERS.TXT and JT/SUDOERS.TXT belong to the account commands, not to an app */
     if (!sd_ready()) return -ENOENT;   /* no card: nothing is there */
     saved_cwd = fat_cwd_get();
     fat_cwd_set(0);
