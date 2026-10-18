@@ -3,7 +3,7 @@
 
 QEMU's virt machine with ramfb and a USB keyboard and a USB boot mouse behind a hub (the arm64 mouse check's setup,
 so every event comes through xhci.c's HID path). Through QMP it:
-  - clicks the Terminal tile, then the Apps tile: the Calculator opens over the right of the Terminal, both on screen;
+  - clicks the Terminal tile, then opens the Calculator from Spotlight (F1, "calc", Enter; the Apps tile is the Launchpad since 3.8.2): it opens over the right of the Terminal, both on screen;
   - types 9-2 and Enter: the UART says "calc: 9-2 = 7" and the Terminal's prompt row did not change a pixel;
   - clicks the Terminal's uncovered body: "focus terminal", and the Terminal is drawn over the Calculator's corner;
   - types 123: the prompt row gains ink, and nothing reaches the Calculator;
@@ -95,7 +95,11 @@ try:
         for k in qcodes: cmd("send-key", keys=[{"type": "qcode", "data": k}]); time.sleep(0.15)
     def calc_lines(): return re.findall(r"calc: (.*) = (.*)\n", uart())
 
-    if click(*slot_centre(6), "terminal open") and click(*slot_centre(0), "calc open"):
+    def spotlight_calc():
+        n = len(uart()); keys("f1")
+        if not wait_for(has("spotlight open", n), 30): return False
+        keys("c", "a", "l", "c", "ret"); return wait_for(has("calc open", n), 30)
+    if click(*slot_centre(6), "terminal open") and spotlight_calc():
         a = shot()
         if px(a, wx + 19, wy + 16) != (0xff, 0x5f, 0x57) or px(a, cx + 19, cy + 16) != (0xff, 0x5f, 0x57):
             fails.append("the Terminal and the Calculator are not both on screen with their red dots")

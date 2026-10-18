@@ -158,7 +158,7 @@ try:
     step("a held j on the Terminal's line repeats there too (9 to 15 j; got %d)" % len(line), set(line) == {"j"} and 9 <= len(line) <= 15, repr(line))
     answered(m, "that line is run too (command not found)"); key("esc")
     fresh("spotlight open", "f1")
-    for c in "apps": key(c)
+    for c in "calc": key(c)
     done = expect("calc open", "Enter opens the Calculator"); key("ret"); done()
     m = len(uart()); hold("9", HOLD); key("ret"); time.sleep(0.5)
     sums = re.findall(r"calc: (9+) =", uart()[m:]); s = sums[0] if sums else ""
