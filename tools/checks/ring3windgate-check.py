@@ -178,7 +178,7 @@ try:
     r3_names = re.findall(r'\{"([^"]+)",\s*user_', open("kernel/ring3app.c").read())
     sam_names = re.findall(r'"([^"]+)"', re.search(r"APPNAME\[\] = \{(.*?)\};", open("user/samantha.c").read(), re.S)[1])
     for what, names in (("APPS[]", app_names), ("RING3_APPS", r3_names), ("Samantha's APPNAME", sam_names)):
-        if "Windgate" not in names: fails.append(f"{what} has no 'Windgate' row")
+        if "Airwell" not in names: fails.append(f"{what} has no 'Airwell' row")
     src = open("user/windgate.c").read()
     if re.search(r"jt_http|SYS_HTTP|JT_POST", src): fails.append("user/windgate.c calls the network: it must run completely offline")
     m = re.search(r"P_SECS\[4\]\[4\] = \{(.*?)\};", src, re.S)

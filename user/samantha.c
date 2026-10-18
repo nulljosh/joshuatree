@@ -699,12 +699,13 @@ static void civil(unsigned days, int *y, int *m, int *d) {
 
 static const char *const APPNAME[] = {
     "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Curbfind", "Keyrate",
-    "Bookrank", "Quotes", "Tonchi", "Toroid", "Hikko", "Fieldbook", "Contacts", "Calculator",
-    "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Clock", "Music", "Movies", "Hamurapi", "Windgate", "Panes", "Claude",
+    "Bookrank", "Quotes", "Patois", "Toroid", "Thinkpond", "Fieldbook", "Contacts", "Calculator",
+    "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Clock", "Music", "Movies", "Hamurapi", "Airwell", "Panes", "Claude",
 };
 #define NAPPS ((int)(sizeof APPNAME / sizeof APPNAME[0]))
-#define HIKKO_SLOT 14 /* its index in APPNAME */
-#define TONCHI_SLOT 12
+#define HIKKO_SLOT 14 /* Thinkpond: its index in APPNAME */
+#define TONCHI_SLOT 12 /* Patois */
+#define WINDGATE_SLOT 27 /* Airwell */
 #define HAMURAPI_SLOT 26
 
 static int word_prefix_ci(const char *lbl, const char *s) {
@@ -728,16 +729,20 @@ static int match_app(const char *arg) {
     if (bl > 4 && b[bl - 4] == ' ' && (b[bl - 3] | 32) == 'a' && (b[bl - 2] | 32) == 'p' && (b[bl - 1] | 32) == 'p') bl -= 4;
     b[bl] = 0;
     if ((b[0] | 32) == 'c' && (b[1] | 32) == 'h' && (b[2] | 32) == 'a' && (b[3] | 32) == 't' && !b[4]) b = "samantha";
-    for (const char *w = b; ; w++) { /* Hikko was Sparkjar, then Hotaru: the old names still open it */
-        if ((w == b || *(w - 1) == ' ') && (word_prefix_ci("sparkjar", w) || word_prefix_ci("hotaru", w))) return HIKKO_SLOT;
+    for (const char *w = b; ; w++) { /* Thinkpond was Hikko, Hotaru, Sparkjar: the old names still open it */
+        if ((w == b || *(w - 1) == ' ') && (word_prefix_ci("hikko", w) || word_prefix_ci("sparkjar", w) || word_prefix_ci("hotaru", w))) return HIKKO_SLOT;
         if (!*w) break;
     }
     for (const char *w = b; ; w++) { /* Hamurapi was Hamurabi (the store name was taken): the old spelling still opens it */
         if ((w == b || *(w - 1) == ' ') && word_prefix_ci("hamurabi", w)) return HAMURAPI_SLOT;
         if (!*w) break;
     }
-    for (const char *w = b; ; w++) { /* Tonchi was Lexly: the old name still opens it */
-        if ((w == b || *(w - 1) == ' ') && word_prefix_ci("lexly", w)) return TONCHI_SLOT;
+    for (const char *w = b; ; w++) { /* Patois was Tonchi, was Lexly: the old names still open it */
+        if ((w == b || *(w - 1) == ' ') && (word_prefix_ci("tonchi", w) || word_prefix_ci("lexly", w))) return TONCHI_SLOT;
+        if (!*w) break;
+    }
+    for (const char *w = b; ; w++) { /* Airwell was Windgate: the old name still opens it */
+        if ((w == b || *(w - 1) == ' ') && word_prefix_ci("windgate", w)) return WINDGATE_SLOT;
         if (!*w) break;
     }
     for (int i = 0; i < NAPPS; i++)

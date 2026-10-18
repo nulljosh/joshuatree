@@ -4356,9 +4356,9 @@ const struct app APPS[GUI_APP_COUNT] = {
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       bookrank_ring3_open,   0, 0}, /* 2.0: ring 3 too (user/bookrank.c) */
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
-    /* 12 */ {"Tonchi",     0x00376E5E, gui_icon_tonchi,     tonchi_ring3_open,     0, 0}, /* 1.9.1: ring 3 too (user/tonchi.c) */
+    /* 12 */ {"Patois",     0x00376E5E, gui_icon_tonchi,     tonchi_ring3_open,     0, 0}, /* 1.9.1: ring 3 too (user/tonchi.c) */
     /* 13 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
-    /* 14 */ {"Hikko",   0x00A6741E, gui_icon_hikko,   hikko_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/hikko.c) */
+    /* 14 */ {"Thinkpond",0x00A6741E, gui_icon_hikko,   hikko_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/hikko.c) */
     /* 15 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  fieldbook_ring3_open,  0, 0}, /* 1.9.3: ring 3 too (user/fieldbook.c) */
     /* 16 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   contacts_ring3_open,   0, 0}, /* 1.9.7: ring 3 (user/contacts.c) */
     /* 17 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_ring3_open, 0, 0}, /* 1.7.12: ring 3 too (user/calculator.c) */
@@ -4371,7 +4371,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 24 */ {"Music",      0x00B5502C, gui_icon_chat,       music_ring3_open,      0, 0}, /* 2.2: ring 3 (user/music.c), Apps folder only like Search */
     /* 25 */ {"Movies",     0x00B5502C, gui_icon_chat,       movies_ring3_open,     0, 0}, /* 2.2: ring 3 (user/movies.c), Apps folder only; authored art (art/icons/movies.svg) covers the icon */
     /* 26 */ {"Hamurapi",   0x00B5502C, gui_icon_chat,       hamurabi_ring3_open,   0, 0}, /* 2.7: ring 3 (user/hamurabi.c; the game is shown as Hamurapi, the store name Hamurabi was taken), Apps folder only; authored art (art/icons/hamurabi.svg) covers the icon */
-    /* 27 */ {"Windgate",   0x000B1420, gui_icon_chat,       windgate_ring3_open,   0, 0}, /* 2.8: guided breathing, ring 3 (user/windgate.c), Apps folder only; authored art (art/icons/windgate.svg) covers the icon */
+    /* 27 */ {"Airwell",    0x000B1420, gui_icon_chat,       windgate_ring3_open,   0, 0}, /* 2.8: guided breathing, ring 3 (user/windgate.c), Apps folder only; authored art (art/icons/windgate.svg) covers the icon */
     /* 28 */ {"Panes",      0x00F5F5F8, gui_icon_chat,       panes_ring3_open,      0, 0}, /* 2.11: cmux-style tabs and split panes sharing the Terminal's shell engine, ring 3 (user/panes.c), Apps folder only; authored art (art/icons/panes.svg) covers the icon */
     /* 29 */ {"Claude",     0x00B5502C, gui_icon_chat,       claude_ring3_open,     0, 0}, /* 2.14: Claude Code through the relay (user/claude.c, tools/claude-relay/relay.py), ring 3, Apps folder only; authored art (art/icons/claude.svg) covers the icon */
     /* 30 */ {"Mines",      0x00556B85, gui_icon_apps,       mines_ring3_open,      0, 0}, /* Minesweeper, ring 3 (user/mines.c), Apps folder only; authored art is art/icons/mines.svg, a cream mine on the accent */

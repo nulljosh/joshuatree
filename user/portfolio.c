@@ -44,11 +44,11 @@ static const pf_row_t PF_ROWS[] = {
 
     {0, "Life", "", PF_KIND_HEADER},
     {"Epiphany",  "finance dashboard",         "epiphany.jaybulb.com", PF_KIND_APP},
-    {"Healstack", "health and supplement tracker", "healstack.jaybulb.com", PF_KIND_APP},
-    {"Windgate",  "guided breathing",          "windgate.jaybulb.com", PF_KIND_APP},
+    {"Intake",    "health and supplement tracker", "intake.jaybulb.com", PF_KIND_APP},
+    {"Airwell",   "guided breathing",          "airwell.jaybulb.com", PF_KIND_APP},
     {"Talli",     "benefits admin",            "talli.jaybulb.com", PF_KIND_APP},
     {"Homeward",  "lost and found pets",       "homeward.jaybulb.com", PF_KIND_APP},
-    {"Brick",     "real estate browsing",      "brick.jaybulb.com", PF_KIND_APP},
+    {"Atlin",     "rentals on a map",          "atlin.jaybulb.com", PF_KIND_APP},
     {"HomeQi",    "feng shui home check",      "homeqi.jaybulb.com", PF_KIND_APP},
     {"Weather",   "forecast and live conditions", "weather.jaybulb.com", PF_KIND_APP},
 
@@ -58,7 +58,7 @@ static const pf_row_t PF_ROWS[] = {
     {"Sidewise",  "news bias reader",          "sidewise.jaybulb.com", PF_KIND_APP},
     {"Wordroot",  "etymology",                 "wordroot.jaybulb.com", PF_KIND_APP},
     {"Fieldbook", "science explained plainly", "fieldbook.jaybulb.com", PF_KIND_APP},
-    {"Tonchi",    "language learning",         "lexly.jaybulb.com", PF_KIND_APP}, /* was Lexly; tonchi.jaybulb.com does not exist yet, so the address stays */
+    {"Patois",    "language learning",         "lexly.jaybulb.com", PF_KIND_APP}, /* was Tonchi, was Lexly; patois.jaybulb.com does not exist yet, so the address stays */
 
     {0, "Make", "", PF_KIND_HEADER},
     {"Block Frame", "wireframes in text",      "wiretext.jaybulb.com", PF_KIND_APP},
@@ -68,7 +68,7 @@ static const pf_row_t PF_ROWS[] = {
     {"Notate",    "on-device transcription",   "notate.jaybulb.com", PF_KIND_APP},
     {"Dream",     "dream journal",             "dream.jaybulb.com", PF_KIND_APP},
     {"Costanza",  "poetry",                    "costanza.jaybulb.com", PF_KIND_APP},
-    {"Hikko",  "idea forum",                "hikko.jaybulb.com", PF_KIND_APP},
+    {"Thinkpond", "idea forum",                "hikko.jaybulb.com", PF_KIND_APP},
 
     {0, "Play", "", PF_KIND_HEADER},
     {"Quotestreak", "quote guessing",          "quotestreak.jaybulb.com", PF_KIND_APP},
@@ -82,7 +82,7 @@ static const pf_row_t PF_ROWS[] = {
     {"Cadence",   "commit tracker",            "cadence.jaybulb.com", PF_KIND_APP},
     {"Tripwire",  "API drift watcher",         "tripwire.jaybulb.com", PF_KIND_APP},
     {"Seamark",   "read values off charts",    "seamark.jaybulb.com", PF_KIND_APP},
-    {"Hagaki",    "inbox triage",              "hagaki.jaybulb.com", PF_KIND_APP},
+    {"Mailbag",   "inbox triage",              "mailbag.jaybulb.com", PF_KIND_APP},
     {"Curbfind",  "Craigslist browser",        "curbfind.jaybulb.com", PF_KIND_APP},
     {"Turing",    "local LLM",                 "", PF_KIND_APP},
     {"Conveyer",  "AI plays Factorio",         "", PF_KIND_APP},
