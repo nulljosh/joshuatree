@@ -2939,6 +2939,14 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
    Each arc is anti-aliased (4x4 samples a pixel, blended onto the bar), so it stays crisp at scale 1 and 2. Each call puts the
    saved bare bar back first, so old pixels never show through. */
 #define WIFI_INK 0x001C1C1E
+static int mb_mic;
+void menubar_mic(int on) {   /* ask.c: voice mode started or ended; the bar is redrawn with or without the mark */
+    if (mb_mic == (on != 0)) return;
+    mb_mic = on != 0;
+    uart_puts(mb_mic ? "mic mark on\n" : "mic mark off\n");
+    if (!fb || !text_ok) return;
+    cur_hide(); menubar_wifi(mb_wifi); cur_show();
+}
 void menubar_wifi(int state) {
     mb_wifi = state;   /* kept even before the desktop exists (the boot splash), so its first paint shows the right fan */
     if (!fb || !text_ok) return;
@@ -2977,6 +2985,13 @@ void menubar_wifi(int state) {
     int isz = sg(16), sx = ox - R - sg(14) - isz, wx = sx - sg(12) - isz, iy = (mb - 1 - isz) / 2, vol = audio_volume();
     glyph_paint(GL_SOUND, vol == 0 ? 0 : vol <= 50 ? 1 : 2, sx, iy, isz, WIFI_INK);   /* ink at every volume: the waves say the level, not a grey */
     glyph_paint(GL_POWER, 0, wx, iy, isz, WIFI_INK);
+    if (mb_mic) {   /* voice mode is listening (ask.c): a terracotta microphone left of the power symbol, a capsule on a stem */
+        int mx = wx - sg(12) - isz, cw = isz * 2 / 5, ch = isz * 3 / 5, cx0 = mx + (isz - cw) / 2;
+        unsigned t = fb_color(0x00B5502C);
+        fb_rect(cx0, iy, cw, ch, t);
+        fb_rect(mx + isz / 2 - sg(1), iy + ch, sg(2), isz - ch - sg(2), t);
+        fb_rect(cx0 - sg(1), iy + isz - sg(2), cw + sg(2), sg(2), t);
+    }
     mb_hit[0][0] = wx - sg(5); mb_hit[0][1] = wx + isz + sg(5);         /* power */
     mb_hit[1][0] = sx - sg(5); mb_hit[1][1] = sx + isz + sg(5);         /* sound */
     mb_hit[2][0] = ox - R - sg(5); mb_hit[2][1] = ox + R + sg(5);       /* Wi-Fi */
@@ -3826,8 +3841,9 @@ void net_stack_demo(void);
 void net_clock_sync(void);
 int bt_starting(void);   /* bt.c: the radio is still loading its patch */
 void tls_demo(void);
-unsigned hear_fake(short *pcm, unsigned max) {   /* ask.c's `hear` on the heartest build: half a second of a 440 Hz square wave instead of a microphone */
+unsigned hear_fake(short *pcm, unsigned max) {   /* ask.c's `hear` on the heartest build: half a second of a 440 Hz square wave instead of a microphone; (0, 0) asks whether this is that build */
 #ifdef HEAR_TEST
+    if (!pcm) return 1;
     unsigned n = 8000 < max ? 8000 : max;
     for (unsigned i = 0; i < n; i++) pcm[i] = (short)(((i * 440 / 16000) & 1) ? 6000 : -6000);
     return n;

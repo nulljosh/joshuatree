@@ -79,6 +79,9 @@ static int tui_on, tui_quit;         /* the chat view has the window; leave it w
 static unsigned tui_n, tui_up;       /* history lines held; how many lines the view is scrolled back from the newest */
 void sam_command(const char *q, unsigned n);
 static void voice_fetch(const char *t, unsigned k);   /* [[say]]: her voice from the relay */
+static int vm_key(unsigned code, unsigned value);
+static void vm_poll(void);
+unsigned hear_fake(short *pcm, unsigned max);   /* main.c */
 static void tui_enter(void);
 static void tui_paint(int full);
 static void tui_escape(void);
@@ -159,6 +162,7 @@ int ask_key(unsigned code, unsigned value) {
     if (code == KEY_ESC && tui_on) { if (value) tui_escape(); return 1; }
     if (tui_on && (code == 103 || code == 108)) { if (value) tui_move(code == 103); return 1; }   /* Up and Down scroll the history */
     if (code == KEY_ESC) { if (value && (ac->pending || sam_state)) stop_flag = 1; return 0; }
+    if (vm_key(code, value)) return 1;         /* voice mode: a held Space is not a space */
     int typed = code < 58 && plain[code];
     if (!typed && code != KEY_BACKSPACE && code != KEY_ENTER && code != KEY_KPENTER) return 0;
     if (!value) return 1;                      /* key up: nothing to do, but it is still ours */
@@ -966,26 +970,9 @@ static void voice_fetch(const char *t, unsigned k) {
    virt, which has no microphone) sends half a second of a 440 Hz tone instead of recording. */
 int usb_mic_ok(void);                                             /* xhci.c */
 unsigned usb_mic_record(short *dst, unsigned max, unsigned ms);
-unsigned hear_fake(short *pcm, unsigned max);                     /* main.c */
 #define HEAR_HZ 16000
 #define HEAR_MAX_SECS 10
-void hear_command(unsigned secs) {
-    if (secs < 1) secs = 3;
-    if (secs > HEAR_MAX_SECS) secs = HEAR_MAX_SECS;
-    if (sam_state) { kputs("hear: sam is busy, wait for her answer\n"); return; }   /* ac->pending is this very command */
-    if (!CLAUDE_TOKEN_LEN) { kputs("hear: no relay token in this build\n"); return; }
-    unsigned long mark = heap_mark();
-    unsigned max = secs * HEAR_HZ, got;
-    short *pcm = kmalloc(max * 2);
-    char *raw = kmalloc(REPLY_MAX + 2048);
-    if (!pcm || !raw) { kputs("hear: out of memory\n"); heap_release(mark); return; }
-    got = hear_fake(pcm, max);   /* main.c: half a second of a tone on the heartest build, 0 otherwise */
-    if (!got) {
-        if (!usb_mic_ok()) { kputs("hear: no USB microphone found (plug it into a Pi port, then wait a second)\n"); heap_release(mark); return; }
-        kputs("hear: listening for "); kdec(secs); kputs(" s\n");
-        got = usb_mic_record(pcm, max, secs * 1000 + 300);
-    }
-    if (got < HEAR_HZ / 4) { kputs("hear: heard nothing\n"); heap_release(mark); return; }
+static void hear_post(const short *pcm, unsigned got, char *raw) {   /* the samples to the words service, the words to sam; raw: REPLY_MAX + 2048 */
     static char token[64];
     for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
     token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
@@ -993,10 +980,10 @@ void hear_command(unsigned secs) {
     int status = 0, n;
 #if defined(PI_BUILD) || CLAUDE_TLS
     /* one request buffer: the header, then the samples; the words service sits beside the relay, one port up */
-    if (!relay_ip && relay_open() < 0) { kputs("hear: no relay\n"); heap_release(mark); return; }
+    if (!relay_ip && relay_open() < 0) { kputs("hear: no relay\n"); return; }
     if (relay_ip) tcp_close();
     char *req = kmalloc(got * 2 + 512);
-    if (!req) { kputs("hear: out of memory\n"); heap_release(mark); return; }
+    if (!req) { kputs("hear: out of memory\n"); return; }
     unsigned k = 0; char digits[10]; unsigned dn = 0, v = got * 2;
     do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
     const char *parts[] = {"POST /api/stt HTTP/1.0\r\nHost: ", RELAY_NAME, "\r\nAuthorization: Bearer ", token,
@@ -1021,17 +1008,108 @@ void hear_command(unsigned secs) {
     status = http_last_status();
 #endif
     for (int i = 0; i < 64; i++) token[i] = 0;
-    if (n < 0 || status != 200) { kputs("hear: no words ("); kdec((unsigned)status); kputs(")\n"); heap_release(mark); return; }
+    if (n < 0 || status != 200) { kputs("hear: no words ("); kdec((unsigned)status); kputs(")\n"); return; }
     unsigned len = 0;
     while (len < (unsigned)n && len < ASK_MAX && raw[len] >= 32 && raw[len] < 127) len++;
     while (len && raw[len - 1] == ' ') len--;
-    if (!len) { kputs("you: (nothing)\n"); heap_release(mark); return; }
+    if (!len) { kputs("you: (nothing)\n"); return; }
     static char said[ASK_MAX + 1];
     for (unsigned i = 0; i < len; i++) said[i] = raw[i];
     said[len] = 0;
-    heap_release(mark);
     kputs("you: "); kputs(said); kputs("\n");
     sam_command(said, len);
+}
+void hear_command(unsigned secs) {
+    if (secs < 1) secs = 3;
+    if (secs > HEAR_MAX_SECS) secs = HEAR_MAX_SECS;
+    if (sam_state) { kputs("hear: sam is busy, wait for her answer\n"); return; }   /* ac->pending is this very command */
+    if (!CLAUDE_TOKEN_LEN) { kputs("hear: no relay token in this build\n"); return; }
+    unsigned long mark = heap_mark();
+    unsigned max = secs * HEAR_HZ, got;
+    short *pcm = kmalloc(max * 2);
+    char *raw = kmalloc(REPLY_MAX + 2048);
+    if (!pcm || !raw) { kputs("hear: out of memory\n"); heap_release(mark); return; }
+    got = hear_fake(pcm, max);   /* main.c: half a second of a tone on the heartest build, 0 otherwise */
+    if (!got) {
+        if (!usb_mic_ok()) { kputs("hear: no USB microphone found (plug it into a Pi port, then wait a second)\n"); heap_release(mark); return; }
+        kputs("hear: listening for "); kdec(secs); kputs(" s\n");
+        got = usb_mic_record(pcm, max, secs * 1000 + 300);
+    }
+    if (got < HEAR_HZ / 4) kputs("hear: heard nothing\n");
+    else hear_post(pcm, got, raw);
+    heap_release(mark);
+}
+
+/* Voice mode (docs/ROADMAP.md, Joshua 2026-10-07): double-tap Space and hold the second tap; release to send. The two taps
+   are swallowed once the hold is confirmed (a quick double tap stays two spaces). While held: "voice: listening" on the
+   UART, a mic mark in the menu bar (main.c menubar_mic) and a "listening [####......]" line with a live level bar in the
+   prompt row. The samples gather in xhci.c's ring while the key is down; the release hands them to hear_post from
+   ask_poll, never from the key handler. HEAR_TEST: the tone stands in for the ring and the level bar moves on its own. */
+#define KEY_SPACE 57
+#define VM_TAP_TICKS 40      /* the second tap within 400 ms of the first */
+#define VM_HOLD_TICKS 25     /* held 250 ms: it is a hold, not a tap */
+#define VM_MAX_SECS 10
+void usb_mic_arm(int on);                  /* xhci.c */
+unsigned usb_mic_take(short *dst, unsigned max);
+unsigned usb_mic_peak(void);
+void menubar_mic(int on);                  /* main.c */
+static int vm_state;                       /* 0 off, 1 one tap seen, 2 second tap down, 3 listening, 4 released: send */
+static unsigned vm_t, vm_bar_t, vm_level;
+static short *vm_pcm; static unsigned vm_got; static unsigned long vm_mark;
+int ask_listening(void) { return vm_state == 3; }
+static void vm_cue(void) {
+    char cue[48]; unsigned k = 0;
+    for (const char *p = "listening ["; *p; p++) cue[k++] = *p;
+    unsigned bars = vm_level * 10 / 32768; if (vm_level && !bars) bars = 1; if (bars > 10) bars = 10;
+    for (unsigned i = 0; i < 10; i++) cue[k++] = i < bars ? '#' : '.';
+    for (const char *p = "] release to send"; *p; p++) cue[k++] = *p;
+    con_prompt(cue, k);
+    static unsigned last; cue[k] = 0;
+    if (bars != last) { last = bars; kputs("voice: "); kputs(cue); kputs("\n"); }   /* the UART sees the bar move, not every repaint */
+}
+static int vm_key(unsigned code, unsigned value) {   /* from ask_key, before the line editing; 1 when the key was taken */
+    if (code != KEY_SPACE || ac->pending || sam_state) { if (code != KEY_SPACE && value && vm_state < 3) vm_state = 0; return 0; }
+    unsigned now = ticks();
+    if (value) {                                                   /* down */
+        if (vm_state == 1 && now - vm_t <= VM_TAP_TICKS) { vm_state = 2; vm_t = now; return 0; }   /* the space is typed; swallowed if the hold comes */
+        if (vm_state >= 2) return 1;                               /* repeats while held */
+        vm_state = 0; return 0;
+    }
+    if (vm_state == 3) { vm_state = 4; return 1; }                /* released: ask_poll sends */
+    if (vm_state == 2) { vm_state = 0; return 0; }                /* a quick double tap: two spaces, as typed */
+    vm_state = 1; vm_t = now; return 0;
+}
+static void vm_poll(void) {
+    unsigned now = ticks();
+    if (vm_state == 2 && now - vm_t >= VM_HOLD_TICKS) {           /* the hold is real */
+        unsigned n = 0; while (n < 2 && ac->len && ac->line[ac->len - 1] == ' ') { ac->len--; n++; }   /* the two taps' spaces */
+        vm_mark = heap_mark(); vm_pcm = kmalloc(VM_MAX_SECS * HEAR_HZ * 2); vm_got = 0; vm_level = 0;
+        if (!vm_pcm) { heap_release(vm_mark); vm_state = 0; prompt_row(ac->line, ac->len); return; }
+        vm_state = 3; vm_bar_t = now; vm_t = now;
+        usb_mic_arm(1); menubar_mic(1);
+        kputs("voice: listening\n"); vm_cue();
+        return;
+    }
+    if (vm_state == 3) {
+        vm_got += usb_mic_take(vm_pcm + vm_got, VM_MAX_SECS * HEAR_HZ - vm_got);
+        unsigned p = usb_mic_peak();
+        if (hear_fake(0, 0)) p = 4000 + ((now - vm_t) % 40) * 600;  /* no microphone on the test build: a bar that moves */
+        if (p > vm_level) vm_level = p; else vm_level = vm_level * 7 / 8;
+        if (now - vm_bar_t >= 10) { vm_bar_t = now; vm_cue(); }
+        if (now - vm_t >= VM_MAX_SECS * 100) vm_state = 4;        /* ten seconds is the most one turn holds */
+        return;
+    }
+    if (vm_state == 4) {
+        usb_mic_arm(0); menubar_mic(0);
+        vm_got += usb_mic_take(vm_pcm + vm_got, VM_MAX_SECS * HEAR_HZ - vm_got);
+        if (!vm_got) vm_got = hear_fake(vm_pcm, VM_MAX_SECS * HEAR_HZ);
+        kputs("voice: released after "); kdec((now - vm_t) / 100); kputs(" s\n");
+        prompt_row(ac->line, ac->len);
+        char *raw = kmalloc(REPLY_MAX + 2048);
+        if (vm_got < HEAR_HZ / 4 || !raw) kputs("hear: heard nothing\n");
+        else hear_post(vm_pcm, vm_got, raw);
+        heap_release(vm_mark); vm_pcm = 0; vm_state = 0;
+    }
 }
 
 void sam_command(const char *q, unsigned n) {   /* cmd.c: `sam QUESTION` queues the question and returns; ask_poll sends it */
@@ -1112,6 +1190,7 @@ static void sam_run(void) {   /* the queued question, on a main loop pass of its
 }
 void ask_poll(void) {
     voice_pump();                              /* the rest of a clip, as the sound ring makes room */
+    vm_poll();                                 /* voice mode: the hold, the level bar, the release */
     if (ac->pending) run_typed();
     else if (sam_state == 1) sam_run();
 }

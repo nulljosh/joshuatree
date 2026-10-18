@@ -565,6 +565,15 @@ unsigned usb_mic_record(short *dst, unsigned max, unsigned ms) {
     mic_armed = 0;
     return got;
 }
+/* Voice mode (ask.c): arm the ring while a key is held, take what it holds without waiting, read the level as it goes. */
+void usb_mic_arm(int on) { if (on) mic_r = mic_w = 0; mic_armed = on != 0; }
+unsigned usb_mic_take(short *dst, unsigned max) {
+    handle_events();
+    unsigned got = 0;
+    while (mic_r != mic_w && got < max) dst[got++] = mic_ring[mic_r++ % MIC_N];
+    return got;
+}
+unsigned usb_mic_peak(void) { handle_events(); unsigned p = mic_peak; mic_peak = 0; return p; }
 void usb_mic_stat(unsigned st[6]) {   /* rate, channels, transfers, errors, last completion code, loudest sample since the last call */
     st[0] = uacs[0].rate; st[1] = uacs[0].ch; st[2] = uacs[0].pkts; st[3] = uacs[0].errs; st[4] = uacs[0].lastcc; st[5] = mic_peak;
     mic_peak = 0;
