@@ -219,11 +219,7 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 
 ## Daily driver gaps (Joshua, 2026-10-12: "keep identifying gaps and check them off as we go")
 
-- [ ] [Sonnet] Browser bookmarks.
-  - A star in the address bar saves the open page to `JT/BOOKMARKS.TXT`, one line a page (address, then title).
-  - The empty Browser screen, where the address bar waits today, lists the saved pages. Tab then Enter opens one.
-  - A star on a saved page takes it off the list.
-  - Check: an arm64 check that stars a page, reads `BOOKMARKS.TXT` back off the card image, reopens the Browser empty and finds the line.
+- [x] [Sonnet] Browser bookmarks, in 4.0.6. A star in the address bar (or Ctrl+D) saves the open page to `JT/BOOKMARK.TXT` (8.3 allows eight letters before the dot, so not BOOKMARKS), one line a page: address, then title. The empty Browser lists the saved pages; Tab then Enter, or a click, opens one; a star on a saved page takes it off. Twelve pages at most. Check: `tools/checks/arm64-bookmarks-check.py`.
 
 ## Next few weeks
 
@@ -1129,6 +1125,7 @@ One line per version. The full release notes live in the GitHub releases and `gi
 
 - **3.10.0 (2026-10-12)**: Copy, paste and the Cmd keys on the Pi: one 4 KB plain-text clipboard in the kernel, reached by Notes through `JT_SYS_CLIPBOARD` (399) and directly by the Terminal input line and the Browser address bar; Cmd or Ctrl with A, C, X and V, Cmd+W closes the front window and Cmd+Q quits the app. Check: `tools/checks/arm64-clipboard-check.py`.
 - **3.9.3 (2026-10-13)**: A sample song on every fresh Pi card: `tools/flash-pi.sh` puts a self-made `HELLO.WAV` (16 seconds, bass, arpeggio and melody, from `tools/gen/sample-song.py`) in `JT/MUSIC/` when the folder has no songs, and never when it has. `tools/checks/arm64-music-check.py` plays it as a third song and checks its length and title; `tools/checks/flash-pi-check.sh` checks the flash rule.
+- **4.0.6 (2026-10-18)**: Browser bookmarks: a star in the address bar saves the open page to `JT/BOOKMARK.TXT`, the empty Browser lists the saved pages, Tab then Enter opens one, a star on a saved page takes it off.
 - **4.0.5 (2026-10-18)**: Closing a window on the Pi leaves no residue: the close path clears the frame and a six pixel ring round it (`wall_vacate`), so content that overhung the frame goes too, then repaints the windows left. `tools/checks/arm64-closeglitch-check.py` opens Terminal, Calendar, Notes, Browser, Brick and Calculator at 1080p and closes each back to a clean desktop.
 - **4.0.4 (2026-10-18)**: A brand kit page, `docs/brand/index.html`: the mark, the mascot, colour, type, icons and the desktop pieces in one place, each with its file.
 - **4.0.3 (2026-10-18)**: The docs read plainer: GUIDE, ARCHITECTURE and ROADMAP say each thing once with pointers, no fact or number dropped; six duplicate file rows gone; the Neo counts (28 pieces in 25 STLs, a 52 mm tray, six build steps) now match the real files; `architecture.svg` (`tools/gen/map.py`) has four boxes a row and more air; the wallpaper lines in CLAUDE.md and ARCHITECTURE.md say grey by default since 3.9.0.

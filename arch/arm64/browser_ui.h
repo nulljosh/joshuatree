@@ -8,6 +8,9 @@ extern void (*cmd_out)(const char *s);                       /* cmd.c */
 int browse_command(const char *q, unsigned n);               /* browser.c */
 const char *browser_text(unsigned *len);
 const char *browser_url(void);
+const char *browser_title(void);
+int sd_ready(void); int sd_write(const char *name, const void *data, unsigned len); int sd_enter_jt(int make);   /* emmc.c */
+int fat_read_file(const char *name, void *buf, unsigned bufsize); int fat_chdir(const char *name);          /* drivers/fat.c */
 const char *browser_link(unsigned n);
 unsigned browser_loads(void);
 #define BR_ROW 16          /* a page line, logical pixels */
@@ -24,9 +27,50 @@ static int br_mascot_tried;
 static unsigned br_sel;   /* the link Tab has picked, 1-based; 0 when none */
 static char br_addr[BR_ADDR_MAX + 1], br_msg[96], br_err[64], br_ln[96];
 static unsigned br_addr_n, br_ln_n;
+/* Bookmarks: JT/BOOKMARK.TXT (8.3: BOOKMARKS would not fit), one line a page, the address then a space then the title. Read once, on the
+   first open; the star in the address bar adds the open page or takes it off, and the card is written each time. With no page
+   open the well lists them: Tab picks, Enter or a click opens. */
+#define BM_MAX 12
+#define BM_URL 200
+#define BM_FILE "BOOKMARK.TXT"
+#define BM_ROW 18          /* a list row, logical pixels, from BM_Y0 under the well's top */
+#define BM_Y0 30
+static char bm_url[BM_MAX][BM_URL + 1], bm_title[BM_MAX][64];
+static unsigned bm_n, bm_sel;   /* bookmarks kept, and the one Tab picked (1-based; 0 when none) */
+static int bm_loaded;
 static unsigned br_slen(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }
 static int br_has(const char *s, const char *w) { unsigned k = br_slen(w); for (; *s; s++) { unsigned i = 0; while (i < k && s[i] == w[i]) i++; if (i == k) return 1; } return 0; }
 static void br_set(char *d, const char *s, unsigned max) { unsigned n = 0; while (s[n] && n + 1 < max) { d[n] = s[n]; n++; } d[n] = 0; }
+static int bm_find(const char *u) { for (unsigned i = 0; i < bm_n; i++) { unsigned k = 0; while (bm_url[i][k] && bm_url[i][k] == u[k]) k++; if (bm_url[i][k] == u[k]) return (int)i; } return -1; }
+static void bm_load(void) {
+    static char buf[BM_MAX * (BM_URL + 66)];
+    bm_loaded = 1; bm_n = 0;
+    if (!sd_ready() || !sd_enter_jt(0)) return;
+    int got = fat_read_file(BM_FILE, buf, sizeof buf - 1);
+    fat_chdir("..");
+    for (unsigned i = 0, n = got > 0 ? (unsigned)got : 0; i < n && bm_n < BM_MAX;) {
+        unsigned e = i; while (e < n && buf[e] != '\n') e++;
+        unsigned u = i; while (u < e && buf[u] != ' ') u++;
+        if (u - i > 7 && u - i <= BM_URL && buf[i] == 'h') {
+            for (unsigned k = i; k < u; k++) bm_url[bm_n][k - i] = buf[k];
+            bm_url[bm_n][u - i] = 0;
+            unsigned t = u < e ? u + 1 : e, m = 0; while (t < e && m < 63 && buf[t] != '\r') bm_title[bm_n][m++] = buf[t++];
+            bm_title[bm_n][m] = 0; bm_n++;
+        }
+        i = e + 1;
+    }
+    con_quiet = 1; uart_puts("browser: bookmarks loaded "); uart_dec(bm_n); uart_putc('\n');
+}
+static int bm_save(void) {   /* the whole list back to the card; 1 when it is there */
+    static char buf[BM_MAX * (BM_URL + 66)]; unsigned n = 0;
+    for (unsigned i = 0; i < bm_n; i++) {
+        for (const char *p = bm_url[i]; *p; p++) buf[n++] = *p;
+        buf[n++] = ' ';
+        for (const char *p = bm_title[i]; *p; p++) buf[n++] = *p;
+        buf[n++] = '\n';
+    }
+    return sd_ready() && sd_write(BM_FILE, buf, n) == 1;
+}
 static int br_x(void) { return win_lx + 8; }
 static int br_w(void) { return win_lw - 16; }
 static int br_h(void) { return win_lh - BR_PAGE_Y - 26; }
@@ -110,8 +154,13 @@ static void browser_paint(int report) {
     }
     int fx = win_lx + 92, fw = win_lw - 102;
     window_rect(fx, ty, fw, 22, br_edit ? BR_ACCENT : 0x00DDD8CE); window_rect(fx + 1, ty + 1, fw - 2, 20, 0x00FFFFFF);
+    {   /* the star at the bar's right end: the accent when the open page is a bookmark, a quiet grey when not */
+        static const unsigned short star[11] = { 0x020, 0x020, 0x070, 0x070, 0x7FF, 0x3FE, 0x1FC, 0x0F8, 0x1FC, 0x1DC, 0x38E };
+        int sx = fx + fw - 20, sy = ty + 5; unsigned saved = browser_url()[0] && bm_find(browser_url()) >= 0;
+        for (int r = 0; r < 11; r++) for (int c = 0; c < 11; c++) if (star[r] >> (10 - c) & 1) window_rect(sx + c, sy + r, 1, 1, saved ? BR_ACCENT : 0x00B8B2A8);
+    }
     const char *shown = br_edit ? br_addr : browser_url();
-    while (*shown && gui_text_width(shown) > fw - 16) shown++;   /* a long address shows its end */
+    while (*shown && gui_text_width(shown) > fw - 36) shown++;   /* a long address shows its end */
     gui_text(*shown || br_edit ? shown : "Type an address and press Enter", fx + 6, ty + 3, *shown || br_edit ? 0x001C1C1E : 0x0075726E);
     if (br_edit) window_rect(fx + 7 + gui_text_width(shown), ty + 4, 1, 14, BR_ACCENT);
     window_rect(x - 1, y - 1, w + 2, h + 2, 0x00DDD8CE); window_rect(x, y, w, h, 0x00faf8f4);
@@ -129,8 +178,20 @@ static void browser_paint(int report) {
     if (!len) {   /* an empty well: the mascot, and the words under it */
         const char *none = "Nothing to show yet";
         int top = y + (h - 96 - 28) / 2;
-        br_mascot_draw(x + w / 2, top);
-        gui_text(none, x + (w - gui_text_width(none)) / 2, top + 96 + 10, 0x0075726E);
+        if (bm_n) {   /* saved pages stand in for the mascot */
+            gui_text("Bookmarks", x + 8, y + 6, 0x0075726E);
+            for (unsigned i = 0; i < bm_n; i++) {
+                int ly = y + BM_Y0 + (int)i * BM_ROW;
+                if (bm_sel == i + 1) window_rect(x + 2, ly - 2, w - 4, BM_ROW, 0x00F3E2D8);
+                char nm[64]; br_set(nm, bm_title[i][0] ? bm_title[i] : bm_url[i], sizeof nm);
+                for (unsigned k = br_slen(nm); k && gui_text_width(nm) > w - 24; ) nm[--k] = 0;
+                gui_text(nm, x + 8, ly, 0x001C1C1E);
+                if (report) { con_quiet = 1; uart_puts("browser: shows bookmark "); uart_dec(i + 1); uart_putc(' '); uart_puts(bm_url[i]); uart_putc('\n'); }
+            }
+        } else {
+            br_mascot_draw(x + w / 2, top);
+            gui_text(none, x + (w - gui_text_width(none)) / 2, top + 96 + 10, 0x0075726E);
+        }
     }
     char st[BR_ADDR_MAX + 48]; unsigned o = 0;
     const char *left = br_loading ? "loading..." : br_msg[0] ? br_msg : browser_url();
@@ -209,7 +270,42 @@ static void br_follow(unsigned n) {   /* link n, as a click on it would */
     con_quiet = 1; uart_puts("browser: link "); uart_dec(n); uart_putc('\n');
     br_run(cmd);
 }
-static void br_tab(void) {   /* Tab: the next link, wrapping, scrolled into view */
+static void br_star(void) {   /* the star: the open page joins the list, or leaves it when it is on it */
+    const char *u = browser_url(); int at = u[0] ? bm_find(u) : -1; unsigned un = br_slen(u);
+    con_quiet = 1;
+    if (!u[0]) br_set(br_msg, "open a page to bookmark it", sizeof br_msg);
+    else if (at >= 0) {
+        for (unsigned i = (unsigned)at + 1; i < bm_n; i++) { br_set(bm_url[i - 1], bm_url[i], sizeof bm_url[0]); br_set(bm_title[i - 1], bm_title[i], sizeof bm_title[0]); }
+        bm_n--; bm_sel = 0;
+        br_set(br_msg, bm_save() ? "bookmark removed" : "bookmark removed (no card to save it)", sizeof br_msg);
+        uart_puts("browser: star removed "); uart_puts(u); uart_putc('\n');
+    } else if (bm_n >= BM_MAX) br_set(br_msg, "bookmarks full, remove one first", sizeof br_msg);
+    else if (un > BM_URL) br_set(br_msg, "that address is too long to bookmark", sizeof br_msg);
+    else {
+        unsigned o = 0; for (; u[o]; o++) bm_url[bm_n][o] = u[o] == ' ' ? '+' : u[o];
+        bm_url[bm_n][o] = 0; br_set(bm_title[bm_n], browser_title(), sizeof bm_title[0]); bm_n++;
+        br_set(br_msg, bm_save() ? "bookmarked" : "bookmarked (no card to save it)", sizeof br_msg);
+        uart_puts("browser: star saved "); uart_puts(u); uart_putc('\n');
+    }
+    browser_paint(0);
+}
+static int br_empty(void) { unsigned len; browser_text(&len); return !len; }
+static void br_bookmark(unsigned n) {   /* bookmark n (1-based) opens as a typed address would */
+    if (!n || n > bm_n) return;
+    char cmd[BM_URL + 8]; unsigned o = 0;
+    for (const char *p = "browse "; *p; p++) cmd[o++] = *p;
+    for (const char *p = bm_url[n - 1]; *p; p++) cmd[o++] = *p;
+    cmd[o] = 0; bm_sel = 0;
+    con_quiet = 1; uart_puts("browser: bookmark "); uart_dec(n); uart_putc('\n');
+    br_run(cmd);
+}
+static void br_tab(void) {
+    if (br_empty()) {   /* no page: Tab walks the saved ones */
+        if (!bm_n) return;
+        bm_sel = bm_sel % bm_n + 1; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0;
+        con_quiet = 1; uart_puts("browser: selected bookmark "); uart_dec(bm_sel); uart_putc('\n');
+        browser_paint(0); return;
+    }   /* Tab: the next link, wrapping, scrolled into view */
     unsigned want = br_sel + 1;
     if (!browser_link(want)) want = 1;
     if (!browser_link(want)) return;
@@ -231,8 +327,8 @@ static void browser_open(void) {
     if (browser_live || !fb) return;
     settings_close(); clock_close(); brick_close(); calc_close(); app_kill("closed for the Browser"); console_close();
     browser_live = 1; br_frame = 1; br_sel = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0; br_top = 0;
-    br_wrap();
-    browser_paint(0); uart_puts("browser open\n");
+    br_wrap(); bm_sel = 0; if (!bm_loaded) bm_load();
+    browser_paint(1); uart_puts("browser open\n");
 }
 static void browser_close(void) {
     if (!browser_live) return;
@@ -243,6 +339,7 @@ static void browser_close(void) {
 static int browser_key(unsigned code) {   /* a key down with the Browser in front and Spotlight closed; always the Browser's */
     if (alt_held && (code == 105 || code == 106)) { br_nav(code == 106); return 1; }          /* Alt+Left, Alt+Right */
     if (code == 63 || (ctrl_held && code == 19)) { br_nav(2); return 1; }                      /* F5, Ctrl+R */
+    if (ctrl_held && code == 32) { br_star(); return 1; }                                      /* Ctrl+D, the star */
     if (ctrl_held && code == 38) { br_edit = 1; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); return 1; }   /* Ctrl+L */
     int page = br_rows() > 1 ? br_rows() - 1 : 1;
     if (code == 1) { if (br_edit) { br_edit = 0; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); } else browser_close(); return 1; }
@@ -262,12 +359,13 @@ static int browser_key(unsigned code) {   /* a key down with the Browser in fron
     }
     if (ctrl_held || gui_held || alt_held) return 1;
     if (code == 15 && !(br_edit && br_addr_n)) { br_tab(); return 1; }
+    if (!br_edit && bm_sel && br_empty() && (code == 28 || code == 96)) { br_bookmark(bm_sel); return 1; }
     if (!br_edit && br_sel && (code == 28 || code == 96)) { br_follow(br_sel); return 1; }
     if (br_edit && (code == 28 || code == 96)) { br_load(); return 1; }
     if (br_edit && code == 14) { if (br_addr_n) br_addr[--br_addr_n] = 0; browser_paint(0); return 1; }
     int ch = ask_char(code);
     if (ch > ' ' || (br_edit && ch == ' ')) {   /* a letter with the page showing starts a new address, as in a Mac browser's Cmd+L */
-        if (!br_edit) { br_edit = 1; br_addr_n = 0; }
+        if (!br_edit) { br_edit = 1; br_addr_n = 0; bm_sel = 0; }
         if (ch < 127 && br_addr_n < BR_ADDR_MAX) { br_addr[br_addr_n++] = (char)ch; br_addr[br_addr_n] = 0; }
         browser_paint(0);
     }
@@ -284,7 +382,13 @@ static void browser_click(int lx, int ly) {
     int ty = win_ly + 34;
     if (ly >= ty && ly < ty + 22) {
         for (int i = 0; i < 3; i++) if (lx >= win_lx + 10 + i * 26 && lx < win_lx + 32 + i * 26) { br_nav(i); return; }
+        if (lx >= win_lx + win_lw - 36 && lx < win_lx + win_lw - 10) { br_star(); return; }   /* the star */
         if (lx >= win_lx + 92 && lx < win_lx + win_lw - 10) { br_edit = 1; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); }
+        return;
+    }
+    if (br_empty() && bm_n && lx >= br_x() && lx < br_x() + br_w() && ly >= win_ly + BR_PAGE_Y + BM_Y0 - 2) {
+        unsigned i = (unsigned)(ly - (win_ly + BR_PAGE_Y + BM_Y0 - 2)) / BM_ROW;
+        if (i < bm_n) br_bookmark(i + 1);
         return;
     }
     int y = win_ly + BR_PAGE_Y + 4;
