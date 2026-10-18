@@ -126,8 +126,8 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o settings.o
-PISDOBJ = pi-emmc.o fat.o ufile.o settings.o
+SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o
+PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c emmc.h ../../drivers/fat.h
@@ -135,6 +135,11 @@ ufile.o: ufile.c emmc.h ../../drivers/fat.h
 # Settings (3.13.0): the choices, JT/SETTINGS.TXT and the version the About page shows, read from VERSION at build time.
 settings.o: settings.c audio.h emmc.h ../../drivers/fat.h ../../VERSION
 	$(SDCC) -DJT_VERSION='"$(shell cat ../../VERSION)"' -c $< -o $@
+# Accounts (4.8.0): the i386 kernel's own PBKDF2 over BearSSL (already linked through --start-lib) and the Pi's account store.
+auth_kdf.o: ../../kernel/auth_kdf.c ../../kernel/auth_kdf.h
+	$(SDCC) -I$(BSSL)/inc -I$(BSSL)/shim -c $< -o $@
+accounts.o: accounts.c accounts.h rng.h emmc.h ../../drivers/fat.h ../../kernel/auth_kdf.h
+	$(SDCC) -c $< -o $@
 emmc.o: emmc.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 pi-emmc.o: emmc.c emmc.h ../../drivers/fat.h

@@ -712,6 +712,10 @@ The ten minute pass for 3.0 is the Board test section. The longer SD test after 
 
 For Notes: press n, type a line, Esc, Esc, pull the power, boot, open Notes. The line is still listed.
 
+### Accounts
+
+The Terminal keeps user accounts on the card. `users` lists the names, `adduser NAME PASSWORD` makes one and `deluser NAME PASSWORD` removes one (it needs the right password). A name is 1 to 24 of a to z, 0 to 9, `_` and `-`; a password is 4 to 64 characters with no spaces; eight accounts at most. The password is stored only as a salted hash in `JT/USERS.TXT`, and the Terminal shows it as stars as you type and in the echoed line. With no SD card `adduser` says so and keeps nothing. There is no login screen yet; that is the next step.
+
 ### Music on the Pi
 
 The Pi plays songs from its card out of the 3.5 mm jack. It uses the PC's own `user/music.c` in user mode. It has no dock tile: press F1 and type music.

@@ -29,6 +29,7 @@
 #include "tls.h"
 #include "claude_cfg.h"
 #include "emmc.h"
+#include "accounts.h"
 #include "../../drivers/fat.h"
 #ifdef CLAUDE_RELEASE        /* a Pi release image: no token, so the Console says `claude: no token` (the Makefile sets it) */
 #undef CLAUDE_TOKEN_LEN
@@ -320,6 +321,19 @@ static int named_in(const char *q, unsigned qn, const char *name) {
     return 0;
 }
 /* pi-actions end */
+/* A line that carries a password (`adduser NAME PASSWORD`, `deluser NAME PASSWORD`) is shown with the password starred out:
+   in the prompt row while it is typed, in the echo after Enter, and so on the UART too. out holds n + 1 bytes. 1 if starred. */
+static int hide_password(const char *s, unsigned n, char *out) {
+    unsigned i = 0, hit = 0;
+    for (; i < n; i++) out[i] = s[i];
+    out[n] = 0;
+    if (starts(s, n, "adduser ") || starts(s, n, "deluser ")) {
+        i = 8;
+        while (i < n && s[i] != ' ') i++;          /* the name stays; everything after the space after it is starred */
+        for (i++; i < n; i++) { out[i] = '*'; hit = 1; }
+    }
+    return hit;
+}
 
 static int is_session(const char *s, unsigned n) {
     if (n != 36) return 0;
@@ -828,6 +842,8 @@ static void tui_paint(int full) {
     prompt_row(ac->line, ac->len);
 }
 static void prompt_row(const char *s, unsigned n) {
+    char shown[ASK_MAX + 1];
+    if (hide_password(s, n, shown)) s = shown;      /* the password is never drawn, in the Terminal or the chat view */
     if (!tui_on) { con_prompt(s, n); return; }
     char line[ASK_MAX + 8]; unsigned k = 0;
     for (; k < n; k++) line[k] = s[k];
@@ -1190,10 +1206,13 @@ static void ask_relay(const char *q, unsigned n) {   /* one question, then the l
 static unsigned poll_depth;
 static void run_typed(void) {
     poll_depth++; term_output(1);
-    say_wrapped(ask_prompt(), ac->question, ac->qlen);
+    char shown[ASK_MAX + 1];
+    int secret = hide_password(ac->question, ac->qlen, shown);
+    say_wrapped(ask_prompt(), shown, ac->qlen);       /* the echo: a password is starred out here and so on the UART */
     void (*saved)(const char *) = cmd_out;
     cmd_run(ac->question, ac->qlen, 0);                /* cmd.c: the one command line (help, /model, browse, llm, sam), into the Terminal */
     cmd_out = saved;
+    if (secret) { accounts_wipe(ac->question, ASK_MAX); accounts_wipe(ac->line + ac->len, ASK_MAX - ac->len); accounts_wipe(shown, sizeof shown); }
     poll_depth--; term_output(poll_depth ? 1 : 0);
     ac->pending = 0;
     prompt_row(ac->line, ac->len);

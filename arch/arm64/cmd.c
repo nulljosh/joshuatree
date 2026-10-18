@@ -7,6 +7,7 @@
    cat JT/NOTE.TXT). write, rm and mkdir change only the JT folder, through emmc.c's sd_write, sd_remove and sd_mkdir. */
 #include "bt.h"
 #include "emmc.h"
+#include "accounts.h"
 #include "../../drivers/fat.h"
 void kputs(const char *s);   /* main.c: the UART and the log of the window in front */
 void say_wrapped(const char *prefix, const char *s, unsigned n);   /* ask.c */
@@ -34,7 +35,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, beep [FREQ MS], mic [SECONDS], hear [SECONDS] (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
-                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), sam QUESTION (ask Samantha), reboot, shutdown, help.";
+                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), users, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;
@@ -194,6 +195,32 @@ static void jt_command(const char *q, unsigned n, int op) {   /* 0 write NAME TE
     cmd_out("\n");
 }
 
+static unsigned slen_(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }
+/* users, adduser NAME PASSWORD, deluser NAME PASSWORD (accounts.c). The password is the last word, copied to a local buffer that is
+   wiped before returning; no message here ever repeats it, and ask.c shows the typed line with it starred out. */
+static void users_command(void) {
+    if (!accounts_count()) { cmd_out("users: none yet, try adduser NAME PASSWORD\n"); return; }
+    for (unsigned i = 0; i < accounts_count(); i++) { cmd_out(accounts_name(i)); cmd_out("\n"); }
+}
+static void account_command(const char *q, unsigned n, int remove) {   /* q is the line after the command word */
+    char name[ACC_NAME_MAX + 2], pass[ACC_PASS_MAX + 2];
+    unsigned used = word(q, n, name, sizeof name);
+    while (used < n && q[used] == ' ') used++;
+    unsigned used2 = used + word(q + used, n - used, pass, sizeof pass);
+    if (!name[0] || !pass[0] || used2 != n || slen_(name) > ACC_NAME_MAX || slen_(pass) > ACC_PASS_MAX) {
+        cmd_out(remove ? "deluser: use deluser NAME PASSWORD (no spaces in the password)\n" : "adduser: use adduser NAME PASSWORD (no spaces in the password)\n");
+        accounts_wipe(pass, sizeof pass);
+        return;
+    }
+    cmd_out(remove ? "deluser: working\n" : "adduser: working, the password is being stretched\n");
+    int r = remove ? accounts_remove(name, pass) : accounts_add(name, pass);
+    accounts_wipe(pass, sizeof pass);
+    cmd_out(remove ? "deluser " : "adduser ");
+    cmd_out(name);
+    if (r) { cmd_out(": "); cmd_out(accounts_reason(r)); }
+    else cmd_out(remove ? ": removed" : ": added");
+    cmd_out("\n");
+}
 static int blocked_while_sam(const char *q, unsigned n) {   /* the one TCP connection and the heap are in use: these would collide */
     static const char *const names[] = {"browse", "open", "back", "forward", "reload", "llm", "bt", "userrun"};
     for (unsigned a = 0; a < sizeof names / sizeof *names; a++) {
@@ -239,6 +266,9 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         if (k < n && q[k] == '.') { jt_command(q + 6, n - 6, 0); return; }
         cmd_out("write: use write NAME.EXT TEXT\n"); return;
     }
+    if (word_is(q, n, "users")) { users_command(); return; }
+    if (word_is(q, n, "adduser") || is(q, n, "adduser")) { account_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 0); return; }
+    if (word_is(q, n, "deluser") || is(q, n, "deluser")) { account_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 1); return; }
     if (is(q, n, "rm")) { jt_command(q + 3, n - 3, 1); return; }
     if (is(q, n, "mkdir")) { jt_command(q + 6, n - 6, 2); return; }
     if (word_is(q, n, "reboot") || word_is(q, n, "restart")) { power_run(0); return; }     /* typing it is the confirmation the chord asks for */
