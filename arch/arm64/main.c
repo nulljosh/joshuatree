@@ -217,7 +217,13 @@ static unsigned long l3[APP_SLOTS * ARENA_BLOCKS * 512] __attribute__((aligned(4
    first block holds the M3a pages and the app's image, stack and window buffer; the other seven are the app's brk heap. */
 #define ARENA_LOW (((unsigned long)RAM_GIB << 30) + (64UL << 20))
 #define HEAP_END ((unsigned long)_heap_start + HEAP_SIZE)
-#define USER_BASE (HEAP_END <= ARENA_LOW ? ARENA_LOW : (HEAP_END + (2UL << 20) - 1) & ~((2UL << 20) - 1))
+/* 4.3.0: the screen's RAM back buffer (fb points at it; fb_flush copies to the real scanout) and a scratch screen of the same
+   size where a moved window's damage is put together, FB_RAM_MAX each, in the 2 MiB blocks right after the heap. The arena
+   moves up past them when they would reach it, as it does past a big heap. */
+#define FB_RAM_MAX (16UL << 20)
+#define FB_RAM_BASE ((HEAP_END + (2UL << 20) - 1) & ~((2UL << 20) - 1))
+#define KERN_END (FB_RAM_BASE + 2 * FB_RAM_MAX)
+#define USER_BASE (KERN_END <= ARENA_LOW ? ARENA_LOW : KERN_END)
 #define UP_CODE  0x0000UL   /* EL0 code, read-only and executable */
 #define UP_STACK 0x2000UL   /* EL0 stack, one page; sp starts at its top */
 #define UP_KERN  0x4000UL   /* a page in the same arena that only EL1 may touch */
@@ -849,19 +855,58 @@ static void dcache_clean(void *p, unsigned long n) {   /* push lines out to RAM,
     for (unsigned long a = (unsigned long)p & ~63UL; a < (unsigned long)p + n; a += 64) __asm__ volatile ("dc civac, %0" :: "r"(a) : "memory");
     __asm__ volatile ("dsb sy" ::: "memory");
 }
-/* The framebuffer is ordinary cached RAM, and the GPU reads RAM, not the cache. Any pixel drawn and not cleaned out
-   stays invisible, so every drawing step that can happen after boot ends with this over the rectangle it touched. */
+/* 4.3.0: a back buffer. fb is a RAM copy of the screen (FB_RAM_BASE, same size and pitch as the scanout) and every painter
+   draws there; fb_scan is the real scanout, and fb_flush is the one place that writes it: it copies the rectangle over and
+   cleans it out of the data cache (the GPU reads RAM, not the cache). Without the RAM (a screen bigger than FB_RAM_MAX)
+   fb_scan stays 0, fb is the scanout and fb_flush only cleans, as before 4.3.0. Between fb_hold and fb_release the flushes
+   only add to one dirty rectangle, copied once at the outermost release: a pointer report that moves a window and the arrow
+   reaches the screen as one copy, never as the half-drawn steps. fb_mute drops flushes while win_set names the damage. */
+static unsigned *fb_scan;
+static int fb_defer, fb_mute, fb_tag, fd_x0, fd_y0, fd_x1, fd_y1;   /* fb_tag: the batch moved a window (FB_TRACE prints it) */
+static int off_on;   /* off_begin's buffer is the target: a flush waits for off_end, as fb points into that buffer */
+static void fb_copy(int x, int y, int w, int h) {   /* clipped already */
+    for (int j = y; j < y + h; j++) {
+        unsigned o = (unsigned)j * fb_pitch + (unsigned)x;
+        if (fb_scan) {
+            unsigned long *d = (unsigned long *)(fb_scan + o); const unsigned long *s = (const unsigned long *)(fb + o); int i = 0;
+            if (!(o & 1)) for (; i + 2 <= w; i += 2) *d++ = *s++;
+            for (; i < w; i++) fb_scan[o + (unsigned)i] = fb[o + (unsigned)i];
+        }
+        unsigned long a = (unsigned long)((fb_scan ? fb_scan : fb) + o), e = a + (unsigned long)w * 4;
+        for (a &= ~63UL; a < e; a += 64) __asm__ volatile ("dc civac, %0" :: "r"(a) : "memory");
+    }
+    __asm__ volatile ("dsb sy" ::: "memory");
+}
 static void fb_flush(int x, int y, int w, int h) {
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
     if (x + w > (int)fb_w) w = (int)fb_w - x;
     if (y + h > (int)fb_h) h = (int)fb_h - y;
-    if (w <= 0 || h <= 0) return;
-    for (int j = y; j < y + h; j++) {
-        unsigned long a = (unsigned long)&fb[(unsigned)j * fb_pitch + (unsigned)x], e = a + (unsigned long)w * 4;
-        for (a &= ~63UL; a < e; a += 64) __asm__ volatile ("dc civac, %0" :: "r"(a) : "memory");
+    if (w <= 0 || h <= 0 || fb_mute || off_on) return;
+    if (!fb_defer) { fb_copy(x, y, w, h); return; }
+    if (fd_x1 <= fd_x0) { fd_x0 = x; fd_y0 = y; fd_x1 = x + w; fd_y1 = y + h; return; }
+    if (x < fd_x0) fd_x0 = x;
+    if (y < fd_y0) fd_y0 = y;
+    if (x + w > fd_x1) fd_x1 = x + w;
+    if (y + h > fd_y1) fd_y1 = y + h;
+}
+static void fb_hold(void) { fb_defer++; }
+static void fb_release(void) {
+    if (!fb_defer || --fb_defer) return;
+    if (fd_x1 > fd_x0) {
+#ifdef FB_TRACE   /* the dirtyrect build (arm64-dirtyrect-check.py): one line per window move, the rectangle copied and how long the copy took */
+        unsigned long t = cnt_now();
+        fb_copy(fd_x0, fd_y0, fd_x1 - fd_x0, fd_y1 - fd_y0);
+        if (fb_tag) {
+            con_quiet = 1; uart_puts("fb: flush "); uart_dec((unsigned)fd_x0); uart_putc(','); uart_dec((unsigned)fd_y0); uart_putc(',');
+            uart_dec((unsigned)(fd_x1 - fd_x0)); uart_putc(','); uart_dec((unsigned)(fd_y1 - fd_y0));
+            uart_puts(" copy "); uart_dec((unsigned)((cnt_now() - t) * 1000000 / cnt_hz())); uart_puts(" us\n");
+        }
+#else
+        fb_copy(fd_x0, fd_y0, fd_x1 - fd_x0, fd_y1 - fd_y0);
+#endif
     }
-    __asm__ volatile ("dsb sy" ::: "memory");
+    fd_x0 = fd_x1 = 0; fb_tag = 0;
 }
 #ifndef PI_BUILD
 #define FW_CFG 0x09020000UL
@@ -1369,6 +1414,7 @@ static void crash(const struct frame *f) {
         con_tx('\n');
     }
     if (fb) {
+        fb_defer = fb_mute = 0;   /* a fault inside a batch: the crash screen goes out now */
         int s = ((int)fb_h * 10 / 600 + 5) / 10; if (s < 1) s = 1;
         int px = 16 * s, py = 32 * s, pw = (int)fb_w - 32 * s, ph = 16 * s * (CRASH_ROWS + 2);
         fb_rect(px, py, pw, ph, CRASH_BG);
@@ -1409,7 +1455,6 @@ unsigned int window_height(void) { return fb_h / window_scale(); }
    1080p), taken once at boot and kept; if the heap cannot give it, off_begin says 0 and the caller paints in place. */
 static unsigned *off_buf, *off_real;
 static unsigned off_cap, off_real_pitch, off_x, off_y, off_w, off_h;
-static int off_on;
 static int clip_x0, clip_y0, clip_x1 = 1 << 30, clip_y1 = 1 << 30;   /* window_pixel_phys stays inside the buffer while it is the target */
 static void off_copy_row(unsigned *d, const unsigned *s, unsigned n) {
     unsigned long *dl = (unsigned long *)d; const unsigned long *sl = (const unsigned long *)s;
@@ -1629,8 +1674,9 @@ static void cur_hide(void) {
     cur_flush(x, y);
     cur_on = 0;
 }
+static int cur_frozen;   /* 4.3.0: win_set is putting several windows back: the arrow waits for the end, or its saved pixels go stale */
 static void cur_show(void) {
-    if (cur_on || !cur_wanted || !fb) return;
+    if (cur_on || !cur_wanted || !fb || cur_frozen) return;
     int s = (int)window_scale(), x = (int)mouse_x / s, y = (int)mouse_y / s;
     gui_cursor_save(x, y);
     gui_draw_cursor(x, y);
@@ -1929,11 +1975,13 @@ static void app_paint(void) {   /* the frame, then the last frame the app presen
     t[n] = 0;
     if (n == 8 && t[0] == 'H' && t[7] == 'i') t[6] = 'p';   /* hamurabi is shown as Hamurapi (the store name Hamurabi was taken) */
     int s = (int)window_scale();
+    fb_hold();   /* the frame, the content and the arrow reach the screen as one copy */
     cur_hide();
     gui_draw_window_frame(app_lx, app_ly, app_lw, app_lh, t);
     if (app_shown) app_blit();
     fb_flush(app_lx * s, app_ly * s, app_lw * s, app_lh * s);
     cur_show();
+    fb_release();
 }
 static void app_repaint_all(void) {   /* every app window, back to front: what a moved, raised or closed window uncovered comes back whole */
     struct app *keep = ap;
@@ -1972,7 +2020,7 @@ static long app_window_open(unsigned long info, unsigned long flags) {
         app_wbytes = bytes; app_shown = 0; app_bw = app_cw; app_bh = app_ch; app_hi = hi;
         if (first) { spot_close(); calc_close(); browser_close(); settings_close(); app_front = 1; app_z_front(ap->slot); app_rs_log = 0; }
         else app_rs_log = 1;
-        if (app_front) app_paint();
+        if (app_front && first) app_paint();   /* 4.3.0: a resize's answer keeps the frame win_set drew (old pixels where they fit) until the redrawn frame is presented, so no empty frame flashes */
         con_quiet = !first; uart_puts("M3c window "); uart_puts(app_cur->name); uart_putc(' '); uart_dec(app_cw); uart_putc('x'); uart_dec(app_ch);
         if (first) { uart_puts(" at "); uart_dec((unsigned)app_lx + 8); uart_putc(','); uart_dec((unsigned)app_ly + 32); }
         else uart_puts(" resized");
@@ -2025,7 +2073,7 @@ static long app_window_poll(unsigned long ev, unsigned long flags) {
         app_shown = 1;
         if (app_front && app_top == (int)ap->slot && !spot_live) {
             int s = (int)window_scale();
-            cur_hide(); app_blit(); fb_flush((app_lx + 8) * s, (app_ly + 32) * s, (int)app_cw * s, (int)app_ch * s); cur_show();
+            fb_hold(); cur_hide(); app_blit(); fb_flush((app_lx + 8) * s, (app_ly + 32) * s, (int)app_cw * s, (int)app_ch * s); cur_show(); fb_release();
         }
     }
     if (app_qh == app_qt) return -11;
@@ -2137,13 +2185,43 @@ static void app_note_resize(void) {   /* JT_EV_RESIZE for the app; one waiting e
     for (unsigned i = app_qh; i != app_qt; i++) if (app_q[i % APP_EVQ].kind == 4) { app_q[i % APP_EVQ].a = (int)app_cw; app_q[i % APP_EVQ].b = (int)app_ch; app_kick = 1; return; }
     app_push(4, (int)app_cw, (int)app_ch);
 }
+/* 4.3.0: the damage of a moved or resized Calculator or app window, physical px x0..x1 by y0..y1 (the old and new rectangles'
+   union), put together from the bottom up: the wallpaper (and the line over the dock when it is that low), the Console if it
+   is open behind, then the Calculator or every app window that meets the union, back to front. With the back buffer it is
+   drawn on the scratch screen, where each window may be drawn whole (its corners blend over whatever is there, and outside the
+   union that is never looked at), and only the union is copied into the back buffer. So nothing outside it changes, a window
+   behind comes back where the moved one uncovered it, and no corner is blended over itself twice. */
+static int box_meets(int x0, int y0, int x1, int y1, int lx, int ly, int lw, int lh) {
+    int s = (int)window_scale();
+    return x0 < (lx + lw) * s && lx * s < x1 && y0 < (ly + lh) * s && ly * s < y1;
+}
+static void desk_compose(int x0, int y0, int x1, int y1) {
+    int s = (int)window_scale();
+    unsigned *keep = fb;
+    if (fb_scan) fb = (unsigned *)(FB_RAM_BASE + FB_RAM_MAX);
+    fb_mute++;
+    wall_fill(x0, y0, x1 - x0, y1 - y0);
+    if (text_ok && y1 > (gui_dock_band_top() - 40) * s) tribute_paint();
+    if (con_live && box_meets(x0, y0, x1, y1, win_lx, win_ly, win_lw, win_lh)) { int cf = calc_front, af = app_front; calc_front = app_front = 0; pane_draw(); calc_front = cf; app_front = af; }
+    if (calc_live && box_meets(x0, y0, x1, y1, calc_lx, calc_ly, calc_lw, calc_lh)) calc_paint();
+    struct app *k = ap;
+    for (int z = (int)app_zn - 1; z >= 0; z--) { ap = &apps[app_z[z]]; if (app_wbytes && box_meets(x0, y0, x1, y1, app_lx, app_ly, app_lw, app_lh)) app_paint(); }
+    ap = k;
+    fb_mute--;
+    if (fb != keep) {
+        for (int j = y0; j < y1; j++) for (int i = x0; i < x1; i++) keep[(unsigned)j * fb_pitch + (unsigned)i] = fb[(unsigned)j * fb_pitch + (unsigned)i];
+        fb = keep;
+    }
+}
 static void win_set(int t, int nx, int ny, int nw, int nh) {   /* the one place a window changes rectangle */
     if (!fb) return;
     int *px_ = win_rc(t, 0), *py_ = win_rc(t, 1), *pw_ = win_rc(t, 2), *ph_ = win_rc(t, 3);
     if (nx == *px_ && ny == *py_ && nw == *pw_ && nh == *ph_) return;
     int s = (int)window_scale(), ox = *px_ * s, oy = *py_ * s, w = *pw_ * s, h = *ph_ * s, px = nx * s, py = ny * s, dx = px - ox, dy = py - oy;
     int resized = nw != *pw_ || nh != *ph_;
-    cur_hide();
+    int ux = ox < px ? ox : px, uy = oy < py ? oy : py, ex = ox + w > px + nw * s ? ox + w : px + nw * s, ey = oy + h > py + nh * s ? oy + h : py + nh * s;
+    fb_hold(); fb_tag = 1;   /* 4.3.0: everything below reaches the screen as one copy, the old and new rectangles' union */
+    cur_hide(); cur_frozen++;
     if (t == WT_MAIN && !resized) {
         wall_vacate(*px_, *py_, *pw_, *ph_, 1);   /* what overhangs the frame stays behind otherwise */
         for (int j = 0; j < h; j++) {   /* a memmove by rows: the far rows first when moving down, the far columns first when moving right */
@@ -2155,28 +2233,26 @@ static void win_set(int t, int nx, int ny, int nw, int nh) {   /* the one place 
         wall_minus(ox, oy, w, h, px, py, w, h);
         *px_ = nx; *py_ = ny;
         con_x += dx; con_y += dy; con_wx += dx; con_wy += dy;   /* con_layout's origin and the title bar's "lines N-M" follow; the size, and so the rows and columns, are unchanged */
-        int ux = ox < px ? ox : px, uy = oy < py ? oy : py;
-        fb_flush(ux, uy, w + (dx < 0 ? -dx : dx), h + (dy < 0 ? -dy : dy));
-        return;
-    }
-    int old_meets_console = con_live && !(ox >= (win_lx + win_lw) * s || ox + w <= win_lx * s || oy >= (win_ly + win_lh) * s || oy + h <= win_ly * s);
-    wall_minus(ox, oy, w, h, px, py, nw * s, nh * s);
-    *px_ = nx; *py_ = ny; *pw_ = nw; *ph_ = nh;
-    win_sizing = resized;
-    if (t == WT_MAIN) {
+    } else if (t == WT_MAIN) {
+        wall_minus(ox, oy, w, h, px, py, nw * s, nh * s);
+        *px_ = nx; *py_ = ny; *pw_ = nw; *ph_ = nh;
+        win_sizing = resized;
         if (brick_live) brick_paint();
         else if (clock_live) clock_paint();
         else if (browser_live) { br_frame = 1; browser_paint(0); }
         else if (settings_live) set_paint();
         else { con_fit(); pane_draw(); }
+        win_sizing = 0;
     } else {
-        if (old_meets_console) { int cf = calc_front, af = app_front; calc_front = app_front = 0; pane_draw(); calc_front = cf; app_front = af; }   /* the Console behind, whole again where the window left it */
-        if (t == WT_CALC) calc_paint();
-        else { app_cw = (unsigned)(nw - 16); app_ch = (unsigned)(nh - 40); if (resized) app_note_resize(); app_paint(); }
+        *px_ = nx; *py_ = ny; *pw_ = nw; *ph_ = nh;
+        if (t == WT_APP) { app_cw = (unsigned)(nw - 16); app_ch = (unsigned)(nh - 40); if (resized) app_note_resize(); }
+        win_sizing = resized;
+        desk_compose(ux, uy, ex, ey);   /* the union again from the wallpaper up, every window that meets it in stacking order */
+        win_sizing = 0;
     }
-    win_sizing = 0;
-    int ux = ox < px ? ox : px, uy = oy < py ? oy : py, ex = ox + w > px + nw * s ? ox + w : px + nw * s, ey = oy + h > py + nh * s ? oy + h : py + nh * s;
     fb_flush(ux, uy, ex - ux, ey - uy);
+    cur_frozen--;
+    fb_release();
 }
 static void win_move_to(int nx, int ny) {   /* the front window (or the Console family's, when none is up) to this place, held whole between the menu bar and the dock's band */
     int t = drag_on || rs_on ? drag_t : WT_MAIN;
@@ -2216,6 +2292,7 @@ static void drag_end(void) {
 static void pointer_moved(void) {   /* one report done: the arrow to its new place, the dock's label to the slot under it */
     if (!fb) return;
     int s = (int)window_scale(), slot = gui_dock_hit_test((int)mouse_x / s, (int)mouse_y / s);
+    fb_hold();   /* 4.3.0: a moved window and the arrow on top of it go to the screen as one copy, at the end */
     if (drag_on || rs_on) {
         if (win_target() != drag_t) drag_on = rs_on = 0;
         else if (drag_on) win_move_to((int)mouse_x / s - drag_dx, (int)mouse_y / s - drag_dy);
@@ -2227,6 +2304,7 @@ static void pointer_moved(void) {   /* one report done: the arrow to its new pla
     cur_hide();
     if (slot != hover_slot) { hover_slot = slot; dock_hover(slot); }
     cur_show();
+    fb_release();
 }
 static int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx && x < bx + bw && y >= by && y < by + bh; }
 static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
@@ -3060,7 +3138,7 @@ static void fb_desktop(void) {
     mouse_x = (unsigned)((gui_slot_x(3) + DOCK_ICON / 2) * s); mouse_y = (unsigned)((gui_dock_y0() + DOCK_PAD + DOCK_ICON / 2) * s);
     pointer_moved();
 #endif
-    dcache_clean(fb, (unsigned long)fb_pitch * fb_h * 4);   /* the whole still picture out to RAM; con_glyph cleans as it goes from here */
+    fb_flush(0, 0, W, H);   /* the whole still picture to the screen; con_glyph flushes as it goes from here */
     /* Blank spots, clear of any text: the bottom of the window's white well, the menu bar's rule, and the wallpaper (the
        design system's dark fill at three corners, not the old 0x203040 fallback). Grey and white read the same either
        byte order; the rule and the fill are checked in fb_color order. */
@@ -3148,6 +3226,10 @@ void desktop_wall_changed(void) {   /* settings.c: the colour is already set */
 }
 static void fb_init(void) {
     if (!fb_setup()) return;
+    if ((unsigned long)fb_pitch * fb_h * 4 <= FB_RAM_MAX) {   /* 4.3.0: draw into RAM from here on; fb_flush copies to the scanout */
+        fb_scan = fb; fb = (unsigned *)FB_RAM_BASE;
+        for (unsigned long i = 0; i < (unsigned long)fb_pitch * fb_h; i++) fb[i] = fb_scan[i];
+    }
     mouse_x = fb_w / 2; mouse_y = fb_h / 2;               /* the pointer starts in the middle of the screen */
 #ifdef QUIET_BOOT
     splash_begin();                                       /* the desktop waits for splash_finish */
