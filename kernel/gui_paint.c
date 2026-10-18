@@ -643,7 +643,7 @@ void gui_close_glyph(int cx, int cy, unsigned int on){
     int pcx = cx * sc, pcy = cy * sc, L = 3 * sc;
     for (int dy = -L; dy <= L; dy++) for (int dx = -L; dx <= L; dx++) {
         int a = dx > dy ? dx - dy : dy - dx, b = dx + dy < 0 ? -dx - dy : dx + dy, m = a < b ? a : b;
-        if (!(dx || dy) || m > sc) continue;
+        if ((dx >= 0 && dx <= 1 && dy >= 0 && dy <= 1) || m > sc) continue;   /* the centre block keeps the dot's own colour: every check reads it to know the window is up */
         unsigned int c = m < sc ? ink : soft;
         if (sc > 1) window_pixel_phys(pcx + dx, pcy + dy, c); else window_pixel(cx + dx, cy + dy, c);
     }
