@@ -2648,7 +2648,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Bookrank | `tools/checks/ring3bookrank-check.py`, `tools/checks/ring3bookrank-live-check.py` |
 | Quotes | `tools/checks/ring3quotes-check.py`, `tools/checks/stocks-live-check.mjs` |
 | Patois | `tools/checks/ring3tonchi-check.py`, `tools/checks/ring3tonchi-live-check.py` |
-| Toroid | `tools/checks/arm64-games-check.py`, `tools/checks/arm64-windows-check.py`, `tools/checks/ring3toroid-check.py` |
+| Toroid | `tools/checks/arm64-dirtyrect-check.py`, `tools/checks/arm64-games-check.py`, `tools/checks/arm64-windows-check.py`, `tools/checks/ring3toroid-check.py` |
 | Thinkpond | `tools/checks/ring3hikko-check.py`, `tools/checks/ring3hikko-live-check.py` |
 | Fieldbook | `tools/checks/ring3fieldbook-check.py` |
 | Contacts | `tools/checks/ring3contacts-check.py` |
