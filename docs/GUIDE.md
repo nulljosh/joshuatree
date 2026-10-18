@@ -30,7 +30,7 @@ Your files live in the card's `JT/` folder. Open any app with F1 and its name.
 
 The Pi's firmware reads `config.txt` on the card and loads `kernel8.img`. Raspberry Pi OS is not involved. The first instructions pick one CPU core, set up its stack and clear empty variables while the other cores wait. The kernel then sets up memory, the screen, input and networking, and draws the desktop.
 
-While it boots, the Pi shows a splash: the tree mark and a thin line that grows as the screen, card, Wi-Fi, clock and Bluetooth finish. The desktop paints once, when Wi-Fi has joined or given up, the clock has synced or given up, and the radio is up (or has said it will not be).
+While it boots, the Pi shows a splash: the tree mark and a thin line that glides forward as the screen, card, Wi-Fi, clock and Bluetooth finish. The desktop paints once, when Wi-Fi has joined or given up, the clock has synced or given up, and the radio is up (or has said it will not be).
 
 Any FAIL or oom line ends the splash at once, so a failure is never hidden. A crash draws its red panel over it. The boot log is kept. A click on a dock tile with no app of its own (Mail, for one) opens the Console.
 
@@ -163,7 +163,7 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 
 **Terminal: the command line.** Its bottom row is a zsh style prompt, `joshua@tree % `. Every command runs and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window. Side-by-side panes remain future work.
 
-The commands are in the User guide section. The Samantha dock tile and Spotlight's Samantha entry open this same Terminal on the ARM build (type `sam` there). The chat view on the i386 build is unchanged.
+The commands are in the User guide section. The Samantha dock tile and Spotlight's Samantha entry open this same Terminal on the ARM build and the tile types `sam ` for you, so just add the question. The chat view on the i386 build is unchanged.
 
 ### Keys
 

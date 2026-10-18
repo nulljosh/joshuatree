@@ -119,6 +119,11 @@ int ask_char(unsigned code) {   /* main.c's Calculator and Spotlight: same map, 
     int up = plain[code] >= 'a' && plain[code] <= 'z' ? shift != caps : shift;
     return up ? shifted[code] : plain[code];
 }
+void ask_prefill(const char *s) {   /* main.c: the Samantha tile types `sam ` on an empty line, so the next word is the question */
+    if (ac->len || ac->pending || sam_state) return;
+    while (*s && ac->len < ASK_MAX) ac->line[ac->len++] = *s++;
+    ac->line[ac->len] = 0;
+}
 void ask_redraw(void) { con_prompt(ac->line, ac->len); }   /* main.c: the Terminal was reopened, put the line being typed back */
 
 /* One key event from any keyboard. 1 when it is the editor's (the caller then keeps its echo line off the screen). */
