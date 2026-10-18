@@ -1,5 +1,5 @@
 {
- "_note": "A slice of the real hikko.heyitsmejosh.com/api/posts, captured 2026-10-04 (list ?limit=12 and one ?id= per row), trimmed to the fields worker.js reads.",
+ "_note": "A slice of the real hikko.jaybulb.com/api/posts, captured 2026-10-04 (list ?limit=12 and one ?id= per row), trimmed to the fields worker.js reads.",
  "list": [
   {
    "id": "post-1788771685045-k789ro",

@@ -20,7 +20,7 @@
 // Usage: node mobiletest.mjs [url]
 import { chromium, devices } from 'playwright';
 
-const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com';
+const url = process.argv[2] || 'https://joshuatree.jaybulb.com';
 const iPhone = devices['iPhone 13'];
 
 const browser = await chromium.launch();

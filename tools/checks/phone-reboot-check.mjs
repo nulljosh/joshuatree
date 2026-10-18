@@ -4,7 +4,7 @@
 // back as a letterboxed 1920x1080 desktop (and lost facehost) after lap 1.
 // Usage: node tools/checks/phone-reboot-check.mjs [url]   (default: the live site)
 import { chromium, devices } from 'playwright';
-const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com/';
+const url = process.argv[2] || 'https://joshuatree.jaybulb.com/';
 const b = await chromium.launch();
 const p = await (await b.newContext({ ...devices['iPhone 15'] })).newPage();
 await p.goto(url, { waitUntil: 'load' });

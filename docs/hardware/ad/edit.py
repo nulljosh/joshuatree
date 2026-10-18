@@ -50,7 +50,7 @@ def card(text, dur, out, size=120):
 
 def end(dur, out):
     title = text_png("Joshua Tree", 96, INK, "cut/title.png")
-    sub = text_png("Join the waitlist.  joshuatree.heyitsmejosh.com", 34, SOFT, "cut/sub.png")
+    sub = text_png("Join the waitlist.  joshuatree.jaybulb.com", 34, SOFT, "cut/sub.png")
     fc = (f"[0:v]scale=1998:1124,crop=1920:1080:39:'t*4',fps={FPS}[bg];"  # slow drift up
           f"[1:v]format=rgba,fade=t=in:st=0.4:d=0.6:alpha=1[t];[2:v]format=rgba,fade=t=in:st=1.8:d=0.6:alpha=1[s];"
           f"[bg][t]overlay=(W-w)/2:96[a];[a][s]overlay=(W-w)/2:218,trim=duration={dur},fade=t=out:st={dur - 1.2}:d=1.2,format=yuv420p")

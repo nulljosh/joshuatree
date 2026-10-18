@@ -23,14 +23,14 @@ let wire;
 try {
   assert.equal((await handleStocks(new URL('https://example.com/api/stocks?range=evil'))).status,400);
   assert.equal(calls,0);
-  const target='http://joshuatree.heyitsmejosh.com/api/stocks?range=0';
-  const response=await handleProxy(new Request('https://joshuatree.heyitsmejosh.com/api/proxy?url='+encodeURIComponent(target)));
+  const target='http://joshuatree.jaybulb.com/api/stocks?range=0';
+  const response=await handleProxy(new Request('https://joshuatree.jaybulb.com/api/proxy?url='+encodeURIComponent(target)));
   wire=await response.text();
   assert.equal(calls,8); assert.equal(wire.trim().split('\n')[1],'0');
   assert.equal(response.headers.get('cache-control'),'no-store');
   const direct=await worker.fetch(new Request(target),{});
   assert.equal(await direct.text(),wire);
-  for (const url of ['http://evil.example/api/stocks','http://joshuatree.heyitsmejosh.com/other','http://joshuatree.heyitsmejosh.com:123/api/stocks']) {
+  for (const url of ['http://evil.example/api/stocks','http://joshuatree.jaybulb.com/other','http://joshuatree.jaybulb.com:123/api/stocks']) {
     assert.equal((await handleProxy(new Request('https://example.com/api/proxy?url='+encodeURIComponent(url)))).status,403);
   }
 } finally { globalThis.fetch=original; }
@@ -51,7 +51,7 @@ static int net_init(unsigned ip){assert(ip==0x0A00020F);return online;}
 static unsigned int ticks(void){return 7000;}
 static int http_last_status(void){return status;}
 static int http_get_timeout(const char*h,const char*p,int port,char*b,unsigned cap,unsigned timeout){
- assert(online); assert(!strcmp(h,"joshuatree.heyitsmejosh.com")); assert(!strcmp(p,"/api/stocks?range=0")); assert(port==80 && timeout==1000);
+ assert(online); assert(!strcmp(h,"joshuatree.jaybulb.com")); assert(!strcmp(p,"/api/stocks?range=0")); assert(port==80 && timeout==1000);
  unsigned n=strlen(reply); assert(n<cap); memcpy(b,reply,n); return n;
 }
 ${source}

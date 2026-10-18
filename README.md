@@ -19,7 +19,7 @@ A small operating system with its own windows, dock, sound, internet and 32 apps
 
 ## Try it
 
-Open [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com). On a PC, boot the [latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) ([checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS)); BIOS boot is checked in QEMU, UEFI and real PCs are not. On a Pi 4, flash a card with `tools/flash-pi.sh` ([steps](docs/GUIDE.md#raspberry-pi)). To build it: `brew install lld qemu`, then `make run` to boot and `./check.sh` to test.
+Open [joshuatree.jaybulb.com](https://joshuatree.jaybulb.com). On a PC, boot the [latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) ([checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS)); BIOS boot is checked in QEMU, UEFI and real PCs are not. On a Pi 4, flash a card with `tools/flash-pi.sh` ([steps](docs/GUIDE.md#raspberry-pi)). To build it: `brew install lld qemu`, then `make run` to boot and `./check.sh` to test.
 
 ## How fast
 

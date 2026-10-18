@@ -717,7 +717,7 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - 1.7.7 took the first step: Keyrate runs as a real ring-3 process with its own window, and crashing it on purpose leaves the desktop standing.
 - [x] 2.1: Music. A player app in its own protected space: WAV first, then MP3 through a small public-domain decoder, a library from Files, play and pause through the sound driver it already has.
 - [x] 2.2: Video. A player app: motion-JPEG first (reusing the JPEG decoder the kernel already has) with sound in sync, then a real codec when the hardware allows.
-- [x] 2.5: Joshua on the web. Numbered 2.5 on Joshua's call, so the plan's 2.1 Music and 2.2 Video are still open. The portfolio at heyitsmejosh.com is Joshua's own: the chat is titled Joshua, answers in the first person and speaks in his cloned voice, and the page opens on a 28 second lip-synced intro of him before the live OS takes over. Done, shipped as 2.5.0.
+- [x] 2.5: Joshua on the web. Numbered 2.5 on Joshua's call, so the plan's 2.1 Music and 2.2 Video are still open. The portfolio at jaybulb.com is Joshua's own: the chat is titled Joshua, answers in the first person and speaks in his cloned voice, and the page opens on a 28 second lip-synced intro of him before the live OS takes over. Done, shipped as 2.5.0.
 - 3.0: Hold it. Joshua Tree runs on a real Raspberry Pi 4: the desktop boots on the board and you can type and click on it, mouse included. Sound from the 3.5 mm jack, Samantha over Wi-Fi through the Mac relay, a new mark. The reference mini PC (UEFI, a real disk, a real network card) moves to a later 3.x.
 - 3.1: The Samantha box ships as a kit. The printed case from `docs/hardware/`, a Pi 4, a 7 inch screen, a speaker and the card, bring your own parts (MONEY.md has the math).
 - 4.0: Many windows. Real multitasking: a window server, real processes, pipes, a Terminal with tabs and splits. Three apps run at once, one crashes, the other two do not notice. Doom is the proof. May go mobile first: one app full screen, a home grid, gestures.
@@ -1273,7 +1273,7 @@ By the second week of October there were more tasks than hours, so API credit st
 
 The sentence the whole project is trying to make true: a computer you can talk to and tell what to fix. The Pi on the desk is the first one that could.
 
-*How this was written.* By Joshua with Claude in October 2026, from the repo's docs and git log and the public journal at journal.heyitsmejosh.com. Every date and number traces to a commit, a doc or a photo in `docs/hardware/`.
+*How this was written.* By Joshua with Claude in October 2026, from the repo's docs and git log and the public journal at journal.jaybulb.com. Every date and number traces to a commit, a doc or a photo in `docs/hardware/`.
 
 ## Our story and launch drafts
 
@@ -1323,7 +1323,7 @@ Not posted. Drafts for Joshua to edit and send. Every claim here was true on 202
 
 I'm one person in Langley, BC, working with Claude. Five weeks ago I wrote a kernel that printed text and read a keyboard. Now it has a desktop, a dock, a file system, sound, a network stack and 26 apps, each in its own protected space. It does not use Linux or a C library, and it's Apache 2.0.
 
-You can boot the real thing in your browser, no install: joshuatree.heyitsmejosh.com
+You can boot the real thing in your browser, no install: joshuatree.jaybulb.com
 
 On October 6 it booted on a real Raspberry Pi 4 for the first time. The first try was a black screen because the SD card wasn't seated. The log of what went wrong on the real board is public, mistakes included.
 
@@ -1339,7 +1339,7 @@ Happy to answer questions about the hard parts: the USB stack, the framebuffer c
 2. (5 to 12 s) The desktop appears: wallpaper, menu bar, dock. Type a line on the keyboard.
 3. (12 to 20 s) Move the mouse, hover a dock tile, open an app. **Needs the mouse.**
 4. (20 to 26 s) Samantha answers a spoken question. Use the browser demo if the Pi has no sound yet.
-5. (26 to 30 s) "Made by one person and Claude. Free. joshuatree.heyitsmejosh.com"
+5. (26 to 30 s) "Made by one person and Claude. Free. joshuatree.jaybulb.com"
 
 Voice: Joshua's own, plain. No music from anyone else. No claims beyond what is on screen.
 
@@ -1352,11 +1352,11 @@ Voice: Joshua's own, plain. No music from anyone else. No claims beyond what is 
 
 ## Portfolio mode
 
-heyitsmejosh.com is a mode of Joshua Tree, not a different program. The same kernel boots, with one word added to its command line, and the chat becomes Joshua. The default build is untouched: there she is still Samantha.
+jaybulb.com is a mode of Joshua Tree, not a different program. The same kernel boots, with one word added to its command line, and the chat becomes Joshua. The default build is untouched: there she is still Samantha.
 
 ### How it switches on
 
-The page embeds `joshuatree.heyitsmejosh.com/?full&portfolio`. `landing/v86/embed.js` sees `?portfolio` and boots the kernel with `portfolio samantha`. The kernel remembers it (`portfolio_dock` in `kernel/kernel.c`) and passes `portfolio` to every windowed ring-3 app as an argument (`kernel/ring3app.c`). Only the chat reads it.
+The page embeds `joshuatree.jaybulb.com/?full&portfolio`. `landing/v86/embed.js` sees `?portfolio` and boots the kernel with `portfolio samantha`. The kernel remembers it (`portfolio_dock` in `kernel/kernel.c`) and passes `portfolio` to every windowed ring-3 app as an argument (`kernel/ring3app.c`). Only the chat reads it.
 
 ### What changes
 

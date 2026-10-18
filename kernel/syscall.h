@@ -37,7 +37,7 @@
 #define SYS_TASKS       386  /* 1.9.6: ebx = struct jt_tasks* (user), ecx = slot to kill or -1; fills the snapshot, 0 or -errno */
 
 /* 1.9.11: SYS_HTTP_GET, the one call the Curbfind port needed. One HTTP
-   GET to the fixed host joshuatree.heyitsmejosh.com, port 80: userland
+   GET to the fixed host joshuatree.jaybulb.com, port 80: userland
    names only the path, never the host, so a ring-3 program cannot point
    the kernel's network stack anywhere else.
      ebx = path (user, NUL-terminated): at most JT_HTTP_PATH_MAX bytes
@@ -178,7 +178,7 @@ struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
 #define JT_SHELL_LINE_MAX 160 /* same number as user/jtsys.h: cwd (63) + newline + command (95) */
 /* 1.9.26: SYS_HTTP_POST, the first slice of Samantha at ring 3 (docs/ARCHITECTURE.md,
    "Samantha at ring 3"). One HTTP POST of application/json to the chat host the
-   Settings app keeps (llm_host/llm_port in kernel.c, turing.heyitsmejosh.com:80 by
+   Settings app keeps (llm_host/llm_port in kernel.c, turing.jaybulb.com:80 by
    default): the program names only the path, never the host, the same rule as
    SYS_HTTP_GET. The six arguments do not fit three registers, so ebx is one struct:
      ebx = struct jt_http_post* (user, read): path (user, NUL terminated, same

@@ -5,7 +5,7 @@ Headless only (-display none). CI never touches the live site: the reply comes f
 loopback stub, the way tools/checks/ring3bookrank-live-check.py serves the shelf. The stub's
 good reply is not hand-written. It is what worker.js's own handleHikko() produces when its
 upstream fetches return tools/checks/hikko-fixture.json, a captured slice of the real
-hikko.heyitsmejosh.com/api/posts (the top-twelve list and one post per row), so a change to
+hikko.jaybulb.com/api/posts (the top-twelve list and one post per row), so a change to
 the Worker's wire format changes what the guest sees and this check notices. The same script
 proves the Worker only ever sends plain GETs to that one host.
 
@@ -56,14 +56,14 @@ const fx = JSON.parse(fs.readFileSync('tools/checks/hikko-fixture.json', 'utf8')
 const asked = [];
 globalThis.fetch = async (url, init) => {
   const u = String(url); asked.push([u, init && (init.method || init.body || init.headers) ? 'not a plain GET' : 'GET']);
-  const m = u.match(/^https:\/\/hikko\.heyitsmejosh\.com\/api\/posts\?id=([A-Za-z0-9_-]+)$/);
+  const m = u.match(/^https:\/\/hikko\.jaybulb\.com\/api\/posts\?id=([A-Za-z0-9_-]+)$/);
   if (m && fx.posts[m[1]]) return Response.json({post: fx.posts[m[1]]});
-  if (u === 'https://hikko.heyitsmejosh.com/api/posts?limit=12') return Response.json({posts: fx.list});
+  if (u === 'https://hikko.jaybulb.com/api/posts?limit=12') return Response.json({posts: fx.list});
   return new Response('no', {status: 404});
 };
 const res = await handleHikko();
 if (res.status !== 200) { console.error('worker answered ' + res.status); process.exit(1); }
-if (!asked.length || !asked.every(([u, how]) => how === 'GET' && u.startsWith('https://hikko.heyitsmejosh.com/api/posts?'))) { console.error('worker did something besides plain GETs to the Hikko API: ' + JSON.stringify(asked)); process.exit(1); }
+if (!asked.length || !asked.every(([u, how]) => how === 'GET' && u.startsWith('https://hikko.jaybulb.com/api/posts?'))) { console.error('worker did something besides plain GETs to the Hikko API: ' + JSON.stringify(asked)); process.exit(1); }
 if (asked.length !== 13) { console.error('expected the list plus 12 posts, asked ' + asked.length); process.exit(1); }
 process.stdout.write(await res.text());
 """

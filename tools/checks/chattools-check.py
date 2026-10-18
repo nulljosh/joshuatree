@@ -12,7 +12,7 @@ clickable), and reads her markers behind the kernel's
 "syscall: write(1) from ring 3: " serial prefix. Apps are opened through her
 open_app tool, never by dock coordinates. Same fake-HTTP-server shape as
 tools/checks/chat-samantha-check.py (reached from the guest at 10.0.2.2 via the
-kernel's llmhost=/llmport= override, turing.heyitsmejosh.com never touched).
+kernel's llmhost=/llmport= override, turing.jaybulb.com never touched).
 One fake server answers both POST /api/pick (scripted per question) and POST
 /api/chat inside one continuous boot, scenarios back to back, since the
 REMINDERS.TXT state an earlier scenario leaves is what the later ones read.
@@ -278,7 +278,7 @@ def send(s):
 
 def run_live():
     """--live: no host overrides at all, the kernel's own compiled-in
-    defaults (turing.heyitsmejosh.com:80, model samantha) are what's
+    defaults (turing.jaybulb.com:80, model samantha) are what's
     actually exercised, same shape as chat-samantha-check.py's own --live.
     Sends "remind me to test the live picker" through the shell `chat`
     command from a plain boot (text output only, no QMP/mouse needed

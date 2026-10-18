@@ -5,7 +5,7 @@ Headless only (-display none). App replies never touch the live site: they come 
 loopback stub, the way tools/checks/ring3bookrank-live-check.py serves the shelf. The stub's
 good replies are not hand-written. They are what worker.js's own handleLexly() produces when
 its upstream fetches return tools/checks/tonchi-fixture.json, a captured slice of the real
-lexly.heyitsmejosh.com catalog and course packs, so a change to the Worker's wire format changes
+lexly.jaybulb.com catalog and course packs, so a change to the Worker's wire format changes
 what the guest sees and this check notices.
 
 Each scenario boots a fresh guest with `open=tonchi` and a rtl8139 NIC (or none) and reads the
@@ -58,18 +58,18 @@ const fx = JSON.parse(fs.readFileSync('tools/checks/tonchi-fixture.json', 'utf8'
 const asked = [];
 globalThis.fetch = async (url) => {
   const u = String(url); asked.push(u);
-  const m = u.match(/^https:\/\/lexly\.heyitsmejosh\.com\/content\/courses\/([a-z0-9_]+)\.json$/);
+  const m = u.match(/^https:\/\/lexly\.jaybulb\.com\/content\/courses\/([a-z0-9_]+)\.json$/);
   if (m && fx.packs[m[1]]) return Response.json(fx.packs[m[1]]);
-  if (u === 'https://lexly.heyitsmejosh.com/content/catalog.json') return Response.json(fx.catalog);
+  if (u === 'https://lexly.jaybulb.com/content/catalog.json') return Response.json(fx.catalog);
   return new Response('no', {status: 404});
 };
 const out = {};
 for (const c of [null, 'spanish', 'python', 'dsa']) {
-  const res = await handleLexly(new URL('https://joshuatree.heyitsmejosh.com/api/lexly' + (c ? '?c=' + c : '')));
+  const res = await handleLexly(new URL('https://joshuatree.jaybulb.com/api/lexly' + (c ? '?c=' + c : '')));
   if (res.status !== 200) { console.error('worker answered ' + res.status + ' for ' + c); process.exit(1); }
   out[c || ''] = await res.text();
 }
-if (!asked.every(u => u.startsWith('https://lexly.heyitsmejosh.com/content/'))) { console.error('worker fetched something else: ' + asked); process.exit(1); }
+if (!asked.every(u => u.startsWith('https://lexly.jaybulb.com/content/'))) { console.error('worker fetched something else: ' + asked); process.exit(1); }
 process.stdout.write(JSON.stringify(out));
 """
 r = subprocess.run(["node", "--input-type=module", "-e", NODE], capture_output=True, text=True)

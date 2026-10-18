@@ -9,7 +9,7 @@ real Mail store -- not just that the picker names the tool.
 "syscall: write(1) from ring 3: " serial prefix. Same fake HTTP server shape
 as tools/checks/chattools-check.py, answering both POST /api/pick and POST
 /api/chat, reached from the guest at 10.0.2.2 via the kernel's
-llmhost=/llmport= override -- turing.heyitsmejosh.com never touched.
+llmhost=/llmport= override -- turing.jaybulb.com never touched.
 
 Scenarios (one continuous boot, in order):
   (a) "read my email" -> pick answers {"tool":"read_mail","arg":""}.

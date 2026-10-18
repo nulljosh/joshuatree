@@ -71,10 +71,10 @@ await page.route('**/api/proxy**', async (route) => {
   try { target = new URL(req.url()).searchParams.get('url') || ''; } catch (e) { /* 403 below */ }
   let targetUrl = null;
   try { targetUrl = new URL(target); } catch (e) { /* 403 below */ }
-  const isFace = targetUrl && targetUrl.hostname === 'joshuatree.heyitsmejosh.com' && /^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname);
-  const isChat = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/chat';
-  const isPick = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/pick';
-  const isSpeak = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/speak';
+  const isFace = targetUrl && targetUrl.hostname === 'joshuatree.jaybulb.com' && /^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname);
+  const isChat = targetUrl && targetUrl.hostname === 'turing.jaybulb.com' && targetUrl.pathname === '/api/chat';
+  const isPick = targetUrl && targetUrl.hostname === 'turing.jaybulb.com' && targetUrl.pathname === '/api/pick';
+  const isSpeak = targetUrl && targetUrl.hostname === 'turing.jaybulb.com' && targetUrl.pathname === '/api/speak';
   if (isFace && req.method() === 'GET') {
     const file = path.join(root, 'face', path.basename(targetUrl.pathname));
     if (fs.existsSync(file)) await route.fulfill({ status: 200, contentType: 'image/jpeg', headers: { 'Access-Control-Allow-Origin': '*' }, body: fs.readFileSync(file) });

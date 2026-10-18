@@ -3,7 +3,7 @@
 // satellite wallpaper and the new multi-window demo actually paint
 // correctly for a real visitor. This session runs in a cloud sandbox with
 // no physical display attached, and its own network egress policy blocks
-// joshuatree.heyitsmejosh.com directly (confirmed repeatedly, see
+// joshuatree.jaybulb.com directly (confirmed repeatedly, see
 // ROADMAP.md's CORS-fix entries) -- there's no way to screenshot the real
 // live site from in here. GitHub Actions runners have real, unrestricted
 // internet access (already proven by check.yml's own `network` job and
@@ -17,7 +17,7 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 
-const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com';
+const url = process.argv[2] || 'https://joshuatree.jaybulb.com';
 const outDir = process.argv[3] || 'capture';
 const durationMs = Number(process.argv[4] || 100000);
 fs.mkdirSync(outDir, { recursive: true });

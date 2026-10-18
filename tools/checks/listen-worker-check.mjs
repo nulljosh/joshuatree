@@ -8,7 +8,7 @@ import { handleListen, wrapPcmAsWav, LISTEN_MAX_BYTES } from "../../worker.js";
 
 function req(body, headers = {}) {
   const h = new Headers({ "content-length": String(body ? body.byteLength : 0), ...headers });
-  return new Request("https://joshuatree.heyitsmejosh.com/api/listen", {
+  return new Request("https://joshuatree.jaybulb.com/api/listen", {
     method: "POST",
     headers: h,
     body,

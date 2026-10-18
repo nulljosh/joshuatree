@@ -88,7 +88,7 @@ async function handleProxy(request, env) {
     return new Response("Invalid url parameter", { status: 400 });
   }
 
-  if (targetUrl.hostname === "joshuatree.heyitsmejosh.com"
+  if (targetUrl.hostname === "joshuatree.jaybulb.com"
       && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password) {
     if (targetUrl.pathname === "/api/stocks") return handleStocks(targetUrl);
     if (targetUrl.pathname === "/api/quotes") return handleQuotes();
@@ -99,7 +99,7 @@ async function handleProxy(request, env) {
     // v1.6.12: kernel/chat_face.h's chat_face_load fetches Samantha's Chat
     // face frames (idle-0..5.jpg, talk-0..11.jpg) over the same plain-HTTP
     // stack every other guest request uses, from facehost=joshuatree.
-    // heyitsmejosh.com (embed.js's cmdline). Those files are static assets
+    // jaybulb.com (embed.js's cmdline). Those files are static assets
     // in this exact deploy (landing/face/*.jpg, wrangler.toml's [assets]
     // binding), so a plain GET, self-fetched over HTTPS, is a real,
     // narrowly-shaped exception -- same idea as /api/stocks etc above, just
@@ -116,7 +116,7 @@ async function handleProxy(request, env) {
       // Read the frame from this deploy's own assets: a Worker fetching its
       // own hostname over the network gets Cloudflare's 522, so the guest's
       // face never loaded on the live site.
-      const resp = await env.ASSETS.fetch(new Request("https://joshuatree.heyitsmejosh.com" + targetUrl.pathname));
+      const resp = await env.ASSETS.fetch(new Request("https://joshuatree.jaybulb.com" + targetUrl.pathname));
       const headers = new Headers(resp.headers);
       headers.set("Access-Control-Allow-Origin", "*");
       // The kernel counts frames by asking for the next one until it fails,
@@ -130,7 +130,7 @@ async function handleProxy(request, env) {
 
   // 1.0.12: a tight, deliberately narrow exception for Chat talking to the
   // Turing project's own Ollama-compatible /api/chat (kernel/chat.h's
-  // chat_send). turing.heyitsmejosh.com is NOT added to ALLOWED_HOSTS --
+  // chat_send). turing.jaybulb.com is NOT added to ALLOWED_HOSTS --
   // every other request to it, or to this exact path with a different
   // method/content-type/size, falls straight through to the ordinary
   // isAllowedTarget() check below and gets the same 403 any other
@@ -156,14 +156,14 @@ async function handleProxy(request, env) {
   // the exact same shape (POST, application/json, {"text","format"}, well
   // under the cap) to the same llm_host chat_send/chat_pick already use.
   // Without this, Chat's speak_text always got the generic 403 below (no
-  // ALLOWED_HOSTS entry for turing.heyitsmejosh.com), so speak: status=200
+  // ALLOWED_HOSTS entry for turing.jaybulb.com), so speak: status=200
   // never happened on the real deployed page -- audio was silently dead in
   // production even with sb16 wired up correctly on the kernel side. The
   // response here is raw PCM, not JSON, but this block only inspects the
   // REQUEST's content-type/size and passes the response body straight
   // through untouched either way.
   const SAMANTHA_PATHS = new Set(["/api/chat", "/api/pick", "/api/speak"]);
-  const isSamanthaChat = targetUrl.hostname === "turing.heyitsmejosh.com" && SAMANTHA_PATHS.has(targetUrl.pathname)
+  const isSamanthaChat = targetUrl.hostname === "turing.jaybulb.com" && SAMANTHA_PATHS.has(targetUrl.pathname)
       && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password;
   const CHAT_SAMANTHA_MAX_BODY = 8192; // 8 KB, the task's own stated cap
   if (isSamanthaChat && request.method === "POST") {
@@ -183,7 +183,7 @@ async function handleProxy(request, env) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": "JoshuaTree-kernel-demo/1 (+https://joshuatree.heyitsmejosh.com)",
+        "User-Agent": "JoshuaTree-kernel-demo/1 (+https://joshuatree.jaybulb.com)",
       },
       body: bodyBuffer,
     });
@@ -254,7 +254,7 @@ async function handleProxy(request, env) {
   // line.
   const upstreamResponse = await fetchWithTimeout(targetUrl.toString(), {
     method: "GET",
-    headers: { "User-Agent": "JoshuaTree-kernel-demo/1 (+https://joshuatree.heyitsmejosh.com)" },
+    headers: { "User-Agent": "JoshuaTree-kernel-demo/1 (+https://joshuatree.jaybulb.com)" },
   });
 
   const headers = new Headers(upstreamResponse.headers);
@@ -347,13 +347,13 @@ async function handleDeals(request) {
 }
 
 // Bookrank, the public ranked shelf from the real app's REST API
-// (bookrank.heyitsmejosh.com/api/books, a read-only GET). The kernel gets
+// (bookrank.jaybulb.com/api/books, a read-only GET). The kernel gets
 // plain text so its parser stays small: first line is the shelf total, then
 // one `rank|rating x100|reviews|badge|title|author|notes` row per book. A
 // field never holds a pipe, a newline or a non-ASCII byte, whatever the
 // upstream sends. Per-account chapter summaries are not public, so the
 // notes line is the summary the OS can show.
-const BOOKRANK_API = "https://bookrank.heyitsmejosh.com/api/books?section=ranked&limit=12";
+const BOOKRANK_API = "https://bookrank.jaybulb.com/api/books?section=ranked&limit=12";
 const wireText = (v, max) => String(v ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
   .replace(/[^\x20-\x7e]/g, " ").replace(/\|/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 function bookrankWire(data) {
@@ -380,10 +380,10 @@ async function handleBooks() {
 }
 
 // Tonchi (was Lexly), "learn anything": the real app's public course packs.
-// The App Store rename is not applied and tonchi.heyitsmejosh.com does not
+// The App Store rename is not applied and tonchi.jaybulb.com does not
 // exist yet, so the address, the /api/lexly route and the LEXLY_* names stay
 // as they are: a URL is not a label. Flip LEXLY_SITE when the new host answers.
-// (lexly.heyitsmejosh.com/content/catalog.json and /content/courses/<id>.json,
+// (lexly.jaybulb.com/content/catalog.json and /content/courses/<id>.json,
 // static read-only files). Two wires for the Tonchi app:
 //   /api/lexly            first line the course count, then `id|name|category`
 //   /api/lexly?c=<id>     first line the question count, then
@@ -402,7 +402,7 @@ async function handleBooks() {
 // logic, Pre-Calculus 11), which keep only four to six four-choice questions
 // that survive. Accented languages (Polish, Czech, Turkish, Vietnamese and
 // the like) are offered with their accents stripped.
-const LEXLY_SITE = "https://lexly.heyitsmejosh.com";
+const LEXLY_SITE = "https://lexly.jaybulb.com";
 const LEXLY_COURSES = [
   "spanish", "french", "german", "italian", "portuguese", "dutch", "turkish", "polish", "swedish",
   "vietnamese", "indonesian", "czech", "danish", "finnish", "norwegian", "hungarian", "romanian", "catalan",
@@ -478,7 +478,7 @@ async function handleLexly(url) {
 }
 
 // Hikko, the idea forum: the real app's public, read-only post feed
-// (hikko.heyitsmejosh.com/api/posts, no login, no token). The list call
+// (hikko.jaybulb.com/api/posts, no login, no token). The list call
 // (?limit=12) has the title, score and category; the body and the plan only come
 // from the one-post call (?id=), so the top twelve are read in parallel. Wire:
 //   first line the row count, then `votes|category|title|text|plan`
@@ -486,7 +486,7 @@ async function handleLexly(url) {
 // post with no readable title is dropped. A post whose body call fails keeps its
 // row with empty text, so the OS still shows the idea. No write path: this
 // route never sends a vote, a post or a header from the guest.
-const HIKKO_API = "https://hikko.heyitsmejosh.com/api/posts";
+const HIKKO_API = "https://hikko.jaybulb.com/api/posts";
 const HIKKO_MAX_ROWS = 12, HIKKO_TITLE = 60, HIKKO_CAT = 14, HIKKO_TEXT = 150, HIKKO_PLAN = 200, HIKKO_MAX_BYTES = 5800;
 function hikkoText(v, max) {
   if (typeof v !== "string") return "";
@@ -574,7 +574,7 @@ const WAITLIST_MAIL_TEXT = [
   "",
   "While you wait, try the real thing. Joshua Tree is a computer built from scratch, with its own apps and Samantha to help you use them. It runs right in your browser.",
   "",
-  "Try Joshua Tree: https://joshuatree.heyitsmejosh.com",
+  "Try Joshua Tree: https://joshuatree.jaybulb.com",
   "Watch the short film: https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7.mp4",
   "",
   "The dev kit will be a Raspberry Pi running Joshua Tree. Neo, the case, is still a concept. Neither is for sale yet.",
@@ -590,9 +590,9 @@ const WAITLIST_MAIL_HTML = `<!doctype html>
 <div style="display:none;max-height:0;overflow:hidden;mso-hide:all">You're on the dev kit waitlist. I'll let you know when the first kits are ready.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf8f4"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px">
-<tr><td style="padding:0 0 24px;border-bottom:1px solid #dedbd5"><img src="https://joshuatree.heyitsmejosh.com/mark.png" width="40" height="40" alt="" style="display:inline-block;vertical-align:middle;margin-right:12px"><span style="font-size:14px;font-weight:700;letter-spacing:2px;vertical-align:middle">JOSHUA TREE</span></td></tr>
+<tr><td style="padding:0 0 24px;border-bottom:1px solid #dedbd5"><img src="https://joshuatree.jaybulb.com/mark.png" width="40" height="40" alt="" style="display:inline-block;vertical-align:middle;margin-right:12px"><span style="font-size:14px;font-weight:700;letter-spacing:2px;vertical-align:middle">JOSHUA TREE</span></td></tr>
 <tr><td style="padding:32px 0 28px"><p style="margin:0 0 12px;color:#964326;font-size:12px;font-weight:700;letter-spacing:2px">THE DEV KIT WAITLIST</p><h1 style="margin:0 0 20px;font-size:40px;line-height:1.1;letter-spacing:-1.5px;font-weight:700">Welcome to<br>Joshua Tree.</h1><p style="margin:0;font-size:17px;line-height:1.6">You're on the list. I'll email you when the first kits are ready. Nothing to buy or do today.</p></td></tr>
-<tr><td style="padding:28px;background:#fff;border:1px solid #dedbd5;border-radius:16px"><h2 style="margin:0 0 12px;font-size:24px;line-height:1.2;letter-spacing:-0.5px">While you wait, try the real thing.</h2><p style="margin:0 0 24px;font-size:16px;line-height:1.6">A computer built from scratch, with its own apps and Samantha to help you use them. It runs right in your browser.</p><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#b5502c" style="border-radius:24px"><a href="https://joshuatree.heyitsmejosh.com" style="display:inline-block;padding:14px 24px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;border-radius:24px">Try Joshua Tree</a></td></tr></table><p style="margin:20px 0 0;font-size:14px;line-height:1.5"><a href="https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7.mp4" style="color:#964326;text-decoration:underline">Watch the short film</a></p></td></tr>
+<tr><td style="padding:28px;background:#fff;border:1px solid #dedbd5;border-radius:16px"><h2 style="margin:0 0 12px;font-size:24px;line-height:1.2;letter-spacing:-0.5px">While you wait, try the real thing.</h2><p style="margin:0 0 24px;font-size:16px;line-height:1.6">A computer built from scratch, with its own apps and Samantha to help you use them. It runs right in your browser.</p><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#b5502c" style="border-radius:24px"><a href="https://joshuatree.jaybulb.com" style="display:inline-block;padding:14px 24px;color:#fff;font-size:15px;font-weight:600;text-decoration:none;border-radius:24px">Try Joshua Tree</a></td></tr></table><p style="margin:20px 0 0;font-size:14px;line-height:1.5"><a href="https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7.mp4" style="color:#964326;text-decoration:underline">Watch the short film</a></p></td></tr>
 <tr><td style="padding:28px 0"><p style="margin:0 0 20px;color:#5b5751;font-size:14px;line-height:1.6">The dev kit will be a Raspberry Pi running Joshua Tree. Neo, the case, is still a concept. Neither is for sale yet.</p><p style="margin:0;font-size:16px;line-height:1.6">Thanks for being here at the beginning.<br><strong>Joshua</strong></p></td></tr>
 <tr><td style="padding:20px 0 0;border-top:1px solid #dedbd5;color:#5b5751;font-size:12px;line-height:1.6">You received this because you joined the Joshua Tree dev kit waitlist.<br>Free and open source. Made in Vancouver, BC.</td></tr>
 </table></td></tr></table></body></html>`;
@@ -678,7 +678,7 @@ async function handleSpeakGet(url, request, env) {
   }
   const text = (url.searchParams.get("t") || "").slice(0, 300);
   if (!text) return new Response("missing t", { status: 400 });
-  const up = await fetch("https://turing.heyitsmejosh.com/api/speak", {
+  const up = await fetch("https://turing.jaybulb.com/api/speak", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, format: "pcm8", voice: url.searchParams.get("v") === "joshua" ? "joshua" : undefined }), // his cloned voice in portfolio mode
@@ -725,7 +725,7 @@ async function handleListen(request, env) {
 // Settings, so the public demo cannot relay mail); a per-IP limit (MAIL_RATE_LIMITER, and with no
 // binding it refuses rather than running unlimited); one validated recipient; capped text.
 // Fixed sender, no reply-to, so this can never be used to impersonate anyone.
-const MAIL_SEND_FROM = "Samantha <samantha@epiphany.heyitsmejosh.com>";
+const MAIL_SEND_FROM = "Samantha <samantha@epiphany.jaybulb.com>";
 const MAIL_MAX_BODY_BYTES = 8192;
 const MAIL_ADDR_RE = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
 
@@ -766,7 +766,7 @@ async function handleMailSend(request, env) {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: MAIL_SEND_FROM, to: [to], subject, text: `${body}\n\n--\nSent by ${fromName} from Joshua Tree (joshuatree.heyitsmejosh.com).` }),
+      body: JSON.stringify({ from: MAIL_SEND_FROM, to: [to], subject, text: `${body}\n\n--\nSent by ${fromName} from Joshua Tree (joshuatree.jaybulb.com).` }),
     });
     if (!res.ok) { console.warn("mail send failed", res.status, await res.text()); return mailErr(502, "the mail service refused the message"); }
   } catch (e) { console.warn("mail send error", String(e)); return mailErr(502, "the mail service is unreachable"); }

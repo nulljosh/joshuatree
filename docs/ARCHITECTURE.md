@@ -414,7 +414,7 @@ Checks that must keep passing (`tools/checks`): `samantha-fullscreen-check.py` (
 Twenty-six apps live in the Apps folder; the dock pins the ones you reach
 for most. Each is one header. They come in three shapes.
 
-Renames (2.6.30): Lexly is Tonchi, Roost is Brick, Voxprint is Notate, Siftbox is Hagaki and Sparkjar is Hikko. Samantha still opens an app by its old name. Tonchi keeps `lexly.heyitsmejosh.com` and `/api/lexly` until its own address exists. Block Frame still answers at its old `wiretext` address.
+Renames (2.6.30): Lexly is Tonchi, Roost is Brick, Voxprint is Notate, Siftbox is Hagaki and Sparkjar is Hikko. Samantha still opens an app by its old name. Tonchi keeps `lexly.jaybulb.com` and `/api/lexly` until its own address exists. Block Frame still answers at its old `wiretext` address.
 
 **Apps with a file on disk.** Same pattern every time: a fixed-size array
 in RAM, one plain text file on the FAT disk, written through on every
@@ -1285,7 +1285,7 @@ Errors: -EFAULT (bad pointer).
 
 **http_get** is what the Curbfind app fetches its live rows with, and the
 first call that puts the kernel's network stack behind a ring-3 program. It
-sends one `GET <path> HTTP/1.0` to `joshuatree.heyitsmejosh.com` port 80; the
+sends one `GET <path> HTTP/1.0` to `joshuatree.jaybulb.com` port 80; the
 host and port are fixed in the kernel and a program cannot name another. The
 path is copied out of user memory a byte at a time with the same check every
 other pointer gets, and is refused with -EINVAL unless it is at most 128 bytes
@@ -1442,7 +1442,7 @@ struct jt_http_post {
 
 **http_post** is the first call of the Samantha port (the Architecture section,
 "Samantha at ring 3"): one `POST <path> HTTP/1.0` of `application/json` to the
-chat host the Settings app keeps (`llm_host:llm_port`, turing.heyitsmejosh.com
+chat host the Settings app keeps (`llm_host:llm_port`, turing.jaybulb.com
 port 80 by default). Six arguments do not fit three registers, so `ebx` names
 one struct, copied out of user memory once after `paging_user_range_ok` on the
 whole of it; the user copy is never read again. `path` gets the exact checks
@@ -2174,7 +2174,7 @@ Apps with no check yet: Trash.
 
 ## CI and deploy
 
-How a change gets from a branch to joshuatree.heyitsmejosh.com, on one page.
+How a change gets from a branch to joshuatree.jaybulb.com, on one page.
 
 ### The pipeline today
 

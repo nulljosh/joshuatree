@@ -104,7 +104,7 @@ static void stocks_fetch(int range) {
     if (!body) return;
     char path[] = "/api/stocks?range=0";
     path[sizeof(path) - 2] = '0' + range;
-    int n = net_init(0x0A00020F) ? http_get_timeout(stk_host_override[0] ? stk_host_override : "joshuatree.heyitsmejosh.com", path, stk_port_override ? stk_port_override : 80, body, 8191, 1000) : -1;
+    int n = net_init(0x0A00020F) ? http_get_timeout(stk_host_override[0] ? stk_host_override : "joshuatree.jaybulb.com", path, stk_port_override ? stk_port_override : 80, body, 8191, 1000) : -1;
     for (int i = 0; i < STOCKS_MAX; i++) stx_data[range][i].stale = 1;
     if (n > 0 && n < 8191 && http_last_status() == 200) {
         body[n] = 0; const char *p = body;

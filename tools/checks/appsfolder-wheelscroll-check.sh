@@ -4,7 +4,7 @@
 #
 # Replaces the old appsfolder-wheelscroll-test.mjs, which drove a
 # Playwright browser against the LIVE deployed site
-# (https://joshuatree.heyitsmejosh.com) through v86's in-browser PS/2
+# (https://joshuatree.jaybulb.com) through v86's in-browser PS/2
 # emulation, not this repo's local build, and asserted on a screenshot
 # pixel-diff fingerprint. That test reported "0.0% pixel difference" --
 # looked like a broken test, but root-causing it against the real kernel

@@ -4,7 +4,7 @@ name: Landing visual capture
 # wallpaper and the new multi-window demo actually paint correctly for a
 # real visitor. This session runs in a cloud sandbox with no physical
 # display attached, and its own network egress policy blocks
-# joshuatree.heyitsmejosh.com directly (confirmed repeatedly, see
+# joshuatree.jaybulb.com directly (confirmed repeatedly, see
 # ROADMAP.md's CORS-fix entries) -- there is no way to screenshot the
 # real live site from in here. GitHub Actions runners have real,
 # unrestricted internet access (already proven by check.yml's own
@@ -29,12 +29,12 @@ jobs:
       - name: Install a real Chromium for the vendored playwright package
         run: npx playwright install --with-deps chromium
       - name: Capture screenshots + video of the live idle tour
-        run: node tools/checks/live-visual-capture.mjs https://joshuatree.heyitsmejosh.com capture
+        run: node tools/checks/live-visual-capture.mjs https://joshuatree.jaybulb.com capture
       # Real pixel analysis printed straight to this job's own log, not a
       # binary artifact -- readable even when downloading a run artifact
       # is blocked (see this file's own header comment).
       - name: Real wallpaper pixel variance over a full idle-tour lap
-        run: node tools/checks/live-wallpaper-check.mjs https://joshuatree.heyitsmejosh.com/?desktop
+        run: node tools/checks/live-wallpaper-check.mjs https://joshuatree.jaybulb.com/?desktop
       - name: Upload capture as a run artifact
         uses: actions/upload-artifact@v4
         with:

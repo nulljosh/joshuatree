@@ -75,7 +75,7 @@ if (typeof document !== "undefined") (function () {
   // 2.48.1: on a desktop her input is the page's own field too (#demo-composer), drawn by the browser at full
   // sharpness; the kernel's bar is one small bitmap font scaled up with the rest of the screen, so it read pixelated.
   var PAGEBAR = WANT_SAMANTHA && !IS_PHONE;
-  var BOOT_CMDLINE = (PAGEBAR ? "pagebar " : "") + (IS_PHONE ? "phone samantha " : "") + RES_TOKEN + (/[?&]portfolio\b/.test(location.search) ? "portfolio samantha " : "") + (WANT_SAMANTHA && !IS_PHONE ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
+  var BOOT_CMDLINE = (PAGEBAR ? "pagebar " : "") + (IS_PHONE ? "phone samantha " : "") + RES_TOKEN + (/[?&]portfolio\b/.test(location.search) ? "portfolio samantha " : "") + (WANT_SAMANTHA && !IS_PHONE ? "samantha " : "") + "facehost=joshuatree.jaybulb.com";
   if (!HERO_SAMANTHA || IS_PHONE) { var dbl = document.getElementById("desktop-boot-link"); if (dbl) dbl.parentNode.style.display = "none"; }   // already on the desktop, his site, or a phone (the phone kernel has no desktop to show)
   var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
@@ -413,7 +413,7 @@ if (typeof document !== "undefined") (function () {
     // kernel/chat_face.h only turns Samantha's Chat face on when this exact
     // token is present, and the frames it fetches (idle-0..3, talk-0..7 under
     // /face/) are served by this same Cloudflare deploy at
-    // joshuatree.heyitsmejosh.com (landing/face/*.png, wrangler.toml's
+    // joshuatree.jaybulb.com (landing/face/*.png, wrangler.toml's
     // [assets] binding), reached through the guest's plain-HTTP stack over
     // the same cors_proxy relay below -- worker.js's handleProxy has a
     // matching /face/ path exception for that host, same shape as its
