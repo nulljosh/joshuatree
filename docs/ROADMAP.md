@@ -737,7 +737,7 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 Desktop apps run as protected ring-3 programs. The Pi app port is separate; its current limits are in `docs/GUIDE.md` (Samantha's agent loop on the Pi).
 
 - [ ] [Fable] Per-window backing stores, not drawing straight into the shared framebuffer.
-- [ ] [Fable] A compositor with damage tracking, plus the back buffer this kernel still lacks.
+- [ ] [Fable] A compositor with damage tracking, plus the back buffer this kernel still lacks. Pi part done in 4.3.0: a RAM back buffer and one damage rectangle per window move or resize (`arch/arm64/main.c`, `fb_flush`, `desk_compose`). Still open: per-window stores and damage for app redraws, and all of it on i386.
 - [ ] [Fable] Input routing by focus instead of the current global key/click pull.
 - [ ] [Fable] Every app converted from a blocking loop to open/draw/on_key/on_click handlers, or its own task.
 - [ ] [Sonnet] Window resize, minimize, and maximize. Needs the compositor above; once it lands, wire up the two unlit traffic-light dots.
@@ -1123,6 +1123,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.3.0 (2026-10-18)**: A back buffer on the Pi. Every painter draws into a RAM copy of the screen and `fb_flush` copies to the real framebuffer, so drags and resizes no longer flicker or smear. A moved or resized window repaints only the union of its old and new rectangles, put together off screen with the windows behind it, and reaches the screen in one copy with the arrow. Check: `arm64-dirtyrect-check.py`.
 - **3.10.0 (2026-10-12)**: Copy, paste and the Cmd keys on the Pi: one 4 KB plain-text clipboard in the kernel, reached by Notes through `JT_SYS_CLIPBOARD` (399) and directly by the Terminal input line and the Browser address bar; Cmd or Ctrl with A, C, X and V, Cmd+W closes the front window and Cmd+Q quits the app. Check: `tools/checks/arm64-clipboard-check.py`.
 - **3.9.3 (2026-10-13)**: A sample song on every fresh Pi card: `tools/flash-pi.sh` puts a self-made `HELLO.WAV` (16 seconds, bass, arpeggio and melody, from `tools/gen/sample-song.py`) in `JT/MUSIC/` when the folder has no songs, and never when it has. `tools/checks/arm64-music-check.py` plays it as a third song and checks its length and title; `tools/checks/flash-pi-check.sh` checks the flash rule.
 - **4.2.1 (2026-10-18)**: The Apps tile opens a Launchpad, not the Calculator: a cream card with all 22 apps Spotlight lists, icon over name, Trash greyed because it has no ARM app. Click a cell, or arrows and Enter; Esc or a click outside closes it and puts the desktop back pixel for pixel. The Calculator keeps Spotlight and the card, with no dock tile. `tools/checks/arm64-launchpad-check.py` is the gate.

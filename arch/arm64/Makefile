@@ -14,6 +14,7 @@
 #   cursortest  cursor-kernel8.elf / cursor-kernel8.img: the pointer's arrow over slot 3 at boot, with its hover label
 #   apptest     app-kernel8.img: APP_NAME (default calendar) opened at boot on the Pi image, for arm64-appsize-check.py at 1080p
 #   dragtest    drag-kernel8.elf / drag-kernel8.img: the Console dragged 100 right and 60 down at boot (clamped), for arm64-drag-check.py at 1080p
+#   dirtyrecttest dirtyrect-kernel8.elf: the glitch build (1080p ramfb) plus a `fb: flush` line per window move
 #   keydbgtest  keydbg-kernel8.elf: the dev card's key debug line on, plus made-up HID reports (a report ID) at boot
 #   calctest    calc-kernel8.elf: the Calculator open at boot with four sums typed into it
 #   caltest     cal-kernel8.elf: the clock fixed at CAL_UTC, so the Calendar tile shows that month with that day in the accent
@@ -292,6 +293,9 @@ dragtest: drag-kernel8.elf drag-kernel8.img
 keydbgtest: keydbg-kernel8.elf
 $(eval $(call variant,glitch,-DFB_BOOT_W=1920 -DFB_BOOT_H=1080 -DHEAP_SIZE=40UL*1024*1024,,))
 glitchtest: glitch-kernel8.elf
+# 4.3.0: the glitch build plus FB_TRACE's `fb: flush` line per window move (arm64-dirtyrect-check.py)
+$(eval $(call variant,dirtyrect,-DFB_BOOT_W=1920 -DFB_BOOT_H=1080 -DHEAP_SIZE=40UL*1024*1024 -DFB_TRACE,,))
+dirtyrecttest: dirtyrect-kernel8.elf
 $(eval $(call variant,calc,-DCALC_TEST,,))
 calctest: calc-kernel8.elf
 CAL_UTC ?= 1775000000
@@ -315,7 +319,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: glitchtest brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest reminderstest
+.PHONY: glitchtest dirtyrecttest brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest reminderstest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
