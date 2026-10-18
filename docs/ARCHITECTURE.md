@@ -20,33 +20,31 @@ How it is built, the rules it keeps, how it is tested and secured.
 
 ## Architecture
 
-Joshua Tree is a whole computer written from nothing. You turn it on, it
-draws a desktop, and you use its apps: notes, mail, a calendar, weather,
-a chat that can set reminders for you. Everything it does, it does
-itself. There is no Linux underneath and no borrowed library.
+Joshua Tree is a whole computer written from nothing.
 
-It runs in your browser on the landing page, in QEMU on a Mac, or from a
-USB stick on a real PC. It is all one file, `kernel.elf`, built from the
-`boot/`, `kernel/`, `drivers/` and `lib/` folders. `docs/ROADMAP.md` (Roadmap) is
-the plan; this page is the map of what exists today.
+You turn it on and it draws a desktop. You use its apps: notes, mail, a calendar, weather, a chat that can set reminders for you.
+
+Everything it does, it does itself. There is no Linux underneath and no borrowed library.
+
+It runs in three places:
+- in your browser, on the landing page
+- in QEMU on a Mac
+- from a USB stick on a real PC
+
+It is all one file, `kernel.elf`, built from the `boot/`, `kernel/`, `drivers/` and `lib/` folders.
+
+`docs/ROADMAP.md` (Roadmap) is the plan. This page is the map of what exists today.
 
 ### How it starts
 
-1. **Something loads it.** QEMU, the browser demo or a real bootloader
-   drops the kernel into memory and jumps to `boot/boot.S`.
-2. **It sets up its own memory.** A few lines of assembly move the kernel
-   to where it expects to live, then hand off to C.
-3. **It wakes the hardware, one piece at a time.** `kmain` starts the
-   processor tables, the clock, memory, the scheduler and the disk, each
-   one needing the last.
-4. **You land in a shell.** Type `gui` and the desktop starts. The shell
-   and the desktop are the same program; the Terminal is the shell in a
-   window.
+1. **Something loads it.** QEMU, the browser demo or a real bootloader drops the kernel into memory and jumps to `boot/boot.S`.
+2. **It sets up its own memory.** A few lines of assembly move the kernel to where it expects to live, then hand off to C.
+3. **It wakes the hardware, one piece at a time.** `kmain` starts the processor tables, the clock, memory, the scheduler and the disk. Each one needs the last.
+4. **You land in a shell.** Type `gui` and the desktop starts. The shell and the desktop are the same program. The Terminal is the shell in a window.
 
 ### Boot modes
 
-Pass keywords on the multiboot command line (QEMU's `-append` flag or the
-browser emulator's cmdline config) to change how the kernel starts:
+Pass keywords on the multiboot command line to change how the kernel starts. Use QEMU's `-append` flag or the browser emulator's cmdline config.
 
 | Flag | What it does |
 |---|---|
@@ -90,19 +88,15 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `kernel/task.c` | Preemptive round-robin scheduling off the timer tick. Six slots. `yield()` reaches the same switch in software. |
 | `kernel/ring3.c` + `kernel/ring3_asm.S` | Runs code at privilege level 3 with its own page tables, so a privileged instruction faults instead of taking the machine down. |
 | `kernel/memmap.h` | The one place the fixed ring-3 addresses live (`JT_USER_BASE`, `JT_DMABUF_BASE`, `JT_USER_FB`); the Makefile renders it into `boot/memmap.ld` for the linker scripts. See the memory map paragraph below. |
-| `arch/arm64/start.S`, `arch/arm64/vectors.S`, `arch/arm64/user.S`, `arch/arm64/main.c`, `arch/arm64/text.c`, `arch/arm64/libc.c`, `arch/arm64/linker.ld`, `arch/arm64/Makefile` | The ARM64 port (the ARM64 and the Raspberry Pi section), milestones M0, M1a, M1b, M1c, the first M2 drivers and M3a, the first userland. `vectors.S` is the exception table (a fault prints a line instead of hanging); `main.c` also sets up the interrupt controller and a timer tick, turns the MMU and caches on over a flat identity map, has a small bump heap, and gets a framebuffer (ramfb through fw_cfg on QEMU's virt machine, the VideoCore mailbox on a Pi) draws a first desktop into it and mirrors the boot log in its window (lines printed before the screen existed are replayed). The text is the same faces (Tree Sans since 3.0.0) through `drivers/ttf.c` as the i386 desktop: `text.c` blends each rasterized glyph onto the screen, `libc.c` supplies the few libc calls the rasterizer makes, and only those files use floating point (`start.S` turns the FPU on at EL1). The old bitmap font is the fallback if the faces fail to load, then on virt finds virtio devices among the virtio-mmio slots: a disk (it reads sector 0), a network card (it asks the router for its address over ARP) and a keyboard and tablet, read with one input driver. Devices raise their interrupt through the GIC and the main loop sleeps in `wfi` between events. A separate build from the i386 kernel: a boot stub that parks all but core 0, a linker script for QEMU's virt machine, and `main` printing over the PL011 UART. `make -C arch/arm64 run` boots it, `make -C arch/arm64 pi` makes the Raspberry Pi 4 image (`kernel8.img`, enters at EL2 and drops to EL1); `tools/checks/arm64-m0-check.py` proves both builds boot, and `tools/checks/arm64-m1c-check.py` takes a QEMU screendump and checks the pixels, and `tools/checks/arm64-m2-check.py` presses keys, moves the pointer and clicks through QMP and reads them back. M3a: `user.S` is a small EL0 program the kernel copies into a user-only code page; `vectors.S` also takes `svc` and faults from EL0 and holds `enter_user` and `leave_user`; `main.c` splits the RAM map into 4 KiB pages for that one arena (code read-only, stack, and a page only the kernel may touch), answers `write` and `exit`, refuses to print memory the program does not own, and survives an EL0 fault as a printed line. `tools/checks/arm64-m3-check.py` asserts the exact serial lines. |
 | `arch/arm64/wifi.c`, `arch/arm64/wifi_proto.h`, `arch/arm64/wifi_fw_gen.sh` | M4 Wi-Fi, stage 1 (Pi 4's CYW43455 over SDIO; shape from Plan 9's ether4330.c and Circle's wlan). `wifi.c` sets GPIO 34-39 to ALT3, brings up the Arasan SDHCI, enumerates the SDIO card (CMD0/5/3/7, 4-bit, high speed, functions 1 and 2), loads the firmware and NVRAM into the chip's RAM over the backplane, releases the ARM, then talks BCDC over SDPCM: `ver`, `cur_etheraddr`, `clmload`, `country` CA and an `escan` whose results print as `wifi ap -51 ch6 Shaw`. Polled, every wait bounded, every step one short `wifi ...` line; QEMU powers the chip, finds no SDIO card and ends at `wifi FAIL cmd5`. `wifi_proto.h` is the pure logic (frame pack and parse, escan walk, NVRAM packing), tested on the host by `tools/checks/wifi-host-check.sh`. `wifi_fw_gen.sh` writes the gitignored wifi_fw.S (generated at build time, not in git) that embeds the Cypress firmware from `build/wifi-fw/` or empty stubs (`wifi no firmware`). |
-| `arch/arm64/emmc.c`, `arch/arm64/emmc.h` | M4 SD card (2.53.0): the Pi 4 reads the card it booted from. EMMC2 is the BCM2711's own SD host at 0xFE340000, on pins of its own, so there is no GPIO setup and the Wi-Fi host is never touched. Shape from Circle's lib/sdcard. Reset, bus power at 3.3 V, the base clock from the firmware (clock 12, `mbox_clock_rate` in `main.c`), 400 kHz, CMD0, CMD8, ACMD41 with HCS, CMD2, CMD3, CMD9 for the size, CMD7, CMD16 512, then 25 MHz on a 1-bit bus. Reads are polled PIO: CMD17 for one block, CMD18 with Auto CMD12 for more, refused past the card's end. `sd_mount` reads the MBR, takes the first FAT partition, checks its boot sector and FSInfo in one CMD18, and mounts it through `drivers/fat.c`, whose `blockdev_read_sector` it supplies (refused past the partition's end; writes return 0, read only until the write slice). Every wait ends on the generic counter, and any failure prints one `sd ...` line (`sd no card`, `sd FAIL cmd8`) and the boot carries on. On virt every call is a stub. `tools/checks/arm64-sd-check.py` plugs a FAT32 card into QEMU's EMMC2 and runs `ls` and `cat` through the `sdtest` build. |
-| `arch/arm64/bt.c`, `arch/arm64/bt.h`, `arch/arm64/bt_fw_gen.sh` | Bluetooth, slice BT1 (2.51.0): the CYW43455's Bluetooth half over HCI in the H4 framing on the PL011 (GPIO 30-33, ALT3, hardware RTS/CTS), so the Pi image's console moved to the mini UART (`main.c`, `CONSOLE_MINI_UART`). Powers BT_ON (expander pin 128, through `wifi.c`'s `pi_exp_gpio`), then follows Linux's btbcm.c: Reset and Read Local Version at 115200, the BCM4345C0 patch (Download Minidriver, each `.hcd` record sent as the command it is, Launch RAM), Reset and version again, the vendor baud command to 921600, Set Event Mask with LE Meta on. `bt scan` (`cmd.c`) runs a 5 second active LE scan and lists each address once with its name (AD 0x09, else 0x08) and RSSI. Polled from the main loop, one command in flight, each with a 3 s deadline on the generic timer; a silent radio prints `bt: no answer from the radio`. `bt_fw_gen.sh` writes the gitignored `arch/arm64/bt_fw.S` that embeds `build/bt-fw/BCM4345C0.hcd` (or `BT_HCD=`), or nothing. On QEMU virt the radio is the second PL011 at 0x09040000, probed under `kprobe_armed`. |
 | `arch/arm64/bt.c`, `arch/arm64/bt.h`, `arch/arm64/bt_fw_gen.sh` | Bluetooth, slice BT1 (2.51.0): the CYW43455's Bluetooth half over HCI in the H4 framing on the PL011 (GPIO 30-33, ALT3, hardware RTS/CTS), so the Pi image's console moved to the mini UART (`main.c`, `CONSOLE_MINI_UART`). Powers BT_ON (expander pin 128, through `wifi.c`'s `pi_exp_gpio`), then follows Linux's btbcm.c: Reset and Read Local Version at 115200, the BCM4345C0 patch (Download Minidriver, each `.hcd` record sent as the command it is, Launch RAM), Reset and version again, the vendor baud command to 921600, Set Event Mask with LE Meta on. `bt scan` (`cmd.c`) runs a 5 second active LE scan and lists each address once with its name (AD 0x09, else 0x08) and RSSI. Polled from the main loop, one command in flight, each with a 3 s deadline on the generic timer; a silent radio prints `bt: no answer from the radio`. `bt_fw_gen.sh` writes the gitignored `arch/arm64/bt_fw.S` that embeds `build/bt-fw/BCM4345C0.hcd` (or `BT_HCD=`), or nothing. On QEMU virt the radio is the second PL011 at 0x09040000, probed under `kprobe_armed`. Slice BT2 (2.54.0), `bt pair`: LE buffers (or the shared ones) and ACL flow control on Number of Completed Packets, Read BD_ADDR, LE Create Connection to the scanned mouse, SMP legacy Just Works on L2CAP channel 6 (c1 and s1 on BearSSL's aes_ct), LE Start Encryption with the STK, the mouse's LTK, EDIV and Rand kept (see BT3 below), then ATT on channel 4: the HID service, Protocol Mode written to boot, the Boot Mouse Input CCCD on. Each notification goes to `main.c`'s `kinput` as EV_REL and BTN_LEFT, like the USB mouse. The mouse's own ATT and signalling requests are answered. Stage lines `bt: connected`, `bt: paired`, `bt: mouse ready`; each wait has a 10 s deadline and a failure is one line and a hang-up. Slice BT3 (3.5.0), remembering: when the LTK, EDIV and Rand have all arrived the pairing is written to `JT/BTPAIR.BIN` (`bt: pairing saved`, never the key). At boot, once the radio is ready, a valid record skips scan and pairing: LE Create Connection to the saved address, LE Start Encryption with the saved key, `bt: reconnected`, then the same GATT steps. No answer in 12 s keeps the record and the next try follows after 2, 4, 8, 15 then 30 s (state RETRY, up to 30 tries; a dropped link starts the same run, `bt reconnect` restarts it, `bt status` reports it); Encryption Change 0x05 or 0x06, or a hang-up with 0x05, 0x06 or 0x3D during encryption, erases it. `bt forget` erases it; `bt` shows `saved pairing: yes` or `no`. |
 | `arch/arm64/btpair.h` | The saved pairing's record, a 70 byte versioned file (magic `JTBP`, version, address type, address, LTK, Rand, EDIV, name, a 16 bit sum) as static inline pack and parse functions with no kernel calls, so the host check builds it with clang. A bad magic, another version, a short record, a damaged sum, an all zero key or a bad address type is refused. Its error words never carry the key. |
-| `arch/arm64/emmc.c`, `arch/arm64/emmc.h` | M4 SD card (2.53.0 reads, 2.57.0 writes): the Pi 4 reads and writes the card it booted from. EMMC2 is the BCM2711's own SD host at 0xFE340000, on pins of its own, so there is no GPIO setup and the Wi-Fi host is never touched. Shape from Circle's lib/sdcard. Reset, bus power at 3.3 V, the base clock from the firmware (clock 12, `mbox_clock_rate` in `main.c`), 400 kHz, CMD0, CMD8, ACMD41 with HCS, CMD2, CMD3, CMD9 for the size, CMD7, CMD16 512, then 25 MHz on a 1-bit bus. Reads are polled PIO: CMD17 for one block, CMD18 with Auto CMD12 for more, refused past the card's end. Writes the same way back: CMD24 or CMD25 with Auto CMD12, then transfer done and CMD13 until the card has finished programming. `sd_mount` reads the MBR, takes the first FAT partition, checks its boot sector and FSInfo in one CMD18, and mounts it through `drivers/fat.c`, whose `blockdev_read_sector` and `blockdev_write_sector` it supplies (refused past the partition's end; a write never lands on the boot sectors, only FSInfo). `sd_write`, `sd_remove` and `sd_mkdir` keep the OS's files in a `JT` folder and refuse, with one `sd refused` line, any name that is not 8.3 or that the firmware boots from (config.txt, kernel*.img, start*.elf, any .dtb, the overlays folder and the rest). Every wait ends on the generic counter, and any failure prints one `sd ...` line (`sd no card`, `sd FAIL cmd8`) and the boot carries on. On virt every call is a stub. `tools/checks/arm64-sd-check.py` plugs a FAT32 card into QEMU's EMMC2, runs `ls` and `cat` through the `sdtest` build, then writes through `sdw` and reads back after a reboot through `sdr` (`make sdwtest`), and checks the card from the host with mtools, its own FAT pass and `fsck.fat`. |
 | `arch/arm64/emmc.c`, `arch/arm64/emmc.h` | M4 SD card (2.53.0 reads, 2.57.0 writes): the Pi 4 reads and writes the card it booted from. EMMC2 is the BCM2711's own SD host at 0xFE340000, on pins of its own, so there is no GPIO setup and the Wi-Fi host is never touched. Shape from Circle's lib/sdcard. Reset, bus power at 3.3 V, the base clock from the firmware (clock 12, `mbox_clock_rate` in `main.c`), 400 kHz, CMD0, CMD8, ACMD41 with HCS, CMD2, CMD3, CMD9 for the size, CMD7, CMD16 512, then 25 MHz on a 1-bit bus. Reads are polled PIO: CMD17 for one block, CMD18 with Auto CMD12 for more, refused past the card's end. Writes the same way back: CMD24 or CMD25 with Auto CMD12, then transfer done and CMD13 until the card has finished programming. `sd_mount` reads the MBR, takes the first FAT partition, checks its boot sector and FSInfo in one CMD18, and mounts it through `drivers/fat.c`, whose `blockdev_read_sector` and `blockdev_write_sector` it supplies (refused past the partition's end; a write never lands on the boot sectors, only FSInfo). `sd_write`, `sd_remove` and `sd_mkdir` keep the OS's files in a `JT` folder and refuse, with one `sd refused` line, any name that is not 8.3 or that the firmware boots from (config.txt, kernel*.img, start*.elf, any .dtb, the overlays folder and the rest). Every wait ends on the generic counter, and any failure prints one `sd ...` line (`sd no card`, `sd FAIL cmd8`) and the boot carries on. On virt (M3d, 2.58.0) only the four `emmc_*` calls differ: they go to `main.c`'s virtio disk (`vblk_*`, now with writes), so the same card mounts there through the same partition and `JT/` code; with no disk nothing is printed. `sd_enter_jt` is how `ufile.c` roots an app's paths. `tools/checks/arm64-sd-check.py` plugs a FAT32 card into QEMU's EMMC2, runs `ls` and `cat` through the `sdtest` build, then writes through `sdw` and reads back after a reboot through `sdr` (`make sdwtest`), and checks the card from the host with mtools, its own FAT pass and `fsck.fat`. |
 | `arch/arm64/start.S`, `arch/arm64/vectors.S`, `arch/arm64/user.S`, `arch/arm64/main.c`, `arch/arm64/text.c`, `arch/arm64/libc.c`, `arch/arm64/linker.ld`, `arch/arm64/Makefile` | The ARM64 port (the ARM64 and the Raspberry Pi section), milestones M0, M1a, M1b, M1c, the first M2 drivers and M3a, the first userland. `vectors.S` is the exception table (a fault prints a line instead of hanging); `main.c` also sets up the interrupt controller and a timer tick, turns the MMU and caches on over a flat identity map, has a small bump heap, and gets a framebuffer (ramfb through fw_cfg on QEMU's virt machine, the VideoCore mailbox on a Pi) draws a first desktop into it and mirrors the boot log in its window (lines printed before the screen existed are replayed). The text is the same faces (Tree Sans since 3.0.0) through `drivers/ttf.c` as the i386 desktop: `text.c` blends each rasterized glyph onto the screen, `libc.c` supplies the few libc calls the rasterizer makes, and only those files use floating point (`start.S` turns the FPU on at EL1). The old bitmap font is the fallback if the faces fail to load, then on virt finds virtio devices among the virtio-mmio slots: a disk (it reads sector 0), a network card (it asks the router for its address over ARP) and a keyboard and tablet, read with one input driver. Devices raise their interrupt through the GIC and the main loop sleeps in `wfi` between events. A separate build from the i386 kernel: a boot stub that parks all but core 0, a linker script for QEMU's virt machine, and `main` printing over the PL011 UART. `make -C arch/arm64 run` boots it, `make -C arch/arm64 pi` makes the Raspberry Pi 4 image (`kernel8.img`, enters at EL2 and drops to EL1); `tools/checks/arm64-m0-check.py` proves both builds boot, and `tools/checks/arm64-m1c-check.py` takes a QEMU screendump and checks the pixels, and `tools/checks/arm64-console-scroll-check.py` presses Page Up, End and Home and checks the Console scrolls over the whole boot log, and `tools/checks/arm64-m2-check.py` presses keys, moves the pointer and clicks through QMP and reads them back. M3a: `user.S` is a small EL0 program the kernel copies into a user-only code page; `vectors.S` also takes `svc` and faults from EL0 and holds `enter_user` and `leave_user`; `main.c` splits the RAM map into 4 KiB pages for that one arena (code read-only, stack, and a page only the kernel may touch), answers `write` and `exit`, refuses to print memory the program does not own, and survives an EL0 fault as a printed line. `tools/checks/arm64-m3-check.py` asserts the exact serial lines. |
 | `arch/arm64/ip.c`, `drivers/nic.h` | The IP stack on ARM. The ARM build compiles the i386 kernel's own `drivers/net.c` and `drivers/http.c` unchanged, with `drivers/nic.h` as the only seam to the hardware: init, MAC, send a frame, poll for one. `main.c` answers it with the virtio-net card on QEMU; the Pi's Wi-Fi or Ethernet goes in the same four calls. `ip.c` adds 100 Hz ticks off the generic timer and, at boot, leases an address by DHCP and (built with `NETPORT=`) POSTs to the host. `tools/checks/arm64-net-check.py` proves both. |
 | `arch/arm64/rng.c`, `arch/arm64/rng.h` | Seeds TLS from the Pi 4 RNG200 hardware FIFO with health checks and a one-second deadline. Incomplete seeds are wiped and TLS stops; Pi images never link the timer provider used for QEMU checks. `tools/checks/arm64-rng-check.py` exercises register faults and byte bounds on the host. |
 | `arch/arm64/clock_ui.h` | Read-only Clock window on ARM, opened through Spotlight or Samantha. Reuses Vancouver date conversion, refreshes each minute, and waits for network time. `tools/checks/arm64-calicon-check.py` covers its date, unset state, opening and closing. |
-| `arch/arm64/settings.c` | The Pi's Settings choices and their file, 3.13.0. Wallpaper (terracotta, clay or ink, flat colours; the photo is gone since 3.0), dock tile size (5 to 25 percent, applied from the next boot) and the volume are saved as `volume=`, `wall=` and `dock=` lines in `JT/SETTINGS.TXT`, loaded right after the card mounts so the Pi's first desktop paint already has them. Every value is range-checked and a bad line is ignored; with no card the choices stay in memory and the window says so. `tools/checks/arm64-settings-check.py` runs the parser and the load and save paths on the host under sanitizers. |
+| `arch/arm64/settings.c` | The Pi's Settings choices and their file, 3.13.0. Wallpaper (grey by default `#6E6E6E`, terracotta, clay or ink, flat colours; the photo is gone since 3.0), dock tile size (5 to 25 percent, applied from the next boot) and the volume are saved as `volume=`, `wall=` and `dock=` lines in `JT/SETTINGS.TXT`, loaded right after the card mounts so the Pi's first desktop paint already has them. Every value is range-checked and a bad line is ignored; with no card the choices stay in memory and the window says so. `tools/checks/arm64-settings-check.py` runs the parser and the load and save paths on the host under sanitizers. |
 | `arch/arm64/settings_ui.h` | The Settings window on ARM, drawn in the Console's rectangle like the Clock. A sidebar of five sections (About, Display, Sound, Dock, Date and Time) and a card of rows beside it, in the i386 Settings' layout. It opens from Spotlight, Samantha's `[[open settings]]` or a click on a menu bar status icon; arrows and the - and + buttons change a value and each change is saved at once. `tools/checks/arm64-settings-check.py` opens it, walks the sections, changes the wallpaper and the volume with keys and clicks, and reads the card back. |
 | `arch/arm64/glyphs.h` | Flat anti-aliased glyphs drawn from circles, rounded boxes and capsules, 4x4 samples a pixel: the five Settings sidebar tiles and the menu bar's speaker and power symbol. No text, one ink. Covered by the same check. |
 | `arch/arm64/clock.c` | Gives the Pi a clock from a verified HTTPS Date header, never plain HTTP. Its build time is the certificate bootstrap floor; accepted time cannot roll back. Strict bounded date parsing rejects malformed or duplicate headers and impossible dates. `tools/checks/arm64-clock-check.py` runs the parser and sync path with sanitizers on the host. The bootstrap age limit remains in `docs/GUIDE.md` (Encrypted Pi relay). |
@@ -132,7 +126,6 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `tools/checks/arm64-browser-mouse-check.py`, `arch/arm64/browser_ui.h` (br_wrap, browser_wheel) | 3.7.2: pointer motion over a long Browser page. `pointer_moved` only swaps the arrow (save the pixels under it, restore, draw) and the dock label, and never calls `browser_paint`; the check proves it on the `brtrace` build by counting `browser: paint` and `browser: wrap` lines across 120 motion events, and the screen equals the reference afterwards. `br_wrap` keeps the lines it made while the page text, its load count and the well width are unchanged (a scroll or reopen does not measure every character again), and wheel notches are summed per report and ignored when the page is already at that end, so a stray wheel byte cannot repaint the page. |
 
 | `tools/checks/arm64-splash-check.py`, `arch/arm64/main.c` (splash_mark) | 3.8.3: the Pi boot splash is neutral grey `0xE5E5E7` with no terracotta, the tree mark in ink `0x1C1C1E` and a grey bar (track `0xC8C8CC`, done `0x636366`). The old splash drew the 80 px menu bar copy of the mark stretched 2.75x over orange, which read as a dark smudge on the Pi; `splash_mark` samples the 160 px `boot_mark_cov` and writes ink over the known ground straight to the screen, then `fb_flush`es the box and the ground (unflushed rows reached the real Pi as torn slivers). The ARM wallpaper is graphite `0x6E6E6E`. The check also compares the mark row by row against `boot_mark_cov`. It boots the splash build headless, screendumps while it holds and asserts the grey ground, zero terracotta pixels, many ink pixels in the mark's box and hard edges. |
-| `arch/arm64/main.c` (quiet boot, Wi-Fi fan), `tools/checks/arm64-quietboot-check.py` | 3.6.2: the Pi image draws no Console window at boot (`QUIET_BOOT`, on with `PI_BUILD`). `fb_init` skips `console_frame` and `con_start`, so the boot log stays in `con_p` and the UART prints `console quiet`; `pane_open` draws it whole when a dock click or Esc from the Terminal asks. The old close-after-boot step, which showed the window for the length of the Wi-Fi bring-up and kept it on any FAIL line, is gone. The menu bar's Wi-Fi fan is anti-aliased, flat ink `0x001C1C1E` when joined and neutral grey `0x909090` otherwise, never blue. The check boots virt with `-DQUIET_BOOT` and `-DWIFI_ICON_TEST` (which prints where the fan is, and `=2` forces a joined one): flat wallpaper where the window would be, the fan's pixels, a dock click opening the Console with the buffered log, the Terminal tile opening the Terminal. |
 
 | `arch/arm64/main.c` (quiet boot, Wi-Fi fan), `tools/checks/arm64-quietboot-check.py` | 3.7.10: the splash never hides a failure. `uart_puts` flags any `FAIL` or `oom ` line printed while `splash_on` and `uart_putc` calls `splash_abort` at the end of that line: the splash ends, `fb_desktop` paints (`M1c fb ok`), and `splash_finish` later prints `boot done` and `fb_diag` only. `splash ` lines stay off the screen log, so a crash report's last console lines are real boot lines. A crash while the splash is up draws the red panel over the terracotta (`arm64-crash-check.py` on the Pi image: `splash up`, then the report, and a terracotta pixel beside the panel). The Pi checks that waited for `M1c fb ok` before Wi-Fi lines (`arm64-sd-check.py`, crash) now wait for `splash up` and the desktop after the first FAIL. 3.7.4: the Pi image boots behind a splash and draws no Console window at all (`QUIET_BOOT`, on with `PI_BUILD`). `fb_init` paints only `splash_begin`: solid terracotta `0xB5502C`, the tree mark (`menu_mark_paint`, the one the menu bar and the old boot screen use) centred and a thin track under it that `splash_step` fills one sixth at a time for fb, sd, wifi, clock, bt and desktop (UART: `splash up`, `splash step N name`). `main` calls the steps as `sd_mount`, the Wi-Fi join and its clock sync and `bt_init` finish, waits up to 60 s while `bt_starting` (the radio loading its patch), then `splash_finish` prints `boot done` and `fb_desktop` paints the wallpaper, menu bar and dock once. `menubar_wifi` keeps its state meanwhile. `-DSPLASH_STEP_MS=N` holds each step for the check. 3.6.2: the Pi image draws no Console window at boot (`QUIET_BOOT`, on with `PI_BUILD`). `fb_init` skips `console_frame` and `con_start`, so the boot log stays in `con_p` and the UART prints `console quiet`; `pane_open` draws it whole when a dock click or Esc from the Terminal asks. The old close-after-boot step, which showed the window for the length of the Wi-Fi bring-up and kept it on any FAIL line, is gone. The menu bar's Wi-Fi fan is anti-aliased, flat ink `0x001C1C1E` when joined and neutral grey `0x909090` otherwise, never blue. The check boots virt with `-DQUIET_BOOT` and `-DWIFI_ICON_TEST` (which prints where the fan is, and `=2` forces a joined one): flat wallpaper where the window would be, the fan's pixels, a dock click opening the Console with the buffered log, the Terminal tile opening the Terminal. |
 | `arch/arm64/calc.c` | The Calculator on ARM. The parser is `user/calculator.c`'s, with two changes: dividing by zero is an error, and `30deg` marks an angle in degrees. Standard and scientific keypads, degrees or radians, `ans` and memory keys. The math runs as short series on the FPU, with no libm. `main.c` draws it as its own window over the right of the Console's, so both show: the Apps tile (by click, dock keys or Spotlight) opens it, and you click keys or type. The window in front has the keys; a click on the other brings it up (`tools/checks/arm64-focus-check.py`). `tools/checks/arm64-calc-check.py` checks 42 sums on the host, then boots the `calctest` build and reads the same answers off the UART. |
@@ -141,7 +134,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `tools/checks/arm64-calicon-check.py` | Builds the `caltest` variant twice with the clock fixed at two dates, boots each headless and reads the Calendar tile out of a screendump: the accent pixels all sit in the cell that date names in a seven-column month grid, with grey day squares around it. |
 | `tools/checks/arm64-calc-check.py` | Compiles `arch/arm64/calc.c` on the host and checks a table of sums, including sin(30deg)=0.5, 5!=120, 2^10=1024 and 1/0 as an error. It also checks the keypad's memory, Deg and edit keys. Then it boots the `calctest` build headless and checks the UART and a screendump. |
 | `arch/arm64/wifi.c` (`wifi_hold`, `wifi_release`) | Bluetooth pairing holds the Wi-Fi radio (3.0.0): the chip has one antenna, and with Wi-Fi up a real mouse's first packets never reached the Pi (0x3e at every link speed on the board, 2026-10-12; with Wi-Fi off the same mouse paired first try). `bt pair` calls `wifi_hold` (WLC_DOWN, the menu bar shows Wi-Fi working) and every end of pairing, paired or failed, calls `wifi_release` (WLC_UP and the join again). |
-| `arch/arm64/wall.c` | The ARM desktop's wallpaper: one flat colour, the brand terracotta `#b5502c` (3.0.0; 2.15.0 to 2.64 decoded the Satellite photo here). `tools/checks/arm64-m1c-check.py` checks the wallpaper pixels at 800x600 and 1080p. |
+| `arch/arm64/wall.c` | The ARM desktop's wallpaper: one flat colour, the brand terracotta `#b5502c` in 3.0.0 and graphite grey `#6E6E6E` by default since 3.9.0 (2.15.0 to 2.64 decoded the Satellite photo here). `tools/checks/arm64-m1c-check.py` checks the wallpaper pixels at 800x600 and 1080p. |
 | `arch/arm64/userapps.S`, `arch/arm64/user_c.ld` | M3b (2.49.0) and M3c part 1 (2.50.0), C programs at EL0. The Makefile builds `user/hello.c`, `user/calendar.c` and, since M3d (2.58.0), `user/notes.c`, and since M3e (2.59.0) `user/music.c`, unchanged for aarch64 (`-fPIE -fdirect-access-external-data`, plus libjt's `string.c`, `text.c`, `osk.c`, `stdlib.c`, `wav.c` and `mp3.c` under `ujt_*.o` names, never in `user/libjt/`; `mp3.c` alone without `-mgeneral-regs-only`, since minimp3 works in floating point) and links each `-pie` at 0 with `user_c.ld` into a flat image: code and read-only data, then a page-aligned data half, then a 16 byte trailer (`JTU1`, code length, `.rela.dyn` range) and `userapps.S` bakes the images in with `.incbin` and a `{name, start, end}` table. `main.c`'s `user_load` copies one into the app window (0x10000 into the user arena), applies its `R_AARCH64_RELATIVE` entries to the copy (any other kind refuses the load), maps the code pages read-only and executable, the data pages and 32 KiB of zeroed pool read-write and never executable (Notes keeps a 28 KB arena there), and a sixteen page stack (four before M3e) with nothing mapped below it. `user_in_range` covers exactly that window, the stack and, since M3e, the heap below the app's `JT_SYS_BRK` top. `fpkeep` (M3e) is a hand-made image like `loop` that holds q0-q31, FPCR and FPSR across 40 yields and calls. `exc_el0_sync` answers `JT_SYS_WRITE` (fd 1 and 2), `JT_SYS_EXIT`, `JT_SYS_TIME` (the ARM clock, 0 if unset; stores only into writable user memory), `JT_SYS_GETPID`, since M3c part 2 the window calls and `JT_SYS_SCHED_YIELD` (next row), and since M3d the file calls (`ufile.c`); anything else is -ENOSYS, and every call but write, read, exit, yield, poll and (M3e) audio prints a `M3c svc N` line on the UART. The boot self-test (QEMU build) runs hello, then `user.S`'s entry E, which abuses each file call once (a kernel pointer, a read into the kernel page, a path with `..`, a 4 GB readfile, a readdir past its page: each an errno), then calendar, then `user.S`'s probe against calendar's pages twice with a reload between, then branches into data, pool and stack. The `userrun NAME` command (`cmd.c`) runs an app from the Terminal on QEMU and the Pi. `tools/checks/arm64-m3c-check.py` asserts all of it; `arm64-m3-check.py` still asserts hello |
 | `arch/arm64/ufile.c` | M3d (2.58.0): the file calls of `user/jtsys.h` for the one EL0 app, with i386's semantics from the System call ABI section: `open` (the access modes, `O_CREAT`, `O_TRUNC`, `O_APPEND`, anything else -EINVAL; a file over 8192 bytes -EINVAL), `read` and `write` on fds 3 to 7 (255 bytes a call, the buffer checked before the fd, -EFBIG past 8192), `close` (writes the buffer back with `fat_replace_file`, reads it back and compares, -EIO when they differ), `lseek` (-ESPIPE on 0 to 2, -EINVAL past the end), `readdir` (40-byte records, the same on LP64; the whole array checked first; the count can exceed what was asked), `readfile` (up to 6 MB into the caller's buffer), `mkdir` (-ENOSPC) and `unlink` (-EISDIR on a folder). Paths are relative to the card's `JT/` folder, the apps' root: no leading slash, no `.` or `..`, at most 63 bytes and 8 parts, copied a byte at a time through `main.c`'s `user_in_range`; outputs go through `user_writable`, never into code. No card is -ENOENT. Five static 8 KB buffers, since the ARM heap never frees; `ufile_release` closes and flushes whatever an app left open when it exits, faults or is killed. It runs over `drivers/fat.c` on the partition `emmc.c` mounted (the Pi's SD card, or the virtio disk on virt) and puts fat.c's one current directory back (`fat_cwd_get`, `fat_cwd_set`) before it returns, so the Terminal's `ls` and `cat` still start at the root. That is only safe with one app, parked only at a yield. `tools/checks/arm64-m3c-check.py` (the abuse pass, and hello.c to exit 9 on a virtio card) and `tools/checks/arm64-notes-check.py` (Notes saves and reopens a note across a reboot on raspi4b) prove it. |
 | `arch/arm64/main.c` (EL0 apps in windows), `arch/arm64/vectors.S` (`resume_user`) | M3e (2.59.0): the EL0 arena is 16 MiB, eight 2 MiB blocks of 4 KiB pages; blocks two to eight are the app's `JT_SYS_BRK` heap (`app_brk_set`: 0 reads the top, any other value sets it to the byte, pages mapped EL0 read-write and never executable and zeroed, shrinking unmaps, outside the heap -EINVAL), dropped with the app. `JT_SYS_AUDIO` is answered through `audio.c` (`app_audio`), `JT_SYS_AUDIO_RECORD` is -ENOSYS, and a call that repeats the last `M3c svc` line exactly is not logged again. `el0_sync_entry` keeps an app's q0-q31, FPCR and FPSR around every call; `app_park` copies them out and `resume_user` loads them back, `enter_user` starts a program with them zero, and the kernel's own d8-d15 are kept with x19-x30. Music is a Spotlight entry (`SPOT_MUSIC`), not a dock tile, and `app_start` makes `JT/MUSIC` for it. M3c part 2 (2.56.0): one app at a time under a cooperative scheduler, the i386 model. The dock (a tile named after an app in the table: Calendar, and since 2.58.0 Notes, for which `app_start` first makes `JT/NOTES/NOTES`, its default folder), Spotlight and `userrun` call `app_start`; the desktop's loop calls `app_tick`, which resumes the app with `resume_user` (the kernel's state saved as `enter_user` saves it, then every user register, the pc and `sp_el0` put back) until it yields. `JT_SYS_SCHED_YIELD` parks it (`app_park`: the frame copied out, `leave_user`), so the loop goes on with the keys, the mouse and the clock and runs it again on the next pass with an event, or every 10 ms. `JT_SYS_WINDOW_OPEN` (only under the scheduler; the boot self-test gets -ENODEV) maps a buffer of the window's content size at the top of the arena (0xD00000 since 3.9.0, 3 MiB, so a device-size buffer fits; it was 0x90000, and the app's heap now ends where the buffer starts, 11 MiB), EL0 read-write and never executable, and draws the Calculator's frame titled with the app's name over the right of the Console, as tall as fits above the dock (560x360 at 800x600); the LP64 `jt_window_info` has the pixels pointer at +16. `JT_SYS_WINDOW_POLL` copies the buffer to the screen on `JT_POLL_PRESENT` (each pixel scale by scale, only while the window is in front and Spotlight is not over it), then returns one queued event (12-byte LP64 `jt_event`) or -EAGAIN. The window in front gets the keys as `JT_KEY_*` codes and clicks in content coordinates; a click on it when behind raises it; its red dot is i386's close (a click above the content, which calendar answers by exiting; an app that ignores it is ended a quarter second later, `app_kill`), and an exit, a fault or a kill puts the wallpaper saved at boot back and redraws the Console. Opening it closes the Calculator; the Calculator, Brick or the Clock end it. `userapps.S`'s `loop`, a hand-made image that opens a window and yields forever, is the test of that. A program that never makes a syscall still holds the core: preempting it needs IRQs at EL0. `tools/checks/arm64-calendar-check.py` proves it. |
@@ -219,8 +212,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/tonchi.c` | Tonchi (was Lexly), learn anything, as a ring-3 program: the seventh app out of the kernel (1.9.1). A course picker over the live Tonchi courses, then a four-choice drill with a score (2.6.27), through `SYS_HTTP_GET` and the Worker. The reply is untrusted: bytes forced printable, every copy bounded, answer index checked, bad rows dropped. With no network or a bad reply it opens the 30-word Spanish deck as before. Keys 1 to 4 or a click answer, Esc goes back to the picker. The backquote key crashes it on purpose for `tools/checks/ring3tonchi-check.py`; `tools/checks/ring3tonchi-live-check.py` proves the live and offline paths. |
 | `user/fieldbook.c` | Fieldbook, every field of science and math explained plainly, as a ring-3 program: the ninth app out of the kernel (1.9.3). Same twelve fields and two-pane layout as the old in-kernel copy, up/down or a click selects, the explanation word-wraps by character count in the 8x16 font, and backquote is the deliberate crash `tools/checks/ring3fieldbook-check.py` presses. |
 | `user/clock.c` | Clock, the time of day, a countdown timer and one alarm, as a ring-3 program: the tenth app out of the kernel (1.9.4). Same three jobs as the old in-kernel copy, the time comes from `SYS_TIME`, and the timer minutes and alarm are typed on the program's own line since a ring-3 program has no prompt box. Backquote is the deliberate crash `tools/checks/ring3clock-check.py` can press. |
-| `user/music.c` | Music, a song player as a ring-3 program with its own window (2.2): the library lists every `.WAV` in the Files root and in a `MUSIC` folder (`SYS_READDIR`), one song at a time is read whole into the `SYS_BRK` heap (`SYS_READFILE`, refused over 3 MB with a message) and `wav.c` turns it into the 8-bit mono the card takes. Play, pause, previous, next, a seek bar (click or arrow keys), shuffle, repeat, a software volume and the wheel on the list. `.MP3` goes through `user/libjt/mp3.c`. The elapsed time is the stream start plus the driver's `played` counter, never the wall clock (32-bit math split into seconds and a remainder, so a song over 97 s at 44.1 kHz does not wrap), and pause or seek wait for the queue to drain first so that number stays true. About a third of a second is kept queued, not more, because the volume is applied before a sample is queued. Shuffle plays every song once a round (repeat off stops, repeat all starts another); when one song ends into the next a song that will not play is skipped, while n and p stop on it and say why. A narrow window puts the Shuffle and Repeat pills on their own row. Backquote is the deliberate crash for `tools/checks/ring3crash-all-check.py`; `tools/checks/music-check.py` and `music-qa-check.py` read its `music:` serial lines. |
-| `user/music.c` | Music, a song player as a ring-3 program with its own window (2.2): the library lists every `.WAV` in the Files root and in a `MUSIC` folder (`SYS_READDIR`), one song at a time is read whole into the `SYS_BRK` heap (`SYS_READFILE`, refused over 3 MB with a message) and `wav.c` turns it into the 8-bit mono the card takes. Play, pause, previous, next, a seek bar (click or arrow keys), shuffle, repeat and a software volume. The elapsed time is the stream start plus the driver's `played` counter, never the wall clock, and pause or seek wait for the queue to drain first so that number stays true. MP3 is a marked hook that refuses with a message (the decoder does not fit a one page stack yet). Backquote is the deliberate crash for `tools/checks/ring3crash-all-check.py`; `tools/checks/music-check.py` reads its `music:` serial lines. Since 2.59.0 the same file runs on the ARM kernel (M3e): Spotlight opens it, its library is the card's `JT/MUSIC/`, and `tools/checks/arm64-music-check.py` plays a WAV and an MP3 with it on QEMU virt. |
+| `user/music.c` | Music, a song player as a ring-3 program with its own window (2.2): the library lists every `.WAV` in the Files root and in a `MUSIC` folder (`SYS_READDIR`), one song at a time is read whole into the `SYS_BRK` heap (`SYS_READFILE`, refused over 3 MB with a message) and `wav.c` turns it into the 8-bit mono the card takes. Play, pause, previous, next, a seek bar (click or arrow keys), shuffle, repeat, a software volume and the wheel on the list. `.MP3` goes through `user/libjt/mp3.c`. The elapsed time is the stream start plus the driver's `played` counter, never the wall clock (32-bit math split into seconds and a remainder, so a song over 97 s at 44.1 kHz does not wrap), and pause or seek wait for the queue to drain first so that number stays true. About a third of a second is kept queued, not more, because the volume is applied before a sample is queued. Shuffle plays every song once a round (repeat off stops, repeat all starts another); when one song ends into the next a song that will not play is skipped, while n and p stop on it and say why. A narrow window puts the Shuffle and Repeat pills on their own row. Backquote is the deliberate crash for `tools/checks/ring3crash-all-check.py`; `tools/checks/music-check.py` and `music-qa-check.py` read its `music:` serial lines. Since 2.59.0 the same file runs on the ARM kernel (M3e): Spotlight opens it, its library is the card's `JT/MUSIC/`, and `tools/checks/arm64-music-check.py` plays a WAV and an MP3 with it on QEMU virt. |
 | `user/movies.c` | Movies, a motion-JPEG AVI player with sound, as a ring-3 program (2.2). Lists `.AVI` files from Files, reads the whole clip into its `SYS_BRK` heap with `SYS_READ_FILE`, indexes it once with `avi.c`, then plays with the audio as the clock: the frame on screen is `played / rate / frame time`, only that frame is decoded, late frames are dropped and the picture never makes the sound wait. Space pauses, left and right seek five seconds, a click on the bar seeks, `f` hides the controls and letterboxes into the whole window. A clip too big, damaged or not an AVI shows a message instead. Backquote is the deliberate crash `ring3crash-all-check.py` presses; `tools/checks/movie-check.py` proves the rest. |
 | `user/hamurabi.c` | Hamurapi (Hamurabi in the sources), the 1968 city game, as a ring-3 program with its own window (2.7), playable start to finish. The title screen (three buttons: story, Classic 1968, a demo the robot king plays by itself), a card at the gate of some story years (the opening, a turning point in years 5 and 10, or an omen with two choices, one drawn grey when the city cannot pay), the orders panel (Land, Feed, Plant, each with minus, plus and a bar you can click; Up and Down pick a row, Left and Right change it, Shift takes big steps, Enter ends the year; the orders are clamped like the web game's so a year can never be illegal), the year's report and the ending with the grade. The drawn city behind it (sky, hills, town around a ziggurat with the king on top, river and boat, fields, sheep, walking villagers) reacts as the web scene does: a villager for every four people, plots sown for what you order planted, sacks for the grain, the harvest and rats as floating numbers, ghosts for the starved, a green fog for the plague, rain on a ruined reign, fireworks on a great one. It draws at the largest whole-number pixel scale the window allows. The sprite sheet is unpacked once onto the `SYS_BRK` heap and every frame is painted into a back buffer, then copied over the window, so the compositor never catches half a frame. Each reign seeds its dice from the clock and logs its seed and every year's orders and result on the serial port; the backquote key crashes it on purpose. `tools/checks/ring3hamurabi-check.py` proves it, replaying every logged year on the host. |
 | `user/hamurabi_sprites.h` | Hamurabi's 125 sprites on one 256x149 sheet: a 133-colour palette, the sheet as run-length coded palette indices (about 21 KB instead of 38 KB) and an enum of sprite names with their rectangles. Generated by `tools/gen/gen_hamurabi_sprites.py` from `art/hamurabi/sprites.png` and `sprites.json`, committed, and checked for staleness in the suite. |
@@ -363,27 +355,104 @@ changed.
 
 ### Ring-3 windows (1.9.23)
 
-Until 1.9.23 a ring-3 program was modal: `exec_user` blocked the desktop loop until the program exited, the program owned the one app viewport, and `SYS_WINDOW_POLL` pulled keys straight off the keyboard ring. Two programs could not even run at once, because every task directory shares the base page tables by value, so `JT_USER_BASE` and `JT_USER_FB` were the same physical frames in every task.
+Until 1.9.23 a ring-3 program was modal.
+- `exec_user` blocked the desktop loop until the program exited.
+- The program owned the one app viewport.
+- `SYS_WINDOW_POLL` pulled keys straight off the keyboard ring.
+- Two programs could not even run at once. Every task directory shares the base page tables by value, so `JT_USER_BASE` and `JT_USER_FB` were the same physical frames in every task.
 
-The window path changes four things. The desktop never falls back to the blocking path any more: a full window table or failed launch is refused with a notice and a `winrefuse: <App>` serial line (`gui_refuse_open`). The blocking path remains only for the phone home grid, the Apps folder and the text shell:
+The window path changes four things.
 
-- `exec_user_window` (kernel/exec.c) loads the image and builds the stack in a kmalloc'd buffer of the window's own and returns the task id at once. `paging_task_map_private` (kernel/paging.c) gives that task's directory a private copy of the 4 MB page table that holds the user window, with the image, stack and framebuffer entries pointing at frames only this task maps. The low identity alias keeps the shared supervisor-only table, so no task reaches another's pages through it, and `paging_user_range_ok` now walks CR3, so a syscall pointer is judged by the caller's own tables.
+The desktop never falls back to the blocking path any more. A full window table or failed launch is refused with a notice and a `winrefuse: <App>` serial line (`gui_refuse_open`). The blocking path remains only for the phone home grid, the Apps folder and the text shell.
 
-**Kernel PDEs are shared by write-through, not by copy.** A task directory is a by-value copy of the kernel directory taken at `task_create`, which was a trap: the heap grows through `paging_map_region`, and a 4 MB region that got its page table after the task was born existed only in the shared directory, so the first syscall or IRQ on that task's CR3 to touch it page-faulted at ring 0 (Mail's close inside `r3win_release`). Preallocating every kernel table is the textbook fix but the wrong trade here: the identity map covers physical frames on demand and the LFB sits at 0xFD000000, so a full set is 4 MB of BSS against 64 KB today. Instead `kernel/paging.c` treats the shared directory as the one source of truth and `paging_sync_task_dirs` writes every kernel PDE create or remove through to every live task directory on the spot (zero extra memory, a six-slot loop per table change, and table changes happen once per 4 MB). The two slots a task owns privately, `PAGING_PRIVATE_PDE` and the user window table at `KERNEL_PDE_INDEX + 1`, are skipped, so `paging_task_map_private` is untouched. `paging_check_task_dirs` compares every live copy against the kernel entries and logs `BUG: paging: task directory drifted` if one differs; `stress=pde` (kernel/r3stress.c) and `tools/checks/pdesync-check.py` arm the whole path headlessly.
-- `syscall_window_register` (kernel/syscall.c, `r3wins`) allocates the framebuffer, maps it at `JT_USER_FB` in that task only, and keeps a 16-deep event ring per window. `SYS_WINDOW_OPEN` hands back the same `jt_window_info` as before. `SYS_WINDOW_POLL` with `JT_POLL_PRESENT` marks the window dirty instead of copying anything, and drains the ring; `-EAGAIN` when it is empty.
-- The compositor (kernel/kernel.c, `gui_window_t.task`) blits a dirty window's buffer through `window_pixel` at the window's position with the usual chrome, and feeds keys and content clicks only to the topmost window's ring (`syscall_window_push_event`) and a wheel step to the ring-3 window under the pointer (`JT_EV_WHEEL`, dropped over anything else; before 2.44.1 no window got one). The red dot kills the task. Every frame it looks for a window whose task is gone (exit or a fault reaped by idt.c), logs the same crash line the blocking launcher does, and closes that one window.
-- Resize is real (1.10): `ring3app_window_blit` compares the viewport with the window's buffer and `syscall_window_request_size` queues one `JT_EV_RESIZE`; the app re-opens (`jt_window_resized` in user/jtsys.h) and `r3win_resize` maps a fresh zeroed buffer with `paging_task_remap_private`, freeing the old one on the compositor's next look so a blit in flight never reads freed memory. Until then the old buffer is blitted clipped. `tools/checks/ring3resize-check.py` proves it.
-- `gui_ring3_windowed` names the apps on this path. Reminders is the proof; adding an app is one row. Burrow, Notes and Mail can move to ring 3 on it without losing multi-window.
+- `exec_user_window` (kernel/exec.c) loads the image and builds the stack in a kmalloc'd buffer of the window's own. It returns the task id at once.
+  - `paging_task_map_private` (kernel/paging.c) gives that task's directory a private copy of the 4 MB page table that holds the user window. The image, stack and framebuffer entries point at frames only this task maps.
+  - The low identity alias keeps the shared supervisor-only table, so no task reaches another's pages through it.
+  - `paging_user_range_ok` now walks CR3, so a syscall pointer is judged by the caller's own tables.
 
-**The concurrency rule.** One CPU, so one rule: shared kernel state is only ever touched with interrupts off. A syscall already runs that way end to end (int 0x80 is an interrupt gate) and the only call that turns them back on, `SYS_HTTP_GET`, holds nothing while it waits: http.c refuses a second fetch while one is in flight, from the desktop or the gate. The desktop (task 0) runs with interrupts on and can be preempted anywhere, so every entry point it shares with a syscall is an `irq_save`/`irq_restore` section (kernel/irqlock.h): `kmalloc`/`kfree`, every `vfs_*` call (which covers FAT, ramfs and the disk), `syscall_window_push_event` into the per-window ring, `task_kill`'s frame patch, and the whole of `ring3app_launch_window` (a slot is marked used before its private mapping exists). The FAT cwd is one global cursor the desktop may have left inside NOTES/, so a syscall path resolves from the root and puts the cursor back (`vfs_cwd_get`/`vfs_cwd_set`). `kheap_check` walks the free list on demand and `tools/checks/ring3stress-check.py` hammers both sides at once to keep it that way.
+**Kernel PDEs are shared by write-through, not by copy.**
+- A task directory is a by-value copy of the kernel directory taken at `task_create`. That was a trap.
+- The heap grows through `paging_map_region`. A 4 MB region that got its page table after the task was born existed only in the shared directory. So the first syscall or IRQ on that task's CR3 to touch it page-faulted at ring 0 (Mail's close inside `r3win_release`).
+- Preallocating every kernel table is the textbook fix, but the wrong trade here. The identity map covers physical frames on demand and the LFB sits at 0xFD000000. A full set is 4 MB of BSS against 64 KB today.
+- Instead, `kernel/paging.c` treats the shared directory as the one source of truth. `paging_sync_task_dirs` writes every kernel PDE create or remove through to every live task directory on the spot. That costs zero extra memory and a six-slot loop per table change, and table changes happen once per 4 MB.
+- The two slots a task owns privately are skipped: `PAGING_PRIVATE_PDE`, and the user window table at `KERNEL_PDE_INDEX + 1`. So `paging_task_map_private` is untouched.
+- `paging_check_task_dirs` compares every live copy against the kernel entries. It logs `BUG: paging: task directory drifted` if one differs.
+- `stress=pde` (kernel/r3stress.c) and `tools/checks/pdesync-check.py` arm the whole path headlessly.
 
-**The memory map.** The kernel is linked at 0xC0100000 and its .text, .rodata, .data and .bss run upward from there; every ring-3 app binary is baked into .rodata as raw deflate (the generated `drivers/user_*.h`, about half the raw size since 2.7.1), so each new app pushes .bss higher, only more slowly. Above .bss sit three fixed, NOLOAD reservations that `pmm.c` never hands to the heap: the 132 KB program window at `JT_USER_BASE` (`JT_USER_IMAGE_PAGES`, 32 pages of image, plus 1 of stack), the 64 KB Sound Blaster DMA buffer at `JT_DMABUF_BASE`, and the ring-3 window framebuffer at `JT_USER_FB`. All three are written down once, in `kernel/memmap.h`; the Makefile turns that header into `boot/memmap.ld`, which `boot/linker.ld`, `user/hello.ld` and `user/note.ld` INCLUDE, so the loader, the reservations and the flat binaries' link address cannot drift. They have to stay inside the second 4 MB kernel page table (0xC0400000 to 0xC07FFFFF) because `paging_task_map_private` copies that one table for a task's private window; `boot/linker.ld` asserts that, plus the order and the DMA alignment. On 2026-10-01 the window moved up 512 KB (0xC0507000 to 0xC0587000) and `tools/checks/bss-margin-check.py` now reports about 544 KB between .bss and the window, with a 16 KB floor. Later that day the image window grew from 7 pages to 32 (28 KB to 128 KB, Samantha and Stocks had both closed to within 1 KB of the old ceiling; a brief detour to 128 pages for Samantha's face frames was undone once `SYS_BRK` landed, see below); `JT_USER_BASE` stayed put, `.dmabuf` and `.userfb` slid up 128 KB (0xC05B0000 and 0xC05C0000, ending at 0xC0730000, still inside the table; in 2.5.1 `.dmabuf` and `.userfb` slid back down into the gap under the program window, to 0xC05B0000 and 0xC05C0000, and `JT_USER_FB_BYTES` grew to 0x220000 so a 960x540 window fits, ending at 0xC07E0000; on 2026-10-04 all three moved up another 64 KB when Hamurabi's binary took the gap under 16 KB: `JT_USER_BASE` is now 0xC0597000, `.dmabuf` 0xC05C0000 and `.userfb` 0xC05D0000, ending at 0xC07F0000, so 64 KB of the table is left above it and about 62 KB between .bss and the window; playable Hamurapi then grew its binary from 54 KB to 81 KB, which left about 34 KB, against the 16 KB floor; 2.7.1 stored the app binaries compressed, which took the gap to about 438 KB), `kernel/exec.h`, both user link scripts and `drivers/ramfs.c` take the size from the header, and ramfs now allocates each file to its actual length instead of the cap.
+The other window changes:
 
-**The task heap (1.9.27).** Anything larger than the image window goes through `SYS_BRK` (`kernel/brk.c`). Each task's heap starts at `JT_BRK_BASE` (0xFF000000, `kernel/memmap.h`) and grows up to `JT_BRK_MAX_PAGES` (8 MB), in PDEs 0x3FC and 0x3FD: above every identity alias `paging_map_region` can create (physical RAM and the 0xFD000000 framebuffer both sit lower), far from the private window PDE 19 and the user image, stack, `.dmabuf` and `.userfb` inside the second kernel table, so a task directory snapshot of the kernel's PDEs never collides with it and nothing the kernel maps later overwrites it. Frames come from the PMM one at a time, are zeroed, and are mapped user and writable in that task's directory only; the syscall switches to the kernel directory while it edits tables (a task directory misses pages the kernel mapped after it was made) and back, which also flushes the TLB. Exit and crash both reach `brk_release` from `syscall_release_task`, which frees every frame and both page tables and logs `brk: released N pages, live=M`. `user/libjt`'s `malloc` sits on it, and Samantha keeps all 72 face JPEGs there (about 1.5 MB), decoding the frame on screen on demand.
+- `syscall_window_register` (kernel/syscall.c, `r3wins`) allocates the framebuffer. It maps it at `JT_USER_FB` in that task only, and keeps a 16-deep event ring per window.
+  - `SYS_WINDOW_OPEN` hands back the same `jt_window_info` as before.
+  - `SYS_WINDOW_POLL` with `JT_POLL_PRESENT` marks the window dirty instead of copying anything, and drains the ring. It returns `-EAGAIN` when the ring is empty.
+- The compositor (kernel/kernel.c, `gui_window_t.task`) blits a dirty window's buffer through `window_pixel`, at the window's position, with the usual chrome.
+  - It feeds keys and content clicks only to the topmost window's ring (`syscall_window_push_event`).
+  - It sends a wheel step to the ring-3 window under the pointer (`JT_EV_WHEEL`). The step is dropped over anything else. Before 2.44.1 no window got one.
+  - The red dot kills the task.
+  - Every frame it looks for a window whose task is gone (exit, or a fault reaped by idt.c). It logs the same crash line the blocking launcher does, and closes that one window.
+- Resize is real (1.10).
+  - `ring3app_window_blit` compares the viewport with the window's buffer. `syscall_window_request_size` queues one `JT_EV_RESIZE`.
+  - The app re-opens (`jt_window_resized` in user/jtsys.h). `r3win_resize` maps a fresh zeroed buffer with `paging_task_remap_private`.
+  - The old buffer is freed on the compositor's next look, so a blit in flight never reads freed memory. Until then the old buffer is blitted clipped.
+  - `tools/checks/ring3resize-check.py` proves it.
+- `gui_ring3_windowed` names the apps on this path. Reminders is the proof. Adding an app is one row. Burrow, Notes and Mail can move to ring 3 on it without losing multi-window.
+
+**The concurrency rule.** There is one CPU, so there is one rule: shared kernel state is only ever touched with interrupts off.
+
+- A syscall already runs that way end to end, because `int 0x80` is an interrupt gate.
+- The only call that turns interrupts back on is `SYS_HTTP_GET`. It holds nothing while it waits. http.c refuses a second fetch while one is in flight, from the desktop or the gate.
+- The desktop (task 0) runs with interrupts on and can be preempted anywhere. So every entry point it shares with a syscall is an `irq_save`/`irq_restore` section (kernel/irqlock.h):
+  - `kmalloc` and `kfree`
+  - every `vfs_*` call (which covers FAT, ramfs and the disk)
+  - `syscall_window_push_event` into the per-window ring
+  - `task_kill`'s frame patch
+  - the whole of `ring3app_launch_window` (a slot is marked used before its private mapping exists)
+- The FAT cwd is one global cursor the desktop may have left inside NOTES/. So a syscall path resolves from the root and puts the cursor back (`vfs_cwd_get`/`vfs_cwd_set`).
+- `kheap_check` walks the free list on demand. `tools/checks/ring3stress-check.py` hammers both sides at once to keep it that way.
+
+**The memory map.**
+- The kernel is linked at 0xC0100000. Its .text, .rodata, .data and .bss run upward from there.
+- Every ring-3 app binary is baked into .rodata as raw deflate (the generated `drivers/user_*.h`, about half the raw size since 2.7.1). So each new app pushes .bss higher, only more slowly.
+- Above .bss sit three fixed, NOLOAD reservations that `pmm.c` never hands to the heap:
+  - the 132 KB program window at `JT_USER_BASE` (`JT_USER_IMAGE_PAGES`, 32 pages of image, plus 1 of stack)
+  - the 64 KB Sound Blaster DMA buffer at `JT_DMABUF_BASE`
+  - the ring-3 window framebuffer at `JT_USER_FB`
+- All three are written down once, in `kernel/memmap.h`. The Makefile turns that header into `boot/memmap.ld`. `boot/linker.ld`, `user/hello.ld` and `user/note.ld` INCLUDE it. So the loader, the reservations and the flat binaries' link address cannot drift.
+- They have to stay inside the second 4 MB kernel page table (0xC0400000 to 0xC07FFFFF), because `paging_task_map_private` copies that one table for a task's private window. `boot/linker.ld` asserts that, plus the order and the DMA alignment.
+- `kernel/exec.h`, both user link scripts and `drivers/ramfs.c` take the size from the header. ramfs now allocates each file to its actual length instead of the cap.
+
+How the map moved over time:
+- On 2026-10-01 the window moved up 512 KB (0xC0507000 to 0xC0587000). `tools/checks/bss-margin-check.py` now reports about 544 KB between .bss and the window, with a 16 KB floor.
+- Later that day the image window grew from 7 pages to 32 (28 KB to 128 KB). Samantha and Stocks had both closed to within 1 KB of the old ceiling.
+  - A brief detour to 128 pages for Samantha's face frames was undone once `SYS_BRK` landed (see below).
+  - `JT_USER_BASE` stayed put. `.dmabuf` and `.userfb` slid up 128 KB (0xC05B0000 and 0xC05C0000, ending at 0xC0730000, still inside the table).
+- In 2.5.1, `.dmabuf` and `.userfb` slid back down into the gap under the program window, to 0xC05B0000 and 0xC05C0000. `JT_USER_FB_BYTES` grew to 0x220000 so a 960x540 window fits, ending at 0xC07E0000.
+- On 2026-10-04 all three moved up another 64 KB, when Hamurabi's binary took the gap under 16 KB.
+  - `JT_USER_BASE` is now 0xC0597000, `.dmabuf` 0xC05C0000 and `.userfb` 0xC05D0000, ending at 0xC07F0000.
+  - So 64 KB of the table is left above it, and about 62 KB between .bss and the window.
+- Playable Hamurapi then grew its binary from 54 KB to 81 KB. That left about 34 KB, against the 16 KB floor.
+- 2.7.1 stored the app binaries compressed. That took the gap to about 438 KB.
+
+**The task heap (1.9.27).** Anything larger than the image window goes through `SYS_BRK` (`kernel/brk.c`).
+
+- Each task's heap starts at `JT_BRK_BASE` (0xFF000000, `kernel/memmap.h`). It grows up to `JT_BRK_MAX_PAGES` (8 MB), in PDEs 0x3FC and 0x3FD.
+- That is above every identity alias `paging_map_region` can create. Physical RAM and the 0xFD000000 framebuffer both sit lower.
+- It is also far from the private window PDE 19 and the user image, stack, `.dmabuf` and `.userfb` inside the second kernel table. So a task directory snapshot of the kernel's PDEs never collides with it, and nothing the kernel maps later overwrites it.
+- Frames come from the PMM one at a time. They are zeroed, and mapped user and writable in that task's directory only.
+- The syscall switches to the kernel directory while it edits tables, because a task directory misses pages the kernel mapped after it was made. It switches back after, which also flushes the TLB.
+- Exit and crash both reach `brk_release` from `syscall_release_task`. It frees every frame and both page tables, and logs `brk: released N pages, live=M`.
+- `user/libjt`'s `malloc` sits on it. Samantha keeps all 72 face JPEGs there (about 1.5 MB), decoding the frame on screen on demand.
 
 ### Samantha at ring 3 (1.9.26, done)
 
-Samantha (`user/samantha.c`) was the twenty-sixth and last app inside the kernel; her old in-kernel chat and face are deleted, and `kernel/phone_home.h` stays because it is the phone's home screen and app grid, the OS shell, not her UI. The reason she is last is that she is the only app that touches everything: the network, the sound card both ways, kernel-only state like the weather fields, and the launcher. The rule for the move is the same as every port before it: the fewest new syscalls that keep the host, the devices and the desktop's launch path on the kernel side, every user pointer through `paging_user_range_ok`, nothing that blocks with interrupts off except around a network wait, and nothing a program can point anywhere the kernel did not choose.
+Samantha (`user/samantha.c`) was the twenty-sixth and last app inside the kernel. Her old in-kernel chat and face are deleted. `kernel/phone_home.h` stays, because it is the phone's home screen and app grid, the OS shell, not her UI.
+
+She is last because she is the only app that touches everything: the network, the sound card both ways, kernel-only state like the weather fields, and the launcher.
+
+The rule for the move is the same as every port before it:
+- the fewest new syscalls that keep the host, the devices and the desktop's launch path on the kernel side
+- every user pointer through `paging_user_range_ok`
+- nothing that blocks with interrupts off, except around a network wait
+- nothing a program can point anywhere the kernel did not choose
 
 | Capability | In the kernel today | At ring 3 |
 |---|---|---|
@@ -405,20 +474,52 @@ Slices, each sized for one Sonnet agent in about ten minutes, in order:
 5. The face: frame arrays into the user binary, libjt drawing, idle and talking states. Haiku.
 6. `SYS_AUDIO_PLAY`/`SYS_AUDIO_STATUS` plus the per-sentence speak path and mouth timing. Sonnet.
 7. `SYS_AUDIO_RECORD` plus push-to-talk and `/api/listen`. Sonnet.
-8. (done) Ring-3 Samantha is the default: dock slot 6, the `chat` and `samantha` shell commands, `boot_to_samantha` and phone mode (argv `phone`, as Notes gets it) all launch her; the in-kernel chat and face are deleted, `phone_home.h` stays and opens her through `gui_apps_launch`; 26 of 26. `facehost=` moved to `syscall.c` and now sets where her face and speech are fetched. Sonnet.
+8. (done) Ring-3 Samantha is the default. Sonnet.
+   - Dock slot 6, the `chat` and `samantha` shell commands, `boot_to_samantha` and phone mode (argv `phone`, as Notes gets it) all launch her.
+   - The in-kernel chat and face are deleted.
+   - `phone_home.h` stays and opens her through `gui_apps_launch`. 26 of 26.
+   - `facehost=` moved to `syscall.c` and now sets where her face and speech are fetched.
 
-Checks that must keep passing (`tools/checks`): `samantha-fullscreen-check.py` (2.9.0: fills the screen, glass, fading captions, scrollback, the two typing bugs, the mouth follows the voice, Esc and the red dot; 2.9.1: a second machine watches her blink on her own clock, every other machine boots with `noblink`; 2.12.1: the room around her in a wide window, and captions that never land on her lips or eyes, measured on the framebuffer), `chat-face-check.py`, `chat-live-check.sh`, `chat-samantha-check.py`, `chat-speaks-check.py`, `chatapp-check.py`, `chattools-check.py`, `demochat-check.mjs`, `face-frames-check.py`, `facespeak-demo-check.mjs`, `phone-boot-check.py`, `phone-reboot-check.mjs`, `phone-samantha-back-check.py`, `samantha-boot-check.py`. They grep serial lines (`chattool=`, `chat=`, face frame counts); the ring-3 program must print the same lines through `SYS_WRITE` to the serial fd so the checks move over untouched, the way the Terminal and Notes ports did.
+Checks that must keep passing (`tools/checks`):
+- `samantha-fullscreen-check.py`
+  - 2.9.0: fills the screen, glass, fading captions, scrollback, the two typing bugs, the mouth follows the voice, Esc and the red dot.
+  - 2.9.1: a second machine watches her blink on her own clock. Every other machine boots with `noblink`.
+  - 2.12.1: the room around her in a wide window, and captions that never land on her lips or eyes, measured on the framebuffer.
+- `chat-face-check.py`
+- `chat-live-check.sh`
+- `chat-samantha-check.py`
+- `chat-speaks-check.py`
+- `chatapp-check.py`
+- `chattools-check.py`
+- `demochat-check.mjs`
+- `face-frames-check.py`
+- `facespeak-demo-check.mjs`
+- `phone-boot-check.py`
+- `phone-reboot-check.mjs`
+- `phone-samantha-back-check.py`
+- `samantha-boot-check.py`
+
+They grep serial lines (`chattool=`, `chat=`, face frame counts). The ring-3 program must print the same lines through `SYS_WRITE` to the serial fd, so the checks move over untouched, the way the Terminal and Notes ports did.
 
 ### The apps
 
-Twenty-six apps live in the Apps folder; the dock pins the ones you reach
-for most. Each is one header. They come in three shapes.
+Twenty-six apps live in the Apps folder. The dock pins the ones you reach for most. Each is one header. They come in three shapes.
 
-Renames (2.6.30): Lexly is Tonchi, Roost is Brick, Voxprint is Notate, Siftbox is Hagaki and Sparkjar is Hikko. Samantha still opens an app by its old name. Tonchi keeps `lexly.jaybulb.com` and `/api/lexly` until its own address exists. Block Frame still answers at its old `wiretext` address.
+Renames (2.6.30):
+- Lexly is Tonchi.
+- Roost is Brick.
+- Voxprint is Notate.
+- Siftbox is Hagaki.
+- Sparkjar is Hikko.
 
-**Apps with a file on disk.** Same pattern every time: a fixed-size array
-in RAM, one plain text file on the FAT disk, written through on every
-change. No Save button.
+Samantha still opens an app by its old name. Tonchi keeps `lexly.jaybulb.com` and `/api/lexly` until its own address exists. Block Frame still answers at its old `wiretext` address.
+
+**Apps with a file on disk.** It is the same pattern every time:
+- a fixed-size array in RAM
+- one plain text file on the FAT disk
+- written through on every change
+
+There is no Save button.
 
 | App | File | On disk |
 |---|---|---|
@@ -427,7 +528,26 @@ change. No Save button.
 | Calendar | `user/calendar.c`, `kernel/ring3app.c` | `EVENTS.TXT`, one line per date. The grid itself is computed from the clock. The seventeenth ring-3 app (1.9.12); its in-kernel copy is gone. |
 | Mail | `user/mail.c`, `kernel/mail.h` | `MAIL.TXT`, one line per message. Mail is the twenty-second ring-3 app (a compositor window, compose sheet inside it); `kernel/mail.h` keeps only the data layer Samantha's read_mail and send_mail use, reloaded from disk on every call. Two starter messages ship compiled in. |
 | Contacts | `user/contacts.c`, `kernel/ring3app.c` | `CONTACTS.TXT`. The thirteenth ring-3 app (1.9.7); its in-kernel copy is gone. |
-| Samantha | `user/samantha.c`, `kernel/ring3app.c` | `CHAT.TXT`. Talks to the Worker through `SYS_HTTP_POST`. Push-to-talk: holding F2 records through `SYS_AUDIO_RECORD` and posts the clip to the Worker's `/api/listen` (Cloudflare Workers AI Whisper); the recognized text runs through the same path a typed message takes. Full screen since 2.9.0: her 736 pixel portrait (`landing/face/hd.jpg`, one fetch of 59 KB through the Worker's `/face/` route) fills the window (a tall one, the phone, shows all of her edge to edge; since 2.12.1 a wide one gives her room: the portrait is 86 percent of the width with her eyes about 40 percent down, the sides are her own wall colour taken from the portrait's top corners, and the portrait's outer tenth fades into it), the input line is a blurred glass panel, what is said shows as captions that rise from just above the input, up to three stacked (newest at the bottom, older ones dimmer) and fading all together after about four quiet seconds (in a wide window, where her mouth is low and her chin travels down toward the panel, one compact row only, and never over her lips or eyes), Tab opens the whole conversation, a red dot or Esc closes her, and her mouth is drawn by code from the loudness of the PCM she is playing. A host without the portrait leaves the old 320 pixel idle and talk frames, scaled up. The twenty-sixth ring-3 app (1.9.26); the in-kernel chat is gone. |
+| Samantha | `user/samantha.c`, `kernel/ring3app.c` | `CHAT.TXT`. Talks to the Worker through `SYS_HTTP_POST`. The twenty-sixth ring-3 app (1.9.26); the in-kernel chat is gone. Details below the table. |
+
+**Samantha, in detail.**
+
+Push-to-talk:
+- Holding F2 records through `SYS_AUDIO_RECORD`.
+- It posts the clip to the Worker's `/api/listen` (Cloudflare Workers AI Whisper).
+- The recognized text runs through the same path a typed message takes.
+
+Full screen since 2.9.0:
+- Her 736 pixel portrait fills the window. It is `landing/face/hd.jpg`, one fetch of 59 KB through the Worker's `/face/` route.
+- A tall window, the phone, shows all of her edge to edge.
+- Since 2.12.1 a wide window gives her room. The portrait is 86 percent of the width, with her eyes about 40 percent down. The sides are her own wall colour, taken from the portrait's top corners. The portrait's outer tenth fades into it.
+- The input line is a blurred glass panel.
+- What is said shows as captions that rise from just above the input. Up to three stack, newest at the bottom, older ones dimmer. They fade all together after about four quiet seconds.
+- In a wide window, her mouth is low and her chin travels down toward the panel. So there is one compact row only, and never over her lips or eyes.
+- Tab opens the whole conversation.
+- A red dot or Esc closes her.
+- Her mouth is drawn by code from the loudness of the PCM she is playing.
+- A host without the portrait leaves the old 320 pixel idle and talk frames, scaled up.
 
 **Apps with nothing to save.**
 
@@ -442,8 +562,7 @@ change. No Save button.
 | Music | `user/music.c`, `kernel/ring3app.c` | Plays the `.WAV` and `.MP3` songs in Files and in a `MUSIC` folder. Keeps nothing on disk. The twenty-fifth ring-3 app (2.2), in the Apps folder. |
 | Movies | `user/movies.c`, `kernel/ring3app.c` | Plays motion-JPEG AVI clips from Files with sound, pause, seek and fullscreen. In the Apps folder, opened with `open=movi`. A ring-3 app from the start (2.2). |
 
-**Apps ported from the fleet.** Each is a native rewrite of one of the
-sibling web apps, kept small on purpose.
+**Apps ported from the fleet.** Each is a native rewrite of one of the sibling web apps, kept small on purpose.
 
 | App | File | What it is |
 |---|---|---|
@@ -464,63 +583,62 @@ sibling web apps, kept small on purpose.
 | Mines | `user/mines.c`, `kernel/ring3app.c` | Minesweeper, the 9x9 beginner board. In the Apps folder, opened with `open=mine`. A ring-3 app from the start. |
 | Books | `user/books.c`, `kernel/ring3app.c` | Plain-text reader. The `.TXT` books in `BOOKS/`, one page at a time, the place kept per book. In the Apps folder and Spotlight, opened with `open=books`. |
 
-**Adding an app.** Every app is one row in `APPS[]` in `kernel/kernel.c`,
-and nothing else dispatches on an app's index: the dock, the Apps folder,
-Chat's `open_app`, and the multiwindow desktop all read that table. Write
-the app as a ring-3 program in `user/<app>.c` the way Keyrate and Toroid
-do and add a row to `RING3_APPS` in `kernel/ring3app.c`, or (for now) in
-its own kernel `.c` with its `open` declared in a tiny header. Then add
-the row, add the `.c` to the Makefile, and bump `GUI_APP_COUNT`. Give it `draw` and `key` only if it should also run as a
-desktop window. Reach for `app.h`'s helpers before writing your own.
+**Adding an app.** Every app is one row in `APPS[]` in `kernel/kernel.c`. Nothing else dispatches on an app's index. The dock, the Apps folder, Chat's `open_app` and the multiwindow desktop all read that table.
 
-The `drivers/app_*.h` files are the original single-file web builds of
-those apps as C byte arrays, generated by `tools/gen/gen_app.sh`. The
-`serveapp` shell command serves one over the kernel's own TCP so you can
-`curl` it from the host. The `drivers/user_hello.h` and
-`drivers/user_note.h` arrays are the two user programs, embedded the same
-way so a fresh disk has something to `exec`.
+The steps:
+1. Write the app as a ring-3 program in `user/<app>.c`, the way Keyrate and Toroid do. Add a row to `RING3_APPS` in `kernel/ring3app.c`. Or (for now) write it in its own kernel `.c` with its `open` declared in a tiny header.
+2. Add the row.
+3. Add the `.c` to the Makefile.
+4. Bump `GUI_APP_COUNT`.
+
+Give it `draw` and `key` only if it should also run as a desktop window. Reach for `app.h`'s helpers before writing your own.
+
+The `drivers/app_*.h` files are the original single-file web builds of those apps as C byte arrays, generated by `tools/gen/gen_app.sh`. The `serveapp` shell command serves one over the kernel's own TCP, so you can `curl` it from the host.
+
+The `drivers/user_hello.h` and `drivers/user_note.h` arrays are the two user programs. They are embedded the same way, so a fresh disk has something to `exec`.
 
 ### Host-side tools
 
 None of this is kernel code. It builds and runs on the Mac.
 
-**Native harnesses** compile one kernel file against a tiny fake of
-`kmalloc` and `memcpy` so it can be tested without booting QEMU.
-`tools/png-host/main.c`, `tools/jpeg-host/main.c`, `tools/ttf-host/` and
-`tools/auth-host/main.c` each do this for a decoder, the font rasterizer or `auth.h`;
-`tools/libjt-host/main.c` does the same for the user-space C library;
-the `kheap.h`, `libc.h` and `irq.h` shims next to each one are the fakes (`tools/parsers-host/irq.h` stands in for the kernel's tick counter so timeout loops stay finite on the host).
-`tools/png-host/wallsat_check.c` decodes the baked satellite photo and
-checks it comes out 960x540. `drivers/png_testdata.h` and
-`drivers/jpeg_testdata.h` are generated test images.
+**Native harnesses** compile one kernel file against a tiny fake of `kmalloc` and `memcpy`. So it can be tested without booting QEMU.
+- `tools/png-host/main.c`, `tools/jpeg-host/main.c`, `tools/ttf-host/` and `tools/auth-host/main.c` each do this for a decoder, the font rasterizer or `auth.h`.
+- `tools/libjt-host/main.c` does the same for the user-space C library.
+- The `kheap.h`, `libc.h` and `irq.h` shims next to each one are the fakes. `tools/parsers-host/irq.h` stands in for the kernel's tick counter, so timeout loops stay finite on the host.
+- `tools/png-host/wallsat_check.c` decodes the baked satellite photo and checks it comes out 960x540.
+- `drivers/png_testdata.h` and `drivers/jpeg_testdata.h` are generated test images.
 
-**Fuzzers** in `tools/fuzz-host/` hammer the code that reads untrusted
-bytes. `fuzz_parsers.c` covers HTTP, HTML and JSON; `fuzz_decoders.c`
-covers PNG and JPEG. Both run under address and undefined-behaviour
-sanitizers, using the shims in `tools/parsers-host/`.
+**Fuzzers** in `tools/fuzz-host/` hammer the code that reads untrusted bytes.
+- `fuzz_parsers.c` covers HTTP, HTML and JSON.
+- `fuzz_decoders.c` covers PNG and JPEG.
+- Both run under address and undefined-behaviour sanitizers, using the shims in `tools/parsers-host/`.
 
-**Generators** in `tools/gen/` produce the embedded data: the icon art
-from hand-drawn SVGs, the editor fonts, the VGA font fallback, the
-satellite wallpaper, the user program arrays, the ported app arrays, the
-fact row and progress chart on the landing page, and Hamurabi's story data
-(`gen_hamurabi_story.py` turns `art/hamurabi/story.json` into `user/hamurabi_story.h`; `gen_hamurabi_sprites.py` turns `art/hamurabi/sprites.png` into `user/hamurabi_sprites.h`).
+**Generators** in `tools/gen/` produce the embedded data:
+- the icon art, from hand-drawn SVGs
+- the editor fonts
+- the VGA font fallback
+- the satellite wallpaper
+- the user program arrays
+- the ported app arrays
+- the fact row and progress chart on the landing page
+- Hamurabi's story data: `gen_hamurabi_story.py` turns `art/hamurabi/story.json` into `user/hamurabi_story.h`, and `gen_hamurabi_sprites.py` turns `art/hamurabi/sprites.png` into `user/hamurabi_sprites.h`
 
-**Checks** in `tools/checks/` are the regression suite. `check.sh` proves
-the kernel boots. `qa-gallery.py` opens every app in a
-headless QEMU and looks at the pixels. `feature-drive.py` performs each
-app's main action. `soak-check.py` opens and closes everything many times
-and checks nothing leaked. `frametime-check.py` fails if a repaint gets
-slow. `usertest-check.sh` runs the ring-3 programs and asserts their
-output. The rest each pin one specific thing that once broke: dock
-shadows, icon lighting, the lock screen, the panic screen, the Apps folder
-layout, the landing page facts. CI runs them all on every pull request.
+**Checks** in `tools/checks/` are the regression suite.
+- `check.sh` proves the kernel boots.
+- `qa-gallery.py` opens every app in a headless QEMU and looks at the pixels.
+- `feature-drive.py` performs each app's main action.
+- `soak-check.py` opens and closes everything many times and checks nothing leaked.
+- `frametime-check.py` fails if a repaint gets slow.
+- `usertest-check.sh` runs the ring-3 programs and asserts their output.
+- The rest each pin one specific thing that once broke: dock shadows, icon lighting, the lock screen, the panic screen, the Apps folder layout, the landing page facts.
+- CI runs them all on every pull request.
 
-**The dev loop.** `tools/watch.sh` keeps a QEMU window open and reboots it
-when the built kernel actually changes. `tools/qa-demo.sh` records a
-headless tour of the desktop to video. `tools/voice-control.sh` lets you
-speak a shell command into a running instance through Whisper and Ollama.
+**The dev loop.**
+- `tools/watch.sh` keeps a QEMU window open and reboots it when the built kernel actually changes.
+- `tools/qa-demo.sh` records a headless tour of the desktop to video.
+- `tools/voice-control.sh` lets you speak a shell command into a running instance through Whisper and Ollama.
 
-The ad lives in `landing/ad/` and plays live from the same clock the video was captured from.
+**The ad.** It lives in `landing/ad/` and plays live from the same clock the video was captured from.
 
 | File | What it does |
 |---|---|
@@ -540,23 +658,33 @@ The ad lives in `landing/ad/` and plays live from the same clock the video was c
 
 ### Where to go next
 
-- the Benchmarks section for how fast it is, and `tools/bench.sh` to measure it yourself.
-- `docs/ROADMAP.md` (Whitepaper) for why this exists and what it is not yet.
-- the System call ABI section if you want to write a program for it.
-- `docs/ROADMAP.md` (Blueprint: where the OS goes after 1.0) for the plan after 1.0: apps as real processes and a window server.
-- the Threat model section for what the login screen does and does not protect.
+- The Benchmarks section: how fast it is. Use `tools/bench.sh` to measure it yourself.
+- `docs/ROADMAP.md` (Whitepaper): why this exists and what it is not yet.
+- The System call ABI section: if you want to write a program for it.
+- `docs/ROADMAP.md` (Blueprint: where the OS goes after 1.0): the plan after 1.0, with apps as real processes and a window server.
+- The Threat model section: what the login screen does and does not protect.
 
 ## ARM64 and the Raspberry Pi
 
-Status (2026-10-10): the desktop, USB keyboard, Wi-Fi and HTTPS fetches have run on Joshua's Raspberry Pi 4. The 2.34.0 development card boots; the 2.35.0 Calendar icon, Clock and Samantha dock launch are in PR #492, with focused QEMU checks and a full local suite pending. USB mouse, hardware RNG output and a real Samantha answer still need a board check.
+Status (2026-10-10): the desktop, USB keyboard, Wi-Fi and HTTPS fetches have run on Joshua's Raspberry Pi 4.
+- The 2.34.0 development card boots.
+- The 2.35.0 Calendar icon, Clock and Samantha dock launch are in PR #492. Focused QEMU checks are done. A full local suite is pending.
+- USB mouse, hardware RNG output and a real Samantha answer still need a board check.
 
-If this is accepted it replaces the x86 board in `docs/GUIDE.md` (Hardware plan) as the 3.0 reference. The OS stays free; the board is what we sell around it.
+If this is accepted, it replaces the x86 board in `docs/GUIDE.md` (Hardware plan) as the 3.0 reference. The OS stays free. The board is what we sell around it.
 
-For the current app list, see [Apps currently implemented on ARM](GUIDE.md#raspberry-pi). The dock artwork is shared with i386; most of its apps are not ported yet.
+For the current app list, see [Apps currently implemented on ARM](GUIDE.md#raspberry-pi). The dock artwork is shared with i386. Most of its apps are not ported yet.
 
 ### Why a Pi and not the Mac mini
 
-The kernel is 32-bit x86. The Mac mini M4 is Apple Silicon: no UEFI, a custom boot chain, and USB, storage and sound behind Apple-only controllers. Bare-metal there means an Asahi-sized effort. A Raspberry Pi boots a plain `kernel8.img` from its firmware, has a documented framebuffer, UART and interrupt controller, and QEMU models parts of it. Start with a Pi 4B. The Pi 5 hangs every peripheral off the RP1 chip over PCIe, which makes first bring-up harder; move to it second.
+The kernel is 32-bit x86. The Mac mini M4 is Apple Silicon.
+- It has no UEFI and a custom boot chain.
+- USB, storage and sound sit behind Apple-only controllers.
+- Bare-metal there means an Asahi-sized effort.
+
+A Raspberry Pi boots a plain `kernel8.img` from its firmware. It has a documented framebuffer, UART and interrupt controller. QEMU models parts of it.
+
+Start with a Pi 4B. The Pi 5 hangs every peripheral off the RP1 chip over PCIe, which makes first bring-up harder. Move to it second.
 
 ### What the port touches
 
@@ -569,37 +697,145 @@ The kernel, drivers and lib are C, plus the user programs.
 
 ### Console scrollback
 
-The on-screen Console is the only debug channel on a Pi with no serial cable, and the boot prints more lines than the window holds. Since 2.19.0 it keeps the last 16 KB of the log and a keyboard scrolls it: Page Up and Page Down by half a page, Home to the first line, End to the newest. The title bar reads "lines 12-27 of 61", and the bottom row of the window pins the newest `wifi` line and the newest `usb` line (key echoes excluded), cut to fit. New output while scrolled back is logged but does not move the view. `tools/checks/arm64-console-scroll-check.py` proves it with QEMU screendumps.
+The on-screen Console is the only debug channel on a Pi with no serial cable. The boot prints more lines than the window holds.
+
+Since 2.19.0 it keeps the last 16 KB of the log, and a keyboard scrolls it:
+- Page Up and Page Down move by half a page.
+- Home goes to the first line. End goes to the newest.
+- The title bar reads "lines 12-27 of 61".
+- The bottom row of the window pins the newest `wifi` line and the newest `usb` line (key echoes excluded), cut to fit.
+- New output while scrolled back is logged but does not move the view.
+
+`tools/checks/arm64-console-scroll-check.py` proves it with QEMU screendumps.
 
 ### Milestones, each one runs
 
 1. **M0, serial boot: done.** `arch/arm64/start.S` reaches C and prints through the UART in QEMU and on the Pi. Check: `tools/checks/arm64-m0-check.py`.
-2. **M1, desktop: implemented.** Memory mapping, timers, fonts, colour Satellite wallpaper, dock, cursor and Console scrollback are present. Clock and the readable Calendar icon are in PR #492; board verification remains. Checks: `tools/checks/arm64-m1c-check.py`, `tools/checks/arm64-calicon-check.py`.
-3. **M2, input and network in QEMU: implemented.** Virtio keyboard, mouse, sector reads and the shared IP stack work. These are emulator drivers; they do not prove the Pi's physical devices. Checks: `tools/checks/arm64-m2-check.py`, `tools/checks/arm64-net-check.py`.
-4. **M3, userland: started.** One EL0 test program can write and exit; touching a kernel-only page faults while the kernel survives. M3b (2.49.0): `user/hello.c`, the same C source the i386 apps use, builds for aarch64 (`user/jtsys.h` has an `svc #0` path, same `JT_SYS_*` numbers) and runs at EL0 on the ARM kernel; write and exit work, everything else answers -ENOSYS. M3c part 1 (2.50.0): a real app loader. `user/calendar.c` (34 KB, with pointer tables, a data page and a zeroed pool) loads from an image table next to hello, runs at EL0 with code pages read-only and executable and data never executable, and `JT_SYS_TIME` and `JT_SYS_GETPID` answer; `userrun NAME` runs an app from the Terminal. M3c part 2 (2.56.0): Calendar in its own window. The dock tile starts `user/calendar.c` under a cooperative scheduler for one app: `JT_SYS_SCHED_YIELD` parks it (every register and its pc saved, `resume_user` in `vectors.S` goes back in) and the desktop's loop resumes it on the next pass with an event, or every 10 ms. `JT_SYS_WINDOW_OPEN` maps a 560x360 buffer for it (EL0 read-write, never executable) and puts up the Calculator's frame titled Calendar; `JT_SYS_WINDOW_POLL` presents it and hands back keys and clicks in the LP64 `jt_event` layout, -EAGAIN when there are none, as on i386. The window in front has the keys; Esc (calendar's own) or the red dot ends it and the wallpaper comes back. A program that loops forever on yield leaves the desktop answering; one that never makes a syscall would still hold the core (preemption needs IRQs unmasked at EL0, next). M3d (2.58.0): files. `arch/arm64/ufile.c` answers open, read, write (fd 3 and up), close, lseek, readdir, readfile, mkdir and unlink with the i386 semantics of the System call ABI section, the same errnos and the 8 KB open() limit, over the shared `drivers/fat.c` on the Pi's card, or on the same FAT image as a virtio disk under QEMU virt. An app's root is the card's `JT/` folder; no path reaches outside it. Notes (`user/notes.c`, unchanged) is in the app table and on its dock tile: a note typed on the Pi lands in `JT/NOTES/NOTES/` and reads back after a reboot. Calendar's `EVENTS.TXT` goes through the same calls, though only its missing-file path is checked on ARM. Limits, all known: one app at a time, because fat.c has one current directory for the whole kernel (each call puts it back, and an app is only ever parked at a yield, never inside a call); a folder never grows past its first cluster (14 entries with one-sector clusters, more with bigger ones); files carry no timestamps; no autosave on ARM yet (#518 is not on main). Separate app address spaces and the text call remain. M3e (2.59.0): Music. `user/music.c`, unchanged, plays the WAV and MP3 songs in the card's `JT/MUSIC/` (made the first time it opens). It is in the app table and Spotlight (type music), not on the dock, a decision. The EL0 arena grows to 16 MiB: blocks two to eight are the app's `JT_SYS_BRK` heap, with i386's semantics (pages mapped EL0 read-write, never executable, zeroed), where Music reads each song whole (3 MB at most). `JT_SYS_AUDIO` takes 8-bit mono PCM into a 32 KB ring that the desktop's loop drains into the PWM ring without waiting, each byte a stereo frame through the master volume (2.48.0), so Music's volume and the kernel's multiply. On the Pi a DMA channel (5, PWM1's DREQ) feeds the jack from that ring; QEMU virt has no PWM, so the generic counter takes it at the song's rate. `played` counts the frames the hardware took, so Music's clock is the sound. minimp3 runs in floating point at EL0, and every call and every park keeps an app's q0-q31, FPCR and FPSR. `JT_SYS_AUDIO_RECORD` is -ENOSYS. Checks: `tools/checks/arm64-m3-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-notes-check.py`, `tools/checks/arm64-music-check.py`.
-5. **M4, real Pi 4: started.** HDMI desktop, USB keyboard and Wi-Fi are working on the board. The xHCI mouse path is checked in QEMU and still needs a physical mouse test. Bluetooth BT1 (2.51.0): HCI over the PL011, the radio's patch, its version and `bt scan`, checked in QEMU against a fake controller (`tools/checks/arm64-bt-check.py`); the console moved to the mini UART for it. M4 SD: the card is read through EMMC2 (2.53.0) and written too (2.57.0, CMD24 and CMD25 with busy waits), so `write`, `rm` and `mkdir` keep the OS's own files in `JT/` on the FAT32 boot partition across a reboot, and the boot files are never written. Proven on QEMU's EMMC2 and waiting on a board photo. Audio: a quiet tone out of the 3.5 mm jack (2.43.0, polled PWM, `beep`), and since 2.59.0 an app's sound through DMA (M3e, Music), neither heard on the board yet; HDMI audio remains. Checks: `tools/checks/arm64-usb-check.py`, `tools/checks/arm64-wifi-check.py`; physical checks are recorded in [`GUIDE.md` (Raspberry Pi)](GUIDE.md#raspberry-pi). BT2 (2.54.0): `bt pair` connects the LE mouse (HID over GATT) and it drives the pointer; still to be seen on the board.
+2. **M1, desktop: implemented.** Memory mapping, timers, fonts, colour Satellite wallpaper, dock, cursor and Console scrollback are present. Clock and the readable Calendar icon are in PR #492. Board verification remains. Checks: `tools/checks/arm64-m1c-check.py`, `tools/checks/arm64-calicon-check.py`.
+3. **M2, input and network in QEMU: implemented.** Virtio keyboard, mouse, sector reads and the shared IP stack work. These are emulator drivers. They do not prove the Pi's physical devices. Checks: `tools/checks/arm64-m2-check.py`, `tools/checks/arm64-net-check.py`.
+4. **M3, userland: started.** One EL0 test program can write and exit. Touching a kernel-only page faults while the kernel survives. The sub-steps are below the list.
+5. **M4, real Pi 4: started.** HDMI desktop, USB keyboard and Wi-Fi are working on the board. The sub-steps are below the list.
 6. **M5, Pi 5: future work.** Its RP1 peripheral controller needs a separate bring-up.
+
+**M3 sub-steps.**
+
+- **M3b (2.49.0).**
+  - `user/hello.c`, the same C source the i386 apps use, builds for aarch64. `user/jtsys.h` has an `svc #0` path, with the same `JT_SYS_*` numbers.
+  - It runs at EL0 on the ARM kernel.
+  - Write and exit work. Everything else answers -ENOSYS.
+- **M3c part 1 (2.50.0): a real app loader.**
+  - `user/calendar.c` (34 KB, with pointer tables, a data page and a zeroed pool) loads from an image table next to hello.
+  - It runs at EL0 with code pages read-only and executable, and data never executable.
+  - `JT_SYS_TIME` and `JT_SYS_GETPID` answer.
+  - `userrun NAME` runs an app from the Terminal.
+- **M3c part 2 (2.56.0): Calendar in its own window.**
+  - The dock tile starts `user/calendar.c` under a cooperative scheduler for one app.
+  - `JT_SYS_SCHED_YIELD` parks it. Every register and its pc are saved, and `resume_user` in `vectors.S` goes back in. The desktop's loop resumes it on the next pass with an event, or every 10 ms.
+  - `JT_SYS_WINDOW_OPEN` maps a 560x360 buffer for it (EL0 read-write, never executable). It puts up the Calculator's frame titled Calendar.
+  - `JT_SYS_WINDOW_POLL` presents it. It hands back keys and clicks in the LP64 `jt_event` layout, -EAGAIN when there are none, as on i386.
+  - The window in front has the keys. Esc (calendar's own) or the red dot ends it, and the wallpaper comes back.
+  - A program that loops forever on yield leaves the desktop answering. One that never makes a syscall would still hold the core. Preemption needs IRQs unmasked at EL0, next.
+- **M3d (2.58.0): files.**
+  - `arch/arm64/ufile.c` answers open, read, write (fd 3 and up), close, lseek, readdir, readfile, mkdir and unlink.
+  - It uses the i386 semantics of the System call ABI section: the same errnos and the 8 KB open() limit.
+  - It runs over the shared `drivers/fat.c` on the Pi's card, or on the same FAT image as a virtio disk under QEMU virt.
+  - An app's root is the card's `JT/` folder. No path reaches outside it.
+  - Notes (`user/notes.c`, unchanged) is in the app table and on its dock tile. A note typed on the Pi lands in `JT/NOTES/NOTES/` and reads back after a reboot.
+  - Calendar's `EVENTS.TXT` goes through the same calls, though only its missing-file path is checked on ARM.
+  - Limits, all known:
+    - One app at a time, because fat.c has one current directory for the whole kernel. Each call puts it back, and an app is only ever parked at a yield, never inside a call.
+    - A folder never grows past its first cluster (14 entries with one-sector clusters, more with bigger ones).
+    - Files carry no timestamps.
+    - No autosave on ARM yet (#518 is not on main).
+  - Separate app address spaces and the text call remain.
+- **M3e (2.59.0): Music.**
+  - `user/music.c`, unchanged, plays the WAV and MP3 songs in the card's `JT/MUSIC/` (made the first time it opens).
+  - It is in the app table and Spotlight (type music), not on the dock. That is a decision.
+  - The EL0 arena grows to 16 MiB. Blocks two to eight are the app's `JT_SYS_BRK` heap, with i386's semantics (pages mapped EL0 read-write, never executable, zeroed). Music reads each song whole there (3 MB at most).
+  - `JT_SYS_AUDIO` takes 8-bit mono PCM into a 32 KB ring. The desktop's loop drains the ring into the PWM ring without waiting. Each byte is a stereo frame through the master volume (2.48.0), so Music's volume and the kernel's multiply.
+  - On the Pi a DMA channel (5, PWM1's DREQ) feeds the jack from that ring. QEMU virt has no PWM, so the generic counter takes it at the song's rate.
+  - `played` counts the frames the hardware took, so Music's clock is the sound.
+  - minimp3 runs in floating point at EL0. Every call and every park keeps an app's q0-q31, FPCR and FPSR.
+  - `JT_SYS_AUDIO_RECORD` is -ENOSYS.
+
+Checks for M3: `tools/checks/arm64-m3-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-notes-check.py`, `tools/checks/arm64-music-check.py`.
+
+**M4 sub-steps.**
+
+- **The mouse.** The xHCI mouse path is checked in QEMU and still needs a physical mouse test.
+- **Bluetooth BT1 (2.51.0).** HCI over the PL011, the radio's patch, its version and `bt scan`. It is checked in QEMU against a fake controller (`tools/checks/arm64-bt-check.py`). The console moved to the mini UART for it.
+- **Bluetooth BT2 (2.54.0).** `bt pair` connects the LE mouse (HID over GATT), and it drives the pointer. Still to be seen on the board.
+- **SD.**
+  - The card is read through EMMC2 (2.53.0) and written too (2.57.0, CMD24 and CMD25 with busy waits).
+  - So `write`, `rm` and `mkdir` keep the OS's own files in `JT/` on the FAT32 boot partition across a reboot. The boot files are never written.
+  - Proven on QEMU's EMMC2 and waiting on a board photo.
+- **Audio.**
+  - A quiet tone out of the 3.5 mm jack (2.43.0, polled PWM, `beep`).
+  - Since 2.59.0, an app's sound through DMA (M3e, Music).
+  - Neither is heard on the board yet. HDMI audio remains.
+- **Checks.** `tools/checks/arm64-usb-check.py`, `tools/checks/arm64-wifi-check.py`. Physical checks are recorded in [`GUIDE.md` (Raspberry Pi)](GUIDE.md#raspberry-pi).
 
 ### Network stack
 
-The ARM build runs the same IP stack as the i386 kernel. Not a copy: `drivers/net.c` (ARP, IPv4, UDP, DNS, TCP, DHCP) and `drivers/http.c` compile for both.
+The ARM build runs the same IP stack as the i386 kernel. It is not a copy. `drivers/net.c` (ARP, IPv4, UDP, DNS, TCP, DHCP) and `drivers/http.c` compile for both.
 
-The only seam is `drivers/nic.h`, four calls: bring the card up, read its MAC, send a frame, poll for one. On QEMU the virtio-net driver in `arch/arm64/main.c` answers them. `arch/arm64/ip.c` adds a 100 Hz clock and, at boot, prints `net dhcp 10.0.2.15 gw 10.0.2.2`. Built with `make -C arch/arm64 NETPORT=8080` it also POSTs to the host and prints `net http 200 N bytes`. `tools/checks/arm64-net-check.py` proves both.
+The only seam is `drivers/nic.h`. It has four calls: bring the card up, read its MAC, send a frame, poll for one.
 
-Next, in order: Wi-Fi joins a network below the same four calls (the CYW43455 driver). Then TCP that survives a lost segment, which a real radio needs and QEMU never tests. TLS comes later, through the BearSSL the i386 build already has.
+On QEMU, the virtio-net driver in `arch/arm64/main.c` answers them. `arch/arm64/ip.c` adds a 100 Hz clock. At boot it prints `net dhcp 10.0.2.15 gw 10.0.2.2`. Built with `make -C arch/arm64 NETPORT=8080`, it also POSTs to the host and prints `net http 200 N bytes`. `tools/checks/arm64-net-check.py` proves both.
+
+Next, in order:
+1. Wi-Fi joins a network below the same four calls (the CYW43455 driver).
+2. TCP that survives a lost segment, which a real radio needs and QEMU never tests.
+3. TLS, later, through the BearSSL the i386 build already has.
 
 ### Claude in the Console
 
-Since 2.21.0 there is a prompt. It lives on the bottom row of the Terminal window (its dock tile, or F1); the Console is logs only ([`GUIDE.md` (Terminal)](GUIDE.md#terminal)). The prompt is zsh style, `joshua@tree % `, and a word that is not a command prints `zsh: command not found: WORD`. Samantha is a command: `sam QUESTION`. The relay says which model answered (Samantha from Turing, or Claude Haiku, Sonnet or Opus) and `/status` shows the last one. Type, Backspace to fix it, Enter to send. The kernel posts it to the Claude relay on the Mac (`tools/claude-relay/relay.py`, see [`GUIDE.md` (The Claude app)](GUIDE.md#the-claude-app)) through the IP stack above, and prints the answer in the Terminal as `sam: ...` in lines of at most 53 columns. `sam` returns to the prompt at once: while she thinks, a line typed meanwhile runs at once, a second `sam` says `sam: still thinking`, and commands that need the one network connection (`browse`, `open`, `llm`) say so and wait. The keyboard is polled between network reads (drivers/net.c `net_idle`); only the local model (`llm`) still blocks the keys while it computes. A follow-up keeps the conversation. Each outcome is one short line: `claude: thinking`, `claude: error -401` when the relay refuses the token, `claude: timeout`, `claude: no network` with no DHCP lease, `claude: no token` when the build had none. Typed keys show on the prompt row and their echo lines go to the serial port only, so the log stays readable.
+Since 2.21.0 there is a prompt.
+- It lives on the bottom row of the Terminal window (its dock tile, or F1).
+- The Console is logs only ([`GUIDE.md` (Terminal)](GUIDE.md#terminal)).
+- The prompt is zsh style, `joshua@tree % `. A word that is not a command prints `zsh: command not found: WORD`.
+- Samantha is a command: `sam QUESTION`.
+- The relay says which model answered (Samantha from Turing, or Claude Haiku, Sonnet or Opus). `/status` shows the last one.
 
-The relay's address and token are set at build time, never in git: `CLAUDE_RELAY_HOST` (default 10.0.2.2), `CLAUDE_RELAY_PORT` (default 8765) and the token file named by `CLAUDE_RELAY_TOKEN_FILE` (default the same token file the Claude app uses). `arch/arm64/claude_cfg.sh` writes them into a gitignored header on every build. The token is never printed.
+How a question goes:
+1. Type, and use Backspace to fix it. Press Enter to send.
+2. The kernel posts it to the Claude relay on the Mac (`tools/claude-relay/relay.py`, see [`GUIDE.md` (The Claude app)](GUIDE.md#the-claude-app)) through the IP stack above.
+3. The answer prints in the Terminal as `sam: ...`, in lines of at most 53 columns.
+4. A follow-up keeps the conversation.
 
-It works end to end on QEMU's virt machine with virtio-net: `tools/checks/arm64-claude-console-check.py` types a question with QMP keys and reads the answer back from a stub Claude. A real Pi has no network until Wi-Fi joins (stage 2 below); if joining fails, it says `claude: no network, Wi-Fi has not joined yet`. Once Wi-Fi joins, run the relay with `--lan`. `CLAUDE_RELAY_HOST` is the Pi's first guess at the Mac; when it is wrong the Pi finds the relay with a LAN probe and checks its `jt-relay` certificate (`docs/GUIDE.md` (Encrypted Pi relay)).
+While she thinks:
+- `sam` returns to the prompt at once.
+- A line typed meanwhile runs at once.
+- A second `sam` says `sam: still thinking`.
+- Commands that need the one network connection (`browse`, `open`, `llm`) say so and wait.
+- The keyboard is polled between network reads (drivers/net.c `net_idle`). Only the local model (`llm`) still blocks the keys while it computes.
+
+Each outcome is one short line:
+- `claude: thinking`
+- `claude: error -401` when the relay refuses the token
+- `claude: timeout`
+- `claude: no network` with no DHCP lease
+- `claude: no token` when the build had none
+
+Typed keys show on the prompt row. Their echo lines go to the serial port only, so the log stays readable.
+
+The relay's address and token are set at build time, never in git:
+- `CLAUDE_RELAY_HOST` (default 10.0.2.2)
+- `CLAUDE_RELAY_PORT` (default 8765)
+- the token file named by `CLAUDE_RELAY_TOKEN_FILE` (default the same token file the Claude app uses)
+
+`arch/arm64/claude_cfg.sh` writes them into a gitignored header on every build. The token is never printed.
+
+It works end to end on QEMU's virt machine with virtio-net. `tools/checks/arm64-claude-console-check.py` types a question with QMP keys and reads the answer back from a stub Claude.
+
+A real Pi has no network until Wi-Fi joins (stage 2 below). If joining fails, it says `claude: no network, Wi-Fi has not joined yet`.
+
+Once Wi-Fi joins, run the relay with `--lan`. `CLAUDE_RELAY_HOST` is the Pi's first guess at the Mac. When it is wrong, the Pi finds the relay with a LAN probe and checks its `jt-relay` certificate (`docs/GUIDE.md` (Encrypted Pi relay)).
 
 ### Risks
 
 - USB through xHCI is the largest single driver and the first thing a real board needs.
-- Sound on a Pi has no Sound Blaster equivalent; budget real time for it.
+- Sound on a Pi has no Sound Blaster equivalent. Budget real time for it.
 - The browser demo is i386 under v86 and stays that way. Two architectures means two builds and a second CI lane. Keep the i386 path green the whole time.
 - `ring3` and task switching are where x86 assumptions are deepest. Read the Architecture section before M3.
 
@@ -607,13 +843,46 @@ It works end to end on QEMU's virt machine with virtio-net: `tools/checks/arm64-
 
 The tests for this section are `tools/checks/arm64-crash-check.py`, `arm64-fp-check.py`, `arm64-oom-check.py` and `arm64-boot-health-check.py`. Each drives a test build (`make -C arch/arm64 crashtest`, `fpsave`, `fpnosave`, `oomtest`) that the real kernel never contains.
 
-- **A kernel fault.** An unexpected exception at EL1 prints `KERNEL CRASH: <class>`, the ESR, FAR and ELR and the last five console lines on the UART, draws the same text as a red panel on the screen, and sleeps in a `wfe` loop. It uses only the raw UART and the 8x16 VGA font, so it works if the fault came from the console or the text code, and the panel is cleaned out of the data cache so the real GPU shows it. A fault inside the crash code halts quietly. The deliberate EL0 faults of M3 are not crashes: they are printed and the kernel carries on.
-- **Interrupts and floating point.** `irq_entry` saves q0-q31, FPCR and FPSR next to the general registers, so a handler can never corrupt the floating point work it interrupted. Today no handler uses floating point; the save makes that a promise nobody has to keep.
-- **Out of memory.** `kmalloc` returns 0 when the bump heap is full and every caller checks. A failure prints `oom <where>` and ends only that step: no framebuffer means no screen but a working UART, and fonts that do not load mean the 8x16 VGA font. Open gap: one allocation in `xhci.c`.
+- **A kernel fault.**
+  - An unexpected exception at EL1 prints `KERNEL CRASH: <class>`, the ESR, FAR and ELR and the last five console lines on the UART.
+  - It draws the same text as a red panel on the screen, and sleeps in a `wfe` loop.
+  - It uses only the raw UART and the 8x16 VGA font. So it works if the fault came from the console or the text code.
+  - The panel is cleaned out of the data cache so the real GPU shows it.
+  - A fault inside the crash code halts quietly.
+  - The deliberate EL0 faults of M3 are not crashes. They are printed and the kernel carries on.
+- **Interrupts and floating point.** `irq_entry` saves q0-q31, FPCR and FPSR next to the general registers. So a handler can never corrupt the floating point work it interrupted. Today no handler uses floating point. The save makes that a promise nobody has to keep.
+- **Out of memory.** `kmalloc` returns 0 when the bump heap is full, and every caller checks. A failure prints `oom <where>` and ends only that step. No framebuffer means no screen but a working UART. Fonts that do not load mean the 8x16 VGA font. Open gap: one allocation in `xhci.c`.
 - **A new failure cannot hide.** The boot health check fails on any `FAIL` or `oom` line the boot prints that is not on its short, commented list of things QEMU cannot do.
+
 ### M4 Wi-Fi
-Stage 1 (2.16.0): the CYW43455 is alive and lists the networks on screen. `arch/arm64/wifi.c` brings up the SDIO host, loads the Cypress firmware (`brcmfmac43455-sdio.bin`, `.txt`, `.clm_blob` from RPi-Distro/firmware-nonfree at the commit pinned in `tools/wifi-fw.sh`, downloaded into `build/wifi-fw/`, never committed, `copyright` alongside), then prints `wifi ver`, `wifi mac` and one `wifi ap <rssi> ch<n> <ssid>` line per network. Lines in order on a real Pi: `wifi power on` (or `wifi power on (was on)`), `wifi sdio card rca 1`, `wifi f1 f2 up`, `wifi fw NNNk loaded`, `wifi fw ready`, `wifi ver`, `wifi mac`, `wifi ap ...`, `wifi scan done`. Any `wifi FAIL <step>` names the step that timed out and the desktop still comes up. Without the firmware files the build still links and prints `wifi no firmware`; QEMU has the SD host but no SDIO card, so it prints `wifi power on` then `wifi FAIL cmd5` and the boot carries on (`tools/checks/arm64-wifi-check.py`). A real board that prints `wifi FAIL cmd5` instead has a powered chip the host cannot see: check the GPIO 34-39 pin setup first.
-Stage 2 (implemented, real-board join confirmed): join. Read `~/.config/joshuatree/wifi.conf` (fallback `arch/arm64/wifi.conf`, both gitignored, lines `ssid=`, `psk=`, `country=`) at build time into a generated object; never print the psk. Set `wsec` 4, `wpa_auth` 0x80, `wsec_pmk`, then `join` with the SSID (the firmware does the WPA2 handshake). SDPCM data frames carry the shared IP stack (`drivers/net.c`: ARP, DHCP, TCP), with `wifi ip 192.168.x.y` on screen. QEMU has no matching SDIO Wi-Fi chip; its missing-card path cannot validate a real WPA2 join.
+
+**Stage 1 (2.16.0): the CYW43455 is alive and lists the networks on screen.**
+- `arch/arm64/wifi.c` brings up the SDIO host.
+- It loads the Cypress firmware: `brcmfmac43455-sdio.bin`, `.txt` and `.clm_blob`. They come from RPi-Distro/firmware-nonfree at the commit pinned in `tools/wifi-fw.sh`. They are downloaded into `build/wifi-fw/`, never committed, with `copyright` alongside.
+- It prints `wifi ver`, `wifi mac` and one `wifi ap <rssi> ch<n> <ssid>` line per network.
+
+Lines in order on a real Pi:
+1. `wifi power on` (or `wifi power on (was on)`)
+2. `wifi sdio card rca 1`
+3. `wifi f1 f2 up`
+4. `wifi fw NNNk loaded`
+5. `wifi fw ready`
+6. `wifi ver`
+7. `wifi mac`
+8. `wifi ap ...`
+9. `wifi scan done`
+
+Failures:
+- Any `wifi FAIL <step>` names the step that timed out. The desktop still comes up.
+- Without the firmware files, the build still links and prints `wifi no firmware`.
+- QEMU has the SD host but no SDIO card. It prints `wifi power on` then `wifi FAIL cmd5`, and the boot carries on (`tools/checks/arm64-wifi-check.py`).
+- A real board that prints `wifi FAIL cmd5` instead has a powered chip the host cannot see. Check the GPIO 34-39 pin setup first.
+
+**Stage 2 (implemented, real-board join confirmed): join.**
+- Read `~/.config/joshuatree/wifi.conf` (fallback `arch/arm64/wifi.conf`, both gitignored, lines `ssid=`, `psk=`, `country=`) at build time into a generated object. Never print the psk.
+- Set `wsec` 4, `wpa_auth` 0x80 and `wsec_pmk`. Then `join` with the SSID. The firmware does the WPA2 handshake.
+- SDPCM data frames carry the shared IP stack (`drivers/net.c`: ARP, DHCP, TCP), with `wifi ip 192.168.x.y` on screen.
+- QEMU has no matching SDIO Wi-Fi chip. Its missing-card path cannot validate a real WPA2 join.
 
 ## Design rules
 
@@ -660,7 +929,18 @@ Fleet icons are the `FLEET_ICONS = 11` apps imported from their own repos. They 
 
 ### Type
 
-The registry holds `DEJAVU_FACES = 14` faces. Two are Tree Sans (Regular and Bold, our own face, built from Inter; the headers keep their `dejavu_` names) and four are DejaVu: Serif, Serif Bold, Mono and Mono Bold. Eight are open look-alikes for documents and user choice: Inter, EB Garamond, Comic Neue, Caveat Brush, Dancing Script, JetBrains Mono, Source Serif and Source Sans (`fonts` lists them). Sans only in the UI chrome: the menu bar, dock and window titles are Tree Sans (3.0.0; DejaVu Sans before). Sans is the interface. The desktop draws it at `GUI_TEXT_PX = 24` physical pixels, 12 on the 960 wide grid. Apps draw it at `BODY_PX = 14.0`, with bold at the same size and the big display digits at `DISP_PX = 56.0`.
+The registry holds `DEJAVU_FACES = 14` faces.
+- Two are Tree Sans (Regular and Bold). It is our own face, built from Inter. The headers keep their `dejavu_` names.
+- Four are DejaVu: Serif, Serif Bold, Mono and Mono Bold.
+- Eight are open look-alikes for documents and user choice: Inter, EB Garamond, Comic Neue, Caveat Brush, Dancing Script, JetBrains Mono, Source Serif and Source Sans (`fonts` lists them).
+
+Sans only in the UI chrome. The menu bar, dock and window titles are Tree Sans (3.0.0; DejaVu Sans before). Sans is the interface.
+
+The sizes:
+- The desktop draws it at `GUI_TEXT_PX = 24` physical pixels, 12 on the 960 wide grid.
+- Apps draw it at `BODY_PX = 14.0`.
+- Bold is at the same size.
+- The big display digits are at `DISP_PX = 56.0`.
 
 On the desktop, Mono is for a shell grid and nothing else: `MONO_APPS = panes, terminal`, at `MONO_PX = 13.5` with every glyph `JT_MONO_ADV = 8` pixels wide. Serif ships with the fonts and nothing draws with it, so `SERIF_USES = 0`. Sans-serif only is the house rule, so serif has to earn its way in.
 
@@ -668,27 +948,69 @@ The retina rule holds for type as it does for icons: stems are inked dense but s
 
 ### Colour and light
 
-The wallpaper is the satellite photo in colour, `DEFAULT_WALLPAPER = WALL_SAT`, live tiles when there is a network and the photo baked into the kernel when there is not. It is never turned black and white, and the tree photo is a choice in Settings, never the boot default.
+The wallpaper is the satellite photo in colour, `DEFAULT_WALLPAPER = WALL_SAT`. It uses live tiles when there is a network, and the photo baked into the kernel when there is not. It is never turned black and white. The tree photo is a choice in Settings, never the boot default.
 
-Day and night are a blend on the wallpaper, read from the same clock as the menu bar, and they never go toward black or blue. From `NIGHT_HOURS = 21-5` the wallpaper sits `NIGHT_PCT = 65` percent of the way to the espresso brown `NIGHT_FLOOR = 0x00201009`, easing in over the evening and out over the morning. In `DAY_HOURS = 8-18` it lifts `DAY_PCT = 10` percent toward silver, `DAY_TINT = 0x00DDDDDD`.
+Day and night are a blend on the wallpaper. They are read from the same clock as the menu bar, and they never go toward black or blue.
+- From `NIGHT_HOURS = 21-5` the wallpaper sits `NIGHT_PCT = 65` percent of the way to the espresso brown `NIGHT_FLOOR = 0x00201009`. It eases in over the evening and out over the morning.
+- In `DAY_HOURS = 8-18` it lifts `DAY_PCT = 10` percent toward silver, `DAY_TINT = 0x00DDDDDD`.
 
-The menu bar is `GUI_MENUBAR_H = 26` pixels tall, half wallpaper and half white (`MENUBAR_WHITE = 50` percent), closed by a one pixel rule, `MENUBAR_RULE = 0x00BDB8B0`. The dock tray is warm cream, `DOCK_TRAY_COLOR = 0x00EFEBE4`. A window body is `WINDOW_BODY = 0x00F5F0EB` with ink `WINDOW_INK = 0x001C1C1E`.
+The chrome colours:
+- The menu bar is `GUI_MENUBAR_H = 26` pixels tall, half wallpaper and half white (`MENUBAR_WHITE = 50` percent). It is closed by a one pixel rule, `MENUBAR_RULE = 0x00BDB8B0`.
+- The dock tray is warm cream, `DOCK_TRAY_COLOR = 0x00EFEBE4`.
+- A window body is `WINDOW_BODY = 0x00F5F0EB` with ink `WINDOW_INK = 0x001C1C1E`.
 
 ### Windows and dock
 
-A window is one frame: a body with a `WINDOW_RADIUS = 18` pixel corner, a one pixel rule `WINDOW_RULE = 0x00D9D3CB` under the title band, the name centred in ink, and a red close dot, `CLOSE_DOT = 0x00FF5F57`, at the left. The few full-screen panels (Settings, Trash, the lock screen) use a plainer bar with the same dots. The edge and the corner are one anti-aliased curve, with no notch where they meet.
+A window is one frame:
+- a body with a `WINDOW_RADIUS = 18` pixel corner
+- a one pixel rule `WINDOW_RULE = 0x00D9D3CB` under the title band
+- the name centred in ink
+- a red close dot, `CLOSE_DOT = 0x00FF5F57`, at the left
 
-Drag a window by its title bar. It follows the pointer live. Let go within `SNAP_EDGE = 12` pixels of a side and it takes that half of the strip between the menu bar and the dock; within `SNAP_CORNER = 40` pixels of a corner it takes that quarter; at the top edge it takes the whole strip.
+The few full-screen panels (Settings, Trash, the lock screen) use a plainer bar with the same dots. The edge and the corner are one anti-aliased curve, with no notch where they meet.
 
-On the Pi's desktop every window drags and resizes the same way. Press on the title band and the window follows the pointer, held whole between the menu bar and the dock. Press within `RESIZE_ZONE = 12` pixels of the left, right or bottom edge, below the title band, and that edge follows the pointer while the opposite one stays; the bottom-right corner takes both. A window shrinks no further than `MIN_WINDOW = 320x220` (Console, Terminal, Browser, Clock, Settings), `MIN_CALC = 220x260` (Calculator) or `MIN_APP = 400x300` (every ring-3 app window: Calendar, Notes, Music, Books, Finder, Mail and the rest), or the size it opened at when that is smaller, and Brick keeps its first size. It grows no further than the sides of the screen and the strip above the dock. The frame is the same one throughout, with its 18 pixel corner and nothing added, and the content lays itself out again for the new size.
+Drag a window by its title bar. It follows the pointer live. Let go and it may snap:
+- within `SNAP_EDGE = 12` pixels of a side, it takes that half of the strip between the menu bar and the dock
+- within `SNAP_CORNER = 40` pixels of a corner, it takes that quarter
+- at the top edge, it takes the whole strip
 
-The dock holds `DOCK_SLOTS = 11` tiles in this order: `DOCK_ORDER = Apps, Burrow, Mail, Calendar, Notes, Reminders, Terminal, Samantha, Weather, Stocks, Trash`. Portfolio mode swaps in the fleet. A tile is `dock_scale_pct = 7` percent of the screen height, so `DOCK_ICON = 37` pixels on the desktop, with `DOCK_GAP = 6` between tiles, `DOCK_PAD = 10` inside the tray and `DOCK_MARGIN_BOT = 24` below it. The tray has a `TRAY_RADIUS = 18` corner, a hairline `TRAY_EDGE = 0x00D6D0C6` top and bottom, and a soft shadow that fades out over `TRAY_SHADOW_REACH = 14` pixels and follows the wallpaper. Hover shows the app's name in a pale capsule, `DOCK_LABEL_BG = 0x00F4F1EC` with a `DOCK_LABEL_EDGE = 0x00BDB4A8` hairline. Nothing magnifies or bounces.
+On the Pi's desktop every window drags and resizes the same way.
+- Press on the title band and the window follows the pointer, held whole between the menu bar and the dock.
+- Press within `RESIZE_ZONE = 12` pixels of the left, right or bottom edge, below the title band. That edge follows the pointer while the opposite one stays. The bottom-right corner takes both.
+- A window shrinks no further than one of these, or the size it opened at when that is smaller:
+  - `MIN_WINDOW = 320x220` (Console, Terminal, Browser, Clock, Settings)
+  - `MIN_CALC = 220x260` (Calculator)
+  - `MIN_APP = 400x300` (every ring-3 app window: Calendar, Notes, Music, Books, Finder, Mail and the rest)
+- Brick keeps its first size.
+- A window grows no further than the sides of the screen and the strip above the dock.
+- The frame is the same one throughout, with its 18 pixel corner and nothing added. The content lays itself out again for the new size.
+
+The dock holds `DOCK_SLOTS = 11` tiles in this order: `DOCK_ORDER = Apps, Burrow, Mail, Calendar, Notes, Reminders, Terminal, Samantha, Weather, Stocks, Trash`. Portfolio mode swaps in the fleet.
+
+The dock's size and edges:
+- A tile is `dock_scale_pct = 7` percent of the screen height, so `DOCK_ICON = 37` pixels on the desktop.
+- There is `DOCK_GAP = 6` between tiles, `DOCK_PAD = 10` inside the tray and `DOCK_MARGIN_BOT = 24` below it.
+- The tray has a `TRAY_RADIUS = 18` corner.
+- It has a hairline `TRAY_EDGE = 0x00D6D0C6` top and bottom.
+- It has a soft shadow that fades out over `TRAY_SHADOW_REACH = 14` pixels and follows the wallpaper.
+- Hover shows the app's name in a pale capsule, `DOCK_LABEL_BG = 0x00F4F1EC` with a `DOCK_LABEL_EDGE = 0x00BDB4A8` hairline.
+- Nothing magnifies or bounces.
 
 The Launchpad is `APPS_COLS = 5` columns of icons at most `APPS_TILE = 56` pixels. Its glass panel is centred, at least `LAUNCHPAD_MIN_TOP = 24` pixels from the menu bar and the dock and `LAUNCHPAD_MIN_SIDE = 40` from the sides, the padding is even, and no two labels are closer than `LABEL_MIN_GAP = 6` pixels.
 
 ### Motion
 
-The shell barely moves. The one exception is the boot splash: the tree is drawn on, trunk first and the terracotta ground last, over `BOOT_DRAW = 0.8 s`, with the pen easing out, and the progress bar fills after it. Windows do not animate open, close or snap. The dock only shows its label. What moves is Samantha's captions, on a clock of `TICK_HZ = 100` ticks a second. A new line rises into place over `CAP_IN = 0.28 s`, easing out as a square (`CAP_EASE = quadratic out`). Up to `CAP_SHOW = 3` lines show at once, each older one dimmer. When the talk has been quiet for `CAP_QUIET = 4 s` the whole stack fades together over `CAP_OUT = 0.6 s`. Her caption backdrop is black at `CAP_ALPHA = 150` out of 256.
+The shell barely moves.
+
+The one exception is the boot splash. The tree is drawn on, trunk first and the terracotta ground last, over `BOOT_DRAW = 0.8 s`, with the pen easing out. The progress bar fills after it.
+
+Windows do not animate open, close or snap. The dock only shows its label.
+
+What moves is Samantha's captions, on a clock of `TICK_HZ = 100` ticks a second.
+- A new line rises into place over `CAP_IN = 0.28 s`, easing out as a square (`CAP_EASE = quadratic out`).
+- Up to `CAP_SHOW = 3` lines show at once, each older one dimmer.
+- When the talk has been quiet for `CAP_QUIET = 4 s`, the whole stack fades together over `CAP_OUT = 0.6 s`.
+- Her caption backdrop is black at `CAP_ALPHA = 150` out of 256.
 
 Apps move only when the movement is the app: Windgate's breathing circle, Samantha's mouth. The tree photo wallpaper sways in the wind; the satellite default stands still.
 
@@ -1639,41 +1961,115 @@ i386 has no 402: it answers -ENOSYS and its apps never call it.
 
 ## Threat model
 
-Written before the auth code: a login prompt on top of no real privilege boundary would protect nothing, so this is honest about what "protects" means here. Condensed 2026-10-12; the full prose is in git history.
+Written before the auth code. A login prompt on top of no real privilege boundary would protect nothing. So this page is honest about what "protects" means here.
+
+Condensed 2026-10-12. The full prose is in git history.
 
 ### What an account protects against, and what it does not
 
-A Joshua Tree account is a desktop lock for the person physically at the keyboard. It stops a casual second person sitting down while the first is away, and an accidental open of the desktop (a stray click, a demo left running) changing another account's files. It also gives the kernel a real password hash: PBKDF2-HMAC-SHA256 over BearSSL, 100,000 iterations, a 16-byte salt and the iteration count stored per record (the 1.7.9 replacement for the older home-grown chained SHA-256, which is still verified so old accounts log in and are then rewritten as PBKDF2).
+A Joshua Tree account is a desktop lock for the person physically at the keyboard.
 
-It does not protect against anything past the keyboard, and must not be oversold. There is no network-facing multi-tenant use and no remote caller for the login to guard. There is no disk encryption: `USERS.TXT` and every file sit in plaintext on the same FAT image, so anyone who can read the disk can run an offline crack of the hashes as if the login never existed. Apps now run at ring 3 in their own address spaces, but code already running in the kernel can read a session's memory or the raw disk. No claim anywhere in the UI or comments may say this "secures your data" or "encrypts your files".
+It stops:
+- a casual second person sitting down while the first is away
+- an accidental open of the desktop (a stray click, a demo left running) changing another account's files
 
-The engineering bar that follows: do the hashing for real (real salt, real iteration, constant-time comparison, because a weak or timing-leaky hash is a cheap avoidable mistake) and imply no stronger boundary than exists. The gate is opt-in: the login screen engages only once at least one account exists in `USERS.TXT`. An unconfigured system boots straight to the desktop, deliberately, because a gate with no account behind it would be a lock on a door with no one behind it, and because the live v86 demo on `landing/index.html` boots this exact `kernel.elf` for anonymous visitors who cannot create an account first. Creating the first account is a deliberate in-desktop action (Settings' "Add user" row).
+It also gives the kernel a real password hash:
+- PBKDF2-HMAC-SHA256 over BearSSL
+- 100,000 iterations
+- a 16-byte salt
+- the iteration count stored per record
+
+This is the 1.7.9 replacement for the older home-grown chained SHA-256. The old hash is still verified, so old accounts log in and are then rewritten as PBKDF2.
+
+It does not protect against anything past the keyboard, and must not be oversold.
+- There is no network-facing multi-tenant use and no remote caller for the login to guard.
+- There is no disk encryption. `USERS.TXT` and every file sit in plaintext on the same FAT image. Anyone who can read the disk can run an offline crack of the hashes as if the login never existed.
+- Apps now run at ring 3 in their own address spaces. But code already running in the kernel can read a session's memory or the raw disk.
+- No claim anywhere in the UI or comments may say this "secures your data" or "encrypts your files".
+
+The engineering bar that follows:
+- Do the hashing for real: real salt, real iteration, constant-time comparison. A weak or timing-leaky hash is a cheap avoidable mistake.
+- Imply no stronger boundary than exists.
+
+The gate is opt-in. The login screen engages only once at least one account exists in `USERS.TXT`.
+- An unconfigured system boots straight to the desktop, deliberately.
+- A gate with no account behind it would be a lock on a door with no one behind it.
+- The live v86 demo on `landing/index.html` boots this exact `kernel.elf` for anonymous visitors, who cannot create an account first.
+- Creating the first account is a deliberate in-desktop action (Settings' "Add user" row).
 
 ### The Claude relay (2.14.0)
 
-The Claude app is the first thing here with a remote caller. The relay (`tools/claude-relay/relay.py`) runs Claude Code on the host for anyone who presents its token. The token is a shared secret kept in plain text in `SETTINGS.TXT` like the Mail token, added to the request by the kernel and never handed to ring 3. The relay listens on loopback by default; a LAN relay now requires TLS (see the Encrypted Pi relay section of GUIDE.md). Claude's tools are read-only and scoped to the relay's working directory, so the worst case for a stolen token is reading that directory and spending the owner's plan. The Claude app section of GUIDE.md has the full list.
+The Claude app is the first thing here with a remote caller. The relay (`tools/claude-relay/relay.py`) runs Claude Code on the host for anyone who presents its token.
+
+- The token is a shared secret kept in plain text in `SETTINGS.TXT`, like the Mail token.
+- The kernel adds it to the request. It is never handed to ring 3.
+- The relay listens on loopback by default. A LAN relay now requires TLS (see the Encrypted Pi relay section of GUIDE.md).
+- Claude's tools are read-only and scoped to the relay's working directory. So the worst case for a stolen token is reading that directory and spending the owner's plan.
+
+The Claude app section of GUIDE.md has the full list.
 
 ## Security on the Pi
 
-A read-only review of what the ARM64 build exposes to the network, reviewed 2026-10-08 against the branch head: the text browser (`arch/arm64/browser.c`), HTTPS (`arch/arm64/tls.c`, the roots in `arch/arm64/certs/`, `tools/gen/tls-ta.py`, `tools/gen/tls-roots.py`), the DNS path (`drivers/net.c`, `drivers/http.c`), the relay client (`arch/arm64/ask.c`, `claude_cfg.sh`) and the relay (`tools/claude-relay/relay.py`). Condensed 2026-10-12: the line numbers and per-finding write-ups are in git history, and the status below says which findings have since moved.
+This is a read-only review of what the ARM64 build exposes to the network. It was reviewed 2026-10-08 against the branch head.
+
+What it covered:
+- the text browser (`arch/arm64/browser.c`)
+- HTTPS (`arch/arm64/tls.c`, the roots in `arch/arm64/certs/`, `tools/gen/tls-ta.py`, `tools/gen/tls-roots.py`)
+- the DNS path (`drivers/net.c`, `drivers/http.c`)
+- the relay client (`arch/arm64/ask.c`, `claude_cfg.sh`)
+- the relay (`tools/claude-relay/relay.py`)
+
+Condensed 2026-10-12. The line numbers and per-finding write-ups are in git history. The status below says which findings have since moved.
 
 ### What holds up
 
-- Every HTTPS server certificate is checked against the embedded roots and the requested host name (`br_ssl_client_reset(&sc, host, 0)`): a name mismatch is error 56 and an untrusted chain error 62.
-- Response size is bounded: the raw reply stops at `RAW_MAX` (64 KiB), text at `TEXT_MAX`, links at `LINK_MAX`, the title at 60 bytes, and the request buffer is sized from `URL_MAX`. Redirects stop after three hops (`arm64-browser-check.py` proves a self-loop stops). The HTML walker stays inside its input; `put` refuses to write past `TEXT_MAX`.
-- The relay token is never printed: one static buffer, one Authorization header, zeroed after the request. Browser requests carry no token, cookie or session id, and a browsed page is never sent to Claude. The relay compares the token in constant time and does not log prompts or replies. The Wi-Fi passphrase never reaches the kernel: `wifi_cfg.sh` derives the PMK on the Mac and only the PMK is embedded, only when `JT_WIFI_DEV=1`.
+- Every HTTPS server certificate is checked against the embedded roots and the requested host name (`br_ssl_client_reset(&sc, host, 0)`). A name mismatch is error 56. An untrusted chain is error 62.
+- Response size is bounded.
+  - The raw reply stops at `RAW_MAX` (64 KiB), text at `TEXT_MAX`, links at `LINK_MAX`, and the title at 60 bytes.
+  - The request buffer is sized from `URL_MAX`.
+  - Redirects stop after three hops (`arm64-browser-check.py` proves a self-loop stops).
+  - The HTML walker stays inside its input. `put` refuses to write past `TEXT_MAX`.
+- The relay token is never printed.
+  - It is one static buffer and one Authorization header, zeroed after the request.
+  - Browser requests carry no token, cookie or session id. A browsed page is never sent to Claude.
+  - The relay compares the token in constant time and does not log prompts or replies.
+- The Wi-Fi passphrase never reaches the kernel. `wifi_cfg.sh` derives the PMK on the Mac. Only the PMK is embedded, and only when `JT_WIFI_DEV=1`.
 
 ### Findings, most severe first, with status
 
-1. **High: the relay token was embedded in every Pi build made on the dev Mac** (`claude_cfg.sh` read `~/.claude-relay-token` whenever it existed; only the Wi-Fi key was gated). Fixed: only `JT_WIFI_DEV=1` or an explicitly supplied token file embeds a token. Check idea: build with the flag unset and fail if the token bytes appear in `kernel8.img`.
-2. **High: the token crossed the Wi-Fi in clear text** over plain TCP with `--lan`. Fixed 2026-10-09: Pi relay requests use verified HTTPS with no fallback and a LAN relay needs a certificate and key.
-3. **High: the certificate clock came from an unauthenticated HTTP Date header.** Reduced, not closed: the clock now takes only a verified HTTPS Date and refuses dates before the build or a previously accepted time, but the first handshake still validates at build time, so a certificate valid at build and expired now can pass that bootstrap check. Closing it needs persistent trusted time or a signed-time protocol.
-4. **Medium: an HTTPS page can redirect to plain HTTP silently.** Fix: refuse an `http://` redirect from an `https://` page (`browser: redirect to http refused`) and mark plain links in the link list; check by a `/down` route in `arm64-browser-check.py`.
-5. **Medium: DNS answers are easy to forge on the LAN**: the transaction id came from the 100 Hz `ticks()`, the source port is fixed at 53000, and answers are matched on ports only. HTTPS still protects page content; plain HTTP pages and the clock do not. Fix: id and port from the entropy source, drop answers from the wrong source IP, compare the question section; check in `dns-txid-check.sh`.
-6. **Medium: a crafted link can split the request line** (`parse_url` accepts any byte, so `\r\n` in an `href` injects a header). Fix: reject any byte below `!` or above `~` in host or path; check with a hostile page.
-7. **Medium: the trust anchor set is small, hand-refreshed, with no expiry check or revocation** (seven roots in `tools/gen/tls-roots.py`; the earliest, GlobalSign Root CA, expires January 2028; no CRL, OCSP or CT, which is normal for a BearSSL minimal client but should be written down). Fix: a CI check that fails when any root expires within a year or `TAS_NUM` differs from the PEM count.
-8. **Low: the TLS random seed came from the timer**, and the suite list includes plain RSA key exchange and CBC with SHA-1 (no forward secrecy). The BCM2711 RNG200 hardware FIFO now seeds TLS on the Pi (a health fault or one-second timeout refuses the connection; `arm64-rng-check.py` checks the driver with fake registers; hardware output still needs a board test). Open: drop the `BR_TLS_RSA_WITH_*` and `*_CBC_SHA` suites unless a needed site requires them.
-9. **Low: the dev card holds the Wi-Fi PMK and SSID in the image.** Accepted: the dev card never leaves the house and `tools/flash-pi.sh` is the only path that sets the dev flag; the log must never gain a line that prints the key.
+1. **High: the relay token was embedded in every Pi build made on the dev Mac.**
+   - `claude_cfg.sh` read `~/.claude-relay-token` whenever it existed. Only the Wi-Fi key was gated.
+   - Fixed: only `JT_WIFI_DEV=1` or an explicitly supplied token file embeds a token.
+   - Check idea: build with the flag unset and fail if the token bytes appear in `kernel8.img`.
+2. **High: the token crossed the Wi-Fi in clear text** over plain TCP with `--lan`.
+   - Fixed 2026-10-09: Pi relay requests use verified HTTPS with no fallback. A LAN relay needs a certificate and key.
+3. **High: the certificate clock came from an unauthenticated HTTP Date header.**
+   - Reduced, not closed. The clock now takes only a verified HTTPS Date. It refuses dates before the build or a previously accepted time.
+   - But the first handshake still validates at build time. So a certificate valid at build and expired now can pass that bootstrap check.
+   - Closing it needs persistent trusted time or a signed-time protocol.
+4. **Medium: an HTTPS page can redirect to plain HTTP silently.**
+   - Fix: refuse an `http://` redirect from an `https://` page (`browser: redirect to http refused`), and mark plain links in the link list.
+   - Check by a `/down` route in `arm64-browser-check.py`.
+5. **Medium: DNS answers are easy to forge on the LAN.**
+   - The transaction id came from the 100 Hz `ticks()`. The source port is fixed at 53000. Answers are matched on ports only.
+   - HTTPS still protects page content. Plain HTTP pages and the clock are not protected.
+   - Fix: take the id and port from the entropy source, drop answers from the wrong source IP, and compare the question section.
+   - Check in `dns-txid-check.sh`.
+6. **Medium: a crafted link can split the request line.**
+   - `parse_url` accepts any byte, so `\r\n` in an `href` injects a header.
+   - Fix: reject any byte below `!` or above `~` in host or path.
+   - Check with a hostile page.
+7. **Medium: the trust anchor set is small and hand-refreshed, with no expiry check or revocation.**
+   - There are seven roots in `tools/gen/tls-roots.py`. The earliest, GlobalSign Root CA, expires January 2028.
+   - There is no CRL, OCSP or CT. That is normal for a BearSSL minimal client, but it should be written down.
+   - Fix: a CI check that fails when any root expires within a year or `TAS_NUM` differs from the PEM count.
+8. **Low: the TLS random seed came from the timer, and the suite list includes plain RSA key exchange and CBC with SHA-1 (no forward secrecy).**
+   - The BCM2711 RNG200 hardware FIFO now seeds TLS on the Pi. A health fault or one-second timeout refuses the connection.
+   - `arm64-rng-check.py` checks the driver with fake registers. Hardware output still needs a board test.
+   - Open: drop the `BR_TLS_RSA_WITH_*` and `*_CBC_SHA` suites unless a needed site requires them.
+9. **Low: the dev card holds the Wi-Fi PMK and SSID in the image.**
+   - Accepted. The dev card never leaves the house. `tools/flash-pi.sh` is the only path that sets the dev flag.
+   - The log must never gain a line that prints the key.
 
 ### Dev card versus release card
 
@@ -1685,11 +2081,17 @@ A read-only review of what the ARM64 build exposes to the network, reviewed 2026
 
 ### What was not verified
 
-No run on the real board (QEMU does not model the Wi-Fi chip or the hardware RNG); BearSSL's minimal X.509 engine is known not to enforce name constraints in intermediate certificates (untested, and the roots are all public CAs); `drivers/net.c`'s TCP (one connection, no retransmission) and the WPA2 handshake were not reviewed; whether `www.google.com` keeps answering plain `HEAD /` with a Date header; the relay's tool sandbox (`~/pi-files`, read only) was read in its header comment only.
+- No run on the real board. QEMU does not model the Wi-Fi chip or the hardware RNG.
+- BearSSL's minimal X.509 engine is known not to enforce name constraints in intermediate certificates. This is untested, and the roots are all public CAs.
+- `drivers/net.c`'s TCP (one connection, no retransmission) and the WPA2 handshake were not reviewed.
+- Whether `www.google.com` keeps answering plain `HEAD /` with a Date header.
+- The relay's tool sandbox (`~/pi-files`, read only) was read in its header comment only.
 
 ### Relay follow-up, 2026-10-09
 
-The API relay's shared-folder reader had a high-severity check/open race: a local process with write access to `~/pi-files` could replace an approved file with a symlink and make the model read outside the folder. The reader now pins the folder, opens with `O_NOFOLLOW` and checks the opened descriptor.
+The API relay's shared-folder reader had a high-severity check/open race. A local process with write access to `~/pi-files` could replace an approved file with a symlink and make the model read outside the folder.
+
+The reader now pins the folder, opens with `O_NOFOLLOW` and checks the opened descriptor.
 
 ## Soul
 
@@ -1718,15 +2120,35 @@ Steve Jobs was both at once: the professional who shipped finished things, and t
 
 ### Seduce. Vilify. Ignore.
 
-Three words, in this order, and the order is the point. They are on the desktop itself, above the dock, in the line that used to be a tribute. Jobs's marketing rule, used here as a design rule: first win people with beauty, then tell them what they are escaping, then stop talking and build.
+Three words, in this order. The order is the point.
 
-**Seduce.** The first sixty seconds have to be beautiful. The wallpaper, the dock, the window frame and the type are the first things on screen, before any log line, and the boot log steps aside once the desktop is up. The landing page boots the real OS in the browser with one click. The typeface is our own (Tree Sans, the Type system section), set on a 4 px grid and spaced the way the font was drawn. Samantha speaks.
+They are on the desktop itself, above the dock, in the line that used to be a tribute.
 
-**Vilify.** Then name the thing we are against, not a competitor's name. The enemy is the computer you cannot read: the OS that is a hundred million lines nobody owns, the chip that needs a cloud login, the settings page with forty toggles, the assistant that rents you your own notes. Say it plainly and let the contrast do the work. Every "we do not do that" in the Design rules section is a small act of this.
+It is Jobs's marketing rule, used here as a design rule:
+1. First win people with beauty.
+2. Then tell them what they are escaping.
+3. Then stop talking and build.
 
-**Ignore.** Once they are in and know why, stop answering. Do not answer every feature list or every critic. There is no app store, no account to make, no notification centre, no settings maze. The roadmap says no to more things than it says yes to, and the Top 10 is the whole plan. Feature requests that do not serve the demo wait. Noise, trends and other people's checklists get nothing from us; the work gets everything.
+**Seduce.** The first sixty seconds have to be beautiful.
+- The wallpaper, the dock, the window frame and the type are the first things on screen, before any log line.
+- The boot log steps aside once the desktop is up.
+- The landing page boots the real OS in the browser with one click.
+- The typeface is our own (Tree Sans, the Type system section), set on a 4 px grid and spaced the way the font was drawn.
+- Samantha speaks.
 
-The three are a loop, not a menu. A change that is not beautiful fails the first test, one that cannot say what it is against fails the second, and one that chases a crowd fails the third.
+**Vilify.** Then name the thing we are against, not a competitor's name.
+- The enemy is the computer you cannot read: the OS that is a hundred million lines nobody owns, the chip that needs a cloud login, the settings page with forty toggles, the assistant that rents you your own notes.
+- Say it plainly and let the contrast do the work.
+- Every "we do not do that" in the Design rules section is a small act of this.
+
+**Ignore.** Once they are in and know why, stop answering.
+- Do not answer every feature list or every critic.
+- There is no app store, no account to make, no notification centre, no settings maze.
+- The roadmap says no to more things than it says yes to, and the Top 10 is the whole plan.
+- Feature requests that do not serve the demo wait.
+- Noise, trends and other people's checklists get nothing from us. The work gets everything.
+
+The three are a loop, not a menu. A change that is not beautiful fails the first test. One that cannot say what it is against fails the second. One that chases a crowd fails the third.
 
 ### Aspen, 1983
 
@@ -1749,23 +2171,63 @@ The pro half is enforced by the checks (`tools/checks/`), the 100 percent docs r
 
 ### Rules we took from the book
 
-Joshua read "Acing the System Design Interview" (Zhiyong Tan) from phone photos. It is about web services, and most of it does not fit one box with one user. A few habits do. Each rule below is one of them, with the place in this tree where it already holds, or where it does not yet. Page numbers are the book's. The longer plan is `docs/SYSTEM-DESIGN-IDEAS.md`.
+Joshua read "Acing the System Design Interview" (Zhiyong Tan) from phone photos.
 
-**Name every tradeoff out loud.** The book says everything is a tradeoff and an unnamed one is a hidden bug (ch 2, pp. 24-25). Write the cost next to the choice. this file does it for the kernel page tables: preallocating every table is the textbook fix and the wrong trade here, because it costs 4 MB of BSS against 64 KB. `docs/DECISIONS.md` is where new ones go.
+It is about web services, and most of it does not fit one box with one user. A few habits do.
 
-**Clarify the requirement and give it a number.** Ask what, then how much (ch 2, pp. 26-27). A limit with no number cannot fail a check. `HTTP_WAIT_TICKS` in `kernel/syscall.c` is one second and `BRK_FLOOR_FRAMES` in `kernel/brk.c` is 4 MB of free frames no program may take. `tools/checks/bss-margin-check.py` fails when the margin goes. Next: time to desktop and free heap after boot (idea 12 in the plan).
+Each rule below is one of them, with the place in this tree where it already holds, or where it does not yet. Page numbers are the book's. The longer plan is `docs/SYSTEM-DESIGN-IDEAS.md`.
 
-**Observability is part of the design.** Latency, traffic, errors, saturation, and logs a program can read (ch 2, pp. 34-40). If a part can fail, it must be able to say how. `net_last_error()` in `drivers/net.c` and `tls_last_error()` in `arch/arm64/tls.c` return typed reasons, and `tools/checks/arm64-boot-health-check.py` reads the boot log. A fault that nothing counts is a fault nobody saw. The counters are idea 3.
+**Name every tradeoff out loud.**
+- The book says everything is a tradeoff, and an unnamed one is a hidden bug (ch 2, pp. 24-25).
+- Write the cost next to the choice.
+- This file does it for the kernel page tables. Preallocating every table is the textbook fix and the wrong trade here, because it costs 4 MB of BSS against 64 KB.
+- `docs/DECISIONS.md` is where new ones go.
 
-**Fail gracefully.** The book's toolkit is bulkhead, circuit breaker, backoff with jitter, fallback and checkpoint (ch 3, pp. 60-65). We have some. A ring-3 task that faults is killed in `kernel/idt.c` and the desktop carries on. The Bluetooth pairing record in `arch/arm64/bt.c` carries a version and a checksum so a half-written file is refused. `drivers/net.c` retries DHCP `DHCP_RETRIES` times with a new transaction ID each time. `relay_open()` in `arch/arm64/ask.c` falls back from the cached address to a LAN probe to a fresh connect, and every outcome is one honest line. `tools/checks/arm64-oom-check.py` proves the boot reaches the desktop with no room for the fonts. We do not yet have a breaker or jitter: with the relay off, every `sam` question pays the full wait. That is idea 1.
+**Clarify the requirement and give it a number.**
+- Ask what, then how much (ch 2, pp. 26-27). A limit with no number cannot fail a check.
+- `HTTP_WAIT_TICKS` in `kernel/syscall.c` is one second.
+- `BRK_FLOOR_FRAMES` in `kernel/brk.c` is 4 MB of free frames no program may take.
+- `tools/checks/bss-margin-check.py` fails when the margin goes.
+- Next: time to desktop and free heap after boot (idea 12 in the plan).
 
-**Trust nothing, including ourselves.** Validate at the boundary, then audit what you think you know (ch 2, pp. 24-25). `paging_user_range_ok()` judges every syscall pointer by the caller's own tables. The relay's reply is untrusted: `ask.c` sends the token only after the handshake proves the name `jt-relay`. `paging_check_task_dirs` logs `BUG: paging: task directory drifted` when our own bookkeeping disagrees. The idle audit is idea 8.
+**Observability is part of the design.**
+- Watch latency, traffic, errors, saturation, and logs a program can read (ch 2, pp. 34-40). If a part can fail, it must be able to say how.
+- `net_last_error()` in `drivers/net.c` and `tls_last_error()` in `arch/arm64/tls.c` return typed reasons.
+- `tools/checks/arm64-boot-health-check.py` reads the boot log.
+- A fault that nothing counts is a fault nobody saw. The counters are idea 3.
 
-**Keep services stateless.** State is what makes things hard to replace (ch 4, p. 77). Keep it in a few named places. `SYS_WINDOW_POLL` is a pull, so the app owns its own pace. `SYS_SHELL_RUN` in `kernel/shellsys.c` uses static buffers and never moves the desktop's working directory. The relay in `tools/claude-relay/relay.py` answers one request at a time, and the session id travels with each request instead of living on the Pi. The only thing the card remembers about the network is `JT/RELAY.TXT`, one address and port.
+**Fail gracefully.**
+- The book's toolkit is bulkhead, circuit breaker, backoff with jitter, fallback and checkpoint (ch 3, pp. 60-65). We have some:
+  - A ring-3 task that faults is killed in `kernel/idt.c` and the desktop carries on.
+  - The Bluetooth pairing record in `arch/arm64/bt.c` carries a version and a checksum, so a half-written file is refused.
+  - `drivers/net.c` retries DHCP `DHCP_RETRIES` times, with a new transaction ID each time.
+  - `relay_open()` in `arch/arm64/ask.c` falls back from the cached address to a LAN probe to a fresh connect. Every outcome is one honest line.
+  - `tools/checks/arm64-oom-check.py` proves the boot reaches the desktop with no room for the fonts.
+- We do not yet have a breaker or jitter. With the relay off, every `sam` question pays the full wait. That is idea 1.
 
-**Never cache private or real-time data.** Cache what is public and slow to fetch, and always expect a miss (ch 4, pp. 103-104). The token is the line we do not cross: it is never written to the card, never printed, and goes out only in the Authorization header of one request (`arch/arm64/ask.c`). If a DNS cache lands (idea 11) it holds names and short lifetimes, and nothing from Notes or Mail.
+**Trust nothing, including ourselves.**
+- Validate at the boundary, then audit what you think you know (ch 2, pp. 24-25).
+- `paging_user_range_ok()` judges every syscall pointer by the caller's own tables.
+- The relay's reply is untrusted. `ask.c` sends the token only after the handshake proves the name `jt-relay`.
+- `paging_check_task_dirs` logs `BUG: paging: task directory drifted` when our own bookkeeping disagrees.
+- The idle audit is idea 8.
 
-**Blameless postmortems.** When something breaks, write what happened and the rule that stops it, not who did it (ch 2, pp. 34-40). the Lessons section is that page: one line of problem, one line of rule, with the commit. Add to it the day it happens.
+**Keep services stateless.**
+- State is what makes things hard to replace (ch 4, p. 77). Keep it in a few named places.
+- `SYS_WINDOW_POLL` is a pull, so the app owns its own pace.
+- `SYS_SHELL_RUN` in `kernel/shellsys.c` uses static buffers and never moves the desktop's working directory.
+- The relay in `tools/claude-relay/relay.py` answers one request at a time. The session id travels with each request instead of living on the Pi.
+- The only thing the card remembers about the network is `JT/RELAY.TXT`, one address and port.
+
+**Never cache private or real-time data.**
+- Cache what is public and slow to fetch, and always expect a miss (ch 4, pp. 103-104).
+- The token is the line we do not cross. It is never written to the card, never printed, and goes out only in the Authorization header of one request (`arch/arm64/ask.c`).
+- If a DNS cache lands (idea 11), it holds names and short lifetimes, and nothing from Notes or Mail.
+
+**Blameless postmortems.**
+- When something breaks, write what happened and the rule that stops it, not who did it (ch 2, pp. 34-40).
+- The Lessons section is that page: one line of problem, one line of rule, with the commit.
+- Add to it the day it happens.
 
 ## Lessons from the loop
 
@@ -1852,7 +2314,19 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 ### Running suites safely
 
-Local CI and pre-push reject new fixed test paths before building. The balancer keeps shard 6 together because ARM checks share build output. Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
+Local CI and pre-push reject new fixed test paths before building.
+
+The balancer keeps shard 6 together, because ARM checks share build output.
+
+Only one suite runs at a time on a Mac.
+- `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`).
+- A second run waits its turn. It prints `waiting for ci-local pid N` every two minutes, for up to an hour.
+- A lock left by a dead run clears itself.
+- `CI_LOCAL_NO_LOCK=1` skips it.
+
+Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
+- `JT_KEEP_TMP=1` keeps it for debugging.
+- `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
 ### The suite (270 checks)
 
@@ -2179,27 +2653,55 @@ How a change gets from a branch to joshuatree.jaybulb.com, on one page.
 
 ### The pipeline today
 
-1. **Verify locally.** Every PR opens as a draft, and a draft runs no CI. You run `tools/ci-local.sh` on the Mac instead. It builds `kernel.elf`, runs all four shards of `tools/checks/ci-suite.sh` in parallel QEMUs, then the check-refs scripts and the browser demo checks. It mirrors `.github/workflows/check.yml` job for job, except the `network` job. Only one suite runs at a time (`tools/ci-lock.sh`).
-2. **Flip the PR ready.** `gh pr ready <N>` starts `.github/workflows/check.yml` (pull requests only, never on push). Its jobs:
+1. **Verify locally.** Every PR opens as a draft, and a draft runs no CI. You run `tools/ci-local.sh` on the Mac instead.
+   - It builds `kernel.elf`.
+   - It runs all four shards of `tools/checks/ci-suite.sh` in parallel QEMUs.
+   - Then it runs the check-refs scripts and the browser demo checks.
+   - It mirrors `.github/workflows/check.yml` job for job, except the `network` job.
+   - Only one suite runs at a time (`tools/ci-lock.sh`).
+2. **Flip the PR ready.** `gh pr ready <N>` starts `.github/workflows/check.yml`. It runs on pull requests only, never on push. Its jobs:
    - `changes` decides what the PR touches. A prose-only PR skips the QEMU suite.
    - `suite` runs the four shards of `ci-suite.sh`. `demo` runs the Playwright landing checks.
    - `check` passes only if `changes`, `suite` and `demo` passed or were rightly skipped.
    - `check-refs` checks doc paths, the version sync and the VERSION bump. It also uploads a Cloudflare version without deploying it, so a bad `wrangler.toml` fails here and not on main. Fork PRs get no token and skip that upload.
    - `network` talks to real internet hosts. It is `continue-on-error`, so it reports but never blocks.
    - `ci` passes only if `check` and `check-refs` both passed.
-3. **The gate.** Branch protection on `main` requires `check`, `check-refs` and `network`, with the branch strictly up to date and no reviews. `network` can never fail, so in practice the gate is `check` plus `check-refs`. The `ci` job says the same thing in one place, but it is not on the required list.
-4. **Deploy.** Merging pushes to `main`. `.github/workflows/deploy.yml` runs on any push to `main` that touches `landing/**`, `wrangler.toml`, `worker.js`, the kernel sources or a few generators. It builds `kernel.elf` fresh, refreshes the landing facts, headline and roadmap card, and runs `wrangler deploy`. Deploys queue and never cancel each other.
+3. **The gate.**
+   - Branch protection on `main` requires `check`, `check-refs` and `network`. The branch must be strictly up to date, and no reviews are needed.
+   - `network` can never fail. So in practice the gate is `check` plus `check-refs`.
+   - The `ci` job says the same thing in one place, but it is not on the required list.
+4. **Deploy.** Merging pushes to `main`.
+   - `.github/workflows/deploy.yml` runs on any push to `main` that touches `landing/**`, `wrangler.toml`, `worker.js`, the kernel sources or a few generators.
+   - It builds `kernel.elf` fresh, refreshes the landing facts, headline and roadmap card, and runs `wrangler deploy`.
+   - Deploys queue and never cancel each other.
 5. **Release.** A push that changes `VERSION` cuts a GitHub release through `.github/workflows/release.yml`.
-6. **Smoke the live site.** `.github/workflows/live-smoke.yml` loads the live page and checks that `/api/proxy` refuses a host off its allowlist. It is manual (`workflow_dispatch`). Run it after a deploy finishes. It does not run on push, because nothing guarantees the deploy is finished first.
+6. **Smoke the live site.** `.github/workflows/live-smoke.yml` loads the live page. It checks that `/api/proxy` refuses a host off its allowlist.
+   - It is manual (`workflow_dispatch`). Run it after a deploy finishes.
+   - It does not run on push, because nothing guarantees the deploy is finished first.
 
 ### Gaps against "CI/CD Made Simple" (Traversy Media)
 
 The video's outline: one verify script, a deploy gate, enforced guardrails, a test that breaks a check on purpose, and a preview per PR. We have the first three. These four are missing.
 
-1. **A preview of the landing page per PR.** Not added, on purpose. A Worker preview version is a version of the same `joshuatree` Worker, and every version gets the Worker's secrets and bindings. A PR preview would run unmerged `worker.js` against the real mail key and mail token, the live waitlist KV, Workers AI billing and the shared rate limiters, at a public URL. Keeping forks out stops a stranger seeing the secrets. It does not stop half-finished code using them. It would also need the kernel build and the three generator steps from `deploy.yml`, or the demo shows nothing. The safe shape is a separate preview Worker with its own KV and no mail or AI secrets, or preview URLs behind Cloudflare Access. Also unverified: whether the config-check versions `check-refs` already uploads get a public preview URL. That depends on the `preview_urls` and `workers_dev` defaults for a Worker on a custom domain. Read one `check-refs` log for a "Version Preview URL" line. If one is there, set `preview_urls = false` in `wrangler.toml`.
-2. **A deliberate gate test.** Nothing proves that a red check blocks a merge. The gate already failed silently once: in 1.5.14, a shell line let a failed shard pass `check`. A test would open a throwaway PR that fails one check on purpose, then confirm `gh pr merge` is refused. It could also assert the required-check list through the API, so `ci` or `check` cannot drop off unnoticed.
-3. **Deploy only after the checks are green on main.** `deploy.yml` fires on every matching push to `main` and reads no check result. Strict up-to-date branch protection means the merged tree is the one that passed. A direct push or an admin merge would still deploy unchecked. The fix: trigger the deploy from a check run on `main` (`workflow_run`), or check the commit's status before `wrangler deploy`.
-4. **Rollback.** There is no rollback step. Today you revert the commit and wait for a fresh deploy. `wrangler rollback` returns to the previous version in seconds. It could be a manual workflow, and the natural place to trigger it is a red `live-smoke.yml`.
+1. **A preview of the landing page per PR.** Not added, on purpose.
+   - A Worker preview version is a version of the same `joshuatree` Worker. Every version gets the Worker's secrets and bindings.
+   - A PR preview would run unmerged `worker.js` against the real mail key and mail token, the live waitlist KV, Workers AI billing and the shared rate limiters, at a public URL.
+   - Keeping forks out stops a stranger seeing the secrets. It does not stop half-finished code using them.
+   - It would also need the kernel build and the three generator steps from `deploy.yml`, or the demo shows nothing.
+   - The safe shape is a separate preview Worker with its own KV and no mail or AI secrets, or preview URLs behind Cloudflare Access.
+   - Also unverified: whether the config-check versions `check-refs` already uploads get a public preview URL. That depends on the `preview_urls` and `workers_dev` defaults for a Worker on a custom domain.
+   - To find out, read one `check-refs` log for a "Version Preview URL" line. If one is there, set `preview_urls = false` in `wrangler.toml`.
+2. **A deliberate gate test.** Nothing proves that a red check blocks a merge.
+   - The gate already failed silently once. In 1.5.14, a shell line let a failed shard pass `check`.
+   - A test would open a throwaway PR that fails one check on purpose, then confirm `gh pr merge` is refused.
+   - It could also assert the required-check list through the API, so `ci` or `check` cannot drop off unnoticed.
+3. **Deploy only after the checks are green on main.** `deploy.yml` fires on every matching push to `main` and reads no check result.
+   - Strict up-to-date branch protection means the merged tree is the one that passed.
+   - A direct push or an admin merge would still deploy unchecked.
+   - The fix: trigger the deploy from a check run on `main` (`workflow_run`), or check the commit's status before `wrangler deploy`.
+4. **Rollback.** There is no rollback step. Today you revert the commit and wait for a fresh deploy.
+   - `wrangler rollback` returns to the previous version in seconds.
+   - It could be a manual workflow. The natural place to trigger it is a red `live-smoke.yml`.
 
 ## Benchmarks
 

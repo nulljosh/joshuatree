@@ -55,11 +55,11 @@ pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi'
       ('Browser', 'window, links', 1), ('Books', 'plain text', 1), ('Music', 'wav, mp3, covers', 1),
       ('Notes', 'saved to the card', 1), ('Calendar', 'four views', 1), ('Bluetooth', 'mouse pairs', 1),
       ('Power', 'reboot, shutdown', 0), ('Sound', 'headphone jack', 0), ('Mic', 'Yeti, USB', 0)]
-pw = (W - 40 - 5 * 8) / 6
+pw = (W - 40 - 3 * 14) / 4
 for i, (a, b, done) in enumerate(pi):
-    box(20 + (i % 6) * (pw + 8), 410 + (i // 6) * 50, pw, 40, a, b, 'new' if done else 'todo')
-out.append(f'<text x="20" y="568" fill="{MUT}" font-size="9">Solid boxes are seen working on the real board (2026-10-12, v3); dashed are built and checked in QEMU, not yet seen there.</text>')
-out.append('<g transform="translate(0,100)">')   # everything below moves down two rows
+    box(20 + (i % 4) * (pw + 14), 410 + (i // 4) * 54, pw, 40, a, b, 'new' if done else 'todo')
+out.append(f'<text x="20" y="688" fill="{MUT}" font-size="9">Solid boxes are seen working on the real board (2026-10-12, v3); dashed are built and checked in QEMU, not yet seen there.</text>')
+out.append('<g transform="translate(0,220)">')   # everything below moves down past the Pi grid
 
 sec(496, 'How it gets built')
 chain(506, [('Roadmap', 'the queue'), ('Build it', 'one agent, own branch'), ('Prove it', 'tests, real frames'), ('Ship it', 'merge on green')],
@@ -79,6 +79,7 @@ for i, (n, k, c) in enumerate(mem):   # three to a row, so the labels never run 
     lx, ly = 20 + (i % 3) * 200, 626 + (i // 3) * 14
     out.append(f'<rect x="{lx}" y="{ly}" width="8" height="8" fill="{c}"/><text x="{lx + 11}" y="{ly + 8}" fill="#555" font-size="9">{n} {k:,} KB</text>')
 
+out.append('<g transform="translate(0,28)">')
 sec(664, 'Apps shipped')
 svg = open(os.path.join(ROOT, 'progress.svg')).read()
 pts = [tuple(map(int, p.split(','))) for p in re.search(r'<polyline points="([^"]+)"', svg).group(1).split()]
@@ -95,8 +96,9 @@ out.append(f'<text x="20" y="772" fill="{MUT}" font-size="10">{dates[0]}</text><
 out.append(f'<text x="{W / 2}" y="798" fill="{MUT}" font-size="10" text-anchor="middle">Terracotta: the newest piece. Drawn by tools/gen/map.py; the detail graphs live in docs/.</text>')
 
 out.append('</g>')
+out.append('</g>')
 open(os.path.join(ROOT, 'architecture.svg'), 'w').write(
-    f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="914" viewBox="0 0 {W} 914" '
+    f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="1062" viewBox="0 0 {W} 1062" '
     'style="background:#faf8f4;font-family:Tree Sans,-apple-system,BlinkMacSystemFont,Helvetica,sans-serif">\n'
     f'<defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="{T}"/></marker></defs>\n'
     f'<rect width="100%" height="100%" fill="#fff"/>\n<path d="{"".join(lines)}" stroke="#d1d1d6" fill="none"/>\n'
