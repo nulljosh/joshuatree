@@ -1746,6 +1746,17 @@ static void settings_close(void);
 static int settings_key(unsigned code);
 static void settings_click(int lx, int ly);
 static int menubar_click(int x, int y);   /* 1 when the click landed on one of the status icons, which opened Settings */
+/* The tree menu (the mark and "Joshua Tree" at the left of the menu bar) is a second card on Spotlight's machinery: the same
+   spot_live, declared above (so every window, drag, app frame and click that stands back for the bar stands back for it), the same saved
+   pixels, the same rows of SPOT_ROW and terracotta selection. spot_tree says which card is up. */
+#define TREE_W 220
+#define TREE_H 112
+static int spot_tree;
+static void tree_open(void);
+static void tree_key(unsigned code);
+static void tree_click(int lx, int ly);
+static void tree_hover(int lx, int ly);
+static int tree_bar_hit(void);
 static void browser_open(void);
 static void browser_close(void);
 static int browser_key(unsigned code);
@@ -2163,6 +2174,7 @@ static void pointer_moved(void) {   /* one report done: the arrow to its new pla
         else if (drag_on) win_move_to((int)mouse_x / s - drag_dx, (int)mouse_y / s - drag_dy);
         else win_resize_to((int)mouse_x / s, (int)mouse_y / s);
     }
+    if (spot_live && spot_tree) tree_hover((int)mouse_x / s, (int)mouse_y / s);
     if (brick_live) brick_mouse((int)mouse_x / s, (int)mouse_y / s);
     cur_wanted = 1;
     cur_hide();
@@ -2184,6 +2196,8 @@ static const char *const game_names[4] = {"Mines", "Toroid", "Hamurabi", "Keyrat
 static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
+    if (spot_live && spot_tree) { tree_click(lx, ly); return; }   /* the tree menu is up: a click is a row, or it dismisses the card */
+    if (tree_bar_hit()) { spot_close(); tree_open(); return; }
     if (spot_live && slot < 0) return;   /* the bar is over the windows: a raise under it would leave its saved pixels stale */
     if (slot < 0 && menubar_click((int)mouse_x, (int)mouse_y)) return;   /* a status icon in the menu bar: Settings at its section */
     int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);
@@ -2302,22 +2316,24 @@ static void spot_open(void) {
     if (!spot_under) { uart_puts("oom spotlight\n"); return; }
     cur_hide();
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) spot_under[j * w + i] = fb[(unsigned)(spot_ly * s + j) * fb_pitch + (unsigned)(spot_lx * s + i)];
-    spot_live = 1; spot_len = 0; spot_text[0] = 0; spot_sel = 0;
+    spot_live = 1; spot_tree = 0; spot_len = 0; spot_text[0] = 0; spot_sel = 0;
     con_quiet = 1; uart_puts("spotlight open\n");
     spot_paint();
 }
 static void spot_close(void) {
     if (!spot_live) return;
-    int s = (int)window_scale(), w = SPOT_W * s, h = spot_hmax() * s, x = spot_lx * s, y = spot_ly * s;
+    int s = (int)window_scale(), w = (spot_tree ? TREE_W : SPOT_W) * s, h = (spot_tree ? TREE_H : spot_hmax()) * s, x = spot_lx * s, y = spot_ly * s;
     cur_hide();
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];
     fb_flush(x, y, w, h);
     spot_live = 0;
-    con_quiet = 1; uart_puts("spotlight close\n");
+    con_quiet = 1; uart_puts(spot_tree ? "treemenu close\n" : "spotlight close\n");
+    spot_tree = 0;
     cur_show();
     if (app_front && app_shown) app_paint();   /* frames the app presented under the bar were held back */
 }
 static int spot_key(unsigned code) {   /* a key down with the bar open: every key is Spotlight's */
+    if (spot_tree) { tree_key(code); return 1; }
     if (code == 1) spot_close();
     else if (code == 28 || code == 96) { int slot = spot_n ? spot_hits[spot_sel] : -1; spot_close(); if (slot >= 0) dock_activate(slot); }
     else if (code == 103) { if (spot_sel > 0) spot_sel--; spot_paint(); }
@@ -2328,9 +2344,7 @@ static int spot_key(unsigned code) {   /* a key down with the bar open: every ke
 }
 static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hover(slot); }
 int ask_busy(void);   /* ask.c: a `sam` request is queued or waiting on the relay */
-#ifdef PI_BUILD
 #include "power.h"
-#endif
 /* The reboot and shutdown commands are refused only while a `sam` request is live. They must not use ask_pending(): that is
    also true while the typed line that holds this very command runs, so every typed reboot would be refused (found on the Pi). */
 static int power_refused(void) {
@@ -2356,15 +2370,91 @@ static int front_close(void) {   /* the window in front, topmost first, ended th
     else if (con_live) console_close();
     return 1;
 }
+
+/* ---- The tree menu: click the mark or "Joshua Tree" at the left of the menu bar (or F10, Ctrl+Option+T) for About, Restart,
+   Shut Down and Log Out, in Spotlight's cream card. Restart and Shut Down are the confirmed chords' own power_ask (the
+   Terminal, the Wait-for-Samantha refusal, Enter confirms); About shows the version and closes on any key. ---- */
+#ifndef JT_VERSION
+#define JT_VERSION "dev"
+#endif
+static int tree_sel, tree_about;
+static const char *const tree_rows[4] = { "About Joshua Tree", "Restart", "Shut Down", "Log Out" };
+static int tree_ry(int r) { return spot_ly + (r ? 37 + (r - 1) * SPOT_ROW : 6); }
+static int tree_bar_hit(void) {   /* the pointer is on the mark or the title, physical px like the bar's own drawing */
+    if (!text_ok || (int)mouse_y >= sg(MENUBAR_H) - 1) return 0;
+    return (int)mouse_x < sg(40) + text_width(1, "Joshua Tree", sg(130)) + sg(6);
+}
+static void tree_paint(void) {
+    int s = (int)window_scale(), w = TREE_W * s, h = TREE_H * s, x = spot_lx * s, y = spot_ly * s;
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];
+    if (tree_about) {
+        gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, TREE_W, 82, 0x00faf8f4, 10);
+        gui_text("Joshua Tree", spot_lx + 16, spot_ly + 10, 0x001C1C1E);
+        gui_text("Version " JT_VERSION, spot_lx + 16, spot_ly + 32, 0x0075726E);
+        gui_text("Made by Joshua, from scratch.", spot_lx + 16, spot_ly + 54, 0x001C1C1E);
+    } else {
+        gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, TREE_W, 109, 0x00faf8f4, 10);
+        gui_hairline_h(spot_lx + 10, spot_ly + 31, TREE_W - 20, 0x00DDD8CE);
+        for (int r = 0; r < 4; r++) {
+            int ry = tree_ry(r), on = r == tree_sel;
+            if (on) window_rect(spot_lx + 8, ry, TREE_W - 16, SPOT_ROW - 2, 0x00b5502c);
+            gui_text(tree_rows[r], spot_lx + 22, ry + 2, on ? 0x00FFFFFF : 0x001C1C1E);
+        }
+    }
+    fb_flush(x, y, w, h);
+    cur_show();
+    con_quiet = 1; uart_puts(tree_about ? "treemenu: about\n" : "treemenu: row "); if (!tree_about) { uart_dec((unsigned)tree_sel); uart_putc('\n'); }
+}
+static void tree_open(void) {
+    if (spot_live || !fb) return;
+    int s = (int)window_scale(), w = SPOT_W * s, h = spot_hmax() * s;   /* the buffer Spotlight sizes; the tree's card is smaller */
+    spot_lx = 8; spot_ly = sg(MENUBAR_H) / s + 2;
+    if (!spot_under) spot_under = kmalloc((unsigned)(w * h) * 4);
+    if (!spot_under) { uart_puts("oom treemenu\n"); return; }
+    w = TREE_W * s; h = TREE_H * s;
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) spot_under[j * w + i] = fb[(unsigned)(spot_ly * s + j) * fb_pitch + (unsigned)(spot_lx * s + i)];
+    spot_live = spot_tree = 1; tree_sel = 0; tree_about = 0;
+    con_quiet = 1; uart_puts("treemenu open\n");
+    tree_paint();
+}
+/* ponytail: there is no login screen yet, so Log Out only closes every window and says so on the menu bar. The 4.0 login
+   screen (roadmap: Joshua Tree 4.0) replaces this body with a real sign-out back to it. */
+static void tree_logout(void) {
+    con_quiet = 1; uart_puts("treemenu: logout\n");
+    power_pending = 0; if (dock_sel >= 0) dock_select(-1);
+    calc_close(); brick_close(); clock_close(); browser_close(); app_kill("logged out"); console_close();
+    menubar_notify("Logged out");
+}
+static void tree_pick(int r) {
+    if (r == 0) { tree_about = 1; tree_paint(); return; }
+    spot_close();
+    con_quiet = 1; uart_puts(r == 1 ? "treemenu: restart\n" : r == 2 ? "treemenu: shutdown\n" : "");
+    if (r == 1) power_ask(0); else if (r == 2) power_ask(1); else tree_logout();
+}
+static void tree_key(unsigned code) {
+    if (tree_about || code == 1) { spot_close(); return; }   /* About closes on any key; Esc closes the menu */
+    if (code == 103) { tree_sel = (tree_sel + 3) % 4; tree_paint(); }
+    else if (code == 108) { tree_sel = (tree_sel + 1) % 4; tree_paint(); }
+    else if (code == 28 || code == 96) tree_pick(tree_sel);
+}
+static void tree_click(int lx, int ly) {
+    if (tree_about || !in_box(lx, ly, spot_lx, spot_ly, TREE_W, 109)) { spot_close(); return; }   /* outside the card, or any click on About, dismisses */
+    for (int r = 0; r < 4; r++) if (in_box(lx, ly, spot_lx + 8, tree_ry(r), TREE_W - 16, SPOT_ROW)) { tree_sel = r; tree_pick(r); return; }
+}
+static void tree_hover(int lx, int ly) {
+    if (tree_about) return;
+    for (int r = 0; r < 4; r++) if (in_box(lx, ly, spot_lx + 8, tree_ry(r), TREE_W - 16, SPOT_ROW) && r != tree_sel) { tree_sel = r; tree_paint(); return; }
+}
 int volume_key(unsigned code);   /* cmd.c: F11 and F12, Volume Down, Up and Mute */
 static int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
     int chord = ctrl_held || gui_held || alt_held;
-#ifdef PI_BUILD
     if (power_key(code)) return 1;
-#endif
     if (volume_key(code)) return 1;   /* before Spotlight and every pane, like the Spotlight shortcut */
     if (gui_held && (code == 17 || code == 16)) return front_close();   /* Cmd+W closes the front window, Cmd+Q quits the front app: every window here is one app's, so both end it */
     if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
+    if (code == 68 || (ctrl_held && alt_held && code == 20)) { int was = spot_live && spot_tree; spot_close(); if (!was) tree_open(); return 1; }   /* F10 or Ctrl+Option+T: the tree menu, for a board with no mouse; again closes it */
     if (code == 60 || (ctrl_held && code == 20)) { spot_close(); settings_close(); brick_close(); clock_close(); browser_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
     if (spot_live) return spot_key(code);
     if (brick_live) return brick_key(code, 1);
@@ -3487,6 +3577,19 @@ void main(void) {
     uart_puts("power: cancellation survived\n");
     hid_kbd(chord, 8, previous); hid_kbd(none, 8, previous);
     hid_kbd(enter, 8, previous);
+#endif
+#ifdef TREEMENU_SELFTEST   /* 1 restart, 2 shut down: the tree clicked open and driven by the board's own key events, then the power prompt confirmed */
+    {
+        int px = sg(12), py = sg(MENUBAR_H) / 2;
+        kinput(3, 0, px * 32768 / (int)fb_w + 1); kinput(3, 1, py * 32768 / (int)fb_h + 1); kinput(0, 0, 0);
+        kinput(1, 272, 1); kinput(1, 272, 0);
+        kinput(1, 1, 1);   /* Esc closes the card */
+        uart_puts(spot_live ? "treemenu: esc FAILED\n" : "treemenu: esc survived\n");
+        kinput(1, 68, 1);   /* F10 opens it again */
+        kinput(1, 108, 1); if (TREEMENU_SELFTEST == 2) kinput(1, 108, 1);
+        kinput(1, 28, 1);   /* Enter on Restart or Shut Down: the Terminal's prompt */
+        kinput(1, 28, 1);   /* Enter confirms: the watchdog */
+    }
 #endif
 #ifdef KEY_SELFTEST
     key_selftest();

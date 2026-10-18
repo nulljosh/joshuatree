@@ -70,6 +70,7 @@ once |6|Settings on the Pi: settings.c parsing and file text under sanitizers; i
 retry|3|Stocks on ARM: the tile and Spotlight open the Pi window, the watchlist pills and the line chart are drawn from the labelled sample, Down changes the chart, Esc and the red dot close it, in headless QEMU|python3 ./tools/checks/arm64-stocks-check.py
 once |6|Games on the Pi: Spotlight opens Mines, Toroid, Hamurapi and Keyrate at EL0, a reveal (key and click), a generation, a year and a typed word each change the pixels, Esc closes each, in headless QEMU|python3 ./tools/checks/arm64-games-check.py
 once |6|Pi keyboard shutdown and restart: confirmed HID chords halt or reboot raspi4b, Escape cancels, busy and hidden prompts refuse (host and QEMU)|python3 ./tools/checks/arm64-power-check.py
+once |6|ARM tree menu: click or F10 opens About, Restart, Shut Down and Log Out (pixels, keys, outside click), power rows confirm and refuse mid-answer, Log Out closes windows, raspi4b restarts and halts|python3 ./tools/checks/arm64-treemenu-check.py
 once |7|CI tooling preserves shared ARM shard affinity and rejects fixed test paths before builds (host only)|python3 ./tools/checks/ci-tooling-check.py
 once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
 once |7|No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
