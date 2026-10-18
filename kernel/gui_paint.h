@@ -50,6 +50,7 @@ void gui_blit_tile(const unsigned int *tile, int x, int y, int size, unsigned in
 extern int gui_aa_band;
 int gui_isqrt(int n);
 void gui_fill_circle(int cx, int cy, int r, unsigned int color, unsigned int into);
+void gui_close_glyph(int cx, int cy, unsigned int on);
 void gui_capsule_phys(int pcx0, int pcy0, int pcx1, int pcy1, int pr, unsigned int color);
 void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into);
 

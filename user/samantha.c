@@ -1641,7 +1641,13 @@ static void draw_video_k(void) {
     if (!uface_phone) {
         for (int dy = -9; dy <= 9; dy++) for (int dx = -9; dx <= 9; dx++) {
             int d2 = dx * dx + dy * dy, px = 24 + dx, py = 24 + dy;
-            if (d2 <= 81) backbuf[py * W + px] = d2 <= 49 ? 0x00FF5F57 : 0x00101012;
+            if (d2 <= 80) backbuf[py * W + px] = d2 <= 49 ? 0x00FF5F57 : 0x00101012;
+        }
+        /* (80, not 81: no single-pixel nubs at the four compass points) the X that says close: both diagonals, a half-tone pixel either side so the strokes read smooth at 2x; the centre
+           pixel stays red because the checks read it to know her window is up */
+        for (int dy = -3; dy <= 3; dy++) for (int dx = -3; dx <= 3; dx++) {
+            int a = dx > dy ? dx - dy : dy - dx, b = dx + dy < 0 ? -dx - dy : dx + dy, m = a < b ? a : b;
+            if ((dx || dy) && m <= 1) backbuf[(24 + dy) * W + 24 + dx] = m ? 0x00BC3E38 : 0x007A1E1A;
         }
         if (now - open_t < 700) pill("Esc closes", 24 + 62, 11, WHITE);
     }
