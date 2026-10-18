@@ -9,7 +9,7 @@ from scratch import scratch_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 TMP = Path(scratch_dir("spotlight"))
-APPS = 23   # 11 dock tiles + Clock, Brick, Music, Browser, Books + Calculator + Finder + Settings + Mines, Toroid, Hamurapi, Keyrate
+APPS = 22   # 10 dock tiles (the Apps tile is the Launchpad since 4.1.2, not an app) + Clock, Brick, Music, Browser, Books + Calculator + Finder + Settings + Mines, Toroid, Hamurapi, Keyrate
 subprocess.run(["make", "-s", "-C", str(ROOT / "arch/arm64"), "kernel8.elf"], check=True)
 log = TMP / "uart"; sock = TMP / "qmp"
 q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256",

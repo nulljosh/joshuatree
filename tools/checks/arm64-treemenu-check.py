@@ -194,7 +194,7 @@ try:
 
     # Log Out closes every window
     click(*slot_centre(6)); wait_for("terminal open", 4)
-    click(*slot_centre(0)); wait_for("calc open", 4)
+    keys("f1"); wait_for("spotlight open", 4); keys("c", "a", "l", "c", "ret"); wait_for("calc open", 4)   # 4.1.2: the Apps tile is the Launchpad, the Calculator comes from Spotlight
     e = shot()
     check("a Terminal and a Calculator are on screen first", px(e, wx + 19, wy + 16) == (0xff, 0x5f, 0x57), px(e, wx + 19, wy + 16))
     step("treemenu open", lambda: keys("f10"))

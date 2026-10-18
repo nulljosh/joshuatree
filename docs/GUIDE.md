@@ -512,9 +512,10 @@ Its native windows are the Calculator, Calendar, Notes, Music, Finder, Terminal,
 - Their files are on the card in `JT/`.
 
 Opening and keys:
-- The Apps tile opens Calculator, beside the Terminal or Console. A click on either gives it the keys.
+- The Apps tile opens the Launchpad: a cream card in the middle of the screen with every app in a grid, icon over name. Click one, or move with the arrow keys and press Enter, to open it. Esc or a click outside closes it. An app the Pi cannot run yet (Trash) is greyed. Every name on the card is also found by Spotlight.
+- The Calculator is on the Launchpad and in Spotlight (type calc). It has no dock tile. It opens beside the Terminal or Console, and a click on either gives it the keys.
 - F2 opens Terminal.
-- Mail, Reminders, Weather, Stocks and Trash tiles do not open their own ARM apps. They return to the Console and print `not on ARM yet`.
+- The Trash tile does not open an ARM app. It returns to the Console and prints `not on ARM yet`.
 
 This is the dispatch in `arch/arm64/main.c` (`dock_activate` and `app_open_name`). It is not a claim that every feature passed a physical-board test.
 

@@ -123,7 +123,7 @@ try:
     def dot(r): move_to((r[0] + 24) * S, (r[1] + 16) * S); click()   # the red dot of a window rectangle (logical)
     def arrow(): return [(pos[0] - 2, pos[1] - 2, 13 * S + 6, 19 * S + 6)]
     DOCK_X0 = (W // S - (11 * ICON + 10 * 6 + 2 * 10)) // 2; DOCK_Y0 = LGH - ICON - 2 * 10 - 24
-    def apps_tile(): move_to((DOCK_X0 + 10 + ICON // 2) * S, (DOCK_Y0 + 10 + ICON // 2) * S); click()
+    # 4.1.2: the Apps tile is the Launchpad, so the Calculator comes from Spotlight
     def park(): move_to(W - 60, H // 2 + 40)
 
     rect = WIN
@@ -174,9 +174,9 @@ try:
     dot(rect); check("Brick closes by its red dot", wait_for("brick closed", 6) or True); dot(rect); wait_for("console closed", 6); same("Brick closed by the dot")
     ok = spotlight("brick", "brick open"); drag(60, -40); dot(rect); time.sleep(0.5); dot(rect); wait_for("console closed", 6); same("Brick dragged, then closed")
 
-    apps_tile(); check("Calculator opens", wait_for("calc open", 6))
+    spotlight("calc", "calc open"); check("Calculator opens", wait_for("calc open", 6))
     dot(CALC); check("Calculator closes by its red dot", wait_for("calc closed", 6)); dot(rect); wait_for("console closed", 6); same("Calculator closed by the dot")
-    apps_tile(); wait_for("calc open", 6); time.sleep(0.4); key("esc"); wait_for("calc closed", 6); dot(rect); wait_for("console closed", 6); same("Calculator closed by Esc")
+    spotlight("calc", "calc open"); wait_for("calc open", 6); time.sleep(0.4); key("esc"); wait_for("calc closed", 6); dot(rect); wait_for("console closed", 6); same("Calculator closed by Esc")
 
     # Brick dragged to the lowest place a window can sit: its hint line overhangs the frame there, over the tribute line's apple
     ok = spotlight("brick", "brick open"); drag(0, 300); dot(rect); time.sleep(0.5); dot(rect); wait_for("console closed", 6); same("Brick dragged to the bottom, then closed")
