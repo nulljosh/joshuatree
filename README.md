@@ -9,7 +9,7 @@
 ![release](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/release.yml?branch=main&label=release)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A small operating system with its own windows, dock, sound, internet and 32 apps. It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it and answers out loud through a relay on your Mac.
+A small operating system with its own windows, dock, sound, internet and 32 apps. It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it and answers out loud through a relay on your Mac. On the Pi you can talk to her with a USB mic.
 
 <p>
   <img src="landing/shots/app-hamurapi.webp" width="32%" alt="Hamurapi, a game">
