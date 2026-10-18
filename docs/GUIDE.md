@@ -109,7 +109,7 @@ Files behind it: `tools/flash-pi.sh` (builds and copies the image), `arch/arm64/
 | Command | What it does |
 |---|---|
 | `help` | Lists the commands. |
-| `sam QUESTION` | Asks Samantha. |
+| `sam QUESTION`, `sam` | Asks Samantha, or opens the chat view when you type `sam` alone. |
 | `ls`, `ls DIR`, `cat NAME` | List the card's files and print the first 4096 bytes of one. |
 | `write NAME.EXT TEXT`, `rm NAME`, `mkdir NAME` | Make a text file, remove a file, make a folder. Inside `JT/` only, names in the old 8.3 shape with a dot. |
 | `browse`, `open`, `back`, `forward`, `reload`, `links`, `more`, `up`, `down`, `top`, `bottom`, `find` | The text browser. |
@@ -123,6 +123,7 @@ While Samantha is answering, the network commands (`browse`, `open`, `back`, `fo
 
 **Samantha.** She does not run on the Pi. The Pi sends your question to the relay on your Mac, which asks the model and sends the answer back over HTTPS with a pinned certificate and a shared token. If the Mac is off or Wi-Fi is down, she cannot answer.
 - `sam QUESTION` hands the question over and returns the prompt at once. Her answer prints as `sam: ...` above the prompt, followed by a line like `sam: 27.4s (find 0.0, tls 0.8, wait 26.6)` saying where the time went (finding the relay, the secure connection, waiting).
+- `sam` with nothing after it turns the Terminal window into a chat. The top row says `Samantha` and the relay she will use (`local only` before one has answered), your lines (`you: ...`) and her answers (`sam: ...`) scroll up below it, and the bottom row is where you type. Enter sends, sums come back at once, a question shows `thinking...` and you can keep typing meanwhile. Up, Down, Page Up, Page Down, Home and End scroll back, and Esc or `/quit` returns to the shell prompt (if she is mid-answer the chat closes once the answer is in). The chat uses the same path as `sam QUESTION`, so the relay, the 30 second limit and the slash commands behave the same. The Samantha dock tile opens the Terminal with `sam ` typed, so pressing Enter there lands in the chat. F3 is held while the chat is open.
 - One question flies at a time (`sam: still thinking`). Plain sums such as `sam 10+10` are answered on the Pi at once.
 - `/status` shows the model, effort and whether the relay answered last time. `/clear` starts over. `/model haiku` selects the smaller model and `/model auto` restores routing. `/effort low` asks for a shorter, cheaper API answer (ignored in Claude Code relay mode). `/help` lists the controls.
 

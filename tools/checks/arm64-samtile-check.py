@@ -4,7 +4,7 @@
 Joshua's board test: the tile did nothing he could see (the empty Terminal looks like the Terminal tile's). Headless QEMU virt with
 a USB keyboard and mouse behind a hub, like arm64-mouse-check.py. It clicks the Terminal tile (slot 6) and measures the ink on the
 prompt row, then clicks the Samantha tile: the row must carry more ink (`sam ` is typed there), Enter must run `sam` with no question
-(UART `usage: sam QUESTION`), and a click on the Terminal tile afterwards must not clear what is typed.
+(UART `tui| open`, the chat view; it was a usage line before 4.2.0), and a click on the Terminal tile afterwards must not clear what is typed.
 Skips (exit 0) when clang, ld.lld or qemu-system-aarch64 is missing. Usage: tools/checks/arm64-samtile-check.py
 """
 import json, os, shutil, socket, subprocess, sys, tempfile, time
@@ -109,8 +109,8 @@ try:
                         n2 = len(uart())
                         cmd("input-send-event", events=[{"type": "key", "data": {"down": True, "key": {"type": "qcode", "data": "ret"}}}])
                         cmd("input-send-event", events=[{"type": "key", "data": {"down": False, "key": {"type": "qcode", "data": "ret"}}}])
-                        if not wait_for("usage: sam QUESTION", 40, n2): fails.append(f"Enter on the prefilled line did not run `sam`, got {uart()[-300:]!r}")
-                        else: print("  ok: Enter on the prefilled line runs `sam` (its usage line)")
+                        if not wait_for("tui| open", 40, n2): fails.append(f"Enter on the prefilled line did not run `sam`, got {uart()[-300:]!r}")
+                        else: print("  ok: Enter on the prefilled line runs `sam` (it opens the chat view)")
     if "KERNEL CRASH" in uart(): fails.append("the kernel crashed")
 finally:
     q.kill(); q.wait()

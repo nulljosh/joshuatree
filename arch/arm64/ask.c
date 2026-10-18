@@ -17,7 +17,13 @@
    loop, and while it waits on the network (drivers/net.c calls net_idle once a pass in every client wait loop) ask_service
    polls the keyboard and runs any line typed meanwhile at once, so the answer lands on a fresh line above the prompt
    whenever it arrives. Only one request flies at a time. Commands that need the one TCP connection or the heap (browse,
-   open, llm, ...) are refused with a short line until she answers (cmd.c). */
+   open, llm, ...) are refused with a short line until she answers (cmd.c).
+
+   `sam` with no question opens the chat view (docs/GUIDE.md): the Terminal window becomes a header, a scrolling history
+   of your lines and hers, and an input row. Each line goes through the same sam_command as `sam QUESTION`, so sums, the
+   slash commands and the relay behave alike; her output is captured into the history instead of the Terminal's log. Esc or
+   /quit goes back to the shell (after her answer, when one is in flight). Every drawn line is also written to the UART as
+   `tui| ...` so a headless check reads the screen. */
 #include "../../drivers/net.h"
 #include "../../drivers/http.h"
 #include "tls.h"
@@ -69,10 +75,25 @@ static const char *const models[] = {"auto", "haiku", "sonnet", "opus"};
 static const char *const efforts[] = {"low", "medium", "high"};
 /* A request keeps its session and output target until it finishes or is stopped. */
 static int sam_state;        /* 0 idle, 1 queued by `sam`, 2 waiting on the relay */
+static int tui_on, tui_quit;         /* the chat view has the window; leave it when the question in flight ends */
+static unsigned tui_n, tui_up;       /* history lines held; how many lines the view is scrolled back from the newest */
+void sam_command(const char *q, unsigned n);
+static void tui_enter(void);
+static void tui_paint(int full);
+static void tui_escape(void);
+static void tui_submit(void);
+static void tui_move(int up);
+static void prompt_row(const char *s, unsigned n);   /* the bottom row: the shell prompt, or the chat view's */
+void tui_log(const char *s);       /* main.c: a line to the UART only */
+int con_rows_total(void);          /* main.c: text rows in the Terminal window, 0 when there is no window to draw in */
+void con_tui_begin(void);
+void con_tui_rows(const char *const *rows, unsigned n);
+void con_tui_input(const char *p, const char *s, unsigned n);
+void con_tui_end(void);
 static char sam_q[ASK_MAX + 1];
 static unsigned sam_qn;
 int ask_select(unsigned pane) {
-    if (pane >= 2 || ac->pending || sam_state) return 0;
+    if (pane >= 2 || ac->pending || sam_state || tui_on) return 0;
     ac = &contexts[pane];
     return 1;
 }
@@ -124,28 +145,31 @@ void ask_prefill(const char *s) {   /* main.c: the Samantha tile types `sam ` on
     while (*s && ac->len < ASK_MAX) ac->line[ac->len++] = *s++;
     ac->line[ac->len] = 0;
 }
-void ask_redraw(void) { con_prompt(ac->line, ac->len); }   /* main.c: the Terminal was reopened, put the line being typed back */
+void ask_redraw(void) { if (tui_on) tui_paint(1); else con_prompt(ac->line, ac->len); }   /* main.c: the Terminal was reopened, put the line being typed back */
 
 /* One key event from any keyboard. 1 when it is the editor's (the caller then keeps its echo line off the screen). */
 /* One key event, while the Terminal is in front (Shift always). 1 when it is the editor's. */
 static int stop_flag;        /* the kill switch: Esc, or "stop" and Enter, while the agent loop runs */
 static int is_stop(const char *s, unsigned n) { return n == 4 && s[0] == 's' && s[1] == 't' && s[2] == 'o' && s[3] == 'p'; }
-int ask_pending(void) { return ac->pending || sam_state; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
+int ask_pending(void) { return ac->pending || sam_state || tui_on; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
 int ask_key(unsigned code, unsigned value) {
     if (code == KEY_LSHIFT || code == KEY_RSHIFT) { shift = value != 0; return 1; }
     if (code == KEY_CAPSLOCK) { if (value) caps = !caps; return 1; }   /* one flip per press */
+    if (code == KEY_ESC && tui_on) { if (value) tui_escape(); return 1; }
+    if (tui_on && (code == 103 || code == 108)) { if (value) tui_move(code == 103); return 1; }   /* Up and Down scroll the history */
     if (code == KEY_ESC) { if (value && (ac->pending || sam_state)) stop_flag = 1; return 0; }
     int typed = code < 58 && plain[code];
     if (!typed && code != KEY_BACKSPACE && code != KEY_ENTER && code != KEY_KPENTER) return 0;
     if (!value) return 1;                      /* key up: nothing to do, but it is still ours */
     if (typed) { if (ac->len < ASK_MAX) ac->line[ac->len++] = (char)ask_char(code); }
     else if (code == KEY_BACKSPACE) { if (ac->len) ac->len--; }
+    else if (ac->len && tui_on) { tui_submit(); return 1; }
     else if (ac->len && ac->pending) { if (is_stop(ac->line, ac->len)) { stop_flag = 1; ac->len = 0; } }   /* a question is running: only "stop" counts */
     else if (ac->len) {                            /* Enter: hand the line to ask_poll, outside the input handler */
         for (unsigned i = 0; i < ac->len; i++) ac->question[i] = ac->line[i];
         ac->qlen = ac->len; ac->len = 0; ac->pending = 1;
     }
-    con_prompt(ac->line, ac->len);
+    prompt_row(ac->line, ac->len);
     return 1;
 }
 
@@ -162,7 +186,7 @@ int ask_edit(unsigned code) {
         char b[ASK_MAX + 1]; unsigned n = clip_take(b, ASK_MAX - ac->len);
         for (unsigned i = 0; i < n; i++) { char c = b[i] == '\n' || b[i] == '\t' ? ' ' : b[i]; if (c >= ' ' && c < 127) ac->line[ac->len++] = c; }
     }
-    con_prompt(ac->line, ac->len);
+    prompt_row(ac->line, ac->len);
     return 1;
 }
 
@@ -369,6 +393,7 @@ static int slash(const char *q, unsigned n) {
         kputs("\nstatus: steps used "); kdec(ac->steps_total); kputs("\n");
     } else if (word_is(w, wn, "clear")) {
         ac->session[0] = 0; ac->last_name[0] = 0; ac->steps_total = 0; ac->relay_state = 0;
+        if (tui_on) { tui_n = 0; tui_up = 0; }
         con_clear(); kputs("clear: new conversation\n"); ask_redraw();
     } else if (word_is(w, wn, "help")) {
         kputs("/model [auto|haiku|sonnet|opus]  pick the model\n/effort [low|medium|high]  how hard it thinks\n"
@@ -737,9 +762,145 @@ static int local_math(const char *q, unsigned n) {
     kputs("sam: "); kputs(out); kputs("\n");
     return 1;
 }
+/* ---- The chat view. Lines are kept as plain text, already wrapped; the window shows the newest ones above the input row. */
+#define TUI_LINES 160
+#define TUI_W 64
+static char tui_h[TUI_LINES][TUI_W];
+static char tui_cur[TUI_W]; static unsigned tui_cn;           /* the line her output is still writing */
+static char tui_head_last[TUI_W + 40];
+static unsigned tui_width(void) { int c = con_columns(); return c >= 20 && c < ASK_WIDTH ? (unsigned)c : ASK_WIDTH; }
+static void tlog(const char *a, const char *b) {              /* "tui| a b" to the UART only */
+    char o[TUI_W + 96]; unsigned n = 0;
+    for (const char *p = "tui| "; *p; p++) o[n++] = *p;
+    for (; *a && n < sizeof o - 2; a++) o[n++] = *a;
+    for (; *b && n < sizeof o - 2; b++) o[n++] = *b;
+    o[n++] = '\n'; o[n] = 0;
+    tui_log(o);
+}
+static unsigned tui_relay(void) {   /* the relay the header names: the one in memory, else the card's, else none (local only) */
+#if defined(PI_BUILD) || CLAUDE_TLS
+    if (!relay_ip && !card_loaded) card_load();
+    return relay_ip ? relay_ip : card_ip;
+#else
+    return 0;
+#endif
+}
+static unsigned tui_body(void) { unsigned r = (unsigned)con_rows_total(); return r > 2 ? r - 2 : r ? 1 : 20; }   /* history rows: the window less the header and its rule */
+static unsigned tui_total(void) { return tui_n + (sam_state ? 1 : 0); }                                           /* the thinking marker is a row too */
+static void tui_paint(int full) {
+    static char head[TUI_W + 8], rule[TUI_W + 8], think[TUI_W + 8];
+    static const char *rows[96];
+    unsigned R = (unsigned)con_rows_total(), w = tui_width(), body = tui_body(), total = tui_total(), ip = tui_relay();
+    char right[24]; unsigned rn = 0;
+    if (ip) {
+        for (const char *p = "relay "; *p; p++) right[rn++] = *p;
+        for (int sh = 24; sh >= 0; sh -= 8) { rn += put_dec(right + rn, (ip >> sh) & 255); if (sh) right[rn++] = '.'; }
+    } else for (const char *p = "local only"; *p; p++) right[rn++] = *p;
+    right[rn] = 0;
+    for (unsigned i = 0; i < w; i++) { head[i] = ' '; rule[i] = '-'; }
+    head[w] = rule[w] = 0;
+    { const char *t = "Samantha"; for (unsigned i = 0; t[i]; i++) head[i] = t[i]; }
+    for (unsigned i = 0; i < rn && rn < w; i++) head[w - rn + i] = right[i];
+    { const char *t = tui_quit ? "thinking (leaving when she answers)" : "thinking...";
+      unsigned i = 0; for (; t[i]; i++) think[i] = t[i]; think[i] = 0; }
+    unsigned max_up = total > body ? total - body : 0;
+    if (tui_up > max_up) tui_up = max_up;
+    unsigned end = total - tui_up, start = end > body ? end - body : 0;
+    rows[0] = head; rows[1] = rule;
+    for (unsigned r = 2; r < R && r < 96; r++) rows[r] = 0;
+    for (unsigned i = start; i < end && 2 + (i - start) < 96; i++) rows[2 + (i - start)] = i < tui_n ? tui_h[i] : think;
+    if (full) con_tui_begin();
+    con_tui_rows(rows, R < 96 ? R : 96);
+    { unsigned same = 1, i = 0; for (; head[i] || tui_head_last[i]; i++) if (head[i] != tui_head_last[i]) { same = 0; break; }
+      if (!same || full) { for (i = 0; head[i]; i++) tui_head_last[i] = head[i]; tui_head_last[i] = 0; tlog("head ", head); } }
+    { char v[40]; unsigned n = 0;
+      n += put_dec(v + n, end > start ? start + 1 : 0); v[n++] = '-'; n += put_dec(v + n, end); v[n++] = '/'; n += put_dec(v + n, total);
+      v[n++] = ' '; v[n++] = 'u'; v[n++] = 'p'; v[n++] = ' '; n += put_dec(v + n, tui_up); v[n] = 0; tlog("view ", v); }
+    if (sam_state) tlog("marker ", think);
+    prompt_row(ac->line, ac->len);
+}
+static void prompt_row(const char *s, unsigned n) {
+    if (!tui_on) { con_prompt(s, n); return; }
+    char line[ASK_MAX + 8]; unsigned k = 0;
+    for (; k < n; k++) line[k] = s[k];
+    line[k] = 0;
+    con_tui_input("you: ", s, n);
+    tlog("input you: ", line);
+}
+static void tui_commit(const char *l) {
+    if (tui_n == TUI_LINES) { for (unsigned i = 1; i < TUI_LINES; i++) for (unsigned k = 0; k < TUI_W; k++) tui_h[i - 1][k] = tui_h[i][k]; tui_n--; }
+    unsigned k = 0; for (; l[k] && k < TUI_W - 1; k++) tui_h[tui_n][k] = l[k];
+    tui_h[tui_n++][k] = 0;
+    tlog("line ", l);
+}
+static int tui_chatter(const char *l) {   /* progress lines that belong to the UART log, not the conversation */
+    unsigned n = 0; while (l[n]) n++;
+    if (starts(l, n, "agent: step ") || starts(l, n, "samantha: thinking") || starts(l, n, "samantha: relay found")) return 1;
+    if (!starts(l, n, "sam: ")) return 0;                         /* "sam: 3.2s (find 0.1, tls 0.2, wait 2.9)" */
+    unsigned i = 5; while (i < n && l[i] >= '0' && l[i] <= '9') i++;
+    return i > 5 && i + 4 < n && l[i] == '.' && l[i + 2] == 's' && l[i + 3] == ' ' && l[i + 4] == '(';
+}
+static void tui_puts(const char *s) {   /* cmd_out while the chat view is up: whole lines into the history */
+    int dirty = 0;
+    if (!tui_on) { real_puts(s); return; }
+    for (; *s; s++) {
+        if (*s == '\n') {
+            tui_cur[tui_cn] = 0;
+            if (tui_chatter(tui_cur)) { real_puts(tui_cur); real_puts("\n"); } else { tui_commit(tui_cur); dirty = 1; }
+            tui_cn = 0;
+        } else if (tui_cn < TUI_W - 1) tui_cur[tui_cn++] = *s >= 32 && *s < 127 ? *s : '?';
+    }
+    if (dirty) { tui_up = 0; tui_paint(0); }
+}
+static void tui_enter(void) {
+    if (sam_state) { kputs("sam: still thinking\n"); return; }
+    tui_on = 1; tui_quit = 0; tui_up = 0; tui_cn = 0; ac->len = 0;
+    tui_head_last[0] = 0;
+    tui_relay();                                  /* reads the card's hint now, from the main loop */
+    tui_log("tui| open\n");
+    if (!tui_n) tui_commit("Type a question and press Enter. Esc leaves.");
+    tui_paint(1);
+}
+static void tui_leave(void) {
+    tui_on = 0; tui_quit = 0; ac->len = 0;
+    tui_log("tui| closed\n");
+    con_tui_end();                                 /* the Terminal's text and the shell prompt */
+}
+static void tui_escape(void) {
+    if (sam_state == 2) { stop_flag = 1; tui_quit = 1; tui_paint(0); }   /* in flight: leave once she has answered */
+    else { sam_state = 0; tui_leave(); }                                 /* idle, or only queued: nothing to wait for */
+}
+static void tui_move(int up) { if (up) tui_up++; else if (tui_up) tui_up--; tui_paint(0); }
+void ask_tui_scroll(unsigned code) {   /* main.c's Page Up 104, Page Down 109, Home 102, End 107 */
+    unsigned b = tui_body(), half = b / 2 ? b / 2 : 1, total = tui_total(), max_up = total > b ? total - b : 0;
+    if (code == 104) tui_up += half;
+    else if (code == 109) tui_up = tui_up > half ? tui_up - half : 0;
+    else if (code == 102) tui_up = max_up;
+    else tui_up = 0;
+    tui_paint(0);
+}
+int ask_tui(void) { return tui_on; }
+static void tui_submit(void) {   /* Enter in the chat view: your line, then the same sam path as `sam QUESTION` */
+    char q[ASK_MAX + 1]; unsigned n = ac->len;
+    for (unsigned i = 0; i < n; i++) q[i] = ac->line[i];
+    ac->len = 0;
+    unsigned a = 0, b = n; while (a < b && q[a] == ' ') a++; while (b > a && q[b - 1] == ' ') b--;
+    if (a == b) { prompt_row(ac->line, ac->len); return; }
+    if (word_is(q + a, b - a, "/quit")) {
+        if (sam_state == 2) { stop_flag = 1; tui_quit = 1; tui_paint(0); } else { sam_state = 0; tui_leave(); }
+        return;
+    }
+    void (*saved)(const char *) = cmd_out;
+    cmd_out = tui_puts;
+    tui_cn = 0; tui_up = 0;
+    say_wrapped("you: ", q + a, b - a);
+    if (!ask_command(q + a, b - a)) sam_command(q + a, b - a);   /* "stop", the slash commands, else a question */
+    cmd_out = saved;
+    tui_paint(0);
+}
 void sam_command(const char *q, unsigned n) {   /* cmd.c: `sam QUESTION` queues the question and returns; ask_poll sends it */
     while (n && q[0] == ' ') { q++; n--; }
-    if (!n) { kputs("usage: sam QUESTION\n"); return; }
+    if (!n) { if (!tui_on) tui_enter(); return; }   /* `sam` alone opens the chat view */
     if (sam_state) { kputs("sam: still thinking\n"); return; }
     if (local_math(q, n)) return;              /* 20 for 10+10, on the Pi, no relay and no busy flag */
     if (n > ASK_MAX) n = ASK_MAX;
@@ -797,18 +958,21 @@ static void run_typed(void) {
     cmd_out = saved;
     poll_depth--; term_output(poll_depth ? 1 : 0);
     ac->pending = 0;
-    con_prompt(ac->line, ac->len);
+    prompt_row(ac->line, ac->len);
 }
 static void sam_run(void) {   /* the queued question, on a main loop pass of its own */
-    poll_depth++; term_output(1);
-    cmd_out = real_puts;
+    poll_depth++; if (!tui_on) term_output(1);   /* in the chat view her lines go to its history, not the Terminal's log */
+    cmd_out = tui_on ? tui_puts : real_puts;
     sam_state = 2; stop_flag = 0;
     net_idle = ask_service;
     ask_relay(sam_q, sam_qn);
     net_idle = 0;
     sam_state = 0;
     poll_depth--; term_output(poll_depth ? 1 : 0);
-    con_prompt(ac->line, ac->len);
+    cmd_out = real_puts;                          /* the shell's next echo must not land in a chat view that is gone */
+    if (tui_on && tui_quit) tui_leave();          /* Esc or /quit came while she was thinking */
+    else if (tui_on) tui_paint(0);                /* the thinking marker goes */
+    prompt_row(ac->line, ac->len);
 }
 void ask_poll(void) {
     if (ac->pending) run_typed();
