@@ -24,6 +24,12 @@ A small operating system with its own windows, dock, sound, internet and 32 apps
 - On a Pi 4: flash a card with `tools/flash-pi.sh` ([steps](docs/GUIDE.md#raspberry-pi)).
 - To build it: `brew install lld qemu`. Then `make run` to boot and `./check.sh` to test.
 
+## The box
+
+<img src="docs/hardware/nimbus-hero.jpg" width="60%" alt="Nimbus, a small square computer running Joshua Tree">
+
+Nimbus: a Raspberry Pi 4 and a 7 inch screen in a printed shell. A concept, with the CAD, renders and print pack in the [Guide](docs/GUIDE.md#nimbus).
+
 ## How fast
 
 Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
