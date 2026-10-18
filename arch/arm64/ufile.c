@@ -42,12 +42,13 @@ int user_writable(unsigned long a, unsigned long n);   /* main.c: memory the ker
 #define PATH_MAX 63                /* bytes of path, the NUL not counted */
 #define PATH_DEPTH 8
 #define FIRST_FD 3
-#define NFDS 5                     /* 3 to 7 */
+#define NFDS 12                    /* 4.0: several apps at once, each with a few */
 #define READDIR_MAX 64
 #define DIRENT_NAME 32             /* struct jt_dirent { char name[32]; unsigned size, is_dir; }: 40 bytes, no pointers, the same on LP64 */
 #define READFILE_CAP_MAX (6u << 20)
 
-struct ufd { int used, dirty; unsigned size, pos, flags; char name[PATH_MAX + 1]; char data[OPEN_MAX_FILE + 1]; };
+unsigned ufile_owner;   /* 4.0: the app (slot + 1) whose calls these are, set by main.c before each run; 0 is the boot self-test */
+struct ufd { unsigned owner; int used, dirty; unsigned size, pos, flags; char name[PATH_MAX + 1]; char data[OPEN_MAX_FILE + 1]; };
 static struct ufd fds[NFDS];
 static char back[OPEN_MAX_FILE + 1];   /* close's read-back */
 
@@ -91,7 +92,7 @@ static long path_enter(char *path, int keep, char **leaf, int make) {
     *leaf = n ? comp[n - 1] : path;
     return 0;
 }
-static struct ufd *fd_of(unsigned long fd) { return fd >= FIRST_FD && fd < FIRST_FD + NFDS && fds[fd - FIRST_FD].used ? &fds[fd - FIRST_FD] : 0; }
+static struct ufd *fd_of(unsigned long fd) { return fd >= FIRST_FD && fd < FIRST_FD + NFDS && fds[fd - FIRST_FD].used && fds[fd - FIRST_FD].owner == ufile_owner ? &fds[fd - FIRST_FD] : 0; }   /* an app's own descriptors only */
 
 static long u_open(unsigned long upath, unsigned long flags) {
     if (flags & ~(unsigned long)(O_ACCMODE | O_CREAT | O_TRUNC | O_APPEND)) return -EINVAL;
@@ -113,7 +114,7 @@ static long u_open(unsigned long upath, unsigned long flags) {
     if (!exists && !(flags & O_CREAT)) { path_leave(); return -ENOENT; }
     if ((!exists || (flags & O_TRUNC)) && !fat_replace_file(leaf, "", 0)) { path_leave(); return -ENOSPC; }   /* O_CREAT and O_TRUNC land now */
     path_leave();
-    f->used = 1; f->dirty = 0; f->flags = (unsigned)flags;
+    f->used = 1; f->dirty = 0; f->owner = ufile_owner; f->flags = (unsigned)flags;
     f->size = exists && !(flags & O_TRUNC) ? (unsigned)n : 0;
     f->pos = flags & O_APPEND ? f->size : 0;
     for (int i = 0; i <= PATH_MAX; i++) { f->name[i] = name[i]; if (!name[i]) break; }
@@ -249,7 +250,7 @@ long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned
 }
 /* An app ended (exit, fault or its red dot): every descriptor it left open is closed, written back first. */
 void ufile_release(void) {
-    for (int i = 0; i < NFDS; i++) if (fds[i].used) u_close(FIRST_FD + (unsigned long)i);
+    for (int i = 0; i < NFDS; i++) if (fds[i].used && fds[i].owner == ufile_owner) u_close(FIRST_FD + (unsigned long)i);
 }
 /* Folders an app expects before it runs, made inside JT/ (JT/ too) when missing: Notes gets NOTES/NOTES, its default
    folder, as i386's notes_check_support makes it. Without NOTES/ it would fall back to loose files in its root. */

@@ -393,6 +393,23 @@ static struct app *ap = &apps[0];         /* the app whose state the code below 
 static unsigned long cnt_now(void) { unsigned long c; __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); return c; }
 static unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f)); return f ? f : 54000000; }
 static void apps_init(void) { for (unsigned i = 0; i < APP_SLOTS; i++) { apps[i].base = USER_BASE + i * ARENA_SIZE; apps[i].l3off = i * ARENA_BLOCKS * 512; apps[i].slot = i; } }
+/* The app windows' stacking: app_z lists the slots that have a window, front first. app_top is the front one (-1 with none); outside
+   app_tick, `ap` always points at it, so the desktop's clicks, keys and drags land on the window in front. */
+static int app_top = -1;
+static unsigned char app_z[APP_SLOTS];
+static unsigned app_zn;
+static void app_z_drop(unsigned sl) {
+    unsigned o = 0;
+    for (unsigned i = 0; i < app_zn; i++) if (app_z[i] != sl) app_z[o++] = app_z[i];
+    app_zn = o;
+}
+static void app_z_front(unsigned sl) {
+    app_z_drop(sl);
+    for (unsigned i = app_zn; i > 0; i--) app_z[i] = app_z[i - 1];
+    app_z[0] = (unsigned char)sl; app_zn++;
+    app_top = (int)sl; ap = &apps[sl];
+}
+static int apps_live(void) { for (unsigned i = 0; i < APP_SLOTS; i++) if (apps[i].cur) return 1; return 0; }
 static long app_window_open(unsigned long info, unsigned long flags);                    /* the window half, with the other windows further down */
 static long app_window_poll(unsigned long ev, unsigned long flags);
 static void app_window_close(void);
@@ -403,6 +420,7 @@ static int span(unsigned long a, unsigned long n, unsigned long base, unsigned l
 }
 long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned long a2);   /* ufile.c, M3d: open, read, write (fd 3 and up), close, lseek, readdir, readfile, mkdir, unlink */
 void ufile_release(void);                 /* ...every descriptor the app left open, closed and written back */
+extern unsigned ufile_owner;              /* 4.0: whose descriptors the file calls mean: 0 the boot self-test, else app slot + 1 */
 void ufile_mkdirs(const char *path);      /* ...folders inside JT/ an app expects */
 static unsigned long heap_len(void) { return app_brk ? app_brk - (UB + UP_HEAP) : 0; }   /* M3e: the heap below its top */
 int user_in_range(unsigned long a, unsigned long n) {   /* memory the program may have the kernel read: the M3a code and stack pages, and the loaded app's whole window, stack and heap */
@@ -659,7 +677,7 @@ static unsigned long user_load(const struct user_app *a) {
 static int user_run(const struct user_app *a) {
     unsigned long entry = user_load(a);
     if (!entry) return -1;
-    user_pid++; user_faulted = 0;
+    user_pid++; user_faulted = 0; ufile_owner = 0;
     user_status = enter_user(entry, USER_BASE + UP_ASTACK + APP_STACK_PAGES * 4096UL, 0, 0);
     ufile_release();   /* M3d: what it left open is closed for it, however it ended */
     return 0;
@@ -673,9 +691,11 @@ static int user_run(const struct user_app *a) {
    with a window does, leaves the desktop responsive; only an app run this way gets a window. A parked app runs again on the
    next pass that has an event for it, and every 10 ms (the generic counter, never `ticks`) in case it is animating. An app
    that loops without ever making a syscall still holds the core: preempting one needs IRQs unmasked at EL0, not done yet. */
+static void app_kill_one(const char *how);
 static void app_end(unsigned long status, const char *how) {   /* an exit, a fault or a kill: the window goes, then the pages */
     const struct user_app *a = app_cur;
     app_cur = 0; app_parked = app_kick = 0; app_close_at = 0; user_status = status;
+    ufile_owner = ap->slot + 1;
     ufile_release();   /* M3d: its open files are written back and closed, after an exit, a fault or its red dot alike */
     audio_app_stop();  /* M3e: and its sound stops (what is already in the PWM ring plays out) */
     app_window_close();
@@ -684,21 +704,32 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
     uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times\n");
 }
-static void app_kill(const char *how) { if (app_cur && !app_running) app_end((unsigned long)-1, how); }
-static void app_tick(void) {
-    if (!app_cur || app_running) return;
-    unsigned long now = cnt_now();
-    if (app_close_at && now > app_close_at) { app_kill("closed by its red dot"); return; }   /* it never read the close click */
-    if (!app_kick && now - app_last < cnt_hz() / 100) return;
-    app_kick = 0; app_last = now; app_runs++;
-    app_parked = 0; user_faulted = 0; app_running = 1;
-    APP_FP_CLOBBER();
-    unsigned long st = resume_user(&app_frame, app_sp, app_fp);
-    app_running = 0;
-    if (!app_parked) app_end(st, user_faulted ? "stopped by a fault" : 0);
+static void app_kill_one(const char *how) { if (app_cur && !app_running) app_end((unsigned long)-1, how); }
+static void app_kill(const char *how) {   /* every app ends: a kernel-drawn window is opening where the apps' windows were */
+    for (unsigned i = 0; i < APP_SLOTS; i++) { ap = &apps[i]; if (app_cur && !app_running) app_end((unsigned long)-1, how); }
+    ap = &apps[app_top >= 0 ? app_top : 0];
 }
-static int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pass), -2 it would not load, -3 one is already running */
-    if (app_cur) return -3;
+static void app_tick(void) {   /* every app with something to do gets its turn: it runs until it yields, exits or faults, and a fault ends that app alone */
+    for (unsigned i = 0; i < APP_SLOTS; i++) {
+        ap = &apps[i];
+        if (!app_cur || app_running) continue;
+        unsigned long now = cnt_now();
+        if (app_close_at && now > app_close_at) { app_kill_one("closed by its red dot"); continue; }   /* it never read the close click */
+        if (!app_kick && now - app_last < cnt_hz() / 100) continue;
+        app_kick = 0; app_last = now; app_runs++;
+        app_parked = 0; user_faulted = 0; app_running = 1; ufile_owner = ap->slot + 1;
+        APP_FP_CLOBBER();
+        unsigned long st = resume_user(&app_frame, app_sp, app_fp);
+        app_running = 0;
+        if (!app_parked) app_end(st, user_faulted ? "stopped by a fault" : 0);
+    }
+    ap = &apps[app_top >= 0 ? app_top : 0];
+}
+static int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pass), -2 it would not load, -3 every slot is taken */
+    unsigned sl = 0;
+    while (sl < APP_SLOTS && apps[sl].cur) sl++;
+    if (sl == APP_SLOTS) return -3;
+    ap = &apps[sl];
     unsigned long entry = user_load(a);
     if (!entry) return -2;
     if (a->name[0] == 'n' && a->name[1] == 'o' && a->name[2] == 't' && a->name[3] == 'e' && a->name[4] == 's' && !a->name[5])
@@ -721,10 +752,11 @@ int userrun(const char *name, unsigned n, unsigned long *status, int *faulted) {
     if (!a) return -1;
     int r = app_start(a);
     if (r) return r;
+    struct app *me = ap;
     user_loud = 1;
     app_tick();
     user_loud = 0;
-    if (app_cur == a) return app_wbytes ? 2 : 1;
+    if (me->cur == a) return me->wbytes ? 2 : 1;
     *status = user_status; *faulted = user_faulted;
     return 0;
 }
@@ -1796,11 +1828,17 @@ static void app_paint(void) {   /* the frame, then the last frame the app presen
     fb_flush(app_lx * s, app_ly * s, app_lw * s, app_lh * s);
     cur_show();
 }
-static void app_raise(void) {   /* in front of the Console or the Terminal, with the keys */
+static void app_repaint_all(void) {   /* every app window, back to front: what a moved, raised or closed window uncovered comes back whole */
+    struct app *keep = ap;
+    for (int z = (int)app_zn - 1; z >= 0; z--) { ap = &apps[app_z[z]]; app_paint(); }
+    ap = keep;
+}
+static void app_raise(void) {   /* this app's window in front of the Console, the Terminal and the other apps, with the keys */
     if (!app_wbytes) return;
-    int was = app_front;
+    int was = app_front && app_top == (int)ap->slot;
     app_front = 1;
-    app_paint();
+    app_z_front(ap->slot);
+    if (was) app_paint(); else app_repaint_all();
     if (!was) { con_quiet = 1; uart_puts("focus app\n"); }
 }
 static void app_push(unsigned kind, int a, int b) {   /* one event for the app; a full ring drops the newest, as on i386 */
@@ -1825,7 +1863,7 @@ static long app_window_open(unsigned long info, unsigned long flags) {
         for (unsigned long i = 0; i < bytes / 8; i++) ((unsigned long *)(USER_BASE + UP_WIN))[i] = 0;
         int first = !app_wbytes;
         app_wbytes = bytes; app_shown = 0; app_bw = app_cw; app_bh = app_ch; app_hi = hi;
-        if (first) { spot_close(); calc_close(); browser_close(); settings_close(); app_front = 1; app_rs_log = 0; }
+        if (first) { spot_close(); calc_close(); browser_close(); settings_close(); app_front = 1; app_z_front(ap->slot); app_rs_log = 0; }
         else app_rs_log = 1;
         if (app_front) app_paint();
         con_quiet = !first; uart_puts("M3c window "); uart_puts(app_cur->name); uart_putc(' '); uart_dec(app_cw); uart_putc('x'); uart_dec(app_ch);
@@ -1877,7 +1915,7 @@ static long app_window_poll(unsigned long ev, unsigned long flags) {
             else uart_puts(" first frame\n");
         }
         app_shown = 1;
-        if (app_front && !spot_live) {
+        if (app_front && app_top == (int)ap->slot && !spot_live) {
             int s = (int)window_scale();
             cur_hide(); app_blit(); fb_flush((app_lx + 8) * s, (app_ly + 32) * s, (int)app_cw * s, (int)app_ch * s); cur_show();
         }
@@ -1896,8 +1934,14 @@ static void app_window_close(void) {
     cur_hide();
     wall_fill(x, y, w, h);
     fb_flush(x, y, w, h);
-    app_front = app_shown = 0;
-    if (con_live) { con_live = 0; pane_open(cp); }   /* the wallpaper went over its part of the Console too: draw it whole */
+    app_shown = 0;
+    unsigned gone = ap->slot;
+    app_z_drop(gone);
+    app_top = app_zn ? (int)app_z[0] : -1;
+    ap = &apps[app_top >= 0 ? app_top : gone];
+    app_front = app_top >= 0;
+    if (app_front) app_repaint_all();   /* the other apps' windows the closed one covered or was covered by */
+    else if (con_live) { con_live = 0; pane_open(cp); }   /* the wallpaper went over its part of the Console too: draw it whole */
     cur_show();
 }
 /* A dock tile whose name is an app in the table (Calendar, and any later one): start it, or bring its window up. */
@@ -1906,13 +1950,13 @@ static int app_dock(const char *name) {
         unsigned i = 0;
         while (name[i] && (name[i] | 32) == a->name[i]) i++;
         if (name[i] || a->name[i]) continue;
-        if (app_cur == a) app_raise();
-        else if (app_cur) {   /* one app at a time: a tile for another app swaps to it (the one in front is closed, its files written back), as clicking a second app does on any desktop */
+        for (unsigned k = 0; k < APP_SLOTS; k++) if (apps[k].cur == a) { ap = &apps[k]; app_raise(); return 1; }   /* already open: its window comes to the front */
+        if (app_start(a) == -3 && app_zn) {   /* every slot is taken: the window furthest back closes for it, files written back */
+            ap = &apps[app_z[app_zn - 1]];
             con_quiet = 1; uart_puts("M3c app swap: "); uart_puts(app_cur->name); uart_puts(" closed for "); uart_puts(a->name); uart_putc('\n');
-            app_kill("closed for another app");
-            if (!app_cur) app_start(a);
+            app_kill_one("closed for another app");
+            app_start(a);
         }
-        else app_start(a);
         return 1;
     }
     return 0;
@@ -2094,6 +2138,12 @@ static void pointer_click(void) {   /* the left button went down */
     if (spot_live && slot < 0) return;   /* the bar is over the windows: a raise under it would leave its saved pixels stale */
     if (slot < 0 && menubar_click((int)mouse_x, (int)mouse_y)) return;   /* a status icon in the menu bar: Settings at its section */
     int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);
+    if (slot < 0 && app_front) {   /* a press on an app window that is not the front one raises it first */
+        for (unsigned z = 0; z < app_zn; z++) {
+            struct app *w = &apps[app_z[z]];
+            if (w->wbytes && in_box(lx, ly, w->lx, w->ly, w->lw, w->lh)) { if ((int)w->slot != app_top) { ap = w; app_raise(); return; } break; }
+        }
+    }
     int on_app = app_wbytes && in_box(lx, ly, app_lx, app_ly, app_lw, app_lh);
     int wt = slot < 0 ? win_target() : -1, grab = wt >= 0 ? win_grab(wt, lx, ly) : 0;   /* the front window's title band or an edge takes hold of it */
     if (grab == GRAB_TITLE) { drag_on = 1; drag_t = wt; drag_dx = lx - *win_rc(wt, 0); drag_dy = ly - *win_rc(wt, 1); return; }
@@ -2658,6 +2708,12 @@ static void fb_desktop(void) {
         if (app_ly < top) { app_ly = top; app_lh = bottom - top; }
     }
     app_cw = (unsigned)(app_lw - 16); app_ch = (unsigned)(app_lh - 40);
+    for (unsigned i = 1; i < APP_SLOTS; i++) {   /* 4.0: the other slots open cascaded down and to the left, a title band apart, so a second window leaves the first's title showing */
+        struct app *o = &apps[i];
+        o->lw = app_lw; o->lh = app_lh; o->cw = app_cw; o->ch = app_ch;
+        o->lx = app_lx - (int)i * 36; if (o->lx < 8) o->lx = 8;
+        o->ly = app_ly + (int)i * 28; if (o->ly + o->lh > gui_dock_band_top() - 22) o->ly = gui_dock_band_top() - 22 - o->lh;
+    }
     win_def[WT_MAIN][0] = lw; win_def[WT_MAIN][1] = lh; win_def[WT_CALC][0] = calc_lw; win_def[WT_CALC][1] = calc_lh; win_def[WT_APP][0] = app_lw; win_def[WT_APP][1] = app_lh;
 #ifndef QUIET_BOOT
     console_frame();
@@ -3378,7 +3434,7 @@ void main(void) {
         }
 #else
         for (;;) {   /* ask_pending: a `sam` queued by Enter is run by the next pass, and a wfi with no timer would sleep through it (the key-up IRQ was already taken) */
-            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy() || app_cur || audio_busy() || ask_pending()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live || notice.text[0] || rep_code || bt_busy() || apps_live() || audio_busy() || ask_pending()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
             usb_poll(); input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick();   /* an app parked on yield runs again here */
