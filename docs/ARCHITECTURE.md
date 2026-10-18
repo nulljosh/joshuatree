@@ -2337,7 +2337,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (280 checks)
+### The suite (281 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2621,6 +2621,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | ARM64 relay discovery: with a dead baked relay address the Pi finds the relay by a LAN broadcast probe, verifies its jt-relay certificate from the private CA, and refuses a right-CA certificate for the wrong name before the token is sent (skips where the tools are missing) | `tools/checks/arm64-relay-discovery-check.py` | retry |
 | ARM64 sam speed: sums answered on the Pi with no relay traffic, the relay remembered in memory and on the card (0 UDP probes after the first), a stalled relay stops at 30 seconds with the relay address, the timing line prints (skips where the tools are missing) | `tools/checks/arm64-samfast-check.py` | retry |
 | ARM64 sam chat view: bare `sam` opens a full-window Samantha in the Terminal with a header, scrolling history and `you: ` input row; a sum answers on the Pi, a question shows a thinking marker and her reply from the stub relay, Up/Page/Home/End scroll, and Esc or /quit return to a working zsh prompt with the busy flag clear (skips where the tools are missing) | `tools/checks/arm64-samtui-check.py` | retry |
+| ARM64 USB audio: a UAC1 speaker behind xHCI is configured and streamed 440 Hz over isochronous transfers, and the tone arrives intact | `tools/checks/arm64-usbaudio-check.py` | retry |
 
 `retry` checks boot a VM and get one retry for host timing noise; `once` checks are pure and never retried.
 
