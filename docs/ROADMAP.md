@@ -109,16 +109,13 @@ Refuted, and why, so nobody re-finds them:
 The research rounds of 2026-10-06 and 2026-10-08 further down still hold. Where they overlap (the crash reporter, W^X, bad-argument syscall tests), the slices here are the ones to build, because they were checked against the tree with a path and line.
 
 Confirmed, 3.0, usable, hours each:
-- [ ] [Sonnet] Caps Lock and held-key repeat on the Pi.
+- [x] [Sonnet] Caps Lock and held-key repeat on the Pi. Already shipped in 2.52.0; 4.15.0 added the missing mutation to its check.
   - `arch/arm64/ask.c` drops every code of 58 or more, so Caps Lock does nothing.
   - `hid_kbd` emits one press per report, so holding Backspace deletes one character (the keyboard is set to idle 0).
   - Track Caps Lock in ask.c (letters only, Shift inverts it).
   - Repeat the last typed key from the main loop after 400 ms, then every 80 ms. Cancel it by release or another key. Typed keys and Backspace only, so Brick is untouched.
   - Check: `tools/checks/arm64-keys-check.py` with a held key over QMP input-send-event (8 to 14 repeats, none after release) and a Caps Lock case through the self-test path.
-- [ ] [Sonnet] Notes autosaves.
-  - `user/notes.c` saves only on Esc or Ctrl+S, and the window's red dot kills the task so a dirty edit is lost.
-  - Save two seconds after the last key, timed with `JT_SYS_TIME` seconds.
-  - Check: a new notes-autosave check under tools/checks that types, waits, closes through the red dot, reopens and finds the text.
+- [x] [Sonnet] Notes autosaves, shipped in 2.55.0 (#518) and found unticked in 4.15.2. `user/notes.c` saves a dirty note two `JT_SYS_TIME` seconds after the last key, so the red dot no longer loses an edit. Check: `tools/checks/notes-autosave-check.py` (i386 kernel; types, waits, closes through the red dot, reopens and finds the text), with a mutation (autosave off) that must fail. Open on the Pi: `JT_SYS_TIME` returns 0 until the network has set the clock (`cal_utc` in `arch/arm64/main.c`), and Notes' `0 - 0 >= 2` never fires, so an offline Pi still does not autosave.
 
 Worth doing, not yet re-checked, in the order the study ranked them:
 - 3.0 stability, hours:
@@ -1048,6 +1045,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.16.1 (2026-10-18)**: Two shipped features get the mutation their checks lacked, and their roadmap boxes are ticked. `notes-autosave-check.py` builds a private tree with the timer turned off and must fail on the missing save (`jtvm.py` takes a `JT_KERNEL` override for it); autosave shipped in 2.55.0. `arm64-keys-check.py` rebuilds with held-key repeat disabled and requires the held-j step to fail; Caps Lock and repeat shipped in 2.52.0. A bare `make` links the kernel again (its first rule had become memmap.ld). No kernel change.
 - **4.16.0 (2026-10-18)**: Nimbus closes the landing page. The footer's desert engraving is replaced by the Nimbus render, cut out on the page's paper; a WebGL shader hatches its shadow in the accent and sends rounded waves out from it, the computer you talk to, talking. The plain cutout is the fallback without WebGL; `render_nimbus.py` makes it with `NIMBUS_CUTOUT=1`. Check: `landing-specs-footer-check.mjs`.
 - **4.15.2 (2026-10-18)**: The stacked-ring Neo case is gone: its CAD, STLs, renders, blueprint, build sheet, assembly steps and three GUIDE sections. Nimbus is the only case. `render_nimbus.py` also renders wallpapers (`NIMBUS_WALL` with a size, camera and aim). The Neo film script (`docs/hardware/ad/anim.py`, which built on the deleted concepts.py) goes too.
 - **4.15.1 (2026-10-18)**: The Terminal prompt shows who is signed in: `ann@tree % ` instead of always `joshua@tree % `. With no accounts it stays `joshua@tree % `. `ask_prompt()` rebuilds one static buffer from `current_user` (no heap); the echoed line on the UART carries the same prompt. Checked by `tools/checks/arm64-sudo-check.py` (bob signed in sees `bob@tree % `) and `arm64-zsh-check.py` (no accounts, unchanged).

@@ -22,9 +22,14 @@ guest's own idea of what it saved):
   4. The text is on the disk image, byte for byte, in the note file.
   5. Reopening Notes from the dock and opening the note puts the text back on screen.
 
+  6. Mutation: a private copy of the tree with the timer turned off (AUTOSAVE_SECS made huge, so a dirty
+     note never saves itself) is built and this same check is run against it. It must FAIL on the missing
+     autosave. A check that also passes with autosave off proves nothing. Your tree is never touched.
+
 Usage: python3 tools/checks/notes-autosave-check.py   (repo root, after make kernel.elf)
+       python3 tools/checks/notes-autosave-check.py --no-mutant   (skip the mutation, used by the mutation run itself)
 """
-import re, sys, tempfile, time
+import os, re, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from jtvm import VM, make_disk, disk_files, SCALE
@@ -154,6 +159,33 @@ if mine != [TEXT.encode()]:
     fail(f'the note on disk is {mine}, expected {TEXT.encode()!r}: the autosave never reached the image')
 else:
     print('PASS: the note file on the image holds the text byte for byte after a red-dot close')
+
+# ---- mutation: autosave off must fail this very check ----
+if '--no-mutant' not in sys.argv and not fails:
+    root = Path(__file__).resolve().parent.parent.parent
+    copy = work / 'mutant-tree'
+    subprocess.run(['rsync', '-a', '--exclude', '.git', '--exclude', 'landing', '--exclude', 'docs', f'{root}/', f'{copy}/'], check=True)
+    (copy / 'landing' / 'v86').mkdir(parents=True, exist_ok=True)   # the Makefile copies kernel.elf there
+    src = copy / 'user' / 'notes.c'
+    text = src.read_text()
+    old = '#define AUTOSAVE_SECS 2 '
+    if old not in text:
+        fail('mutation target `#define AUTOSAVE_SECS 2` is gone from user/notes.c, update the mutation')
+    else:
+        src.write_text(text.replace(old, '#define AUTOSAVE_SECS 100000 ', 1))
+        built = subprocess.run(['make', '-C', str(copy), 'kernel.elf', '-j4'], capture_output=True, text=True)
+        if built.returncode != 0:
+            fail('the mutant kernel did not build:\n' + built.stderr[-600:])
+        else:
+            run = subprocess.run([sys.executable, str(Path(__file__).resolve()), '--no-mutant'], capture_output=True, text=True,
+                                 env=dict(os.environ, JT_KERNEL=str(copy / 'kernel.elf'), TMPDIR=str(work)))
+            if run.returncode == 0:
+                fail('MUTATION SURVIVED: with autosave off this check still passed, so it proves nothing')
+            elif 'no `notes: saved=` within six seconds' not in run.stdout:
+                fail('the mutant failed, but not on the missing autosave:\n' + run.stdout[-800:])
+            else:
+                print('PASS: mutation (autosave off) is caught: no save within six seconds of the last key')
+    shutil.rmtree(copy, ignore_errors=True)
 
 if fails:
     print(f'\n{len(fails)} FAILURE(S)')
