@@ -67,7 +67,10 @@ ratchet_ceiling() {
         # 2026-10-19: 4.18.5 moved pngtest, jpegtest, heaptest, nettest and mailtest (and their test data) to kernel/selftest.c.
         # 2026-10-19: 4.18.6 moved the scheduler demos (tasktest, fputest, preempttest, killtest, spawntest, isotest, reaptest) to kernel/taskdemo.c.
         # 2026-10-19: 4.18.7 moved the shell file commands (ls, cat, write, rm, trash, restore, cd, mkdir, browse, fsuse, diskuse) to kernel/shellfs.c.
-        kernel/kernel.c) echo 6393 ;;
+        # 2026-10-19: 4.19.1 moved the shell network commands, the text web browser, serve/serveapp/build and the embedded app pages to kernel/shellnet.c.
+        # 2026-10-19: 4.19.1 moved the weather and wallpaper self-tests to kernel/wxtest.c and the per-pixel grades to kernel/walltint.h.
+        # 2026-10-19: 4.19.1 moved the window manager to kernel/multiwin.c.
+        kernel/kernel.c) echo 5173 ;;
         *) echo "$LIMIT" ;;
     esac
 }

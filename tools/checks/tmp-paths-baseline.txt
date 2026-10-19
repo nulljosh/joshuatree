@@ -2,7 +2,6 @@
 # This list only ever shrinks: fix a file with scratch_dir() (Python) or mktemp -d (shell),
 # then delete its line. Never add a line. The five checks that broke when two suites ran
 # at once (feature-drive, menuclock, ring3crash-all, qa-gallery, soak) are already fixed.
-activity-check.py
 app-interact-check.py
 appclose-check.py
 appsfolder-layout-check.py
