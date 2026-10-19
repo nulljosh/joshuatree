@@ -80,7 +80,7 @@ A normal release build includes neither the Wi-Fi key nor the default relay toke
 With an address, the Pi fetches a network clock from a verified HTTPS reply that cannot move behind the build date or an already accepted time (the first check still relies on the build date; see the Encrypted Pi relay section). Without a configured network the Pi scans but does not join, Samantha cannot reach the relay, and the desktop still works.
 
 **Ask Samantha or read a web page.** Open Terminal with F2 or Ctrl+T, or the Terminal and Samantha dock tiles.
-- The prompt is `joshua@tree % `, zsh style. A word that is not a command prints `zsh: command not found`.
+- The prompt is `joshua@tree % `, zsh style (`ann@tree % ` once ann is signed in). A word that is not a command prints `zsh: command not found`.
 - F3 switches between two sessions. Each keeps its typed line, scrollback and conversation until reboot. Finish or stop a request before switching.
 - Console shows boot messages and network errors and takes no questions. Escape from an idle Terminal returns to it. While Samantha works, Escape asks her to stop between action steps.
 - `browse example.com` reads a page as text (a bare host uses HTTPS).
@@ -167,7 +167,7 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 
 **Console: logs only.** Boot messages, Wi-Fi and errors. It has no input row, and typing with it in front does nothing (key echoes go to the UART only). It opens at boot, because on a Pi with no serial cable it is the only debug view. Page Up, Page Down, Home and End scroll it.
 
-**Terminal: the command line.** Its bottom row is a zsh style prompt, `joshua@tree % `. Every command runs and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window. Side-by-side panes remain future work.
+**Terminal: the command line.** Its bottom row is a zsh style prompt, `joshua@tree % ` (`NAME@tree % ` once someone is signed in). Every command runs and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window. Side-by-side panes remain future work.
 
 The commands are in the User guide section. The Samantha dock tile and Spotlight's Samantha entry open this same Terminal on the ARM build and the tile types `sam ` for you, so just add the question. The chat view on the i386 build is unchanged.
 
