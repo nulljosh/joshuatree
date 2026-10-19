@@ -95,7 +95,7 @@ jobs:
     # room for the suite's one automatic retry of timing-sensitive checks
     # on top of the ~12 minutes the slowest shard takes. The ARM checks used to
     # share shard 6 alone and ran about 46 minutes, gating every merge; since
-    # 4.19.1 they are packed across shards 6, 8, 9 and 10.
+    # 4.12.2 they are packed across shards 6, 8, 9 and 10.
     timeout-minutes: 30
     strategy:
       fail-fast: false
