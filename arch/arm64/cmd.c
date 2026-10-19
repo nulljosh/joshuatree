@@ -10,6 +10,7 @@
 #include "accounts.h"
 #include "sudo.h"
 #include "login.h"
+#include "home.h"
 #include "../../drivers/fat.h"
 void kputs(const char *s);   /* main.c: the UART and the log of the window in front */
 void say_wrapped(const char *prefix, const char *s, unsigned n);   /* ask.c */
@@ -38,7 +39,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, beep [FREQ MS], mic [SECONDS], hear [SECONDS] (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
-                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
+                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
                            "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
@@ -57,21 +58,31 @@ static unsigned word(const char *q, unsigned n, char *out, unsigned size) {   /*
     out[k] = 0;
     return used;
 }
-static char *down(char *path) {   /* DIR/NAME: into DIR, then NAME; a bare NAME stays in the root. 0 when DIR is not there */
-    for (char *p = path; *p; p++)
-        if (*p == '/') { *p = 0; int in = fat_chdir(path); *p = '/'; return in ? p + 1 : 0; }
-    return path;
+static int walk_path(const char *what, char *path, unsigned cap, int keep, char **leaf) {   /* 4.11.0: `~` and any depth; 1 with the cursor moved (home_back puts it back), else the reason is printed */
+    char full[96];
+    int e = home_expand(path, full, sizeof full);
+    if (e == 0) { cmd_out(what); cmd_out(": no home folder, nobody is signed in\n"); return 0; }
+    if (e < 0) { cmd_out(what); cmd_out(": that path is too long\n"); return 0; }
+    unsigned k = 0;
+    for (; full[k] && k + 1 < cap; k++) path[k] = full[k];
+    path[k] = 0;
+    int r = home_walk(path, keep, leaf);
+    if (r < 0) { cmd_out(what); cmd_out(": that is another person's home folder, an admin can open it with sudo\n"); }
+    return r > 0 ? 1 : r < 0 ? 0 : -1;
 }
 static void cat_file(const char *q, unsigned n) {   /* the first 4 KB of a file, as text */
     static char text[4097];
-    char path[64];
+    char path[64], shown_path[64], *name;
     word(q, n, path, sizeof path);
+    for (unsigned i = 0; i < sizeof path; i++) shown_path[i] = path[i];
     if (!sd_ready()) { cmd_out("cat: no SD card\n"); return; }
-    char *name = down(path);
-    if (name && accounts_count() && accounts_protected(name) && !priv("cat")) { if (name != path) fat_chdir(".."); return; }
-    int got = name ? fat_read_file(name, text, sizeof text) : -1;
-    if (name && name != path) fat_chdir("..");   /* back to the root */
-    if (got < 0) { cmd_out("cat: no file "); cmd_out(path); cmd_out("\n"); return; }
+    int w = walk_path("cat", path, sizeof path, 1, &name);
+    if (w == 0) return;
+    if (w < 0) { cmd_out("cat: no file "); cmd_out(shown_path); cmd_out("\n"); return; }
+    if (accounts_count() && accounts_protected(name) && !priv("cat")) { home_back(); return; }
+    int got = fat_read_file(name, text, sizeof text);
+    home_back();   /* back to the root */
+    if (got < 0) { cmd_out("cat: no file "); cmd_out(shown_path); cmd_out("\n"); return; }
     unsigned shown = got > 4096 ? 4096 : (unsigned)got, m = 0;
     for (unsigned i = 0; i < shown; i++) if (text[i] != '\r') text[m++] = text[i];   /* DOS line ends print as one */
     if (m) say_wrapped("", text, m);
@@ -192,12 +203,37 @@ static int priv(const char *what) {
     cmd_out(what); cmd_out("\n");
     return 0;
 }
+static unsigned slen_(const char *s);
+static void home_file_command(const char *verb, int op, char *name, const char *text, unsigned len) {   /* write, rm or mkdir on a path with a slash or a ~: 4.11.0 */
+    char full[96], rel[96];
+    unsigned k = 0;
+    if (name[0] == '~') { for (; name[k]; k++) rel[k] = name[k]; rel[k] = 0; }
+    else { rel[0] = 'J'; rel[1] = 'T'; rel[2] = '/'; for (; name[k] && k < sizeof rel - 4; k++) rel[3 + k] = name[k]; rel[3 + k] = 0; }   /* a plain path is under JT/, as write NAME always was */
+    int e = home_expand(rel, full, sizeof full);
+    if (e == 0) { cmd_out(verb); cmd_out(": no home folder, nobody is signed in\n"); return; }
+    if (e < 0) { cmd_out(verb); cmd_out(": that path is too long\n"); return; }
+    int own = home_owns(full);   /* the signed-in person's own folder needs no sudo; the rest of JT/ is shared and does */
+    if (!own && !priv(verb)) return;
+    if (!own && !sd_ready()) { cmd_out(verb); cmd_out(": no SD card\n"); return; }
+    int ok = home_op(op, full, text, len);
+    if (ok == -1) { cmd_out(verb); cmd_out(": that is another person's home folder, an admin can open it with sudo\n"); return; }
+    if (ok == -2) { cmd_out(verb); cmd_out(": use an 8.3 name such as NOTE.TXT\n"); return; }
+    if (op == 0) cmd_out(ok ? "wrote " : "write: ");
+    else if (op == 1) cmd_out(ok ? "removed " : "rm: no file ");
+    else cmd_out(ok ? "made " : "mkdir: no folder made, ");
+    cmd_out(full);
+    if (op == 0 && ok) { cmd_out(", "); cmd_dec(len); cmd_out(" bytes"); }
+    if (op == 0 && !ok) cmd_out(" not written");
+    if (op == 2 && ok) cmd_out("/");
+    cmd_out("\n");
+}
 static void jt_command(const char *q, unsigned n, int op) {   /* 0 write NAME TEXT, 1 rm NAME, 2 mkdir NAME */
     static char text[1024];
     char name[64];
     unsigned used = word(q, n, name, sizeof name), len = 0;
     const char *verb = op == 0 ? "write" : op == 1 ? "rm" : "mkdir";
-    if (!priv(verb)) return;
+    int homed = name[0] == '~' || ((name[0] | 32) == 'h' && (name[1] | 32) == 'o' && (name[2] | 32) == 'm' && (name[3] | 32) == 'e' && name[4] == '/');   /* ~/... or HOME/...: every other name is a bare JT/ file, as before */
+    if (!homed && !priv(verb)) return;
     if (accounts_protected(name)) { cmd_out(verb); cmd_out(": "); cmd_out(name); cmd_out(" is kept by adduser, passwd and makeadmin, not by hand\n"); return; }
     if (!sd_ready()) { cmd_out(verb); cmd_out(": no SD card\n"); return; }
     if (op == 0) {                                 /* the rest of the line, then a newline: a text file */
@@ -205,6 +241,7 @@ static void jt_command(const char *q, unsigned n, int op) {   /* 0 write NAME TE
         while (used < n && len < sizeof text - 1) text[len++] = q[used++];
         text[len++] = '\n';
     }
+    if (homed) { home_file_command(verb, op, name, text, len); return; }
     int ok = op == 0 ? sd_write(name, text, len) : op == 1 ? sd_remove(name) : sd_mkdir(name);
     if (ok < 0) return;                            /* refused: emmc.c has said why */
     if (op == 0) cmd_out(ok ? "wrote JT/" : "write: JT/");
@@ -224,6 +261,11 @@ static void users_command(void) {
     if (!accounts_count()) { cmd_out("users: none yet, try adduser NAME PASSWORD\n"); return; }
     for (unsigned i = 0; i < accounts_count(); i++) { cmd_out(accounts_name(i)); cmd_out("\n"); }
 }
+static void home_note(const char *name) {   /* a made account gets its folder; a card that will not take it is said, the account stays */
+    char dir[HOME_DIR_MAX + 1]; home_dirname(name, dir);
+    if (home_make(name)) { cmd_out("adduser: home folder JT/HOME/"); cmd_out(dir); cmd_out("\n"); }
+    else cmd_out("adduser: the home folder could not be made, it is made again the first time a file is saved\n");
+}
 static void account_command(const char *q, unsigned n, int remove) {   /* q is the line after the command word */
     char name[ACC_NAME_MAX + 2], pass[ACC_PASS_MAX + 2];
     unsigned used = word(q, n, name, sizeof name);
@@ -238,6 +280,11 @@ static void account_command(const char *q, unsigned n, int remove) {   /* q is t
     int first = !remove && !accounts_count();      /* no accounts at all: the first one may be made by anyone, and is an admin */
     int self = remove && eq_(name, current_user);
     if (!first && !(self && !forced) && !priv(remove ? "deluser" : "adduser")) { accounts_wipe(pass, sizeof pass); return; }
+    if (!remove && home_collides(name)) {   /* two long names that fold to one folder name would share their files */
+        cmd_out("adduser "); cmd_out(name); cmd_out(": its home folder name is taken by another account, pick a different name\n");
+        accounts_wipe(pass, sizeof pass);
+        return;
+    }
     if (remove && sudo_is_admin(name) && sudo_admin_count() == 1 && accounts_count() > 1) {
         cmd_out("deluser "); cmd_out(name); cmd_out(": the last admin, make another admin first\n");
         accounts_wipe(pass, sizeof pass);
@@ -253,6 +300,8 @@ static void account_command(const char *q, unsigned n, int remove) {   /* q is t
     cmd_out("\n");
     if (r) return;
     if (remove) {
+        char dir[HOME_DIR_MAX + 1]; home_dirname(name, dir);   /* 4.11.0: nothing is deleted with the account */
+        cmd_out("deluser: the files in JT/HOME/"); cmd_out(dir); cmd_out(" stay on the card; a new account with that name would see them\n");
         sudo_scrub(name);                           /* the name must not come back as an admin */
         if (self) {
             sudo_drop(); accounts_wipe(current_user, ACC_NAME_MAX + 1);
@@ -263,7 +312,8 @@ static void account_command(const char *q, unsigned n, int remove) {   /* q is t
         for (unsigned i = 0; name[i] && i < ACC_NAME_MAX; i++) { current_user[i] = name[i]; current_user[i + 1] = 0; }
         sudo_arm(name);
         cmd_out(name); cmd_out(" is the first account, so an admin, and signed in\n");
-    } else sudo_scrub(name);
+        home_note(name);
+    } else { sudo_scrub(name); home_note(name); }
 }
 static void admins_command(void) {
     if (!sudo_admin_count()) { cmd_out("admins: none, the first adduser makes one\n"); return; }
@@ -408,9 +458,13 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         if (!sd_ready()) { cmd_out("ls: no SD card\n"); return; }
         char dir[64] = "";
         if (n > 3) word(q + 3, n - 3, dir, sizeof dir);
-        if (*dir && !fat_chdir(dir)) { cmd_out("ls: no folder "); cmd_out(dir); cmd_out("\n"); return; }
+        char shown_dir[64]; for (unsigned i = 0; i < sizeof dir; i++) shown_dir[i] = dir[i];
+        char *leaf; int w = 1;
+        if (*dir) w = walk_path("ls", dir, sizeof dir, 0, &leaf);
+        if (w == 0) return;
+        if (w < 0) { cmd_out("ls: no folder "); cmd_out(shown_dir); cmd_out("\n"); return; }
         ls_count = 0; fat_list(ls_one);
-        if (*dir) fat_chdir("..");
+        if (*dir) home_back();
         if (!ls_count) cmd_out("ls: no files\n");
         return;
     }

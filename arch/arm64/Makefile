@@ -74,11 +74,11 @@ claude_cfg.h: claude_cfg.sh FORCE
 	@./claude_cfg.sh
 wifi_cfg.h: wifi_cfg.sh FORCE
 	@./wifi_cfg.sh
-ask.o: ask.c claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
+ask.o: ask.c home.h claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
 	$(NETCC) -c ask.c -o $@
 # A Pi image carries the relay token only on the dev card (JT_WIFI_DEV=1, the same flag that carries the Wi-Fi key);
 # a release build has no relay config at all. tools/checks/pi-release-notoken-check.sh proves it. QEMU builds are unchanged.
-pi-ask.o: ask.c claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
+pi-ask.o: ask.c home.h claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
 	$(NETCC) -DPI_BUILD $(if $(filter 1,$(JT_WIFI_DEV)),,-DCLAUDE_RELEASE) -c ask.c -o $@
 ttf.o: ../../drivers/ttf.c
 	$(FPCC) -c $< -o $@
@@ -87,7 +87,7 @@ text.o: text.c ../../drivers/ttf.h ../../lib/text_ink.h
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
 # The Calculator's evaluator: the FPU does the sums, so it is built like text.c; main.c draws its window.
-cmd.o: cmd.c bt.h emmc.h accounts.h sudo.h login.h ../../drivers/fat.h
+cmd.o: cmd.c bt.h emmc.h accounts.h sudo.h login.h home.h ../../drivers/fat.h
 	$(CC) -c $< -o $@
 calc.o: calc.c
 	$(FPCC) -c $< -o $@
@@ -126,11 +126,11 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o
-PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o
+SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o
+PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
-ufile.o: ufile.c emmc.h ../../drivers/fat.h
+ufile.o: ufile.c home.h emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 # Settings (3.13.0): the choices, JT/SETTINGS.TXT and the version the About page shows, read from VERSION at build time.
 settings.o: settings.c audio.h emmc.h ../../drivers/fat.h ../../VERSION
@@ -145,6 +145,9 @@ login.o: login.c login.h accounts.h
 	$(SDCC) -c $< -o $@
 # Admins and sudo (4.10.0): JT/SUDOERS.TXT, the password check and the five minutes it is remembered.
 sudo.o: sudo.c sudo.h accounts.h login.h emmc.h ../../drivers/fat.h
+	$(SDCC) -c $< -o $@
+# Home folders (4.11.0): JT/HOME/<name>, where apps, ~ and Samantha's save put a signed-in person's files.
+home.o: home.c home.h accounts.h sudo.h login.h emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 emmc.o: emmc.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@

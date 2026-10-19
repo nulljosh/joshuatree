@@ -30,6 +30,7 @@
 #include "claude_cfg.h"
 #include "emmc.h"
 #include "accounts.h"
+#include "home.h"
 int sudo_may_write(void);   /* sudo.c: no accounts, or the signed-in user is an admin */
 #include "../../drivers/fat.h"
 #ifdef CLAUDE_RELEASE        /* a Pi release image: no token, so the Console says `claude: no token` (the Makefile sets it) */
@@ -752,17 +753,18 @@ static void run_actions(void) {
         case ACT_SAVE: {                       /* asked-for files only, into JT/ (emmc.c refuses boot files and non 8.3 names) */
             unsigned at = 0, len = code_block(said, said_n, &at); int ok = 0;
             if (!named_in(sam_q, sam_qn, t)) { kputs("save: "); kputs(t); kputs(" was not in your question, not saved\n"); result_puts("refused, not named by the person\n"); break; }
-            if (!sudo_may_write()) { kputs("save: only an admin saves files\n"); result_puts("refused, not an admin\n"); break; }
+            int homed = home_active();            /* 4.11.0: signed in, the file goes to the person's own folder, whoever they are */
+            if (!homed && !sudo_may_write()) { kputs("save: only an admin saves files\n"); result_puts("refused, not an admin\n"); break; }
             if (accounts_protected(t)) { kputs("save: "); kputs(t); kputs(" is kept by adduser, passwd and makeadmin\n"); result_puts("refused, an account file\n"); break; }
             if (!len) { kputs("save: no code block to save\n"); result_puts("no code block\n"); break; }
             if (!sd_ready()) { kputs("save: no SD card\n"); result_puts("no SD card\n"); break; }
-            ok = sd_write(t, said + at, len) == 1;
-            kputs(ok ? "save: wrote JT/" : "save: could not write "); kputs(t); kputs(ok ? ", cat JT/" : "\n"); if (ok) { kputs(t); kputs(" to read it\n"); }
+            ok = (homed ? home_save(t, said + at, len) : sd_write(t, said + at, len)) == 1;
+            kputs(ok ? (homed ? "save: wrote ~/" : "save: wrote JT/") : "save: could not write "); kputs(t); kputs(ok ? (homed ? ", cat ~/" : ", cat JT/") : "\n"); if (ok) { kputs(t); kputs(" to read it\n"); }
             result_puts(ok ? "saved\n" : "not saved\n");
             break; }
         case ACT_LIST: {                       /* what is in JT/: the same lines `ls JT` prints, sent back to her too */
             rlen_before = rlen; saved_out = cmd_out;
-            cmd_run("ls JT", 5, tee);
+            if (home_active()) cmd_run("ls ~", 4, tee); else cmd_run("ls JT", 5, tee);
             cmd_out = saved_out;           /* cmd_run left its own printer set; the next action prints through the old one */
             if (rlen == rlen_before) result_puts("nothing in JT/\n");
             break; }
@@ -770,7 +772,7 @@ static void run_actions(void) {
             char cmd[ACT_LEN + 8]; unsigned o = 0, okname = k > 0 && k <= 12;
             for (unsigned i = 0; i < k; i++) okname = okname && ((t[i] >= 'a' && t[i] <= 'z') || (t[i] >= 'A' && t[i] <= 'Z') || (t[i] >= '0' && t[i] <= '9') || t[i] == '_' || t[i] == '-' || t[i] == '.');
             if (!okname) { kputs("read: not a file name\n"); result_puts("not a file name\n"); break; }
-            for (const char *p = "cat JT/"; *p; p++) cmd[o++] = *p;
+            for (const char *p = home_active() ? "cat ~/" : "cat JT/"; *p; p++) cmd[o++] = *p;
             for (unsigned i = 0; i < k; i++) cmd[o++] = t[i];
             rlen_before = rlen; saved_out = cmd_out;
             cmd_run(cmd, o, real_puts);   /* cat prints through say_wrapped, which the result buffer already sees */
