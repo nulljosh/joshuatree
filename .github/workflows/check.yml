@@ -72,7 +72,7 @@ jobs:
           fi
 
   # The suite runs as eleven parallel shards (ci-suite.sh SHARD/SHARDS),
-  # about a quarter of the wall time each. `check` below stays the one
+  # about eleven minutes of checks each. `check` below stays the one
   # required status and passes only when every shard did.
   suite:
     needs: [changes]

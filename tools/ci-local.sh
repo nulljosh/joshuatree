@@ -100,7 +100,8 @@ CI_LOCAL_JOBS=${CI_LOCAL_JOBS:-2}
 echo "-- suite job: 11 shards, $CI_LOCAL_JOBS jobs at a time, each its own QEMU (-display none); the ARM shards 6 8 9 10 run in turn in one job --"
 SUITE_LOGS=()
 suite_start=$(date +%s)
-for group in 0 1 2 3 4 5 7 "6 8 9 10"; do   # the ARM shards share arch/arm64 (each check cleans it), so never two at once
+for group in "6 8 9 10" 0 1 2 3 4 5 7; do   # the ARM shards share arch/arm64 (each check cleans it), so never two at once; every
+  # check that builds arch/arm64 is on one of them (ci-balance.py). Longest job first, so it overlaps the host shards.
   log="/tmp/jt-ci-local-$$-shard${group// /-}.log"
   SUITE_LOGS+=("$log")
   while [ "$(jobs -rp | wc -l)" -ge "$CI_LOCAL_JOBS" ]; do sleep 2; done
