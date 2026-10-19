@@ -1,4 +1,4 @@
-/* Claude in the Terminal. The bottom row of the Terminal window (its dock tile, or F1) is a one-line editor behind a zsh style prompt, `joshua@tree % `:
+/* Claude in the Terminal. The bottom row of the Terminal window (its dock tile, or F1) is a one-line editor behind a zsh style prompt, `joshua@tree % ` (`NAME@tree % ` once someone is signed in):
    typed keys land there, Backspace takes one back, Enter runs the line. `browse`, `open N` and `llm` are commands, and so is
    `sam QUESTION`: it goes to the Claude relay on the Mac (tools/claude-relay/relay.py) as one POST through the shared
    IP stack, HTTPS on the Pi and loopback HTTP by default in QEMU. Everything a command prints goes into the Terminal, above the prompt, wrapped to 53 columns (the house
@@ -30,6 +30,7 @@
 #include "claude_cfg.h"
 #include "emmc.h"
 #include "accounts.h"
+#include "login.h"
 #include "home.h"
 int sudo_may_write(void);   /* sudo.c: no accounts, or the signed-in user is an admin */
 #include "../../drivers/fat.h"
@@ -107,7 +108,7 @@ int ask_select(unsigned pane) {
     return 1;
 }
 
-/* The prompt is zsh style and never changes: `joshua@tree % `. The model that last answered shows in /status, not on the
+/* The prompt is zsh style: `joshua@tree % `, or `NAME@tree % ` for the signed-in account. The model that last answered shows in /status, not on the
    prompt (Samantha is a command now, not the shell). tools/checks/relay-api-check.py keeps ASK_DEFAULT_MODEL in step
    with relay.py's TURING_NAME. */
 #define ASK_DEFAULT_MODEL "Samantha"
@@ -130,7 +131,18 @@ void ask_forget(void) {   /* main.c's login_show: a sign-out takes any half-type
     }
     tui_forget();
 }
-const char *ask_prompt(void) { return pw_on ? pw_label : "joshua@tree % "; }   /* main.c draws it on the bottom row */
+/* 4.14.1: the prompt carries the signed-in name (`ann@tree % `). With nobody signed in (no accounts yet) it stays `joshua@tree % `.
+   One static buffer, rebuilt on every call (current_user changes at sign in and sign out); the name is at most ACC_NAME_MAX of a-z 0-9 _ -. */
+const char *ask_prompt(void) {
+    static char buf[ACC_NAME_MAX + 9];
+    if (pw_on) return pw_label;
+    if (!current_user[0]) return "joshua@tree % ";
+    unsigned k = 0;
+    for (; current_user[k] && k < ACC_NAME_MAX; k++) buf[k] = current_user[k];
+    for (const char *t = "@tree % "; *t; t++) buf[k++] = *t;
+    buf[k] = 0;
+    return buf;   /* main.c draws it on the bottom row */
+}
 /* The relay's "M <name>" line is network data: only "Samantha" (Turing) or a short printable name that starts
    "Claude" is used. */
 static void take_model(const char *s, unsigned n) {
