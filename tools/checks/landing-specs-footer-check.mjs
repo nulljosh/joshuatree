@@ -184,8 +184,11 @@ try {
         landscape: (() => {
           const e = document.querySelector('footer .foot-landscape[aria-hidden="true"]');
           if (!e || e.getBoundingClientRect().height < 240) return false;
-          // 4.17: the Nimbus shader when WebGL runs (.live, its canvas filling the box), else the plain cutout
+          // 4.16: the Nimbus shader when WebGL runs (.live, its canvas filling the box), else the plain cutout
           const c = e.querySelector('canvas');
+          // and it is the Nimbus, not some other shader: the page fetched the cutout (live or fallback alike)
+          const nimbus = performance.getEntriesByType('resource').some(r => r.name.endsWith('/nimbus-footer.webp'));
+          if (!nimbus) return false;
           if (e.classList.contains('live')) return !!c && c.getBoundingClientRect().height >= 240 && c.width > 0;
           return getComputedStyle(e).backgroundImage.includes('nimbus-footer.webp');
         })(),
