@@ -5,7 +5,7 @@ Where it is going, what shipped, and the story so far.
 ## Contents
 
 - [Roadmap](#roadmap)
-- [Next priorities (reviewed 2026-10-11)](#next-priorities-reviewed-2026-10-11)
+- [Next priorities (reviewed 2026-10-18)](#next-priorities-reviewed-2026-10-18)
 - [From the gap study (2026-10-11)](#from-the-gap-study-2026-10-11)
 - [Daily driver gaps (Joshua, 2026-10-12: "keep identifying gaps and check them off as we go")](#daily-driver-gaps-joshua-2026-10-12-keep-identifying-gaps-and-check-them-off-as-we-go)
 - [Next few weeks](#next-few-weeks)
@@ -50,90 +50,29 @@ See the Blueprint: where the OS goes after 1.0 section for the structural plan o
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Next priorities (reviewed 2026-10-11)
+## Next priorities (reviewed 2026-10-18)
 
-The ordered list below is the near-term queue. The topic sections keep the longer plan.
+The near-term queue. The topic sections below keep the longer plan, and shipped work is in [the Shipped log section](#shipped-log).
 
-Completed work is in [the Shipped log section](#shipped-log). `VERSION` and the GitHub releases are the source for release numbers.
+**Now: 5.0, Talk to it (Joshua, 2026-10-18: "aim for v5, focus on the mic").** The gate is a ten-minute spoken conversation on the real Pi that opens and changes things. 5.0.0 is cut only after Joshua has had it on the board.
 
-**The road to 3.0 (Joshua, 2026-10-11: "/loop until v3").**
+1. The mic on the board. USB audio and `mic` landed in 4.6.0; Joshua checks it with the Yeti.
+2. Speech to text on the Mac: `tools/claude-relay/stt.py` (whisper.cpp), raw 16 kHz PCM in, text out, the relay's bearer token.
+3. `hear` on the Pi: record until quiet, send, print what you said, hand it to `sam`.
+4. Samantha's reply out loud: the relay's speech as PCM, out the jack or a USB speaker.
+5. A full-screen face with a mouth driven by that audio.
+6. Hold Space to talk, with a mic mark and a level bar.
+7. Samantha opens and changes things through the agent loop in `arch/arm64/ask.c`.
 
-The gate is in `ARCHITECTURE.md` (Decisions): the desktop boots on a real Pi 4 and you can type and click, mouse included.
+**Then: the rest of 6.0, Yours.** Accounts, login, sudo, home folders (4.8 to 4.11) and snapshots are in. Still to come: the crash-safe card filesystem, a Users pane in Settings, file permissions and backups.
 
-Tonight:
-- These merge one at a time: the Samantha box case (#505), sound from the 3.5 mm jack (#506), typing into apps with click to focus (#507) and Samantha's voice through the relay (#508).
-- The 3.0 mark is picked from three candidates.
-
-This week:
-- The card is reflashed with the LAN relay over TLS.
-- The logo and UI refresh.
-- Then 3.0.0 and a QA pass of the landing page.
-
-This month:
-- The first case print from `docs/hardware/`.
-- SD card writes.
-- The local model from the card.
-
-User mode on ARM (M3) is the centrepiece:
-1. The `svc` syscall layer under `user/jtsys.h`.
-2. Calendar as the first shared app on the Pi.
-3. Files and Notes.
-
-Rest of the year: 4.0 "Many windows", the box as a kit, and showing it in person.
-
-The Loop handoff section has the exact state and the M3 slices.
-
-**On the real Pi:** the desktop, USB keyboard, Wi-Fi, network clock and Samantha relay work. Joshua confirmed an HTTPS fetch on the board.
-
-The merged Terminal, bounded agent loop, browser navigation and model controls have QEMU checks. The latest keyboard fixes still need another board pass.
-
-**Released 2.40.0:** PR #502 merged as 264c01d9.
-- Full local and final GitHub gates passed.
-- Deployment and release passed.
-- The public footer, browser demo and ISO checksum were verified.
-- All superseded PRs and remote branches were removed.
-- Physical Pi verification remains for the newer features.
-
-**In review, 2.41.0:** Pi screen sleep blanks HDMI after five idle minutes. It wakes on keyboard or mouse without suspending apps.
-- Focused host and raspi4b mailbox/input checks pass.
-- Full gates and physical HDMI verification remain.
-
-**Next, in order**
-
-1. Codex login from the Pi by device code.
-   - Why: a second agent on the box without typing a key.
-   - Only if the terms research says the device-code flow is allowed for this use. Otherwise Codex runs through the relay on the Mac, read-only.
-   - Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
-   - Research decision (2026-10-10): use the official Codex CLI on the Mac rather than building a bare-metal OAuth client.
-     - Official [authentication](https://learn.chatgpt.com/docs/auth) and [non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode) docs describe CLI device login and read-only exec.
-     - They do not establish permission for a custom client.
-     - Keep credentials on the Mac.
-     - Before implementation, verify repository-scoped read access, disabled writes/network and bounded requests.
-     - No Codex relay backend exists yet.
-2. Pi security: verify the TLS relay and HTTPS clock on the board, then replace the build-time clock bootstrap.
-   - RNG200 hardware entropy is implemented with health checks and fail-closed TLS, pending board verification.
-   - The code now refuses plaintext Pi relay requests and time rollback.
-   - A certificate valid at build time but expired today can still pass the first clock handshake.
-   - Setup and checks: [`GUIDE.md` (Encrypted Pi relay)](GUIDE.md#encrypted-pi-relay).
-3. The self-update path with a fallback kernel.
-   - SD writes landed in 2.57.0 (files in `JT/` survive a reboot under QEMU, `tools/checks/arm64-sd-check.py`). They wait on a board photo.
-   - Why: a new build still needs a card swap.
-   - Check: a fake release that boots once and falls back.
-4. The local model with real weights read from the SD card.
-   - Why: the kernel runs the forward pass, but release builds carry no weights.
-   - Check: `tools/checks/arm64-llm-check.py` with the model loaded from a FAT image instead of the link.
-5. The Bluetooth mouse on the Pi (Joshua has no wired one).
-   - Pointer and clicks work in QEMU.
-   - The radio bring-up and `bt scan` are slice BT1. Pairing and HID over GATT are BT2. Both are in the Loop handoff section.
-   - Check: a fake controller under QEMU plus one board photo of the cursor moving.
-6. Split `kernel/kernel.c` in slices.
-   - Why: it is too big to work in.
-   - Check: `make` and `./check.sh` after every slice, `tools/checks/check-refs.sh` after each move.
-7. Trademark check before any rename (Folio, Mirage).
-   - Why: a rename on a box with a taken name is a redo.
-   - Check: the search result written in this file.
-
-Notes on ARM, the boot chime, the admin tier and [the Autonomy section](#autonomy) stay open below.
+**Still open from the 2026-10-11 review:**
+- Codex through the relay on the Mac, read-only, never a bare-metal OAuth client on the Pi (research decision 2026-10-10).
+- Pi security on the board: verify the TLS relay and HTTPS clock, then drop the build-time clock bootstrap.
+- Self-update with a fallback kernel. Check: a fake release that boots once and falls back.
+- The local model with real weights read from the card (`tools/checks/arm64-llm-check.py` loading from a FAT image).
+- Split `kernel/kernel.c` and `arch/arm64/main.c`, one behaviour-identical PR each.
+- A trademark search before any rename.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, and fewer get it onto a real board. Lean into that:
 - **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`). Film the first ugly print and every fix. Then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
@@ -1109,6 +1048,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.11.3 (2026-10-18)**: The roadmap's Next priorities section is current again: the 5.0 voice path in order, what is left of 6.0, and the items still open from the 10-11 review. The old road-to-3.0 queue is gone.
 - **4.11.0 (2026-10-18)**: Per-user home folders on the Pi, slice 4 of 6.0. With accounts, Notes, Music and every other app save into `JT/HOME/<name>/` instead of the shared `JT/`; `~` in the Terminal is that folder (`write`, `cat`, `ls`, `mkdir`, `rm` with no sudo); Samantha's `[[save]]` writes there too. Another person's folder is refused to `cat`, `ls`, `write`, `rm` and apps unless the admin has `sudo` active. `adduser` makes the folder, `deluser` leaves it and says so. No accounts, no change. New `home.c`, `arm64-home-check.py`.
 - **4.10.1 (2026-10-18)**: The landing page's Raspberry Pi section is a bento grid: mixed tile widths, a headline on every tile and a flat terracotta tint on the two lead tiles, CSS only. Checked with `tools/checks/landing-layout-check.mjs` and headless shots at 1280 and 390 wide, light and dark.
 - **4.10.0 (2026-10-18)**: Admins, `sudo` and `passwd` on the Pi, slice 3 of 6.0. `JT/SUDOERS.TXT` lists the admins (the USERS.TXT record format is unchanged); the first account ever made is one. A normal user gets "you are not an admin; try sudo" for `adduser`, `deluser` of someone else, `passwd NAME`, `makeadmin`, `unadmin`, `write`, `rm`, `mkdir` and `cat` of the account files; an admin must still say `sudo`. `sudo COMMAND` asks for the signed-in user's password on the next line (stars on screen, nothing on the UART, not even a key code or a star count, buffer wiped), waits a second on a wrong one, says "NAME is not an admin" after a right one from a normal user, and remembers a success for five minutes (`sudo -k` and every sign-out forget it). `passwd` changes your own password (old, then new twice); `sudo passwd NAME` resets another's; `sudo deluser NAME` needs no password of theirs. `makeadmin NAME`, `unadmin NAME` (never the last admin) and `admins`. USERS.TXT and SUDOERS.TXT cannot be touched by hand, by Samantha or by an app; Settings and Samantha's `[[save]]` write only for an admin. Hardening: logout empties both Terminals' scrollback and the chat history and drops half-typed lines and prompts, the Terminal's key lines no longer spell a password on the UART, an unknown name costs the same PBKDF2 as a wrong password, and on the Pi's quiet boot the login card now goes up before the desktop is first drawn. `arch/arm64/sudo.c`; `tools/checks/arm64-sudo-check.py` runs it on the host under sanitizers, drives ann (admin) and bob in QEMU across three boots, checks the quiet-boot order, and catches a sudo that skips the password check.
