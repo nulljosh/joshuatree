@@ -87,16 +87,16 @@ try {
   console.log('--- end ---');
 
   const sawPhoto = wallsrcLines.includes('wallsrc=photo');
-  const sawSatFallback = wallsrcLines.includes('wallsrc=satfallback');
+  const sawSolid = wallsrcLines.includes('wallsrc=solid');   // 4.11.1: the default is the plain grey wall
 
   if (wallsrcLines.length === 0) {
     console.log('FAIL: no wallsrc= line ever appeared on serial within budget');
   } else if (sawPhoto) {
     console.log('FAIL: wallsrc=photo appeared -- the tree photo showed in the v86 demo, the exact thing this change removes');
-  } else if (!sawSatFallback) {
-    console.log('FAIL: no wallsrc=satfallback line -- the baked satellite capture never became the wallpaper source');
+  } else if (!sawSolid || wallsrcLines.includes('wallsrc=satfallback')) {
+    console.log('FAIL: expected only wallsrc=solid -- the v86 demo should boot to the plain grey wall, not the satellite capture');
   } else {
-    console.log('PASS: the v86 demo\'s automatic no-network wallpaper is the baked satellite capture, never the tree photo');
+    console.log('PASS: the v86 demo boots to the plain grey wall, never the tree photo or the satellite');
     exitCode = 0;
   }
 } finally {

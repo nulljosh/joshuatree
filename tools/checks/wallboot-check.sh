@@ -63,11 +63,11 @@ if [ -z "$FIRST" ]; then
     exit 1
 fi
 
-if [ "$FIRST" = "wallsrc=satfallback" ]; then
-    echo "PASS: first desktop paint used the baked satellite capture ($FIRST), never the tree photo"
+if [ "$FIRST" = "wallsrc=solid" ]; then
+    echo "PASS: first desktop paint was the plain grey wall ($FIRST), never a photo"
     exit 0
 else
-    echo "FAIL: first desktop paint was $FIRST, expected wallsrc=satfallback -- the tree photo flashed on boot"
+    echo "FAIL: first desktop paint was $FIRST, expected wallsrc=solid (4.11.1: plain grey default) -- the photo or satellite flashed on boot"
     cat "$LOG"
     exit 1
 fi
