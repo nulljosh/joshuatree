@@ -132,6 +132,7 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "jpeg.h"
 #include "jpeg_testdata.h"
 #include "version.h"
+#include "ring3app.h"
 #include "weather.h"   /* 4.12.3: the menu-bar weather lives in kernel/weather.c */
 #include "json.h"
 #include "html.h"
@@ -1014,16 +1015,6 @@ static const unsigned char wall_cycle_order[WALL_COUNT] = { WALL_GREY, WALL_TERR
    is a flat grey and fetches no tile. */
 static int wall_theme = WALL_GREY;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
-
-/* v71: real location for weather/map, looked up from the public IP
-   (ip-api.com, see geo_fetch further down). Forward of that same v71
-   declaration, same reason wind_enabled is forward here: settings_load
-   needs it and has to precede it in the file.
-   v0.85.5: loc_* is the Settings-entered override (see loc_geocode
-   further down) that settings_load copies straight into these three
-   fields plus geo_have, so weather_fetch_inner and the map wallpaper
-   fetch pick it up through the exact same path as the IP lookup, no
-   separate "which source" branch anywhere downstream. */
 
 /* v85 (chat rework): global LLM config, the same "one real setting, one
    real default, survives a reboot" contract wind/dock/wall already keep.
@@ -2077,16 +2068,6 @@ void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; } static int gui
    second one yet. No NIC (v86, the browser demo) means no attempt and
    nothing drawn, not an error. */
 volatile unsigned jt_data_stamp = 0; /* bumped whenever WEATHER.TXT or STOCKS.TXT is rewritten; windows poll it through SYS_SYSINFO */
-/* v53: real fields behind the one-line summary, kept for the dropdown
-   panel. Nothing fabricated: temp/code are exactly what weather_fetch
-   already parses out of the reply; lat/lon (v71) are the exact text
-   ip-api.com returned for this machine's own public IP (geo_fetch below),
-   the same text the http_get() URL is built from, not a literal. */
-/* Why the last fetch ended the way it did. The Weather window used to have
-   exactly one failure face ("Weather unavailable") for five different
-   causes, and no way to try again short of waiting ten minutes.
-   weather_have/weather_text keep the last GOOD reading across a later
-   failure on purpose: the window labels it stale instead of going blank. */
 /* 1.9.26: SYS_SYSINFO fill and the SYS_LAUNCH_REQUEST mailbox (kernel/syscall.c). */
 void jt_sysinfo_fill(struct jt_sysinfo *si){
     char *z = (char *)si;
@@ -2125,14 +2106,12 @@ int jt_refresh_request(int kind, int arg){
     refresh_arg = arg; refresh_kind = kind; return 0;
 }
 int jt_refresh_take(int *arg){ int k = refresh_kind; if (k >= 0) { *arg = refresh_arg; refresh_kind = -1; } return k; }
-/* Test/diagnostic override, read once from the multiboot command line
-   (`-append "wxhost=10.0.2.2:8099"`, see kmain): both the location and the
-   forecast request go to this literal IP:port instead of ip-api.com and
-   api.open-meteo.com. tools/checks/weather-app-check.sh points it at a
-   local fake server to drive success, bad-response and timeout without
-   the real internet. Empty (every normal boot) means the real hosts. */
-char wx_override_host[20] = "";
-unsigned short wx_override_port = 80;
+/* Hit box for the menu-bar weather text, recomputed by gui_draw_menubar
+   every time it actually redraws that text (same cadence the clock hit
+   test already tolerates: coarse, minute-granularity, matching how often
+   the underlying layout can shift). -1/-1 means "nothing drawn, not
+   clickable" rather than a stale box from a previous boot. */
+int weather_hit_x0 = -1, weather_hit_x1 = -1;
 /* 1.1.1: tilehost=/tileport=, the wall_fetch equivalent of wxhost= above --
    for tools/checks/wallcompose-check.py to point BOTH tile hosts
    (a.tile.opentopomap.org for map themes, mt0.google.com for Satellite)

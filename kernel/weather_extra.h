@@ -1,7 +1,7 @@
 #ifndef WEATHER_EXTRA_H
 #define WEATHER_EXTRA_H
 /* Weather window data, split out of kernel.c in 2.10.0 (its line ceiling only goes down). Included
-   by kernel.c just before weather_fetch_inner, so json_current_number, wx_round10's callers and
+   by kernel/weather.c just before weather_fetch_inner, so json_current_number, wx_round10's callers and
    serial_puts are already in scope. wx_parse_extras reads everything the Weather app shows beyond
    the menu bar reading; wx_write_extras appends it to WEATHER.TXT; wx_serial_summary prints the
    "wxextra=yes days=7 hours=24" line tools/checks/weather-app-check.sh reads. */

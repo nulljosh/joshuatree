@@ -13,10 +13,29 @@
 #include "ramfs.h"
 #include "json.h"
 #include "irq.h"
+#include "ring3app.h"
 #include "weather.h"
 
-/* The state the menu bar, the Weather window and SYS_SYSINFO read (declared in weather.h). weather_have/weather_text
-   keep the last good reading across a later failure on purpose: the window labels it stale instead of going blank. */
+/* Test/diagnostic override, read once from the multiboot command line
+   (`-append "wxhost=10.0.2.2:8099"`, see kmain): both the location and the
+   forecast request go to this literal IP:port instead of ip-api.com and
+   api.open-meteo.com. tools/checks/weather-app-check.sh points it at a
+   local fake server to drive success, bad-response and timeout without
+   the real internet. Empty (every normal boot) means the real hosts. */
+char wx_override_host[20] = "";
+unsigned short wx_override_port = 80;
+
+/* The state the menu bar, the Weather window and SYS_SYSINFO read (declared in weather.h). */
+/* v53: real fields behind the one-line summary, kept for the dropdown
+   panel. Nothing fabricated: temp/code are exactly what weather_fetch
+   already parses out of the reply; lat/lon (v71) are the exact text
+   ip-api.com returned for this machine's own public IP (geo_fetch below),
+   the same text the http_get() URL is built from, not a literal. */
+/* Why the last fetch ended the way it did. The Weather window used to have
+   exactly one failure face ("Weather unavailable") for five different
+   causes, and no way to try again short of waiting ten minutes.
+   weather_have/weather_text keep the last GOOD reading across a later
+   failure on purpose: the window labels it stale instead of going blank. */
 char weather_text[24] = "";
 unsigned int weather_last_tick = 0;
 int weather_tried_once = 0;
@@ -37,12 +56,6 @@ const char *weather_state_name(int st){
    net.c's default reply budget (sized for local LLM generation, minutes)
    froze the whole desktop that long on a half-open connection. */
 #define WX_REPLY_TIMEOUT_TICKS 1200
-/* Hit box for the menu-bar weather text, recomputed by gui_draw_menubar
-   every time it actually redraws that text (same cadence the clock hit
-   test already tolerates: coarse, minute-granularity, matching how often
-   the underlying layout can shift). -1/-1 means "nothing drawn, not
-   clickable" rather than a stale box from a previous boot. */
-int weather_hit_x0 = -1, weather_hit_x1 = -1;
 
 const char *weather_word(int code){
     if (code == 0) return "Clear";
@@ -216,7 +229,6 @@ int json_current_number(const char *json, const char *key, int *out_x10){
         while ((*q >= '0' && *q <= '9') || *q == '.') {
             if (*q == '.') { seen_dot = 1; q++; continue; }
             if (!seen_dot) whole = whole * 10 + (*q - '0');
-            else if (frac == 0 && !seen_dot) {}
             else if (frac == 0) { frac = (*q - '0'); }
             q++;
         }
@@ -247,10 +259,8 @@ int json_current_number(const char *json, const char *key, int *out_x10){
    a NIC-less boot. Both values are mirrored to serial (`geo=`/`wxurl=`)
    so tools/geo-check.sh can prove headlessly, against the host's own
    ip-api answer, that the URL really carries the dynamic location.
-   (geo_lat/geo_lon/geo_city/geo_have and the loc_* Settings-location
-   override are declared earlier, alongside wind_enabled, since
-   settings_load needs them and settings_load has to come before this
-   point in the file.) */
+   (geo_* and the loc_* Settings-location override are defined at the top
+   of this file; settings_load in kernel.c fills loc_* through weather.h.) */
 /* Open-Meteo's own geocoding endpoint (the same house the weather forecast
    already comes from), through the exact http_get_timeout/wx_override_host
    plumbing geo_fetch and weather_fetch_inner already use -- one more host
@@ -260,10 +270,13 @@ int json_current_number(const char *json, const char *key, int *out_x10){
    No result, a bad reply, or no network all fail cleanly with loc_err set
    and loc_have/geo_have untouched -- never a fabricated coordinate, never
    a panic. */
+static void loc_err_set(const char *m){   /* bounded: loc_err is 48 bytes */
+    unsigned i = 0; while (m[i] && i < sizeof loc_err - 1) { loc_err[i] = m[i]; i++; } loc_err[i] = 0;
+}
 int loc_geocode(const char *query){
     loc_err[0] = 0;
-    if (!query[0]) { const char *m = "empty"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0; return 0; }
-    if (!net_init(0x0A00020F)) { const char *m = "no network card"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0; return 0; }
+    if (!query[0]) { loc_err_set("empty"); return 0; }
+    if (!net_init(0x0A00020F)) { loc_err_set("no network card"); return 0; }
     static char path[112];
     int p = 0; const char *s;
     for (s = "/v1/search?name="; *s; s++) path[p++] = *s;
@@ -280,14 +293,14 @@ int loc_geocode(const char *query){
     if (n <= 0 || http_last_status() != 200) {
         int e = net_last_error();
         const char *m = (n < 0 || e == NET_ERR_REPLY_TIMEOUT || e == NET_ERR_ARP_TIMEOUT || e == NET_ERR_DNS_TIMEOUT || e == NET_ERR_CONNECT_TIMEOUT) ? "network unreachable" : "geocoding request failed";
-        int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0;
+        loc_err_set(m);
         return 0;
     }
     body[n] = 0;
     char lat[16], lon[16], name[LOC_NAME_MAX];
     if (!json_extract_number_text(body, "latitude", lat, sizeof(lat)) ||
         !json_extract_number_text(body, "longitude", lon, sizeof(lon))) {
-        const char *m = "location not found"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0;
+        loc_err_set("location not found");
         return 0;
     }
     if (!json_extract_string(body, "name", name, sizeof(name))) name[0] = 0;
@@ -428,7 +441,6 @@ static void weather_write_file(void){
 
 /* The dock's Weather, blocking fallback only (a full window table). The window path in
    user/weather.c asks for refetches with SYS_REFRESH instead; here the app just runs once. */
-int weather_ring3_run(void);
 void weather_ring3_open(void){
     if (!weather_tried_once) { weather_tried_once = 1; weather_fetch(); gui_menubar_force_redraw(); }
     unsigned int t0 = ticks();
