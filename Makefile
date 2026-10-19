@@ -31,6 +31,8 @@ PASS1_OBJS := $(filter-out kernel/symtab.o,$(OBJS))
 # Neither kernel.elf.pass1 nor the generated kernel/symtab.c is committed
 # (see .gitignore); both regenerate from scratch on every build, same as
 # drivers/version.h.
+# A bare `make` links the kernel; without this the first rule below (memmap.ld) was the goal.
+.DEFAULT_GOAL := kernel.elf
 # boot/memmap.ld: kernel/memmap.h's #defines as linker-script symbols, so
 # boot/linker.ld and user/*.ld INCLUDE the same ring-3 addresses the kernel
 # compiles against. Generated, not committed (see .gitignore).
