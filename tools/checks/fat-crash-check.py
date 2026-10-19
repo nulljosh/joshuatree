@@ -22,6 +22,7 @@ HOST = r'''
 #include <stdlib.h>
 #include <string.h>
 #include "fat.h"
+void *kmalloc(unsigned int n) { return malloc(n); }   /* fat.c's scan buffers come from the heap (4.14.0) */
 FILE *img; static unsigned limit = 0xFFFFFFFF, nwrites;
 struct vfs_ops;
 void vfs_register(const char *n, const struct vfs_ops *o) { (void)n; (void)o; }

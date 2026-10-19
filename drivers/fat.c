@@ -568,8 +568,11 @@ int fat_replace_file(const char *name, const void *data, unsigned int len) {
 #define SCAN_MAX_CLUSTERS (1u << 17)   /* i386 has little BSS room before its user image; a FAT16 table holds 65K clusters */
 #endif
 #define SCAN_DEPTH 12
-static u8 scan_live[SCAN_MAX_CLUSTERS / 8];
-static u8 scan_sec[SCAN_DEPTH][512];
+void *kmalloc(unsigned int n);   /* both kernels' heap (kernel/kheap.c, arch/arm64/main.c) */
+/* 4.14.0: the scan's bitmap and per-depth sectors (16 KB and 6 KB on i386, 128 KB on the Pi) come from the heap on the first
+   mount and stay, not BSS: i386 keeps 16 KB between its BSS and the program window (bss-margin-check.py). */
+static u8 *scan_live;
+static u8 (*scan_sec)[512];
 static int scan_bad;
 static u32 scan_fat_lba;   /* the FAT sector scan_next holds; nothing writes the FAT until the scan is over */
 static u8 scan_fat[512];
@@ -616,6 +619,8 @@ static int scan_dir_sector(u8 *sec, int depth) {   /* 1 at the folder's 0x00 end
 
 static void fat_recover(void) {
     if (total_clusters == 0 || total_clusters > SCAN_MAX_CLUSTERS) return;
+    if (!scan_live) { scan_live = kmalloc(SCAN_MAX_CLUSTERS / 8); scan_sec = kmalloc(SCAN_DEPTH * 512); }
+    if (!scan_live || !scan_sec) return;   /* no heap: mount without the repair, the same as a volume too big to scan */
     memset(scan_live, 0, (total_clusters + 7) / 8);
     scan_bad = 0; scan_fat_lba = 0;   /* sector 0 is the boot sector, never a FAT sector */
     if (fat32) scan_chain(root_cluster, 1, 0);
