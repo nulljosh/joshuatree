@@ -56,12 +56,11 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 
 **Now: 5.0, Talk to it (Joshua, 2026-10-18: "aim for v5, focus on the mic").** The gate is a ten-minute spoken conversation on the real Pi that opens and changes things. 5.0.0 is cut only after Joshua has had it on the board.
 
-Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Mac (`tools/claude-relay/stt.py`), `hear`, voice mode (double-tap and hold Space, a mic mark and a level bar), her voice through `[[say]]` with a mouth in the chat view, and the agent loop. Since 4.17.0 `[[open]]` reaches every app Spotlight opens. Left:
+Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Mac (`tools/claude-relay/stt.py`), voice mode (double-tap and hold Space, a mic mark and a level bar), her voice through `[[say]]` with a mouth in the chat view, and the agent loop. Since 4.17.0 `[[open]]` reaches every app Spotlight opens. Left:
 
 1. The board proof (Joshua): the Yeti in a Pi port, `mic` shows the room, hold Space and talk, she answers out loud.
-2. `hear` stops when you go quiet, instead of after a fixed few seconds.
-3. A full-screen face whose mouth follows her voice.
-4. Whatever the board shows is broken.
+2. A full-screen face whose mouth follows her voice.
+3. Whatever the board shows is broken.
 
 **Then: the rest of 6.0, Yours.** Accounts, login, sudo, home folders (4.8 to 4.11) and snapshots are in. Still to come: the crash-safe card filesystem, a Users pane in Settings, file permissions and backups.
 
@@ -1043,6 +1042,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.19.0 (2026-10-19)**: Talking to Samantha on the Pi is double-tap and hold Space, like Claude Code's voice mode, and nothing else: the typed `hear` command and its quiet detector are gone (Joshua: "replace hear with double click and hold space"). Holding Space now says plainly when there is no USB microphone or no relay token, the two errors `hear` used to give, and `arm64-voicemode-check.py` gained `hear`'s refusal case (a 401 from the words service is reported and nothing reaches the relay).
 - **4.18.3 (2026-10-19)**: Second slice of breaking up `kernel/kernel.c` (now 7,282 lines): the map and satellite wallpapers (tile fetch, theme switch, the baked satellite fallback, `wall_apply`) move to `kernel/wallmap.c` (286 lines) behind `kernel/wallmap.h`, and the 17,000-line satellite header compiles with it instead of with kernel.c. The per-pixel readers stay inlined in kernel.c; the photo is reached through one pointer so its 1.5 MB is linked once. No behaviour change. Checks: `check.sh`, `walldefault-check.sh`, `walldemo-regression-check.py`, `wallcompose-check.py`, `bss-margin-check.py`.
 - **4.18.4 (2026-10-19)**: Third slice of breaking up `kernel/kernel.c` (now 7,037 lines): `SETTINGS.TXT` load and save and the LLM, Mail and Claude relay settings move to `kernel/settings.c` (250 lines) behind `kernel/settings.h`. Same file format, same keys, same bounds checks; the god-file ceiling drops to match.
 - **4.18.5 (2026-10-19)**: Fourth slice of breaking up `kernel/kernel.c` (now 6,724 lines): `pngtest`, `jpegtest`, `heaptest`, `nettest` and `mailtest` leave the shell's 1,729-line `run()` for `kernel/selftest.c`, and the PNG and JPEG test fixtures and `mail.h` compile with them instead of with kernel.c. Same commands, same output; png, jpeg and the shell regression checks pass unchanged.

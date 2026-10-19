@@ -8,7 +8,7 @@
     400 bad body (empty, odd length, too long)   401 no or wrong token   404 other path   405 not POST   500 whisper failed
 
 The words come from whisper.cpp (`brew install whisper-cpp`) with its base English model; nothing leaves the Mac.
-The Pi's `hear` command records from the USB microphone (arch/arm64/xhci.c, 16 kHz mono) and posts it here.
+The Pi's voice mode (double-tap and hold Space) records from the USB microphone (arch/arm64/xhci.c, 16 kHz mono) and posts it here.
 
     python3 tools/claude-relay/stt.py --token-file ~/.claude-relay-token      (port 8766, loopback: QEMU)
     python3 tools/claude-relay/stt.py --lan --token-file ~/.claude-relay-token --tls-cert ... --tls-key ...   (the Pi)

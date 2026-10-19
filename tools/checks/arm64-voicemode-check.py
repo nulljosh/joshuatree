@@ -2,7 +2,8 @@
 """ARM64 voice mode: double-tap Space and hold the second tap to talk to Samantha, release to send. The heartest kernel on QEMU virt (no
 microphone: a tone stands in). QMP holds the key down: the UART must say "voice: listening" and "mic mark on", the
 release must say "voice: released", "mic mark off", post the samples to the stub words service and print "you: open
-notes", which reaches the stub relay as the question. The two taps leave no spaces: a line typed around the hold comes out
+notes", which reaches the stub relay as the question; with the words service refusing (401) the Terminal says so and
+nothing reaches the relay. The two taps leave no spaces: a line typed around the hold comes out
 as "hi" alone. A quick double tap without the hold stays two spaces. Skips where clang, ld.lld or qemu is missing.
 Usage: tools/checks/arm64-voicemode-check.py   (from the repo root)
 """
@@ -116,10 +117,17 @@ try:
     out4 = b.uart()
     check("the taps left no spaces on the line", "% hi\n" in out4 and "% hi " not in out4, out4[-300:])
     check("the token never appears on the UART", TOKEN not in out4)
+    # the words service refusing (401): reported, and nothing reaches the relay
+    refuse[0] = True; del calls[:]; del heard[:]
+    space(True); time.sleep(0.05); space(False); time.sleep(0.1)
+    space(True); b.wait_for("voice: listening", 5, 2); time.sleep(0.6); space(False)
+    b.wait_for("hear: no words", 30); time.sleep(0.5)
+    out5 = b.uart()[len(out4):]
+    check("a refusal is reported and nothing reaches the relay", "hear: no words (401)" in out5 and len(heard) == 1 and not calls, out5[-300:])
     b.close()
 finally:
     relay.shutdown(); words.shutdown()
     shutil.rmtree(tmp, ignore_errors=True)
 if fails:
     print("FAIL: %d of the voice mode checks failed" % len(fails)); sys.exit(1)
-print("PASS: double-tap and hold Space listens with a mic mark and a level bar, the release sends the words to sam, and the taps leave no spaces")
+print("PASS: double-tap and hold Space listens with a mic mark and a level bar, the release sends the words to sam, a refusal stops there, and the taps leave no spaces")
