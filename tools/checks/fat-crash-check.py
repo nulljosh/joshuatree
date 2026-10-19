@@ -22,7 +22,6 @@ HOST = r'''
 #include <stdlib.h>
 #include <string.h>
 #include "fat.h"
-void *kmalloc(unsigned int n) { return malloc(n); }   /* fat.c's scan buffers come from the heap (4.14.0) */
 FILE *img; static unsigned limit = 0xFFFFFFFF, nwrites;
 struct vfs_ops;
 void vfs_register(const char *n, const struct vfs_ops *o) { (void)n; (void)o; }
@@ -76,7 +75,7 @@ def build(t, name, fat_c):
     open(os.path.join(shim, "libc.h"), "w").write("#include <string.h>\n")
     src = os.path.join(t, name + ".c"); open(src, "w").write(HOST)
     exe = os.path.join(t, name)
-    cc = sh("clang", "-std=gnu11", "-D_GNU_SOURCE", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=undefined", "-w", "-I", shim, "-I", drivers, src, fat_c, "-o", exe)
+    cc = sh("clang", "-std=gnu11", "-D_GNU_SOURCE", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=undefined", "-w", "-I", shim, "-I", drivers, src, fat_c, os.path.join(root, "tools", "fuzz-host", "kmalloc_host.c"), "-o", exe)
     if cc.returncode: print(cc.stderr[-2000:]); sys.exit(1)
     return exe
 

@@ -99,7 +99,7 @@ with tempfile.TemporaryDirectory(prefix="jt-snap-") as t:
     src = os.path.join(t, "t.c"); open(src, "w").write(HOST)
     exe = os.path.join(t, "t")
     cc = subprocess.run(["clang", "-std=gnu11", "-D_GNU_SOURCE", "-g", "-fsanitize=address,undefined", "-w", "-I", shim, "-I", arch, "-I", os.path.join(root, "drivers"),
-                         src, os.path.join(arch, "snap.c"), os.path.join(root, "drivers", "fat.c"), "-o", exe], capture_output=True, text=True)
+                         src, os.path.join(arch, "snap.c"), os.path.join(root, "drivers", "fat.c"), os.path.join(root, "tools", "fuzz-host", "kmalloc_host.c"), "-o", exe], capture_output=True, text=True)
     if cc.returncode: print(cc.stderr[-2000:]); sys.exit(1)
     r = subprocess.run([exe, img], capture_output=True, text=True, timeout=600)
     print(r.stdout + r.stderr[-1500:])

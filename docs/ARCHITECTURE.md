@@ -630,7 +630,7 @@ None of this is kernel code. It builds and runs on the Mac.
 - `drivers/png_testdata.h` and `drivers/jpeg_testdata.h` are generated test images.
 
 **Fuzzers** in `tools/fuzz-host/` hammer the code that reads untrusted bytes.
-- `fuzz_parsers.c` covers HTTP, HTML and JSON.
+- `fuzz_parsers.c` covers HTTP, HTML and JSON. `kmalloc_host.c` is the one heap call `drivers/fat.c` makes, as malloc, for every host build of it.
 - `fuzz_decoders.c` covers PNG and JPEG.
 - Both run under address and undefined-behaviour sanitizers, using the shims in `tools/parsers-host/`.
 
