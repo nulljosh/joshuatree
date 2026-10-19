@@ -269,7 +269,7 @@ with tempfile.TemporaryDirectory(prefix="jt-home-") as t0:
         m = os.path.join(t0, "m_" + os.path.basename(src_path)); open(m, "w").write(text.replace(old, new, 1))
         kw = {"home_c": m} if src_path == HOME_C else {"ufile_c": m}
         okm, outm = host_run(t0, **kw)
-        check("mutation (%s) must fail the host test on an assertion, not a compile error" % tag, not okm and "Assertion failed" in outm, outm)
+        check("mutation (%s) must fail the host test on an assertion, not a compile error" % tag, not okm and re.search(r"Assertion (failed|`.*' failed)", outm), outm)   # macOS and glibc wording
     mutate(HOME_C, "    return sudo_active();\n}", "    return 1;\n}", "home_may always yes")
     mutate(UFILE_C, "static const char *cur_home(char *buf) { return home_mine(buf) ? buf : 0; }", "static const char *cur_home(char *buf) { (void)buf; return 0; }", "apps ignore the home folder")
 
