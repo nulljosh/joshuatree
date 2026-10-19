@@ -350,6 +350,7 @@ static int hang_arm;       /* app_start sets it for slot 0, so the boot self-tes
 static int user_loud;       /* userrun: what the program writes reaches the screen too; the boot self-test keeps it on the UART */
 static unsigned user_pid;   /* programs started so far, what JT_SYS_GETPID answers */
 static unsigned long app_len, app_code, app_img;   /* the loaded app: bytes of window mapped, how many of those are code, and the image's own length */
+static unsigned long cal_local(void);   /* cal_utc shifted to Vancouver wall time, what SYS_TIME returns (below) */
 static unsigned long cal_utc(void);   /* the clock the Calendar tile reads, further down: 0 until the network has told us the time */
 /* M3c part 2, the scheduler's state: one app at a time, since the arena has one app window. app_cur is the app it holds,
    running or parked; app_frame and app_sp are where it parked (every register, its pc and its stack). Its window buffer is
@@ -573,7 +574,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
         else {
             long r;
             if (n == JT_SYS_TIME) {   /* seconds since the epoch, 0 until the clock is set; a non-null pointer is also stored through */
-                unsigned long t = cal_utc();
+                unsigned long t = cal_local();   /* local, like the Clock: the Calendar app circles the day the Clock names, not the UTC one */
                 r = (int)t;
                 if (a0) {
                     if (!user_writable(a0, 4)) r = -14;   /* -EFAULT, like kernel/syscall.c's sys_time */
@@ -1690,6 +1691,8 @@ static unsigned long cal_utc(void) { return MUSIC_TEST_UTC + cnt_now() / cnt_hz(
 #else
 static unsigned long cal_utc(void) { return net_clock_utc(); }
 #endif
+static long clock_offset(unsigned long utc);   /* seconds to subtract from UTC for Vancouver wall time (the one time-zone path) */
+static unsigned long cal_local(void) { unsigned long u = cal_utc(); return u ? u - (unsigned long)clock_offset(u) : 0; }   /* 0 stays 0: no clock yet */
 static int cal_shown = -1;   /* the day the tile shows, as a y/m/d number; -1 is the plain art */
 static int cal_today(void) {   /* today's y/m/d number, or -1 with no clock */
     unsigned long u = cal_utc(); if (!u) return -1;
@@ -2972,11 +2975,15 @@ static unsigned long nth_sunday_utc(long y, unsigned mon, unsigned nth, unsigned
     unsigned first = dow == 0 ? 1 : 1 + (7 - dow);
     return (civil_days(y, mon, first + (nth - 1) * 7)) * 86400UL + hour * 3600UL;
 }
-static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day) {
+static long clock_offset(unsigned long utc) {   /* Vancouver: 7 h behind UTC in daylight time, 8 h otherwise */
     long y; unsigned m, d; civil_from_days(utc / 86400, &y, &m, &d);
     int dst = utc >= civil_days(2026, 3, 8) * 86400UL + 10 * 3600UL
            || (utc >= nth_sunday_utc(y, 3, 2, 10) && utc < nth_sunday_utc(y, 11, 1, 9));
-    unsigned long loc = utc - (dst ? 7 : 8) * 3600UL;
+    return (dst ? 7 : 8) * 3600L;
+}
+static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day) {
+    long y;
+    unsigned long loc = utc - (unsigned long)clock_offset(utc);
     civil_from_days(loc / 86400, &y, mon, day);
     clock_year = y;
     *hh = (unsigned)(loc % 86400) / 3600; *mm = (unsigned)(loc % 3600) / 60;

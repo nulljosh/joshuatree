@@ -207,10 +207,9 @@ Worth doing, not yet re-checked, in the order the study ranked them:
     3. The relay running several agent steps (each one a full POST) on the small local model.
   - Time each step with `ticks()` stamps on the UART on the board first.
   - Check: a stub-relay check that fails when a question costs more than one handshake.
-- [ ] [Sonnet] Calendar app on the Pi highlights the UTC day, not the local one.
-  - At 11:20 PM on 11 October the Clock and the dock tile said the 11th and the month grid circled the 12th.
-  - Use the same local date the Clock uses.
-  - Check: extend `tools/checks/arm64-calicon-check.py` with a UTC-after-midnight, local-before-midnight case that finds the circled day.
+- [x] [Sonnet] Calendar app on the Pi circled the UTC day, not the local one, fixed in 4.15.1.
+  - At 11:20 PM on 11 October the Clock and the dock tile said the 11th and the month grid circled the 12th. The app read `SYS_TIME` as raw UTC; on the Pi `SYS_TIME` now returns Vancouver wall time through `clock_offset` in `arch/arm64/main.c`, the one time-zone path the Clock already used.
+  - Check: `tools/checks/arm64-calicon-check.py` boots 06:20 UTC on 12 October, finds the circled day in the Calendar window (the 11th), and a mutation with the grid back on UTC (`--mutate`) circles the 12th and fails.
 - [ ] [Sonnet] Keyboard shortcuts in every app.
   - The Command key (the GUI or Windows key on a PC keyboard) with A select all, C copy, X cut, V paste, Z undo, S save, W close the window, Q quit, N new, F find, Tab to switch windows.
   - Plus Ctrl for the same on a keyboard with no GUI key.
@@ -1045,6 +1044,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.15.1 (2026-10-18)**: The Calendar app on the Pi circles the local day, not the UTC one. At 11:20 PM on 11 October the Clock said the 11th and the grid circled the 12th, because `SYS_TIME` handed apps raw UTC. It now returns Vancouver wall time from `clock_offset` in `arch/arm64/main.c`, the same offset `clock_local` uses for the Clock. Checked with `tools/checks/arm64-calicon-check.py` (06:20 UTC on 12 October circles the 11th; the `--mutate` build with the grid on UTC circles the 12th and fails).
 - **4.16.1 (2026-10-18)**: Two shipped features get the mutation their checks lacked, and their roadmap boxes are ticked. `notes-autosave-check.py` builds a private tree with the timer turned off and must fail on the missing save (`jtvm.py` takes a `JT_KERNEL` override for it); autosave shipped in 2.55.0. `arm64-keys-check.py` rebuilds with held-key repeat disabled and requires the held-j step to fail; Caps Lock and repeat shipped in 2.52.0. A bare `make` links the kernel again (its first rule had become memmap.ld). No kernel change.
 - **4.16.0 (2026-10-18)**: Nimbus closes the landing page. The footer's desert engraving is replaced by the Nimbus render, cut out on the page's paper; a WebGL shader hatches its shadow in the accent and sends rounded waves out from it, the computer you talk to, talking. The plain cutout is the fallback without WebGL; `render_nimbus.py` makes it with `NIMBUS_CUTOUT=1`. Check: `landing-specs-footer-check.mjs`.
 - **4.15.2 (2026-10-18)**: The stacked-ring Neo case is gone: its CAD, STLs, renders, blueprint, build sheet, assembly steps and three GUIDE sections. Nimbus is the only case. `render_nimbus.py` also renders wallpapers (`NIMBUS_WALL` with a size, camera and aim). The Neo film script (`docs/hardware/ad/anim.py`, which built on the deleted concepts.py) goes too.
