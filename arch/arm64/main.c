@@ -1942,6 +1942,7 @@ int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
 static int clock_live, brick_live, spot_live, browser_live, settings_live;
 #include "accounts.h"
 #include "login.h"
+#include "sudo.h"
 static int login_live;   /* login_ui.h: the login screen covers everything; the bar, the notices and the clock stand back */
 static void set_paint(void);
 static void settings_open(int sec);
@@ -3157,6 +3158,8 @@ static void splash_begin(void) {
 #define SPLASH(n, name) ((void)0)
 #endif
 static int desktop_up;   /* fb_desktop has painted the desktop once: a wallpaper change may repaint it */
+static int text_early;         /* the deferred boot started the text engine for the login card */
+static int desktop_deferred;   /* 4.10.0, the Pi's quiet boot: an account is on the card, so the login card goes up first and login_done paints the desktop */
 static void menubar_base(void) {   /* the bar over bare wallpaper: half wallpaper, half white, per pixel, closed by a one pixel rule */
     int W = (int)fb_w, mb = sg(MENUBAR_H);
     for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {
@@ -3216,7 +3219,8 @@ static void fb_desktop(void) {
     mb_h = mb - 1; mb_x0 = W / 2;                          /* keep the bare right half of the bar, for menubar_status() */
     mb_save = kmalloc((unsigned)(mb_h * (W - mb_x0)) * 4);
     menubar_keep();
-    text_ok = text_init();                                /* before the window (its title) */
+    if (!text_early) text_ok = text_init();               /* before the window (its title); the deferred boot did it already for the login card */
+    text_early = 0;
     dock_paint();                                         /* the i386 dock, while only the wallpaper is under it */
     int band_y = gui_dock_band_top() * (int)window_scale();   /* the top of the dock's band, room for a hover label */
     /* Slice 3: the Console wears the i386 window frame (gui_paint.c): rounded cream body on the wallpaper, traffic
@@ -3382,9 +3386,10 @@ static void splash_finish(void) {   /* everything boot waits for is done: the on
     if (splash_on) {
         splash_step(6, "desktop");
         splash_on = 0;
-        fb_desktop();
+        if (accounts_count()) { desktop_deferred = 1; text_ok = text_init(); text_early = 1; }   /* the login card goes over the splash's colour; the desktop is first drawn after the sign-in */
+        else fb_desktop();
     }
-    fb_diag();
+    if (!desktop_deferred) fb_diag();             /* it measures the console font, which the desktop's layout does */
 }
 #endif
 /* One line that turns a photo of the screen into a measurement: where the firmware really put the kernel, the monitor
@@ -3459,6 +3464,7 @@ int app_open_name(const char *name) {
    translates its reports into them). The pointer starts mid-screen; a tablet sets it, a mouse moves it. ---- */
 struct input_event { unsigned short type, code; unsigned value; };
 int ask_key(unsigned code, unsigned value);   /* ask.c: the prompt's line editor */
+int ask_secret(void);                         /* ask.c: the line being typed holds a password */
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 void ask_poll(void);
 #ifdef PI_BUILD
@@ -3542,7 +3548,7 @@ static void input_event(struct input_event e) {
             /* Only the Terminal takes typing; Shift always reaches ask.c, as the Calculator reads its state there */
             if (term || e.code == 42 || e.code == 54) ask_key(e.code, e.value);
             con_quiet = 1;   /* typed keys show on the ask> row, or nowhere; the echo stays on the UART and off the Console */
-            uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
+            if (!(term && ask_secret())) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* 4.10.0: not while a password is being typed */
         }
         cur_release(held);
     }
@@ -3929,6 +3935,7 @@ void main(void) {
 #endif
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
     accounts_load();           /* accounts.c: JT/USERS.TXT, the names `users` lists */
+    sudo_load();               /* sudo.c: JT/SUDOERS.TXT, who may sudo */
     settings_load();           /* settings.c: JT/SETTINGS.TXT, before the Pi's desktop is first painted (the splash waits) */
     SPLASH(2, "sd");
 #ifdef SD_SELFTEST   /* the sd builds (arm64-sd-check.py) run the Terminal's own commands at boot on the check's card */

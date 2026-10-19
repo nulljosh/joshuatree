@@ -10,7 +10,7 @@
      hashlib is accepted (an independent implementation).
   2. QEMU virt, headless, the check card (sdcard.py) as a virtio disk, Terminal open (F2): `users` says none, then
      `adduser ann hunter22` (timed) and `users` lists ann; the echoed line reads `adduser ann ********`; a wrong deluser, a
-     repeat name, a short password and a bad line are refused; the UART never holds a password that was typed.
+     repeat name and a short password (4.10.0: the first account is an admin and just proved itself, so `sudo adduser` runs) and a bad line are refused; the UART never holds a password that was typed.
   3. The card: JT/USERS.TXT read back with mtools is one `ann:p2:100000:` record whose hash is what Python's PBKDF2 gives
      for the password and the stored salt, with no plaintext. A second boot on the same card stops at the login screen (4.9.0), signs ann in, lists ann, deluser with the
      right password removes it, and a third `users` says none.
@@ -258,8 +258,8 @@ try:
     ok, secs = S.run("deluser ann wrongpass1", "deluser ann: wrong password", 120)
     check("a wrong password cannot delete the account (%.1f s)" % secs, ok, S.uart()[-300:])
     check("... and the deluser echo is starred too", "joshua@tree % deluser ann **********\n" in S.uart(), S.uart()[-900:])
-    check("a repeat name is refused", S.run("adduser ann other1234", "adduser ann: that name is taken", 60)[0], S.uart()[-300:])
-    check("a short password is refused", S.run("adduser bob abc", "adduser bob: the password is 4 to 64", 30)[0], S.uart()[-300:])
+    check("a repeat name is refused", S.run("sudo adduser ann other1234", "adduser ann: that name is taken", 60)[0], S.uart()[-300:])
+    check("a short password is refused", S.run("sudo adduser bob abc", "adduser bob: the password is 4 to 64", 30)[0], S.uart()[-300:])
     check("a name with a capital is refused", S.run("adduser bob hunter22", "adduser bob: added", 120)[0], S.uart()[-300:]) if False else None
     check("a line with no password is told how to use it", S.run("adduser ann", "adduser: use adduser NAME PASSWORD", 10)[0], S.uart()[-300:])
     check("ann is still the only account", S.run("users", "ann\n")[0] and S.uart().count("\nann\n") == 2, S.uart()[-300:])

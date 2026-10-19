@@ -30,6 +30,7 @@
 #include "claude_cfg.h"
 #include "emmc.h"
 #include "accounts.h"
+int sudo_may_write(void);   /* sudo.c: no accounts, or the signed-in user is an admin */
 #include "../../drivers/fat.h"
 #ifdef CLAUDE_RELEASE        /* a Pi release image: no token, so the Console says `claude: no token` (the Makefile sets it) */
 #undef CLAUDE_TOKEN_LEN
@@ -95,10 +96,12 @@ void con_tui_begin(void);
 void con_tui_rows(const char *const *rows, unsigned n);
 void con_tui_input(const char *p, const char *s, unsigned n);
 void con_tui_end(void);
+static int pw_on;            /* a password prompt is up (cmd.c asked for one): see ask_password */
+static char pw_label[56];
 static char sam_q[ASK_MAX + 1];
 static unsigned sam_qn;
 int ask_select(unsigned pane) {
-    if (pane >= 2 || ac->pending || sam_state || tui_on) return 0;
+    if (pane >= 2 || ac->pending || sam_state || tui_on || pw_on) return 0;
     ac = &contexts[pane];
     return 1;
 }
@@ -107,7 +110,26 @@ int ask_select(unsigned pane) {
    prompt (Samantha is a command now, not the shell). tools/checks/relay-api-check.py keeps ASK_DEFAULT_MODEL in step
    with relay.py's TURING_NAME. */
 #define ASK_DEFAULT_MODEL "Samantha"
-const char *ask_prompt(void) { return "joshua@tree % "; }   /* main.c draws it on the bottom row */
+/* A password prompt (4.10.0, `sudo` and `passwd` in cmd.c): while pw_on is set the bottom row shows its label instead of the shell
+   prompt, every typed character is a star, the next Enter goes to cmd_password and not to cmd_run, and Esc cancels. */
+void cmd_password(const char *q, unsigned n, void (*out)(const char *));   /* cmd.c: the line typed at a password prompt */
+void cmd_password_cancel(void);
+void ask_password(const char *label) {
+    unsigned k = 0;
+    for (; label[k] && k < sizeof pw_label - 1; k++) pw_label[k] = label[k];
+    pw_label[k] = 0; pw_on = 1;
+}
+static void tui_forget(void);
+void ask_forget(void) {   /* main.c's login_show: a sign-out takes any half-typed password, the lines being typed and the chat history with it */
+    pw_on = 0; cmd_password_cancel();
+    for (unsigned c = 0; c < 2; c++) {
+        accounts_wipe(contexts[c].line, sizeof contexts[c].line); contexts[c].len = 0;
+        accounts_wipe(contexts[c].question, sizeof contexts[c].question);
+        contexts[c].session[0] = 0; contexts[c].last_name[0] = 0; contexts[c].steps_total = 0; contexts[c].relay_state = 0;   /* the next user's `sam` starts a new conversation */
+    }
+    tui_forget();
+}
+const char *ask_prompt(void) { return pw_on ? pw_label : "joshua@tree % "; }   /* main.c draws it on the bottom row */
 /* The relay's "M <name>" line is network data: only "Samantha" (Turing) or a short printable name that starts
    "Claude" is used. */
 static void take_model(const char *s, unsigned n) {
@@ -146,21 +168,30 @@ int ask_char(unsigned code) {   /* main.c's Calculator and Spotlight: same map, 
     return up ? shifted[code] : plain[code];
 }
 void ask_prefill(const char *s) {   /* main.c: the Samantha tile types `sam ` on an empty line, so the next word is the question */
-    if (ac->len || ac->pending || sam_state) return;
+    if (ac->len || ac->pending || sam_state || pw_on) return;
     while (*s && ac->len < ASK_MAX) ac->line[ac->len++] = *s++;
     ac->line[ac->len] = 0;
 }
-void ask_redraw(void) { if (tui_on) tui_paint(1); else con_prompt(ac->line, ac->len); }   /* main.c: the Terminal was reopened, put the line being typed back */
+void ask_redraw(void) { if (tui_on) tui_paint(1); else prompt_row(ac->line, ac->len); }   /* prompt_row stars out a password */   /* main.c: the Terminal was reopened, put the line being typed back */
 
 /* One key event from any keyboard. 1 when it is the editor's (the caller then keeps its echo line off the screen). */
 /* One key event, while the Terminal is in front (Shift always). 1 when it is the editor's. */
 static int stop_flag;        /* the kill switch: Esc, or "stop" and Enter, while the agent loop runs */
 static int is_stop(const char *s, unsigned n) { return n == 4 && s[0] == 's' && s[1] == 't' && s[2] == 'o' && s[3] == 'p'; }
-int ask_pending(void) { return ac->pending || sam_state || tui_on; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
+int ask_pending(void) { return ac->pending || sam_state || tui_on || pw_on; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
 int ask_key(unsigned code, unsigned value) {
     if (code == KEY_LSHIFT || code == KEY_RSHIFT) { shift = value != 0; return 1; }
     if (code == KEY_CAPSLOCK) { if (value) caps = !caps; return 1; }   /* one flip per press */
     if (code == KEY_ESC && tui_on) { if (value) tui_escape(); return 1; }
+    if (code == KEY_ESC && pw_on) {   /* Esc at a password prompt: nothing is kept, the line is wiped, the prompt comes back */
+        if (value && !ac->pending) {
+            pw_on = 0; cmd_password_cancel();
+            accounts_wipe(ac->line, sizeof ac->line); ac->len = 0;
+            kputs("cancelled\n");
+            prompt_row(ac->line, ac->len);
+        }
+        return 1;
+    }
     if (tui_on && (code == 103 || code == 108)) { if (value) tui_move(code == 103); return 1; }   /* Up and Down scroll the history */
     if (code == KEY_ESC) { if (value && (ac->pending || sam_state)) stop_flag = 1; return 0; }
     if (vm_key(code, value)) return 1;         /* voice mode: a held Space is not a space */
@@ -187,6 +218,7 @@ unsigned clip_take(char *o, unsigned room);
    of the four, so the letter is not typed. */
 int ask_edit(unsigned code) {
     if (code != 46 && code != 45 && code != 47 && code != 30) return 0;
+    if (pw_on && (code == 46 || code == 45)) return 1;      /* a password is never put on the clipboard */
     if (code == 46 || code == 45) { clip_put(ac->line, ac->len); if (code == 45 && !ac->pending) ac->len = 0; }
     else if (code == 47 && !ac->pending) {
         char b[ASK_MAX + 1]; unsigned n = clip_take(b, ASK_MAX - ac->len);
@@ -327,12 +359,21 @@ static int hide_password(const char *s, unsigned n, char *out) {
     unsigned i = 0, hit = 0;
     for (; i < n; i++) out[i] = s[i];
     out[n] = 0;
-    if (starts(s, n, "adduser ") || starts(s, n, "deluser ")) {
-        i = 8;
+    if (pw_on) { for (i = 0; i < n; i++) out[i] = '*'; return 1; }     /* a password prompt: the whole line is the password */
+    unsigned off = 0;                                                   /* cmd_run drops leading spaces and the ones after sudo, so this does too */
+    while (off < n && s[off] == ' ') off++;
+    if (starts(s + off, n - off, "sudo ")) { off += 5; while (off < n && s[off] == ' ') off++; }   /* sudo adduser NAME PASSWORD hides the same word */
+    if (starts(s + off, n - off, "adduser ") || starts(s + off, n - off, "deluser ")) {
+        i = off + 8;
         while (i < n && s[i] != ' ') i++;          /* the name stays; everything after the space after it is starred */
         for (i++; i < n; i++) { out[i] = '*'; hit = 1; }
     }
     return hit;
+}
+
+int ask_secret(void) {   /* main.c: the line being typed holds a password, so the key lines stay off the UART (a key code is a letter) */
+    char tmp[ASK_MAX + 1];
+    return pw_on || hide_password(ac->line, ac->len, tmp);
 }
 
 static int is_session(const char *s, unsigned n) {
@@ -711,6 +752,8 @@ static void run_actions(void) {
         case ACT_SAVE: {                       /* asked-for files only, into JT/ (emmc.c refuses boot files and non 8.3 names) */
             unsigned at = 0, len = code_block(said, said_n, &at); int ok = 0;
             if (!named_in(sam_q, sam_qn, t)) { kputs("save: "); kputs(t); kputs(" was not in your question, not saved\n"); result_puts("refused, not named by the person\n"); break; }
+            if (!sudo_may_write()) { kputs("save: only an admin saves files\n"); result_puts("refused, not an admin\n"); break; }
+            if (accounts_protected(t)) { kputs("save: "); kputs(t); kputs(" is kept by adduser, passwd and makeadmin\n"); result_puts("refused, an account file\n"); break; }
             if (!len) { kputs("save: no code block to save\n"); result_puts("no code block\n"); break; }
             if (!sd_ready()) { kputs("save: no SD card\n"); result_puts("no SD card\n"); break; }
             ok = sd_write(t, said + at, len) == 1;
@@ -788,6 +831,11 @@ static int local_math(const char *q, unsigned n) {
 #define TUI_LINES 160
 #define TUI_W 64
 static char tui_h[TUI_LINES][TUI_W];
+static void tui_forget(void) {
+    accounts_wipe(tui_h, sizeof tui_h);
+    tui_n = 0; tui_up = 0;
+    if (!sam_state) tui_on = 0;                  /* a chat view with nothing in flight is closed; an answer still coming keeps its view */
+}
 static char tui_cur[TUI_W]; static unsigned tui_cn;           /* the line her output is still writing */
 static char tui_head_last[TUI_W + 40];
 static unsigned tui_width(void) { int c = con_columns(); return c >= 20 && c < ASK_WIDTH ? (unsigned)c : ASK_WIDTH; }
@@ -1208,9 +1256,11 @@ static void run_typed(void) {
     poll_depth++; term_output(1);
     char shown[ASK_MAX + 1];
     int secret = hide_password(ac->question, ac->qlen, shown);
-    say_wrapped(ask_prompt(), shown, ac->qlen);       /* the echo: a password is starred out here and so on the UART */
+    int pw = pw_on;                                    /* this line answers a password prompt: echo the label alone, not even the stars */
+    if (pw) say_wrapped(ask_prompt(), "", 0); else say_wrapped(ask_prompt(), shown, ac->qlen);   /* a password is starred out here and so on the UART */
     void (*saved)(const char *) = cmd_out;
-    cmd_run(ac->question, ac->qlen, 0);                /* cmd.c: the one command line (help, /model, browse, llm, sam), into the Terminal */
+    if (pw) { pw_on = 0; cmd_password(ac->question, ac->qlen, 0); }   /* cmd.c may ask for the next password and set pw_on again */
+    else cmd_run(ac->question, ac->qlen, 0);           /* cmd.c: the one command line (help, /model, browse, llm, sam), into the Terminal */
     cmd_out = saved;
     if (secret) { accounts_wipe(ac->question, ASK_MAX); accounts_wipe(ac->line + ac->len, ASK_MAX - ac->len); accounts_wipe(shown, sizeof shown); }
     poll_depth--; term_output(poll_depth ? 1 : 0);

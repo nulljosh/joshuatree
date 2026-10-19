@@ -11,6 +11,7 @@ extern int dock_scale_pct;            /* main.c: the dock's tile size as a perce
 void wall_set(unsigned rgb);          /* wall.c */
 void desktop_wall_changed(void);      /* main.c: repaint the desktop if it is up */
 void kputs(const char *s); void kdec(unsigned v);   /* main.c: the UART (and the Console) */
+int sudo_may_write(void);             /* sudo.c: no accounts, or the signed-in user is an admin */
 
 #define SET_FILE "SETTINGS.TXT"
 #define SET_WALLS 4
@@ -19,7 +20,7 @@ void kputs(const char *s); void kdec(unsigned v);   /* main.c: the UART (and the
 static const struct { const char *name; unsigned rgb; } walls[SET_WALLS] = {
     { "Grey", 0x006E6E6Eu }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u } };
 static int wall_pick;                 /* index into walls */
-static int saved_state;               /* 0 not yet saved, 1 on the card, -1 no card or the card refused it */
+static int saved_state;               /* 0 not yet saved, 1 on the card, -1 no card or the card refused it, -2 not an admin */
 
 const char *settings_version(void) {
 #ifdef JT_VERSION
@@ -76,6 +77,7 @@ unsigned settings_format(char *out, int vol, int wall, int dock) {
 void settings_save(void) {
     char buf[48];
     unsigned n = settings_format(buf, audio_volume(), wall_pick, dock_scale_pct);
+    if (!sudo_may_write()) { saved_state = -2; return; }     /* 4.10.0: only an admin saves settings; anyone else's change lasts until restart */
     saved_state = sd_ready() && sd_write(SET_FILE, buf, n) == 1 ? 1 : -1;
 }
 /* After sd_mount, before the desktop is first painted on the Pi. The choices that need the screen (the wallpaper) repaint it

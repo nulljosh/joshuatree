@@ -8,6 +8,8 @@
 #include "bt.h"
 #include "emmc.h"
 #include "accounts.h"
+#include "sudo.h"
+#include "login.h"
 #include "../../drivers/fat.h"
 void kputs(const char *s);   /* main.c: the UART and the log of the window in front */
 void say_wrapped(const char *prefix, const char *s, unsigned n);   /* ask.c */
@@ -30,12 +32,14 @@ void menubar_notify(const char *message);                          /* main.c: th
 #define TICK_MS 40
 
 void (*cmd_out)(const char *s) = kputs;
+static int priv(const char *what);   /* below: 1 if a privileged command may go on */
 void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (char)('0' + v % 10); while (v /= 10); cmd_out(t + n); }
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, beep [FREQ MS], mic [SECONDS], hear [SECONDS] (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
-                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), users, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), logout, sam QUESTION (ask Samantha), reboot, shutdown, help.";
+                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
+                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;
@@ -64,6 +68,7 @@ static void cat_file(const char *q, unsigned n) {   /* the first 4 KB of a file,
     word(q, n, path, sizeof path);
     if (!sd_ready()) { cmd_out("cat: no SD card\n"); return; }
     char *name = down(path);
+    if (name && accounts_count() && accounts_protected(name) && !priv("cat")) { if (name != path) fat_chdir(".."); return; }
     int got = name ? fat_read_file(name, text, sizeof text) : -1;
     if (name && name != path) fat_chdir("..");   /* back to the root */
     if (got < 0) { cmd_out("cat: no file "); cmd_out(path); cmd_out("\n"); return; }
@@ -173,11 +178,28 @@ static int is(const char *q, unsigned n, const char *w) {   /* the line starts w
     for (; w[k]; k++) if (k >= n || q[k] != w[k]) return 0;
     return k < n && q[k] == ' ';
 }
+void logout_request(void);   /* main.c: the login screen comes back on the next pass of the main loop */
+void cmd_run(const char *q, unsigned n, void (*out)(const char *));
+static int eq_(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
+static int sudo_run;   /* above 0 while a command runs under sudo: the password was just checked, or is still remembered */
+/* A privileged command (adduser, deluser of someone else, any write to JT/, passwd for someone else, makeadmin, unadmin). With
+   no accounts everything is open, as before. Under sudo it goes. An admin who forgot the word is told to use it; anyone else
+   is told they are not an admin. 1 if the command may go on. */
+static int priv(const char *what) {
+    if (!accounts_count() || sudo_run) return 1;
+    cmd_out(what);
+    cmd_out(sudo_is_admin(current_user) ? ": needs sudo, try sudo " : ": you are not an admin; try sudo ");
+    cmd_out(what); cmd_out("\n");
+    return 0;
+}
 static void jt_command(const char *q, unsigned n, int op) {   /* 0 write NAME TEXT, 1 rm NAME, 2 mkdir NAME */
     static char text[1024];
     char name[64];
     unsigned used = word(q, n, name, sizeof name), len = 0;
-    if (!sd_ready()) { cmd_out(op == 0 ? "write" : op == 1 ? "rm" : "mkdir"); cmd_out(": no SD card\n"); return; }
+    const char *verb = op == 0 ? "write" : op == 1 ? "rm" : "mkdir";
+    if (!priv(verb)) return;
+    if (accounts_protected(name)) { cmd_out(verb); cmd_out(": "); cmd_out(name); cmd_out(" is kept by adduser, passwd and makeadmin, not by hand\n"); return; }
+    if (!sd_ready()) { cmd_out(verb); cmd_out(": no SD card\n"); return; }
     if (op == 0) {                                 /* the rest of the line, then a newline: a text file */
         if (used < n) used++;
         while (used < n && len < sizeof text - 1) text[len++] = q[used++];
@@ -207,21 +229,153 @@ static void account_command(const char *q, unsigned n, int remove) {   /* q is t
     unsigned used = word(q, n, name, sizeof name);
     while (used < n && q[used] == ' ') used++;
     unsigned used2 = used + word(q + used, n - used, pass, sizeof pass);
-    if (!name[0] || !pass[0] || used2 != n || slen_(name) > ACC_NAME_MAX || slen_(pass) > ACC_PASS_MAX) {
+    int forced = remove && sudo_run && name[0] && !pass[0];   /* an admin's deluser NAME needs no password of the account's own */
+    if (!name[0] || (!pass[0] && !forced) || used2 != n || slen_(name) > ACC_NAME_MAX || slen_(pass) > ACC_PASS_MAX) {
         cmd_out(remove ? "deluser: use deluser NAME PASSWORD (no spaces in the password)\n" : "adduser: use adduser NAME PASSWORD (no spaces in the password)\n");
         accounts_wipe(pass, sizeof pass);
         return;
     }
+    int first = !remove && !accounts_count();      /* no accounts at all: the first one may be made by anyone, and is an admin */
+    int self = remove && eq_(name, current_user);
+    if (!first && !(self && !forced) && !priv(remove ? "deluser" : "adduser")) { accounts_wipe(pass, sizeof pass); return; }
+    if (remove && sudo_is_admin(name) && sudo_admin_count() == 1 && accounts_count() > 1) {
+        cmd_out("deluser "); cmd_out(name); cmd_out(": the last admin, make another admin first\n");
+        accounts_wipe(pass, sizeof pass);
+        return;
+    }
     cmd_out(remove ? "deluser: working\n" : "adduser: working, the password is being stretched\n");
-    int r = remove ? accounts_remove(name, pass) : accounts_add(name, pass);
+    int r = remove ? (forced ? accounts_delete(name) : accounts_remove(name, pass)) : accounts_add(name, pass);
     accounts_wipe(pass, sizeof pass);
     cmd_out(remove ? "deluser " : "adduser ");
     cmd_out(name);
     if (r) { cmd_out(": "); cmd_out(accounts_reason(r)); }
     else cmd_out(remove ? ": removed" : ": added");
     cmd_out("\n");
+    if (r) return;
+    if (remove) {
+        sudo_scrub(name);                           /* the name must not come back as an admin */
+        if (self) {
+            sudo_drop(); accounts_wipe(current_user, ACC_NAME_MAX + 1);
+            if (accounts_count()) logout_request();
+        }
+    } else if (first) {
+        sudo_first(name);
+        for (unsigned i = 0; name[i] && i < ACC_NAME_MAX; i++) { current_user[i] = name[i]; current_user[i + 1] = 0; }
+        sudo_arm(name);
+        cmd_out(name); cmd_out(" is the first account, so an admin, and signed in\n");
+    } else sudo_scrub(name);
 }
-void logout_request(void);   /* main.c: the login screen comes back on the next pass of the main loop */
+static void admins_command(void) {
+    if (!sudo_admin_count()) { cmd_out("admins: none, the first adduser makes one\n"); return; }
+    for (unsigned i = 0; i < sudo_admin_count(); i++) { cmd_out(sudo_admin_name(i)); cmd_out("\n"); }
+}
+static void admin_command(const char *q, unsigned n, int make) {   /* makeadmin NAME, unadmin NAME */
+    const char *cmd = make ? "makeadmin" : "unadmin";
+    char name[ACC_NAME_MAX + 2];
+    unsigned used = word(q, n, name, sizeof name);
+    while (used < n && q[used] == ' ') used++;
+    if (!name[0] || used != n || slen_(name) > ACC_NAME_MAX) { cmd_out(cmd); cmd_out(": use "); cmd_out(cmd); cmd_out(" NAME\n"); return; }
+    if (!priv(cmd)) return;
+    int r = make ? sudo_make(name) : sudo_unmake(name);
+    cmd_out(cmd); cmd_out(" "); cmd_out(name); cmd_out(": ");
+    cmd_out(r ? sudo_reason(r) : make ? "now an admin" : "no longer an admin");
+    cmd_out("\n");
+}
+
+/* sudo and passwd need a password, typed on the line after the command with the stars drawn by ask.c (ask_password): the next
+   line Enter sends comes to cmd_password instead of cmd_run, whatever it holds. That keeps the Terminal one line at a time,
+   shows nothing of the password on screen or UART (not even its length: the echo is the prompt alone), and lets Esc cancel.
+   Every buffer that held a password, or a command with one in it, is wiped before the step returns. */
+#define PW_NONE 0
+#define PW_SUDO 1     /* sudo CMD: waiting for the signed-in user's password; pw_cmd holds CMD */
+#define PW_OLD 2      /* passwd: the current password of pw_target */
+#define PW_NEW1 3     /* passwd: the new password */
+#define PW_NEW2 4     /* passwd: the new password again */
+void ask_password(const char *label);   /* ask.c: the next line typed is a password: stars, no echo */
+static int pw_state;
+static char pw_cmd[256], pw_target[ACC_NAME_MAX + 2], pw_new[ACC_PASS_MAX + 2], pw_label[56];
+static void pw_clear(void) {
+    accounts_wipe(pw_cmd, sizeof pw_cmd); accounts_wipe(pw_new, sizeof pw_new); accounts_wipe(pw_target, sizeof pw_target);
+    pw_state = PW_NONE;
+}
+static void pw_ask(int state, const char *a, const char *b) {   /* the label is a + b + ": " */
+    unsigned k = 0;
+    for (; a[k] && k < sizeof pw_label - 3; k++) pw_label[k] = a[k];
+    for (unsigned i = 0; b[i] && k < sizeof pw_label - 3; i++) pw_label[k++] = b[i];
+    pw_label[k++] = ':'; pw_label[k++] = ' '; pw_label[k] = 0;
+    pw_state = state;
+    ask_password(pw_label);
+}
+void cmd_password_cancel(void) { pw_clear(); }   /* ask.c: Esc at the prompt, or a sign-out */
+static void sudo_command(const char *q, unsigned n) {   /* q is the line after "sudo " */
+    while (n && q[0] == ' ') { q++; n--; }
+    if (!n) { cmd_out("sudo: use sudo COMMAND, or sudo -k to forget the password\n"); return; }
+    if (word_is(q, n, "-k")) { sudo_drop(); cmd_out("sudo: password forgotten\n"); return; }
+    if (word_is(q, n, "sudo") || is(q, n, "sudo")) { cmd_out("sudo: not inside sudo\n"); return; }
+    if (!accounts_count()) { cmd_run(q, n, cmd_out); return; }   /* no accounts: everything is open already */
+    if (!current_user[0]) { cmd_out("sudo: nobody is signed in\n"); return; }
+    if (sudo_active()) { sudo_run++; cmd_run(q, n, cmd_out); sudo_run--; return; }
+    if (n >= sizeof pw_cmd) { cmd_out("sudo: that line is too long\n"); return; }
+    pw_clear();
+    for (unsigned i = 0; i < n; i++) pw_cmd[i] = q[i];
+    pw_ask(PW_SUDO, "[sudo] password for ", current_user);
+}
+static void passwd_command(const char *q, unsigned n) {   /* passwd, passwd NAME; under sudo passwd NAME resets without the old one */
+    char name[ACC_NAME_MAX + 2];
+    unsigned used = word(q, n, name, sizeof name);
+    while (used < n && q[used] == ' ') used++;
+    if (used != n || slen_(name) > ACC_NAME_MAX) { cmd_out("passwd: use passwd, or sudo passwd NAME\n"); return; }
+    if (!accounts_count()) { cmd_out("passwd: no accounts yet, adduser NAME PASSWORD makes one\n"); return; }
+    if (!name[0]) for (unsigned i = 0; current_user[i]; i++) { name[i] = current_user[i]; name[i + 1] = 0; }
+    if (!name[0]) { cmd_out("passwd: nobody is signed in\n"); return; }
+    int self = eq_(name, current_user);
+    if (!self && !priv("passwd")) return;
+    if (!accounts_has(name)) { cmd_out("passwd: no such account\n"); return; }
+    pw_clear();
+    for (unsigned i = 0; name[i]; i++) { pw_target[i] = name[i]; pw_target[i + 1] = 0; }
+    if (self && !sudo_run) pw_ask(PW_OLD, "Current password", "");
+    else pw_ask(PW_NEW1, "New password", "");
+}
+/* ask.c, for the line typed while a password is wanted. */
+void cmd_password(const char *q, unsigned n, void (*out)(const char *)) {
+    cmd_out = out ? out : kputs;
+    char pass[ACC_PASS_MAX + 2];
+    int st = pw_state, big = n > ACC_PASS_MAX;
+    pw_state = PW_NONE;
+    for (unsigned i = 0; i < n && i < ACC_PASS_MAX + 1; i++) pass[i] = q[i];
+    pass[big ? ACC_PASS_MAX + 1 : n] = 0;
+    if (st == PW_SUDO) {
+        int r = sudo_check(current_user, pass);   /* waits a second when it is wrong */
+        accounts_wipe(pass, sizeof pass);
+        if (r == SUDO_E_NOTADMIN) { cmd_out("sudo: "); cmd_out(current_user); cmd_out(" is not an admin\n"); pw_clear(); return; }
+        if (r) { cmd_out("sudo: wrong password\n"); pw_clear(); return; }
+        char line[sizeof pw_cmd]; unsigned len = slen_(pw_cmd);
+        for (unsigned i = 0; i <= len; i++) line[i] = pw_cmd[i];
+        pw_clear();
+        sudo_run++; cmd_run(line, len, cmd_out); sudo_run--;
+        accounts_wipe(line, sizeof line);
+    } else if (st == PW_OLD) {
+        int r = big ? ACC_E_WRONG : accounts_check(pw_target, pass);
+        accounts_wipe(pass, sizeof pass);
+        if (r) { login_wait_ms(LOGIN_DELAY_MS); cmd_out("passwd: wrong password\n"); pw_clear(); return; }
+        pw_ask(PW_NEW1, "New password", "");
+    } else if (st == PW_NEW1) {
+        if (big || slen_(pass) < ACC_PASS_MIN) { accounts_wipe(pass, sizeof pass); cmd_out("passwd: "); cmd_out(accounts_reason(ACC_E_PASS)); cmd_out(", nothing changed\n"); pw_clear(); return; }
+        for (unsigned i = 0; i <= slen_(pass); i++) pw_new[i] = pass[i];
+        accounts_wipe(pass, sizeof pass);
+        pw_ask(PW_NEW2, "Retype new password", "");
+    } else if (st == PW_NEW2) {
+        int ok = !big && eq_(pass, pw_new);
+        accounts_wipe(pass, sizeof pass);
+        if (!ok) { cmd_out("passwd: the two passwords differ, nothing changed\n"); pw_clear(); return; }
+        cmd_out("passwd: working, the password is being stretched\n");
+        int r = accounts_passwd(pw_target, pw_new);
+        cmd_out("passwd "); cmd_out(pw_target); cmd_out(r ? ": " : ": password changed");
+        if (r) cmd_out(accounts_reason(r));
+        cmd_out("\n");
+        pw_clear();
+    } else accounts_wipe(pass, sizeof pass);
+}
 static int blocked_while_sam(const char *q, unsigned n) {   /* the one TCP connection and the heap are in use: these would collide */
     static const char *const names[] = {"browse", "open", "back", "forward", "reload", "llm", "bt", "userrun"};
     for (unsigned a = 0; a < sizeof names / sizeof *names; a++) {
@@ -268,6 +422,12 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         cmd_out("write: use write NAME.EXT TEXT\n"); return;
     }
     if (word_is(q, n, "users")) { users_command(); return; }
+    if (word_is(q, n, "admins")) { admins_command(); return; }
+    if (word_is(q, n, "sudo")) { sudo_command(q, 0); return; }
+    if (is(q, n, "sudo")) { sudo_command(q + 5, n - 5); return; }
+    if (word_is(q, n, "passwd") || is(q, n, "passwd")) { passwd_command(q + 6 + (n > 6), n > 6 ? n - 7 : 0); return; }
+    if (word_is(q, n, "makeadmin") || is(q, n, "makeadmin")) { admin_command(q + 9 + (n > 9), n > 9 ? n - 10 : 0, 1); return; }
+    if (word_is(q, n, "unadmin") || is(q, n, "unadmin")) { admin_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 0); return; }
     if (word_is(q, n, "logout")) { if (accounts_count()) { cmd_out("logout: signing out\n"); logout_request(); } else cmd_out("logout: no accounts, nobody to sign out\n"); return; }
     if (word_is(q, n, "adduser") || is(q, n, "adduser")) { account_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 0); return; }
     if (word_is(q, n, "deluser") || is(q, n, "deluser")) { account_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 1); return; }
