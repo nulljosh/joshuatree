@@ -56,13 +56,12 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 
 **Now: 5.0, Talk to it (Joshua, 2026-10-18: "aim for v5, focus on the mic").** The gate is a ten-minute spoken conversation on the real Pi that opens and changes things. 5.0.0 is cut only after Joshua has had it on the board.
 
-1. The mic on the board. USB audio and `mic` landed in 4.6.0; Joshua checks it with the Yeti.
-2. Speech to text on the Mac: `tools/claude-relay/stt.py` (whisper.cpp), raw 16 kHz PCM in, text out, the relay's bearer token.
-3. `hear` on the Pi: record until quiet, send, print what you said, hand it to `sam`.
-4. Samantha's reply out loud: the relay's speech as PCM, out the jack or a USB speaker.
-5. A full-screen face with a mouth driven by that audio.
-6. Hold Space to talk, with a mic mark and a level bar.
-7. Samantha opens and changes things through the agent loop in `arch/arm64/ask.c`.
+Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Mac (`tools/claude-relay/stt.py`), `hear`, voice mode (double-tap and hold Space, a mic mark and a level bar), her voice through `[[say]]` with a mouth in the chat view, and the agent loop. Since 4.17.0 `[[open]]` reaches every app Spotlight opens. Left:
+
+1. The board proof (Joshua): the Yeti in a Pi port, `mic` shows the room, hold Space and talk, she answers out loud.
+2. `hear` stops when you go quiet, instead of after a fixed few seconds.
+3. A full-screen face whose mouth follows her voice.
+4. Whatever the board shows is broken.
 
 **Then: the rest of 6.0, Yours.** Accounts, login, sudo, home folders (4.8 to 4.11) and snapshots are in. Still to come: the crash-safe card filesystem, a Users pane in Settings, file permissions and backups.
 
@@ -1044,6 +1043,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.17.0 (2026-10-18)**: Samantha's `[[open APP]]` on the Pi reaches every app Spotlight opens (Notes, Music, Calendar, Books, the games), by the name Spotlight shows, through the same `dock_activate` its Enter uses. It opened eleven named apps before. The roadmap's 5.0 list now says what is built and what is left. Check: `arm64-agent-check.py` opens Notes and Music and refuses a made-up name; its `--mutate` build without the fallback fails.
 - **4.16.2 (2026-10-18)**: The Calendar app on the Pi circles the local day, not the UTC one. At 11:20 PM on 11 October the Clock said the 11th and the grid circled the 12th, because `SYS_TIME` handed apps raw UTC. It now returns Vancouver wall time from `clock_offset` in `arch/arm64/main.c`, the same offset `clock_local` uses for the Clock. Samantha's "what time is it" and the Weather weekday were reading UTC too and now read local; the other callers only time gaps or seed. Checked with `tools/checks/arm64-calicon-check.py` (06:20 UTC on 12 October circles the 11th; the `--mutate` build with the grid on UTC circles the 12th and fails).
 - **4.16.1 (2026-10-18)**: Two shipped features get the mutation their checks lacked, and their roadmap boxes are ticked. `notes-autosave-check.py` builds a private tree with the timer turned off and must fail on the missing save (`jtvm.py` takes a `JT_KERNEL` override for it); autosave shipped in 2.55.0. `arm64-keys-check.py` rebuilds with held-key repeat disabled and requires the held-j step to fail; Caps Lock and repeat shipped in 2.52.0. A bare `make` links the kernel again (its first rule had become memmap.ld). No kernel change.
 - **4.16.0 (2026-10-18)**: Nimbus closes the landing page. The footer's desert engraving is replaced by the Nimbus render, cut out on the page's paper; a WebGL shader hatches its shadow in the accent and sends rounded waves out from it, the computer you talk to, talking. The plain cutout is the fallback without WebGL; `render_nimbus.py` makes it with `NIMBUS_CUTOUT=1`. Check: `landing-specs-footer-check.mjs`.

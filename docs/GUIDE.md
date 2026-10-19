@@ -218,9 +218,9 @@ Each action is alone on its own line at the end of an answer, inside `[[ ]]`, at
 | Action | What the Pi does |
 |---|---|
 | `[[note TEXT]]` | Prints TEXT as `pi: TEXT`. |
-| `[[say TEXT]]` | Prints TEXT as `say: TEXT`. A caption: the ARM build has no voice yet. |
+| `[[say TEXT]]` | Prints TEXT as `say: TEXT` and says it out loud through the relay's voice. |
 | `[[led blink]]` | Blinks the green light (on QEMU: `pi: no green light on QEMU`). |
-| `[[open APP]]` | Opens an app by name. Only the Calculator opens on ARM so far. Other names print `pi: no app named ...`. |
+| `[[open APP]]` | Opens any app Spotlight lists, by its name (Notes, Music, Calculator, Mines). Other names print `pi: no app named ...`. |
 | `[[browse URL]]` | Fetches an `http://` or `https://` page through the Terminal browser and prints it as text. Any other scheme is unknown. |
 | `[[calc EXPR]]` | Works out EXPR with the Calculator's evaluator and prints `calc: EXPR = RESULT`. |
 | `[[status]]` | Prints the Pi's address, clock and Wi-Fi bars. |
