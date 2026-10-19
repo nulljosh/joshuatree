@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host-only CI fixtures: reserved ARM builds and fail-fast path validation."""
+"""Host-only CI fixtures: ARM checks packed across the ARM shards only, and fail-fast path validation."""
 import os
 from pathlib import Path
 import re
@@ -39,8 +39,10 @@ else:
     assert suite.read_text() == original, "--check changed the manifest"
     subprocess.run(cmd + ["1"], cwd=root, env=env, check=True)
     rows = [line.split("|") for line in suite.read_text().splitlines()]
-    assert [row[1] for row in rows[:2]] == ["6", "6"], "ARM checks separated"
-    assert all(row[1] != "6" for row in rows[2:]), "pinned work omitted from loads"
+    arm = {"6", "8", "9", "10"}   # the raspi4b runner's shards (check.yml)
+    assert all(row[1] in arm for row in rows[:2]), "an ARM check left the ARM shards"
+    assert rows[0][1] != rows[1][1], "ARM checks were not spread across the ARM shards"
+    assert all(row[1] not in arm for row in rows[2:]), "a host check landed on an ARM shard"
     assert rows[2][1] != rows[3][1], "ordinary checks did not balance"
     assert re.sub(r"\|\d+\|", "|SHARD|", suite.read_text()) == re.sub(
         r"\|\d+\|", "|SHARD|", original), "changed check commands or retry modes"
@@ -58,4 +60,4 @@ else:
     assert "FAIL: tmp-paths-check" in rejected.stdout, "guard did not run"
     assert "-- build --" not in rejected.stdout, "build ran after failed preflight"
 
-print("PASS: ARM affinity, load accounting, dry run, shard bounds and fail-fast preflight")
+print("PASS: ARM checks spread across the ARM shards, host checks off them, dry run, shard bounds and fail-fast preflight")
