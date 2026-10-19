@@ -3530,7 +3530,7 @@ static void input_event(struct input_event e) {
     }
     if (e.type == 1 && e.value && ui_key(e.code)) {                                                      /* Spotlight, the dock keys, F2 and Ctrl+T */
         con_quiet = 1;
-        uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
+        if (!set_secret()) { uart_puts("key "); uart_dec(e.code); uart_puts(" down\n"); }   /* 4.14.0: not while Settings' Users pane takes a password */
         return;
     }
     if (e.type == 1 && brick_live && !spot_live) { brick_key(e.code, e.value); return; }
@@ -3553,7 +3553,7 @@ static void input_event(struct input_event e) {
             /* Only the Terminal takes typing; Shift always reaches ask.c, as the Calculator reads its state there */
             if (term || e.code == 42 || e.code == 54) ask_key(e.code, e.value);
             con_quiet = 1;   /* typed keys show on the ask> row, or nowhere; the echo stays on the UART and off the Console */
-            if (!(term && ask_secret())) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* 4.10.0: not while a password is being typed */
+            if (!(term && ask_secret()) && !set_secret()) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* 4.10.0: not while a password is being typed */
         }
         cur_release(held);
     }
