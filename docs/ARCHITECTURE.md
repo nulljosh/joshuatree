@@ -2354,7 +2354,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (290 checks)
+### The suite (291 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2366,6 +2366,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Login on the Pi: login.c on the host under sanitizers; in headless QEMU a card with an account boots to the login screen, a wrong password costs a second and stays, the right one brings the desktop and the name, logout returns, a card with no account has no login, and a login that accepts any password is caught | `tools/checks/arm64-login-check.py` | once |
 | Admins and sudo on the Pi: sudo.c under sanitizers (first admin, five minute memory, makeadmin, unadmin, damaged SUDOERS.TXT, passwd, same-time unknown name); in headless QEMU a normal user is refused every privileged command, sudo asks a starred password and remembers it, passwd changes it, no password or key code reaches the UART, the quiet boot shows the login card first, and a sudo that skips the check is caught | `tools/checks/arm64-sudo-check.py` | once |
 | Home folders on the Pi: home.c and ufile.c under sanitizers over an in-memory FAT (an app's root is JT/HOME/<name>, flush after sign-out, another's folder refused by any path, cat/ls/write/rm walker, Samantha's save, folder-name collisions); in headless QEMU a normal user works in ~ without sudo, cannot touch an admin's folder, an admin needs sudo for his, adduser makes the folder and deluser leaves it, and two mutations are caught | `tools/checks/arm64-home-check.py` | once |
+| Home snapshots: snap.c and the real fat.c on a mkfs.fat image under sanitizers (nested copy, SNAP never copied into itself, newest three kept, a snapshot without _DONE ignored and cleaned, restore puts files back and removes later ones, fat_rmdir, fsck.fat clean) | `tools/checks/arm64-snap-check.py` | once |
 | Settings on the Pi: settings.c parsing and file text under sanitizers; in headless QEMU Spotlight and the menu bar icons open the window, five sections with their own glyphs, a wallpaper change repaints the whole desktop and a window closed afterwards leaves the new colour, volume and dock size step, and JT/SETTINGS.TXT survives a reboot | `tools/checks/arm64-settings-check.py` | once |
 | Stocks on ARM: the tile and Spotlight open the Pi window, the watchlist pills and the line chart are drawn from the labelled sample, Down changes the chart, Esc and the red dot close it, in headless QEMU | `tools/checks/arm64-stocks-check.py` | retry |
 | Games on the Pi: Spotlight opens Mines, Toroid, Hamurapi and Keyrate at EL0, a reveal (key and click), a generation, a year and a typed word each change the pixels, Esc closes each, in headless QEMU | `tools/checks/arm64-games-check.py` | once |
