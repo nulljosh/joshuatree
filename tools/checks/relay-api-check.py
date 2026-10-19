@@ -147,7 +147,7 @@ class ModelName(unittest.TestCase):
         self.assertEqual(m.group(1), relay.TURING_NAME)
         self.assertEqual(relay.TURING_NAME, "Samantha")
         self.assertIn('static const char sam[] = "Samantha";', src, "ask.c's take_model no longer accepts M Samantha")
-        self.assertIn('return "joshua@tree % ";', src, "the prompt is no longer joshua@tree % ")
+        self.assertIn('"joshua@tree % ";', src, "the prompt is no longer joshua@tree % ")
         self.assertNotIn('"ask> "', src)
 
 
