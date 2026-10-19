@@ -3469,7 +3469,7 @@ int app_open_name(const char *name) {
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
         if (!w[i] && !name[i]) { dock_activate(SPOT_FINDER); return 1; }
     }
-    for (int s = 1; s <= SPOT_LAST; s++) {   /* 4.18.0: anything Spotlight lists and the Pi runs, by the name it shows (Notes, Music, Calendar, the games), the way Spotlight's Enter opens it */
+    for (int s = 1; s <= SPOT_LAST; s++) {   /* 4.17.0: anything Spotlight lists and the Pi runs, by the name it shows (Notes, Music, Calendar, the games), the way Spotlight's Enter opens it */
         const char *w = spot_name(s); unsigned i = 0;
         for (; w[i] && name[i] && (name[i] | 32) == (w[i] | 32); i++) ;
         if (!w[i] && !name[i] && lp_on_arm(s)) { dock_activate(s); return 1; }

@@ -116,7 +116,7 @@ try:
     mutate = "--mutate" in sys.argv
     main_c = os.path.join(arch, "main.c"); main_src = open(main_c).read()
     if mutate:   # app_open_name without its Spotlight fallback: only the old named list opens
-        cut = re.sub(r"\n    for \(int s = 1; s <= SPOT_LAST; s\+\+\) \{   /\* 4\.18\.0.*?\n    \}", "", main_src, count=1, flags=re.S)
+        cut = re.sub(r"\n    for \(int s = 1; s <= SPOT_LAST; s\+\+\) \{   /\* [0-9.]+: anything Spotlight.*?\n    \}", "", main_src, count=1, flags=re.S)
         if cut == main_src: print("FAIL: the mutation found no Spotlight fallback to cut"); sys.exit(1)
         open(main_c, "w").write(cut)
     try: r = subprocess.run(["make", "-C", arch], env=env, capture_output=True, text=True, timeout=300)

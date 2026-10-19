@@ -56,7 +56,7 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 
 **Now: 5.0, Talk to it (Joshua, 2026-10-18: "aim for v5, focus on the mic").** The gate is a ten-minute spoken conversation on the real Pi that opens and changes things. 5.0.0 is cut only after Joshua has had it on the board.
 
-Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Mac (`tools/claude-relay/stt.py`), `hear`, voice mode (double-tap and hold Space, a mic mark and a level bar), her voice through `[[say]]` with a mouth in the chat view, and the agent loop. Since 4.18.0 `[[open]]` reaches every app Spotlight opens. Left:
+Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Mac (`tools/claude-relay/stt.py`), `hear`, voice mode (double-tap and hold Space, a mic mark and a level bar), her voice through `[[say]]` with a mouth in the chat view, and the agent loop. Since 4.17.0 `[[open]]` reaches every app Spotlight opens. Left:
 
 1. The board proof (Joshua): the Yeti in a Pi port, `mic` shows the room, hold Space and talk, she answers out loud.
 2. `hear` stops when you go quiet, instead of after a fixed few seconds.
