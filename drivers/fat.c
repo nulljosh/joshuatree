@@ -463,6 +463,36 @@ failed:
     return 0;
 }
 
+/* Removes the named subdirectory of the current directory, only when it holds
+   nothing but "." and "..". Same order as fat_delete: entry first, then the
+   clusters. */
+int fat_rmdir(const char *name) {
+    if (!mounted || !*name) return 0;
+    struct dir_entry *e = find_entry_in(current_dir_cluster, name);
+    if (!e || !(e->attr & ATTR_DIRECTORY)) return 0;
+    u32 first = entry_cluster(e);
+    u32 elba = matched_lba; int eidx = matched_index;
+    if (first < 2) return 0;
+    u8 sector[512];
+    for (u32 s = 0; ; s++) {
+        u32 lba = dir_get_sector(first, s);
+        if (!lba) break;
+        if (!blockdev_read_sector(lba, sector)) return 0;
+        struct dir_entry *d = (struct dir_entry *)sector;
+        for (int i = 0; i < 512 / 32; i++) {
+            if (d[i].name[0] == 0x00) goto empty;
+            if (d[i].name[0] == 0xE5 || d[i].name[0] == '.') continue;
+            return 0;
+        }
+    }
+empty:
+    if (!blockdev_read_sector(elba, sector)) return 0;
+    ((struct dir_entry *)sector)[eidx].name[0] = 0xE5;
+    if (!blockdev_write_sector(elba, sector)) return 0;
+    release_chain(first);
+    return 1;
+}
+
 static int write_file(const char *name, const void *data, unsigned int len, int replace) {
     if (!mounted || !*name) return 0;
     struct dir_entry *existing = find_entry_in(current_dir_cluster, name);

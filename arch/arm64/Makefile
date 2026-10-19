@@ -87,7 +87,7 @@ text.o: text.c ../../drivers/ttf.h ../../lib/text_ink.h
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
 # The Calculator's evaluator: the FPU does the sums, so it is built like text.c; main.c draws its window.
-cmd.o: cmd.c bt.h emmc.h accounts.h sudo.h login.h home.h ../../drivers/fat.h
+cmd.o: cmd.c snap.h bt.h emmc.h accounts.h sudo.h login.h home.h ../../drivers/fat.h
 	$(CC) -c $< -o $@
 calc.o: calc.c
 	$(FPCC) -c $< -o $@
@@ -126,8 +126,8 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o
-PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o
+SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o
+PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c home.h emmc.h ../../drivers/fat.h
@@ -148,6 +148,8 @@ sudo.o: sudo.c sudo.h accounts.h login.h emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 # Home folders (4.11.0): JT/HOME/<name>, where apps, ~ and Samantha's save put a signed-in person's files.
 home.o: home.c home.h accounts.h sudo.h login.h emmc.h ../../drivers/fat.h
+	$(SDCC) -c $< -o $@
+snap.o: snap.c snap.h home.h accounts.h login.h emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 emmc.o: emmc.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@

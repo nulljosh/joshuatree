@@ -11,6 +11,7 @@
 #include "sudo.h"
 #include "login.h"
 #include "home.h"
+#include "snap.h"
 #include "../../drivers/fat.h"
 void kputs(const char *s);   /* main.c: the UART and the log of the window in front */
 void say_wrapped(const char *prefix, const char *s, unsigned n);   /* ask.c */
@@ -40,7 +41,7 @@ void power_run(int off);                                   /* main.c: the confir
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, beep [FREQ MS], mic [SECONDS], hear [SECONDS] (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
-                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, sam QUESTION (ask Samantha), reboot, shutdown, help.";
+                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;
@@ -440,6 +441,43 @@ static void not_found(const char *q, unsigned n) {   /* zsh: command not found: 
     word(q, n, w, sizeof w);
     cmd_out("zsh: command not found: "); cmd_out(w); cmd_out("\n");
 }
+static void snap_one(unsigned id, const char *info) { cmd_dec(id); cmd_out("  "); cmd_out(info); cmd_out("\n"); }
+static int snap_refused(const char *verb, int r) {   /* the reason a snapshot call said no, printed; 1 when it did */
+    if (r >= 0 && r != 0) return 0;
+    cmd_out(verb);
+    cmd_out(r == -1 ? ": no SD card\n" : r == -2 ? ": nobody is signed in, so there is no home folder\n" : r == -3 ? ": no such snapshot, see snapshots\n" : ": the card would not take it\n");
+    return 1;
+}
+static void snap_command(const char *q, unsigned n) {   /* snapshot | snapshots | restore N yes */
+    unsigned id, files, skipped;
+    if (word_is(q, n, "snapshots")) {
+        int r = snap_list(snap_one);
+        if (r == 0) cmd_out("snapshots: none yet, try snapshot\n");
+        else if (r < 0) snap_refused("snapshots", r);
+        return;
+    }
+    if (word_is(q, n, "snapshot")) {
+        int r = snap_take(&id, &files, &skipped);
+        if (snap_refused("snapshot", r)) return;
+        cmd_out("snapshot "); cmd_dec(id); cmd_out(": "); cmd_dec(files); cmd_out(" files");
+        if (skipped) { cmd_out(", "); cmd_dec(skipped); cmd_out(" skipped (over 32 KB or past 24 in a folder)"); }
+        cmd_out("\n"); return;
+    }
+    char w1[16], w2[16];
+    unsigned used = word(q + 8, n - 8, w1, sizeof w1);
+    word(q + 8 + used, n - 8 - used, w2, sizeof w2);
+    int v;
+    if (!num(w1, slen_(w1), &v)) { cmd_out("restore: use restore N yes (N from snapshots)\n"); return; }
+    if (!(w2[0] == 'y' && w2[1] == 'e' && w2[2] == 's' && !w2[3])) {
+        cmd_out("restore "); cmd_dec((unsigned)v); cmd_out(": this makes your home folder exactly as that snapshot was, files made since are removed. Type restore ");
+        cmd_dec((unsigned)v); cmd_out(" yes to go on\n"); return;
+    }
+    int r = snap_restore((unsigned)v, &files, &skipped);
+    if (snap_refused("restore", r)) return;
+    cmd_out("restore "); cmd_dec((unsigned)v); cmd_out(": "); cmd_dec(files); cmd_out(" files back");
+    if (skipped) { cmd_out(", "); cmd_dec(skipped); cmd_out(" skipped"); }
+    cmd_out("\n");
+}
 void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     cmd_out = out ? out : kputs;
     while (n && q[0] == ' ') { q++; n--; }
@@ -485,6 +523,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (word_is(q, n, "logout")) { if (accounts_count()) { cmd_out("logout: signing out\n"); logout_request(); } else cmd_out("logout: no accounts, nobody to sign out\n"); return; }
     if (word_is(q, n, "adduser") || is(q, n, "adduser")) { account_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 0); return; }
     if (word_is(q, n, "deluser") || is(q, n, "deluser")) { account_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 1); return; }
+    if (word_is(q, n, "snapshot") || word_is(q, n, "snapshots") || word_is(q, n, "restore") || is(q, n, "restore")) { snap_command(q, n); return; }
     if (is(q, n, "rm")) { jt_command(q + 3, n - 3, 1); return; }
     if (is(q, n, "mkdir")) { jt_command(q + 6, n - 6, 2); return; }
     if (word_is(q, n, "reboot") || word_is(q, n, "restart")) { power_run(0); return; }     /* typing it is the confirmation the chord asks for */
