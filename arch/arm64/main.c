@@ -2694,6 +2694,11 @@ static int spot_key(unsigned code) {   /* a key down with the bar open: every ke
 static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hover(slot); }
 int ask_busy(void);   /* ask.c: a `sam` request is queued or waiting on the relay */
 #include "power.h"
+#ifdef POWER_FILE_TEST   /* the power check's output catcher: what a Terminal command printed, searched for a word */
+static char seen[256];
+static void grab(const char *t) { unsigned k = 0; while (seen[k]) k++; for (; *t && k + 1 < sizeof seen; t++) seen[k++] = *t; seen[k] = 0; }
+static int has(const char *w) { for (unsigned i = 0; seen[i]; i++) { unsigned j = 0; while (w[j] && seen[i + j] == w[j]) j++; if (!w[j]) return 1; } return 0; }
+#endif
 /* The reboot and shutdown commands are refused only while a `sam` request is live. They must not use ask_pending(): that is
    also true while the typed line that holds this very command runs, so every typed reboot would be refused (found on the Pi). */
 static int power_refused(void) {
@@ -4018,6 +4023,23 @@ void main(void) {
     uart_puts("power: cancellation survived\n");
     hid_kbd(chord, 8, previous); hid_kbd(none, 8, previous);
     hid_kbd(enter, 8, previous);
+#endif
+#ifdef POWER_FILE_TEST   /* tools/checks/arm64-power-check.py: boot 1 leaves a file unsaved and types `reboot`; boot 2 reads it back and types `shutdown` */
+    {
+        void cmd_run(const char *q, unsigned n, void (*out)(const char *));
+        void ufile_selftest_dirty(const char *name, const char *text);
+        cmd_run("cat JT/PWRBOOT.TXT", 18, grab);
+        if (!has("boot-one")) {
+            cmd_run("write PWRBOOT.TXT boot-one", 26, 0);
+            ufile_selftest_dirty("PWR.TXT", "kept-by-flush");
+            uart_puts("power: file left unsaved, typing reboot\n");
+            cmd_run("reboot", 6, 0);
+        } else {
+            seen[0] = 0; cmd_run("cat JT/PWR.TXT", 15, grab);
+            uart_puts(has("kept-by-flush") ? "power: file survived the reboot\n" : "power: file LOST in the reboot\n");
+            cmd_run("shutdown", 8, 0);
+        }
+    }
 #endif
 #ifdef TREEMENU_SELFTEST   /* 1 restart, 2 shut down: the tree clicked open and driven by the board's own key events, then the power prompt confirmed */
     {

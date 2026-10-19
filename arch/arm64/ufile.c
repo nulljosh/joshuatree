@@ -266,6 +266,22 @@ long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned
 void ufile_release(void) {
     for (int i = 0; i < NFDS; i++) if (fds[i].used && fds[i].owner == ufile_owner) u_close(FIRST_FD + (unsigned long)i);
 }
+/* Power (4.16.0): every descriptor with unwritten bytes goes to the card before a restart or shutdown; returns how many were
+   written, -1 when one failed. The descriptors stay open (the machine is about to go), so nothing here frees anything. */
+int ufile_sync(void) {
+    int n = 0, bad = 0;
+    for (int i = 0; i < NFDS; i++) if (fds[i].used && fds[i].dirty) { if (flush(&fds[i])) bad = 1; else n++; }
+    return bad ? -1 : n;
+}
+/* The power check's build (main.c POWER_FILE_TEST) calls this: a file an app wrote and has not closed, as Notes is mid-save. */
+void ufile_selftest_dirty(const char *name, const char *text) {
+    struct ufd *f = &fds[NFDS - 1];
+    unsigned n = 0, k = 0;
+    while (text[n] && n < 64) { f->data[n] = text[n]; n++; }
+    for (; name[k] && k < PATH_MAX; k++) f->name[k] = name[k];
+    f->name[k] = 0; f->home[0] = 0;
+    f->used = f->dirty = 1; f->owner = 0; f->flags = O_WRONLY; f->size = f->pos = n;
+}
 /* Folders an app expects before it runs, made inside JT/ (JT/ too) when missing: Notes gets NOTES/NOTES, its default
    folder, as i386's notes_check_support makes it. Without NOTES/ it would fall back to loose files in its root. */
 void ufile_mkdirs(const char *path) {
