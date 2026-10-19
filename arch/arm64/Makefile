@@ -126,8 +126,8 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o
-PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o
+SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o
+PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c emmc.h ../../drivers/fat.h
@@ -139,6 +139,9 @@ settings.o: settings.c audio.h emmc.h ../../drivers/fat.h ../../VERSION
 auth_kdf.o: ../../kernel/auth_kdf.c ../../kernel/auth_kdf.h
 	$(SDCC) -I$(BSSL)/inc -I$(BSSL)/shim -c $< -o $@
 accounts.o: accounts.c accounts.h rng.h emmc.h ../../drivers/fat.h ../../kernel/auth_kdf.h
+	$(SDCC) -c $< -o $@
+# The login form (4.9.0): its keys and the wrong-password delay; the screen is login_ui.h.
+login.o: login.c login.h accounts.h
 	$(SDCC) -c $< -o $@
 emmc.o: emmc.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
@@ -204,7 +207,7 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = ../../VERSION settings_ui.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = ../../VERSION settings_ui.h login_ui.h login.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c

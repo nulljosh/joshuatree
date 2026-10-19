@@ -35,7 +35,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, beep [FREQ MS], mic [SECONDS], hear [SECONDS] (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
-                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), users, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), sam QUESTION (ask Samantha), reboot, shutdown, help.";
+                           "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/), users, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), logout, sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;
@@ -221,6 +221,7 @@ static void account_command(const char *q, unsigned n, int remove) {   /* q is t
     else cmd_out(remove ? ": removed" : ": added");
     cmd_out("\n");
 }
+void logout_request(void);   /* main.c: the login screen comes back on the next pass of the main loop */
 static int blocked_while_sam(const char *q, unsigned n) {   /* the one TCP connection and the heap are in use: these would collide */
     static const char *const names[] = {"browse", "open", "back", "forward", "reload", "llm", "bt", "userrun"};
     for (unsigned a = 0; a < sizeof names / sizeof *names; a++) {
@@ -267,6 +268,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         cmd_out("write: use write NAME.EXT TEXT\n"); return;
     }
     if (word_is(q, n, "users")) { users_command(); return; }
+    if (word_is(q, n, "logout")) { if (accounts_count()) { cmd_out("logout: signing out\n"); logout_request(); } else cmd_out("logout: no accounts, nobody to sign out\n"); return; }
     if (word_is(q, n, "adduser") || is(q, n, "adduser")) { account_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 0); return; }
     if (word_is(q, n, "deluser") || is(q, n, "deluser")) { account_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 1); return; }
     if (is(q, n, "rm")) { jt_command(q + 3, n - 3, 1); return; }

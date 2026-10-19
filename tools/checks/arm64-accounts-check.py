@@ -12,7 +12,7 @@
      `adduser ann hunter22` (timed) and `users` lists ann; the echoed line reads `adduser ann ********`; a wrong deluser, a
      repeat name, a short password and a bad line are refused; the UART never holds a password that was typed.
   3. The card: JT/USERS.TXT read back with mtools is one `ann:p2:100000:` record whose hash is what Python's PBKDF2 gives
-     for the password and the stored salt, with no plaintext. A second boot on the same card lists ann, deluser with the
+     for the password and the stored salt, with no plaintext. A second boot on the same card stops at the login screen (4.9.0), signs ann in, lists ann, deluser with the
      right password removes it, and a third `users` says none.
 Skips (exit 0) when the tools are missing.
 """
@@ -225,9 +225,17 @@ class Session:
         t0 = time.time(); self.key("ret")
         ok = self.wait_for(want, secs, n)
         return ok, time.time() - t0
-    def open_terminal(self):
+    def open_terminal(self, login=None):
         if not self.wait_for("M2 input ready", 60) or not self.wait_for("sd fat32 partition at block 2048", 30): return False
         self.connect(); time.sleep(0.5)
+        if login:   # a card with an account boots to the login screen (4.9.0): sign in first
+            if not self.wait_for("login: screen up", 30): return False
+            for c in login[0]: self.key(c)
+            self.key("ret")
+            for c in login[1]: self.key(c)
+            self.key("ret")
+            if not self.wait_for("login: desktop up", 120): return False
+            time.sleep(0.5)
         n = self.uart().count("terminal open"); self.key("f2")
         end = time.time() + 10
         while time.time() < end and self.uart().count("terminal open") < n + 1: time.sleep(0.1)
@@ -274,7 +282,7 @@ if m:
     check("... whose hash is PBKDF2-HMAC-SHA256 of the password, the salt and 100000 rounds (checked with Python's hashlib)", m.group(2) == want, m.group(2))
 S = Session("b")
 try:
-    if not S.open_terminal(): check("the second boot comes up", False, S.uart()[-600:]); raise SystemExit
+    if not S.open_terminal(("ann", "hunter22")): check("the second boot comes up", False, S.uart()[-600:]); raise SystemExit
     check("second boot: users still lists ann", S.run("users", "ann\n")[0], S.uart()[-300:])
     ok, secs = S.run("deluser ann hunter22", "deluser ann: removed", 120)
     check("deluser with the right password removes it (%.1f s)" % secs, ok, S.uart()[-300:])
