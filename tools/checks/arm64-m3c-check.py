@@ -52,6 +52,7 @@ if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
     print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
 
 CAL_UTC = 1775000000
+CAL_LOCAL = CAL_UTC - 7 * 3600   # 4.16.2: JT_SYS_TIME answers Vancouver wall time (daylight time all year since 2026-03-08, main.c clock_offset)
 tmp = tempfile.mkdtemp(prefix="jt-arm-m3c-")
 fails = []
 def check(name, ok, detail=""):
@@ -164,7 +165,7 @@ try:
     build_card(card, False)
     b = Boot("cal", os.path.join(arch, "cal-kernel8.elf"), True, card)
     try:
-        trace(b.uart(), CAL_UTC)
+        trace(b.uart(), CAL_LOCAL)
         check("the virtio disk is the card: emmc.c mounts its FAT32 partition on virt",
               "sd virtio disk 4096 MB\nsd fat32 partition at block 2048, 64 MB, writes go in JT/\n" in b.uart(), b.uart()[-600:])
         b.key("f2")

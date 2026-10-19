@@ -32,7 +32,7 @@ root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 arch = os.path.join(root, "arch/arm64")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
     print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
-CAL_UTC = 1775000000   # 2026-03-31 23:33:20 UTC; calendar.c reads the date in UTC
+CAL_UTC = 1775000000   # 2026-03-31 23:33:20 UTC; 16:33 in Vancouver, still the 31st; SYS_TIME is local time
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 if subprocess.run(["make", "-C", arch, "CAL_UTC=%d" % CAL_UTC, "caltest"], capture_output=True).returncode:
     print("FAIL: arch/arm64 `make caltest` does not build"); sys.exit(1)
