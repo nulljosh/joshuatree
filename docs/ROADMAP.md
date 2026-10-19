@@ -109,7 +109,7 @@ Refuted, and why, so nobody re-finds them:
 The research rounds of 2026-10-06 and 2026-10-08 further down still hold. Where they overlap (the crash reporter, W^X, bad-argument syscall tests), the slices here are the ones to build, because they were checked against the tree with a path and line.
 
 Confirmed, 3.0, usable, hours each:
-- [ ] [Sonnet] Caps Lock and held-key repeat on the Pi.
+- [x] [Sonnet] Caps Lock and held-key repeat on the Pi. Already shipped in 2.52.0; 4.15.0 added the missing mutation to its check.
   - `arch/arm64/ask.c` drops every code of 58 or more, so Caps Lock does nothing.
   - `hid_kbd` emits one press per report, so holding Backspace deletes one character (the keyboard is set to idle 0).
   - Track Caps Lock in ask.c (letters only, Shift inverts it).
@@ -1048,6 +1048,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.15.0 (2026-10-18)**: Caps Lock and held-key repeat on the Pi, closed out. Both were built in 2.52.0 (`ask.c` tracks Caps with Shift inverting it, letters only; `main.c` repeats a held typed key or Backspace after 400 ms and every 80 ms, cancelled by a release or another key; Brick is untouched) but the roadmap box was never ticked and the check had no mutation. `arm64-keys-check.py` now rebuilds with the repeat disabled and requires the held-key step to fail (a held j types once, not 9 to 15), then restores `main.c`. No kernel change.
 - **4.16.0 (2026-10-18)**: Nimbus closes the landing page. The footer's desert engraving is replaced by the Nimbus render, cut out on the page's paper; a WebGL shader hatches its shadow in the accent and sends rounded waves out from it, the computer you talk to, talking. The plain cutout is the fallback without WebGL; `render_nimbus.py` makes it with `NIMBUS_CUTOUT=1`. Check: `landing-specs-footer-check.mjs`.
 - **4.15.2 (2026-10-18)**: The stacked-ring Neo case is gone: its CAD, STLs, renders, blueprint, build sheet, assembly steps and three GUIDE sections. Nimbus is the only case. `render_nimbus.py` also renders wallpapers (`NIMBUS_WALL` with a size, camera and aim). The Neo film script (`docs/hardware/ad/anim.py`, which built on the deleted concepts.py) goes too.
 - **4.15.1 (2026-10-18)**: The Terminal prompt shows who is signed in: `ann@tree % ` instead of always `joshua@tree % `. With no accounts it stays `joshua@tree % `. `ask_prompt()` rebuilds one static buffer from `current_user` (no heap); the echoed line on the UART carries the same prompt. Checked by `tools/checks/arm64-sudo-check.py` (bob signed in sees `bob@tree % `) and `arm64-zsh-check.py` (no accounts, unchanged).
