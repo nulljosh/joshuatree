@@ -352,6 +352,7 @@ changed.
 
 | File | What it does |
 |---|---|
+| `kernel/wallmap.c` + `kernel/wallmap.h` | The map and satellite wallpapers, out of kernel.c since 4.18.3: the tile fetch around the place `geo_*` names (OpenTopoMap PNGs or Google satellite JPEGs, `tilehost=` for fake servers in checks), the theme switch, the baked satellite fallback in `kernel/wall_sat.h` (only this file includes it), and `wall_apply`, which points `wall_src` at what the desktop draws. The per-pixel readers stay in kernel.c, inlined in the draw loops; the 1.5 MB photo stays there too, reached here through `wall_photo`. |
 | `kernel/weather.c` + `kernel/weather.h` | The menu-bar weather, out of kernel.c since 4.12.3: ip-api (or `loc=` through Open-Meteo's geocoder) for the place, Open-Meteo for the reading, the error states the Weather window names, the rain and snow particles, and `WEATHER.TXT` for `user/weather.c`. The header lists what the rest of the kernel reads and what weather.c borrows back (the cmdline overrides, the wind level, the menu bar's redraw). |
 | `kernel/kernel.c` | The big one. The text console, the keyboard scancode table, the clock, the shell, and the whole desktop: menu bar, dock, windows, Apps folder, Burrow (the file browser), Settings, Lock Screen, the wind-swayed tree. Most apps are still drawn from here. |
 | `kernel/ttf_render.h` | The shared glyph path for anything drawing real DejaVu text at physical resolution: a per-face cache, a glyph cache, the antialiased ink blend. Notes and the Terminal both draw through it. |
