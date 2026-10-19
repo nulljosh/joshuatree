@@ -57,7 +57,10 @@ int ring3app_write_packed(const char *file, const unsigned char *packed, unsigne
    Mojave espresso-brown (0x00201009) instead of wallpaper_rgb (the Joshua
    Tree photo). The tree photo is still available as WALL_PHOTO, so users
    who want it can select it in Settings; it never appears by default or
-   during satellite fetch. */
+   during satellite fetch.
+
+   4.11.4: the default is now a plain grey (WALL_GREY), wall_src points at
+   wall_solid_row for the four plain walls, and nothing is fetched. */
 static const unsigned char *wall_src = wallpaper_rgb;
 /* v0.83.x: a REAL, once-captured satellite photograph (kernel/wall_sat.h,
    tools/gen/gen_wall_sat.py -- the same real mt0.google.com tiles
@@ -68,6 +71,12 @@ static const unsigned char *wall_src = wallpaper_rgb;
    tree stays reachable from Settings (WALL_PHOTO, an explicit user pick),
    it is only the no-network AUTOMATIC fallback that changes. */
 static unsigned char *wall_sat_rgb = 0;
+/* 4.11.4: the plain wallpapers (Grey, Terracotta, Clay, Ink, the same four
+   the Pi offers) are two flat rows of the chosen colour, not a 1.5 MB image.
+   wall_src points here when a plain wall is up; every reader that walks
+   wall_src row by row (gui_wallpaper_row, gui_wallpaper_color) pins its row
+   to 0, so row 0 and the row after it are all they ever touch. */
+static unsigned char wall_solid_row[WALLPAPER_W * 3 * 2];
 static unsigned char *wall_map = 0;        /* the fetched mosaic, kmalloc'd, kept while the session lives so Photo->Map needs no refetch */
 static int wall_map_tx = 0, wall_map_ty = 0, wall_map_cx = 0, wall_map_cy = 0; /* tile x/y of the mosaic's top-left tile, crop offset inside it */
 static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels actually came from (OpenTopoMap PNG vs Google satellite JPEG). Warm/Cool/Raw all share ONE fetch, since they're just different grades of the same topo pixels -- Satellite is a genuinely different image, not a grade, so switching across this boundary must drop wall_map and refetch instead of reusing stale pixels from the other source. */
@@ -960,13 +969,30 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
          math, not just a new host/decoder.
    Any non-zero value still shows the baked photo until the fetch lands
    and keeps showing it if the fetch fails, never a blank desktop (same
-   contract v75 established). settings_load clamps to 0..4 so a hand-
+   contract v75 established). settings_load clamps to 0..8 (4.11.4: 5..8 are
+   the plain walls) so a hand-
    edited or stale SETTINGS.TXT can't select a theme that doesn't exist. */
 #define WALL_PHOTO 0
 #define WALL_WARM  1
 #define WALL_COOL  2
 #define WALL_RAW   3
 #define WALL_SAT   4
+/* 4.11.4: plain walls, the same four names and colours as the Pi's Settings
+   (arch/arm64/settings.c). Numbered after the old five so a saved wall=0..4
+   keeps meaning what it meant. Grey is the default; none of these fetch a
+   tile or tint the colour (a plain wall is exactly the colour you picked). */
+#define WALL_GREY  5
+#define WALL_TERRA 6
+#define WALL_CLAY  7
+#define WALL_INK   8
+#define WALL_COUNT 9
+static const unsigned int wall_solid_color[4] = { 0x006E6E6Eu, 0x00B5502Cu, 0x00923F20u, 0x00141311u };
+static const char *const wall_solid_name[4] = { "Grey", "Terracotta", "Clay", "Ink" };
+/* Settings and `wallpaper` step through the themes in this order: the plain
+   walls first, then the photo and the map themes. */
+static const unsigned char wall_cycle_order[WALL_COUNT] = { WALL_GREY, WALL_TERRA, WALL_CLAY, WALL_INK, WALL_PHOTO, WALL_WARM, WALL_COOL, WALL_RAW, WALL_SAT };
+/* True for the four themes that need tiles from the network. */
+#define WALL_THEME_FETCHES() (wall_theme >= WALL_WARM && wall_theme <= WALL_SAT)
 /* v0.76.7: default flipped from WALL_WARM to WALL_SAT per Joshua's own
    direct, previously-recorded request ("the real satellite-town wallpaper
    should become the default once buildable", ROADMAP.md's "Later idea:
@@ -980,7 +1006,12 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
    fallback this default already relied on for WALL_WARM, so flipping the
    default changes nothing about failure-mode safety, only which real image
    a successful fetch shows. */
-static int wall_theme = WALL_SAT;
+/* 4.11.4: default flipped again, WALL_SAT -> WALL_GREY. Direct report: "still
+   showing the stale wallpaper, the satellite; it should just be a plain
+   wallpaper". The satellite and map themes stay selectable in Settings, but
+   a fresh boot (the ISO, QEMU, and the browser demo's every idle-tour lap)
+   is a flat grey and fetches no tile. */
+static int wall_theme = WALL_GREY;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
 
 /* v71: real location for weather/map, looked up from the public IP
@@ -1186,7 +1217,7 @@ static void settings_load(void){
         if (neg) val = -val;
         if (is_wind) wind_enabled = (val != 0);
         else if (is_dock && val >= 5 && val <= 25) dock_scale_pct = val;
-        else if (is_wall && val >= WALL_PHOTO && val <= WALL_SAT) wall_theme = val;
+        else if (is_wall && val >= WALL_PHOTO && val <= WALL_INK) wall_theme = val;
         else if (is_llmport && val > 0 && val <= 65535) llm_port = val;
     }
 }
@@ -1385,7 +1416,10 @@ static unsigned int gui_daynight_tint_pct(unsigned int rgb, int night, int day){
     if (day > 0)   return gui_lerp(rgb, 0x00DDDDDD, day, 100);   /* toward this file's own documented Silver, a small real brighten */
     return rgb;
 }
-static unsigned int gui_daynight_tint(unsigned int rgb){ return gui_daynight_tint_pct(rgb, daynight_night_pct, daynight_day_pct); }
+static unsigned int gui_daynight_tint(unsigned int rgb){
+    if (wall_src == wall_solid_row) return rgb; /* 4.11.4: a plain wall is exactly the colour picked, day and night */
+    return gui_daynight_tint_pct(rgb, daynight_night_pct, daynight_day_pct);
+}
 
 /* v79: the map wallpaper (wall_src pointed at wall_map instead of
    wallpaper_rgb, see v75's comment at wall_src's declaration) is real
@@ -1484,6 +1518,7 @@ static inline __attribute__((always_inline)) unsigned int gui_sat_color(unsigned
    here once instead of being copy-pasted at each call site. */
 static inline __attribute__((always_inline)) unsigned int gui_wall_tint(unsigned int rgb){
     if (wall_src == wallpaper_rgb) return rgb;      /* Photo: never graded */
+    if (wall_src == wall_solid_row) return rgb;     /* 4.11.4: plain wall: never graded */
     if (wall_theme == WALL_COOL) return gui_map_tint_cool(rgb);
     if (wall_theme == WALL_RAW) return rgb;         /* Raw: OpenTopoMap's own palette, untouched */
     if (wall_theme == WALL_SAT) return gui_sat_color(rgb);
@@ -1522,6 +1557,7 @@ static unsigned int gui_wallpaper_color(int row){
     if (r >= area_h) r = area_h - 1;
     int sy = r * WALLPAPER_H / area_h;
     if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
+    if (wall_src == wall_solid_row) sy = 0; /* 4.11.4: the plain wall is two rows long */
     const unsigned char *p = &wall_src[(sy * WALLPAPER_W + WALLPAPER_W / 2) * 3];
     unsigned int rgb = ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2];
     rgb = gui_wall_tint(rgb); /* v79/v81: the current wallpaper theme's grade, Photo untouched */
@@ -1781,6 +1817,7 @@ static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int
     int fy = row * (WALLPAPER_H - 1) * 256 / (area_h * sc > 1 ? area_h * sc - 1 : 1);
     int sy = fy >> 8; c.wy = fy & 255;
     if (sy >= WALLPAPER_H - 1) { sy = WALLPAPER_H - 2; c.wy = 255; }
+    if (wall_src == wall_solid_row) { sy = 0; c.wy = 0; } /* 4.11.4: the plain wall is two rows long, both the same */
     c.r0 = &wall_src[sy * WALLPAPER_W * 3];
     c.r1 = c.r0 + WALLPAPER_W * 3;
     c.shift = sway ? (gui_wind_shift(py / sc) * WALLPAPER_W / lw) >> 8 : 0;
@@ -2747,7 +2784,18 @@ static void wall_sat_init(void){
 }
 static void wall_apply(int want_map){
     const unsigned char *next;
-    if (want_map && !wall_map){
+    if (wall_theme >= WALL_GREY) {
+        /* 4.11.4: a plain wall. No tile, no photo decode: two rows of the
+           colour (the buffer is tiny, so refilling on every call is free
+           and a Grey -> Clay switch needs no other bookkeeping). */
+        unsigned int c = wall_solid_color[wall_theme - WALL_GREY];
+        for (int i = 0; i < WALLPAPER_W * 2; i++) {
+            wall_solid_row[i * 3] = (unsigned char)(c >> 16);
+            wall_solid_row[i * 3 + 1] = (unsigned char)(c >> 8);
+            wall_solid_row[i * 3 + 2] = (unsigned char)c;
+        }
+        next = wall_solid_row;
+    } else if (want_map && !wall_map){
         /* No live map yet, and maybe never: show the baked satellite
            capture, the same kind of imagery the fetch will bring, so a
            landed fetch reads as a refresh rather than a reveal.
@@ -2781,7 +2829,7 @@ static void wall_apply(int want_map){
        cannot tell them apart could not prove the v86 fallback bake-in
        actually took effect. */
     serial_puts("wallsrc=");
-    serial_puts(next == wallpaper_rgb ? "photo" : (next == wall_sat_rgb ? "satfallback" : "map"));
+    serial_puts(next == wallpaper_rgb ? "photo" : (next == wall_solid_row ? "solid" : (next == wall_sat_rgb ? "satfallback" : "map")));
     serial_puts("\n");
     wall_src = next;
     wall_last_theme = wall_theme;
@@ -5213,7 +5261,7 @@ static void gui_run(void){
                after the geo lookup it depends on. One fetch per session
                once it lands (the mosaic is kept), retried each cycle
                until then; a failure leaves the photo up, never a blank. */
-            if (wall_theme != WALL_PHOTO && !wall_map && geo_have && wall_fetch()) { wall_apply(1); gui_draw_desktop(-1, -1, 0, 0); gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
+            if (WALL_THEME_FETCHES() && !wall_map && geo_have && wall_fetch()) { wall_apply(1); gui_draw_desktop(-1, -1, 0, 0); gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
         }
         /* 1.9.26: SYS_LAUNCH_REQUEST pickup. The syscall only stored an index; the launch runs here,
            IF on, through the same two paths a dock click takes (window first, blocking fallback). */
@@ -6367,10 +6415,15 @@ static void run(char *line){
         unsigned int wall_dispatch_sat_green = gui_wall_tint(0x00208020);
         wall_src = wallpaper_rgb; wall_theme = WALL_COOL;
         unsigned int wall_dispatch_photo = gui_wall_tint(gray); /* Photo guard: must ignore wall_theme entirely */
+        wall_src = wall_solid_row; wall_theme = WALL_SAT; /* a plain wall is never graded, whatever wall_theme says */
+        unsigned int wall_dispatch_solid = gui_wall_tint(gray);
+        unsigned int wall_tint_solid = gui_daynight_tint(gray); /* ...and never day/night tinted either */
         wall_src = saved_wall_src; wall_theme = saved_wall_theme;
         int ok3 = (wall_dispatch_warm == warm_g) && (wall_dispatch_cool == cool_g)
                 && (wall_dispatch_raw == gray) && (wall_dispatch_photo == gray)
-                && (wall_dispatch_sat == gui_sat_color(gray)) && (wall_dispatch_sat != warm_g);
+                && (wall_dispatch_sat == gui_sat_color(gray)) && (wall_dispatch_sat != warm_g)
+                && (wall_dispatch_solid == gray) && (wall_tint_solid == gray)
+                && (wall_solid_color[0] == 0x006E6E6Eu);
         /* Satellite must preserve hue and lift saturation. Returning raw
            pixels or restoring the old luminance-only grade fails here. */
         unsigned int sg = gui_sat_color(0x00208020);
@@ -6386,7 +6439,7 @@ static void run(char *line){
         char prev_fs_buf[16]; int pfi = 0; while (prev_fs[pfi] && pfi < 15) { prev_fs_buf[pfi] = prev_fs[pfi]; pfi++; } prev_fs_buf[pfi] = 0;
         vfs_switch("ramfs");
         int roundtrip_ok = 1;
-        for (int theme = WALL_PHOTO; theme <= WALL_SAT; theme++) {
+        for (int theme = WALL_PHOTO; theme <= WALL_INK; theme++) {
             wall_theme = theme; settings_save();
             wall_theme = -1; /* clobber so settings_load has to actually set it, not coast on the old value */
             settings_load();
@@ -6404,7 +6457,7 @@ static void run(char *line){
             puts(" ok3="); putn((unsigned int)ok3); puts(" ok4="); putn((unsigned int)ok4);
             puts(" roundtrip="); putn((unsigned int)roundtrip_ok); puts("\n");
         }
-        wall_theme = WALL_WARM; settings_save(); /* restore the real default, this test must not leave the kernel in a weird state for whatever runs next */
+        wall_theme = WALL_GREY; settings_save(); /* restore the real default, this test must not leave the kernel in a weird state for whatever runs next */
     }
     else if (!strcmp(line, "weatherfxtest")) {
         /* v65 (0.62.0): standing QA per CLAUDE.md's 4b, two real,
@@ -6962,13 +7015,18 @@ static void run(char *line){
         else puts("usage: weatherfx rain|snow|off\n");
     }
     else if (!strcmp(line, "wallpaper")) {
-        /* v75/v81: photo|warm|cool|raw picks the theme (persisted like
+        /* v75/v81: grey|terracotta|clay|ink (4.11.4, the plain walls)|photo|warm|cool|raw picks the theme (persisted like
            wind/dockscale); "map" stays a working alias for "warm" (v75's
            original two-state name, now one of four themes) so nothing
            that already typed `wallpaper map` breaks. fetch forces the map
            download right now (its own NIC/net bring-up, same as
            weather_fetch), no argument reports state. */
-        if (!strcmp(arg, "photo")) { wall_switch_theme(WALL_PHOTO); wall_apply(0); puts("wallpaper: photo\n"); }
+        /* 4.11.4: the four plain walls (the Pi's names and colours). */
+        if (!strcmp(arg, "grey") || !strcmp(arg, "gray")) { wall_switch_theme(WALL_GREY); wall_apply(0); puts("wallpaper: grey\n"); }
+        else if (!strcmp(arg, "terracotta")) { wall_switch_theme(WALL_TERRA); wall_apply(0); puts("wallpaper: terracotta\n"); }
+        else if (!strcmp(arg, "clay")) { wall_switch_theme(WALL_CLAY); wall_apply(0); puts("wallpaper: clay\n"); }
+        else if (!strcmp(arg, "ink")) { wall_switch_theme(WALL_INK); wall_apply(0); puts("wallpaper: ink\n"); }
+        else if (!strcmp(arg, "photo")) { wall_switch_theme(WALL_PHOTO); wall_apply(0); puts("wallpaper: photo\n"); }
         else if (!strcmp(arg, "map") || !strcmp(arg, "warm")) { wall_switch_theme(WALL_WARM); wall_apply(1); puts(wall_map ? "wallpaper: map (warm)\n" : "wallpaper: map (warm) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
         else if (!strcmp(arg, "cool")) { wall_switch_theme(WALL_COOL); wall_apply(1); puts(wall_map ? "wallpaper: map (cool)\n" : "wallpaper: map (cool) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
         else if (!strcmp(arg, "raw")) { wall_switch_theme(WALL_RAW); wall_apply(1); puts(wall_map ? "wallpaper: map (raw)\n" : "wallpaper: map (raw) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
@@ -6980,9 +7038,9 @@ static void run(char *line){
                    else puts("wallpaper: fetch failed, photo stays\n"); }
         }
         else {
-            const char *tn = wall_theme == WALL_PHOTO ? "photo" : wall_theme == WALL_COOL ? "map (cool)" : wall_theme == WALL_RAW ? "map (raw)" : wall_theme == WALL_SAT ? "satellite" : "map (warm)";
+            const char *tn = wall_theme >= WALL_GREY ? wall_solid_name[wall_theme - WALL_GREY] : wall_theme == WALL_PHOTO ? "photo" : wall_theme == WALL_COOL ? "map (cool)" : wall_theme == WALL_RAW ? "map (raw)" : wall_theme == WALL_SAT ? "satellite" : "map (warm)";
             puts("wallpaper: "); puts(tn);
-            puts(wall_src == wallpaper_rgb ? " (showing photo)\n" : " (showing map)\n");
+            puts(wall_src == wallpaper_rgb ? " (showing photo)\n" : wall_src == wall_solid_row ? " (plain)\n" : " (showing map)\n");
         }
     }
     else if (!strcmp(line, "dockscale")) {
@@ -7810,6 +7868,7 @@ void kmain(unsigned int multiboot_info_addr){
                 if (pc[0]=='m' && pc[1]=='a' && pc[2]=='p') wall_theme_override = WALL_WARM;
                 else if (pc[0]=='s' && pc[1]=='a' && pc[2]=='t') wall_theme_override = WALL_SAT;
                 else if (pc[0]=='p' && pc[1]=='h' && pc[2]=='o') wall_theme_override = WALL_PHOTO;
+                else if (pc[0]=='g' && pc[1]=='r' && pc[2]=='e') wall_theme_override = WALL_GREY;
                 break;
             }
         /* 1.0.12: llmhost=HOST / llmport=PORT, the Chat equivalent of

@@ -132,9 +132,9 @@ finally:
     except subprocess.TimeoutExpired:
         q.kill()
 
-if after == 4:
-    print('PASS: Settings visit left wall_theme on Satellite (4), matching kernel.c\'s real default -- the demo no longer clicks itself away from it')
+if after == 5:  # 4.11.4: the default is WALL_GREY (5)
+    print('PASS: Settings visit left wall_theme on Grey (5), matching kernel.c\'s real default -- the demo no longer clicks itself away from it')
     sys.exit(0)
 else:
-    print(f'FAIL: wall_theme ended at {after}, expected 4 (Satellite) -- the demo\'s Settings visit changed the theme when it should not touch it at all')
+    print(f'FAIL: wall_theme ended at {after}, expected 5 (Grey) -- the demo\'s Settings visit changed the theme when it should not touch it at all')
     sys.exit(1)

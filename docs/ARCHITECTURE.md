@@ -974,7 +974,7 @@ The retina rule holds for type as it does for icons: stems are inked dense but s
 
 ### Colour and light
 
-The wallpaper is the satellite photo in colour, `DEFAULT_WALLPAPER = WALL_SAT`. It uses live tiles when there is a network, and the photo baked into the kernel when there is not. It is never turned black and white. The tree photo is a choice in Settings, never the boot default.
+The wallpaper is plain grey, `DEFAULT_WALLPAPER = WALL_GREY`, the Pi's default colour. Terracotta, Clay and Ink are the other plain walls; none of them fetch anything or get tinted. The satellite photo (live tiles with a network, the baked capture without), the map themes and the tree photo are choices in Settings, never the boot default.
 
 Day and night are a blend on the wallpaper. They are read from the same clock as the menu bar, and they never go toward black or blue.
 - From `NIGHT_HOURS = 21-5` the wallpaper sits `NIGHT_PCT = 65` percent of the way to the espresso brown `NIGHT_FLOOR = 0x00201009`. It eases in over the evening and out over the morning.
