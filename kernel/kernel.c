@@ -43,6 +43,9 @@ int ring3app_write_packed(const char *file, const unsigned char *packed, unsigne
 #include "boot_mark.h"
 #include "wallmap.h"   /* 4.18.3: the map and satellite wallpapers live in kernel/wallmap.c (and wall_sat.h with them) */
 #include "selftest.h"  /* 4.18.5: pngtest, jpegtest, heaptest, nettest and mailtest live in kernel/selftest.c */
+#include "desktop.h"   /* 4.19.1: the menu bar geometry and day/night grade the split-out units share */
+#include "multiwin.h"  /* 4.19.1: the window manager */
+#include "walltint.h"  /* 4.19.1: the per-pixel wallpaper grades */
 #include "settings.h"  /* 4.18.4: SETTINGS.TXT load and save, and the LLM, Mail and Claude relay settings, live in kernel/settings.c */
 /* v75 (0.67.0): the wallpaper is read through this pointer, not the baked
    array directly, so a real fetched image (wall_fetch below: a 2x2 mosaic
@@ -116,16 +119,7 @@ int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels actually 
 #include "serial.h"
 #include "sb16.h"
 #include "speak.h"
-#include "app_weather.h"
-#include "app_curbfind.h"
-#include "app_keyrate.h"
 #include "app.h"
-#include "app_bookrank.h"
-#include "app_quotestreak.h"
-#include "app_tonchi.h"
-#include "app_toroid.h"
-#include "app_hikko.h"
-#include "app_fieldbook.h"
 #include "png.h"
 #include "jpeg.h"
 #include "version.h"
@@ -464,32 +458,6 @@ static void klog_dump(void){
 
 /* ---- shell ---- */
 
-/* Combines HTTP headers with an embedded app's raw bytes (gen_app.sh's
-   output) into one buffer and serves it. Shared by every serveapp target
-   so adding another embedded app is one dispatch line, not a copy-pasted
-   block. */
-/* LLMs habitually wrap generated code in a ```html ... ``` fence even when
-   told not to. Strips a leading ``` line and a trailing ``` if present,
-   in place, returns the new length. Not a markdown parser, just this one
-   specific, extremely common habit. */
-static unsigned int strip_code_fence(char *s, unsigned int len){
-    unsigned int start = 0;
-    if (len >= 3 && s[0] == '`' && s[1] == '`' && s[2] == '`') {
-        unsigned int i = 3;
-        while (i < len && s[i] != '\n') i++; /* skip the rest of the ```html line */
-        if (i < len) i++;
-        start = i;
-    }
-    unsigned int end = len;
-    while (end > start && (s[end - 1] == '\n' || s[end - 1] == ' ')) end--;
-    if (end - start >= 3 && s[end - 3] == '`' && s[end - 2] == '`' && s[end - 1] == '`') end -= 3;
-    while (end > start && (s[end - 1] == '\n' || s[end - 1] == ' ')) end--;
-
-    unsigned int new_len = end - start;
-    for (unsigned int i = 0; i < new_len; i++) s[i] = s[start + i];
-    return new_len;
-}
-
 /* v8's actual point: parsed page text drawn to the framebuffer with the
    real font, not just dumped to the text-mode shell. Word-wraps at the
    window's pixel width; no scrolling yet, a page longer than one screen
@@ -509,7 +477,7 @@ static unsigned int strip_code_fence(char *s, unsigned int len){
    still draw (font_draw_string has no length limit), they just can't be
    measured for the wrap decision past that cap, matching the old code's
    own honest limit (it never measured unbounded words either). */
-static void render_wrapped_text(const char *text, int x0, int y0, int max_w_px, int max_h_px, unsigned int fg) {
+void render_wrapped_text(const char *text, int x0, int y0, int max_w_px, int max_h_px, unsigned int fg) {
     int x = x0, y = y0;
     const char *p = text;
     int space_w = font_string_width(" ");
@@ -540,133 +508,9 @@ static void render_wrapped_text(const char *text, int x0, int y0, int max_w_px, 
     }
 }
 
-static int web_starts_with(const char *p, const char *needle) {
+int web_starts_with(const char *p, const char *needle) {
     while (*needle) { if (*p != *needle) return 0; p++; needle++; }
     return 1;
-}
-
-static void web_str_copy(char *dst, const char *src, unsigned int cap) {
-    unsigned int i = 0;
-    while (src[i] && i < cap - 1) { dst[i] = src[i]; i++; }
-    dst[i] = 0;
-}
-
-/* Resolves a link's href against the current page's host. No TLS in this
-   stack, so an https:// link is a real, honest dead end, reported as one
-   rather than silently attempted and failed. Bare relative paths (no
-   leading /) and non-http schemes (mailto:, #anchors) are a known gap,
-   not a scope this pass claims to cover. */
-static int resolve_href(const char *href, const char *cur_host, char *host_out, unsigned int host_cap,
-                         char *path_out, unsigned int path_cap, const char **reason_out) {
-    if (!href[0]) { *reason_out = "empty link"; return 0; }
-    if (web_starts_with(href, "https://")) { *reason_out = "https not supported, no TLS in this kernel yet"; return 0; }
-    if (web_starts_with(href, "http://")) {
-        const char *h = href + 7;
-        unsigned int i = 0;
-        while (h[i] && h[i] != '/' && i < host_cap - 1) { host_out[i] = h[i]; i++; }
-        host_out[i] = 0;
-        if (h[i] == '/') web_str_copy(path_out, h + i, path_cap);
-        else { path_out[0] = '/'; path_out[1] = 0; }
-        return 1;
-    }
-    if (href[0] == '/') {
-        web_str_copy(host_out, cur_host, host_cap);
-        web_str_copy(path_out, href, path_cap);
-        return 1;
-    }
-    *reason_out = "relative/unsupported link (mailto:, anchors, bare relative paths)";
-    return 0;
-}
-
-/* v8's link navigation: fetch, render, list real links found on the page,
-   number keys follow one, 'b' goes back, anything else closes. A small
-   fixed-depth history stack, not a general browser session, that's plenty
-   for what this proves. */
-#define WEB_HISTORY_DEPTH 6
-static void browse_web(const char *first_host, const char *first_path) {
-    char cur_host[64], cur_path[192];
-    web_str_copy(cur_host, first_host, sizeof(cur_host));
-    web_str_copy(cur_path, first_path, sizeof(cur_path));
-
-    char hist_host[WEB_HISTORY_DEPTH][64];
-    char hist_path[WEB_HISTORY_DEPTH][192];
-    int hist_n = 0;
-
-    for (;;) {
-        static char body[1400];
-        int n = http_get(cur_host, cur_path, 80, body, sizeof(body) - 1);
-        if (n < 0) { puts("FAIL (dns/tcp)\n"); return; }
-        if (n == 0) { puts("FAIL (no body, response too large or truncated)\n"); return; }
-        body[n] = 0;
-
-        static char text[1400];
-        unsigned int tn = html_to_text(body, text, sizeof(text));
-        putn(tn); puts(" bytes of text:\n\n");
-        puts(text);
-        putc('\n');
-
-        static struct html_link links[HTML_MAX_LINKS];
-        unsigned int nlinks = html_extract_links(body, links, HTML_MAX_LINKS);
-
-        if (!window_open(800, 600, 32)) return;
-        window_clear(0x00FAF8F6);
-        render_wrapped_text(text, 20, 20, 760, 420, 0x001C1C1E);
-
-        int ly = 460;
-        for (unsigned int i = 0; i < nlinks && ly < 560; i++) {
-            char label[8]; label[0] = '['; label[1] = (char)('1' + i); label[2] = ']'; label[3] = ' '; label[4] = 0;
-            font_draw_string(label, 20, ly, 0x007A2048, -1);
-            font_draw_string(links[i].text[0] ? links[i].text : links[i].href, 20 + 32, ly, 0x007A2048, -1);
-            ly += 18;
-        }
-        font_draw_string(hist_n > 0 ? "[b]ack   any other key closes" : "any other key closes", 20, 570, 0x0075726E, -1);
-
-        int k = get_key();
-        window_close();
-        clear();
-        puts("back in text mode\n");
-
-        if (k == 'b' && hist_n > 0) {
-            hist_n--;
-            web_str_copy(cur_host, hist_host[hist_n], sizeof(cur_host));
-            web_str_copy(cur_path, hist_path[hist_n], sizeof(cur_path));
-            continue;
-        }
-        if (k >= '1' && k <= '9') {
-            unsigned int idx = (unsigned int)(k - '1');
-            if (idx < nlinks) {
-                char new_host[64], new_path[192];
-                const char *reason = 0;
-                if (resolve_href(links[idx].href, cur_host, new_host, sizeof(new_host), new_path, sizeof(new_path), &reason)) {
-                    if (hist_n < WEB_HISTORY_DEPTH) {
-                        web_str_copy(hist_host[hist_n], cur_host, sizeof(hist_host[0]));
-                        web_str_copy(hist_path[hist_n], cur_path, sizeof(hist_path[0]));
-                        hist_n++;
-                    }
-                    web_str_copy(cur_host, new_host, sizeof(cur_host));
-                    web_str_copy(cur_path, new_path, sizeof(cur_path));
-                    continue;
-                }
-                puts("can't follow that link: "); puts(reason); putc('\n');
-            }
-        }
-        return;
-    }
-}
-
-static void serve_app(const char *label, const unsigned char *data, unsigned int data_len){
-    static const char header[] = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n";
-    unsigned int total_len = (sizeof(header) - 1) + data_len;
-    char *buf = kmalloc(total_len);
-    if (!buf) { puts("out of heap\n"); return; }
-
-    for (unsigned int i = 0; i < sizeof(header) - 1; i++) buf[i] = header[i];
-    for (unsigned int i = 0; i < data_len; i++) buf[sizeof(header) - 1 + i] = (char)data[i];
-
-    puts("serving "); puts(label); puts(" (a real app from the codebase, ");
-    putn(data_len); puts(" bytes), waiting on :8080...\n");
-    puts(tcp_serve_once(8080, buf, total_len) ? "served:ok\n" : "timeout, nobody connected\n");
-    kfree(buf);
 }
 
 static void reboot(void){
@@ -726,9 +570,9 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-#define GUI_APP_COUNT   34 /* 32 real apps + the Apps folder + Trash; Books (31) pushed Apps/Trash to 32/33; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurapi (26) to 27/28, 2.8 Windgate (27) to 28/29, 2.11 Panes (28) to 29/30, 2.14 Claude (29) to 30/31, Mines (30) to 31/32 */
-#define GUI_APP_PANES   28 /* the one app that gets Ctrl chords as KEY_CTL_* (kernel/app.h) */
-#define GUI_APP_PORTFOLIO 21 /* hidden from the Apps folder and phone home unless the boot line says "portfolio" (his site embed); the public OS ships without it */
+/* GUI_APP_COUNT: kernel/desktop.h */
+/* GUI_APP_PANES: kernel/desktop.h */
+/* GUI_APP_PORTFOLIO: kernel/desktop.h */
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
    defined further down once every hook it points at exists (see "The app
    registry" below). This tentative definition lets the dock and Launchpad
@@ -790,7 +634,7 @@ static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_o
 int dock_hover = -1; /* slot whose label is showing */
 
 /* GUI_BG lives in app.h now: a moved-out app's own unit clears to it too. */
-#define GUI_MENUBAR_H   26
+/* GUI_MENUBAR_H: kernel/desktop.h */
 /* v36 (0.36.0): the icon size is now *derived* from how many icons there
    are, instead of a constant that silently overflows the screen every
    time an app is added. v35 hit that for real (14 icons at the old
@@ -981,7 +825,7 @@ static unsigned int daynight_last_tick = 0;
    already sets for its own percentages: 08:00-18:00 full real daylight (a
    small +10% brighten), 18:00-21:00 dusk deepening, 05:00-08:00 dawn
    lightening back up, 21:00-05:00 the real deep-night floor. */
-static void daynight_calc(int hour, int *night_out, int *day_out){
+void daynight_calc(int hour, int *night_out, int *day_out){
     int night = 0, day = 0;
     if (hour >= 8 && hour < 18) day = 10;                       /* real midday: small, real brighten */
     else if (hour >= 18 && hour < 21) night = (hour - 18) * 22; /* dusk: 18->0, 19->22, 20->44 */
@@ -1004,119 +848,17 @@ static void daynight_update(void){
    existing channel-wise blend (the wind/AA code already uses it for
    every other precomputed solid-color transition here), reused rather
    than a new blend primitive. */
-static unsigned int gui_daynight_tint_pct(unsigned int rgb, int night, int day){
+unsigned int gui_daynight_tint_pct(unsigned int rgb, int night, int day){
     if (night > 0) return gui_lerp(rgb, 0x00201009, night, 100); /* toward the wallpaper's own espresso-brown floor, never blue */
     if (day > 0)   return gui_lerp(rgb, 0x00DDDDDD, day, 100);   /* toward this file's own documented Silver, a small real brighten */
     return rgb;
 }
-static unsigned int gui_daynight_tint(unsigned int rgb){
+unsigned int gui_daynight_tint(unsigned int rgb){
     if (wall_src == wall_solid_row) return rgb; /* 4.11.4: a plain wall is exactly the colour picked, day and night */
     return gui_daynight_tint_pct(rgb, daynight_night_pct, daynight_day_pct);
 }
 
-/* v79: the map wallpaper (wall_src pointed at wall_map instead of
-   wallpaper_rgb, see v75's comment at wall_src's declaration) is real
-   fetched OpenTopoMap pixel data, and OpenTopoMap ships its own neutral
-   cartographer's palette (grays for streets/contours, cold greens for
-   parks, flat blues for water) that never went through this file's own
-   Mojave desert grade the baked photo did. Sitting next to the sand/
-   granite/leather-brown dock and panels, it read as a foreign, cold
-   rectangle dropped onto a warm desktop, direct request to fix.
-   A grade toward this file's palette has to stay a MULTIPLY, not a lerp
-   toward one flat target color the way gui_daynight_tint blends toward
-   its espresso-brown/Silver floors: a lerp blend flattens every distinct
-   map color toward the same target as the blend percentage climbs, which
-   is exactly the "washes out detail" failure this was asked to avoid --
-   street-name glyphs are 1-2px of near-black on near-white, road/water
-   contrast is a gray line on a blue fill, and either one degrading toward
-   a shared target erases the very contrast that makes the map legible.
-   A per-channel multiply instead scales every pixel by the same warm
-   ratio, so two pixels that started different stay different (their
-   contrast ratio is preserved to within rounding), while the whole image
-   shifts toward this palette's warmth: reds pushed up (272/256, +6.25%,
-   toward Orange #FF851B's own red-forward hue), greens pulled down
-   slightly (248/256, -3.1%, so parkland reads sand-toward-olive rather
-   than postcard green), blues pulled down more (216/256, -15.6%, the
-   real driver of the warm shift, matching wall_bot's own brown recipe a
-   few hundred lines below: Orange blended with Black is red-heavy and
-   blue-starved). Deliberately mild (a 15.6% max single-channel move) so
-   near-white street-label backgrounds stay legibly near-white and near-
-   black glyph strokes stay legibly near-black, both ends of the contrast
-   range that has to survive; a heavier grade would gray-crush the whites
-   the way a heavy sepia overlay does. Applied at the two real per-pixel
-   choke points that read wall_src directly (gui_wallpaper_color below,
-   for the icon-shadow/dock-tray blend targets, and gui_wallpaper_px
-   further down, for the actual on-screen blit and the wind_base cache it
-   feeds), both gated on `wall_src != wallpaper_rgb` so the baked photo's
-   own already-correct palette is never touched, only the map is. Runs
-   before gui_daynight_tint, not after: daynight's night/day blend is
-   meant to read as "what hour it is" layered on top of whatever the base
-   wallpaper actually looks like, the same order the photo already uses. */
-static inline __attribute__((always_inline)) unsigned int gui_map_tint(unsigned int rgb){
-    int r = (int)((rgb >> 16) & 0xFF), g = (int)((rgb >> 8) & 0xFF), b = (int)(rgb & 0xFF);
-    r = (r * 272) >> 8; if (r > 255) r = 255;
-    g = (g * 248) >> 8;
-    b = (b * 216) >> 8;
-    return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)b;
-}
-
-/* v81: the Cool map theme, a real, distinct second grade for the direct
-   request's "cooler/higher-contrast map variant for legibility", not a
-   relabeled copy of Warm above. Two real moves, opposite of Warm's:
-     1. channel balance pushed cool instead of warm -- blue up (300/256,
-        +17.2%) and red down (208/256, -18.75%), green trimmed slightly
-        (240/256, -6.25%), the mirror image of Warm's red-up/blue-down
-        recipe, so the two themes are provably different curves, not the
-        same curve with different constants that happen to look similar.
-     2. a genuine contrast stretch on top (push every channel away from
-        mid-gray 128 by ~15%, matching the 15% figure the direct request
-        asked for under "higher-contrast"), which Warm deliberately does
-        NOT do (Warm's own comment above stays a pure per-channel
-        multiply, no contrast move, specifically to keep near-white/near-
-        black street labels from crushing). Cool applies both: OpenTopoMap
-        legibility is the point of this variant, so a real contrast boost
-        is in scope here even though it wasn't for Warm.
-   Clamped 0..255 at every step; run through the same maptinttest-shaped
-   proof below (walltest) that a neutral gray goes cool (blue ends up
-   strictly greater than red, the opposite assertion from Warm's), that
-   distinct source colors stay distinct (multiply+affine contrast, never
-   a lerp-to-one-target), and that near-white/near-black labels still
-   read (contrast stretch pushes them further apart, not together). */
-static inline __attribute__((always_inline)) unsigned int gui_map_tint_cool(unsigned int rgb){
-    int r = (int)((rgb >> 16) & 0xFF), g = (int)((rgb >> 8) & 0xFF), b = (int)(rgb & 0xFF);
-    r = (r * 208) >> 8;
-    g = (g * 240) >> 8;
-    b = (b * 300) >> 8; if (b > 255) b = 255;
-    r = 128 + ((r - 128) * 147) / 128; if (r < 0) r = 0; if (r > 255) r = 255;
-    g = 128 + ((g - 128) * 147) / 128; if (g < 0) g = 0; if (g > 255) g = 255;
-    b = 128 + ((b - 128) * 147) / 128; if (b < 0) b = 0; if (b > 255) b = 255;
-    return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)b;
-}
-
-/* Keep the satellite photograph in color. A modest saturation lift makes
-   trees, roofs, and roads readable without flattening their detail. */
-static inline __attribute__((always_inline)) unsigned int gui_sat_color(unsigned int rgb){
-    int r = (int)((rgb >> 16) & 0xFF), g = (int)((rgb >> 8) & 0xFF), b = (int)(rgb & 0xFF);
-    int l = (r * 77 + g * 150 + b * 29) >> 8;
-    r = l + (r - l) * 5 / 4; if (r < 0) r = 0; if (r > 255) r = 255;
-    g = l + (g - l) * 5 / 4; if (g < 0) g = 0; if (g > 255) g = 255;
-    b = l + (b - l) * 5 / 4; if (b < 0) b = 0; if (b > 255) b = 255;
-    return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)b;
-}
-
-/* v81: single choke point every wallpaper-theme reader goes through, so
-   gui_wallpaper_color and gui_wallpaper_px (the two real per-pixel paths,
-   see v79's comment above) can't drift out of sync on which theme applies
-   which grade. wall_theme's own guard (never touch the baked photo) lives
-   here once instead of being copy-pasted at each call site. */
-static inline __attribute__((always_inline)) unsigned int gui_wall_tint(unsigned int rgb){
-    if (wall_src == wallpaper_rgb) return rgb;      /* Photo: never graded */
-    if (wall_src == wall_solid_row) return rgb;     /* 4.11.4: plain wall: never graded */
-    if (wall_theme == WALL_COOL) return gui_map_tint_cool(rgb);
-    if (wall_theme == WALL_RAW) return rgb;         /* Raw: OpenTopoMap's own palette, untouched */
-    if (wall_theme == WALL_SAT) return gui_sat_color(rgb);
-    return gui_map_tint(rgb);                       /* WALL_WARM, and the fallback while fetching */
-}
+/* gui_map_tint, gui_map_tint_cool, gui_sat_color, gui_wall_tint: the per-pixel wallpaper grades, in kernel/walltint.h */
 
 /* Real photo now, not a procedural gradient: direct request for an
    actual, non-copyrighted image of the real park instead of drawn
@@ -1384,7 +1126,7 @@ static unsigned int *wind_base = 0;
 static int wind_base_width = 0; void music_ring3_open(void); void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void tonchi_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void hikko_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
 void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void); void panes_ring3_open(void); void claude_ring3_open(void); void mines_ring3_open(void); void books_ring3_open(void);
 
-static int gui_ring3_windowed(int icon);
+int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
     struct wp_row c;
@@ -1653,7 +1395,7 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
    redraw entirely once per real minute unless forced, matching the one
    thing in this bar that actually changes on its own. */
 static int gui_menubar_last_min = -1;
-void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; } static int gui_bleed_open(void); /* a full-bleed window covers the menu bar */
+void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; } int gui_bleed_open(void); /* a full-bleed window covers the menu bar */
 
 /* Real macOS menu bar clock format: weekday, month, day, 12-hour time with
    AM/PM, not the bare 24h HH:MM this used to show. Reads the CMOS weekday
@@ -1720,7 +1462,7 @@ int jt_refresh_take(int *arg){ int k = refresh_kind; if (k >= 0) { *arg = refres
    clickable" rather than a stale box from a previous boot. */
 int weather_hit_x0 = -1, weather_hit_x1 = -1;
 static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink);
-static void gui_draw_menubar(void){
+void gui_draw_menubar(void){
     if (gui_bleed_open()) { gui_menubar_last_min = -1; return; } /* repaints on the first call after it closes */
     u8 h, m, wd, dom, mon;
     cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
@@ -2840,7 +2582,7 @@ static void gui_apps_redraw_panel(const struct apps_geom *g, int scroll_offset, 
     gui_apps_draw_grid(g, scroll_offset, sel);
     serial_puts("appsgridrepaint\n");
 }
-static int gui_multiwin_open(int icon); static void gui_refuse_open(int icon);
+int gui_multiwin_open(int icon); static void gui_refuse_open(int icon);
 /* 2.0 gate 5: the Apps folder has no window of its own to host an app, so a launch closes the folder and opens the app as a compositor window, exactly a dock click (full table: the same refusal notice). */
 static void gui_apps_launch(int icon){ window_clear_viewport(); /* the window is sized and clamped against the whole screen, not the folder's smaller viewport */ if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); }
 
@@ -3052,7 +2794,7 @@ static void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
 
-static int gui_multiwin_open(int icon);
+int gui_multiwin_open(int icon);
 /* 2.0 gate 5: a full window table or a failed window launch is an honest refusal now, never a
    blocking takeover of the screen. Serial marker plus a notice the next repaint draws. */
 static const char *gui_notice_name = 0; static unsigned int gui_notice_until = 0;
@@ -3125,150 +2867,7 @@ again:
     }
 }
 
-/* v0.73.0: phase 1 of real multi-window, per ROADMAP.md's "Multi-window,
-   honestly scoped" entry (grep for it: real windows were estimated as
-   "3-5 sessions of unstarted work" before this pass, and confirmed still
-   unstarted immediately before this one, every app a blocking function and
-   window_open() called exactly once at boot). This is real, not cosmetic:
-   a genuine window list, and two windows genuinely open and drawn on
-   screen at the same time, each redrawn from its own real state on every
-   repaint, neither frozen nor a fake snapshot.
-
-   Phase 2 (click-to-focus, z-order hit testing) landed in v0.73.6; the
-   2-window cap (GUI_MULTIWIN_MAX) is the one scoping choice still here. */
-#define GUI_MULTIWIN_MAX 2
-typedef struct {
-    int icon;
-    int x, y, w, h;
-    int task; /* 1.9.23: the ring-3 task drawing this window, -1 for an in-kernel draw hook */
-    int shown; /* 1.9.23: 0 until the compositor has drawn it once (an open= boot launch lands before the first frame) */
-} gui_window_t;
-/* 1.9.23: ring-3 apps that open as compositor windows (ring3app_launch_window)
-   instead of the blocking viewport. Reminders is the proof; one row moves another. */
-int ring3app_launch_window(const char *name, unsigned int w, unsigned int h);
-void ring3app_window_reaped(int task, int status);
-void ring3app_window_blit(int task, int vw, int vh); int ring3app_is_windowable(const char *name);
-static int gui_ring3_windowed(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && ring3app_is_windowable(APPS[icon].name); } /* every RING3_APPS row; a full window table or failed launch falls back to the blocking path */
-static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
-static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
-
-static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && (APPS[icon].draw || gui_ring3_windowed(icon)); }
-static int gui_multiwin_dock_ok(int icon){ return gui_multiwin_supported(icon); } /* apps with a draw hook or a ring-3 window */
-
-/* v0.75.0 (batch 2): Mail has real per-keystroke interaction (its list,
-   read and compose modes), unlike Files/Weather's static viewers; Reminders
-   (1.9.9) and Calendar (1.9.12) left this set when they became ring-3
-   programs. gui_run's input loop below only ever forwards a keystroke to
-   the app whose window is currently topmost/focused (the same "topmost
-   owns input" rule click-to-focus already established for clicks). */
-static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && (APPS[icon].key || gui_ring3_windowed(icon)); } /* apps with a key hook; Files for its 1/2 view-switch keys, Weather for R-to-retry */
-
-/* Window 0 keeps the exact single-window rect the existing dock-app tests
-   already assert against (gui_launch_from_dock's own x=70,y=40,w=820,h=385;
-   appclose-check.py/app-interact-check.py hard-code CLOSE_X,CLOSE_Y=94,56,
-   which is this same rect's close-circle centre, x+24,y+16). A second,
-   concurrently-open window is offset so both titlebars and both close
-   buttons stay fully on screen and visually distinct, not stacked exactly
-   on top of each other. */
-static int gui_bleed_fits(void){ return (unsigned)window_width() * (unsigned)window_height() * 4u <= JT_USER_FB_BYTES; } /* a ring-3 window buffer is 2.1 MB (960x540): a bigger screen gets her in an ordinary window instead of a refused open */
-static int gui_window_bleed(int icon){ return !boot_to_phone && gui_bleed_fits() && icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open == samantha_ring3_open; } /* Samantha's window is her face, full bleed (portfolio mode: under the menu bar too); Esc closes it */
-static int gui_bleed_open(void){ for (int i = 0; i < gui_window_count; i++) if (gui_window_bleed(gui_windows[i].icon)) return 1; return 0; }
-static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
-    if (boot_to_phone) { *x = -8; *y = 8; *w = (int)window_width() + 16; *h = (int)window_height(); return; } /* 2.0 gate 5: one window, full screen under the back chevron strip (content rect 0,40,W,H-40) */
-    if (slot_index == 0) { *x = 70; *y = 40; *w = 820; *h = 385; }
-    else { *x = 70 + 60; *y = 40 + 60; *w = 820; *h = 385; }
-    gui_clamp_win_rect(x, y, w, h); /* Mail/Calendar/Reminders/Files/Weather open here, not gui_launch_from_dock -- phone screens need the same clamp */
-}
-
-/* Magnet-style window snapping (title-bar drag to an edge/corner). All five
-   multi-window apps draw their content through window_set_viewport(x+8,
-   y+32, w-16, h-40) and lay it out with window_width()/window_height(),
-   not hard-coded 820x385 numbers, so any w/h this hands them is real, not
-   clipped or scaled after the fact.
-
-   Zones, checked corners-first so a near-corner drag never mistakenly
-   reads as a plain edge: 0=left half, 1=right half, 2..5=quarters (TL,
-   TR, BL, BR), 6=full (top edge, like Magnet's maximize), -1=no zone. The
-   playable area is the desktop strip between the menu bar and the dock,
-   the same area gui_multiwin_geom's own windows already live inside. */
-static int gui_snap_area(int *top, int *bottom){
-    *top = GUI_MENUBAR_H;
-    *bottom = gui_dock_y0() - 10;
-    return (int)window_width();
-}
-static int gui_snap_zone(int mx, int my){
-    int top, bottom; int w = gui_snap_area(&top, &bottom);
-    const int corner = 40, edge = 12;
-    if (mx <= corner && my <= top + corner) return 2;
-    if (mx >= w - corner && my <= top + corner) return 3;
-    if (mx <= corner && my >= bottom - corner) return 4;
-    if (mx >= w - corner && my >= bottom - corner) return 5;
-    if (my <= top + edge) return 6;
-    if (mx <= edge) return 0;
-    if (mx >= w - edge) return 1;
-    return -1;
-}
-static void gui_snap_target(int zone, int *x, int *y, int *w, int *h){
-    int top, bottom; int sw = gui_snap_area(&top, &bottom);
-    int areaH = bottom - top;
-    switch (zone) {
-        case 0: *x = 0;      *y = top;             *w = sw / 2;      *h = areaH; break;
-        case 1: *x = sw / 2; *y = top;             *w = sw - sw / 2; *h = areaH; break;
-        case 2: *x = 0;      *y = top;             *w = sw / 2;      *h = areaH / 2; break;
-        case 3: *x = sw / 2; *y = top;             *w = sw - sw / 2; *h = areaH / 2; break;
-        case 4: *x = 0;      *y = top + areaH / 2; *w = sw / 2;      *h = areaH - areaH / 2; break;
-        case 5: *x = sw / 2; *y = top + areaH / 2; *w = sw - sw / 2; *h = areaH - areaH / 2; break;
-        default:*x = 0;      *y = top;             *w = sw;          *h = areaH; break; /* 6: full */
-    }
-}
-/* One-pixel border, drawn straight onto the framebuffer, never onto a
-   window (there's nothing under it to preserve while dragging: the
-   dragged window itself isn't moved live, only this preview outline is
-   drawn, see gui_run's drag_win handling). */
-static void gui_snap_outline(int zone){
-    if (zone < 0) return;
-    int x, y, w, h; gui_snap_target(zone, &x, &y, &w, &h);
-    unsigned int c = 0x00307FE2;
-    window_rect(x, y, w, 1, c);
-    window_rect(x, y + h - 1, w, 1, c);
-    window_rect(x, y, 1, h, c);
-    window_rect(x + w - 1, y, 1, h, c);
-}
-
-/* v0.76.18: chrome and content split so a keystroke repaints only the
-   content viewport, never the whole alpha-blended frame (mwkeyflash-check.sh). */
-static void gui_multiwin_draw_chrome(const gui_window_t *win){
-    if (gui_window_bleed(win->icon)) return; /* no frame, no traffic lights: his face is the screen */
-    serial_puts("mwchrome\n"); /* discriminating marker for tools/checks/mwkeyflash-check.sh */
-    int x = win->x, y = win->y, w = win->w, h = win->h;
-    gui_draw_window_frame(x, y, w, h, APPS[win->icon].name);
-}
-static void gui_multiwin_draw_content_only(const gui_window_t *win){
-    int x = win->x, y = win->y, w = win->w, h = win->h;
-    window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
-    /* v0.76.19: gui_draw_app_titlebar skips its own traffic lights only
-       under this flag; without it every content redraw drew a second set. */
-    gui_app_windowed = 1;
-    /* Real per-repaint content, not a cached bitmap: each call re-derives
-       the window's content from the same live state its single-window
-       counterpart reads (vfs_list for Files, weather_text for Weather),
-       so a second window opening never leaves the first one's content
-       stale or frozen. */
-    if (win->task >= 0) {
-        /* 1.9.23: a ring-3 window: blit its private framebuffer through
-           window_pixel, the same clipped primitive every in-kernel app
-           draws with, at this window's position. The program never
-           touches the screen. */
-        ring3app_window_blit(win->task, w - 16, h - 40);
-    } else if (gui_multiwin_supported(win->icon)) APPS[win->icon].draw();
-    gui_app_windowed = 0;
-    window_clear_viewport();
-}
-static void gui_multiwin_draw_one(const gui_window_t *win){
-    gui_multiwin_draw_chrome(win);
-    gui_multiwin_draw_content_only(win);
-}
-
+/* The window manager (open, close, focus, snap, the switcher, screenshots): kernel/multiwin.c, multiwin.h */
 /* The app registry: the one place an app is wired into the desktop. Its
    index is its identity (dock order, gui_order, icon art slots and the
    window list all key off it), so a new app is one row here plus one
@@ -3318,244 +2917,6 @@ const struct app APPS[GUI_APP_COUNT] = {
     [GUI_APPS_FOLDER] = {"Apps",  DOCK_TRAY_COLOR, gui_icon_apps,  gui_launch_apps,  0, 0},
     [GUI_TRASH]       = {"Trash", DOCK_TRAY_COLOR, gui_icon_trash, gui_launch_trash, 0, 0},
 };
-
-/* Called from gui_run's own full-repaint branch, right alongside the
-   menu/notif/weather overlay draws it already does there, so every open
-   window is genuinely redrawn on top of the desktop on every real repaint
-   this kernel does, back-to-front, list order. */
-static void gui_multiwin_draw_all(void){
-    for (int i = 0; i < gui_window_count; i++) gui_multiwin_draw_one(&gui_windows[i]);
-}
-
-/* v0.73.6 (phase 2): the one real choke point that moves a window to the
-   top of the z-order list. Both gui_multiwin_open's "already open, refocus
-   it" path and the new click-to-focus path below now go through this
-   instead of each keeping its own copy of the same shift loop, so draw
-   order (gui_multiwin_draw_all, back-to-front over the list) and input
-   hit-testing (gui_multiwin_hit_test, topmost-first over the same list)
-   can never disagree about which window is "on top": there is exactly one
-   piece of z-order state, gui_windows[0..count-1]'s own order. */
-static void gui_multiwin_focus(int idx){
-    if (idx < 0 || idx >= gui_window_count || idx == gui_window_count - 1) return;
-    gui_window_t tmp = gui_windows[idx];
-    for (int j = idx; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1];
-    gui_windows[gui_window_count - 1] = tmp;
-}
-
-/* App switcher: Alt+Tab (Ctrl+Tab too, since QEMU/v86's Alt delivery to a
-   guest kernel is the flaky one to bet on) cycles the open windows, the
-   same macOS Cmd+Tab shape -- hold the modifier and tap Tab, a small
-   centered panel lists every open window with the next one highlighted;
-   releasing the modifier focuses it. Walks whatever's really open
-   (gui_window_count, capped at GUI_MULTIWIN_MAX like the window list
-   itself already is), never a hard-coded count. */
-static int gui_switcher_open = 0;
-static int gui_switcher_idx = 0;
-
-static void gui_switcher_draw(int hi){
-    int rows = gui_window_count;
-    if (rows <= 0) return;
-    int row_h = 28, pad_v = 10, w = 220;
-    int h = pad_v * 2 + rows * row_h;
-    int x = ((int)window_width() - w) / 2, y = ((int)window_height() - h) / 2;
-    unsigned int bg = 0x002C2C2E, text = 0x00F5F5F7; /* same flyout colors the Apple menu/notif/weather panels already share */
-    gui_rounded_rect_on_wallpaper(x, y, w, h, bg, 14);
-    int ry = y + pad_v;
-    for (int i = 0; i < rows; i++) {
-        if (i == hi) window_rect(x + 6, ry, w - 12, row_h - 4, 0x00555555);
-        int icon = gui_windows[i].icon;
-        const char *label = (icon >= 0 && icon < GUI_APP_COUNT) ? APPS[icon].name : "?";
-        font_draw_string(label, x + 18, ry + 6, text, -1);
-        ry += row_h;
-    }
-    window_present();
-}
-
-/* Screenshot: Ctrl+Shift+3, the reliable one -- real PrintScreen sends an
-   E0-prefixed 4-byte make sequence (E0 2A E0 37) that shares its 0xE0
-   lead byte with every arrow key's own extended sequence, which the
-   multiwin key readers just above are already mid-decoding whenever a
-   window with arrow-key input (Files, Calendar) is open; peeking for it
-   here risked eating a real arrow keystroke, so this ships the one
-   hotkey that can't collide. Saves the live framebuffer as an
-   uncompressed 24-bit BMP (no PNG encoder exists in this tree, drivers/
-   png.c only decodes) named SHOT0001.BMP, SHOT0002.BMP, ... in the files
-   root, so it shows up in Files like any other saved file. */
-static void gui_write_u32le(unsigned char *p, unsigned int v){ p[0]=v&0xFF; p[1]=(v>>8)&0xFF; p[2]=(v>>16)&0xFF; p[3]=(v>>24)&0xFF; }
-static void gui_write_u16le(unsigned char *p, unsigned int v){ p[0]=v&0xFF; p[1]=(v>>8)&0xFF; }
-
-static int gui_screenshot_next_name(char *out /* 13 bytes, "SHOTNNNN.BMP\0" */){
-    for (int n = 1; n <= 9999; n++) {
-        char name[13];
-        int i = 0; name[i++]='S'; name[i++]='H'; name[i++]='O'; name[i++]='T';
-        name[i++]='0'+(n/1000)%10; name[i++]='0'+(n/100)%10; name[i++]='0'+(n/10)%10; name[i++]='0'+n%10;
-        name[i++]='.'; name[i++]='B'; name[i++]='M'; name[i++]='P'; name[i]=0;
-        unsigned char probe[1];
-        if (vfs_read_file(name, probe, 1) < 0) { for (int j = 0; j <= i; j++) out[j] = name[j]; return 1; }
-    }
-    return 0;
-}
-
-/* Returns the real byte count written (54-byte header + padded pixel
-   rows) on success, 0 on failure -- a headless check can grep the exact
-   figure straight out of the serial marker below instead of having to
-   parse the FAT image itself to prove the file's real size. */
-static unsigned int gui_screenshot_save(char *name_out /* 13 bytes */){
-    int sc = (int)window_scale(); if (sc < 1) sc = 1;
-    int w = (int)window_width() * sc, h = (int)window_height() * sc;
-    if (w <= 0 || h <= 0) return 0;
-    unsigned int row_bytes = (unsigned int)w * 3;
-    unsigned int pad = (4 - (row_bytes % 4)) % 4;
-    unsigned int data_size = (row_bytes + pad) * (unsigned int)h;
-    unsigned int file_size = 54 + data_size;
-    unsigned char *buf = (unsigned char *)kmalloc(file_size);
-    if (!buf) return 0;
-    buf[0]='B'; buf[1]='M';
-    gui_write_u32le(buf + 2, file_size);
-    gui_write_u32le(buf + 6, 0);
-    gui_write_u32le(buf + 10, 54);
-    gui_write_u32le(buf + 14, 40);
-    gui_write_u32le(buf + 18, (unsigned int)w);
-    gui_write_u32le(buf + 22, (unsigned int)h); /* positive height: bottom-up rows, standard BMP */
-    gui_write_u16le(buf + 26, 1);
-    gui_write_u16le(buf + 28, 24);
-    gui_write_u32le(buf + 30, 0);
-    gui_write_u32le(buf + 34, data_size);
-    gui_write_u32le(buf + 38, 2835);
-    gui_write_u32le(buf + 42, 2835);
-    gui_write_u32le(buf + 46, 0);
-    gui_write_u32le(buf + 50, 0);
-    unsigned char *px = buf + 54;
-    for (int y = 0; y < h; y++) {
-        int src_y = h - 1 - y; /* bottom-up */
-        unsigned char *row = px + (unsigned int)y * (row_bytes + pad);
-        for (int x = 0; x < w; x++) {
-            unsigned int c = window_get_pixel_phys(x, src_y);
-            row[x*3+0] = (unsigned char)(c & 0xFF);
-            row[x*3+1] = (unsigned char)((c >> 8) & 0xFF);
-            row[x*3+2] = (unsigned char)((c >> 16) & 0xFF);
-        }
-        for (unsigned int p = 0; p < pad; p++) row[row_bytes + p] = 0;
-    }
-    char name[13];
-    int ok = gui_screenshot_next_name(name);
-    int saved = ok && vfs_write_file(name, buf, file_size) == 1; /* vfs_write_file (drivers/vfs.h), not fat_write_file directly, so this lands in whichever backend is actually active -- the FAT disk when one's attached, the RAM fallback (ramfs.c) in every headless/no-disk boot -- the same choice Files/Notes already make instead of hard-wiring FAT. Returns exactly 1 on success, 0 on failure, never a byte count. */
-    kfree(buf);
-    if (saved) { for (int j = 0; j < 13; j++) name_out[j] = name[j]; }
-    return saved ? file_size : 0;
-}
-
-/* A brief centered confirmation banner, same flyout colors as the
-   switcher panel above, up for ~0.6s (60 PIT ticks) then erased by the
-   next real desktop repaint -- the same "flash" every other save
-   confirmation in this kernel (editor.h's status line) already does,
-   just as its own overlay instead of a status line, since the desktop
-   itself has none. */
-static void gui_screenshot_flash(const char *name){
-    char msg[24]; int i = 0; const char *s = "Saved "; while (*s) msg[i++] = *s++;
-    s = name; while (*s && i < 23) msg[i++] = *s++;
-    msg[i] = 0;
-    int tw = font_string_width(msg);
-    int w = tw + 40, h = 40;
-    int x = ((int)window_width() - w) / 2, y = 70;
-    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x002C2C2E, 14);
-    font_draw_string(msg, x + 20, y + 12, 0x00F5F5F7, -1);
-    window_present();
-    unsigned int until = ticks() + 60;
-    while ((int)(ticks() - until) < 0) __asm__ volatile ("hlt");
-}
-
-static int gui_multiwin_open(int icon){
-    for (int i = 0; i < gui_window_count; i++) {
-        if (gui_windows[i].icon == icon) {
-            /* Already open: focus it (move to the end of the list, so the
-               back-to-front draw puts it on top) instead of opening a
-               duplicate. */
-            gui_multiwin_focus(i);
-            return gui_window_count - 1;
-        }
-    }
-    if (gui_window_count >= GUI_MULTIWIN_MAX) return -1; /* the real cap this pass proves, see the comment above */
-    int slot = gui_window_count;
-    gui_windows[slot].icon = icon;
-    gui_windows[slot].task = -1;
-    gui_windows[slot].shown = 0;
-    gui_multiwin_geom(slot, &gui_windows[slot].x, &gui_windows[slot].y, &gui_windows[slot].w, &gui_windows[slot].h);
-    if (gui_window_bleed(icon)) { gui_windows[slot].x = -8; gui_windows[slot].y = -32; gui_windows[slot].w = (int)window_width() + 16; gui_windows[slot].h = (int)window_height() + 40; } /* content rect = the whole screen */
-    if (gui_ring3_windowed(icon)) {
-        /* 1.9.23: the program is scheduled now and draws into its own
-           buffer; this loop keeps running. -1 is refused by the caller
-           (gui_refuse_open), never a blocking takeover. */
-        if (APPS[icon].open == notes_ring3_open) notes_migrate_legacy(); /* the window path never calls APPS[].open, which is where the one-time NOTES.TXT move into the default folder lives (editor.h) */
-        int t = ring3app_launch_window(APPS[icon].name, (unsigned int)(gui_windows[slot].w - 16), (unsigned int)(gui_windows[slot].h - 40));
-        if (t < 0) return -1;
-        gui_windows[slot].task = t;
-    }
-    gui_window_count++;
-    return slot;
-}
-
-/* v0.73.6 (phase 2): real click-to-focus hit-testing. Checks every open
-   window, topmost-drawn first (gui_windows[count-1] down to [0], the exact
-   reverse of gui_multiwin_draw_all's back-to-front draw order), and returns
-   the first (i.e. topmost) whose rect contains the click -- the same
-   "topmost visible thing wins" rule every real windowing system's hit
-   test uses (X11 stacking order, Win32 Z-order, etc). Replaces the old
-   phase-1 gui_multiwin_focused_click_hit, which only ever tested the
-   single most-recently-opened window and left a click on a visible
-   background window doing nothing. -1 means the click hit neither
-   window's rect at all. */
-static int gui_multiwin_hit_test(int mx, int my){
-    for (int i = gui_window_count - 1; i >= 0; i--) {
-        const gui_window_t *w = &gui_windows[i];
-        if (mx >= w->x && mx < w->x + w->w && my >= w->y && my < w->y + w->h) return i;
-    }
-    return -1;
-}
-
-static void gui_multiwin_close(int idx){
-    if (idx < 0 || idx >= gui_window_count) return;
-    int bleed = gui_window_bleed(gui_windows[idx].icon); for (int j = idx; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1]; gui_window_count--;
-    if (bleed) { gui_menubar_force_redraw(); gui_draw_menubar(); } /* the bar was held back while his face covered it */
-}
-
-/* v0.75.0 (batch 2): the same SC[]/extended-0xE0 decode get_key_or_click
-   already does, but never hlt-waits -- called at most once per gui_run
-   frame, for the one focused interactive window (gui_multiwin_interactive),
-   so a real keystroke reaches Mail/Calendar/Reminders' own on_key handler
-   without blocking the compositor the way the old gui_wait_close-shaped
-   loops did. A truly split extended sequence (the second byte of an arrow
-   key) just drops this frame rather than block waiting for it -- the IRQ
-   handler fills both bytes of the ring within microseconds of each other,
-   well inside one frame at this poll rate, so in practice this never
-   drops a real arrow keystroke. */
-static int gui_multiwin_key_nonblock(void){
-    int sc = kbd_pop();
-    if (sc < 0) return -1;
-    /* 2.0.0: the selection keys (Shift+arrow, Ctrl+A) go to a ring-3 window only; an in-kernel app keeps plain arrows */
-    int sel_ok = gui_window_count > 0 && gui_windows[gui_window_count - 1].task >= 0;
-    if (sc == 0xE0) {
-        int sc2 = kbd_pop();
-        if (sc2 < 0) return -1; int sh = sel_ok && kbd_shift; /* shift+arrow extends a selection only in a ring-3 window */
-        if (sc2 == 0x48) return sh ? KEY_SUP : KEY_UP;    if (sc2 == 0x50) return sh ? KEY_SDOWN : KEY_DOWN;
-        if (sel_ok && kbd_ctrl && gui_windows[gui_window_count - 1].icon == GUI_APP_PANES) { if (sc2 == 0x4B) return KEY_CTL_LEFT; if (sc2 == 0x4D) return KEY_CTL_RIGHT; }
-        if (sc2 == 0x4B) return sh ? KEY_SLEFT : KEY_LEFT; if (sc2 == 0x4D) return sh ? KEY_SRIGHT : KEY_RIGHT;
-        if (sc2 == 0x47) return KEY_HOME;
-        if (sc2 == 0x4F) return KEY_END;
-        if (sc2 == 0x53) return KEY_DELETE;
-        return -1;
-    }
-    if (sc == 0xBC) return KEY_F2_UP;
-    if (sc & 0x80) return -1; /* key release */
-    if (sc == 0x3C) return KEY_F2;
-    if (kbd_ctrl && (sc & 0x7F) == 0x1F) return KEY_SAVE;
-    if (kbd_ctrl) { int k = sc & 0x7F; if (k == 0x2E) return KEY_COPY; if (k == 0x2D) return KEY_CUT; if (k == 0x2F) return KEY_PASTE; if (sel_ok && k == 0x1E) return KEY_SELALL; if (sel_ok && gui_windows[gui_window_count - 1].icon == GUI_APP_PANES && key_ctl_code(k)) return key_ctl_code(k); } /* clipboard and select-all keys reach ring-3 windows too */
-    char c = kbd_map(sc);
-    if (c == '\n') return KEY_ENTER;
-    if (c == 27)   return KEY_ESC;
-    if (c) return (int)(unsigned char)c;
-    return -1;
-}
 
 /* A loop (octagon approximating a circle, 8 capsule segments) for the
    round parts of a script letter: no sin/cos in this freestanding build,
@@ -3948,8 +3309,8 @@ static void gui_draw_notif_panel(void){
    word, and as of v71 the real ip-api.com city/lat/lon it queried, no
    longer a fixed literal), no invented humidity/wind/forecast rows the
    data doesn't have. */
-#define WEATHER_W 220
-static void gui_draw_weather_panel(void){
+/* WEATHER_W: kernel/desktop.h */
+void gui_draw_weather_panel(void){
     int x0 = weather_hit_x0 >= 0 ? weather_hit_x0 : (int)window_width() - WEATHER_W - 200;
     if (x0 + WEATHER_W > (int)window_width() - 4) x0 = (int)window_width() - WEATHER_W - 4;
     int y0 = GUI_MENUBAR_H;
@@ -4905,6 +4266,8 @@ static void run(char *line){
     if (selftest_run(line, arg)) return;   /* kernel/selftest.c: the built-in self-test commands */
     if (taskdemo_run(line)) return;        /* kernel/taskdemo.c: the scheduler demos */
     if (shellfs_run(line, arg)) return;    /* kernel/shellfs.c: ls, cat, rm, cd, mkdir, write, trash, browse */
+    if (shellnet_run(line, arg)) return;
+    if (wxtest_run(line, arg)) return;
     if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest fputest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps calctest pngtest jpegtest chattest beep say listen pick pickcheck\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
@@ -5037,417 +4400,6 @@ static void run(char *line){
             int id = 0; const char *p = arg; while (*p >= '0' && *p <= '9') { id = id*10 + (*p-'0'); p++; }
             task_kill(id);
             puts("signal sent (takes effect next time that task is scheduled)\n");
-        }
-    }
-    else if (!strcmp(line, "weathertest")) {
-        /* v43: the parser has one real trap, so it gets a real test: the
-           reply's "current_units" object carries the same keys with STRING
-           values ("°C") before the "current" object carries the numbers.
-           A naive key search reads the wrong one. Negative and fractional
-           temperatures are the other two edge cases a Vancouver winter
-           will actually exercise. */
-        int t10 = 999, code10 = 999;
-        int ok = weather_parse_check(&t10, &code10);   /* weather.c: the canned reply through json_current_number */
-        puts(ok ? "weather parse: -3.5C / code 61 through the units-block trap: ok\n" : "weather parse: FAILED\n");
-        if (!ok) { puts("  t10="); putn((unsigned int)t10); puts(" code10="); putn((unsigned int)code10); puts("\n"); }
-    }
-    else if (!strcmp(line, "daynighttest")) {
-        /* v65 (0.62.0): standing QA per CLAUDE.md's 4b. daynight_calc and
-           gui_daynight_tint_pct are both pure functions of an explicit
-           hour/pct (see their own comments above, deliberately shaped
-           this way for exactly this test), so this pins hour=2 (deep
-           night) against hour=14 (real midday) directly, no faked
-           hardware needed, the same boot-time direct-call trick this
-           suite's other tests use, just via a pure function instead of a
-           temporary kmain hook. Three real, discriminating checks a
-           reverted feature would fail: the two hours actually produce a
-           different color for the same input pixel, the night one is
-           genuinely darker (not just different), and it stays inside
-           this repo's own "never cold black-and-blue" rule (blue channel
-           never exceeds red on a warm test color, at either hour). */
-        unsigned int test_color = 0x00C97A3E; /* a plausible warm sunset tone from this file's own photo */
-        int night2 = 0, day2 = 0, night14 = 0, day14 = 0;
-        daynight_calc(2, &night2, &day2);
-        daynight_calc(14, &night14, &day14);
-        unsigned int c2 = gui_daynight_tint_pct(test_color, night2, day2);
-        unsigned int c14 = gui_daynight_tint_pct(test_color, night14, day14);
-        int r2 = (int)((c2 >> 16) & 0xFF), g2 = (int)((c2 >> 8) & 0xFF), b2 = (int)(c2 & 0xFF);
-        int r14 = (int)((c14 >> 16) & 0xFF), g14 = (int)((c14 >> 8) & 0xFF), b14 = (int)(c14 & 0xFF);
-        int sum2 = r2 + g2 + b2, sum14 = r14 + g14 + b14;
-        int ok = (c2 != c14) && (sum2 < sum14) && (b2 <= r2) && (b14 <= r14) && (night2 > night14) && (day14 >= day2);
-        puts(ok ? "daynight: hour=2 darker+warm than hour=14, both differ: ok\n" : "daynight: FAILED\n");
-        if (!ok) {
-            puts("  c2="); puthex(c2); puts(" c14="); puthex(c14);
-            puts(" sum2="); putn((unsigned int)sum2); puts(" sum14="); putn((unsigned int)sum14); puts("\n");
-        }
-    }
-    else if (!strcmp(line, "maptinttest")) {
-        /* v79 (0.68.0): standing QA per CLAUDE.md's 4b, for the map-only
-           warm color grade added above (gui_map_tint). Three real,
-           discriminating checks a reverted grade would fail: (1) a
-           neutral OpenTopoMap-style gray actually shifts warm (red ends
-           up strictly greater than blue, it started equal), (2) two
-           distinct source colors (a road gray and a water blue) stay
-           distinct after the grade -- proves this is a multiply, not a
-           lerp-to-one-target that would collapse them together, (3) a
-           near-white street-label background and a near-black label
-           glyph both stay on their own end of the range (white stays
-           above 200, black stays under 40) so the grade doesn't crush
-           the contrast a real label needs to read. */
-        unsigned int gray  = 0x00A0A0A0; /* plausible OpenTopoMap road/contour gray */
-        unsigned int water = 0x006E9BC7; /* plausible OpenTopoMap water blue */
-        unsigned int label_bg = 0x00F2F0E8;  /* near-white street-name background */
-        unsigned int label_fg = 0x00202020;  /* near-black street-name glyph */
-        unsigned int tg = gui_map_tint(gray), tw = gui_map_tint(water);
-        unsigned int tbg = gui_map_tint(label_bg), tfg = gui_map_tint(label_fg);
-        int gr = (int)((tg >> 16) & 0xFF), gb = (int)(tg & 0xFF);
-        int bg_r = (int)((tbg >> 16) & 0xFF);
-        int fg_r = (int)((tfg >> 16) & 0xFF);
-        int ok = (gr > gb) && (tg != tw) && (tg != gray) && (bg_r > 200) && (fg_r < 40);
-        puts(ok ? "maptint: neutral grays warmed, distinct colors stay distinct, label contrast survives: ok\n" : "maptint: FAILED\n");
-        if (!ok) {
-            puts("  tg="); puthex(tg); puts(" tw="); puthex(tw);
-            puts(" tbg="); puthex(tbg); puts(" tfg="); puthex(tfg); puts("\n");
-        }
-    }
-    else if (!strcmp(line, "walltest")) {
-        /* v81 (0.69.0): standing QA per CLAUDE.md's 4b for the wallpaper
-           theme picker added this pass. Reverting either gui_map_tint_cool
-           or gui_wall_tint's dispatch back to a single-theme shape fails
-           this, proved by hand before writing it: temporarily making
-           gui_wall_tint always return gui_map_tint(rgb) (the pre-v81
-           behaviour) makes check (2) below fail (Cool would equal Warm).
-           Real, discriminating checks, same shape as maptinttest above:
-           (1) Cool is a genuinely different curve from Warm on the same
-               neutral gray -- not just "some different number", but the
-               opposite direction: Warm pushes red above blue (r>b), Cool
-               pushes blue above red (b>r), on the identical input.
-           (2) Cool(gray) != Warm(gray): the two map themes are provably
-               distinct, not the same grade under two names.
-           (3) Raw(gray) == gray: the "no color grade" theme really is a
-               no-op, not a mislabeled copy of one of the tinted paths.
-           (4) Cool keeps two distinct source colors distinct after its
-               grade (a road gray and a water blue stay != each other),
-               proving the contrast-stretch add-on is still a real
-               per-pixel transform, not a lerp-to-one-target that would
-               collapse them.
-           (5) settings_save()/settings_load() round-trip every one of the
-               4 real theme values through SETTINGS.TXT (the actual
-               Settings-screen persistence path, not a mock), each value
-               distinct after reload -- the "config value with no visible
-               effect" failure mode this task was scoped to avoid, plus
-               the file-format contract wind/dock already get tested at. */
-        unsigned int gray  = 0x00A0A0A0;
-        unsigned int water = 0x006E9BC7;
-        unsigned int warm_g = gui_map_tint(gray);
-        unsigned int cool_g = gui_map_tint_cool(gray);
-        int wr = (int)((warm_g >> 16) & 0xFF), wb = (int)(warm_g & 0xFF);
-        int cr = (int)((cool_g >> 16) & 0xFF), cb = (int)(cool_g & 0xFF);
-        int ok1 = (wr > wb) && (cb > cr); /* opposite directions on the same input */
-        int ok2 = (cool_g != warm_g);
-        int ok4 = (gui_map_tint_cool(gray) != gui_map_tint_cool(water));
-
-        /* ok3 exercises the real per-pixel dispatch (gui_wall_tint), not
-           the standalone tint functions above, so a broken dispatch (e.g.
-           gui_wall_tint hardcoded back to always-Warm, the pre-v81 shape)
-           fails HERE even though ok1/ok2/ok4 would still pass on their
-           own -- proved by hand: hardcoding gui_wall_tint to always
-           `return gui_map_tint(rgb);` makes wall_dispatch_warm ==
-           wall_dispatch_cool below, which this catches. wall_src is
-           pointed at a real non-wallpaper_rgb address (any distinct
-           pointer works, gui_wall_tint only ever compares it, never
-           dereferences it here) so the Photo early-out doesn't fire. */
-        const unsigned char *saved_wall_src = wall_src;
-        int saved_wall_theme = wall_theme;
-        unsigned char fake_map_byte = 0;
-        wall_src = &fake_map_byte;
-        wall_theme = WALL_WARM;  unsigned int wall_dispatch_warm = gui_wall_tint(gray);
-        wall_theme = WALL_COOL;  unsigned int wall_dispatch_cool = gui_wall_tint(gray);
-        wall_theme = WALL_RAW;   unsigned int wall_dispatch_raw  = gui_wall_tint(gray);
-        wall_theme = WALL_SAT;   unsigned int wall_dispatch_sat  = gui_wall_tint(gray);
-        unsigned int wall_dispatch_sat_green = gui_wall_tint(0x00208020);
-        wall_src = wallpaper_rgb; wall_theme = WALL_COOL;
-        unsigned int wall_dispatch_photo = gui_wall_tint(gray); /* Photo guard: must ignore wall_theme entirely */
-        wall_src = wall_solid_row; wall_theme = WALL_SAT; /* a plain wall is never graded, whatever wall_theme says */
-        unsigned int wall_dispatch_solid = gui_wall_tint(gray);
-        unsigned int wall_tint_solid = gui_daynight_tint(gray); /* ...and never day/night tinted either */
-        wall_src = saved_wall_src; wall_theme = saved_wall_theme;
-        int ok3 = (wall_dispatch_warm == warm_g) && (wall_dispatch_cool == cool_g)
-                && (wall_dispatch_raw == gray) && (wall_dispatch_photo == gray)
-                && (wall_dispatch_sat == gui_sat_color(gray)) && (wall_dispatch_sat != warm_g)
-                && (wall_dispatch_solid == gray) && (wall_tint_solid == gray)
-                && (wall_solid_color[0] == 0x006E6E6Eu);
-        /* Satellite must preserve hue and lift saturation. Returning raw
-           pixels or restoring the old luminance-only grade fails here. */
-        unsigned int sg = gui_sat_color(0x00208020);
-        int ok5 = (gui_sat_color(0x00000000) == 0x00000000)
-                && (gui_sat_color(0x00FFFFFF) == 0x00FFFFFF)
-                && (((sg >> 8) & 0xFF) > ((sg >> 16) & 0xFF))
-                && (((sg >> 8) & 0xFF) > (sg & 0xFF))
-                && (((sg >> 8) & 0xFF) - (sg & 0xFF) > 0x60)
-                && (wall_dispatch_sat_green == sg);
-        ok3 = ok3 && ok5;
-
-        const char *prev_fs = vfs_current_name();
-        char prev_fs_buf[16]; int pfi = 0; while (prev_fs[pfi] && pfi < 15) { prev_fs_buf[pfi] = prev_fs[pfi]; pfi++; } prev_fs_buf[pfi] = 0;
-        vfs_switch("ramfs");
-        int roundtrip_ok = 1;
-        for (int theme = WALL_PHOTO; theme <= WALL_INK; theme++) {
-            wall_theme = theme; settings_save();
-            wall_theme = -1; /* clobber so settings_load has to actually set it, not coast on the old value */
-            settings_load();
-            if (wall_theme != theme) roundtrip_ok = 0;
-        }
-        vfs_switch(prev_fs_buf);
-
-        int ok = ok1 && ok2 && ok3 && ok4 && roundtrip_ok;
-        puts(ok ? "walltest: Cool distinct from Warm (opposite direction), Raw is a no-op, Cool preserves color distinctness, theme round-trips through SETTINGS.TXT: ok\n" : "walltest: FAILED\n");
-        if (!ok) {
-            puts("  warm_g="); puthex(warm_g); puts(" cool_g="); puthex(cool_g);
-            puts(" dispatch warm="); puthex(wall_dispatch_warm); puts(" cool="); puthex(wall_dispatch_cool);
-            puts(" raw="); puthex(wall_dispatch_raw); puts(" photo="); puthex(wall_dispatch_photo);
-            puts(" ok1="); putn((unsigned int)ok1); puts(" ok2="); putn((unsigned int)ok2);
-            puts(" ok3="); putn((unsigned int)ok3); puts(" ok4="); putn((unsigned int)ok4);
-            puts(" roundtrip="); putn((unsigned int)roundtrip_ok); puts("\n");
-        }
-        wall_theme = WALL_GREY; settings_save(); /* restore the real default, this test must not leave the kernel in a weird state for whatever runs next */
-    }
-    else if (!strcmp(line, "weatherfxtest")) {
-        /* v65 (0.62.0): standing QA per CLAUDE.md's 4b, two real,
-           discriminating checks. (1) weather_fx_kind is a pure function
-           of a WMO code (see its own comment above, same cutoffs
-           weather_word() uses), so Clear/Fog/Rain/Snow/Storm codes are
-           checked directly against the classification a reverted feature
-           would get wrong. (2) weather_fx_tick_kind actually has to move
-           real particle state, not just classify a code correctly: seed
-           a known particle set, tick it under a live Rain classification
-           and confirm particle 0 really moved, then tick the same count
-           under WEATHER_FX_NONE and confirm it does NOT move (the early-
-           return path), proving the "Clear gets no overlay" contract is
-           real, not just a comment. Global particle state is saved and
-           restored around this so a real live overlay in progress isn't
-           disturbed by running the test. */
-        int ok_kind, moved_on_rain, still_on_clear;
-        weather_fx_check(&ok_kind, &moved_on_rain, &still_on_clear);   /* weather.c: classification, then particles under Rain and Clear */
-        int ok = ok_kind && moved_on_rain && still_on_clear;
-        puts(ok ? "weatherfx: classification + rain moves/clear doesn't: ok\n" : "weatherfx: FAILED\n");
-        if (!ok) {
-            puts("  ok_kind="); putn((unsigned int)ok_kind);
-            puts(" moved_on_rain="); putn((unsigned int)moved_on_rain);
-            puts(" still_on_clear="); putn((unsigned int)still_on_clear); puts("\n");
-        }
-
-    }
-    else if (!strcmp(line, "windweathertest")) {
-        /* v60 gap fix: verification that pass was a boot-time direct-call
-           dump of three gui_wind_shift() samples, reverted before commit,
-           nothing left in the suite. Real, discriminating logic to pin
-           down: wind_pct_for_weather_code's seven WMO-code buckets, the
-           exact percentages ROADMAP.md's own table names (Fog stillest at
-           40%, then Clear/Cloudy/Snow/Rain/Showers/Storm climbing to
-           200%), every boundary value, not just one code per bucket. */
-        int ok =
-            wind_pct_for_weather_code(0)  == 60  && wind_pct_for_weather_code(3)  == 100 &&
-            wind_pct_for_weather_code(4)  == 40  && wind_pct_for_weather_code(48) == 40  &&
-            wind_pct_for_weather_code(49) == 130 && wind_pct_for_weather_code(67) == 130 &&
-            wind_pct_for_weather_code(68) == 90  && wind_pct_for_weather_code(77) == 90  &&
-            wind_pct_for_weather_code(78) == 150 && wind_pct_for_weather_code(82) == 150 &&
-            wind_pct_for_weather_code(83) == 200 && wind_pct_for_weather_code(95) == 200;
-        puts(ok ? "wind_pct_for_weather_code: every WMO bucket boundary maps to its real percent: ok\n"
-                : "wind_pct_for_weather_code: FAILED\n");
-    }
-    else if (!strcmp(line, "weatherfxcliptest")) {
-        /* v71 (0.65.0): regression test for the horizon glitch bar, per
-           CLAUDE.md's 4b. Real framebuffer, not just particle state: opens
-           the desktop's own 960x540 scale-2 window, clears it to a flat
-           colour, parks particles one logical row above WIND_HORIZON_ROW
-           (rain at max speed, then snow), ticks each kind ONCE, and scans
-           the physical rows from the horizon down. The pre-v71 tick drew a
-           particle at its advanced position (up to 8 rows past the
-           horizon) before wrapping it, so any streak/dot pixel found at or
-           below WIND_HORIZON_ROW*sc is exactly the leak that painted the
-           dashed bar on Joshua's live desktop. Also asserts the tick did
-           draw real particle pixels somewhere inside the band, so a
-           "fix" that simply stopped drawing would fail too. Particle
-           globals saved/restored like weatherfxtest. */
-        int save_seeded = weather_particles_seeded;
-        struct weather_particle save_particles[WEATHER_PARTICLE_COUNT];
-        for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) save_particles[i] = weather_particles[i];
-        if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); }
-        else {
-            const unsigned int flat = 0x00202020;
-            int sc = (int)window_scale(), w = (int)window_width();
-            int leaked = 0, drawn = 0;
-            for (int kind = WEATHER_FX_RAIN; kind <= WEATHER_FX_SNOW; kind++) {
-                window_clear(flat);
-                weather_particles_seeded = 1;
-                for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) {
-                    weather_particles[i].x = 40 + i * 24;
-                    weather_particles[i].y = WIND_HORIZON_ROW - 1;
-                    weather_particles[i].speed = 8;
-                }
-                weather_fx_tick_kind(kind, w);
-                for (int py = WIND_HORIZON_ROW * sc; py < (WIND_HORIZON_ROW + 12) * sc; py++)
-                    for (int px = 0; px < w * sc; px++)
-                        if (window_get_pixel_phys(px, py) != flat) leaked++;
-                for (int py = WIND_TOP_ROW * sc; py < WIND_HORIZON_ROW * sc; py++)
-                    for (int px = 0; px < w * sc; px++)
-                        if (window_get_pixel_phys(px, py) != flat) drawn++;
-            }
-            window_close();
-            puts(drawn > 0 ? "weatherfx clip: particles really drawn inside the sky band: ok\n" : "weatherfx clip: nothing drawn at all (test not discriminating): FAILED\n");
-            puts(leaked == 0 ? "weatherfx clip: zero particle pixels at or below the horizon: ok\n" : "weatherfx clip: FAILED, pixels leaked below WIND_HORIZON_ROW: ");
-            if (leaked) { putn((unsigned int)leaked); puts("\n"); }
-        }
-        weather_particles_seeded = save_seeded;
-        for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) weather_particles[i] = save_particles[i];
-    }
-    else if (!strcmp(line, "geotest")) {
-        /* v71 (0.65.0): the parser half of the real-location fix, pure and
-           offline (tools/geo-check.sh is the live-network half). A fixed
-           ip-api-shaped body, including the traps a sloppy match would
-           trip on: "latitude"/"longitude" keys earlier in the text (the
-           Open-Meteo reply's own key names, which "lat"/"lon" must NOT
-           match inside), a negative longitude, a string-valued key that
-           must be rejected as not-a-number, and a missing key. Asserts the
-           exact text ip-api returned comes back byte-for-byte, since that
-           text is what weather_fetch splices into its URL. */
-        const char *body = "{\"status\":\"success\",\"latitude\":\"trap\",\"longitude\":1,\"city\":\"Langley\",\"lat\":49.0983,\"lon\":-122.6498,\"zip\":\"V3A\"}";
-        char lat[16], lon[16], city[24], bad[16], none[16];
-        unsigned int nlat = json_extract_number_text(body, "lat", lat, sizeof(lat));
-        unsigned int nlon = json_extract_number_text(body, "lon", lon, sizeof(lon));
-        unsigned int nbad = json_extract_number_text(body, "zip", bad, sizeof(bad));
-        unsigned int nnone = json_extract_number_text(body, "isp", none, sizeof(none));
-        unsigned int ncity = json_extract_string(body, "city", city, sizeof(city));
-        int ok_lat = nlat == 7 && !strcmp(lat, "49.0983");
-        int ok_lon = nlon == 9 && !strcmp(lon, "-122.6498");
-        int ok_reject = nbad == 0 && nnone == 0;
-        int ok_city = ncity == 7 && !strcmp(city, "Langley");
-        puts(ok_lat ? "geo lat: exact text extracted, not matched inside \"latitude\": ok\n" : "geo lat: FAILED\n");
-        puts(ok_lon ? "geo lon: negative value extracted byte-exact: ok\n" : "geo lon: FAILED\n");
-        puts(ok_reject ? "geo: string value and missing key both rejected: ok\n" : "geo reject: FAILED\n");
-        puts(ok_city ? "geo city: ok\n" : "geo city: FAILED\n");
-        if (!(ok_lat && ok_lon)) { puts("  lat="); puts(lat); puts(" lon="); puts(lon); puts("\n"); }
-    }
-    else if (!strcmp(line, "loctest")) {
-        /* v0.85.5: Settings Location, headless and deterministic --
-           tools/checks/location-check.py boots this against a local fake
-           geocoding-api.open-meteo.com server (same wxhost= override
-           weather-app-check.sh's mock already uses for ip-api/Open-Meteo),
-           never real internet, so this never flakes on CI's own network.
-           Three real things proven: one, a real geocode through
-           loc_geocode lands in the loc and geo globals exactly the way a
-           Settings save would; two, settings_save and settings_load
-           round-trip it through SETTINGS.TXT, the same file wind/dock/wall
-           already prove elsewhere, simulating a reboot the same way the
-           shell's own mail round trip test above simulates one for
-           MAIL.TXT; three, an unresolvable query fails cleanly (loc_err
-           set, nothing overwritten, no crash) rather than fabricating a
-           coordinate. */
-        serial_puts("loctest start\n");
-        char save_name[LOC_NAME_MAX]; int si=0; while (loc_name[si]) { save_name[si]=loc_name[si]; si++; } save_name[si]=0;
-        int ok1 = loc_geocode("Langley");
-        int ok1b = ok1 && loc_have && loc_lat[0] && loc_lon[0] && loc_name[0]
-                   && !strcmp(geo_lat, loc_lat) && !strcmp(geo_lon, loc_lon) && !strcmp(geo_city, loc_name) && geo_have;
-        serial_puts(ok1b ? "loc geocode: real lookup lands in loc_*/geo_*: ok\n" : "loc geocode: FAILED\n");
-
-        char want_name[LOC_NAME_MAX], want_lat[16], want_lon[16];
-        { int i=0; while (loc_name[i]) { want_name[i]=loc_name[i]; i++; } want_name[i]=0; }
-        { int i=0; while (loc_lat[i]) { want_lat[i]=loc_lat[i]; i++; } want_lat[i]=0; }
-        { int i=0; while (loc_lon[i]) { want_lon[i]=loc_lon[i]; i++; } want_lon[i]=0; }
-        settings_save();
-        loc_have = 0; loc_name[0] = 0; loc_lat[0] = 0; loc_lon[0] = 0;
-        geo_have = 0; geo_lat[0] = 0; geo_lon[0] = 0; geo_city[0] = 0;
-        settings_load();
-        int ok2 = loc_have && !strcmp(loc_name, want_name) && !strcmp(loc_lat, want_lat) && !strcmp(loc_lon, want_lon)
-                  && geo_have && !strcmp(geo_lat, want_lat) && !strcmp(geo_lon, want_lon) && !strcmp(geo_city, want_name);
-        serial_puts(ok2 ? "loc persist: settings_save/settings_load round trip (simulated reboot): ok\n" : "loc persist: FAILED\n");
-
-        loc_err[0] = 0;
-        int ok3 = !loc_geocode("Nowhereville") && loc_err[0] && loc_have && !strcmp(loc_name, want_name);
-        serial_puts(ok3 ? "loc not-found: fails clean, error set, nothing overwritten: ok\n" : "loc not-found: FAILED\n");
-
-        loc_err[0] = 0;
-        int ok4 = !loc_geocode("");
-        serial_puts(ok4 ? "loc empty input: rejected, no crash: ok\n" : "loc empty input: FAILED\n");
-
-        int p=0; while (save_name[p]) { loc_name[p]=save_name[p]; p++; } loc_name[p]=0; /* restore whatever was there before this test ran */
-        serial_puts((ok1b && ok2 && ok3 && ok4) ? "loctest PASS\n" : "loctest FAIL\n");
-    }
-    else if (!strcmp(line, "weatherpaneltest")) {
-        /* v56 gap fix: weathertest (above) proves weather_fetch's JSON
-           parse; nothing proved the dropdown itself once shipped, that
-           pass's verification was a boot-time pixel dump into fixed RAM,
-           reverted before commit. Two real, discriminating checks: (1)
-           weather_word()'s WMO-code bucket mapping, the same function the
-           dropdown's condition word and v60's wind multiplier both depend
-           on, every boundary named in ROADMAP.md's own table; (2)
-           gui_draw_weather_panel() actually paints its own bg chrome and,
-           only once weather_have is set, real antialiased glyph ink for
-           the line it claims to show, not a blank rect.
-
-           v72 gap fix, root-caused with a real DEBUG serial dump, not
-           guessed: both checks below failed on pristine v70/v71 HEAD, and
-           the panel itself was fine, painting real chrome both times
-           (confirmed: the interior point now used, x0+40/y0+20 or
-           x0+40/y0+40, read back the real fill color 0x002C2C2E in both
-           the no-data and live-data cases). Two real, separate causes,
-           both predating this test's own geometry:
-           (1) the old (x0+4, y0+4) corner probe predates v66's
-           GUI_FLYOUT_RADIUS=14 rounding of this panel. At radius 14 with
-           a 3px AA band, the point 4px in from each edge is genuinely
-           OUTSIDE the corner arc (distance from the arc centre (14,14) is
-           sqrt(200)=~14.14, past the 14px radius), so
-           gui_rounded_rect_on_wallpaper's own `continue` leaves it
-           untouched -- it read back whatever was there before the panel
-           drew (the test's own pre-clear color), not the panel's fault.
-           (2) the (x0, y0) "border" probe checked for a border color that
-           v66 deliberately removed from this exact panel: see
-           GUI_FLYOUT_RADIUS's own comment, "these three flyouts... were
-           the one place still... with a manually drawn 1px border...
-           zero separate stroke line" is the whole point of that pass.
-           There has been no border to find at (x0, y0) since v66; that
-           corner pixel is also outside the radius per (1) regardless.
-           Real fix is in this test, not the panel: probe a genuine
-           interior point clear of both the corner radius and the
-           top-edge AA band, and stop asserting a border this panel was
-           intentionally redesigned not to have. */
-        int ok_word =
-            !strcmp(weather_word(0),  "Clear")   && !strcmp(weather_word(3),  "Cloudy") &&
-            !strcmp(weather_word(4),  "Fog")     && !strcmp(weather_word(48), "Fog")    &&
-            !strcmp(weather_word(49), "Rain")    && !strcmp(weather_word(67), "Rain")   &&
-            !strcmp(weather_word(68), "Snow")    && !strcmp(weather_word(77), "Snow")   &&
-            !strcmp(weather_word(78), "Showers") && !strcmp(weather_word(82), "Showers")&&
-            !strcmp(weather_word(83), "Storm")   && !strcmp(weather_word(95), "Storm");
-        puts(ok_word ? "weather_word: every WMO bucket boundary maps correctly: ok\n" : "weather_word: FAILED\n");
-
-        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
-        else {
-            unsigned int bg = 0x002C2C2E;
-            weather_hit_x0 = -1; /* force the fallback geometry branch, same formula gui_draw_weather_panel uses */
-            int x0 = (int)window_width() - WEATHER_W - 200;
-            if (x0 + WEATHER_W > (int)window_width() - 4) x0 = (int)window_width() - WEATHER_W - 4;
-            int y0 = GUI_MENUBAR_H;
-
-            weather_have = 0;
-            window_clear(0x00111111);
-            gui_draw_weather_panel();
-            int chrome_empty = window_get_pixel(x0 + 40, y0 + 20) == bg;
-            puts(chrome_empty ? "weather panel (no data): chrome painted: ok\n" : "weather panel (no data): FAILED\n");
-
-            weather_have = 1; weather_temp_c = -3; weather_code10 = 610;
-            int wi = 0; const char *seed = "-3\xf8 Rain";
-            while (seed[wi] && wi < (int)sizeof(weather_text) - 1) { weather_text[wi] = seed[wi]; wi++; }
-            weather_text[wi] = 0;
-            window_clear(0x00111111);
-            gui_draw_weather_panel();
-            int chrome_ok = window_get_pixel(x0 + 40, y0 + 40) == bg;
-            int ink = 0;
-            for (int dx = 0; dx < WEATHER_W - 24 && !ink; dx++)
-                if (window_get_pixel(x0 + 12 + dx, y0 + 10) != bg) ink = 1;
-            puts((chrome_ok && ink) ? "weather panel (live data): chrome + real ink drawn: ok\n" : "weather panel (live data): FAILED\n");
-            window_close();
-            weather_have = 0; weather_text[0] = 0; /* leave state clean for anything run after */
         }
     }
     else if (!strcmp(line, "cursortest")) {
@@ -5759,40 +4711,6 @@ static void run(char *line){
             }
         }
     }
-    else if (!strcmp(line, "lspci")) {
-        struct pci_device dev;
-        if (pci_find_device(0x03, 0x00, &dev)) { puts("VGA device found, BAR0="); puthex(dev.bar0); putc('\n'); }
-        else puts("no VGA device found\n");
-        if (pci_find_device(0x02, 0x00, &dev)) {
-            puts("NIC found, "); puts(dev.bar0_is_io ? "I/O BAR=" : "MEM BAR=");
-            puthex(dev.bar0); putc('\n');
-        } else puts("no NIC found\n");
-    }
-    else if (!strcmp(line, "tcpmatchtest")) {
-        /* Regression test for a real bug: tcp_match (net.c) used to trust
-           ip->total_length outright with no check against the actual number
-           of bytes rtl8139_receive put in the frame, so a malicious/corrupt
-           remote peer could claim far more payload than it actually sent
-           and every caller (tcp_get/tcp_probe_port/tcp_serve_once) would
-           copy that many bytes starting past the real frame, an
-           out-of-bounds read and uninitialized-stack-memory disclosure.
-           No hardware needed: tcp_match_selftest builds real frames in a
-           local buffer and calls the exact same tcp_match(). */
-        puts(tcp_match_selftest() ? "tcpmatch: honest frame accepted, lying frame rejected: ok\n" : "tcpmatch: FAILED\n");
-    }
-    else if (!strcmp(line, "rxclamptest")) {
-        /* Regression test for a real bug: rtl8139_receive (rtl8139.c) used
-           to return the NIC's raw, unclamped claimed length instead of how
-           many bytes it actually copied into the caller's buffer. Every
-           net.c caller trusts that return value as ground truth for how
-           much of rx[1514] is valid, which is exactly what tcp_match's own
-           bound check depends on -- an oversized or underflowed NIC length
-           defeated that check one layer down, the same OOB-read class as
-           the already-fixed tcp_match bug. No hardware needed:
-           rtl8139_clamp_selftest calls the exact same clamp logic
-           rtl8139_receive uses. */
-        puts(rtl8139_clamp_selftest() ? "rxclamp: oversized/runt NIC lengths clamp correctly: ok\n" : "rxclamp: FAILED\n");
-    }
     else if (!strcmp(line, "settingsclicktest")) {
         /* Regression test for a real bug: Settings' own click handler used
            to act on whatever row a PRIOR arrow-key press had left `sel`
@@ -5856,147 +4774,9 @@ static void run(char *line){
         puts(ok ? "settingsclick: click hit-tests the row it actually landed on, sidebar sections hit-test correctly, and a toggle survives save/load: ok\n" : "settingsclick: FAILED\n");
         serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so a tools/checks shell script can read the verdict headless */
     }
-    else if (!strcmp(line, "ifconfig")) {
-        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
-        else {
-            unsigned char mac[6]; net_get_mac(mac);
-            puts("net0: 10.0.2.15\n  mac ");
-            for (int i = 0; i < 6; i++) {
-                char hx[3]; const char *hexd = "0123456789abcdef";
-                hx[0] = hexd[mac[i] >> 4]; hx[1] = hexd[mac[i] & 0xF]; hx[2] = 0;
-                puts(hx); if (i < 5) puts(":");
-            }
-            puts("\n");
-        }
-    }
-    else if (!strcmp(line, "netscan")) {
-        /* v30: a real, honest connect scan, Kali-flavored in spirit only,
-           not a clone: no SYN-stealth/OS-fingerprint modes, one scan type,
-           a fixed common-port list, exactly what tcp_probe_port actually
-           supports. Same "not a general tool, a real narrow proof" scope
-           as everything else this session, see ROADMAP.md's v30 entry. */
-        if (!*arg) { puts("usage: netscan <host, e.g. 10.0.2.2>\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
-        else {
-            unsigned int ip;
-            int have_ip = 0;
-            /* accept a bare dotted-quad directly, skip DNS for the common
-               "scan a LAN host" case; anything else goes through the same
-               DNS path `web`/`nettest` already use. */
-            { unsigned int a=0,b=0,c=0,d=0; int i=0; const char *p=arg; int quad=1;
-              while (*p) { if (*p=='.') i++; else if (*p<'0'||*p>'9') { quad=0; break; } p++; }
-              if (quad && i==3) { unsigned int parts[4]={0,0,0,0}; int pi=0; p=arg;
-                  while (*p) { if (*p=='.') pi++; else parts[pi]=parts[pi]*10+(*p-'0'); p++; }
-                  a=parts[0];b=parts[1];c=parts[2];d=parts[3];
-                  ip = (a<<24)|(b<<16)|(c<<8)|d; have_ip = 1; }
-            }
-            if (!have_ip) have_ip = dns_resolve(arg, 0x0A000203, &ip);
-            if (!have_ip) { puts("could not resolve host\n"); }
-            else {
-                static const unsigned short ports[] = {21,22,23,25,80,443,3306,8080};
-                puts("scanning...\n");
-                for (unsigned int i = 0; i < sizeof(ports)/sizeof(ports[0]); i++) {
-                    char buf[16]; int n = 0; unsigned int v = ports[i];
-                    char tmp[6]; int ti = 0; if (v==0) tmp[ti++]='0'; while (v) { tmp[ti++]='0'+v%10; v/=10; }
-                    while (ti) buf[n++] = tmp[--ti];
-                    buf[n++] = '/'; buf[n++]='t'; buf[n++]='c'; buf[n++]='p'; buf[n++]=' '; buf[n]=0;
-                    puts(buf);
-                    int r = tcp_probe_port(ip, ports[i]);
-                    puts(r == 1 ? "open\n" : r == 0 ? "closed\n" : "filtered\n");
-                }
-            }
-        }
-    }
-    else if (!strcmp(line, "web")) {
-        char *first_host = arg;
-        char *first_path = first_host;
-        while (*first_path && *first_path != ' ') first_path++;
-        if (*first_path) *first_path++ = 0; else first_path = "/";
-        if (!*first_host) { puts("usage: web <host> [path]\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
-        else {
-            browse_web(first_host, first_path);
-        }
-    }
-    else if (!strcmp(line, "serve")) {
-        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
-        else {
-            /* Long enough on purpose: >536 bytes forces tcp_serve_once
-               through its multi-segment path, not just the one-chunk case. */
-            static const char page[] =
-                "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n"
-                "<html><body><h1>Joshua Tree</h1>"
-                "<p>Served from a kernel with no OS underneath it: no Linux, no XNU, "
-                "no Windows NT, nothing between this HTML and the bare metal except "
-                "the code in this repository. Booted with a multiboot1 header, brought "
-                "up its own GDT, IDT, paging, and a cooperative scheduler, mounted a "
-                "FAT16 filesystem it wrote the driver for, found this network card by "
-                "walking PCI configuration space by hand, and built Ethernet, ARP, "
-                "IPv4, UDP, DNS and TCP from raw bytes on the wire, no libc anywhere "
-                "in the chain. The response you are reading crossed that entire stack "
-                "in more than one TCP segment, which is exactly why this paragraph is "
-                "this long.</p></body></html>";
-            puts("waiting for a connection on :8080...\n");
-            puts(tcp_serve_once(8080, page, sizeof(page) - 1) ? "served:ok\n" : "timeout, nobody connected\n");
-        }
-    }
-    else if (!strcmp(line, "serveapp")) {
-        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|tonchi|toroid|hikko|fieldbook\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
-        else {
-            if (!strcmp(arg, "weather"))          serve_app("weather", app_weather_html, app_weather_len);
-            else if (!strcmp(arg, "curbfind"))    serve_app("curbfind", app_curbfind_html, app_curbfind_len);
-            else if (!strcmp(arg, "keyrate"))     serve_app("keyrate", app_keyrate_html, app_keyrate_len);
-            else if (!strcmp(arg, "bookrank"))    serve_app("bookrank", app_bookrank_html, app_bookrank_len);
-            else if (!strcmp(arg, "quotestreak")) serve_app("quotestreak", app_quotestreak_html, app_quotestreak_len);
-            else if (!strcmp(arg, "tonchi") || !strcmp(arg, "lexly")) serve_app("tonchi", app_tonchi_html, app_tonchi_len);
-            else if (!strcmp(arg, "toroid"))      serve_app("toroid", app_toroid_html, app_toroid_len);
-            else if (!strcmp(arg, "hikko"))    serve_app("hikko", app_hikko_html, app_hikko_len);
-            else if (!strcmp(arg, "fieldbook"))   serve_app("fieldbook", app_fieldbook_html, app_fieldbook_len);
-            else puts("unknown app, see usage\n");
-        }
-    }
     else if (!strcmp(line, "chat") || !strcmp(line, "samantha")) {
         /* 1.9.26: Samantha is a ring-3 program (user/samantha.c); the text shell opens her window like `notes`. */
         puts("chat: Samantha is a desktop window now, run gui and click her in the dock\n"); /* 2.0 gate 5: no blocking launch from the text shell */
-    }
-    else if (!strcmp(line, "build")) {
-        /* v10's "build stuff" loop: take a request, ask the LLM to generate
-           a page for it, serve the result live. The kernel-native version
-           of what gato does on macOS, minus the file-editing part, there's
-           no persistent app catalog to edit yet, just this one slot. */
-        if (!*arg) { puts("usage: build <what to make>\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
-        else {
-            char escaped[256];
-            json_escape(arg, escaped, sizeof(escaped));
-
-            static char req_body[1024];
-            unsigned int n = 0;
-            const char *parts[3];
-            parts[0] = "{\"model\":\"llama3.1:8b\",\"stream\":false,\"prompt\":\"Output ONLY raw HTML for one self-contained page, inline CSS and JS, no external resources, no markdown code fences, no explanation, just the HTML. Make: ";
-            parts[1] = escaped;
-            parts[2] = "\"}";
-            for (int p = 0; p < 3; p++) {
-                const char *s = parts[p];
-                while (*s && n < sizeof(req_body)) req_body[n++] = *s++;
-            }
-
-            puts("asking llama3.1 to build it...\n");
-            static char resp[8192];
-            int rn = http_post("10.0.2.2", "/api/generate", 11434, req_body, n, resp, sizeof(resp) - 1);
-            if (rn <= 0) { puts("FAIL (couldn't reach the host's Ollama server)\n"); }
-            else {
-                resp[rn] = 0;
-                static char html[6144];
-                unsigned int hn = json_extract_string(resp, "response", html, sizeof(html));
-                if (hn == 0) { puts("(no response field in the reply)\n"); }
-                else {
-                    hn = strip_code_fence(html, hn);
-                    serve_app("the generated page", (const unsigned char *)html, hn);
-                }
-            }
-        }
     }
     else if (!strcmp(line, "notes")) {
         puts("notes: Notes is a desktop window now, run gui and click it in the dock\n"); /* 2.0 gate 5: no blocking launch from the text shell */

@@ -58,7 +58,7 @@ static void notes_count_cb(const char *name, unsigned int size, int is_dir) {
    fallback below shows. Skips entirely (and safely: nothing to do) once
    the default folder already has a note in it, so this never re-fires
    or clobbers real notes a user has since made. */
-static void notes_migrate_legacy(void) {
+void notes_migrate_legacy(void) {   /* desktop.h: multiwin.c calls it too */
     if (notes_migrated) return;
     notes_migrated = 1;
     notes_goto_root();

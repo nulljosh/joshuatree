@@ -3,7 +3,7 @@
 close it. Produces one 1920x1080 PNG per app, fails if any app doesn't open
 or if the kernel crashes.
 
-Grid navigation to each app reuses the technique from activity-check.py,
+Grid navigation to each app reuses the technique from ring3activity-check.py,
 portfolio-check.py, appclose-check.py: open the Apps folder (dock slot 0),
 navigate the grid by row/col (icon i: row = i // 5, col = i % 5, using arrow
 keys), press Enter to launch, dump the framebuffer with pmemsave, close via
