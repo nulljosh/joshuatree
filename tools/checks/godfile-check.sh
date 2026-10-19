@@ -64,7 +64,8 @@ ratchet_ceiling() {
         # 2026-10-19: 4.12.3 moved the menu-bar weather to kernel/weather.c.
         # 2026-10-19: 4.18.3 moved the map and satellite wallpapers to kernel/wallmap.c.
         # 2026-10-19: 4.18.4 moved SETTINGS.TXT load and save and the LLM, Mail and Claude settings to kernel/settings.c.
-        kernel/kernel.c) echo 7037 ;;
+        # 2026-10-19: 4.18.5 moved pngtest, jpegtest, heaptest, nettest and mailtest (and their test data) to kernel/selftest.c.
+        kernel/kernel.c) echo 6724 ;;
         *) echo "$LIMIT" ;;
     esac
 }

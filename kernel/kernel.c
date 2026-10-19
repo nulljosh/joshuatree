@@ -42,6 +42,7 @@ int ring3app_write_packed(const char *file, const unsigned char *packed, unsigne
 #include "icon_art.h"
 #include "boot_mark.h"
 #include "wallmap.h"   /* 4.18.3: the map and satellite wallpapers live in kernel/wallmap.c (and wall_sat.h with them) */
+#include "selftest.h"  /* 4.18.5: pngtest, jpegtest, heaptest, nettest and mailtest live in kernel/selftest.c */
 #include "settings.h"  /* 4.18.4: SETTINGS.TXT load and save, and the LLM, Mail and Claude relay settings, live in kernel/settings.c */
 /* v75 (0.67.0): the wallpaper is read through this pointer, not the baked
    array directly, so a real fetched image (wall_fetch below: a 2x2 mosaic
@@ -126,9 +127,7 @@ int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels actually 
 #include "app_hikko.h"
 #include "app_fieldbook.h"
 #include "png.h"
-#include "png_testdata.h"
 #include "jpeg.h"
-#include "jpeg_testdata.h"
 #include "version.h"
 #include "ring3app.h"
 #include "weather.h"   /* 4.12.3: the menu-bar weather lives in kernel/weather.c */
@@ -425,7 +424,7 @@ static void boot_chime(void){
     beep(659, 12); /* E5, held a touch longer to land the chime */
 }
 
-static void putn(unsigned int v){
+void putn(unsigned int v){   /* console.h */
     char buf[12]; int n = 0;
     if (v == 0) buf[n++] = '0';
     while (v) { buf[n++] = '0' + v % 10; v /= 10; }
@@ -2736,7 +2735,6 @@ static int wx_text_lw(const char *s, int size, int bold, int mul);
 #include "ttf_render.h"
 #include "auth.h"
 #include "editor.h"
-#include "mail.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -5033,6 +5031,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
+    if (selftest_run(line, arg)) return;   /* kernel/selftest.c: the built-in self-test commands */
     if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest fputest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps calctest pngtest jpegtest chattest beep say listen pick pickcheck\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
@@ -5075,51 +5074,6 @@ static void run(char *line){
         while (dn) m[p++] = d[--dn];
         a = ok == total ? " ok\n" : " FAIL\n"; while (*a) m[p++] = *a++;
         m[p] = 0; puts(m);
-    }
-    else if (!strcmp(line, "heaptest")) {
-        char *a = kmalloc(16);
-        char *b = kmalloc(32);
-        if (a && b) { a[0] = 'A'; b[0] = 'B'; kfree(a); char *c = kmalloc(8);
-            puts(c == (void*)a ? "reused freed block: ok\n" : "alloc ok, no reuse\n"); kfree(b); kfree(c); }
-        else puts("kmalloc failed\n");
-
-        /* two adjacent blocks, freed, should merge into one big enough for
-           a request neither could satisfy alone, with no new frame pulled
-           in for it: the real, distinguishing signature of coalescing
-           actually running, not just "didn't crash" */
-        char *x = kmalloc(20);
-        char *y = kmalloc(20);
-        if (x && y) {
-            unsigned int before = pmm_free_frames();
-            kfree(y); kfree(x);
-            char *big = kmalloc(48);
-            unsigned int after = pmm_free_frames();
-            puts((big == x && after == before) ? "coalesced adjacent free blocks: ok\n" : "coalesce failed\n");
-            kfree(big);
-        } else puts("kmalloc failed\n");
-
-        /* v57: block splitting. Free one big block, then take two small
-           bites out of it. The real, distinguishing signature that
-           splitting is actually carving the leftover into its own reusable
-           block, not just "both allocs succeeded": p2 has to land just
-           past p1, close enough that it can only be the leftover carved
-           off p1's own block (one header's worth of gap), not a different
-           free block elsewhere or a fresh bump allocation. Without
-           splitting, the first small alloc claims the *whole* freed block
-           (same shape as the "reused freed block" check above), leaving no
-           free space behind inside it, so the second small alloc has to
-           come from wherever else the allocator finds space, nowhere near
-           p1's own address. */
-        char *big2 = kmalloc(200);
-        if (big2) {
-            kfree(big2);
-            char *p1 = kmalloc(20);
-            char *p2 = kmalloc(20);
-            unsigned int gap = (unsigned int)(p2 - p1);
-            int adjacent = p2 > p1 && gap < 64;
-            puts((p1 && p2 && adjacent) ? "split leftover reused: ok\n" : "split failed\n");
-            kfree(p1); kfree(p2);
-        } else puts("kmalloc failed\n");
     }
     else if (!strcmp(line, "heapgrow")) {
         /* v34 (0.34.0): real proof the old 0x400000 wall is actually gone,
@@ -5937,57 +5891,6 @@ static void run(char *line){
             window_close();
         }
     }
-    else if (!strcmp(line, "mailtest")) {
-        /* v59 gap fix: Mail shipped with no regression test at all, the
-           reminders/calendar precedent (check-calendar.sh) only covers
-           date math, nothing VFS-backed like Mail's write-through. Real,
-           discriminating: three known messages through mail_save() ->
-           MAIL.TXT -> a forced mail_load() (state wiped first, so this is
-           a real read off disk, not the array still sitting in RAM),
-           confirms every field and the read flag survived the '|'-
-           delimited round trip; then deletes the middle message through
-           the exact mail_delete_at() the UI's 'd' key now calls, confirms
-           the remaining two shifted into the right slots with every field
-           intact, not just that mail_count went down by one. Runs against
-           ramfs explicitly (fsuse's own backend switch) so the test is
-           real and repeatable even when no FAT disk image is attached,
-           the same reason this suite ships a ramfs backend at all;
-           whatever backend was active is restored after. */
-        const char *prev_fs = vfs_current_name();
-        char prev_fs_buf[16]; int pfi = 0; while (prev_fs[pfi] && pfi < 15) { prev_fs_buf[pfi] = prev_fs[pfi]; pfi++; } prev_fs_buf[pfi] = 0;
-        vfs_switch("ramfs");
-        mail_count = 3;
-        mail_str_copy(mail_msgs[0].from, "Alice", MAIL_FROM_MAX);
-        mail_str_copy(mail_msgs[0].subject, "First", MAIL_SUBJECT_MAX);
-        mail_str_copy(mail_msgs[0].body, "alpha body", MAIL_BODY_MAX);
-        mail_msgs[0].read = 1;
-        mail_str_copy(mail_msgs[1].from, "Bob", MAIL_FROM_MAX);
-        mail_str_copy(mail_msgs[1].subject, "Second", MAIL_SUBJECT_MAX);
-        mail_str_copy(mail_msgs[1].body, "bravo body", MAIL_BODY_MAX);
-        mail_msgs[1].read = 0;
-        mail_str_copy(mail_msgs[2].from, "Carol", MAIL_FROM_MAX);
-        mail_str_copy(mail_msgs[2].subject, "Third", MAIL_SUBJECT_MAX);
-        mail_str_copy(mail_msgs[2].body, "charlie body", MAIL_BODY_MAX);
-        mail_msgs[2].read = 1;
-        mail_save();
-
-        for (int i = 0; i < MAIL_MAX; i++) { mail_msgs[i].from[0] = 0; mail_msgs[i].subject[0] = 0; mail_msgs[i].body[0] = 0; mail_msgs[i].read = 0; }
-        mail_count = 0;
-        mail_loaded = 0;
-        mail_load();
-        int ok = mail_count == 3
-            && !strcmp(mail_msgs[0].from, "Alice") && !strcmp(mail_msgs[0].subject, "First") && !strcmp(mail_msgs[0].body, "alpha body") && mail_msgs[0].read == 1
-            && !strcmp(mail_msgs[1].from, "Bob")   && !strcmp(mail_msgs[1].subject, "Second") && !strcmp(mail_msgs[1].body, "bravo body") && mail_msgs[1].read == 0
-            && !strcmp(mail_msgs[2].from, "Carol") && !strcmp(mail_msgs[2].subject, "Third")  && !strcmp(mail_msgs[2].body, "charlie body") && mail_msgs[2].read == 1;
-        puts(ok ? "mail round trip (3 messages through MAIL.TXT): ok\n" : "mail round trip: FAILED\n");
-
-        mail_delete_at(1);
-        int ok2 = mail_count == 2
-            && !strcmp(mail_msgs[0].from, "Alice") && mail_msgs[0].read == 1
-            && !strcmp(mail_msgs[1].from, "Carol") && !strcmp(mail_msgs[1].subject, "Third") && !strcmp(mail_msgs[1].body, "charlie body") && mail_msgs[1].read == 1;
-        puts(ok2 ? "mail delete: shifted correctly: ok\n" : "mail delete: FAILED\n");
-        vfs_switch(prev_fs_buf);
-    }
     else if (!strcmp(line, "wind")) {
         if (!strcmp(arg, "off")) { wind_enabled = 0; settings_save(); puts("wind off\n"); }
         else if (!strcmp(arg, "on")) { wind_enabled = 1; settings_save(); puts("wind on\n"); }
@@ -6284,56 +6187,6 @@ static void run(char *line){
         puts(ok ? "settingsclick: click hit-tests the row it actually landed on, sidebar sections hit-test correctly, and a toggle survives save/load: ok\n" : "settingsclick: FAILED\n");
         serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so a tools/checks shell script can read the verdict headless */
     }
-    else if (!strcmp(line, "nettest")) {
-        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
-        else {
-            unsigned char mac[6];
-            net_get_mac(mac);
-            puts("MAC: ");
-            for (int i = 0; i < 6; i++) { puthex(mac[i]); if (i < 5) putc(':'); }
-            putc('\n');
-            static const unsigned char frame[64] = {
-                0xFF,0xFF,0xFF,0xFF,0xFF,0xFF, /* dest: broadcast */
-                0,0,0,0,0,0,                    /* src: filled from our MAC below */
-            };
-            unsigned char buf[64];
-            for (int i = 0; i < 64; i++) buf[i] = frame[i];
-            for (int i = 0; i < 6; i++) buf[6 + i] = mac[i];
-            puts(net_send_raw(buf, sizeof(buf)) ? "send:ok\n" : "send:FAIL (timeout)\n");
-
-            unsigned char gw_mac[6];
-            puts("arp 10.0.2.2: ");
-            if (arp_resolve(0x0A000202, gw_mac)) { /* SLIRP's built-in gateway */
-                for (int i = 0; i < 6; i++) { puthex(gw_mac[i]); if (i < 5) putc(':'); }
-                putc('\n');
-            } else puts("timeout\n");
-
-            unsigned int resolved_ip = 0;
-            int dns_ok = dns_resolve("example.com", 0x0A000203, &resolved_ip); /* SLIRP's built-in DNS proxy */
-            puts("dns example.com: ");
-            if (dns_ok) {
-                putn((resolved_ip >> 24) & 0xFF); putc('.');
-                putn((resolved_ip >> 16) & 0xFF); putc('.');
-                putn((resolved_ip >> 8) & 0xFF); putc('.');
-                putn(resolved_ip & 0xFF); putc('\n');
-            } else puts("timeout/no answer\n");
-
-            puts("tcp GET example.com: ");
-            if (!dns_ok) puts("skipped, no IP\n");
-            else {
-                static const char req[] = "GET / HTTP/1.0\r\nHost: example.com\r\nConnection: close\r\n\r\n";
-                static char resp[1400];
-                int n = tcp_get(resolved_ip, 80, req, sizeof(req) - 1, resp, sizeof(resp) - 1);
-                if (n < 0) puts("FAIL\n");
-                else {
-                    resp[n] = 0;
-                    putn((unsigned int)n); puts(" bytes, starts: ");
-                    for (int i = 0; i < 20 && resp[i] && resp[i] != '\r'; i++) putc(resp[i]);
-                    putc('\n');
-                }
-            }
-        }
-    }
     else if (!strcmp(line, "ifconfig")) {
         if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
@@ -6543,172 +6396,6 @@ static void run(char *line){
         stocks_format_change(-18000, &dollars, &cents, &sign);
         if (sign != -1 || dollars != 180) { puts("stocks change format failed\n"); pass = 0; }
         puts(pass ? "stocks formatting: ok\n" : "FAILED\n");
-    }
-    else if (!strcmp(line, "pngtest")) {
-        /* v74 (0.66.0): discriminating regression test for drivers/png.c.
-           Three real PNG files are baked in (drivers/png_testdata.h,
-           generated by tools/gen_png_testdata.py): each is a crop of the
-           kernel's own wallpaper source, so the expected pixels are
-           wallpaper_rgb itself, no second copy. Between them they cover
-           all five scanline filters (cycled per row on purpose) and all
-           three DEFLATE block kinds (dynamic Huffman at zlib level 9,
-           stored blocks at level 0, fixed Huffman via a tiny image),
-           RGB and RGBA, multi-IDAT. Each decode is compared byte-for-byte
-           to the crop it came from and FNV-1a hashed; the hash is printed
-           on serial too so tools/png-check.sh can match it against the
-           host's own PIL decode of the identical bytes. Two fault
-           injections finish it: one flipped IDAT byte must fail on the
-           chunk CRC, and the same flip with the CRC recomputed must still
-           fail inside inflate/Adler-32 instead of decoding to garbage. */
-        int pass = 1;
-        /* v75: a fourth fixture, 8-bit indexed (PLTE), the shape every real
-           map tile server serves. Its pixels are palette lookups of a
-           quantized crop, not wallpaper bytes, so pal=1 skips the
-           wallpaper compare and the host hash alone is the oracle. */
-        struct { const char *name; const unsigned char *png; unsigned int len;
-                 unsigned int x0, y0, w, h, ch, fnv; int pal; } cases[4] = {
-            { "rgb_dyn", pngt_rgb_dyn, sizeof pngt_rgb_dyn, PNGT_RGB_DYN_X0, PNGT_RGB_DYN_Y0,
-              PNGT_RGB_DYN_W, PNGT_RGB_DYN_H, PNGT_RGB_DYN_CH, PNGT_RGB_DYN_FNV, PNGT_RGB_DYN_PAL },
-            { "rgba_stored", pngt_rgba_stored, sizeof pngt_rgba_stored, PNGT_RGBA_STORED_X0, PNGT_RGBA_STORED_Y0,
-              PNGT_RGBA_STORED_W, PNGT_RGBA_STORED_H, PNGT_RGBA_STORED_CH, PNGT_RGBA_STORED_FNV, PNGT_RGBA_STORED_PAL },
-            { "rgb_fixed", pngt_rgb_fixed, sizeof pngt_rgb_fixed, PNGT_RGB_FIXED_X0, PNGT_RGB_FIXED_Y0,
-              PNGT_RGB_FIXED_W, PNGT_RGB_FIXED_H, PNGT_RGB_FIXED_CH, PNGT_RGB_FIXED_FNV, PNGT_RGB_FIXED_PAL },
-            { "pal_dyn", pngt_pal_dyn, sizeof pngt_pal_dyn, PNGT_PAL_DYN_X0, PNGT_PAL_DYN_Y0,
-              PNGT_PAL_DYN_W, PNGT_PAL_DYN_H, PNGT_PAL_DYN_CH, PNGT_PAL_DYN_FNV, PNGT_PAL_DYN_PAL },
-        };
-        for (int ci = 0; ci < 4; ci++) {
-            unsigned char *px = 0; unsigned int w = 0, h = 0, ch = 0;
-            int r = png_decode(cases[ci].png, cases[ci].len, &px, &w, &h, &ch);
-            puts("png "); puts(cases[ci].name); puts(": ");
-            if (r != 0) { puts("decode error "); putn((unsigned int)(-r)); puts(" FAILED\n"); pass = 0; continue; }
-            unsigned int mism = 0, fnv = 0x811c9dc5u;
-            if (w != cases[ci].w || h != cases[ci].h || ch != cases[ci].ch) mism = 0xFFFFFFFFu;
-            else if (cases[ci].pal) {
-                for (unsigned int i = 0; i < w * h * ch; i++) { fnv ^= px[i]; fnv *= 0x01000193u; }
-            }
-            else {
-                for (unsigned int y = 0; y < h; y++)
-                    for (unsigned int x = 0; x < w; x++) {
-                        const unsigned char *e = &wallpaper_rgb[((cases[ci].y0 + y) * WALLPAPER_W + cases[ci].x0 + x) * 3];
-                        const unsigned char *d = px + (y * w + x) * ch;
-                        if (e[0] != d[0] || e[1] != d[1] || e[2] != d[2]) mism++;
-                        if (ch == 4 && d[3] != ((x * 7 + y * 3) & 0xFF)) mism++; /* the generator's alpha pattern */
-                    }
-                for (unsigned int i = 0; i < w * h * ch; i++) { fnv ^= px[i]; fnv *= 0x01000193u; }
-            }
-            kfree(px);
-            putn(w); puts("x"); putn(h); puts(" ch="); putn(ch);
-            puts(" mismatches="); putn(mism); puts(" fnv="); puthex(fnv);
-            int ok = (mism == 0 && fnv == cases[ci].fnv);
-            puts(ok ? " ok\n" : " FAILED\n");
-            if (!ok) pass = 0;
-            /* serial copy for the headless harness */
-            { char b[64]; int i = 0; const char *s = "pngtest "; while (*s) b[i++] = *s++;
-              s = cases[ci].name; while (*s) b[i++] = *s++; b[i++] = ' ';
-              b[i++] = ok ? 'o' : 'F'; b[i++] = ok ? 'k' : 'A'; b[i++] = ' ';
-              for (int sh = 28; sh >= 0; sh -= 4) { int nib = (fnv >> sh) & 0xF; b[i++] = nib < 10 ? '0' + nib : 'a' + nib - 10; }
-              b[i++] = '\n'; b[i] = 0; serial_puts(b); }
-        }
-        /* fault injection 1: a flipped IDAT byte must trip the chunk CRC */
-        {
-            unsigned int n = sizeof pngt_rgb_dyn;
-            unsigned char *c = kmalloc(n);
-            unsigned char *px = 0; unsigned int w, h, ch;
-            if (c) {
-                memcpy(c, pngt_rgb_dyn, n);
-                c[5000] ^= 0x55;
-                int r = png_decode(c, n, &px, &w, &h, &ch);
-                if (px) kfree(px);
-                puts(r == PNG_E_CRC ? "png corrupt byte -> crc rejected: ok\n" : "png corrupt byte not rejected: FAILED\n");
-                if (r != PNG_E_CRC) pass = 0;
-                /* fault injection 2: same flip, CRC repaired, must still fail in zlib/Adler */
-                unsigned int pos = 8 + 25;
-                unsigned int clen = ((unsigned int)c[pos] << 24) | ((unsigned int)c[pos+1] << 16) | ((unsigned int)c[pos+2] << 8) | c[pos+3];
-                memcpy(c, pngt_rgb_dyn, n);
-                c[pos + 8 + clen / 2] ^= 0x55;
-                unsigned int crc = png_crc32(c + pos + 4, clen + 4);
-                c[pos + 8 + clen] = crc >> 24; c[pos + 9 + clen] = crc >> 16; c[pos + 10 + clen] = crc >> 8; c[pos + 11 + clen] = crc;
-                px = 0;
-                r = png_decode(c, n, &px, &w, &h, &ch);
-                if (px) kfree(px);
-                int ok2 = (r == PNG_E_ZLIB || r == PNG_E_TRUNCATED);
-                puts(ok2 ? "png corrupt byte, crc repaired -> inflate rejected: ok\n" : "png corrupt inflate not rejected: FAILED\n");
-                if (!ok2) pass = 0;
-                kfree(c);
-            } else { puts("kmalloc failed\n"); pass = 0; }
-        }
-        puts(pass ? "png decoder: ok\n" : "png decoder: FAILED\n");
-        serial_puts(pass ? "pngtest PASS\n" : "pngtest FAIL\n");
-    }
-    else if (!strcmp(line, "jpegtest")) {
-        /* v76: discriminating regression test for drivers/jpeg.c, the same
-           pngtest shape. Five real photographic JPEGs are baked in
-           (drivers/jpeg_testdata.h, generated by tools/gen/gen_jpeg_testdata.py):
-           crops of the kernel's own wallpaper source re-encoded via PIL at
-           4:4:4 and 4:2:0 subsampling, several quality levels, and one
-           grayscale case. Unlike pngtest, there is no PIL-decode oracle
-           baked in here: JPEG is lossy, so a bit-exact match against an
-           independent decoder isn't the bar (see tools/jpeg-host/main.c's
-           comment for that comparison, done host-side against PIL within a
-           documented tolerance). What *is* checked hash-for-hash here is
-           this exact decoder, cross-compiled freestanding, against the
-           same C source compiled natively (tools/checks/jpeg-check.sh runs
-           tools/jpeg-host fresh and diffs the printed hashes), which is a
-           real, meaningful, discriminating test: deterministic integer-
-           only code should decode identically on both targets, and a
-           mismatch means a real cross-compile or freestanding-environment
-           bug, not lossy-format noise. Two fault injections finish it:
-           a file with no SOI marker must be rejected as not-a-JPEG, and a
-           truncated file must fail cleanly rather than reading past the
-           end. */
-        int pass = 1;
-        struct { const char *name; const unsigned char *jpg; unsigned int len;
-                 unsigned int w, h, ch; } cases[5] = {
-            { "photo_q90_420", jpegt_photo_q90_420, sizeof jpegt_photo_q90_420, JPEGT_PHOTO_Q90_420_W, JPEGT_PHOTO_Q90_420_H, JPEGT_PHOTO_Q90_420_CH },
-            { "photo_q75_444", jpegt_photo_q75_444, sizeof jpegt_photo_q75_444, JPEGT_PHOTO_Q75_444_W, JPEGT_PHOTO_Q75_444_H, JPEGT_PHOTO_Q75_444_CH },
-            { "photo_q50_420", jpegt_photo_q50_420, sizeof jpegt_photo_q50_420, JPEGT_PHOTO_Q50_420_W, JPEGT_PHOTO_Q50_420_H, JPEGT_PHOTO_Q50_420_CH },
-            { "photo_q95_444", jpegt_photo_q95_444, sizeof jpegt_photo_q95_444, JPEGT_PHOTO_Q95_444_W, JPEGT_PHOTO_Q95_444_H, JPEGT_PHOTO_Q95_444_CH },
-            { "gray_q85_420", jpegt_gray_q85_420, sizeof jpegt_gray_q85_420, JPEGT_GRAY_Q85_420_W, JPEGT_GRAY_Q85_420_H, JPEGT_GRAY_Q85_420_CH },
-        };
-        for (int ci = 0; ci < 5; ci++) {
-            unsigned char *px = 0; unsigned int w = 0, h = 0, ch = 0;
-            int r = jpeg_decode(cases[ci].jpg, cases[ci].len, &px, &w, &h, &ch);
-            puts("jpeg "); puts(cases[ci].name); puts(": ");
-            if (r != 0) { puts("decode error "); putn((unsigned int)(-r)); puts(" FAILED\n"); pass = 0; continue; }
-            int dims_ok = (w == cases[ci].w && h == cases[ci].h && ch == cases[ci].ch);
-            unsigned int fnv = 0x811c9dc5u;
-            if (dims_ok) for (unsigned int i = 0; i < w * h * ch; i++) { fnv ^= px[i]; fnv *= 0x01000193u; }
-            kfree(px);
-            putn(w); puts("x"); putn(h); puts(" ch="); putn(ch);
-            puts(" fnv="); puthex(fnv);
-            puts(dims_ok ? " ok\n" : " FAILED\n");
-            if (!dims_ok) pass = 0;
-            /* serial copy for the headless harness, same "jpeghash <name> <hash>" line tools/jpeg-host/main.c prints */
-            { char b[64]; int i = 0; const char *s = "jpeghash "; while (*s) b[i++] = *s++;
-              s = cases[ci].name; while (*s) b[i++] = *s++; b[i++] = ' ';
-              for (int sh = 28; sh >= 0; sh -= 4) { int nib = (fnv >> sh) & 0xF; b[i++] = nib < 10 ? '0' + nib : 'a' + nib - 10; }
-              b[i++] = '\n'; b[i] = 0; serial_puts(b); }
-        }
-        /* fault injection 1: no SOI marker at all */
-        {
-            unsigned char c[16];
-            for (int i = 0; i < 16; i++) c[i] = 0;
-            unsigned char *px = 0; unsigned int w, h, ch;
-            int r = jpeg_decode(c, sizeof c, &px, &w, &h, &ch);
-            if (px) kfree(px);
-            puts(r == JPEG_E_SIGNATURE ? "jpeg no SOI -> rejected: ok\n" : "jpeg no SOI not rejected: FAILED\n");
-            if (r != JPEG_E_SIGNATURE) pass = 0;
-        }
-        /* fault injection 2: truncated file */
-        {
-            unsigned char *px = 0; unsigned int w, h, ch;
-            int r = jpeg_decode(jpegt_photo_q90_420, 50, &px, &w, &h, &ch);
-            if (px) kfree(px);
-            puts(r == JPEG_E_TRUNCATED ? "jpeg truncated -> rejected: ok\n" : "jpeg truncated not rejected: FAILED\n");
-            if (r != JPEG_E_TRUNCATED) pass = 0;
-        }
-        puts(pass ? "jpeg decoder: ok\n" : "jpeg decoder: FAILED\n");
-        serial_puts(pass ? "jpegtest PASS\n" : "jpegtest FAIL\n");
     }
     else if (!strcmp(line, "mousetest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
