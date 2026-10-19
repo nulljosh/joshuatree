@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: CC-BY-NC-SA-4.0
 # Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
-# Shared by render_neo.py and render_samantha.py: build the CAD with uv, then run Blender headless on its meshes.
+# Shared by render_nimbus.py and render_samantha.py: build the CAD with uv, then run Blender headless on its meshes.
 # Outside Blender only subprocess is used. The bpy helpers import bpy when they are called, inside Blender.
 # Blender's -P does not put this folder on sys.path, so each render script adds it before importing this.
 import os, subprocess, sys
