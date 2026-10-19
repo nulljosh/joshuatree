@@ -10,3 +10,5 @@ The newer half is an ARM64 port that runs on a real Pi 4 from one flashed SD car
 The part I'm proudest of is the testing. Every change boots the kernel in QEMU in CI and drives it with keys and clicks, and each feature has a mutation that has to make its check fail. Next up is a power-cut sweep for the FAT writes: cut after every sector write and want fsck clean afterwards.
 
 Source, Apache 2.0: https://github.com/nulljosh/joshuatree. I'd love feedback from people who have done a Pi 4 bring-up, especially on the SD card driver.
+
+Post: https://old.reddit.com/r/osdev/comments/1x9ml07/joshua_tree_my_fromscratch_os_now_boots_on_a/
