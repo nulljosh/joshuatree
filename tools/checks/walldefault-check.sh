@@ -45,14 +45,14 @@ LOG="$WORKDIR/log"
 ) | qemu-system-i386 -kernel kernel.elf -display none -monitor stdio > "$LOG" 2>&1
 
 # wall_theme is a 4-byte little-endian int; only the low byte matters here
-# since the real range is 0..4.
+# since the real range is 0..8.
 BYTE0=$(grep -A1 "xp /4xb" "$LOG" | tail -1 | awk '{print $2}')
 
-if [ "$BYTE0" = "0x04" ]; then
-    echo "PASS: wall_theme defaults to WALL_SAT (4) on a fresh boot"
+if [ "$BYTE0" = "0x05" ]; then
+    echo "PASS: wall_theme defaults to WALL_GREY (5, plain) on a fresh boot"
     exit 0
 else
-    echo "FAIL: wall_theme defaulted to $BYTE0, expected 0x04 (WALL_SAT)"
+    echo "FAIL: wall_theme defaulted to $BYTE0, expected 0x05 (WALL_GREY)"
     cat "$LOG"
     exit 1
 fi

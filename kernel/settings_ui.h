@@ -297,14 +297,15 @@ static void gui_launch_settings(void){
                    what's actually up, say so instead of claiming a theme
                    that isn't really rendering. */
                 font_draw_string("Wallpaper", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
+                /* 4.11.1: the plain walls name themselves and are never "fetching". */
                 const char *theme_name = wall_theme == WALL_COOL ? "Map (Cool)" : wall_theme == WALL_RAW ? "Map (Raw)" : wall_theme == WALL_SAT ? "Satellite" : (geo_city[0] ? geo_city : "Map (Warm)");
                 /* v0.83.x: the v86 demo's own honest label. "photo until
                    then" stopped being true the moment the no-network
                    fallback became the baked satellite capture instead of
                    the tree -- font_is_fallback() is the same real v86
                    signal wall_apply() itself branches on. */
-                const char *lbl = wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : (font_is_fallback() ? "Satellite (offline demo)" : "Map (fetching, photo until then)"));
-                font_draw_string(lbl, detail_right - font_string_width(lbl), y, wall_theme != WALL_PHOTO && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
+                const char *lbl = wall_theme >= WALL_GREY ? wall_solid_name[wall_theme - WALL_GREY] : wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : (font_is_fallback() ? "Satellite (offline demo)" : "Map (fetching, photo until then)"));
+                font_draw_string(lbl, detail_right - font_string_width(lbl), y, WALL_THEME_FETCHES() && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
             } else if (i == 3) {
                 font_draw_string("LLM model", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
                 font_draw_string(llm_model, detail_right - font_string_width(llm_model), y, 0x001C1C1E, -1);
@@ -457,7 +458,10 @@ static void gui_launch_settings(void){
                    A tap (KEY_CLICK) always steps forward, same convention
                    dock size's tap already keeps. */
                 int dir = (k == 'a') ? -1 : 1;
-                wall_switch_theme((wall_theme + dir + 5) % 5);
+                /* 4.11.1: nine themes now, stepped in wall_cycle_order (Grey,
+                   Terracotta, Clay, Ink, Photo, Map Warm, Cool, Raw, Satellite). */
+                int ci = 0; while (ci < WALL_COUNT - 1 && wall_cycle_order[ci] != wall_theme) ci++;
+                wall_switch_theme(wall_cycle_order[(ci + dir + WALL_COUNT) % WALL_COUNT]);
                 wall_apply(wall_theme != WALL_PHOTO);
             }
             else if (sel == 3) {

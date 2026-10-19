@@ -61,6 +61,7 @@ try:
     # desktop is now a no-op, kernel.c gui_run).
     key_combo("ctrl", "alt", "backspace"); time.sleep(1.0)          # into the shell
     type_line("weatherfx " + MODE)
+    type_line("wallpaper map")           # 4.11.1: the default is plain grey now, pick the map first
     type_line("wallpaper fetch")
     for _ in range(60):
         time.sleep(1)
