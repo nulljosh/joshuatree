@@ -59,7 +59,7 @@ const launch = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIU
 const WATCHDOG_S = 180;
 let stage = 'starting';
 setTimeout(() => { console.log(`FAIL: no answer from the browser for ${WATCHDOG_S}s, stuck at: ${stage}`); process.exit(1); }, WATCHDOG_S * 1000).unref();
-if (!await exists(join(ROOT, 'footer-landscape.svg'))) fail('footer landscape asset is missing');
+if (!await exists(join(ROOT, 'nimbus-footer.webp'))) fail('footer Nimbus cutout is missing');
 try {
 for (const engine of [chromium, webkit]) {
 stage = `${engine.name()} launch`;
@@ -184,10 +184,13 @@ try {
         landscape: (() => {
           const e = document.querySelector('footer .foot-landscape[aria-hidden="true"]');
           if (!e || e.getBoundingClientRect().height < 240) return false;
-          // 4.3.2: the shader engraving when WebGL runs (.live, its canvas filling the box), else the flat masked silhouette
+          // 4.16: the Nimbus shader when WebGL runs (.live, its canvas filling the box), else the plain cutout
           const c = e.querySelector('canvas');
+          // and it is the Nimbus, not some other shader: the page fetched the cutout (live or fallback alike)
+          const nimbus = performance.getEntriesByType('resource').some(r => r.name.endsWith('/nimbus-footer.webp'));
+          if (!nimbus) return false;
           if (e.classList.contains('live')) return !!c && c.getBoundingClientRect().height >= 240 && c.width > 0;
-          return getComputedStyle(e).maskImage.includes('footer-landscape.svg');
+          return getComputedStyle(e).backgroundImage.includes('nimbus-footer.webp');
         })(),
         hasNav: !!nav, hasRule: !!document.querySelector('footer .sheet-rule'),
         cols: cols.map(c => ({ h: c.querySelector('h3, h2, h4')?.textContent.trim(), n: c.querySelectorAll('a').length, x: Math.round(c.getBoundingClientRect().x), y: Math.round(c.getBoundingClientRect().y) })),
