@@ -3639,7 +3639,7 @@ void usb_poll(void);
 void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p);
 static void notes_tick(void) {
     static const char *const script = NOTES_SELFTEST == 1 ? ">>>>>\n|nhello from the pi\033" : NOTES_SELFTEST == 2 ? ">>>>>\n|\n"
-        : NOTES_SELFTEST == 3 ? ">>>>>>\n|buy milk\ncall mom\n^^ " : ">>>>>>\n|";   /* 3, 4: Reminders (arm64-reminders-check.py): the sixth tile, two adds, Up Up, Space on the first; then just open it */
+        : NOTES_SELFTEST == 3 ? ">>>>>>\n|buy milk\ncall mom\n^^ " : NOTES_SELFTEST == 5 ? ">>>>>\n|nautosaved with no clock!@" : ">>>>>>\n|";   /* 3, 4: Reminders (arm64-reminders-check.py): the sixth tile, two adds, Up Up, Space on the first; then just open it; 5: Notes with no clock set, a line typed and left, '!' waits four seconds, '@' clicks the red dot (arm64-notes-check.py) */
     static unsigned at; static unsigned long next; static unsigned char last[8]; static int done;
     unsigned long now = cnt_now();
     if (!next) next = now + cnt_hz();   /* a second after the loop starts: the desktop has settled */
@@ -3652,6 +3652,13 @@ static void notes_tick(void) {
         uart_puts("notestest: notes is up\n");
         at++; next = now + 2 * cnt_hz();   /* two seconds to take a screendump of the list before the next key */
         return;
+    }
+    if (c == '!') { uart_puts("notestest: waiting\n"); at++; next = now + 4 * cnt_hz(); return; }   /* long enough for the two second autosave to fire, with Esc never pressed */
+    if (c == '@') {   /* the red dot of the front app window, through the pointer's own click path */
+        int s = (int)window_scale();
+        mouse_x = (app_lx + 24) * s; mouse_y = (app_ly + 16) * s;
+        uart_puts("notestest: red dot\n"); pointer_click();
+        at++; next = now + 2 * cnt_hz(); return;
     }
     unsigned char down[8] = { 0 }, none[8] = { 0 };
     down[2] = c == '>' ? 0x4F : c == '\n' ? 0x28 : c == '\033' ? 0x29 : c == ' ' ? 0x2C : c == '^' ? 0x52 : (unsigned char)(0x04 + c - 'a');   /* HID usages: Right, Enter, Esc, Space, a to z */
