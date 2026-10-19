@@ -297,7 +297,7 @@ static void gui_launch_settings(void){
                    what's actually up, say so instead of claiming a theme
                    that isn't really rendering. */
                 font_draw_string("Wallpaper", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
-                /* 4.11.1: the plain walls name themselves and are never "fetching". */
+                /* 4.11.4: the plain walls name themselves and are never "fetching". */
                 const char *theme_name = wall_theme == WALL_COOL ? "Map (Cool)" : wall_theme == WALL_RAW ? "Map (Raw)" : wall_theme == WALL_SAT ? "Satellite" : (geo_city[0] ? geo_city : "Map (Warm)");
                 /* v0.83.x: the v86 demo's own honest label. "photo until
                    then" stopped being true the moment the no-network
@@ -458,7 +458,7 @@ static void gui_launch_settings(void){
                    A tap (KEY_CLICK) always steps forward, same convention
                    dock size's tap already keeps. */
                 int dir = (k == 'a') ? -1 : 1;
-                /* 4.11.1: nine themes now, stepped in wall_cycle_order (Grey,
+                /* 4.11.4: nine themes now, stepped in wall_cycle_order (Grey,
                    Terracotta, Clay, Ink, Photo, Map Warm, Cool, Raw, Satellite). */
                 int ci = 0; while (ci < WALL_COUNT - 1 && wall_cycle_order[ci] != wall_theme) ci++;
                 wall_switch_theme(wall_cycle_order[(ci + dir + WALL_COUNT) % WALL_COUNT]);

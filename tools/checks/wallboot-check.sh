@@ -67,7 +67,7 @@ if [ "$FIRST" = "wallsrc=solid" ]; then
     echo "PASS: first desktop paint was the plain grey wall ($FIRST), never a photo"
     exit 0
 else
-    echo "FAIL: first desktop paint was $FIRST, expected wallsrc=solid (4.11.1: plain grey default) -- the photo or satellite flashed on boot"
+    echo "FAIL: first desktop paint was $FIRST, expected wallsrc=solid (4.11.4: plain grey default) -- the photo or satellite flashed on boot"
     cat "$LOG"
     exit 1
 fi

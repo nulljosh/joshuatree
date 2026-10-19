@@ -59,7 +59,7 @@ int ring3app_write_packed(const char *file, const unsigned char *packed, unsigne
    who want it can select it in Settings; it never appears by default or
    during satellite fetch.
 
-   4.11.1: the default is now a plain grey (WALL_GREY), wall_src points at
+   4.11.4: the default is now a plain grey (WALL_GREY), wall_src points at
    wall_solid_row for the four plain walls, and nothing is fetched. */
 static const unsigned char *wall_src = wallpaper_rgb;
 /* v0.83.x: a REAL, once-captured satellite photograph (kernel/wall_sat.h,
@@ -71,7 +71,7 @@ static const unsigned char *wall_src = wallpaper_rgb;
    tree stays reachable from Settings (WALL_PHOTO, an explicit user pick),
    it is only the no-network AUTOMATIC fallback that changes. */
 static unsigned char *wall_sat_rgb = 0;
-/* 4.11.1: the plain wallpapers (Grey, Terracotta, Clay, Ink, the same four
+/* 4.11.4: the plain wallpapers (Grey, Terracotta, Clay, Ink, the same four
    the Pi offers) are two flat rows of the chosen colour, not a 1.5 MB image.
    wall_src points here when a plain wall is up; every reader that walks
    wall_src row by row (gui_wallpaper_row, gui_wallpaper_color) pins its row
@@ -969,7 +969,7 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
          math, not just a new host/decoder.
    Any non-zero value still shows the baked photo until the fetch lands
    and keeps showing it if the fetch fails, never a blank desktop (same
-   contract v75 established). settings_load clamps to 0..8 (4.11.1: 5..8 are
+   contract v75 established). settings_load clamps to 0..8 (4.11.4: 5..8 are
    the plain walls) so a hand-
    edited or stale SETTINGS.TXT can't select a theme that doesn't exist. */
 #define WALL_PHOTO 0
@@ -977,7 +977,7 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
 #define WALL_COOL  2
 #define WALL_RAW   3
 #define WALL_SAT   4
-/* 4.11.1: plain walls, the same four names and colours as the Pi's Settings
+/* 4.11.4: plain walls, the same four names and colours as the Pi's Settings
    (arch/arm64/settings.c). Numbered after the old five so a saved wall=0..4
    keeps meaning what it meant. Grey is the default; none of these fetch a
    tile or tint the colour (a plain wall is exactly the colour you picked). */
@@ -1006,7 +1006,7 @@ static const unsigned char wall_cycle_order[WALL_COUNT] = { WALL_GREY, WALL_TERR
    fallback this default already relied on for WALL_WARM, so flipping the
    default changes nothing about failure-mode safety, only which real image
    a successful fetch shows. */
-/* 4.11.1: default flipped again, WALL_SAT -> WALL_GREY. Direct report: "still
+/* 4.11.4: default flipped again, WALL_SAT -> WALL_GREY. Direct report: "still
    showing the stale wallpaper, the satellite; it should just be a plain
    wallpaper". The satellite and map themes stay selectable in Settings, but
    a fresh boot (the ISO, QEMU, and the browser demo's every idle-tour lap)
@@ -1417,7 +1417,7 @@ static unsigned int gui_daynight_tint_pct(unsigned int rgb, int night, int day){
     return rgb;
 }
 static unsigned int gui_daynight_tint(unsigned int rgb){
-    if (wall_src == wall_solid_row) return rgb; /* 4.11.1: a plain wall is exactly the colour picked, day and night */
+    if (wall_src == wall_solid_row) return rgb; /* 4.11.4: a plain wall is exactly the colour picked, day and night */
     return gui_daynight_tint_pct(rgb, daynight_night_pct, daynight_day_pct);
 }
 
@@ -1518,7 +1518,7 @@ static inline __attribute__((always_inline)) unsigned int gui_sat_color(unsigned
    here once instead of being copy-pasted at each call site. */
 static inline __attribute__((always_inline)) unsigned int gui_wall_tint(unsigned int rgb){
     if (wall_src == wallpaper_rgb) return rgb;      /* Photo: never graded */
-    if (wall_src == wall_solid_row) return rgb;     /* 4.11.1: plain wall: never graded */
+    if (wall_src == wall_solid_row) return rgb;     /* 4.11.4: plain wall: never graded */
     if (wall_theme == WALL_COOL) return gui_map_tint_cool(rgb);
     if (wall_theme == WALL_RAW) return rgb;         /* Raw: OpenTopoMap's own palette, untouched */
     if (wall_theme == WALL_SAT) return gui_sat_color(rgb);
@@ -1557,7 +1557,7 @@ static unsigned int gui_wallpaper_color(int row){
     if (r >= area_h) r = area_h - 1;
     int sy = r * WALLPAPER_H / area_h;
     if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
-    if (wall_src == wall_solid_row) sy = 0; /* 4.11.1: the plain wall is two rows long */
+    if (wall_src == wall_solid_row) sy = 0; /* 4.11.4: the plain wall is two rows long */
     const unsigned char *p = &wall_src[(sy * WALLPAPER_W + WALLPAPER_W / 2) * 3];
     unsigned int rgb = ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2];
     rgb = gui_wall_tint(rgb); /* v79/v81: the current wallpaper theme's grade, Photo untouched */
@@ -1817,7 +1817,7 @@ static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int
     int fy = row * (WALLPAPER_H - 1) * 256 / (area_h * sc > 1 ? area_h * sc - 1 : 1);
     int sy = fy >> 8; c.wy = fy & 255;
     if (sy >= WALLPAPER_H - 1) { sy = WALLPAPER_H - 2; c.wy = 255; }
-    if (wall_src == wall_solid_row) { sy = 0; c.wy = 0; } /* 4.11.1: the plain wall is two rows long, both the same */
+    if (wall_src == wall_solid_row) { sy = 0; c.wy = 0; } /* 4.11.4: the plain wall is two rows long, both the same */
     c.r0 = &wall_src[sy * WALLPAPER_W * 3];
     c.r1 = c.r0 + WALLPAPER_W * 3;
     c.shift = sway ? (gui_wind_shift(py / sc) * WALLPAPER_W / lw) >> 8 : 0;
@@ -2785,7 +2785,7 @@ static void wall_sat_init(void){
 static void wall_apply(int want_map){
     const unsigned char *next;
     if (wall_theme >= WALL_GREY) {
-        /* 4.11.1: a plain wall. No tile, no photo decode: two rows of the
+        /* 4.11.4: a plain wall. No tile, no photo decode: two rows of the
            colour (the buffer is tiny, so refilling on every call is free
            and a Grey -> Clay switch needs no other bookkeeping). */
         unsigned int c = wall_solid_color[wall_theme - WALL_GREY];
@@ -7015,13 +7015,13 @@ static void run(char *line){
         else puts("usage: weatherfx rain|snow|off\n");
     }
     else if (!strcmp(line, "wallpaper")) {
-        /* v75/v81: grey|terracotta|clay|ink (4.11.1, the plain walls)|photo|warm|cool|raw picks the theme (persisted like
+        /* v75/v81: grey|terracotta|clay|ink (4.11.4, the plain walls)|photo|warm|cool|raw picks the theme (persisted like
            wind/dockscale); "map" stays a working alias for "warm" (v75's
            original two-state name, now one of four themes) so nothing
            that already typed `wallpaper map` breaks. fetch forces the map
            download right now (its own NIC/net bring-up, same as
            weather_fetch), no argument reports state. */
-        /* 4.11.1: the four plain walls (the Pi's names and colours). */
+        /* 4.11.4: the four plain walls (the Pi's names and colours). */
         if (!strcmp(arg, "grey") || !strcmp(arg, "gray")) { wall_switch_theme(WALL_GREY); wall_apply(0); puts("wallpaper: grey\n"); }
         else if (!strcmp(arg, "terracotta")) { wall_switch_theme(WALL_TERRA); wall_apply(0); puts("wallpaper: terracotta\n"); }
         else if (!strcmp(arg, "clay")) { wall_switch_theme(WALL_CLAY); wall_apply(0); puts("wallpaper: clay\n"); }

@@ -87,7 +87,7 @@ try {
   console.log('--- end ---');
 
   const sawPhoto = wallsrcLines.includes('wallsrc=photo');
-  const sawSolid = wallsrcLines.includes('wallsrc=solid');   // 4.11.1: the default is the plain grey wall
+  const sawSolid = wallsrcLines.includes('wallsrc=solid');   // 4.11.4: the default is the plain grey wall
 
   if (wallsrcLines.length === 0) {
     console.log('FAIL: no wallsrc= line ever appeared on serial within budget');

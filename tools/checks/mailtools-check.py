@@ -177,7 +177,7 @@ def main():
         # a network, so it always does, seconds after the window opens). That repaint moves the dark-pixel
         # count by hundreds of thousands, so take the baseline only after it. No network: the wait just times out.
         for _ in range(60):
-            if "wallsrc=map" in serial() or "wallsrc=solid" in serial(): break   # 4.11.1: a plain wall never repaints to a map
+            if "wallsrc=map" in serial() or "wallsrc=solid" in serial(): break   # 4.11.4: a plain wall never repaints to a map
             time.sleep(0.5)
         time.sleep(3.0)
 

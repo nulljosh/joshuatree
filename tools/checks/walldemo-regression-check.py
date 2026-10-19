@@ -132,7 +132,7 @@ finally:
     except subprocess.TimeoutExpired:
         q.kill()
 
-if after == 5:  # 4.11.1: the default is WALL_GREY (5)
+if after == 5:  # 4.11.4: the default is WALL_GREY (5)
     print('PASS: Settings visit left wall_theme on Grey (5), matching kernel.c\'s real default -- the demo no longer clicks itself away from it')
     sys.exit(0)
 else:

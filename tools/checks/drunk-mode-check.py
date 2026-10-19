@@ -59,7 +59,7 @@ try:
             "qemu-system-i386",
             "-machine", "pc", "-m", "128",
             "-kernel", kernel,
-            "-append", "drunk walltheme=sat",   # 4.11.1: a plain grey wall has no rows to sway
+            "-append", "drunk walltheme=sat",   # 4.11.4: a plain grey wall has no rows to sway
             "-qmp", f"unix:/tmp/jt-drunk-qmp,server,nowait",
             "-serial", f"file:{LOG}",
             "-display", "none", "-vga", "std", "-monitor", "none",
