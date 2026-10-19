@@ -19,7 +19,6 @@ int browse_command(const char *q, unsigned n);                     /* browser.c 
 int ask_command(const char *q, unsigned n);                        /* ask.c: "stop" and the /model, /effort, /status, /clear, /help commands */
 void ask_claude(const char *q, unsigned n);                        /* ask.c: `llm PROMPT` */
 void sam_command(const char *q, unsigned n);                       /* ask.c: `sam QUESTION`, queued and answered without blocking the prompt */
-void hear_command(unsigned secs);                                  /* ask.c: `hear [SECONDS]`, the microphone to the Mac, the words to sam */
 int ask_busy(void);                                                /* ask.c: a `sam` request is waiting on the relay */
 int userrun(const char *name, unsigned n, unsigned long *status, int *faulted);   /* main.c: load an app from the table and run it at EL0 */
 
@@ -39,7 +38,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, beep [FREQ MS], mic [SECONDS], hear [SECONDS] (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
+                           "top, bottom, find WORD, beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
                            "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
@@ -522,11 +521,6 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (!n) return;
     if (ask_busy() && blocked_while_sam(q, n)) { cmd_out("zsh: sam is using the network, try again when she answers\n"); return; }
     if (n == 3 && q[0] == 's' && q[1] == 'a' && q[2] == 'm') { sam_command(q + 3, 0); return; }
-    if (n >= 4 && q[0] == 'h' && q[1] == 'e' && q[2] == 'a' && q[3] == 'r' && (n == 4 || q[4] == ' ')) {   /* `hear`, `hear 5` */
-        int secs = 0;   /* bare `hear`: until you stop talking */
-        if (n > 5 && (!num(q + 5, n - 5, &secs) || secs < 1 || secs > 10)) { cmd_out("hear: use hear, or hear 1 to 10 (seconds)\n"); return; }
-        hear_command((unsigned)secs); return;
-    }
     if (is(q, n, "sam")) { sam_command(q + 4, n - 4); return; }
     if (n == 4 && q[0] == 'h' && q[1] == 'e' && q[2] == 'l' && q[3] == 'p') { say_wrapped("", help, sizeof help - 1); return; }
     if ((n == 2 && q[0] == 'l' && q[1] == 's') || is(q, n, "ls")) {

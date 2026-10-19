@@ -363,7 +363,7 @@ audiotest: audio-kernel8.elf
 $(eval $(call variant,usbaudio,-DUSB_AUDIO_TEST,,))
 usbaudiotest: usbaudio-kernel8.elf
 .PHONY: usbaudiotest
-# heartest: `hear` sends half a second of a tone instead of recording (virt has no microphone); arm64-hear-check.py stubs the words service.
+# heartest: voice mode sends half a second of a tone instead of recording (virt has no microphone); arm64-hear-check.py stubs the words service.
 $(eval $(call variant,hear,-DHEAR_TEST,,))
 heartest: hear-kernel8.elf
 .PHONY: heartest

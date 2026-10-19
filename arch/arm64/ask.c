@@ -1066,27 +1066,12 @@ static void voice_fetch(const char *t, unsigned k) {
     voice_pump();
 }
 
-/* `hear`: the USB microphone until you stop talking (or `hear N`: N seconds), the samples to the Mac's words service (tools/claude-relay/stt.py, the relay's
-   port plus one, the same token and on the Pi the same TLS name), the words printed as "you: ..." and handed to `sam`. The
-   recording blocks the Terminal for those seconds; the post waits like a `sam` turn. HEAR_TEST (arm64-hear-check.py on QEMU
-   virt, which has no microphone) sends half a second of a 440 Hz tone instead of recording. */
+/* Speech into Samantha: voice mode (below) records while Space is held, then hear_post sends the samples to the Mac's
+   words service (tools/claude-relay/stt.py, the relay's port plus one, the same token and on the Pi the same TLS name),
+   prints the words as "you: ..." and hands them to `sam`. HEAR_TEST (QEMU virt, which has no microphone) sends half a
+   second of a 440 Hz tone instead. 4.19.0: the typed `hear` command is gone, the Space hold is the one way in. */
 int usb_mic_ok(void);                                             /* xhci.c */
-unsigned usb_mic_record(short *dst, unsigned max, unsigned ms);
 #define HEAR_HZ 16000
-#define HEAR_MAX_SECS 10
-/* pi-hear-quiet begin: a bare `hear` ends once speech has been followed by HEAR_QUIET quiet samples. Counted in samples, not
-   ticks, so it needs no clock. HEAR_LOUD is the knob: room hiss on the Yeti should sit under it, a voice well over it. */
-#define HEAR_LOUD 1500
-#define HEAR_QUIET (HEAR_HZ * 6 / 5)   /* 1.2 s */
-static int heard_end(const short *s, unsigned n, int *spoke, unsigned *quiet) {   /* fed each new block; 1 when the talking is over */
-    for (unsigned i = 0; i < n; i++) {
-        int v = s[i] < 0 ? -s[i] : s[i];
-        if (v > HEAR_LOUD) { *spoke = 1; *quiet = 0; }
-        else if (*spoke && ++*quiet >= HEAR_QUIET) return 1;
-    }
-    return 0;
-}
-/* pi-hear-quiet end */
 static void hear_post(const short *pcm, unsigned got, char *raw) {   /* the samples to the words service, the words to sam; raw: REPLY_MAX + 2048 */
     static char token[64];
     for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
@@ -1134,37 +1119,6 @@ static void hear_post(const short *pcm, unsigned got, char *raw) {   /* the samp
     kputs("you: "); kputs(said); kputs("\n");
     sam_command(said, len);
 }
-void hear_command(unsigned secs) {   /* secs 0: until quiet, at most HEAR_MAX_SECS */
-    int until_quiet = secs == 0;
-    if (until_quiet || secs > HEAR_MAX_SECS) secs = HEAR_MAX_SECS;
-    if (sam_state) { kputs("hear: sam is busy, wait for her answer\n"); return; }   /* ac->pending is this very command */
-    if (!CLAUDE_TOKEN_LEN) { kputs("hear: no relay token in this build\n"); return; }
-    unsigned long mark = heap_mark();
-    unsigned max = secs * HEAR_HZ, got;
-    short *pcm = kmalloc(max * 2);
-    char *raw = kmalloc(REPLY_MAX + 2048);
-    if (!pcm || !raw) { kputs("hear: out of memory\n"); heap_release(mark); return; }
-    got = hear_fake(pcm, max);   /* main.c: half a second of a tone on the heartest build, 0 otherwise */
-    if (!got) {
-        if (!usb_mic_ok()) { kputs("hear: no USB microphone found (plug it into a Pi port, then wait a second)\n"); heap_release(mark); return; }
-        if (until_quiet) {   /* 100 ms blocks, so a microphone that stops sending still ends within HEAR_MAX_SECS */
-            kputs("hear: listening, stop talking to send\n");
-            int spoke = 0; unsigned quiet = 0;
-            for (unsigned b = 0; b < HEAR_MAX_SECS * 10 && got < max; b++) {
-                unsigned n = usb_mic_record(pcm + got, max - got < HEAR_HZ / 10 ? max - got : HEAR_HZ / 10, 100);
-                got += n;
-                if (heard_end(pcm + got - n, n, &spoke, &quiet)) break;
-            }
-        } else {
-            kputs("hear: listening for "); kdec(secs); kputs(" s\n");
-            got = usb_mic_record(pcm, max, secs * 1000 + 300);
-        }
-    }
-    if (got < HEAR_HZ / 4) kputs("hear: heard nothing\n");
-    else hear_post(pcm, got, raw);
-    heap_release(mark);
-}
-
 /* Voice mode (docs/ROADMAP.md, Joshua 2026-10-07): double-tap Space and hold the second tap; release to send. The two taps
    are swallowed once the hold is confirmed (a quick double tap stays two spaces). While held: "voice: listening" on the
    UART, a mic mark in the menu bar (main.c menubar_mic) and a "listening [####......]" line with a live level bar in the
@@ -1208,6 +1162,9 @@ static void vm_poll(void) {
     unsigned now = ticks();
     if (vm_state == 2 && now - vm_t >= VM_HOLD_TICKS) {           /* the hold is real */
         unsigned n = 0; while (n < 2 && ac->len && ac->line[ac->len - 1] == ' ') { ac->len--; n++; }   /* the two taps' spaces */
+        const char *why = !CLAUDE_TOKEN_LEN ? "voice: no relay token in this build\n"
+                        : !hear_fake(0, 0) && !usb_mic_ok() ? "voice: no USB microphone found (plug it into a Pi port, then wait a second)\n" : 0;
+        if (why) { kputs(why); vm_state = 0; prompt_row(ac->line, ac->len); return; }
         vm_mark = heap_mark(); vm_pcm = kmalloc(VM_MAX_SECS * HEAR_HZ * 2); vm_got = 0; vm_level = 0;
         if (!vm_pcm) { heap_release(vm_mark); vm_state = 0; prompt_row(ac->line, ac->len); return; }
         vm_state = 3; vm_bar_t = now; vm_t = now;
