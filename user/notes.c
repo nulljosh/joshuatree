@@ -23,9 +23,10 @@
  * (the kernel editor's own contract) into the system clipboard (SYS_CLIPBOARD); paste
  * inserts it. Esc saves (truncate-write, only if edited) and returns to browse.
  * Home, End and Delete work in the editor; Ctrl+S saves and stays in it. Autosave: a dirty
- * note saves itself AUTOSAVE_SECS RTC seconds after the last edit (JT_SYS_TIME, read only
- * while dirty; SYS_WINDOW_POLL's -EAGAIN path yields, so nothing spins), which is 1 to 2
- * real seconds because the clock counts whole seconds. The kernel has no close hook: the
+ * note saves itself AUTOSAVE_SECS seconds after the last edit, timed on the uptime ticks of
+ * SYS_TASKS (100 Hz on both kernels, read only while dirty; SYS_WINDOW_POLL's -EAGAIN path
+ * yields, so nothing spins). Not JT_SYS_TIME: the Pi has no clock until the network sets it,
+ * so offline that call stays 0 and the timer never fired. The kernel has no close hook: the
  * red dot task_kills the program, so Esc never runs and the timer is the whole protection.
  * Selection: Shift+arrows extend an anchor-to-caret range (JT_KEY_SLEFT..SDOWN), Ctrl+A
  * selects all (JT_KEY_SELALL), a 0xB4D5FE band is drawn behind the glyphs, copy and cut
@@ -58,7 +59,8 @@
 #define LIST_W (win.width < 600 ? 170 : 220)
 #define COL_Y 40
 #define ROW_H 22
-#define AUTOSAVE_SECS 2   /* RTC seconds a dirty note sits untouched before it saves itself */
+#define AUTOSAVE_SECS 2   /* seconds a dirty note sits untouched before it saves itself */
+#define TICKS_PER_SEC 100 /* SYS_TASKS ticks, the same on i386 and the Pi */
 #define KEY_COPY 302
 #define KEY_CUT 303
 #define KEY_PASTE 304
@@ -87,7 +89,8 @@ static const char *note JT_DATA = 0;
 static int editing JT_DATA = 0, elen JT_DATA = 0, epos JT_DATA = 0, escroll JT_DATA = 0;
 static int phone JT_DATA = 0;   /* argv[1] == "phone": show the on-screen keyboard in the editor */
 static int edirty JT_DATA = 0, goalx JT_DATA = -1;
-static unsigned edit_t JT_DATA = 0;   /* jt_time() of the last key that left the note dirty */
+static unsigned edit_t JT_DATA = 0;   /* uptime ticks of the last key that left the note dirty */
+static unsigned now_ticks(void) { struct jt_tasks t; jt_tasks(&t, -1); return t.ticks; }   /* uptime, 100 Hz: runs with no network and no RTC */
 static int esel JT_DATA = -1;       /* selection anchor; the selection is anchor..epos, none while -1 or equal to the caret */
 static char efile[13] JT_DATA = {0};
 static int del_armed JT_DATA = 0;   /* d once asks, d again deletes, anything else cancels */
@@ -581,8 +584,8 @@ void _start(int argc, char **argv) {
         if (r == 1 && jt_window_resized(&ev, &win)) { if (editing) { chrome_stale = 1; ed_draw(); } else draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11) {
-            if (editing && edirty && (unsigned)jt_time(0) - edit_t >= AUTOSAVE_SECS) {   /* quiet for two seconds: save, drop the star */
-                if (!edit_save()) edit_t = (unsigned)jt_time(0);   /* "Save failed." shows; try again in two seconds */
+            if (editing && edirty && now_ticks() - edit_t >= AUTOSAVE_SECS * TICKS_PER_SEC) {   /* quiet for two seconds: save, drop the star */
+                if (!edit_save()) edit_t = now_ticks();   /* "Save failed." shows; try again in two seconds */
                 ed_draw();
                 flags = JT_POLL_PRESENT;
                 continue;
@@ -599,7 +602,7 @@ void _start(int argc, char **argv) {
             ev.a = key;
             if (ev.a == JT_KEY_ESC && ed_has_sel()) { esel = -1; ed_draw(); }
             else if (ev.a == JT_KEY_ESC) { edit_close(); draw(); }
-            else { ed_key(ev.a); if (edirty) edit_t = (unsigned)jt_time(0); ed_draw(); }
+            else { ed_key(ev.a); if (edirty) edit_t = now_ticks(); ed_draw(); }
             flags = JT_POLL_PRESENT;
             continue;
         }

@@ -22,7 +22,8 @@
 #   sdwtest     sdw-kernel8.img writes, replaces and deletes files in JT/ at boot and tries the boot files (refused), then a
 #               CMD25 at the card's end; sdr-kernel8.img, booted next on the same card, reads them back and deletes them
 #   notestest   notesw-kernel8.img opens Notes from the dock with made-up USB key reports, types a note and saves it;
-#               notesr-kernel8.img, booted next on the same card, opens Notes and the note again (arm64-notes-check.py)
+#               notesr-kernel8.img, booted next on the same card, opens Notes and the note again; notesa-kernel8.img types a line,
+#               leaves it for four seconds and clicks the red dot, with no network clock (arm64-notes-check.py)
 # The Console's ask> prompt asks the Claude relay. claude_cfg.sh writes its address and token (gitignored) on every build
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token), but only when
 # JT_WIFI_DEV=1 (tools/flash-pi.sh) or CLAUDE_RELAY_TOKEN_FILE is set explicitly (the checks); a release build has neither.
@@ -326,7 +327,8 @@ $(eval $(call variant,sdr,-DSD_SELFTEST=3,,))
 sdwtest: sdw-kernel8.img sdr-kernel8.img
 $(eval $(call variant,notesw,-DNOTES_SELFTEST=1,,))
 $(eval $(call variant,notesr,-DNOTES_SELFTEST=2,,))
-notestest: notesw-kernel8.img notesr-kernel8.img
+$(eval $(call variant,notesa,-DNOTES_SELFTEST=5,,))
+notestest: notesw-kernel8.img notesr-kernel8.img notesa-kernel8.img
 $(eval $(call variant,remw,-DNOTES_SELFTEST=3,,))
 $(eval $(call variant,remr,-DNOTES_SELFTEST=4,,))
 reminderstest: remw-kernel8.img remr-kernel8.img
