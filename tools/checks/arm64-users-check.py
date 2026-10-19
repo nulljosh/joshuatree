@@ -17,6 +17,7 @@ happened (names only, never a password).
      password; a reboot lets bob sign in with it.
   3. A normal user (bob, a second card): the list shows, ann's page, Add user and every admin-only row are refused, and he
      changes his own password, which needs the old one (a wrong old one is refused, the right one works).
+  3b. No accounts: the pane says so, Add user makes the first account with no password asked, an admin and signed in.
   4. No password reached the UART: no typed secret in the log, no `key N` line while a password view was up, and the key codes
      of the whole log do not spell any password.
   5. Mutation: the pane made to skip sudo_check must FAIL the wrong-password step in QEMU (restored afterwards).
@@ -72,7 +73,7 @@ QK = {" ": "spc", "-": "minus"}
 EVDEV = {**{c: "1234567890"[c - 2] for c in range(2, 12)}, 12: "-", 57: " ",
          **{16 + i: ch for i, ch in enumerate("qwertyuiop")}, **{30 + i: ch for i, ch in enumerate("asdfghjkl")}, **{44 + i: ch for i, ch in enumerate("zxcvbnm")}}
 def keystream(uart): return "".join(EVDEV.get(int(m), "?") for m in re.findall(r"^key (\d+) down$", uart, re.M))
-SECRETS = ["hunter22", "pass1111", "pass1112", "nopenope", "newpass1", "wrongold1", "newbob111", "bobpass44", "starsaaa1", "starszzz9"]
+SECRETS = ["firstpw1", "hunter22", "pass1111", "pass1112", "nopenope", "newpass1", "wrongold1", "newbob111", "bobpass44", "starsaaa1", "starszzz9"]
 SILENT = ("settings users view add", "settings users view passwd", "settings users view auth")
 OUT_OF_SECRET = ("settings users view list", "settings users view detail", "settings users view confirm", "settings users view sidebar")
 
@@ -139,6 +140,7 @@ class Session:
     def boot(self, login):
         if not self.wait_for("M2 input ready", 90) or not self.wait_for("sd fat32 partition at block 2048", 40): return False
         self.connect(); time.sleep(0.5)
+        if login is None: time.sleep(1.5); return True   # no accounts: no login screen
         if not self.wait_for("login: screen up", 40): return False
         n = len(self.uart())
         self.typ(login[0]); self.key("ret"); self.typ(login[1]); self.key("ret")
@@ -320,6 +322,30 @@ try:
     check("... and SUDOERS.TXT still lists only ann", card_file(cardB, "SUDOERS.TXT") == "ann\n")
     logs.append(S.uart())
     check("no fault, no crash", "KERNEL CRASH" not in S.uart(), S.uart()[-300:])
+except SystemExit:
+    pass
+finally:
+    S.close()
+
+# ---- 3b. no accounts at all ----
+cardN = os.path.join(tmp, "n.img"); build_card(cardN, False)
+if mt(cardN, "mmd", "::JT").returncode: print("FAIL: mtools could not make JT/"); sys.exit(1)
+S = Session("n", cardN)
+try:
+    if not S.boot(None) or not S.users_pane(): check("an empty card boots to Settings at Users", False, S.uart()[-500:]); raise SystemExit
+    S.key("ret"); time.sleep(0.5); e = S.shot()
+    check("with no accounts the list is one row, Add user, and the pane says so (a white one-row card, a hint under it)",
+          px(e, CX + 30, CY + 4) == (255, 255, 255) and px(e, CX + 30, CY + ROW + 4) != (255, 255, 255) and sum(1 for p in box(e, CX, CY + ROW + 8, 280, 16) if max(p) < 0xB0) > 30)
+    check("Return on Add user opens the form", S.step("ret", "settings users view add\n"))
+    S.typ("dee"); S.key("ret"); S.typ("firstpw1"); S.key("ret")
+    n = len(S.uart())
+    S.typ("firstpw1"); S.key("ret")
+    check("the first account is made with no admin password (there is nobody to ask)", S.wait_for("settings users added dee\n", 120, n) and "view auth" not in S.uart()[n:], S.uart()[n:][-300:])
+    check("... it is an admin, signed in: SUDOERS.TXT lists dee and the list marks her You, admin",
+          card_file(cardN, "SUDOERS.TXT") == "dee\n" and card_file(cardN, "USERS.TXT").startswith("dee:p2:"))
+    time.sleep(0.5); e2 = S.shot()
+    check("... and the list shows her row with grey text at the right", sum(1 for p in box(e2, CX + 220, CY + 5, 90, 20) if max(p) < 0xB0) > 15)
+    logs.append(S.uart())
 except SystemExit:
     pass
 finally:
