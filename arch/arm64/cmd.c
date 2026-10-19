@@ -267,6 +267,7 @@ static void home_note(const char *name) {   /* a made account gets its folder; a
     if (home_make(name)) { cmd_out("adduser: home folder JT/HOME/"); cmd_out(dir); cmd_out("\n"); }
     else cmd_out("adduser: the home folder could not be made, it is made again the first time a file is saved\n");
 }
+static int account_apply(const char *name_in, const char *pass_in, int remove, int forced, int first, int self);
 static void account_command(const char *q, unsigned n, int remove) {   /* q is the line after the command word */
     char name[ACC_NAME_MAX + 2], pass[ACC_PASS_MAX + 2];
     unsigned used = word(q, n, name, sizeof name);
@@ -281,15 +282,27 @@ static void account_command(const char *q, unsigned n, int remove) {   /* q is t
     int first = !remove && !accounts_count();      /* no accounts at all: the first one may be made by anyone, and is an admin */
     int self = remove && eq_(name, current_user);
     if (!first && !(self && !forced) && !priv(remove ? "deluser" : "adduser")) { accounts_wipe(pass, sizeof pass); return; }
+    account_apply(name, pass, remove, forced, first, self);
+    accounts_wipe(pass, sizeof pass);
+}
+/* The work of adduser and deluser once the line is read and the privilege is settled; the Settings Users pane (users_add and
+   users_delete below) runs this same code. 0 when the account was added or removed, 1 when it was refused (the reason is said). */
+static int account_apply(const char *name_in, const char *pass_in, int remove, int forced, int first, int self) {
+    char name[ACC_NAME_MAX + 2], pass[ACC_PASS_MAX + 2];
+    unsigned k = 0;
+    for (; name_in[k] && k < ACC_NAME_MAX + 1; k++) name[k] = name_in[k];
+    name[k] = 0;
+    for (k = 0; pass_in[k] && k < ACC_PASS_MAX + 1; k++) pass[k] = pass_in[k];
+    pass[k] = 0;
     if (!remove && home_collides(name)) {   /* two long names that fold to one folder name would share their files */
         cmd_out("adduser "); cmd_out(name); cmd_out(": its home folder name is taken by another account, pick a different name\n");
         accounts_wipe(pass, sizeof pass);
-        return;
+        return 1;
     }
     if (remove && sudo_is_admin(name) && sudo_admin_count() == 1 && accounts_count() > 1) {
         cmd_out("deluser "); cmd_out(name); cmd_out(": the last admin, make another admin first\n");
         accounts_wipe(pass, sizeof pass);
-        return;
+        return 1;
     }
     cmd_out(remove ? "deluser: working\n" : "adduser: working, the password is being stretched\n");
     int r = remove ? (forced ? accounts_delete(name) : accounts_remove(name, pass)) : accounts_add(name, pass);
@@ -299,7 +312,7 @@ static void account_command(const char *q, unsigned n, int remove) {   /* q is t
     if (r) { cmd_out(": "); cmd_out(accounts_reason(r)); }
     else cmd_out(remove ? ": removed" : ": added");
     cmd_out("\n");
-    if (r) return;
+    if (r) return 1;
     if (remove) {
         char dir[HOME_DIR_MAX + 1]; home_dirname(name, dir);   /* 4.11.0: nothing is deleted with the account */
         cmd_out("deluser: the files in JT/HOME/"); cmd_out(dir); cmd_out(" stay on the card; a new account with that name would see them\n");
@@ -315,7 +328,9 @@ static void account_command(const char *q, unsigned n, int remove) {   /* q is t
         cmd_out(name); cmd_out(" is the first account, so an admin, and signed in\n");
         home_note(name);
     } else { sudo_scrub(name); home_note(name); }
+    return 0;
 }
+
 static void admins_command(void) {
     if (!sudo_admin_count()) { cmd_out("admins: none, the first adduser makes one\n"); return; }
     for (unsigned i = 0; i < sudo_admin_count(); i++) { cmd_out(sudo_admin_name(i)); cmd_out("\n"); }
@@ -387,6 +402,15 @@ static void passwd_command(const char *q, unsigned n) {   /* passwd, passwd NAME
     if (self && !sudo_run) pw_ask(PW_OLD, "Current password", "");
     else pw_ask(PW_NEW1, "New password", "");
 }
+/* The work of passwd once both new passwords agree; the Settings Users pane (users_passwd below) runs this same code. */
+static int passwd_apply(const char *target, const char *pass) {
+    cmd_out("passwd: working, the password is being stretched\n");
+    int r = accounts_passwd(target, pass);
+    cmd_out("passwd "); cmd_out(target); cmd_out(r ? ": " : ": password changed");
+    if (r) cmd_out(accounts_reason(r));
+    cmd_out("\n");
+    return r != 0;
+}
 /* ask.c, for the line typed while a password is wanted. */
 void cmd_password(const char *q, unsigned n, void (*out)(const char *)) {
     cmd_out = out ? out : kputs;
@@ -419,13 +443,26 @@ void cmd_password(const char *q, unsigned n, void (*out)(const char *)) {
         int ok = !big && eq_(pass, pw_new);
         accounts_wipe(pass, sizeof pass);
         if (!ok) { cmd_out("passwd: the two passwords differ, nothing changed\n"); pw_clear(); return; }
-        cmd_out("passwd: working, the password is being stretched\n");
-        int r = accounts_passwd(pw_target, pw_new);
-        cmd_out("passwd "); cmd_out(pw_target); cmd_out(r ? ": " : ": password changed");
-        if (r) cmd_out(accounts_reason(r));
-        cmd_out("\n");
+        passwd_apply(pw_target, pw_new);
         pw_clear();
     } else accounts_wipe(pass, sizeof pass);
+}
+/* The Settings Users pane (settings_ui.h, 4.14.0) calls these. The pane has already settled who may do what with the same
+   sudo_check and remembered window the Terminal uses; the work and its messages are the commands' own, said through out. */
+int users_add(const char *name, const char *pass, void (*out)(const char *)) {
+    void (*saved)(const char *) = cmd_out; cmd_out = out ? out : kputs;
+    int r = account_apply(name, pass, 0, 0, !accounts_count(), 0);
+    cmd_out = saved; return r;
+}
+int users_delete(const char *name, void (*out)(const char *)) {
+    void (*saved)(const char *) = cmd_out; cmd_out = out ? out : kputs;
+    int r = account_apply(name, "", 1, 1, 0, eq_(name, current_user));
+    cmd_out = saved; return r;
+}
+int users_passwd(const char *name, const char *pass, void (*out)(const char *)) {
+    void (*saved)(const char *) = cmd_out; cmd_out = out ? out : kputs;
+    int r = passwd_apply(name, pass);
+    cmd_out = saved; return r;
 }
 static int blocked_while_sam(const char *q, unsigned n) {   /* the one TCP connection and the heap are in use: these would collide */
     static const char *const names[] = {"browse", "open", "back", "forward", "reload", "llm", "bt", "userrun"};
