@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Asking Samantha for the weather fetches it. She never says "open Weather first".
 
-Boots with `samantha` (her full-screen avatar, the phone demo's path), so the
-desktop never runs and nothing has fetched the weather yet. Types "whats the
-weather"; a fake /api/pick at 10.0.2.2 answers the weather tool. Asserts a
-`wxfetch` line lands between the question and her `chattool=weather:` reply,
-i.e. the tool fetched on its own. Discriminating: drop the weather_fetch()
-call in kernel/chat.h's weather tool and no wxfetch ever prints on this boot.
+Boots with `samantha` (her full-screen avatar, the phone demo's path) and types
+"whats the weather"; a fake /api/pick at 10.0.2.2 answers the weather tool.
+Asserts her `chattool=weather:` answer carries a real reading (not "none") and
+that a `wxfetch` landed before it. The desktop's own first fetch usually wins
+the race; when it has not, her tool asks for one (jt_refresh) and waits for
+WEATHER.TXT to move (user/samantha.c). Without both, she says "open Weather
+first".
 
 Usage: tools/checks/samweather-check.py   (from the repo root)
 """
-import http.server, json, os, socket, subprocess, sys, threading, time
+import http.server, json, os, socket, subprocess, sys, tempfile, threading, time
 from freeport import free_port
 
-LOG = "/tmp/jt-samweather-serial.log"
+LOG = os.path.join(tempfile.mkdtemp(prefix="jt-samweather-"), "serial.log")   # per run: two runs never share one log
 PORT = free_port()
 
 
@@ -67,14 +68,18 @@ try:
     def key(k): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k}]}})
     if not wait_for("samfocus", 40): raise SystemExit("FAIL: her avatar never focused its input box")
     time.sleep(0.5)
-    before = serial().count("wxfetch")
     for ch in "whats the weather":
         key("spc" if ch == " " else ch); time.sleep(0.05)
     time.sleep(0.3); key("ret")
     if not wait_for("chattool=weather:", 40):
         fail = "no chattool=weather line: the picker or tool never ran"
-    elif serial().count("wxfetch") <= before:
-        fail = "she answered the weather without fetching it (the old \"open Weather first\" reply)"
+    else:
+        log = serial(); at = log.find("chattool=weather:")
+        res = log[at + len("chattool=weather:"):].split("\n", 1)[0].strip()
+        if res.startswith("none"):
+            fail = "she answered the weather without a reading (the old \"open Weather first\" reply)"
+        elif "wxfetch" not in log[:at]:
+            fail = "her answer came before any weather fetch"
 finally:
     q.kill(); q.wait(); srv.shutdown()
 if fail:
