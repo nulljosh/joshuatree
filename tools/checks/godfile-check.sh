@@ -65,7 +65,8 @@ ratchet_ceiling() {
         # 2026-10-19: 4.18.3 moved the map and satellite wallpapers to kernel/wallmap.c.
         # 2026-10-19: 4.18.4 moved SETTINGS.TXT load and save and the LLM, Mail and Claude settings to kernel/settings.c.
         # 2026-10-19: 4.18.5 moved pngtest, jpegtest, heaptest, nettest and mailtest (and their test data) to kernel/selftest.c.
-        kernel/kernel.c) echo 6724 ;;
+        # 2026-10-19: 4.18.6 moved the scheduler demos (tasktest, fputest, preempttest, killtest, spawntest, isotest, reaptest) to kernel/taskdemo.c.
+        kernel/kernel.c) echo 6556 ;;
         *) echo "$LIMIT" ;;
     esac
 }
