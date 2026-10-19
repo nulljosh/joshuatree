@@ -3,6 +3,7 @@
 void putc(char c);
 void puts(const char *s);
 void puthex(unsigned int v);
+void putn(unsigned int v);   /* unsigned decimal */
 
 /* The next already-queued keystroke as an ASCII character, or -1 if the
    keyboard ring is empty. Non-blocking on purpose: its one caller is

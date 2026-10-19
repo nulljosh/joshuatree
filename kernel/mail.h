@@ -1,6 +1,6 @@
 /* Mail's data layer. The app itself is ring 3 (user/mail.c, a compositor
-   window); this file keeps only what Samantha's read_mail/send_mail tools
-   (chat.h) and mailtest still need: the message array and MAIL.TXT
+   window); this file keeps only what mailtest (kernel/selftest.c, its one
+   includer) still needs: the message array and MAIL.TXT
    load/save, one line per message, "<r/u>|from|subject|body". Starter
    messages are only used before MAIL.TXT exists on disk. */
 #define MAIL_MAX 24
