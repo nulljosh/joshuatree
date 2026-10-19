@@ -343,6 +343,9 @@ FORCE:
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
 $(eval $(call variant,restart,-DPOWER_SELFTEST=2,,))
 
+# power-check: a file left unsaved, `reboot`, the file read back, `shutdown`; the second build skips the flush and must lose the file.
+$(eval $(call variant,powerfile,-DPOWER_FILE_TEST=1,,))
+$(eval $(call variant,powernoflush,-DPOWER_FILE_TEST=1 -DPOWER_NOFLUSH,,))
 $(eval $(call variant,treerestart,-DTREEMENU_SELFTEST=1,,))
 $(eval $(call variant,treeshutdown,-DTREEMENU_SELFTEST=2,,))
 $(eval $(call variant,notice,-DNOTICE_SELFTEST,,))
