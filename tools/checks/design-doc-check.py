@@ -343,7 +343,7 @@ FACTS = {
     "JT_MONO_ADV": ("num", lambda: int(rx("user/libjt/text.h", r"#define JT_MONO_ADV (\d+)")), "user/libjt/text.h"),
     "MONO_APPS": ("str", mono_apps, "user/*.c (who calls jt_mono_draw)"),
     "SERIF_USES": ("num", serif_uses, "kernel/, user/, drivers/ (TTF_FACE_SERIF, editor_glyphs family 1)"),
-    "DEFAULT_WALLPAPER": ("str", lambda: rx("kernel/kernel.c", r"^static int wall_theme = (\w+);"), "kernel/kernel.c"),
+    "DEFAULT_WALLPAPER": ("str", lambda: rx("kernel/kernel.c", r"^(?:static )?int wall_theme = (\w+);"), "kernel/kernel.c"),
     "NIGHT_FLOOR": ("hex", lambda: hexval(rx("kernel/kernel.c", r"return gui_lerp\(rgb, (0x[0-9A-Fa-f]+), night, 100\)")), "kernel/kernel.c"),
     "NIGHT_PCT": ("num", lambda: int(rx("kernel/kernel.c", r"else night = (\d+);")), "kernel/kernel.c"),
     "NIGHT_HOURS": ("str", night_hours, "kernel/kernel.c"),
