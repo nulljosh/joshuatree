@@ -63,7 +63,8 @@ ratchet_ceiling() {
         # 2026-10-01: Samantha moved to ring 3 (user/samantha.c); the in-kernel chat, its face, the chat shell command and chattest are gone.
         # 2026-10-19: 4.12.3 moved the menu-bar weather to kernel/weather.c.
         # 2026-10-19: 4.18.3 moved the map and satellite wallpapers to kernel/wallmap.c.
-        kernel/kernel.c) echo 7282 ;;
+        # 2026-10-19: 4.18.4 moved SETTINGS.TXT load and save and the LLM, Mail and Claude settings to kernel/settings.c.
+        kernel/kernel.c) echo 7037 ;;
         *) echo "$LIMIT" ;;
     esac
 }
