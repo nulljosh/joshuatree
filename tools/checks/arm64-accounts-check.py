@@ -257,7 +257,7 @@ try:
     check("users lists ann", S.run("users", "ann\n")[0], S.uart()[-200:])
     ok, secs = S.run("deluser ann wrongpass1", "deluser ann: wrong password", 120)
     check("a wrong password cannot delete the account (%.1f s)" % secs, ok, S.uart()[-300:])
-    check("... and the deluser echo is starred too", "joshua@tree % deluser ann **********\n" in S.uart(), S.uart()[-900:])
+    check("... and the deluser echo is starred too", re.search(r"\w+@tree % deluser ann \*{10}\n", S.uart()) is not None, S.uart()[-900:])   # 4.15.1: the prompt names whoever is signed in
     check("a repeat name is refused", S.run("sudo adduser ann other1234", "adduser ann: that name is taken", 60)[0], S.uart()[-300:])
     check("a short password is refused", S.run("sudo adduser bob abc", "adduser bob: the password is 4 to 64", 30)[0], S.uart()[-300:])
     check("a name with a capital is refused", S.run("adduser bob hunter22", "adduser bob: added", 120)[0], S.uart()[-300:]) if False else None
