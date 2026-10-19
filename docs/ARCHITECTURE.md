@@ -206,7 +206,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `arch/arm64/power.h`, `tools/checks/arm64-power-check.py` | Pi keyboard shutdown and restart, explicit confirmation and cancellation, VideoCore SD power-off and watchdog reset; host safety checks and real raspi4b shutdown/reboot tests. |
 | `user/finder.c`, `tools/checks/arm64-finder-check.py` | Finder on the ARM64 build (3.14.0), the file window of the Burrow tile and Spotlight (`SPOT_FINDER`), a ring-3 program built only for aarch64. A 132 px sidebar (Home, then Documents, Music and Trash when `JT/` holds them; an 8.3 card's `DOCUME~1` counts as Documents), a list of 24 px rows with a flat 16 px glyph per type (folder in the accent `#b5502c`, document, music, image, no text in an icon), the name and the size. Up and Down choose, Enter opens a folder or previews a `.TXT` read-only through `SYS_READFILE` (2 KB, wrapped, since Notes takes no path), Backspace goes up, Left and Right swap the sidebar and the list, Esc closes. It reads through `SYS_READDIR` relative to `JT/`; with no card it lists the built-in apps and the status line says so. Its arena sits past `_user_bss_end`, not `_user_end`, because the linker script puts the `.bss` right after the image. Check: boots with a card holding folders and a file, opens Finder from Spotlight, lists, goes into a folder and back, previews a note, moves in the sidebar, closes; then boots with no card and opens it through `burrow`. |
 | `tools/checks/arm64-spotlight-check.py` | Boots the ARM kernel headless in QEMU, presses F1: an empty query lists all 18 apps, typing calc shows exactly Calculator, Enter opens its window. |
-| `tools/gen/ci-balance.py` | Rebalances the CI shards. Reads how long each check took in a finished run and rewrites the shard numbers in `tools/checks/ci-suite.sh` while preserving shard 6 for shared ARM builds. |
+| `tools/gen/ci-balance.py` | Rebalances the CI shards. Reads how long each check took in a finished run and rewrites the shard numbers in `tools/checks/ci-suite.sh` packing ARM checks across shards 6, 8, 9 and 10 and the rest across the others. |
 | `tools/checks/ci-tooling-check.py` | Host fixtures prove ARM builds stay together when balancing and a fixed test path stops local CI before builds. |
 | `tools/ci-local.sh`, `tools/hooks/pre-push` | Run the fixed-path guard before builds; local CI then runs the release suite with two workers. |
 | `tools/ci-lock.sh` | One suite at a time on this Mac. `ci-local.sh` and `ci-suite.sh` source it: an atomic `mkdir` lock with a pid file, stale locks cleared, a 60 minute wait, released on exit. `CI_LOCAL_NO_LOCK=1` skips it. |
@@ -2342,7 +2342,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Local CI and pre-push reject new fixed test paths before building.
 
-The balancer keeps shard 6 together, because ARM checks share build output.
+The balancer packs ARM checks across shards 6, 8, 9 and 10 (the raspi4b runner) and the rest across the others.
 
 Only one suite runs at a time on a Mac.
 - `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`).
@@ -2372,7 +2372,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Games on the Pi: Spotlight opens Mines, Toroid, Hamurapi and Keyrate at EL0, a reveal (key and click), a generation, a year and a typed word each change the pixels, Esc closes each, in headless QEMU | `tools/checks/arm64-games-check.py` | once |
 | Pi keyboard shutdown and restart: confirmed HID chords halt or reboot raspi4b, Escape cancels, busy and hidden prompts refuse (host and QEMU) | `tools/checks/arm64-power-check.py` | once |
 | ARM tree menu: click or F10 opens About, Restart, Shut Down and Log Out (pixels, keys, outside click), power rows confirm and refuse mid-answer, Log Out closes windows, raspi4b restarts and halts | `tools/checks/arm64-treemenu-check.py` | once |
-| CI tooling preserves shared ARM shard affinity and rejects fixed test paths before builds (host only) | `tools/checks/ci-tooling-check.py` | once |
+| CI tooling packs ARM checks across the ARM shards only and rejects fixed test paths before builds (host only) | `tools/checks/ci-tooling-check.py` | once |
 | Dock slot constants agree with kernel.c (static drift guard) | `tools/checks/dockslots-check.py` | once |
 | No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks) | `tools/checks/tmp-paths-check.py` | once |
 | docs/ARCHITECTURE.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static) | `tools/checks/design-doc-check.py` | once |
@@ -2702,13 +2702,13 @@ How a change gets from a branch to joshuatree.jaybulb.com, on one page.
 
 1. **Verify locally.** Every PR opens as a draft, and a draft runs no CI. You run `tools/ci-local.sh` on the Mac instead.
    - It builds `kernel.elf`.
-   - It runs all four shards of `tools/checks/ci-suite.sh` in parallel QEMUs.
+   - It runs the eleven shards of `tools/checks/ci-suite.sh` in parallel QEMUs (the four ARM shards in turn).
    - Then it runs the check-refs scripts and the browser demo checks.
    - It mirrors `.github/workflows/check.yml` job for job, except the `network` job.
    - Only one suite runs at a time (`tools/ci-lock.sh`).
 2. **Flip the PR ready.** `gh pr ready <N>` starts `.github/workflows/check.yml`. It runs on pull requests only, never on push. Its jobs:
    - `changes` decides what the PR touches. A prose-only PR skips the QEMU suite.
-   - `suite` runs the four shards of `ci-suite.sh`. `demo` runs the Playwright landing checks.
+   - `suite` runs the eleven shards of `ci-suite.sh`. `demo` runs the Playwright landing checks.
    - `check` passes only if `changes`, `suite` and `demo` passed or were rightly skipped.
    - `check-refs` checks doc paths, the version sync and the VERSION bump. It also uploads a Cloudflare version without deploying it, so a bad `wrangler.toml` fails here and not on main. Fork PRs get no token and skip that upload.
    - `network` talks to real internet hosts. It is `continue-on-error`, so it reports but never blocks.

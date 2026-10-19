@@ -26,7 +26,7 @@ def file_of(cmd):
 out = ["Run it all locally with `tools/ci-local.sh`. Run one with the command in the table.", "",
        "### Running suites safely", "",
        "Local CI and pre-push reject new fixed test paths before building.", "",
-       "The balancer keeps shard 6 together, because ARM checks share build output.", "",
+       "The balancer packs ARM checks across shards 6, 8, 9 and 10 (the raspi4b runner) and the rest across the others.", "",
        "Only one suite runs at a time on a Mac.",
        "- `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`).",
        "- A second run waits its turn. It prints `waiting for ci-local pid N` every two minutes, for up to an hour.",
