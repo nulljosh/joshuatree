@@ -9,7 +9,7 @@ import sys, os, subprocess, tempfile, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)                                    # Blender's -P does not put this folder on the path
-from render_kit import build, blender, argv, material, aim  # shared with render_neo.py
+from render_kit import build, blender, argv, material, aim  # shared with render_nimbus.py
 
 SHELL, BEZEL = (0xB5, 0x50, 0x2C), (0xE9, 0xE0, 0xCF)       # terracotta and cream
 PAPER = "#faf8f4"                                           # the page colour the JPGs are flattened onto

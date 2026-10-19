@@ -75,7 +75,7 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 - A trademark search before any rename.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, and fewer get it onto a real board. Lean into that:
-- **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`). Film the first ugly print and every fix. Then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
+- **Our own case.** 3D print the Nimbus case for the Pi 4 (CAD and print pack in `docs/hardware/nimbus/`). Film the first ugly print and every fix. Then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
 - **Nothing underneath.** No Linux, no Raspberry Pi OS: it boots straight into our desktop. Say it on the box and in the first second of the video.
 - **It knows what you want.** The anticipation slice from the Vision section, all on the device. No other hobby OS has an assistant that runs it.
 - **A maker pack.** The breadboard prototype (`docs/GUIDE.md` (Breadboard prototype)) with real drivers for the LED, button and speaker, so people can wire their own things to it.
@@ -548,12 +548,12 @@ The top five gaps from the Research section (written from memory) that were not 
 
 ### Nimbus, the hardware (Joshua, 2026-10-06 night)
 
-The hardware is called Neo in the files (`docs/hardware/neo_cad.py`, the blueprint, the build guide); Strata was the earlier name. Joshua prefers Nimbus and wants the design refreshed in Blender with the original Macintosh as inspiration: a compact, square box.
+Nimbus replaced the stacked-ring Neo case, which was removed in 4.11.6 (Strata was its earlier name). Nimbus is a compact, square box with the original Macintosh as inspiration.
 
 - [ ] [Sonnet] Name check for Nimbus before it goes on a box: domain, trademark search in Canada and the US, and the App Store and GitHub namespaces (the asc-name-creator skill has the bulk domain check). Nimbus is a common word, so confirm it is free for computer hardware.
-- [ ] [Fable] Redesign: a compact, near-square all-in-one in the spirit of the first Macintosh, but an original design with no Apple marks. The Pi 4 (and a larger variant for the mini-ITX board) sits behind a front face that holds a 7 inch screen, a handle recess on top, a vent slot grille, one slot-shaped detail on the front, ports out the back. Built in build123d, exported to STL and STEP, rendered in Blender from the real CAD like the Neo hero image.
-- [ ] [Sonnet] Rename Neo to Nimbus across the repo once the name check passes: file names, the blueprint and build sheets, `docs/GUIDE.md` (Hardware plan), the Money section, the landing page. One PR, with `check-refs` green; mention the old names in a single "formerly Neo, Strata" line.
-- [ ] [Sonnet] A Nimbus build guide, blueprint sheet and assembly steps regenerated from the new CAD.
+- [x] [Fable] Redesign (shipped 4.7.0): a compact, near-square all-in-one in the spirit of the first Macintosh, but an original design with no Apple marks. The Pi 4 (and a larger variant for the mini-ITX board) sits behind a front face that holds a 7 inch screen, a handle recess on top, a vent slot grille, one slot-shaped detail on the front, ports out the back. Built in build123d, exported to STL and STEP, rendered in Blender from the real CAD like the Neo hero image.
+- [x] [Sonnet] Neo removed (4.11.6): its CAD, STLs, renders, blueprint and build guide are gone; Nimbus is the only case.
+- [x] [Sonnet] A Nimbus build guide, blueprint sheet and assembly steps regenerated from the new CAD (4.7.0 print pack).
 
 ### Known limits to recheck
 - [ ] [Sonnet] `SYS_READFILE` reads with interrupts off, so loading mid-song can glitch the audio.
@@ -1048,6 +1048,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.11.6 (2026-10-18)**: The stacked-ring Neo case is gone: its CAD, STLs, renders, blueprint, build sheet, assembly steps and three GUIDE sections. Nimbus is the only case. `render_nimbus.py` also renders wallpapers (`NIMBUS_WALL` with a size, camera and aim).
 - **4.15.1 (2026-10-18)**: The Terminal prompt shows who is signed in: `ann@tree % ` instead of always `joshua@tree % `. With no accounts it stays `joshua@tree % `. `ask_prompt()` rebuilds one static buffer from `current_user` (no heap); the echoed line on the UART carries the same prompt. Checked by `tools/checks/arm64-sudo-check.py` (bob signed in sees `bob@tree % `) and `arm64-zsh-check.py` (no accounts, unchanged).
 - **4.15.0 (2026-10-19)**: A Users pane in the Pi's Settings, so accounts are managed without the Terminal. The sixth section lists the accounts and marks the admins; Add user (name, password twice), Change password (your own needs the old one, someone else's needs an admin), an Admin switch and Remove user with a confirm step. Every privileged change asks the signed-in admin's password through the same `sudo_check` and shares sudo's remembered five minutes; a normal user sees the list and changes only their own password. Passwords are stars on screen and no key line reaches the UART while one is typed. It runs the Terminal commands' own code (`cmd.c` `users_add`, `users_delete`, `users_passwd`). Keys and mouse both work. `arch/arm64/users_ui.h`; `tools/checks/arm64-users-check.py` drives it in QEMU, checks the card across a reboot and the UART for leaks, and catches a pane that skips the admin check.
 - **4.14.0 (2026-10-18)**: Crash-safe card, slice 6 of 6.0. Pulling the power mid-write never corrupts the FAT or loses a replaced file's old contents: new data goes to fresh clusters, one directory-sector write flips the entry, then the old clusters are freed, and at mount a scan frees clusters no entry reaches, syncs the FAT copies and fixes FSInfo's free count. `USERS.TXT` takes the same path. `tools/checks/fat-crash-check.py` cuts the power after every sector write and wants `fsck.fat` clean and the file old or new, never a mix. The scan's bitmap and sectors come from the heap at first mount, so the i386 kernel keeps its 16 KB margin below the program window.
@@ -1181,7 +1182,7 @@ The facts today:
 |---|---|---|
 | The OS and the apps | Free, Apache 2.0 | Shipped. Runs in the browser and on a real Pi 4 |
 | Samantha (from Turing, a separate project) | Free | Answers from Turing's small model on the Mac; on the box itself later, no key, no cloud |
-| The case designs (Neo, Neo Pi, the Samantha box) | Free to build for yourself, CC BY-NC-SA 4.0 | Drawn, not printed |
+| The case designs (Nimbus, the Samantha box) | Free to build for yourself, CC BY-NC-SA 4.0 | Drawn, not printed |
 | The Samantha box, built and supported | $500 USD | Not built. No date promised |
 
 The hardware licence is non-commercial on purpose. Anyone can print a case for themselves. Nobody can sell copies of the kit.
@@ -1223,7 +1224,7 @@ The known lines add to roughly $65 to $140 before the board, supply and labour. 
 
 What fills it in, in order:
 1. The Pi 4B and supply retail price.
-2. A real print quote for the Neo Pi STLs.
+2. A real print quote for the Nimbus STLs.
 3. A carrier quote for one boxed kit to a US address.
 
 Before anyone defends the $500, price a Pi 4 kit at retail (board, card, supply, stock case). The $500 has to name what it buys beyond parts: a built, tested, supported box with the OS on it and a person to write to.
@@ -1243,7 +1244,7 @@ A demand gate comes first: 50 people on the waitlist (a guess, move it if real n
 
 Also required first:
 - A Pi that boots to the desktop, takes a keyboard and a mouse and keeps a file across a reboot, on camera, on the real board.
-- A real print of the Neo Pi case that fits (fit test first).
+- A real print of the Nimbus case that fits.
 - A real parts total and shipping quote.
 - An answer on certification.
 - A fulfilment path (who builds, ships and answers mail).

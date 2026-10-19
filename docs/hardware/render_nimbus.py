@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from render_kit import build, blender, argv, lin
 PREVIEW = bool(os.environ.get("NIMBUS_PREVIEW"))
-W = int(os.environ.get("NIMBUS_W", 640 if PREVIEW else 1600)); H = round(W * 0.6875)
+W = int(os.environ.get("NIMBUS_W", 640 if PREVIEW else 1600)); H = int(os.environ.get("NIMBUS_H", 0)) or round(W * 0.6875)
 SS = int(os.environ.get("SS", 1 if PREVIEW else 2))      # render at SS times the size, then Lanczos down: tack sharp edges and screen text
 CREAM, INK, TERRA = (0xEF, 0xEB, 0xE4), (0x1C, 0x1C, 0x1E), (0xB5, 0x50, 0x2C)
 SWEEP = (0xC9, 0xC4, 0xBB)
@@ -22,6 +22,10 @@ VIEWS = [("hero", (-620.0, -930.0, 560.0), (-30.0, 20.0, 100.0), 85.0),
          ("rear", (-620.0, -930.0, 560.0), (30.0, -20.0, 100.0), 85.0)]      # the rear is the hero's camera on the product turned half a turn, so backdrop, light and exposure are the same
 BOX = bool(os.environ.get("NIMBUS_BOX"))      # NIMBUS_BOX=1: render the retail box (nimbus-box.jpg) in the same studio instead of the product
 if BOX: VIEWS = [("box", (-570.0, -1200.0, 1320.0), (0.0, 0.0, 70.0), 85.0)]
+# Wallpapers: NIMBUS_WALL=NAME with NIMBUS_W/NIMBUS_H and CAM="x,y,z", AIM="x,y,z", LENS=mm renders nimbus-NAME.jpg, the hero lit the same way
+if os.environ.get("NIMBUS_WALL"):
+    _v = lambda k: tuple(float(c) for c in os.environ[k].split(","))
+    VIEWS = [(os.environ["NIMBUS_WALL"], _v("CAM"), _v("AIM"), float(os.environ.get("LENS", 85)))]
 
 try:
     import bpy

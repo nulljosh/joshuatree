@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: CC-BY-NC-SA-4.0
 # Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
-# Raspberry Pi 4 Model B numbers, from its mechanical drawing. Constants only: neo_pi_cad.py and samantha_cad.py
+# Raspberry Pi 4 Model B numbers, from its mechanical drawing. Constants only: nimbus_cad.py and samantha_cad.py
 # both import them, so a caliper correction lands in both cases at once. mm throughout.
 # The windows are deliberately bigger than the connectors, so half a millimetre of error in a port still fits.
 
