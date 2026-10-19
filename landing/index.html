@@ -361,8 +361,15 @@ p,li,.sub{text-wrap:pretty}
   #hero-poster[hidden], html.no-poster #hero-poster { display: none; }
   #hero-poster picture, #hero-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
   /* The still poster reads as a video that never started, so the real demo gets its own visible way in. */
-  #pi .tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 760px; margin: 0 auto; }
-  @media (max-width: 520px) { #pi .tile-grid { grid-template-columns: 1fr; } }
+  /* Bento: mixed spans, headline first, flat accent tints (Dribbble "Today" shot, 2026-10-18). */
+  #pi .tile-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); max-width: 960px; margin: 0 auto; }
+  #pi .tile { grid-column: span 2; }
+  #pi .tile:nth-child(1), #pi .tile:nth-child(6) { grid-column: span 4; background: color-mix(in srgb, var(--accent) 14%, var(--card)); border-color: transparent; }
+  #pi .tile:nth-child(8) { grid-column: span 6; background: transparent; }
+  #pi .tile p { padding: var(--s24); color: var(--sub); }
+  #pi .tile p strong { display: block; margin-bottom: var(--s8); color: var(--fg); font-size: var(--t22); line-height: var(--lh22); letter-spacing: var(--tr22); }
+  #pi .tile:nth-child(1) p strong, #pi .tile:nth-child(6) p strong { font-size: var(--t28); line-height: var(--lh28); letter-spacing: var(--tr28); }
+  @media (max-width: 760px) { #pi .tile-grid { grid-template-columns: 1fr; } #pi .tile, #pi .tile:nth-child(n) { grid-column: auto; } }
   #pi a { color: var(--accent); font-weight: 600; text-decoration: none; }
   .poster-skip { position: absolute; z-index: 5; right: 16px; top: 16px; padding: 8px 14px; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff; font-size:var(--t13); font-weight: 600; text-decoration: none; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);line-height:var(--lh13);letter-spacing:var(--tr13)}
   .poster-skip:hover { background: rgba(0,0,0,0.75); }
