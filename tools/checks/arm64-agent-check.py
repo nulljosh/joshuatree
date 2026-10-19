@@ -9,9 +9,11 @@ fake relay (a tiny HTTP server here, scripted answers, every prompt logged) and 
   2. caps: every answer ends with five [[note N]] lines; only four run (the fifth stays as text) and the loop stops at
      "agent: step limit" after exactly 5 relay calls. Then an Esc after a step 1 answer stops the loop at step 2.
   3. unknown: [[reboot]] and [[browse ftp://x]] are logged as "agent: ignored [[...]]" and nothing runs; one call only.
+  4. open: [[open Notes]] and [[open Music]] start the apps Spotlight would, [[open Nonsense]] is "no app named". --mutate
+     builds without the Spotlight fallback in app_open_name and runs only this boot, which must then fail.
 Headless; python subprocess timeouts throughout. Skips where clang, lld or qemu-system-aarch64 is missing.
 """
-import http.server, json, os, shutil, socket, subprocess, sys, tempfile, threading, time
+import http.server, json, os, re, shutil, socket, subprocess, sys, tempfile, threading, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from freeport import free_port
 
@@ -111,8 +113,25 @@ try:
     print("arm64 agent loop: fake relay on 127.0.0.1:%d, page server on %d" % (relay_port, page_port))
     env = dict({k: v for k, v in os.environ.items() if not k.startswith("CLAUDE_RELAY")}, CLAUDE_RELAY_HOST="10.0.2.2",
                CLAUDE_RELAY_PORT=str(relay_port), CLAUDE_RELAY_TOKEN_FILE=token_file)
-    r = subprocess.run(["make", "-C", arch], env=env, capture_output=True, text=True, timeout=300)
+    mutate = "--mutate" in sys.argv
+    main_c = os.path.join(arch, "main.c"); main_src = open(main_c).read()
+    if mutate:   # app_open_name without its Spotlight fallback: only the old named list opens
+        cut = re.sub(r"\n    for \(int s = 1; s <= SPOT_LAST; s\+\+\) \{   /\* 4\.18\.0.*?\n    \}", "", main_src, count=1, flags=re.S)
+        if cut == main_src: print("FAIL: the mutation found no Spotlight fallback to cut"); sys.exit(1)
+        open(main_c, "w").write(cut)
+    try: r = subprocess.run(["make", "-C", arch], env=env, capture_output=True, text=True, timeout=300)
+    finally: open(main_c, "w").write(main_src)
     if r.returncode: print("FAIL: arch/arm64 does not build:\n" + r.stdout[-2000:] + r.stderr[-2000:]); sys.exit(1)
+
+    # 4. [[open]] reaches every app Spotlight opens, not only the old named few
+    b, out = run("open", ["Opening.\n[[open Notes]]\n[[open Music]]\n[[open Nonsense]]", "Both up. OPENWORD"], "open notes", "OPENWORD")
+    b.close()
+    check("[[open Notes]] and [[open Music]] open them", "pi: opened Notes" in out and "pi: opened Music" in out, out[-600:])
+    check("[[open Nonsense]] says no app", "pi: no app named Nonsense" in out, out[-600:])
+    check("the results went back as the next turn", len(calls) == 2 and calls[1]["prompt"].count("opened") == 2 and "no such app" in calls[1]["prompt"], repr(calls[1:]))
+    if mutate:
+        if fails: print("PASS: --mutate: without the Spotlight fallback, [[open Notes]] fails as it should"); sys.exit(0)
+        print("FAIL: --mutate: the build without the fallback still opened Notes"); sys.exit(1)
 
     # 1. browse, then a final answer built from the page
     url = "http://10.0.2.2:%d/page" % page_port
@@ -156,4 +175,4 @@ finally:
 if fails:
     print("FAIL: %d of the agent loop checks failed" % len(fails)); sys.exit(1)
 print("PASS: the ARM Terminal runs Samantha's actions and sends their results back as the next turn: browse then answer, "
-      "4 actions per turn and 5 steps, Esc stops it, unknown actions are logged and ignored")
+      "4 actions per turn and 5 steps, Esc stops it, unknown actions are logged and ignored, [[open]] reaches any app Spotlight opens")
