@@ -523,7 +523,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (ask_busy() && blocked_while_sam(q, n)) { cmd_out("zsh: sam is using the network, try again when she answers\n"); return; }
     if (n == 3 && q[0] == 's' && q[1] == 'a' && q[2] == 'm') { sam_command(q + 3, 0); return; }
     if (n >= 4 && q[0] == 'h' && q[1] == 'e' && q[2] == 'a' && q[3] == 'r' && (n == 4 || q[4] == ' ')) {   /* `hear`, `hear 5` */
-        int secs = 3;
+        int secs = 0;   /* bare `hear`: until you stop talking */
         if (n > 5 && (!num(q + 5, n - 5, &secs) || secs < 1 || secs > 10)) { cmd_out("hear: use hear, or hear 1 to 10 (seconds)\n"); return; }
         hear_command((unsigned)secs); return;
     }
