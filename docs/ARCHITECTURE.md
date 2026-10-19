@@ -776,7 +776,7 @@ The back buffer and the scratch screen are 16 MiB each, in the 2 MiB blocks righ
     - One app at a time, because fat.c has one current directory for the whole kernel. Each call puts it back, and an app is only ever parked at a yield, never inside a call.
     - A folder never grows past its first cluster (14 entries with one-sector clusters, more with bigger ones).
     - Files carry no timestamps.
-    - Autosave (2.55.0) runs on ARM too, but it times on `JT_SYS_TIME`, which is 0 until the network sets the clock, so an offline Pi does not autosave yet.
+    - Autosave (2.55.0) runs on ARM too, timed on the task tick counter since 4.13.1, so an offline Pi autosaves as well.
   - Separate app address spaces and the text call remain.
 - **M3e (2.59.0): Music.**
   - `user/music.c`, unchanged, plays the WAV and MP3 songs in the card's `JT/MUSIC/` (made the first time it opens).
