@@ -26,7 +26,7 @@ clang -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined \
     -Wall -Wextra \
     -Idrivers -Itools/parsers-host \
     -o /tmp/jt-parser-fuzz \
-    tools/fuzz-host/fuzz_parsers.c drivers/http.c drivers/json.c drivers/fat.c drivers/blockdev.c
+    tools/fuzz-host/fuzz_parsers.c tools/fuzz-host/kmalloc_host.c drivers/http.c drivers/json.c drivers/fat.c drivers/blockdev.c
 
 # Per-input hangs are caught inside the harness via alarm(1) per case, so a
 # stuck input fails loudly instead of hanging the whole run. (No `timeout`
