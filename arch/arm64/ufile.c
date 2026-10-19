@@ -121,9 +121,11 @@ static long u_open(unsigned long upath, unsigned long flags) {
     if (n > OPEN_MAX_FILE) { path_leave(); return -EINVAL; }   /* bigger than one open holds: refused, never cut */
     int exists = n > 0;                                        /* empty and missing read the same, as on i386 */
     if (!exists && !(flags & O_CREAT)) { path_leave(); return -ENOENT; }
-    if ((!exists || (flags & O_TRUNC)) && !fat_replace_file(leaf, "", 0)) { path_leave(); return -ENOSPC; }   /* O_CREAT and O_TRUNC land now */
+    if (!exists && !fat_replace_file(leaf, "", 0)) { path_leave(); return -ENOSPC; }   /* O_CREAT lands now */
     path_leave();
-    f->used = 1; f->dirty = 0; f->owner = ufile_owner; f->flags = (unsigned)flags;
+    /* O_TRUNC of a file that exists lands at close with the new bytes, in one fat_replace_file, so a power cut
+       before close leaves the old file, never an empty one (4.13.0) */
+    f->used = 1; f->dirty = exists && (flags & O_TRUNC); f->owner = ufile_owner; f->flags = (unsigned)flags;
     f->size = exists && !(flags & O_TRUNC) ? (unsigned)n : 0;
     f->pos = flags & O_APPEND ? f->size : 0;
     for (int i = 0; i <= PATH_MAX; i++) { f->name[i] = name[i]; if (!name[i]) break; }

@@ -6,8 +6,8 @@ each of replace-with-more, replace-with-less, delete, mkdir and rmdir, the run i
 (every later write is dropped, as if the power went), then fsck.fat -n must report nothing worse than clusters used but
 reachable from no entry or FAT copies that differ, the card is mounted again (which frees those clusters, syncs the copies and
 fixes FSInfo's free count), fsck.fat -n must then find it fully clean, and the file must hold exactly the old content or exactly
-the new one, never a mix; a folder is whole or absent. Then one mutation: the same fat.c with the directory entry written
-right after the first cluster is allocated, before the data and the chain (the wrong order) must FAIL this same check.
+the new one, never a mix; a folder is whole or absent. Then two mutations must FAIL this same check: the same fat.c with the directory entry written
+right after the first cluster is allocated, before the data and the chain (the wrong order), and one with the mount scan off.
 Skips (exit 0) where clang, mkfs.fat or fsck.fat is missing.
 """
 import os, re, shutil, subprocess, sys, tempfile
@@ -79,6 +79,12 @@ def build(t, name, fat_c):
     if cc.returncode: print(cc.stderr[-2000:]); sys.exit(1)
     return exe
 
+def mutant(t, name, src):
+    mdir = os.path.join(t, name + "-src"); os.makedirs(mdir)
+    for h in ("fat.h", "blockdev.h", "vfs.h"): shutil.copy(os.path.join(drivers, h), mdir)
+    open(os.path.join(mdir, "fat.c"), "w").write(src)
+    return build(t, name, os.path.join(mdir, "fat.c"))
+
 def sweep(t, exe, fatbits, ops):
     """Returns (cuts, failures, repairs) for one binary on one FAT type."""
     base = os.path.join(t, "base%d.img" % fatbits)
@@ -125,12 +131,16 @@ with tempfile.TemporaryDirectory(prefix="jt-fatcrash-") as t:
     assert mut.count(hook) == 1
     mut = mut.replace(hook, hook + """        if (c == first_cluster) { u8 ms[512]; blockdev_read_sector(slot_lba, ms); struct dir_entry *m = &((struct dir_entry *)ms)[slot_idx];
             to_fat_name(name, m->name); m->attr = 0; set_cluster(m, c); m->file_size = len; blockdev_write_sector(slot_lba, ms); }\n""")
-    mdir = os.path.join(t, "mut"); os.makedirs(mdir)
-    for h in ("fat.h", "blockdev.h", "vfs.h"): shutil.copy(os.path.join(drivers, h), mdir)
-    open(os.path.join(mdir, "fat.c"), "w").write(mut)
-    mexe = build(t, "mutant", os.path.join(mdir, "fat.c"))
-    c, f, r = sweep(t, mexe, 16, ["more", "less"])
+    c, f, r = sweep(t, mutant(t, "mutant", mut), 16, ["more", "less"])
     if f: print("ok mutation (entry before data) fails the check: %d findings over %d cuts, first: %s" % (len(f), c, f[0][:140]))
     else: ok = False; print("FAIL mutation (entry before data) was NOT caught")
+
+    # mutation: the mount scan switched off must be caught too, or the repair half of the claim is untested
+    off = open(os.path.join(drivers, "fat.c")).read()
+    hook = "    mounted = 1;\n    fat_recover();\n"
+    assert off.count(hook) == 1
+    c, f, r = sweep(t, mutant(t, "noscan", off.replace(hook, "    mounted = 1;\n")), 16, ["more", "delete", "mkdir"])
+    if f: print("ok mutation (no mount scan) fails the check: %d findings over %d cuts, first: %s" % (len(f), c, f[0][:140]))
+    else: ok = False; print("FAIL mutation (no mount scan) was NOT caught")
 print("PASS: fat-crash" if ok else "FAIL: fat-crash")
 sys.exit(0 if ok else 1)

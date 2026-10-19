@@ -571,10 +571,20 @@ int fat_replace_file(const char *name, const void *data, unsigned int len) {
 static u8 scan_live[SCAN_MAX_CLUSTERS / 8];
 static u8 scan_sec[SCAN_DEPTH][512];
 static int scan_bad;
+static u32 scan_fat_lba;   /* the FAT sector scan_next holds; nothing writes the FAT until the scan is over */
+static u8 scan_fat[512];
 
-static void scan_dir_sector(u8 *sec, int depth);
+/* fat_entry_read with a one-sector cache: a chain's entries sit side by side, so the walk reads a FAT sector once, not once a cluster */
+static u32 scan_next(u32 c) {
+    u32 off = c * (fat32 ? 4 : 2), lba = fat_start + off / 512;
+    if (lba != scan_fat_lba) { if (!blockdev_read_sector(lba, scan_fat)) return 0xFFFFFFFF; scan_fat_lba = lba; }
+    return fat32 ? rd32(&scan_fat[off % 512]) & 0x0FFFFFFF : rd16(&scan_fat[off % 512]);
+}
+
+static int scan_dir_sector(u8 *sec, int depth);
 
 static void scan_chain(u32 c, int dir, int depth) {
+    int end = 0;   /* a folder's 0x00 entry ends its listing; the rest of its chain is still the folder's, so still walked */
     for (u32 n = 0; c >= 2 && c < eoc && !scan_bad; n++) {
         if (c >= total_clusters + 2 || n > total_clusters) { scan_bad = 1; return; }
         u32 bit = c - 2;
@@ -582,35 +592,36 @@ static void scan_chain(u32 c, int dir, int depth) {
         scan_live[bit / 8] |= (u8)(1u << (bit % 8));
         if (dir) {
             if (depth >= SCAN_DEPTH) { scan_bad = 1; return; }
-            for (u8 s = 0; s < sectors_per_cluster && !scan_bad; s++) {
+            for (u8 s = 0; s < sectors_per_cluster && !scan_bad && !end; s++) {
                 if (!blockdev_read_sector(cluster_to_lba(c) + s, scan_sec[depth])) { scan_bad = 1; return; }
-                scan_dir_sector(scan_sec[depth], depth);
+                end = scan_dir_sector(scan_sec[depth], depth);
             }
         }
-        u32 next = fat_entry_read(c);
+        u32 next = scan_next(c);
         if (next == 0xFFFFFFFF) { scan_bad = 1; return; }
         c = next;
     }
 }
 
-static void scan_dir_sector(u8 *sec, int depth) {
+static int scan_dir_sector(u8 *sec, int depth) {   /* 1 at the folder's 0x00 end marker, as find_entry_in and fat_list stop there */
     struct dir_entry *d = (struct dir_entry *)sec;
     for (int i = 0; i < 512 / 32 && !scan_bad; i++) {
-        if (d[i].name[0] == 0x00) return;
-        if (d[i].name[0] == 0xE5 || d[i].name[0] == '.' || (d[i].attr & ATTR_VOLUME_ID)) continue;
+        if (d[i].name[0] == 0x00) return 1;
+        if (d[i].name[0] == 0xE5 || !memcmp(d[i].name, ".          ", 11) || !memcmp(d[i].name, "..         ", 11) || (d[i].attr & ATTR_VOLUME_ID)) continue;
         u32 c = entry_cluster(&d[i]);
         if (c >= 2) scan_chain(c, (d[i].attr & ATTR_DIRECTORY) != 0, depth + 1);
     }
+    return 0;
 }
 
 static void fat_recover(void) {
     if (total_clusters == 0 || total_clusters > SCAN_MAX_CLUSTERS) return;
     memset(scan_live, 0, (total_clusters + 7) / 8);
-    scan_bad = 0;
+    scan_bad = 0; scan_fat_lba = 0;   /* sector 0 is the boot sector, never a FAT sector */
     if (fat32) scan_chain(root_cluster, 1, 0);
     else for (u32 s = 0; s < root_dir_sectors && !scan_bad; s++) {
         if (!blockdev_read_sector(root_dir_start + s, scan_sec[0])) { scan_bad = 1; break; }
-        scan_dir_sector(scan_sec[0], 0);
+        if (scan_dir_sector(scan_sec[0], 0)) break;
     }
     if (scan_bad) return;
 
