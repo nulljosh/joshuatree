@@ -71,8 +71,8 @@ jobs:
             echo kernel=false >> "$GITHUB_OUTPUT"
           fi
 
-  # The suite runs as eight parallel shards (ci-suite.sh SHARD/SHARDS),
-  # about a quarter of the wall time each. `check` below stays the one
+  # The suite runs as eleven parallel shards (ci-suite.sh SHARD/SHARDS),
+  # about eleven minutes of checks each. `check` below stays the one
   # required status and passes only when every shard did.
   suite:
     needs: [changes]
@@ -83,8 +83,8 @@ jobs:
     # exact shape of "it was green yesterday and red today with no commit
     # in between". Bump this line deliberately when the toolchain should
     # move, so the bump is a commit that CI itself proves out.
-    # ARM is reserved on shard 6 and needs QEMU with raspi4b support.
-    runs-on: ${{ matrix.shard == 6 && 'ubuntu-26.04' || 'ubuntu-24.04' }}
+    # ARM lives on shards 6, 8, 9 and 10 and needs QEMU with raspi4b support.
+    runs-on: ${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) && 'ubuntu-26.04' || 'ubuntu-24.04' }}
     # A wedged QEMU process (hung boot, a script waiting forever on a socket
     # that will never answer) used to have no ceiling: the job would sit
     # "in_progress" indefinitely, which reads the same as "still fine" on
@@ -93,14 +93,14 @@ jobs:
     # wedged QEMU is one named FAIL rather than a job-level timeout that
     # takes every check after it down with no result. 30 minutes leaves
     # room for the suite's one automatic retry of timing-sensitive checks
-    # on top of the ~6 minutes it really takes. Shard 6 is the exception: every
-    # ARM app check shares it (they build in one arch/arm64 tree), and with the Pi
-    # apps ported it runs about 35 minutes, so the ceiling is 60.
-    timeout-minutes: 60
+    # on top of the ~12 minutes the slowest shard takes. The ARM checks used to
+    # share shard 6 alone and ran about 46 minutes, gating every merge; since
+    # 4.12.2 they are packed across shards 6, 8, 9 and 10.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       # fetch-depth: 0 for the kernel.elf sync step at the end of this job,
       # which compares real commit ancestry. It used to paper over the
@@ -122,7 +122,7 @@ jobs:
         run: |
           nproc
           qemu-system-aarch64 --version
-          if [ "${{ matrix.shard }}" = 6 ]; then
+          if [ "${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) }}" = true ]; then
             qemu-system-aarch64 -machine help | awk '$1 == "raspi4b" { found = 1 } END { if (!found) { print "FAIL: QEMU lacks raspi4b"; exit 1 } }'
           fi
           openssl version
@@ -140,9 +140,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-ubuntu-${{ matrix.shard == 6 && '26.04' || '24.04' }}-${{ hashFiles('kernel/**', 'drivers/**', 'boot/**', 'lib/**', 'arch/arm64/**', 'third_party/bearssl/**', 'Makefile') }}
+          key: ccache-ubuntu-${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-${{ hashFiles('kernel/**', 'drivers/**', 'boot/**', 'lib/**', 'arch/arm64/**', 'third_party/bearssl/**', 'Makefile') }}
           restore-keys: |
-            ccache-ubuntu-${{ matrix.shard == 6 && '26.04' || '24.04' }}-
+            ccache-ubuntu-${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-
       - name: Build
         run: |
           echo "/usr/lib/ccache" >> "$GITHUB_PATH"
@@ -167,7 +167,7 @@ jobs:
       # minute run at a time. The suite now runs everything, prints a full
       # pass/fail summary, and fails the job if any check failed.
       - name: Regression suite (all checks, full summary)
-        run: SHARD=${{ matrix.shard }} SHARDS=8 ./tools/checks/ci-suite.sh
+        run: SHARD=${{ matrix.shard }} SHARDS=11 ./tools/checks/ci-suite.sh
       # A check that fails only on the runner is unreadable from the log
       # alone. Keep what every check leaves in /tmp (serial logs, raw
       # framebuffer dumps, PNGs) so the failure can be looked at, not guessed.

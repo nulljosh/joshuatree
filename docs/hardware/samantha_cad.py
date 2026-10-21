@@ -4,7 +4,7 @@
 # build123d -> one STL per part, plus a STEP of the box itself (shell and bezel). mm throughout.
 # Run:  uv run --with build123d python3 docs/hardware/samantha_cad.py OUTDIR
 # Every part number below is a stand-in until the parts are in hand: measure the real screen and speaker with
-# calipers, edit the block marked PARTS and rebuild. The Pi numbers are pi4b.py's, shared with neo_pi_cad.py.
+# calipers, edit the block marked PARTS and rebuild. The Pi numbers are pi4b.py's, shared with nimbus_cad.py.
 # The asserts run before anything is written, so a change that stops fitting leaves no parts on disk.
 # Axes: X is width, Y is up the screen, Z comes out of the screen toward you. The box's back face is z = 0.
 import sys, os, math

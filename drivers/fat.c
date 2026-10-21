@@ -32,6 +32,7 @@ static u32 alloc_hint;         /* where the last free-cluster search stopped; on
 
 static u32 fat_start, root_dir_start, root_dir_sectors, data_start, total_clusters;
 static int mounted = 0;
+static void fat_recover(void);
 
 /* 0 means root (the fixed pre-data-area directory FAT16 has no cluster
    number for; on FAT32 the chain at root_cluster); any other value is the
@@ -111,6 +112,7 @@ int fat_mount(void) {
 
     current_dir_cluster = 0;
     mounted = 1;
+    fat_recover();
     return 1;
 }
 
@@ -463,6 +465,36 @@ failed:
     return 0;
 }
 
+/* Removes the named subdirectory of the current directory, only when it holds
+   nothing but "." and "..". Same order as fat_delete: entry first, then the
+   clusters. */
+int fat_rmdir(const char *name) {
+    if (!mounted || !*name) return 0;
+    struct dir_entry *e = find_entry_in(current_dir_cluster, name);
+    if (!e || !(e->attr & ATTR_DIRECTORY)) return 0;
+    u32 first = entry_cluster(e);
+    u32 elba = matched_lba; int eidx = matched_index;
+    if (first < 2) return 0;
+    u8 sector[512];
+    for (u32 s = 0; ; s++) {
+        u32 lba = dir_get_sector(first, s);
+        if (!lba) break;
+        if (!blockdev_read_sector(lba, sector)) return 0;
+        struct dir_entry *d = (struct dir_entry *)sector;
+        for (int i = 0; i < 512 / 32; i++) {
+            if (d[i].name[0] == 0x00) goto empty;
+            if (d[i].name[0] == 0xE5 || d[i].name[0] == '.') continue;
+            return 0;
+        }
+    }
+empty:
+    if (!blockdev_read_sector(elba, sector)) return 0;
+    ((struct dir_entry *)sector)[eidx].name[0] = 0xE5;
+    if (!blockdev_write_sector(elba, sector)) return 0;
+    release_chain(first);
+    return 1;
+}
+
 static int write_file(const char *name, const void *data, unsigned int len, int replace) {
     if (!mounted || !*name) return 0;
     struct dir_entry *existing = find_entry_in(current_dir_cluster, name);
@@ -519,6 +551,117 @@ int fat_write_file(const char *name, const void *data, unsigned int len) {
 
 int fat_replace_file(const char *name, const void *data, unsigned int len) {
     return write_file(name, data, len, 1);
+}
+
+
+/* Crash safety (4.13.0). The write order does most of it: a replaced file's new data goes to fresh clusters and their FAT
+   chain first, then ONE directory sector write flips the entry (sector writes are the atomic unit), and only then are the
+   old clusters freed; delete, rmdir and mkdir keep the same shape (entry flipped in one sector, clusters after or before).
+   So a power cut leaves either the old file or the new one, and at worst clusters marked used that no entry reaches.
+   fat_recover runs at mount and puts that right: it marks every cluster reachable from the root, copies FAT 1 over any
+   other FAT copy that differs (the first copy is always written first), frees what is used but unreachable, and writes
+   FSInfo's free count exact. It gives up without changing anything if the tree cannot be read whole
+   (a read error, a loop, a chain off the table, folders nested past SCAN_DEPTH) or the volume has more clusters than SCAN_MAX_CLUSTERS. */
+#ifdef __aarch64__
+#define SCAN_MAX_CLUSTERS (1u << 20)   /* a 32 GB card at 32 KB clusters */
+#else
+#define SCAN_MAX_CLUSTERS (1u << 17)   /* i386 has little BSS room before its user image; a FAT16 table holds 65K clusters */
+#endif
+#define SCAN_DEPTH 12
+void *kmalloc(unsigned int n);   /* both kernels' heap (kernel/kheap.c, arch/arm64/main.c) */
+/* 4.14.0: the scan's bitmap and per-depth sectors (16 KB and 6 KB on i386, 128 KB on the Pi) come from the heap on the first
+   mount and stay, not BSS: i386 keeps 16 KB between its BSS and the program window (bss-margin-check.py). */
+static u8 *scan_live;
+static u8 (*scan_sec)[512];
+static int scan_bad;
+static u32 scan_fat_lba;   /* the FAT sector scan_next holds; nothing writes the FAT until the scan is over */
+static u8 scan_fat[512];
+
+/* fat_entry_read with a one-sector cache: a chain's entries sit side by side, so the walk reads a FAT sector once, not once a cluster */
+static u32 scan_next(u32 c) {
+    u32 off = c * (fat32 ? 4 : 2), lba = fat_start + off / 512;
+    if (lba != scan_fat_lba) { if (!blockdev_read_sector(lba, scan_fat)) return 0xFFFFFFFF; scan_fat_lba = lba; }
+    return fat32 ? rd32(&scan_fat[off % 512]) & 0x0FFFFFFF : rd16(&scan_fat[off % 512]);
+}
+
+static int scan_dir_sector(u8 *sec, int depth);
+
+static void scan_chain(u32 c, int dir, int depth) {
+    int end = 0;   /* a folder's 0x00 entry ends its listing; the rest of its chain is still the folder's, so still walked */
+    for (u32 n = 0; c >= 2 && c < eoc && !scan_bad; n++) {
+        if (c >= total_clusters + 2 || n > total_clusters) { scan_bad = 1; return; }
+        u32 bit = c - 2;
+        if (scan_live[bit / 8] & (1u << (bit % 8))) return;   /* already seen: a shared or looping chain ends here */
+        scan_live[bit / 8] |= (u8)(1u << (bit % 8));
+        if (dir) {
+            if (depth >= SCAN_DEPTH) { scan_bad = 1; return; }
+            for (u8 s = 0; s < sectors_per_cluster && !scan_bad && !end; s++) {
+                if (!blockdev_read_sector(cluster_to_lba(c) + s, scan_sec[depth])) { scan_bad = 1; return; }
+                end = scan_dir_sector(scan_sec[depth], depth);
+            }
+        }
+        u32 next = scan_next(c);
+        if (next == 0xFFFFFFFF) { scan_bad = 1; return; }
+        c = next;
+    }
+}
+
+static int scan_dir_sector(u8 *sec, int depth) {   /* 1 at the folder's 0x00 end marker, as find_entry_in and fat_list stop there */
+    struct dir_entry *d = (struct dir_entry *)sec;
+    for (int i = 0; i < 512 / 32 && !scan_bad; i++) {
+        if (d[i].name[0] == 0x00) return 1;
+        if (d[i].name[0] == 0xE5 || !memcmp(d[i].name, ".          ", 11) || !memcmp(d[i].name, "..         ", 11) || (d[i].attr & ATTR_VOLUME_ID)) continue;
+        u32 c = entry_cluster(&d[i]);
+        if (c >= 2) scan_chain(c, (d[i].attr & ATTR_DIRECTORY) != 0, depth + 1);
+    }
+    return 0;
+}
+
+static void fat_recover(void) {
+    if (total_clusters == 0 || total_clusters > SCAN_MAX_CLUSTERS) return;
+    if (!scan_live) { scan_live = kmalloc(SCAN_MAX_CLUSTERS / 8); scan_sec = kmalloc(SCAN_DEPTH * 512); }
+    if (!scan_live || !scan_sec) return;   /* no heap: mount without the repair, the same as a volume too big to scan */
+    memset(scan_live, 0, (total_clusters + 7) / 8);
+    scan_bad = 0; scan_fat_lba = 0;   /* sector 0 is the boot sector, never a FAT sector */
+    if (fat32) scan_chain(root_cluster, 1, 0);
+    else for (u32 s = 0; s < root_dir_sectors && !scan_bad; s++) {
+        if (!blockdev_read_sector(root_dir_start + s, scan_sec[0])) { scan_bad = 1; break; }
+        if (scan_dir_sector(scan_sec[0], 0)) break;
+    }
+    if (scan_bad) return;
+
+    u32 w = fat32 ? 4 : 2, bad_mark = fat32 ? 0x0FFFFFF7 : 0xFFF7, nfree = 0;
+    u32 rows = ((total_clusters + 2) * w + 511) / 512;
+    u8 a[512], b[512];
+    for (u32 row = 0; row < rows; row++) {
+        if (!blockdev_read_sector(fat_start + row, a)) return;
+        int dirty = 0;
+        for (u8 f = 1; f < num_fats; f++) {
+            if (!blockdev_read_sector(fat_start + (u32)f * fat_size_sectors + row, b)) return;
+            if (memcmp(a, b, 512)) dirty = 1;
+        }
+        for (u32 k = 0; k < 512 / w; k++) {
+            u32 c = row * (512 / w) + k;
+            if (c < 2 || c >= total_clusters + 2) continue;
+            u32 v = fat32 ? rd32(&a[k * 4]) & 0x0FFFFFFF : rd16(&a[k * 2]);
+            u32 bit = c - 2;
+            if (v && v != bad_mark && !(scan_live[bit / 8] & (1u << (bit % 8)))) {
+                for (u32 i = 0; i < w; i++) if (i < 3 || !fat32) a[k * w + i] = 0;
+                if (fat32) a[k * 4 + 3] &= 0xF0;
+                v = 0; dirty = 1;
+            }
+            if (!v) nfree++;
+        }
+        if (dirty) {
+            fsinfo_unknown();   /* a cut during this repair leaves the count unknown, never wrong */
+            for (u8 f = 0; f < num_fats; f++) blockdev_write_sector(fat_start + (u32)f * fat_size_sectors + row, a);
+        }
+    }
+    if (fat32 && fsinfo_lba >= 1 && fsinfo_lba < reserved_sectors && blockdev_read_sector(fsinfo_lba, a)
+        && rd32(a) == 0x41615252 && rd32(&a[484]) == 0x61417272 && rd32(&a[488]) != nfree) {
+        for (u32 i = 0; i < 4; i++) a[488 + i] = (u8)(nfree >> (8 * i));
+        if (blockdev_write_sector(fsinfo_lba, a)) fsinfo_done = 0;   /* the first later change marks it unknown again */
+    }
 }
 
 /* v29: fat's own functions already match struct vfs_ops's signatures

@@ -13,6 +13,12 @@ hid_kbd, the parser a real keyboard's reports go through, one key every 150 ms f
   3. notesr-kernel8.img on the same card, as after a reboot: the same keys open Notes, which lists the note
      ("notes: folders=01 notes=01"); the window is pixel for pixel the one boot 1 left after saving; then Enter opens it
      in the editor ("notes: edit=N0000001.TXT"), with ink on its first line and none on the second.
+  4. Autosave with no network (4.11.2): notesa-kernel8.img types a line and never presses Esc, waits four seconds, then clicks
+     the window's red dot, which ends the program the kill way. The Pi has no clock until the network sets one, so JT_SYS_TIME
+     stays 0 here and Notes must time its two seconds on the uptime ticks (SYS_TASKS) instead. The program saves the line by
+     itself ("notes: saved=23" once, no "notes: closed", "closed by its red dot"), mtools finds it on the card, and notesr on
+     the same card lists it and opens it with ink on the first line. `--mutate` puts the old JT_SYS_TIME timing back in
+     user/notes.c, rebuilds, runs only this case and passes only if it FAILS (the file is restored afterwards).
 Once Notes starts, no EL0 fault, no KERNEL CRASH, no `sd FAIL` and no exit, in either boot. Skips (exit 0) without clang, ld.lld, qemu-system-aarch64,
 its raspi4b model, or mtools.
 Usage: tools/checks/arm64-notes-check.py   (from the repo root)
@@ -103,8 +109,71 @@ def ink(rows, x0, y0, w, h):   # dark pixels in a box of the crop: only INK text
 # notes.c's layout at a window under 600 wide: the notes column starts at 20 + 100 + 16, is 170 wide, and its first row's
 # text sits at COL_Y + 46 - 4 = 82; the editor's first line at ED_TOP 28, 33 rows a line, from ED_MARGIN 56.
 NOTES_COL, FIRST_ROW, EDIT_LINE0, EDIT_LINE1 = (136, 170), (74, 22), (28, 33), (61, 33)
+AUTOTEXT = b"autosaved with no clock"
+
+
+def autosave_case():
+    """Section 4. A fresh card, notesa (types, waits, red dot), the card read from the host, then notesr to find the text again."""
+    card2 = os.path.join(TMP, "card2.img")
+    build_card(card2, False)
+    print("arm64 notes: autosave with no network clock, notesa-kernel8.img on a clean card")
+    b = Boot(os.path.join(arch, "notesa-kernel8.img"), card2)
+    try:
+        done = b.wait_for("notestest: done", 90)
+        out = b.uart()
+    finally:
+        b.close()
+    check("the line is typed, left alone for four seconds, and the red dot is clicked", done and in_order(out, ["notes: new=N0000001.TXT", "notestest: waiting\n", "notestest: red dot\n", "notestest: done"]), out[-900:])
+    check("Notes saved the %d bytes by itself, exactly once, before the red dot" % len(AUTOTEXT),
+          done and out.count("notes: saved=") == 1 and in_order(out, ["notes: saved=%d\n" % len(AUTOTEXT), "notestest: red dot\n"]), out[-900:])
+    check("the red dot ended the program the kill way: 'closed by its red dot', no 'notes: closed' (Esc's exit)",
+          "M3c app notes closed by its red dot" in out and "notes: closed" not in out, out[-600:])
+    for bad in ("M3 EL0 fault", "KERNEL CRASH", "sd FAIL"):
+        check("the autosave boot never printed %r once Notes started" % bad, bad not in out.partition("M3c app notes starts")[2], out[-400:])
+    def mt2(*a): return subprocess.run([a[0], "-i", f"{card2}@@{PART * 512}", *a[1:]], capture_output=True, env=MT)
+    got = mt2("mtype", "::JT/NOTES/NOTES/N0000001.TXT").stdout
+    check("JT/NOTES/NOTES/N0000001.TXT on the card holds exactly the typed line", got == AUTOTEXT, repr(got))
+    bad = []
+    clean = fat_pass(card2, "after the autosave", bad) is not None
+    check("the FAT32 pass finds the card clean after the red-dot kill", clean and not bad, bad)
+    print("arm64 notes: autosave, notesr-kernel8.img on the same card")
+    b = Boot(os.path.join(arch, "notesr-kernel8.img"), card2)
+    try:
+        up = b.wait_for("notestest: notes is up", 60)
+        done = b.wait_for("notestest: done", 60)
+        editor = b.shot() if done else None
+        out2 = b.uart()
+        wr = window(out2)
+    finally:
+        b.close()
+    check("after the reboot Notes lists the autosaved note and Enter opens it", "notes: folders=01 notes=01\n" in out2 and "notes: edit=N0000001.TXT\n" in out2, out2[-600:])
+    if wr and editor:
+        cw, chh, cx, cy = wr
+        l0 = ink(crop(editor, cx, cy, cw, chh), 56, EDIT_LINE0[0], cw - 112, EDIT_LINE0[1])
+        check("on screen, the reopened note shows its text: ink on the first line", l0 > 40, "ink %d" % l0)
+    else:
+        check("the reopened note's window was captured", False, out2[-400:])
+
+
 MT = dict(os.environ, MTOOLS_SKIP_CHECK="1")
 card = os.path.join(TMP, "card.img")
+if "--mutate" in sys.argv:   # the old timing back: JT_SYS_TIME is 0 with no clock, so 0 - 0 >= 2 never fires and the line is never saved
+    notes_c = os.path.join(root, "user/notes.c")
+    orig = open(notes_c).read()
+    good = "static unsigned now_ticks(void) { struct jt_tasks t; jt_tasks(&t, -1); return t.ticks; }"
+    if good not in orig: print("FAIL: mutation target not found in user/notes.c"); sys.exit(2)
+    open(notes_c, "w").write(orig.replace(good, "static unsigned now_ticks(void) { return (unsigned)jt_time(0) * 100; }"))
+    subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
+    n0 = len(fails)
+    try:
+        r = subprocess.run(["make", "-C", arch, "notesa-kernel8.img", "notesr-kernel8.img"], capture_output=True, text=True, timeout=900)
+        if r.returncode: print("FAIL: the mutant does not build:\n" + (r.stdout + r.stderr)[-1500:]); sys.exit(2)
+        autosave_case()
+    finally:
+        open(notes_c, "w").write(orig)
+        subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
+    if len(fails) > n0: print("PASS (mutation caught): with the JT_SYS_TIME timing the autosave case fails, %d checks" % (len(fails) - n0)); sys.exit(0)
+    print("FAIL: the old JT_SYS_TIME timing still passes the autosave case"); sys.exit(1)
 build_card(card, False)
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 try:
@@ -173,10 +242,11 @@ try:
         ed = crop(editor, cx, cy, cw, chh)
         l0, l1 = ink(ed, 56, EDIT_LINE0[0], cw - 112, EDIT_LINE0[1]), ink(ed, 56, EDIT_LINE1[0], cw - 112, EDIT_LINE1[1])
         check("on screen, the editor shows the line read back off the card: ink on the first line, none on the second", l0 > 40 and l1 == 0, "first %d, second %d" % (l0, l1))
+    autosave_case()
 finally:
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 
 if fails:
     print("FAIL: %d of the Notes checks failed" % len(fails)); sys.exit(1)
 print("PASS: on QEMU's raspi4b the dock opens the unchanged user/notes.c at EL0, a typed note is saved through the ARM file calls to "
-      "JT/NOTES/NOTES/N0000001.TXT on the FAT32 card (mtools reads the line, the card is clean), and after a reboot Notes lists it and opens it")
+      "JT/NOTES/NOTES/N0000001.TXT on the FAT32 card (mtools reads the line, the card is clean), and after a reboot Notes lists it and opens it; with no network clock a typed line saves itself on the uptime ticks and survives a red-dot close")

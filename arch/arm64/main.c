@@ -350,6 +350,7 @@ static int hang_arm;       /* app_start sets it for slot 0, so the boot self-tes
 static int user_loud;       /* userrun: what the program writes reaches the screen too; the boot self-test keeps it on the UART */
 static unsigned user_pid;   /* programs started so far, what JT_SYS_GETPID answers */
 static unsigned long app_len, app_code, app_img;   /* the loaded app: bytes of window mapped, how many of those are code, and the image's own length */
+static unsigned long cal_local(void);   /* cal_utc shifted to Vancouver wall time, what SYS_TIME returns (below) */
 static unsigned long cal_utc(void);   /* the clock the Calendar tile reads, further down: 0 until the network has told us the time */
 /* M3c part 2, the scheduler's state: one app at a time, since the arena has one app window. app_cur is the app it holds,
    running or parked; app_frame and app_sp are where it parked (every register, its pc and its stack). Its window buffer is
@@ -573,7 +574,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
         else {
             long r;
             if (n == JT_SYS_TIME) {   /* seconds since the epoch, 0 until the clock is set; a non-null pointer is also stored through */
-                unsigned long t = cal_utc();
+                unsigned long t = cal_local();   /* local, like the Clock: the Calendar app circles the day the Clock names, not the UTC one */
                 r = (int)t;
                 if (a0) {
                     if (!user_writable(a0, 4)) r = -14;   /* -EFAULT, like kernel/syscall.c's sys_time */
@@ -1690,6 +1691,8 @@ static unsigned long cal_utc(void) { return MUSIC_TEST_UTC + cnt_now() / cnt_hz(
 #else
 static unsigned long cal_utc(void) { return net_clock_utc(); }
 #endif
+static long clock_offset(unsigned long utc);   /* seconds to subtract from UTC for Vancouver wall time (the one time-zone path) */
+static unsigned long cal_local(void) { unsigned long u = cal_utc(); return u ? u - (unsigned long)clock_offset(u) : 0; }   /* 0 stays 0: no clock yet */
 static int cal_shown = -1;   /* the day the tile shows, as a y/m/d number; -1 is the plain art */
 static int cal_today(void) {   /* today's y/m/d number, or -1 with no clock */
     unsigned long u = cal_utc(); if (!u) return -1;
@@ -2694,6 +2697,11 @@ static int spot_key(unsigned code) {   /* a key down with the bar open: every ke
 static void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hover(slot); }
 int ask_busy(void);   /* ask.c: a `sam` request is queued or waiting on the relay */
 #include "power.h"
+#ifdef POWER_FILE_TEST   /* the power check's output catcher: what a Terminal command printed, searched for a word */
+static char seen[256];
+static void grab(const char *t) { unsigned k = 0; while (seen[k]) k++; for (; *t && k + 1 < sizeof seen; t++) seen[k++] = *t; seen[k] = 0; }
+static int has(const char *w) { for (unsigned i = 0; seen[i]; i++) { unsigned j = 0; while (w[j] && seen[i + j] == w[j]) j++; if (!w[j]) return 1; } return 0; }
+#endif
 /* The reboot and shutdown commands are refused only while a `sam` request is live. They must not use ask_pending(): that is
    also true while the typed line that holds this very command runs, so every typed reboot would be refused (found on the Pi). */
 static int power_refused(void) {
@@ -2967,11 +2975,15 @@ static unsigned long nth_sunday_utc(long y, unsigned mon, unsigned nth, unsigned
     unsigned first = dow == 0 ? 1 : 1 + (7 - dow);
     return (civil_days(y, mon, first + (nth - 1) * 7)) * 86400UL + hour * 3600UL;
 }
-static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day) {
+static long clock_offset(unsigned long utc) {   /* Vancouver: 7 h behind UTC in daylight time, 8 h otherwise */
     long y; unsigned m, d; civil_from_days(utc / 86400, &y, &m, &d);
     int dst = utc >= civil_days(2026, 3, 8) * 86400UL + 10 * 3600UL
            || (utc >= nth_sunday_utc(y, 3, 2, 10) && utc < nth_sunday_utc(y, 11, 1, 9));
-    unsigned long loc = utc - (dst ? 7 : 8) * 3600UL;
+    return (dst ? 7 : 8) * 3600L;
+}
+static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day) {
+    long y;
+    unsigned long loc = utc - (unsigned long)clock_offset(utc);
     civil_from_days(loc / 86400, &y, mon, day);
     clock_year = y;
     *hh = (unsigned)(loc % 86400) / 3600; *mm = (unsigned)(loc % 3600) / 60;
@@ -3457,6 +3469,11 @@ int app_open_name(const char *name) {
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
         if (!w[i] && !name[i]) { dock_activate(SPOT_FINDER); return 1; }
     }
+    for (int s = 1; s <= SPOT_LAST; s++) {   /* 4.17.0: anything Spotlight lists and the Pi runs, by the name it shows (Notes, Music, Calendar, the games), the way Spotlight's Enter opens it */
+        const char *w = spot_name(s); unsigned i = 0;
+        for (; w[i] && name[i] && (name[i] | 32) == (w[i] | 32); i++) ;
+        if (!w[i] && !name[i] && lp_on_arm(s)) { dock_activate(s); return 1; }
+    }
     return 0;
 }
 
@@ -3525,7 +3542,7 @@ static void input_event(struct input_event e) {
     }
     if (e.type == 1 && e.value && ui_key(e.code)) {                                                      /* Spotlight, the dock keys, F2 and Ctrl+T */
         con_quiet = 1;
-        uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
+        if (!set_secret()) { uart_puts("key "); uart_dec(e.code); uart_puts(" down\n"); }   /* 4.14.0: not while Settings' Users pane takes a password */
         return;
     }
     if (e.type == 1 && brick_live && !spot_live) { brick_key(e.code, e.value); return; }
@@ -3548,7 +3565,7 @@ static void input_event(struct input_event e) {
             /* Only the Terminal takes typing; Shift always reaches ask.c, as the Calculator reads its state there */
             if (term || e.code == 42 || e.code == 54) ask_key(e.code, e.value);
             con_quiet = 1;   /* typed keys show on the ask> row, or nowhere; the echo stays on the UART and off the Console */
-            if (!(term && ask_secret())) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* 4.10.0: not while a password is being typed */
+            if (!(term && ask_secret()) && !set_secret()) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* 4.10.0: not while a password is being typed */
         }
         cur_release(held);
     }
@@ -3634,7 +3651,7 @@ void usb_poll(void);
 void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p);
 static void notes_tick(void) {
     static const char *const script = NOTES_SELFTEST == 1 ? ">>>>>\n|nhello from the pi\033" : NOTES_SELFTEST == 2 ? ">>>>>\n|\n"
-        : NOTES_SELFTEST == 3 ? ">>>>>>\n|buy milk\ncall mom\n^^ " : ">>>>>>\n|";   /* 3, 4: Reminders (arm64-reminders-check.py): the sixth tile, two adds, Up Up, Space on the first; then just open it */
+        : NOTES_SELFTEST == 3 ? ">>>>>>\n|buy milk\ncall mom\n^^ " : NOTES_SELFTEST == 5 ? ">>>>>\n|nautosaved with no clock!@" : ">>>>>>\n|";   /* 3, 4: Reminders (arm64-reminders-check.py): the sixth tile, two adds, Up Up, Space on the first; then just open it; 5: Notes with no clock set, a line typed and left, '!' waits four seconds, '@' clicks the red dot (arm64-notes-check.py) */
     static unsigned at; static unsigned long next; static unsigned char last[8]; static int done;
     unsigned long now = cnt_now();
     if (!next) next = now + cnt_hz();   /* a second after the loop starts: the desktop has settled */
@@ -3647,6 +3664,13 @@ static void notes_tick(void) {
         uart_puts("notestest: notes is up\n");
         at++; next = now + 2 * cnt_hz();   /* two seconds to take a screendump of the list before the next key */
         return;
+    }
+    if (c == '!') { uart_puts("notestest: waiting\n"); at++; next = now + 4 * cnt_hz(); return; }   /* long enough for the two second autosave to fire, with Esc never pressed */
+    if (c == '@') {   /* the red dot of the front app window, through the pointer's own click path */
+        int s = (int)window_scale();
+        mouse_x = (app_lx + 24) * s; mouse_y = (app_ly + 16) * s;
+        uart_puts("notestest: red dot\n"); pointer_click();
+        at++; next = now + 2 * cnt_hz(); return;
     }
     unsigned char down[8] = { 0 }, none[8] = { 0 };
     down[2] = c == '>' ? 0x4F : c == '\n' ? 0x28 : c == '\033' ? 0x29 : c == ' ' ? 0x2C : c == '^' ? 0x52 : (unsigned char)(0x04 + c - 'a');   /* HID usages: Right, Enter, Esc, Space, a to z */
@@ -4018,6 +4042,23 @@ void main(void) {
     uart_puts("power: cancellation survived\n");
     hid_kbd(chord, 8, previous); hid_kbd(none, 8, previous);
     hid_kbd(enter, 8, previous);
+#endif
+#ifdef POWER_FILE_TEST   /* tools/checks/arm64-power-check.py: boot 1 leaves a file unsaved and types `reboot`; boot 2 reads it back and types `shutdown` */
+    {
+        void cmd_run(const char *q, unsigned n, void (*out)(const char *));
+        void ufile_selftest_dirty(const char *name, const char *text);
+        cmd_run("cat JT/PWRBOOT.TXT", 18, grab);
+        if (!has("boot-one")) {
+            cmd_run("write PWRBOOT.TXT boot-one", 26, 0);
+            ufile_selftest_dirty("PWR.TXT", "kept-by-flush");
+            uart_puts("power: file left unsaved, typing reboot\n");
+            cmd_run("reboot", 6, 0);
+        } else {
+            seen[0] = 0; cmd_run("cat JT/PWR.TXT", 15, grab);
+            uart_puts(has("kept-by-flush") ? "power: file survived the reboot\n" : "power: file LOST in the reboot\n");
+            cmd_run("shutdown", 8, 0);
+        }
+    }
 #endif
 #ifdef TREEMENU_SELFTEST   /* 1 restart, 2 shut down: the tree clicked open and driven by the board's own key events, then the power prompt confirmed */
     {

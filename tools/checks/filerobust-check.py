@@ -200,8 +200,14 @@ class FatImage:
         index (the same total_clusters fat_mount() clamps to) marked
         in-use, so alloc_cluster's free-cluster scan finds nothing no
         matter what it's asked to allocate."""
-        for c in range(2, self.g["total_clusters"] + 2):
-            self.fat_entry_write(c, 0xFFFF)
+        last = self.g["total_clusters"] + 1
+        for c in range(2, last + 1):   # one chain, 2 -> 3 -> ... -> last, owned by FULL.BIN below
+            self.fat_entry_write(c, c + 1 if c < last else 0xFFFF)
+        # 4.14.0: the mount scan frees used clusters no entry reaches, so a FAT full of orphans is no longer a full
+        # disk. One real file owning every cluster is.
+        slot = self.find_free_root_slots(1)[0]
+        size = (last - 1) * self.g["sectors_per_cluster"] * 512
+        self.write_dir_entry(slot, to_fat_name("FULL.BIN"), 0x20, 2, size)
 
 
 def to_fat_name(name):

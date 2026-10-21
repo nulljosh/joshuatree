@@ -25,6 +25,10 @@ void fat_list(void (*cb)(const char *name, unsigned int size, int is_dir));
    the file wasn't found or is a directory. */
 int fat_delete(const char *name);
 
+/* Removes an empty subdirectory of the current directory. Returns 1 on
+   success, 0 if missing, not a directory, or not empty. */
+int fat_rmdir(const char *name);
+
 /* Moves the current directory to the named subdirectory, ".." (parent,
    root's own ".." is a no-op), or "." (no-op). Returns 1 on success, 0 if
    the name doesn't exist or isn't a directory. */

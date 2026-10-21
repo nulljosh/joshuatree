@@ -41,7 +41,9 @@ int ring3app_write_packed(const char *file, const unsigned char *packed, unsigne
 #include "wallpaper.h"
 #include "icon_art.h"
 #include "boot_mark.h"
-#include "wall_sat.h"
+#include "wallmap.h"   /* 4.18.3: the map and satellite wallpapers live in kernel/wallmap.c (and wall_sat.h with them) */
+#include "selftest.h"  /* 4.18.5: pngtest, jpegtest, heaptest, nettest and mailtest live in kernel/selftest.c */
+#include "settings.h"  /* 4.18.4: SETTINGS.TXT load and save, and the LLM, Mail and Claude relay settings, live in kernel/settings.c */
 /* v75 (0.67.0): the wallpaper is read through this pointer, not the baked
    array directly, so a real fetched image (wall_fetch below: a 2x2 mosaic
    of OpenTopoMap tiles around the ip-api location, decoded by
@@ -57,8 +59,12 @@ int ring3app_write_packed(const char *file, const unsigned char *packed, unsigne
    Mojave espresso-brown (0x00201009) instead of wallpaper_rgb (the Joshua
    Tree photo). The tree photo is still available as WALL_PHOTO, so users
    who want it can select it in Settings; it never appears by default or
-   during satellite fetch. */
-static const unsigned char *wall_src = wallpaper_rgb;
+   during satellite fetch.
+
+   4.11.4: the default is now a plain grey (WALL_GREY), wall_src points at
+   wall_solid_row for the four plain walls, and nothing is fetched. */
+const unsigned char *const wall_photo = wallpaper_rgb;   /* wallmap.c reaches the photo through this; only this file includes drivers/wallpaper.h */
+const unsigned char *wall_src = wallpaper_rgb;
 /* v0.83.x: a REAL, once-captured satellite photograph (kernel/wall_sat.h,
    tools/gen/gen_wall_sat.py -- the same real mt0.google.com tiles
    wall_fetch() itself pulls for WALL_SAT, baked in at build time), decoded
@@ -67,10 +73,16 @@ static const unsigned char *wall_src = wallpaper_rgb;
    the desktop shows a satellite look, not the baked tree photo -- the
    tree stays reachable from Settings (WALL_PHOTO, an explicit user pick),
    it is only the no-network AUTOMATIC fallback that changes. */
-static unsigned char *wall_sat_rgb = 0;
-static unsigned char *wall_map = 0;        /* the fetched mosaic, kmalloc'd, kept while the session lives so Photo->Map needs no refetch */
-static int wall_map_tx = 0, wall_map_ty = 0, wall_map_cx = 0, wall_map_cy = 0; /* tile x/y of the mosaic's top-left tile, crop offset inside it */
-static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels actually came from (OpenTopoMap PNG vs Google satellite JPEG). Warm/Cool/Raw all share ONE fetch, since they're just different grades of the same topo pixels -- Satellite is a genuinely different image, not a grade, so switching across this boundary must drop wall_map and refetch instead of reusing stale pixels from the other source. */
+unsigned char *wall_sat_rgb = 0;
+/* 4.11.4: the plain wallpapers (Grey, Terracotta, Clay, Ink, the same four
+   the Pi offers) are two flat rows of the chosen colour, not a 1.5 MB image.
+   wall_src points here when a plain wall is up; every reader that walks
+   wall_src row by row (gui_wallpaper_row, gui_wallpaper_color) pins its row
+   to 0, so row 0 and the row after it are all they ever touch. */
+unsigned char wall_solid_row[WALLPAPER_W * 3 * 2];
+unsigned char *wall_map = 0;        /* the fetched mosaic, kmalloc'd, kept while the session lives so Photo->Map needs no refetch */
+int wall_map_tx = 0, wall_map_ty = 0, wall_map_cx = 0, wall_map_cy = 0; /* tile x/y of the mosaic's top-left tile, crop offset inside it */
+int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels actually came from (OpenTopoMap PNG vs Google satellite JPEG). Warm/Cool/Raw all share ONE fetch, since they're just different grades of the same topo pixels -- Satellite is a genuinely different image, not a grade, so switching across this boundary must drop wall_map and refetch instead of reusing stale pixels from the other source. */
 /* v0.76.14: direct follow-up ("satellite finally working, let's
    strengthen it") -- honest scope check first: the actual complaint
    underneath ("showing Vancouver, not Langley/Brookswood") is a real,
@@ -101,10 +113,6 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
    at all (see the v0.76.14 note above: that's IP geolocation's own
    ceiling, a different, separate limitation zoom cannot touch either
    direction). */
-#define WALL_ZOOM 14
-#define WALL_TILE 256   /* OpenTopoMap serves 256px tiles, no @2x variant */
-#define WALL_COLS 4     /* 4x3 grid = 1024x768, the smallest that covers a centered 960x540 crop */
-#define WALL_ROWS 3
 #include "serial.h"
 #include "sb16.h"
 #include "speak.h"
@@ -119,10 +127,10 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app_hikko.h"
 #include "app_fieldbook.h"
 #include "png.h"
-#include "png_testdata.h"
 #include "jpeg.h"
-#include "jpeg_testdata.h"
 #include "version.h"
+#include "ring3app.h"
+#include "weather.h"   /* 4.12.3: the menu-bar weather lives in kernel/weather.c */
 #include "json.h"
 #include "html.h"
 
@@ -174,7 +182,7 @@ void puthex(unsigned int v){
     }
 }
 
-static void clear(void){
+void clear(void){   /* console.h */
     for (int i = 0; i < W * H; i++) VGA[i] = (ATTR << 8) | ' ';
     cx = cy = 0; cursor();
 }
@@ -281,7 +289,7 @@ int gui_getch_or_click(void){
 #define KEY_PTT 305
 int get_key_or_click(void);
 
-static int get_key(void){
+int get_key(void){   /* console.h */
     for (;;) {
         int sc = kbd_pop();
         if (sc < 0) { window_present(); __asm__ volatile ("hlt"); continue; }
@@ -416,7 +424,7 @@ static void boot_chime(void){
     beep(659, 12); /* E5, held a touch longer to land the chime */
 }
 
-static void putn(unsigned int v){
+void putn(unsigned int v){   /* console.h */
     char buf[12]; int n = 0;
     if (v == 0) buf[n++] = '0';
     while (v) { buf[n++] = '0' + v % 10; v /= 10; }
@@ -451,135 +459,6 @@ static void klog_dump(void){
     for (int i = 0; i < klog_count; i++){
         int idx = (start + i) % KLOG_MAX;
         puts("[ "); putn(klog_tick[idx]); puts("] "); puts(klog_buf[idx]); putc('\n');
-    }
-}
-
-/* ---- task demo: two tasks that each print a letter and yield, round-robin,
-   to prove context switching actually swaps stacks correctly. Bounded, then
-   task_exit() (v28): a task can't safely `return` (see task.c), but now
-   that it can really exit instead of parking in `hlt` forever, running
-   tasktest repeatedly no longer permanently burns 2 of the 6 task slots. ---- */
-static void task_a(void){ for (int i = 0; i < 10; i++) { puts("A"); yield(); } task_exit(); }
-static void task_b(void){ for (int i = 0; i < 10; i++) { puts("B"); yield(); } task_exit(); }
-
-/* 2.2.0: fputest. Two tasks each push a value on the x87 stack, switch away inside the same asm, pop it back; crossed values mean schedule() lost per-task float state. */
-static volatile int fpu_bad, fpu_done;
-static void fpu_task(double mark) { for (int i = 0; i < 300; i++) { double in = mark + i, out = 0; __asm__ volatile ("fldl %1; int $32; fstpl %0" : "=m"(out) : "m"(in) : "memory"); if (out != in) fpu_bad++; } fpu_done++; task_exit(); }
-static void fpu_a(void){ fpu_task(1000.5); } static void fpu_b(void){ fpu_task(7000.25); }
-
-/* ---- preemption demo: two tasks that never call yield() or hlt, proving
-   the timer itself forces a switch. The shell's own wait loop below also
-   never yields/hlts on purpose, so if preemption weren't real this whole
-   command would just spin, and neither counter would ever move.
-   preempt_stop (v28) lets the shell actually reap these once it's done
-   measuring, same reasoning as task_a/task_b above: without it these two
-   would spin forever and permanently hold 2 of the 6 task slots. ---- */
-static volatile int preempt_a_count = 0;
-static volatile int preempt_b_count = 0;
-static volatile int preempt_stop = 0;
-static void preempt_task_a(void){ while (!preempt_stop) preempt_a_count++; task_exit(); }
-static void preempt_task_b(void){ while (!preempt_stop) preempt_b_count++; task_exit(); }
-
-/* ---- v0.88.0: spawntest. The Activity app (user/activity.c) shows and
-   kills real scheduler tasks through the exact same task_used/task_kill
-   primitives `ps`/`kill` already use, but nothing in the shell so far
-   leaves a task running indefinitely for a test to observe from the GUI
-   side -- every existing demo (task_a/b, preempt_task_a/b, iso_task_a/b)
-   cleans itself up within a handful of yields. spawntest_task is the one
-   deliberately long-lived task: it just spins until killed, real and
-   idle, the same shape preempt_task_a already has minus the self-stop
-   flag, so tools/checks/activity-check.py has a real, persistent task to
-   select and kill through the app instead of a synthetic fixture. ---- */
-static void spawntest_task(void){ for (;;) yield(); }
-
-/* ---- v31 (0.31.0) isolation demo: two tasks write different markers to
-   the SAME virtual address, PAGING_PRIVATE_VADDR. If page directories were
-   still shared (the pre-v31 world), the second write would clobber the
-   first and both readbacks would show 0xBBBBBBBB. Each task's own
-   directory maps that address to its own private physical frame, so both
-   readbacks should show what that task itself wrote, unaffected by the
-   other task's write to the "same" address in between. ---- */
-static volatile unsigned int iso_readback_a = 0, iso_readback_b = 0;
-static void iso_task_a(void){
-    *(volatile unsigned int *)PAGING_PRIVATE_VADDR = 0xAAAAAAAA;
-    yield(); /* let task B run and write its own marker to the "same" address before we read ours back */
-    iso_readback_a = *(volatile unsigned int *)PAGING_PRIVATE_VADDR;
-    task_exit();
-}
-static void iso_task_b(void){
-    *(volatile unsigned int *)PAGING_PRIVATE_VADDR = 0xBBBBBBBB;
-    yield();
-    iso_readback_b = *(volatile unsigned int *)PAGING_PRIVATE_VADDR;
-    task_exit();
-}
-
-static void ls_cb(const char *name, unsigned int size, int is_dir) {
-    puts(name); if (is_dir) putc('/');
-    puts("  "); putn(size); puts(" bytes\n");
-}
-
-/* ---- text-mode file browser: arrow keys + Enter/Esc, not just a shell.
-   ponytail: capped at BROWSE_MAX entries -- plenty for what fits on a
-   25-line screen anyway. Enter on a directory descends into it (fat_chdir
-   + refresh); esc/q at any depth just quits back to the shell, not up a
-   level, matching browse's existing "in or out" model rather than growing
-   its own breadcrumb stack. ---- */
-#define BROWSE_MAX 20
-static char browse_names[BROWSE_MAX][13];
-static unsigned int browse_sizes[BROWSE_MAX];
-static int browse_is_dir[BROWSE_MAX];
-static int browse_count;
-
-static void browse_collect_cb(const char *name, unsigned int size, int is_dir) {
-    if (browse_count >= BROWSE_MAX) return;
-    int i = 0;
-    while (name[i] && i < 12) { browse_names[browse_count][i] = name[i]; i++; }
-    browse_names[browse_count][i] = 0;
-    browse_sizes[browse_count] = size;
-    browse_is_dir[browse_count] = is_dir;
-    browse_count++;
-}
-
-static void browse_draw(int sel){
-    clear();
-    puts("-- file browser: up/down, enter=view/open, esc=quit --\n\n");
-    if (browse_count == 0) { puts("(empty)\n"); return; }
-    for (int i = 0; i < browse_count; i++) {
-        putc(i == sel ? '>' : ' '); putc(' ');
-        puts(browse_names[i]);
-        if (browse_is_dir[i]) { putc('/'); putc('\n'); }
-        else { puts("  "); putn(browse_sizes[i]); puts(" bytes\n"); }
-    }
-}
-
-static void browse(void){
-    browse_count = 0;
-    vfs_list(browse_collect_cb);
-    int sel = 0;
-    browse_draw(sel);
-    for (;;) {
-        int k = get_key();
-        if (k == KEY_ESC || k == 'q') { clear(); return; }
-        if (k == KEY_UP)   { if (sel > 0) sel--; browse_draw(sel); }
-        if (k == KEY_DOWN) { if (sel < browse_count - 1) sel++; browse_draw(sel); }
-        if (k == KEY_ENTER && browse_count > 0 && browse_is_dir[sel]) {
-            vfs_chdir(browse_names[sel]);
-            browse_count = 0;
-            vfs_list(browse_collect_cb);
-            sel = 0;
-            browse_draw(sel);
-        }
-        else if (k == KEY_ENTER && browse_count > 0) {
-            clear();
-            puts(browse_names[sel]); puts(":\n\n");
-            char buf[2048];
-            int n = vfs_read_file(browse_names[sel], buf, sizeof(buf) - 1);
-            if (n < 0) puts("(couldn't read)\n");
-            else { buf[n] = 0; puts(buf); }
-            puts("\n\n-- press any key to go back --\n");
-            get_key();
-            browse_draw(sel);
-        }
     }
 }
 
@@ -960,13 +839,15 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
          math, not just a new host/decoder.
    Any non-zero value still shows the baked photo until the fetch lands
    and keeps showing it if the fetch fails, never a blank desktop (same
-   contract v75 established). settings_load clamps to 0..4 so a hand-
+   contract v75 established). settings_load clamps to 0..8 (4.11.4: 5..8 are
+   the plain walls) so a hand-
    edited or stale SETTINGS.TXT can't select a theme that doesn't exist. */
-#define WALL_PHOTO 0
-#define WALL_WARM  1
-#define WALL_COOL  2
-#define WALL_RAW   3
-#define WALL_SAT   4
+const unsigned int wall_solid_color[4] = { 0x006E6E6Eu, 0x00B5502Cu, 0x00923F20u, 0x00141311u };
+static const char *const wall_solid_name[4] = { "Grey", "Terracotta", "Clay", "Ink" };
+/* Settings and `wallpaper` step through the themes in this order: the plain
+   walls first, then the photo and the map themes. */
+static const unsigned char wall_cycle_order[WALL_COUNT] = { WALL_GREY, WALL_TERRA, WALL_CLAY, WALL_INK, WALL_PHOTO, WALL_WARM, WALL_COOL, WALL_RAW, WALL_SAT };
+/* True for the four themes that need tiles from the network. */
 /* v0.76.7: default flipped from WALL_WARM to WALL_SAT per Joshua's own
    direct, previously-recorded request ("the real satellite-town wallpaper
    should become the default once buildable", ROADMAP.md's "Later idea:
@@ -980,272 +861,15 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
    fallback this default already relied on for WALL_WARM, so flipping the
    default changes nothing about failure-mode safety, only which real image
    a successful fetch shows. */
-static int wall_theme = WALL_SAT;
-static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
+/* 4.11.4: default flipped again, WALL_SAT -> WALL_GREY. Direct report: "still
+   showing the stale wallpaper, the satellite; it should just be a plain
+   wallpaper". The satellite and map themes stay selectable in Settings, but
+   a fresh boot (the ISO, QEMU, and the browser demo's every idle-tour lap)
+   is a flat grey and fetches no tile. */
+int wall_theme = WALL_GREY;
+int wind_enabled = 1; /* settings.c reads and writes it */
 
-/* v71: real location for weather/map, looked up from the public IP
-   (ip-api.com, see geo_fetch further down). Forward of that same v71
-   declaration, same reason wind_enabled is forward here: settings_load
-   needs it and has to precede it in the file.
-   v0.85.5: loc_* is the Settings-entered override (see loc_geocode
-   further down) that settings_load copies straight into these three
-   fields plus geo_have, so weather_fetch_inner and the map wallpaper
-   fetch pick it up through the exact same path as the IP lookup, no
-   separate "which source" branch anywhere downstream. */
-static char geo_lat[16] = "", geo_lon[16] = "", geo_city[24] = "";
-static int geo_have = 0;
-#define LOC_NAME_MAX 24
-static char loc_name[LOC_NAME_MAX] = "", loc_lat[16] = "", loc_lon[16] = "";
-static int loc_have = 0;
-static char loc_err[48] = "";
-
-/* v85 (chat rework): global LLM config, the same "one real setting, one
-   real default, survives a reboot" contract wind/dock/wall already keep.
-   Was hardcoded inline in the shell `chat` command and duplicated again
-   in gui_launch_chat (two copies of "llama3.1:8b" / "10.0.2.2" / 11434
-   that could silently drift apart); now one source of truth both read.
-   1.0.12 (direct owner request, "hook Chat up to our Samantha LLM, the
-   Turing project"): the compiled-in default is now the Turing project's
-   own Cloudflare Worker (turing.jaybulb.com, plain HTTP port 80,
-   model "samantha"), reachable both natively (this file, straight over
-   the internet, no VPN/gateway address involved) and from the v86 browser
-   demo through worker.js's own `/api/proxy` exception for exactly this
-   host+path. Settings (sel == 3/4 below) stays fully editable, same as
-   before: anyone who'd rather run a local Ollama server on their own
-   machine just points host/port/model back at it. */
-#define LLM_MODEL_MAX 32
-#define LLM_HOST_MAX 40
-static char llm_model[LLM_MODEL_MAX] = "samantha";
-static char llm_host[LLM_HOST_MAX] = "turing.jaybulb.com";
-static int llm_port = 80;
-/* 1.9.26: read-only view for SYS_HTTP_POST (kernel/syscall.c). Settings still owns the write. */
-const char *llm_host_get(void) { return llm_host; }
-int llm_port_get(void) { return llm_port; }
-/* 1.9.27: the Mail token Settings owns (SETTINGS.TXT mailtoken=). Only SYS_HTTP_POST reads it, to
-   build the Authorization header for /api/mail/send; no syscall hands it to ring 3. */
-#define MAIL_TOKEN_MAX 64
-static char mail_token[MAIL_TOKEN_MAX] = "";
-const char *mail_token_get(void) { return mail_token; }
-/* 2.14.0: the Claude relay (tools/claude-relay/relay.py) Settings owns: SETTINGS.TXT claudehost=,
-   claudeport=, claudetoken=. Its own host, never the LLM host: the token must only ever go to a
-   relay the owner pointed at, not to turing.jaybulb.com. Empty host or token means "not set
-   up", and SYS_HTTP_POST refuses JT_POST_CLAUDE without touching the network. Only SYS_HTTP_POST
-   reads the token, to build the bearer for /api/claude; no syscall hands it to ring 3. */
-#define CLAUDE_HOST_MAX 40
-#define CLAUDE_TOKEN_MAX 64
-static char claude_host[CLAUDE_HOST_MAX] = "";
-static int claude_port = 8765;
-static char claude_token[CLAUDE_TOKEN_MAX] = "";
-const char *claude_host_get(void) { return claude_host; }
-int claude_port_get(void) { return claude_port; }
-const char *claude_token_get(void) { return claude_token; }
-/* v85: real chat models actually installed on the host (checked via
-   `ollama list`), not a free-text field a typo can point at nothing.
-   nomic-embed-text is also installed but is embedding-only, deliberately
-   left off. Settings' LLM-model row cycles this list; a stale/hand-edited
-   SETTINGS.TXT with anything else falls back to index 0 (samantha) the
-   next time the cycle runs, since the cycle only ever writes one of
-   these three strings back out.
-   v0.85.4 (direct owner request): qwen3:8b promoted to the real default,
-   llama3.1:8b kept as the second choice, checked against the same
-   `ollama list` on the host, both actually installed.
-   1.0.12 (direct owner request): "samantha" (Turing's own Ollama-
-   compatible model name, confirmed against its own `/api/chat` reply's
-   "model" field) added as the new default, index 0; qwen3:8b and
-   llama3.1:8b kept as the local-Ollama alternatives for anyone who sets
-   Settings' host back to their own machine. */
-static const char *LLM_MODELS[] = { "samantha", "qwen3:8b", "llama3.1:8b" };
-#define LLM_MODEL_COUNT 3
-
-/* v47 (0.47.0): settings persisted through the VFS, so "customize the OS
-   from inside the OS" actually survives a reboot instead of resetting to
-   the compiled-in defaults every boot. Deliberately a flat key=value text
-   file (SETTINGS.TXT), not a binary struct: it's human-readable from any
-   app that can read a file (cat, the editor), and a corrupt or missing
-   file just means defaults, never a crash, since every key is parsed with
-   its own bounds check and a real default already set before parsing
-   starts.
-
-   v85: grew from int-only values (wind/dock/wall) to also carry two real
-   string values (llmmodel/llmhost) plus one more int (llmport), same
-   flat key=value shape, just a second value-parsing path alongside the
-   existing numeric one rather than a new file format. */
-#define SETTINGS_FILE "SETTINGS.TXT"
-/* 2.14.0: exact key match for settings_load's newer keys, instead of another letter-by-letter chain. */
-static int key_is(const char *k, int len, const char *want){
-    int i = 0;
-    while (i < len && want[i] && k[i] == want[i]) i++;
-    return i == len && !want[i];
-}
-static void settings_load(void){
-    static char buf[1024]; /* 2.14.0: was 512; the Claude relay's host and token would not fit beside the rest */
-    int n = vfs_read_file(SETTINGS_FILE, buf, sizeof(buf) - 1);
-    if (n <= 0) return; /* no file yet: compiled-in defaults stand */
-    buf[n] = 0;
-    for (int i = 0; i < n; ){
-        int start = i;
-        while (i < n && buf[i] != '\n') i++;
-        int line_end = i;
-        if (i < n) i++; /* skip the newline */
-        int eq = -1;
-        for (int j = start; j < line_end; j++) if (buf[j] == '=') { eq = j; break; }
-        if (eq < 0) continue;
-        int keylen = eq - start;
-        int is_wind = keylen == 4 && buf[start]=='w' && buf[start+1]=='i' && buf[start+2]=='n' && buf[start+3]=='d';
-        int is_dock = keylen == 4 && buf[start]=='d' && buf[start+1]=='o' && buf[start+2]=='c' && buf[start+3]=='k';
-        int is_wall = keylen == 4 && buf[start]=='w' && buf[start+1]=='a' && buf[start+2]=='l' && buf[start+3]=='l';
-        int is_llmmodel = keylen == 8 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='m' && buf[start+4]=='o' && buf[start+5]=='d' && buf[start+6]=='e' && buf[start+7]=='l';
-        int is_llmhost  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='h' && buf[start+4]=='o' && buf[start+5]=='s' && buf[start+6]=='t';
-        int is_llmport  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='p' && buf[start+4]=='o' && buf[start+5]=='r' && buf[start+6]=='t';
-        int is_mailtoken = keylen == 9 && buf[start]=='m' && buf[start+1]=='a' && buf[start+2]=='i' && buf[start+3]=='l' && buf[start+4]=='t' && buf[start+5]=='o' && buf[start+6]=='k' && buf[start+7]=='e' && buf[start+8]=='n';
-        int is_loc = keylen == 3 && buf[start]=='l' && buf[start+1]=='o' && buf[start+2]=='c';
-        int is_claudehost = key_is(buf + start, keylen, "claudehost");
-        int is_claudeport = key_is(buf + start, keylen, "claudeport");
-        int is_claudetoken = key_is(buf + start, keylen, "claudetoken");
-        if (is_claudehost || is_claudetoken) {
-            char *dst = is_claudehost ? claude_host : claude_token;
-            int cap = is_claudehost ? CLAUDE_HOST_MAX : CLAUDE_TOKEN_MAX;
-            int j = 0, k = eq + 1;
-            while (k < line_end && j < cap - 1 && buf[k] > ' ' && buf[k] < 0x7F) dst[j++] = buf[k++];
-            dst[j] = 0;
-            continue;
-        }
-        if (is_claudeport) {
-            int v = 0, k = eq + 1;
-            while (k < line_end && buf[k] >= '0' && buf[k] <= '9' && v < 100000) v = v * 10 + (buf[k++] - '0');
-            if (v > 0 && v <= 65535) claude_port = v;
-            continue;
-        }
-        if (is_loc) {
-            /* value shape: name;lat;lon -- the same three fields
-               loc_geocode fills in, ';'-joined since '=' is already the
-               key/value separator and none of the three ever contain a
-               ';' (json_extract_string strips escapes, json_extract_number_text
-               is digits/./- only). A malformed line (missing a ';', an
-               empty lat/lon) is treated as "no override" rather than
-               guessed at. */
-            int k = eq + 1;
-            int f = 0; /* which field: 0=name 1=lat 2=lon */
-            char nbuf[LOC_NAME_MAX]; int ni = 0;
-            char latbuf[16]; int lai = 0;
-            char lonbuf[16]; int loi = 0;
-            while (k < line_end) {
-                char c = buf[k++];
-                if (c == ';') { f++; continue; }
-                if (f == 0 && ni < LOC_NAME_MAX - 1) nbuf[ni++] = c;
-                else if (f == 1 && lai < 15) latbuf[lai++] = c;
-                else if (f == 2 && loi < 15) lonbuf[loi++] = c;
-            }
-            nbuf[ni] = 0; latbuf[lai] = 0; lonbuf[loi] = 0;
-            if (f == 2 && lai > 0 && loi > 0) {
-                int j = 0; while (nbuf[j]) { loc_name[j] = nbuf[j]; j++; } loc_name[j] = 0;
-                j = 0; while (latbuf[j]) { loc_lat[j] = latbuf[j]; j++; } loc_lat[j] = 0;
-                j = 0; while (lonbuf[j]) { loc_lon[j] = lonbuf[j]; j++; } loc_lon[j] = 0;
-                loc_have = 1;
-                j = 0; while (loc_lat[j]) { geo_lat[j] = loc_lat[j]; j++; } geo_lat[j] = 0;
-                j = 0; while (loc_lon[j]) { geo_lon[j] = loc_lon[j]; j++; } geo_lon[j] = 0;
-                j = 0; while (loc_name[j] && j < 23) { geo_city[j] = loc_name[j]; j++; } geo_city[j] = 0;
-                geo_have = 1;
-            }
-            continue;
-        }
-        if (is_llmmodel) {
-            char parsed[LLM_MODEL_MAX];
-            int j = 0, k = eq + 1;
-            while (k < line_end && j < LLM_MODEL_MAX - 1) parsed[j++] = buf[k++];
-            parsed[j] = 0;
-            /* Validated against the real installed-model list, not
-               accepted verbatim: a hand-edited or stale SETTINGS.TXT
-               naming a model that isn't one of the two real ones falls
-               back to the default (index 0) rather than pointing chat at
-               something that will just fail every call, same "can't
-               select a theme that doesn't exist" contract wall_theme's
-               own clamp already keeps just above. */
-            int valid = 0;
-            for (int mi = 0; mi < LLM_MODEL_COUNT; mi++) if (!strcmp(parsed, LLM_MODELS[mi])) { valid = 1; break; }
-            const char *use = valid ? parsed : LLM_MODELS[0];
-            int p = 0; while (use[p] && p < LLM_MODEL_MAX - 1) { llm_model[p] = use[p]; p++; } llm_model[p] = 0;
-            continue;
-        }
-        if (is_mailtoken) {
-            int j = 0, k = eq + 1;
-            while (k < line_end && j < MAIL_TOKEN_MAX - 1) mail_token[j++] = buf[k++];
-            mail_token[j] = 0;
-            continue;
-        }
-        if (is_llmhost) {
-            int j = 0, k = eq + 1;
-            while (k < line_end && j < LLM_HOST_MAX - 1) llm_host[j++] = buf[k++];
-            llm_host[j] = 0;
-            if (j == 0) { const char *d = "turing.jaybulb.com"; int p=0; while (d[p]) llm_host[p]=d[p], p++; llm_host[p]=0; }
-            continue;
-        }
-        int val = 0, neg = 0, k = eq + 1;
-        if (k < line_end && buf[k] == '-') { neg = 1; k++; }
-        while (k < line_end && buf[k] >= '0' && buf[k] <= '9') { val = val * 10 + (buf[k] - '0'); k++; }
-        if (neg) val = -val;
-        if (is_wind) wind_enabled = (val != 0);
-        else if (is_dock && val >= 5 && val <= 25) dock_scale_pct = val;
-        else if (is_wall && val >= WALL_PHOTO && val <= WALL_SAT) wall_theme = val;
-        else if (is_llmport && val > 0 && val <= 65535) llm_port = val;
-    }
-}
-
-static void settings_save(void){
-    static char buf[1024]; /* 2.14.0: was 512, see settings_load */
-    int n = 0;
-    const char *k1 = "wind="; while (*k1) buf[n++] = *k1++;
-    buf[n++] = wind_enabled ? '1' : '0'; buf[n++] = '\n';
-    const char *k2 = "dock="; while (*k2) buf[n++] = *k2++;
-    if (dock_scale_pct >= 10) buf[n++] = '0' + dock_scale_pct / 10;
-    buf[n++] = '0' + dock_scale_pct % 10;
-    buf[n++] = '\n';
-    const char *k3 = "wall="; while (*k3) buf[n++] = *k3++;
-    buf[n++] = '0' + wall_theme; buf[n++] = '\n';
-    const char *k4 = "llmmodel="; while (*k4) buf[n++] = *k4++;
-    { const char *s = llm_model; while (*s && n < (int)sizeof(buf) - 2) buf[n++] = *s++; }
-    buf[n++] = '\n';
-    const char *k5 = "llmhost="; while (*k5) buf[n++] = *k5++;
-    { const char *s = llm_host; while (*s && n < (int)sizeof(buf) - 8) buf[n++] = *s++; }
-    buf[n++] = '\n';
-    const char *k6 = "llmport="; while (*k6) buf[n++] = *k6++;
-    { char digits[8]; int nd = 0; int v = llm_port;
-      if (v == 0) digits[nd++] = '0';
-      while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
-      while (nd) buf[n++] = digits[--nd]; }
-    buf[n++] = '\n';
-    if (mail_token[0]) {
-        const char *k8 = "mailtoken="; while (*k8) buf[n++] = *k8++;
-        { const char *s = mail_token; while (*s && n < (int)sizeof(buf) - 80) buf[n++] = *s++; }
-        buf[n++] = '\n';
-    }
-    if (claude_host[0]) {
-        const char *k9 = "claudehost="; while (*k9) buf[n++] = *k9++;
-        { const char *s = claude_host; while (*s && n < (int)sizeof(buf) - 200) buf[n++] = *s++; }
-        buf[n++] = '\n';
-        const char *k10 = "claudeport="; while (*k10) buf[n++] = *k10++;
-        { char digits[8]; int nd = 0; int v = claude_port;
-          if (v == 0) digits[nd++] = '0';
-          while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
-          while (nd) buf[n++] = digits[--nd]; }
-        buf[n++] = '\n';
-    }
-    if (claude_token[0]) {
-        const char *k11 = "claudetoken="; while (*k11) buf[n++] = *k11++;
-        { const char *s = claude_token; while (*s && n < (int)sizeof(buf) - 120) buf[n++] = *s++; }
-        buf[n++] = '\n';
-    }
-    if (loc_have) {
-        const char *k7 = "loc="; while (*k7) buf[n++] = *k7++;
-        { const char *s = loc_name; while (*s && n < (int)sizeof(buf) - 34) buf[n++] = *s++; }
-        buf[n++] = ';';
-        { const char *s = loc_lat; while (*s && n < (int)sizeof(buf) - 18) buf[n++] = *s++; }
-        buf[n++] = ';';
-        { const char *s = loc_lon; while (*s && n < (int)sizeof(buf) - 2) buf[n++] = *s++; }
-        buf[n++] = '\n';
-    }
-    vfs_replace_file(SETTINGS_FILE, buf, (unsigned int)n);
-}
+/* SETTINGS.TXT and the LLM, Mail and Claude relay settings it carries: kernel/settings.c (settings.h). */
 
 /* gui_dock_icon/gui_dock_w/gui_dock_x0/gui_dock_y0/gui_slot_x/gui_slot_at/
    gui_dock_hit_test: dock geometry and hit-testing, moved to
@@ -1385,7 +1009,10 @@ static unsigned int gui_daynight_tint_pct(unsigned int rgb, int night, int day){
     if (day > 0)   return gui_lerp(rgb, 0x00DDDDDD, day, 100);   /* toward this file's own documented Silver, a small real brighten */
     return rgb;
 }
-static unsigned int gui_daynight_tint(unsigned int rgb){ return gui_daynight_tint_pct(rgb, daynight_night_pct, daynight_day_pct); }
+static unsigned int gui_daynight_tint(unsigned int rgb){
+    if (wall_src == wall_solid_row) return rgb; /* 4.11.4: a plain wall is exactly the colour picked, day and night */
+    return gui_daynight_tint_pct(rgb, daynight_night_pct, daynight_day_pct);
+}
 
 /* v79: the map wallpaper (wall_src pointed at wall_map instead of
    wallpaper_rgb, see v75's comment at wall_src's declaration) is real
@@ -1484,6 +1111,7 @@ static inline __attribute__((always_inline)) unsigned int gui_sat_color(unsigned
    here once instead of being copy-pasted at each call site. */
 static inline __attribute__((always_inline)) unsigned int gui_wall_tint(unsigned int rgb){
     if (wall_src == wallpaper_rgb) return rgb;      /* Photo: never graded */
+    if (wall_src == wall_solid_row) return rgb;     /* 4.11.4: plain wall: never graded */
     if (wall_theme == WALL_COOL) return gui_map_tint_cool(rgb);
     if (wall_theme == WALL_RAW) return rgb;         /* Raw: OpenTopoMap's own palette, untouched */
     if (wall_theme == WALL_SAT) return gui_sat_color(rgb);
@@ -1522,6 +1150,7 @@ static unsigned int gui_wallpaper_color(int row){
     if (r >= area_h) r = area_h - 1;
     int sy = r * WALLPAPER_H / area_h;
     if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
+    if (wall_src == wall_solid_row) sy = 0; /* 4.11.4: the plain wall is two rows long */
     const unsigned char *p = &wall_src[(sy * WALLPAPER_W + WALLPAPER_W / 2) * 3];
     unsigned int rgb = ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2];
     rgb = gui_wall_tint(rgb); /* v79/v81: the current wallpaper theme's grade, Photo untouched */
@@ -1711,8 +1340,6 @@ static unsigned int ICON_FG = 0x00FFFFFF;
    eased by its own square reads as a breath, not a metronome). Only the
    rows above the horizon are ever redrawn, so the cached dock band is
    never touched and the desktop's dirty-region scheme stays intact. */
-#define WIND_HORIZON_ROW 395   /* logical row of the photo's skyline */
-#define WIND_TOP_ROW      30   /* just under the menu bar */
 /* wind_enabled itself now declared earlier (see settings_load), self-disables if a frame measures slow (v86, the browser demo) */
 static int wind_phase = 0;     /* -256..256, current displacement scale */
 
@@ -1728,7 +1355,7 @@ static int wind_phase = 0;     /* -256..256, current displacement scale */
    pre-v60 baseline amplitude, in force until the first real fetch lands
    (see weather_fetch's wind_pct_for_weather_code call), so a NIC-less
    boot (v86, the browser demo, never fetches) sways exactly as before. */
-static int wind_weather_pct = 100;
+int wind_weather_pct = 100;
 
 static int gui_wind_shift(int row){ /* source-pixel shift for this screen row, in 8.8 fixed point */
     if (wall_src != wallpaper_rgb) return 0; /* v75: streets don't sway; the tick still runs (zero shift) so rain/snow keep compositing */
@@ -1781,6 +1408,7 @@ static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int
     int fy = row * (WALLPAPER_H - 1) * 256 / (area_h * sc > 1 ? area_h * sc - 1 : 1);
     int sy = fy >> 8; c.wy = fy & 255;
     if (sy >= WALLPAPER_H - 1) { sy = WALLPAPER_H - 2; c.wy = 255; }
+    if (wall_src == wall_solid_row) { sy = 0; c.wy = 0; } /* 4.11.4: the plain wall is two rows long, both the same */
     c.r0 = &wall_src[sy * WALLPAPER_W * 3];
     c.r1 = c.r0 + WALLPAPER_W * 3;
     c.shift = sway ? (gui_wind_shift(py / sc) * WALLPAPER_W / lw) >> 8 : 0;
@@ -2025,7 +1653,7 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
    redraw entirely once per real minute unless forced, matching the one
    thing in this bar that actually changes on its own. */
 static int gui_menubar_last_min = -1;
-static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; } static int gui_bleed_open(void); /* a full-bleed window covers the menu bar */
+void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; } static int gui_bleed_open(void); /* a full-bleed window covers the menu bar */
 
 /* Real macOS menu bar clock format: weekday, month, day, 12-hour time with
    AM/PM, not the bare 24h HH:MM this used to show. Reads the CMOS weekday
@@ -2046,34 +1674,7 @@ static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; } static 
    receive path was written single-caller and hasn't been audited for a
    second one yet. No NIC (v86, the browser demo) means no attempt and
    nothing drawn, not an error. */
-static char weather_text[24] = "";
-static unsigned int weather_last_tick = 0;
-static volatile unsigned jt_data_stamp = 0; /* bumped whenever WEATHER.TXT or STOCKS.TXT is rewritten; windows poll it through SYS_SYSINFO */
-static int weather_tried_once = 0;
-/* v53: real fields behind the one-line summary, kept for the dropdown
-   panel. Nothing fabricated: temp/code are exactly what weather_fetch
-   already parses out of the reply; lat/lon (v71) are the exact text
-   ip-api.com returned for this machine's own public IP (geo_fetch below),
-   the same text the http_get() URL is built from, not a literal. */
-static int weather_temp_c = 0;
-static int weather_code10 = 0;
-static int weather_have = 0;
-/* Why the last fetch ended the way it did. The Weather window used to have
-   exactly one failure face ("Weather unavailable") for five different
-   causes, and no way to try again short of waiting ten minutes.
-   weather_have/weather_text keep the last GOOD reading across a later
-   failure on purpose: the window labels it stale instead of going blank. */
-#define WX_NONE    0 /* never tried */
-#define WX_OK      1
-#define WX_OFFLINE 2 /* no NIC, or the gateway never answered ARP */
-#define WX_TIMEOUT 3 /* DNS, connect or reply deadline ran out */
-#define WX_FAILED  4 /* resolver said no such host, or the NIC refused the frame */
-#define WX_BAD     5 /* non-200, empty, or a body the parser could not read */
-static int weather_state = WX_NONE;
-static char weather_err[48] = "";
-static const char *weather_state_name(int st){
-    return st == WX_OK ? "ok" : st == WX_OFFLINE ? "offline" : st == WX_TIMEOUT ? "timeout" : st == WX_FAILED ? "failed" : st == WX_BAD ? "bad" : "none";
-}
+volatile unsigned jt_data_stamp = 0; /* bumped whenever WEATHER.TXT or STOCKS.TXT is rewritten; windows poll it through SYS_SYSINFO */
 /* 1.9.26: SYS_SYSINFO fill and the SYS_LAUNCH_REQUEST mailbox (kernel/syscall.c). */
 void jt_sysinfo_fill(struct jt_sysinfo *si){
     char *z = (char *)si;
@@ -2112,682 +1713,12 @@ int jt_refresh_request(int kind, int arg){
     refresh_arg = arg; refresh_kind = kind; return 0;
 }
 int jt_refresh_take(int *arg){ int k = refresh_kind; if (k >= 0) { *arg = refresh_arg; refresh_kind = -1; } return k; }
-/* Test/diagnostic override, read once from the multiboot command line
-   (`-append "wxhost=10.0.2.2:8099"`, see kmain): both the location and the
-   forecast request go to this literal IP:port instead of ip-api.com and
-   api.open-meteo.com. tools/checks/weather-app-check.sh points it at a
-   local fake server to drive success, bad-response and timeout without
-   the real internet. Empty (every normal boot) means the real hosts. */
-static char wx_override_host[20] = "";
-static unsigned short wx_override_port = 80;
-/* 1.1.1: tilehost=/tileport=, the wall_fetch equivalent of wxhost= above --
-   for tools/checks/wallcompose-check.py to point BOTH tile hosts
-   (a.tile.opentopomap.org for map themes, mt0.google.com for Satellite)
-   at one local fake server instead of the real internet, headlessly.
-   Root cause this exists for: wallpaper-check.py/satellite-wallpaper-
-   check.py/wallfx-check.py all fetch over the real internet with no way
-   to fake the tile bytes, so a hermetic proof of wall_fetch's compose
-   path (independent of whether a1.tile.opentopomap.org/mt0.google.com
-   are reachable from a given CI runner) needed its own override, the
-   same shape as wxhost's. Empty (every normal boot) means the real
-   hosts; set means BOTH hosts point here, since a fake server tells map
-   and satellite tiles apart by path (png vs jpeg-shaped bytes), not by
-   host. */
-static char tile_override_host[20] = "";
-static unsigned short tile_override_port = 80;
-/* 1.1.2: walltheme=map|sat|photo, a one-boot theme override applied AFTER
-   settings_load() (same reasoning as llmhost=): the default has been
-   WALL_SAT since v0.76.7, and tools/checks/wallpaper-check.py compares
-   the first automatic fetch against OpenTopoMap PNGs, so it boots with
-   walltheme=map instead of assuming the default. -1 = not given. */
-static int wall_theme_override = -1;
-/* A weather one-liner that has not started answering in ~15s will not.
-   net.c's default reply budget (sized for local LLM generation, minutes)
-   froze the whole desktop that long on a half-open connection. */
-#define WX_REPLY_TIMEOUT_TICKS 1200
 /* Hit box for the menu-bar weather text, recomputed by gui_draw_menubar
    every time it actually redraws that text (same cadence the clock hit
    test already tolerates: coarse, minute-granularity, matching how often
    the underlying layout can shift). -1/-1 means "nothing drawn, not
    clickable" rather than a stale box from a previous boot. */
-static int weather_hit_x0 = -1, weather_hit_x1 = -1;
-
-static const char *weather_word(int code){
-    if (code == 0) return "Clear";
-    if (code <= 3) return "Cloudy";
-    if (code <= 48) return "Fog";
-    if (code <= 67) return "Rain";
-    if (code <= 77) return "Snow";
-    if (code <= 82) return "Showers";
-    return "Storm";
-}
-
-/* v60: wind_weather_pct's source. Same thresholds as weather_word() above
-   on purpose, so the sway always matches the word actually shown in the
-   menu bar/dropdown, not a second guess at the same code. Percentages are
-   a judgment call (no real wind-speed field exists to derive them from,
-   see wind_weather_pct's comment), ordered calmest to strongest by what
-   each condition plausibly implies about the air: Fog is stillest, Clear
-   next, Cloudy is the unchanged pre-v60 baseline, then Snow/Rain/Showers/
-   Storm climb from there. */
-static int wind_pct_for_weather_code(int code){
-    if (code == 0) return 60;    /* Clear: calm */
-    if (code <= 3) return 100;   /* Cloudy: baseline, matches pre-v60 sway */
-    if (code <= 48) return 40;   /* Fog: stillest air */
-    if (code <= 67) return 130;  /* Rain */
-    if (code <= 77) return 90;   /* Snow: typically calmer than rain */
-    if (code <= 82) return 150;  /* Showers */
-    return 200;                  /* Storm: strongest sway */
-}
-
-/* v65 (0.62.0): weather particle overlay, direct follow-up to v60's wind-
-   amplitude scaling, the "beyond wind" half of the same real request.
-   Real, visible rain streaks / snow dots for the condition codes that
-   warrant one, no new subsystem: a small fixed-size particle array
-   (WEATHER_PARTICLE_COUNT, same shape as wind_base's own fixed cost
-   budget), advanced and drawn once per wind tick (weather_fx_tick, called
-   from the same ~20fps loop in gui_run that already drives wind_phase),
-   same cost class as the existing wind-sway sampler it rides alongside.
-   weather_fx_kind reuses weather_word()'s own threshold boundaries
-   exactly (same code10/10 input, same cutoffs), on purpose, so the
-   overlay always matches the condition word the menu bar/dropdown already
-   shows, never a second guess at the same fetched field: Clear/Cloudy/Fog
-   get no overlay, Rain/Showers/Storm get rain streaks, Snow gets snow
-   dots. Honest scope note: particles are only ever drawn inside
-   WIND_TOP_ROW..WIND_HORIZON_ROW, the same swaying sky band the wind tick
-   already repaints in full every frame, which is what erases last frame's
-   particles with no separate restore/dirty-rect logic needed (the same
-   trick the wind redraw itself already relies on). Extending particles
-   across the dock/ground band below the horizon would need the same kind
-   of repaint plumbing gui_redraw_dock_band's own band cache has, real
-   follow-up, not attempted here. A NIC-less boot (v86) never calls
-   weather_fetch, so weather_have stays 0 and weather_fx_tick is a no-op,
-   same "nothing fabricated" contract v56/v60 already established for
-   every other weather-derived effect in this file. */
-#define WEATHER_FX_NONE 0
-#define WEATHER_FX_RAIN 1
-#define WEATHER_FX_SNOW 2
-#define WEATHER_PARTICLE_COUNT 36
-
-struct weather_particle { int x, y, speed; };
-static struct weather_particle weather_particles[WEATHER_PARTICLE_COUNT];
-static int weather_particles_seeded = 0;
-static unsigned int weather_rng = 0;
-
-/* Same tiny LCG keyrate's own word generator already uses (no rand()/no
-   libc in this freestanding build); good enough for particle scatter, not
-   for anything security-sensitive, same honesty note that code carries. */
-static unsigned int weather_rand(void){
-    weather_rng = weather_rng * 1103515245u + 12345u;
-    return (weather_rng >> 16) & 0x7fff;
-}
-
-/* Pure: same answer every time for the same code, no globals touched, so
-   weatherfxtest can call this directly. Same cutoffs as weather_word()
-   above, stated once rather than re-derived: <=3 Clear/Cloudy, <=48 Fog,
-   <=67 Rain, <=77 Snow, <=82 Showers, else Storm. */
-static int weather_fx_kind(int code){
-    if (code <= 3) return WEATHER_FX_NONE;    /* Clear, Cloudy */
-    if (code <= 48) return WEATHER_FX_NONE;   /* Fog */
-    if (code <= 67) return WEATHER_FX_RAIN;   /* Rain */
-    if (code <= 77) return WEATHER_FX_SNOW;   /* Snow */
-    return WEATHER_FX_RAIN;                   /* Showers, Storm */
-}
-
-static void weather_particles_seed(int w){
-    weather_rng = ticks() ? ticks() : 1;
-    for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++){
-        weather_particles[i].x = (int)(weather_rand() % (unsigned int)(w > 0 ? w : 1));
-        weather_particles[i].y = WIND_TOP_ROW + (int)(weather_rand() % (unsigned int)(WIND_HORIZON_ROW - WIND_TOP_ROW));
-        weather_particles[i].speed = 4 + (int)(weather_rand() % 5);
-    }
-    weather_particles_seeded = 1;
-}
-
-/* Advances every particle one tick and draws it directly (physical
-   coords via window_pixel_phys, same as the wallpaper's own draw path,
-   so it scales correctly at any window_scale()). Colors stay inside the
-   Mojave palette on purpose: a light silvery-sand rain streak and an off-
-   white (the dock tray's own cream) snow dot, never a saturated or cold-
-   blue tone. `kind`/`w` passed explicitly rather than read from globals
-   so weatherfxtest can drive this deterministically. */
-/* v71 (0.65.0): every particle pixel goes through this clip, and the
-   wrap-around check now runs BEFORE the draw, not after. The real bug
-   this fixes (Joshua's "dashed glitch bar at the horizon", reproduced
-   headlessly: 314 streak-coloured pixels on physical rows 790..804 after
-   ten idle seconds under a Rain reading, 12 above): a rain particle at
-   logical row 394 with speed 8 was advanced to 402, drawn there, and only
-   THEN wrapped back to the top. Rows 395..402 are below WIND_HORIZON_ROW,
-   outside the band the wind tick repaints every frame, so nothing ever
-   erased those stamps; each streak that crossed the horizon left a
-   permanent 4-pixel diagonal at a random x, accumulating into exactly the
-   dashed full-width bar seen live. Snow had the same leak one row deep
-   (y advanced to 395, dotted at physical 790). Clipping to the band is
-   the real contract the v65 entry already stated ("particles only ever
-   draw inside WIND_TOP_ROW..WIND_HORIZON_ROW"), now enforced per pixel
-   rather than assumed from the reset logic. */
-static inline void weather_fx_plot(int px, int py, int w, int sc, unsigned int color){
-    if (py < WIND_TOP_ROW * sc || py >= WIND_HORIZON_ROW * sc) return;
-    if (px < 0 || px >= w * sc) return;
-    window_pixel_phys(px, py, color);
-}
-
-static void weather_fx_tick_kind(int kind, int w){
-    if (kind == WEATHER_FX_NONE) return;
-    if (!weather_particles_seeded) weather_particles_seed(w);
-    int sc = (int)window_scale();
-    for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++){
-        struct weather_particle *p = &weather_particles[i];
-        if (kind == WEATHER_FX_RAIN){
-            p->y += p->speed;                       /* fast, mostly-vertical fall */
-            p->x += 1;                               /* a slight real wind-blown slant */
-        } else {
-            p->y += 1;                               /* snow drifts, much slower than rain */
-            if (weather_rand() & 1) p->x += ((i & 1) * 2 - 1); /* gentle side-to-side drift */
-        }
-        if (p->y >= WIND_HORIZON_ROW || p->x < 0 || p->x >= w){
-            p->x = (int)(weather_rand() % (unsigned int)(w > 0 ? w : 1));
-            p->y = WIND_TOP_ROW;
-            p->speed = 4 + (int)(weather_rand() % 5);
-        }
-        int x0 = p->x * sc, y0 = p->y * sc;
-        if (kind == WEATHER_FX_RAIN){
-            for (int s = 0; s < 4; s++)
-                weather_fx_plot(x0 - s, y0 - s * sc, w, sc, 0x00C9C0B4); /* light silvery-sand streak, in-palette */
-        } else {
-            weather_fx_plot(x0, y0, w, sc, 0x00EFEBE4);           /* off-white dot, the dock tray's own cream */
-            if (sc > 1) weather_fx_plot(x0 + 1, y0, w, sc, 0x00EFEBE4);
-        }
-    }
-}
-
-/* The real, live entry point: derives kind from the actually-fetched
-   weather_code10, "nothing fabricated" the same way weather_fetch's own
-   callers already require. */
-static void weather_fx_tick(int w){
-    weather_fx_tick_kind(weather_have ? weather_fx_kind(weather_code10 / 10) : WEATHER_FX_NONE, w);
-}
-
-/* Pulls a number for `key` from inside the "current":{...} object. The
-   units object earlier in the same reply has the same keys with string
-   values ("°C"), so the search has to start after "current":{ or it would
-   read the wrong one. */
-static int json_current_number(const char *json, const char *key, int *out_x10){
-    const char *p = json;
-    const char *cur = 0;
-    while (*p) { if (p[0]=='"' && p[1]=='c' && p[2]=='u' && p[3]=='r' && p[4]=='r' && p[5]=='e' && p[6]=='n' && p[7]=='t' && p[8]=='"' && p[9]==':' && p[10]=='{') { cur = p + 11; break; } p++; }
-    if (!cur) return 0;
-    for (p = cur; *p && *p != '}'; p++) {
-        const char *k = key; const char *q = p;
-        if (*q != '"') continue;
-        q++;
-        while (*k && *q == *k) { q++; k++; }
-        if (*k || *q != '"' || q[1] != ':') continue;
-        q += 2;
-        int neg = 0; if (*q == '-') { neg = 1; q++; }
-        int whole = 0, frac = 0, seen_dot = 0;
-        while ((*q >= '0' && *q <= '9') || *q == '.') {
-            if (*q == '.') { seen_dot = 1; q++; continue; }
-            if (!seen_dot) whole = whole * 10 + (*q - '0');
-            else if (frac == 0 && !seen_dot) {}
-            else if (frac == 0) { frac = (*q - '0'); }
-            q++;
-        }
-        int v = whole * 10 + frac;
-        *out_x10 = neg ? -v : v;
-        return 1;
-    }
-    return 0;
-}
-
-/* v71 (0.65.0): real location, not a constant. weather_fetch used to hard-
-   code latitude=49.28&longitude=-123.12 (downtown Vancouver) in its Open-
-   Meteo URL, so every weather-derived effect in this file (menu bar text,
-   v56 dropdown, v60 wind amplitude, v65 particles and tint) reported a
-   place ~40km from where this machine actually sits (Langley, per both
-   Joshua's own phone and a real `curl http://ip-api.com/json/` from the
-   host, ROADMAP.md's "Real find" entry). Open-Meteo itself was never
-   wrong, it answered honestly for the coordinates it was given; the
-   coordinates were the bug. ip-api.com answers on plain HTTP (no TLS in
-   this kernel), so this is the same http_get shape the weather call
-   already uses. Looked up once per boot and cached (a public IP doesn't
-   move mid-session; a failed lookup is retried on the next ten-minute
-   weather cycle). The lat/lon are kept as the exact numeric TEXT ip-api
-   returned (json_extract_number_text) and spliced straight into the URL,
-   no float parse/format round trip to lose digits in. No fallback
-   constant on purpose: with no real location there is no weather fetch,
-   the same "nothing fabricated" contract v56/v60/v65 already hold to for
-   a NIC-less boot. Both values are mirrored to serial (`geo=`/`wxurl=`)
-   so tools/geo-check.sh can prove headlessly, against the host's own
-   ip-api answer, that the URL really carries the dynamic location.
-   (geo_lat/geo_lon/geo_city/geo_have and the loc_* Settings-location
-   override are declared earlier, alongside wind_enabled, since
-   settings_load needs them and settings_load has to come before this
-   point in the file.) */
-/* Open-Meteo's own geocoding endpoint (the same house the weather forecast
-   already comes from), through the exact http_get_timeout/wx_override_host
-   plumbing geo_fetch and weather_fetch_inner already use -- one more host
-   name, same request shape, nothing new. `query` is bounded the same way
-   every other Settings text field is (settings_prompt_line's max param);
-   spaces are percent-encoded since a city name is likely to have one.
-   No result, a bad reply, or no network all fail cleanly with loc_err set
-   and loc_have/geo_have untouched -- never a fabricated coordinate, never
-   a panic. */
-static int loc_geocode(const char *query){
-    loc_err[0] = 0;
-    if (!query[0]) { const char *m = "empty"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0; return 0; }
-    if (!net_init(0x0A00020F)) { const char *m = "no network card"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0; return 0; }
-    static char path[112];
-    int p = 0; const char *s;
-    for (s = "/v1/search?name="; *s; s++) path[p++] = *s;
-    for (const char *c = query; *c && p < 96; c++) {
-        unsigned char ch = (unsigned char)*c; /* percent-encode all but [A-Za-z0-9] so '&', '#', '%' can't reshape the query */
-        if ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) path[p++] = (char)ch;
-        else { path[p++]='%'; path[p++]="0123456789ABCDEF"[ch >> 4]; path[p++]="0123456789ABCDEF"[ch & 15]; }
-    }
-    for (s = "&count=1"; *s; s++) path[p++] = *s;
-    path[p] = 0;
-    static char body[1024];
-    int n = wx_override_host[0] ? http_get_timeout(wx_override_host, path, wx_override_port, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS)
-                                 : http_get_timeout("geocoding-api.open-meteo.com", path, 80, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS);
-    if (n <= 0 || http_last_status() != 200) {
-        int e = net_last_error();
-        const char *m = (n < 0 || e == NET_ERR_REPLY_TIMEOUT || e == NET_ERR_ARP_TIMEOUT || e == NET_ERR_DNS_TIMEOUT || e == NET_ERR_CONNECT_TIMEOUT) ? "network unreachable" : "geocoding request failed";
-        int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0;
-        return 0;
-    }
-    body[n] = 0;
-    char lat[16], lon[16], name[LOC_NAME_MAX];
-    if (!json_extract_number_text(body, "latitude", lat, sizeof(lat)) ||
-        !json_extract_number_text(body, "longitude", lon, sizeof(lon))) {
-        const char *m = "location not found"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0;
-        return 0;
-    }
-    if (!json_extract_string(body, "name", name, sizeof(name))) name[0] = 0;
-    int i;
-    for (i = 0; lat[i]; i++) loc_lat[i] = lat[i]; loc_lat[i] = 0;
-    for (i = 0; lon[i]; i++) loc_lon[i] = lon[i]; loc_lon[i] = 0;
-    for (i = 0; name[i] && i < LOC_NAME_MAX - 1; i++) loc_name[i] = name[i]; loc_name[i] = 0;
-    loc_have = 1;
-    /* Same fields weather_fetch_inner/wall_fetch already read -- setting
-       these here means neither one needs to know a manual override even
-       exists. */
-    for (i = 0; loc_lat[i]; i++) geo_lat[i] = loc_lat[i]; geo_lat[i] = 0;
-    for (i = 0; loc_lon[i]; i++) geo_lon[i] = loc_lon[i]; geo_lon[i] = 0;
-    for (i = 0; loc_name[i] && i < 23; i++) geo_city[i] = loc_name[i]; geo_city[i] = 0;
-    geo_have = 1;
-    serial_puts("locgeo="); serial_puts(loc_lat); serial_puts(","); serial_puts(loc_lon); serial_puts(" name="); serial_puts(loc_name); serial_puts("\n");
-    return 1;
-}
-/* Turns the net/http layer's last failure into a window state plus a short
-   human detail. `what` names the request ("location" / "forecast"). */
-static void weather_set_error(int st, const char *what, const char *detail){
-    weather_state = st;
-    int p = 0;
-    for (const char *c = what; *c && p < 46; c++) weather_err[p++] = *c;
-    if (*detail && p < 45) { weather_err[p++] = ':'; weather_err[p++] = ' '; }
-    for (const char *c = detail; *c && p < 47; c++) weather_err[p++] = *c;
-    weather_err[p] = 0;
-}
-static void weather_classify_http_failure(const char *what, int n){
-    int e = net_last_error();
-    if (n < 0 || e == NET_ERR_REPLY_TIMEOUT) {
-        if (e == NET_ERR_ARP_TIMEOUT) weather_set_error(WX_OFFLINE, what, "no route to the network");
-        else if (e == NET_ERR_DNS_TIMEOUT || e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) weather_set_error(WX_TIMEOUT, what, net_error_name(e));
-        else weather_set_error(WX_FAILED, what, net_error_name(e));
-        return;
-    }
-    int st = http_last_status();
-    if (st && st != 200) {
-        char d[12] = "HTTP "; int q = 5;
-        d[q++] = '0' + (st / 100) % 10; d[q++] = '0' + (st / 10) % 10; d[q++] = '0' + st % 10; d[q] = 0;
-        weather_set_error(WX_BAD, what, d);
-    } else weather_set_error(WX_BAD, what, n == 0 ? "empty reply" : "unreadable reply");
-}
-
-static int geo_fetch(void){
-    static char body[1024];
-    int n = wx_override_host[0] ? http_get_timeout(wx_override_host, "/json/", wx_override_port, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS)
-                                : http_get_timeout("ip-api.com", "/json/", 80, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS);
-    if (n <= 0 || http_last_status() != 200) { weather_classify_http_failure("location", n); return 0; }
-    body[n] = 0;
-    char lat[16], lon[16];
-    if (!json_extract_number_text(body, "lat", lat, sizeof(lat)) ||
-        !json_extract_number_text(body, "lon", lon, sizeof(lon))) { weather_set_error(WX_BAD, "location", "unreadable reply"); return 0; }
-    int i;
-    for (i = 0; lat[i]; i++) geo_lat[i] = lat[i]; geo_lat[i] = 0;
-    for (i = 0; lon[i]; i++) geo_lon[i] = lon[i]; geo_lon[i] = 0;
-    if (!json_extract_string(body, "city", geo_city, sizeof(geo_city))) geo_city[0] = 0;
-    geo_have = 1;
-    serial_puts("geo="); serial_puts(geo_lat); serial_puts(","); serial_puts(geo_lon); serial_puts("\n");
-    return 1;
-}
-
-#include "weather_extra.h"
-static int weather_fetch_inner(void){
-    weather_err[0] = 0;
-    if (!net_init(0x0A00020F)) { weather_set_error(WX_OFFLINE, "no network card", ""); return 0; }
-    if (!geo_have && !geo_fetch()) return 0; /* v71: no real location, no fetch, nothing fabricated */
-    static char body[6144]; /* the 24-hour and 7-day reply is ~2.7KB; was 2048 */
-    static char path[640]; /* was 320: the field list below is ~330 bytes plus the position; http.c's request buffer is 1024 */
-    { int p = 0; const char *s;
-      for (s = "/v1/forecast?latitude="; *s; s++) path[p++] = *s;
-      for (s = geo_lat; *s; s++) path[p++] = *s;
-      for (s = "&longitude="; *s; s++) path[p++] = *s;
-      for (s = geo_lon; *s; s++) path[p++] = *s;
-      /* One request for everything the Weather window shows: now, the next 24 hours and seven
-         days with sunrise, sunset, UV and chance of rain. The real reply is ~2.7KB, inside the
-         6144-byte body buffer above; forecast_hours=24 starts at the current hour. */
-      for (s = "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,pressure_msl,visibility,is_day"
-               "&hourly=temperature_2m,precipitation_probability,weather_code,is_day"
-               "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max"
-               "&forecast_days=7&forecast_hours=24&timezone=auto"; *s && p < 638; s++) path[p++] = *s;
-      path[p] = 0; }
-    serial_puts("wxurl="); serial_puts(path); serial_puts("\n");
-    int n = wx_override_host[0] ? http_get_timeout(wx_override_host, path, wx_override_port, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS)
-                                : http_get_timeout("api.open-meteo.com", path, 80, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS);
-    if (n <= 0 || http_last_status() != 200) { weather_classify_http_failure("forecast", n); return 0; }
-    body[n] = 0;
-    int t10 = 0, code10 = 0;
-    if (!json_current_number(body, "temperature_2m", &t10)) { weather_set_error(WX_BAD, "forecast", "unreadable reply"); return 0; }
-    json_current_number(body, "weather_code", &code10);
-    int t = (t10 >= 0 ? t10 + 5 : t10 - 5) / 10; /* round to whole degrees */
-    weather_temp_c = t; weather_code10 = code10; weather_have = 1;
-    wind_weather_pct = wind_pct_for_weather_code(code10 / 10); /* v60: real wind sway now follows real weather */
-    wx_parse_extras(body);
-    int p = 0;
-    if (t < 0) { weather_text[p++] = '-'; t = -t; }
-    if (t >= 10) weather_text[p++] = '0' + t / 10;
-    weather_text[p++] = '0' + t % 10;
-    weather_text[p++] = (char)0xF8; /* CP437 degree sign, present in both the hardware font and the fallback */
-    weather_text[p++] = ' ';
-    for (const char *w = weather_word(code10 / 10); *w; w++) weather_text[p++] = *w;
-    weather_text[p] = 0;
-    weather_state = WX_OK;
-    /* What the window's secondary row and forecast row will be built from. */
-    wx_serial_summary();
-    serial_puts("wx="); serial_puts(weather_text); serial_puts("\n"); /* v71: tools/geo-check.sh asserts the fetch really landed, not just that the URL was built */
-    return 1;
-}
-static void weather_write_file(void);
-static void weather_fetch(void){
-    weather_last_tick = ticks();
-    serial_puts("wxfetch\n"); /* tools/checks/weather-app-check.sh counts these: a failed fetch must not re-run on every repaint */
-    weather_fetch_inner();
-    /* One line per attempt, the state the window will show and why. */
-    serial_puts("wxstate="); serial_puts(weather_state_name(weather_state));
-    if (weather_err[0]) { serial_puts(" "); serial_puts(weather_err); }
-    serial_puts("\n");
-    weather_write_file();
-}
-
-/* 1.9.22: Weather is a ring-3 program (user/weather.c). It cannot see these
-   statics, so every fetch, good or not, leaves WEATHER.TXT for it: one
-   "key value" line per field, the seven forecast days as "d weekday code hi lo rain uv10 sunrise sunset" and the next 24 hours as hs/ht/hc/hp/hd lines. */
-static void weather_write_file(void){
-    char b[1536], *o = b; const char *c;
-    #define WXPUT(str) do { for (c = (str); *c; c++) *o++ = *c; } while (0)
-    #define WXNUM(key, v) do { WXPUT(key " "); o = wx_put_int(o, (v)); *o++ = '\n'; } while (0)
-    WXPUT("state "); WXPUT(weather_state_name(weather_state)); *o++ = '\n';
-    WXPUT("err "); WXPUT(weather_err); *o++ = '\n';
-    WXPUT("city "); WXPUT(geo_city); *o++ = '\n';
-    WXPUT("word "); WXPUT(weather_word(weather_code10 / 10)); *o++ = '\n';
-    WXNUM("have", weather_have); WXNUM("temp", weather_temp_c); WXNUM("code", weather_code10 / 10);
-    WXNUM("extra", wx_extra_have); WXNUM("feels", wx_feels_c); WXNUM("hum", wx_humidity); WXNUM("wind", wx_wind_kmh);
-    o = wx_write_extras(o);
-    vfs_replace_file("WEATHER.TXT", b, (unsigned int)(o - b));
-    jt_data_stamp++;
-}
-
-/* The dock's Weather, blocking fallback only (a full window table). The window path in
-   user/weather.c asks for refetches with SYS_REFRESH instead; here the app just runs once. */
-int weather_ring3_run(void);
-void weather_ring3_open(void){
-    if (!weather_tried_once) { weather_tried_once = 1; weather_fetch(); gui_menubar_force_redraw(); }
-    unsigned int t0 = ticks();
-    weather_ring3_run();
-    weather_last_tick += ticks() - t0;
-}
-
-/* v75 (0.67.0): the real location-dynamic wallpaper, the item ROADMAP.md's
-   satellite entry was building toward. Honest naming first: this is a MAP
-   of the real town, not a satellite photo. Real curl checks (roadmap.md,
-   v75 entry) found every satellite/imagery source that answers on plain
-   HTTP at all (Google's mt0 `lyrs=s`, Bing virtualearth) serves JPEG,
-   and this kernel only has a PNG decoder; OSM's own tile servers, Esri
-   World Imagery and NASA GIBS all 301 straight to HTTPS. Of the PNG
-   sources that do answer plain HTTP (CartoCDN, Thunderforest, OsmAnd's
-   app proxy, OpenTopoMap), CartoCDN and Thunderforest stamp a huge "API
-   KEY REQUIRED" watermark across keyless tiles (found on the first real
-   framebuffer dump, not in the curl headers: 200, image/png, looked
-   fine until rendered), OsmAnd's is an undocumented proxy for their own
-   app, and OpenTopoMap (tile.opentopomap.org, CC-BY-SA, free with
-   attribution for light use) answers a bare HTTP/1.0 GET with a clean,
-   watermark-free 8-bit paletted PNG, no key, no User-Agent check, which
-   is exactly what http_get + png_decode can consume. Topographic style
-   (contours, hillshade), which suits a desert-named OS better than a
-   flat street map anyway.
-
-   Slippy-map tile math (the OSM wiki's "Slippy map tilenames", the same
-   formula every tile client uses): at zoom z, x = (lon+180)/360 * 2^z,
-   y = (1 - ln(tan(lat) + sec(lat)) / pi) / 2 * 2^z, with lat in radians.
-   No libm here, so ln/tan/pi come from the x87 directly (fyl2x, fptan,
-   fldpi), the same FPU the calculator's doubles already run on. The 4x3
-   mosaic of 256px tiles (1024x768) is picked so the location lands near
-   its middle (top-left tile = floor(x - 1.5), floor(y - 1.0)), then a
-   960x540 window is cut out centered on the location, clamped to the
-   mosaic, so the town is under the middle of the desktop, not at a tile
-   corner. Each tile is decoded and copied straight into the 960x540
-   buffer, never assembled into a full mosaic first: peak heap is the
-   1.5MB destination plus one decoded tile, not 2.3MB more on top.
-
-   Everything it does is mirrored to serial (`wall=` on success with the
-   tile coords, crop offset and an FNV-1a of the finished buffer;
-   `wallerr=` on any failure with the step that failed) so
-   tools/wallpaper-check.sh can prove the whole chain headlessly against
-   the host's own download of the same twelve tiles. */
-static double jt_tan(double x){ double r; __asm__ volatile ("fptan\n\tfstp %%st(0)" : "=t"(r) : "0"(x)); return r; }
-static double jt_ln(double x){ double r; __asm__ volatile ("fldln2\n\tfxch\n\tfyl2x" : "=t"(r) : "0"(x) : "st(1)"); return r; }
-static double jt_sqrt(double x){ double r; __asm__ volatile ("fsqrt" : "=t"(r) : "0"(x)); return r; }
-static double jt_pi(void){ double r; __asm__ volatile ("fldpi" : "=t"(r)); return r; }
-static double jt_parse_double(const char *s){ /* "-123.0456" -> double, the only shape ip-api's lat/lon text takes */
-    int neg = 0; double v = 0, scale = 0.1;
-    if (*s == '-') { neg = 1; s++; }
-    while (*s >= '0' && *s <= '9') { v = v * 10 + (*s - '0'); s++; }
-    if (*s == '.') { s++; while (*s >= '0' && *s <= '9') { v += (*s - '0') * scale; scale *= 0.1; s++; } }
-    return neg ? -v : v;
-}
-static void wall_serial_err(const char *step, int code){
-    char b[48]; int i = 0; const char *s = "wallerr="; while (*s) b[i++] = *s++;
-    while (*step && i < 40) b[i++] = *step++;
-    if (code) { b[i++] = ' '; unsigned int u = (unsigned int)(code < 0 ? -code : code); if (code < 0) b[i++] = '-'; char d[12]; int nd = 0; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) b[i++] = d[--nd]; }
-    b[i++] = '\n'; b[i] = 0; serial_puts(b);
-}
-static void wall_caches_drop(void); /* defined after the dock band code it invalidates */
-static int wall_fetch(void){
-    if (!geo_have) { wall_serial_err("nogeo", 0); return 0; }
-    double lat = jt_parse_double(geo_lat), lon = jt_parse_double(geo_lon);
-    double n = (double)(1 << WALL_ZOOM);
-    double latr = lat * jt_pi() / 180.0;
-    double t = jt_tan(latr);
-    double xf = (lon + 180.0) / 360.0 * n;
-    double yf = (1.0 - jt_ln(t + jt_sqrt(1.0 + t * t)) / jt_pi()) / 2.0 * n;
-    if (xf < 1.5 || yf < 1.0 || xf >= n - 2.5 || yf >= n - 2.0) { wall_serial_err("range", 0); return 0; }
-    int tx = (int)(xf - 1.5), ty = (int)(yf - 1.0);          /* top-left tile of the 4x3, location in its middle */
-    int px = (int)((xf - tx) * WALL_TILE), py = (int)((yf - ty) * WALL_TILE); /* location inside the 1024x768 mosaic: x 384..639, y 256..511 */
-    int cx = px - WALLPAPER_W / 2, cy = py - WALLPAPER_H / 2;   /* crop origin, clamped to the mosaic */
-    if (cx < 0) cx = 0; if (cx > WALL_COLS * WALL_TILE - WALLPAPER_W) cx = WALL_COLS * WALL_TILE - WALLPAPER_W;
-    if (cy < 0) cy = 0; if (cy > WALL_ROWS * WALL_TILE - WALLPAPER_H) cy = WALL_ROWS * WALL_TILE - WALLPAPER_H;
-
-    unsigned char *dst = wall_map ? wall_map : (unsigned char *)kmalloc(WALLPAPER_W * WALLPAPER_H * 3);
-    if (!dst) { wall_serial_err("nomem", 0); return 0; }
-    unsigned char *body = (unsigned char *)kmalloc(65536);
-    if (!body) { if (!wall_map) kfree(dst); wall_serial_err("nomem", 1); return 0; }
-    static char path[96];
-    /* v0.73: satellite pulls real JPEG tiles from Google's slippy-map
-       satellite endpoint instead of OpenTopoMap's PNG line-art. Same x/y/z
-       tile math above (Google uses the identical slippy-map convention,
-       unlike Bing's quadkey scheme), just a different host, path shape and
-       decoder. mt0.google.com/vt/lyrs=s&x=X&y=Y&z=Z was confirmed live
-       over plain HTTP, real baseline JPEG, before this was wired. */
-    int use_sat = (wall_theme == WALL_SAT);
-    for (int i = 0; i < WALL_COLS * WALL_ROWS; i++) {
-        int col = i % WALL_COLS, row = i / WALL_COLS;
-        int ttx = tx + col, tty = ty + row;
-        int p = 0; const char *s;
-        int n_bytes; const char *host;
-        if (use_sat) {
-            host = tile_override_host[0] ? tile_override_host : "mt0.google.com";
-            for (s = "/vt/lyrs=s&x="; *s; s++) path[p++] = *s;
-            { char d[12]; int nd = 0; unsigned int u = (unsigned int)ttx; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
-            for (s = "&y="; *s; s++) path[p++] = *s;
-            { char d[12]; int nd = 0; unsigned int u = (unsigned int)tty; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
-            for (s = "&z="; *s; s++) path[p++] = *s;
-            { char d[12]; int nd = 0; unsigned int u = WALL_ZOOM; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
-            path[p] = 0;
-        } else {
-            host = tile_override_host[0] ? tile_override_host : "a.tile.opentopomap.org";
-            for (s = "/"; *s; s++) path[p++] = *s;
-            { char d[12]; int nd = 0; unsigned int u = WALL_ZOOM; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; path[p++] = '/'; }
-            { char d[12]; int nd = 0; unsigned int u = (unsigned int)ttx; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; path[p++] = '/'; }
-            { char d[12]; int nd = 0; unsigned int u = (unsigned int)tty; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
-            for (s = ".png"; *s; s++) path[p++] = *s;
-            path[p] = 0;
-        }
-        n_bytes = http_get(host, path, tile_override_host[0] ? tile_override_port : 80, body, 65536);
-        if (n_bytes <= 0) { kfree(body); if (!wall_map) kfree(dst); wall_serial_err("http", i); return 0; }
-        unsigned char *px_out = 0; unsigned int w = 0, h = 0, ch = 0;
-        int r = use_sat ? jpeg_decode(body, (unsigned int)n_bytes, &px_out, &w, &h, &ch)
-                         : png_decode(body, (unsigned int)n_bytes, &px_out, &w, &h, &ch);
-        if (r != 0 || w != WALL_TILE || h != WALL_TILE || ch != 3) {
-            if (px_out) kfree(px_out); kfree(body); if (!wall_map) kfree(dst);
-            wall_serial_err(r ? (use_sat ? "jpeg" : "png") : "tilesize", r ? r : (int)w); return 0;
-        }
-        /* copy the part of this tile that lands inside the crop window */
-        int ox = col * WALL_TILE, oy = row * WALL_TILE; /* tile origin in mosaic coords */
-        for (int y = 0; y < WALL_TILE; y++) {
-            int my = oy + y - cy; if (my < 0 || my >= WALLPAPER_H) continue;
-            int x0 = cx - ox; if (x0 < 0) x0 = 0;
-            int x1 = cx + WALLPAPER_W - ox; if (x1 > WALL_TILE) x1 = WALL_TILE;
-            if (x1 <= x0) continue;
-            memcpy(dst + (my * WALLPAPER_W + (ox + x0 - cx)) * 3, px_out + (y * WALL_TILE + x0) * 3, (unsigned int)(x1 - x0) * 3);
-        }
-        kfree(px_out);
-    }
-    kfree(body);
-    wall_map = dst; wall_map_tx = tx; wall_map_ty = ty; wall_map_cx = cx; wall_map_cy = cy; wall_map_is_sat = use_sat;
-    unsigned int fnv = 0x811c9dc5u;
-    for (unsigned int i = 0; i < WALLPAPER_W * WALLPAPER_H * 3; i++) { fnv ^= dst[i]; fnv *= 0x01000193u; }
-    { char b[96]; int i = 0; const char *s = "wall="; while (*s) b[i++] = *s++;
-      int vals[5] = { WALL_ZOOM, tx, ty, cx, cy };
-      for (int v = 0; v < 5; v++) { char d[12]; int nd = 0; unsigned int u = (unsigned int)vals[v]; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) b[i++] = d[--nd]; b[i++] = v < 4 ? ',' : ' '; }
-      for (int sh = 28; sh >= 0; sh -= 4) { int nib = (fnv >> sh) & 0xF; b[i++] = nib < 10 ? '0' + nib : 'a' + nib - 10; }
-      b[i++] = '\n'; b[i] = 0; serial_puts(b); }
-    return 1;
-}
-/* v0.73: the one place every wallpaper-theme setter goes through, so none
-   of them can forget the sat/topo source-boundary rule above. Warm/Cool/
-   Raw all reuse the same wall_map pixels (just a different grade), so
-   switching among them is free. Crossing into or out of Satellite means
-   the pixels on hand are from the wrong real source entirely, so wall_map
-   is dropped (forcing the next weather cycle or `wallpaper fetch` to pull
-   fresh tiles from the right host) instead of silently painting topo
-   pixels under a "Satellite" label or vice versa. */
-static void wall_switch_theme(int theme){
-    int want_sat = (theme == WALL_SAT);
-    if (wall_map && want_sat != wall_map_is_sat) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
-    wall_theme = theme;
-    settings_save();
-    /* v0.75: the one real choke point every theme setter already goes
-       through, so this is the one place to log it -- lets a real browser
-       run (no serial port to read otherwise) confirm which theme actually
-       got switched to via window.__jt.serial, the same real-evidence
-       pattern ne2k-check.mjs already established for geo=/wx=. */
-    serial_puts("walltheme="); char tb[2] = { (char)('0' + wall_theme), 0 }; serial_puts(tb); serial_puts("\n");
-}
-/* Switch what the desktop paints from. Both directions drop every cache
-   built from the old pixels (the wind crown band, the dock band) so the
-   next frame is honest, not a stale composite of the previous source. */
-/* v81: real bug caught while capturing evidence for this pass, before
-   this fix shipped -- wind_base (the cached, tinted wallpaper samples
-   gui_draw_desktop lazily builds, see its own v75 comment) is keyed on
-   wall_src's pointer changing, not on wall_theme. Switching Warm -> Cool
-   -> Raw all pass want_map=1 with the SAME wall_map buffer, so wall_src
-   never actually changes pointer and the old early-return skipped
-   wall_caches_drop() entirely: the desktop kept painting whichever
-   theme's grade got cached first, headless framebuffer evidence showed
-   all three map themes rendering identical mean color for the wind band
-   (57.x/72.x/88.x across Warm/Cool/Raw) until this was found and fixed.
-   wall_last_theme tracks what was actually baked into wind_base last, so
-   a theme-only change (same wall_map pointer, different wall_theme)
-   still drops the stale cache. */
-static int wall_last_theme = -1;
-/* Decode the baked satellite capture (kernel/wall_sat.h) once, lazily, and
-   keep it for the session. The source bytes are a real
-   photograph stored as an indexed PNG (drivers/png.c has decoded 8-bit
-   indexed/PLTE images since v75) instead of a solid fill, so this one goes
-   through png_decode instead of a fill loop. Decoding ~277KB of PNG once
-   per boot is cheap; the decoded 960x540x3 buffer is what wall_src actually
-   points readers at, same layout wallpaper_rgb and wall_map already use.
-   On any decode failure this leaves wall_sat_rgb null and the caller falls
-   back to wallpaper_rgb, never a null wall_src. */
-static void wall_sat_init(void){
-    if (wall_sat_rgb) return; /* already decoded */
-    unsigned char *out = 0; unsigned int w = 0, h = 0, ch = 0;
-    if (png_decode(wall_sat_png, WALL_SAT_PNG_LEN, &out, &w, &h, &ch) != 0) {
-        wall_serial_err("wallsat decode", 0);
-        return;
-    }
-    if (w != WALLPAPER_W || h != WALLPAPER_H || ch != 3) {
-        wall_serial_err("wallsat dims", (int)w);
-        kfree(out);
-        return;
-    }
-    wall_sat_rgb = out; /* ours now; never freed, lives for the kernel's lifetime */
-}
-static void wall_apply(int want_map){
-    const unsigned char *next;
-    if (want_map && !wall_map){
-        /* No live map yet, and maybe never: show the baked satellite
-           capture, the same kind of imagery the fetch will bring, so a
-           landed fetch reads as a refresh rather than a reveal.
-           This used to be two branches split on font_is_fallback() as a
-           stand-in for "this is the v86 browser demo": v86 got the bake,
-           everything else got a solid black placeholder until the fetch
-           landed. Real bug, direct report ("the demo isn't showing the
-           wallpaper reliably, it's falling back to black"): that signal is
-           a VGA font-plane quirk, not a network fact. Whenever it read 0
-           inside the browser the demo took the "fetch is pending" branch,
-           and a browser fetch to the tile hosts never lands (CORS, see the
-           landing page's own note), so black was permanent. One branch, no
-           guess about where we are running. If the decode ever fails this
-           still falls back to the tree photo, never a blank desktop. */
-        wall_sat_init();
-        next = wall_sat_rgb ? wall_sat_rgb : wallpaper_rgb;
-    } else {
-        next = (want_map && wall_map) ? wall_map : wallpaper_rgb;
-    }
-    if (next == wall_src && wall_theme == wall_last_theme) return;
-    /* Real-evidence marker for tools/checks/wallboot-check.sh, the same
-       "log it at the one real choke point" pattern wall_switch_theme's
-       own walltheme= line already uses. Fires every
-       time wall_src actually changes buffer, which includes the very
-       first call (wall_src's static initializer is wallpaper_rgb and
-       wall_last_theme starts at -1, so the first real assignment always
-       logs), letting a headless boot prove what buffer the first real
-       desktop paint used without guessing from timing alone. "satfallback"
-       is its own distinct value, not folded into "map": it is the baked
-       v86 satellite capture, not a live wall_map fetch, and a check that
-       cannot tell them apart could not prove the v86 fallback bake-in
-       actually took effect. */
-    serial_puts("wallsrc=");
-    serial_puts(next == wallpaper_rgb ? "photo" : (next == wall_sat_rgb ? "satfallback" : "map"));
-    serial_puts("\n");
-    wall_src = next;
-    wall_last_theme = wall_theme;
-    wall_caches_drop();
-}
-
+int weather_hit_x0 = -1, weather_hit_x1 = -1;
 static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink);
 static void gui_draw_menubar(void){
     if (gui_bleed_open()) { gui_menubar_last_min = -1; return; } /* repaints on the first call after it closes */
@@ -3550,7 +2481,7 @@ void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
 
 /* v75: see wall_apply. wind_base is rebuilt lazily by gui_draw_desktop,
    the dock band by gui_redraw_dock_band's own top-mismatch check. */
-static void wall_caches_drop(void){
+void wall_caches_drop(void){
     if (wind_base) { kfree(wind_base); wind_base = 0; }
     dock_band_cache_top = -1;
     gui_wall_full_cache_drop();
@@ -3675,7 +2606,6 @@ static int wx_text_lw(const char *s, int size, int bold, int mul);
 #include "ttf_render.h"
 #include "auth.h"
 #include "editor.h"
-#include "mail.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -5213,7 +4143,7 @@ static void gui_run(void){
                after the geo lookup it depends on. One fetch per session
                once it lands (the mosaic is kept), retried each cycle
                until then; a failure leaves the photo up, never a blank. */
-            if (wall_theme != WALL_PHOTO && !wall_map && geo_have && wall_fetch()) { wall_apply(1); gui_draw_desktop(-1, -1, 0, 0); gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
+            if (WALL_THEME_FETCHES() && !wall_map && geo_have && wall_fetch()) { wall_apply(1); gui_draw_desktop(-1, -1, 0, 0); gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
         }
         /* 1.9.26: SYS_LAUNCH_REQUEST pickup. The syscall only stored an index; the launch runs here,
            IF on, through the same two paths a dock click takes (window first, blocking fallback). */
@@ -5972,6 +4902,9 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
+    if (selftest_run(line, arg)) return;   /* kernel/selftest.c: the built-in self-test commands */
+    if (taskdemo_run(line)) return;        /* kernel/taskdemo.c: the scheduler demos */
+    if (shellfs_run(line, arg)) return;    /* kernel/shellfs.c: ls, cat, rm, cd, mkdir, write, trash, browse */
     if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest fputest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps calctest pngtest jpegtest chattest beep say listen pick pickcheck\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
@@ -6014,51 +4947,6 @@ static void run(char *line){
         while (dn) m[p++] = d[--dn];
         a = ok == total ? " ok\n" : " FAIL\n"; while (*a) m[p++] = *a++;
         m[p] = 0; puts(m);
-    }
-    else if (!strcmp(line, "heaptest")) {
-        char *a = kmalloc(16);
-        char *b = kmalloc(32);
-        if (a && b) { a[0] = 'A'; b[0] = 'B'; kfree(a); char *c = kmalloc(8);
-            puts(c == (void*)a ? "reused freed block: ok\n" : "alloc ok, no reuse\n"); kfree(b); kfree(c); }
-        else puts("kmalloc failed\n");
-
-        /* two adjacent blocks, freed, should merge into one big enough for
-           a request neither could satisfy alone, with no new frame pulled
-           in for it: the real, distinguishing signature of coalescing
-           actually running, not just "didn't crash" */
-        char *x = kmalloc(20);
-        char *y = kmalloc(20);
-        if (x && y) {
-            unsigned int before = pmm_free_frames();
-            kfree(y); kfree(x);
-            char *big = kmalloc(48);
-            unsigned int after = pmm_free_frames();
-            puts((big == x && after == before) ? "coalesced adjacent free blocks: ok\n" : "coalesce failed\n");
-            kfree(big);
-        } else puts("kmalloc failed\n");
-
-        /* v57: block splitting. Free one big block, then take two small
-           bites out of it. The real, distinguishing signature that
-           splitting is actually carving the leftover into its own reusable
-           block, not just "both allocs succeeded": p2 has to land just
-           past p1, close enough that it can only be the leftover carved
-           off p1's own block (one header's worth of gap), not a different
-           free block elsewhere or a fresh bump allocation. Without
-           splitting, the first small alloc claims the *whole* freed block
-           (same shape as the "reused freed block" check above), leaving no
-           free space behind inside it, so the second small alloc has to
-           come from wherever else the allocator finds space, nowhere near
-           p1's own address. */
-        char *big2 = kmalloc(200);
-        if (big2) {
-            kfree(big2);
-            char *p1 = kmalloc(20);
-            char *p2 = kmalloc(20);
-            unsigned int gap = (unsigned int)(p2 - p1);
-            int adjacent = p2 > p1 && gap < 64;
-            puts((p1 && p2 && adjacent) ? "split leftover reused: ok\n" : "split failed\n");
-            kfree(p1); kfree(p2);
-        } else puts("kmalloc failed\n");
     }
     else if (!strcmp(line, "heapgrow")) {
         /* v34 (0.34.0): real proof the old 0x400000 wall is actually gone,
@@ -6128,57 +5016,11 @@ static void run(char *line){
         else if (strcmp(rbuf, content)) serial_puts("filetest: content mismatch\n");
         else serial_puts(read_only ? "filetest: persisted read ok\n" : "filetest: write+read ok\n");
     }
-    else if (!strcmp(line, "fputest")) { fpu_bad = fpu_done = 0; task_create(fpu_a); task_create(fpu_b); for (int i = 0; i < 2000 && fpu_done < 2; i++) yield();
-        puts(fpu_done == 2 && !fpu_bad ? "fputest: x87 state kept per task: ok\n" : fpu_done == 2 ? "fputest: FAIL x87 values crossed between tasks\n" : "fputest: FAIL tasks did not finish\n"); }
-    else if (!strcmp(line, "tasktest")) {
-        /* v0.76.8: real, reproduced-on-demand CI flake fixed at the root.
-           yield()'s software `int $32` and the hardware PIT's own IRQ0 both
-           land on the identical IDT gate and both call schedule() (see
-           task.c's own comment on yield()), so this kernel has been truly,
-           continuously preemptive in the background since whatever version
-           first wired IRQ0 to it -- not just during preempttest's deliberate
-           no-yield demo. This test's strict "ABABAB..." expectation is only
-           true if NO hardware tick lands during its own tiny window, which
-           held by luck on a fast/idle machine but not on a slower or
-           shared CI runner: reproduced reliably here by temporarily
-           reconfiguring the PIT to 5000Hz (irq_install's pit_init call),
-           which corrupted the output on every single run (e.g.
-           "ABABAABABABABABABABB"), then confirmed clean again after adding
-           the mask below, even at that same artificially high rate; the
-           real PIT rate (100Hz) was restored unchanged after the repro.
-           Fix: mask IRQ0 at the PIC for the exact width of this test, so
-           only the tasks' own explicit yield() calls drive scheduling here
-           -- pic_set_mask holds across a task switch regardless of which
-           task's own EFLAGS.IF is active (unlike cli/sti, which only
-           affects the currently running task's own restored flags), unlike
-           preempttest/killtest elsewhere, which still rely on real IRQ0
-           ticks and are intentionally left untouched. */
-        pic_set_mask(0, 1);
-        puts("\n");
-        task_create(task_a);
-        task_create(task_b);
-        for (int i = 0; i < 10; i++) yield(); /* shell is task 0; let A/B interleave */
-        pic_set_mask(0, 0);
-        puts("\ndone (expect ABABAB...)\n");
-    }
     else if (!strcmp(line, "ring3test")) {
         ring3_test(arg); /* v64: "", "fault", or "spin", see ring3.h; all three come back to the shell */
     }
     else if (!strcmp(line, "usertest")) usertest();
     else if (!strcmp(line, "notetest")) notetest();
-    else if (!strcmp(line, "preempttest")) {
-        preempt_a_count = 0; preempt_b_count = 0; preempt_stop = 0;
-        int ida = task_create(preempt_task_a);
-        int idb = task_create(preempt_task_b);
-        if (ida < 0 || idb < 0) { puts("no free task slots (run fewer other task tests first)\n"); }
-        else {
-            unsigned int deadline = ticks() + 20; /* ~200ms real wall clock */
-            while (ticks() < deadline) { } /* deliberately no yield()/hlt here */
-            puts((preempt_a_count > 0 && preempt_b_count > 0) ? "preempted without yield: ok\n" : "no preemption (still cooperative-only)\n");
-            preempt_stop = 1;
-            for (int i = 0; i < 5; i++) yield(); /* let both tasks actually reach task_exit() and free their slots before returning */
-        }
-    }
     else if (!strcmp(line, "ps")) {
         for (int i = 0; i < task_max(); i++) {
             char buf[16]; int n = 0; unsigned int v = (unsigned int)i;
@@ -6197,43 +5039,6 @@ static void run(char *line){
             puts("signal sent (takes effect next time that task is scheduled)\n");
         }
     }
-    else if (!strcmp(line, "killtest")) {
-        /* Real proof a killed task actually stops, not just that `kill`
-           didn't crash anything: preempt_task_a runs forever incrementing
-           a plain counter (same demo task preempttest already uses,
-           reused rather than writing a third almost-identical one). Kill
-           it mid-flight, let a few ticks pass, and confirm the counter
-           genuinely stopped moving instead of merely slowing down. */
-        preempt_a_count = 0; preempt_stop = 0;
-        int id = task_create(preempt_task_a);
-        if (id < 0) { puts("no free task slots\n"); }
-        else {
-            unsigned int warmup = ticks() + 5;
-            while (ticks() < warmup) { }
-            task_kill(id);
-            for (int i = 0; i < 3; i++) yield(); /* let the scheduler actually resume it into task_exit() */
-            int stopped_at = preempt_a_count;
-            unsigned int settle = ticks() + 10;
-            while (ticks() < settle) { }
-            puts(preempt_a_count == stopped_at ? "kill: task really stopped: ok\n" : "kill: FAILED (counter kept moving)\n");
-        }
-    }
-    else if (!strcmp(line, "spawntest")) {
-        /* Real, persistent task for tools/checks/activity-check.py: prints
-           its own slot id over serial so the script can compute which
-           Activity row to select, the same "serial marker for a headless
-           check" idiom the ring-3 apps' own marker lines use. */
-        int id = task_create(spawntest_task);
-        if (id < 0) puts("no free task slots\n");
-        else {
-            char buf[16]; int n = 0; unsigned int v = (unsigned int)id;
-            char tmp[6]; int ti = 0; if (v==0) tmp[ti++]='0'; while (v) { tmp[ti++]='0'+v%10; v/=10; }
-            while (ti) buf[n++] = tmp[--ti];
-            buf[n] = 0;
-            serial_puts("spawntest id="); serial_puts(buf); serial_puts("\n");
-            puts("spawned task "); puts(buf); puts(" (runs until killed)\n");
-        }
-    }
     else if (!strcmp(line, "weathertest")) {
         /* v43: the parser has one real trap, so it gets a real test: the
            reply's "current_units" object carries the same keys with STRING
@@ -6241,12 +5046,8 @@ static void run(char *line){
            A naive key search reads the wrong one. Negative and fractional
            temperatures are the other two edge cases a Vancouver winter
            will actually exercise. */
-        static const char canned[] = "{\"latitude\":49.27,\"current_units\":{\"time\":\"iso8601\",\"temperature_2m\":\"\xb0" "C\",\"weather_code\":\"wmo code\"},"
-                                     "\"current\":{\"time\":\"2026-09-14T07:40\",\"interval\":900,\"temperature_2m\":-3.5,\"weather_code\":61}}";
         int t10 = 999, code10 = 999;
-        int ok_t = json_current_number(canned, "temperature_2m", &t10);
-        int ok_c = json_current_number(canned, "weather_code", &code10);
-        int ok = ok_t && ok_c && t10 == -35 && code10 == 610;
+        int ok = weather_parse_check(&t10, &code10);   /* weather.c: the canned reply through json_current_number */
         puts(ok ? "weather parse: -3.5C / code 61 through the units-block trap: ok\n" : "weather parse: FAILED\n");
         if (!ok) { puts("  t10="); putn((unsigned int)t10); puts(" code10="); putn((unsigned int)code10); puts("\n"); }
     }
@@ -6367,10 +5168,15 @@ static void run(char *line){
         unsigned int wall_dispatch_sat_green = gui_wall_tint(0x00208020);
         wall_src = wallpaper_rgb; wall_theme = WALL_COOL;
         unsigned int wall_dispatch_photo = gui_wall_tint(gray); /* Photo guard: must ignore wall_theme entirely */
+        wall_src = wall_solid_row; wall_theme = WALL_SAT; /* a plain wall is never graded, whatever wall_theme says */
+        unsigned int wall_dispatch_solid = gui_wall_tint(gray);
+        unsigned int wall_tint_solid = gui_daynight_tint(gray); /* ...and never day/night tinted either */
         wall_src = saved_wall_src; wall_theme = saved_wall_theme;
         int ok3 = (wall_dispatch_warm == warm_g) && (wall_dispatch_cool == cool_g)
                 && (wall_dispatch_raw == gray) && (wall_dispatch_photo == gray)
-                && (wall_dispatch_sat == gui_sat_color(gray)) && (wall_dispatch_sat != warm_g);
+                && (wall_dispatch_sat == gui_sat_color(gray)) && (wall_dispatch_sat != warm_g)
+                && (wall_dispatch_solid == gray) && (wall_tint_solid == gray)
+                && (wall_solid_color[0] == 0x006E6E6Eu);
         /* Satellite must preserve hue and lift saturation. Returning raw
            pixels or restoring the old luminance-only grade fails here. */
         unsigned int sg = gui_sat_color(0x00208020);
@@ -6386,7 +5192,7 @@ static void run(char *line){
         char prev_fs_buf[16]; int pfi = 0; while (prev_fs[pfi] && pfi < 15) { prev_fs_buf[pfi] = prev_fs[pfi]; pfi++; } prev_fs_buf[pfi] = 0;
         vfs_switch("ramfs");
         int roundtrip_ok = 1;
-        for (int theme = WALL_PHOTO; theme <= WALL_SAT; theme++) {
+        for (int theme = WALL_PHOTO; theme <= WALL_INK; theme++) {
             wall_theme = theme; settings_save();
             wall_theme = -1; /* clobber so settings_load has to actually set it, not coast on the old value */
             settings_load();
@@ -6404,7 +5210,7 @@ static void run(char *line){
             puts(" ok3="); putn((unsigned int)ok3); puts(" ok4="); putn((unsigned int)ok4);
             puts(" roundtrip="); putn((unsigned int)roundtrip_ok); puts("\n");
         }
-        wall_theme = WALL_WARM; settings_save(); /* restore the real default, this test must not leave the kernel in a weird state for whatever runs next */
+        wall_theme = WALL_GREY; settings_save(); /* restore the real default, this test must not leave the kernel in a weird state for whatever runs next */
     }
     else if (!strcmp(line, "weatherfxtest")) {
         /* v65 (0.62.0): standing QA per CLAUDE.md's 4b, two real,
@@ -6421,26 +5227,8 @@ static void run(char *line){
            real, not just a comment. Global particle state is saved and
            restored around this so a real live overlay in progress isn't
            disturbed by running the test. */
-        int save_seeded = weather_particles_seeded;
-        struct weather_particle save_particles[WEATHER_PARTICLE_COUNT];
-        for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) save_particles[i] = weather_particles[i];
-
-        int ok_kind = weather_fx_kind(0) == WEATHER_FX_NONE   /* Clear */
-                   && weather_fx_kind(45) == WEATHER_FX_NONE  /* Fog */
-                   && weather_fx_kind(61) == WEATHER_FX_RAIN  /* Rain */
-                   && weather_fx_kind(73) == WEATHER_FX_SNOW  /* Snow */
-                   && weather_fx_kind(95) == WEATHER_FX_RAIN; /* Storm */
-
-        weather_particles_seed(800);
-        int y0 = weather_particles[0].y, x0 = weather_particles[0].x;
-        for (int i = 0; i < 5; i++) weather_fx_tick_kind(WEATHER_FX_RAIN, 800);
-        int moved_on_rain = (weather_particles[0].y != y0) || (weather_particles[0].x != x0);
-
-        weather_particles[0].y = y0; weather_particles[0].x = x0;
-        int y1 = weather_particles[0].y, x1 = weather_particles[0].x;
-        for (int i = 0; i < 5; i++) weather_fx_tick_kind(WEATHER_FX_NONE, 800);
-        int still_on_clear = (weather_particles[0].y == y1) && (weather_particles[0].x == x1);
-
+        int ok_kind, moved_on_rain, still_on_clear;
+        weather_fx_check(&ok_kind, &moved_on_rain, &still_on_clear);   /* weather.c: classification, then particles under Rain and Clear */
         int ok = ok_kind && moved_on_rain && still_on_clear;
         puts(ok ? "weatherfx: classification + rain moves/clear doesn't: ok\n" : "weatherfx: FAILED\n");
         if (!ok) {
@@ -6449,8 +5237,6 @@ static void run(char *line){
             puts(" still_on_clear="); putn((unsigned int)still_on_clear); puts("\n");
         }
 
-        for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) weather_particles[i] = save_particles[i];
-        weather_particles_seeded = save_seeded;
     }
     else if (!strcmp(line, "windweathertest")) {
         /* v60 gap fix: verification that pass was a boot-time direct-call
@@ -6895,57 +5681,6 @@ static void run(char *line){
             window_close();
         }
     }
-    else if (!strcmp(line, "mailtest")) {
-        /* v59 gap fix: Mail shipped with no regression test at all, the
-           reminders/calendar precedent (check-calendar.sh) only covers
-           date math, nothing VFS-backed like Mail's write-through. Real,
-           discriminating: three known messages through mail_save() ->
-           MAIL.TXT -> a forced mail_load() (state wiped first, so this is
-           a real read off disk, not the array still sitting in RAM),
-           confirms every field and the read flag survived the '|'-
-           delimited round trip; then deletes the middle message through
-           the exact mail_delete_at() the UI's 'd' key now calls, confirms
-           the remaining two shifted into the right slots with every field
-           intact, not just that mail_count went down by one. Runs against
-           ramfs explicitly (fsuse's own backend switch) so the test is
-           real and repeatable even when no FAT disk image is attached,
-           the same reason this suite ships a ramfs backend at all;
-           whatever backend was active is restored after. */
-        const char *prev_fs = vfs_current_name();
-        char prev_fs_buf[16]; int pfi = 0; while (prev_fs[pfi] && pfi < 15) { prev_fs_buf[pfi] = prev_fs[pfi]; pfi++; } prev_fs_buf[pfi] = 0;
-        vfs_switch("ramfs");
-        mail_count = 3;
-        mail_str_copy(mail_msgs[0].from, "Alice", MAIL_FROM_MAX);
-        mail_str_copy(mail_msgs[0].subject, "First", MAIL_SUBJECT_MAX);
-        mail_str_copy(mail_msgs[0].body, "alpha body", MAIL_BODY_MAX);
-        mail_msgs[0].read = 1;
-        mail_str_copy(mail_msgs[1].from, "Bob", MAIL_FROM_MAX);
-        mail_str_copy(mail_msgs[1].subject, "Second", MAIL_SUBJECT_MAX);
-        mail_str_copy(mail_msgs[1].body, "bravo body", MAIL_BODY_MAX);
-        mail_msgs[1].read = 0;
-        mail_str_copy(mail_msgs[2].from, "Carol", MAIL_FROM_MAX);
-        mail_str_copy(mail_msgs[2].subject, "Third", MAIL_SUBJECT_MAX);
-        mail_str_copy(mail_msgs[2].body, "charlie body", MAIL_BODY_MAX);
-        mail_msgs[2].read = 1;
-        mail_save();
-
-        for (int i = 0; i < MAIL_MAX; i++) { mail_msgs[i].from[0] = 0; mail_msgs[i].subject[0] = 0; mail_msgs[i].body[0] = 0; mail_msgs[i].read = 0; }
-        mail_count = 0;
-        mail_loaded = 0;
-        mail_load();
-        int ok = mail_count == 3
-            && !strcmp(mail_msgs[0].from, "Alice") && !strcmp(mail_msgs[0].subject, "First") && !strcmp(mail_msgs[0].body, "alpha body") && mail_msgs[0].read == 1
-            && !strcmp(mail_msgs[1].from, "Bob")   && !strcmp(mail_msgs[1].subject, "Second") && !strcmp(mail_msgs[1].body, "bravo body") && mail_msgs[1].read == 0
-            && !strcmp(mail_msgs[2].from, "Carol") && !strcmp(mail_msgs[2].subject, "Third")  && !strcmp(mail_msgs[2].body, "charlie body") && mail_msgs[2].read == 1;
-        puts(ok ? "mail round trip (3 messages through MAIL.TXT): ok\n" : "mail round trip: FAILED\n");
-
-        mail_delete_at(1);
-        int ok2 = mail_count == 2
-            && !strcmp(mail_msgs[0].from, "Alice") && mail_msgs[0].read == 1
-            && !strcmp(mail_msgs[1].from, "Carol") && !strcmp(mail_msgs[1].subject, "Third") && !strcmp(mail_msgs[1].body, "charlie body") && mail_msgs[1].read == 1;
-        puts(ok2 ? "mail delete: shifted correctly: ok\n" : "mail delete: FAILED\n");
-        vfs_switch(prev_fs_buf);
-    }
     else if (!strcmp(line, "wind")) {
         if (!strcmp(arg, "off")) { wind_enabled = 0; settings_save(); puts("wind off\n"); }
         else if (!strcmp(arg, "on")) { wind_enabled = 1; settings_save(); puts("wind on\n"); }
@@ -6962,13 +5697,18 @@ static void run(char *line){
         else puts("usage: weatherfx rain|snow|off\n");
     }
     else if (!strcmp(line, "wallpaper")) {
-        /* v75/v81: photo|warm|cool|raw picks the theme (persisted like
+        /* v75/v81: grey|terracotta|clay|ink (4.11.4, the plain walls)|photo|warm|cool|raw picks the theme (persisted like
            wind/dockscale); "map" stays a working alias for "warm" (v75's
            original two-state name, now one of four themes) so nothing
            that already typed `wallpaper map` breaks. fetch forces the map
            download right now (its own NIC/net bring-up, same as
            weather_fetch), no argument reports state. */
-        if (!strcmp(arg, "photo")) { wall_switch_theme(WALL_PHOTO); wall_apply(0); puts("wallpaper: photo\n"); }
+        /* 4.11.4: the four plain walls (the Pi's names and colours). */
+        if (!strcmp(arg, "grey") || !strcmp(arg, "gray")) { wall_switch_theme(WALL_GREY); wall_apply(0); puts("wallpaper: grey\n"); }
+        else if (!strcmp(arg, "terracotta")) { wall_switch_theme(WALL_TERRA); wall_apply(0); puts("wallpaper: terracotta\n"); }
+        else if (!strcmp(arg, "clay")) { wall_switch_theme(WALL_CLAY); wall_apply(0); puts("wallpaper: clay\n"); }
+        else if (!strcmp(arg, "ink")) { wall_switch_theme(WALL_INK); wall_apply(0); puts("wallpaper: ink\n"); }
+        else if (!strcmp(arg, "photo")) { wall_switch_theme(WALL_PHOTO); wall_apply(0); puts("wallpaper: photo\n"); }
         else if (!strcmp(arg, "map") || !strcmp(arg, "warm")) { wall_switch_theme(WALL_WARM); wall_apply(1); puts(wall_map ? "wallpaper: map (warm)\n" : "wallpaper: map (warm) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
         else if (!strcmp(arg, "cool")) { wall_switch_theme(WALL_COOL); wall_apply(1); puts(wall_map ? "wallpaper: map (cool)\n" : "wallpaper: map (cool) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
         else if (!strcmp(arg, "raw")) { wall_switch_theme(WALL_RAW); wall_apply(1); puts(wall_map ? "wallpaper: map (raw)\n" : "wallpaper: map (raw) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
@@ -6980,9 +5720,9 @@ static void run(char *line){
                    else puts("wallpaper: fetch failed, photo stays\n"); }
         }
         else {
-            const char *tn = wall_theme == WALL_PHOTO ? "photo" : wall_theme == WALL_COOL ? "map (cool)" : wall_theme == WALL_RAW ? "map (raw)" : wall_theme == WALL_SAT ? "satellite" : "map (warm)";
+            const char *tn = wall_theme >= WALL_GREY ? wall_solid_name[wall_theme - WALL_GREY] : wall_theme == WALL_PHOTO ? "photo" : wall_theme == WALL_COOL ? "map (cool)" : wall_theme == WALL_RAW ? "map (raw)" : wall_theme == WALL_SAT ? "satellite" : "map (warm)";
             puts("wallpaper: "); puts(tn);
-            puts(wall_src == wallpaper_rgb ? " (showing photo)\n" : " (showing map)\n");
+            puts(wall_src == wallpaper_rgb ? " (showing photo)\n" : wall_src == wall_solid_row ? " (plain)\n" : " (showing map)\n");
         }
     }
     else if (!strcmp(line, "dockscale")) {
@@ -6991,74 +5731,6 @@ static void run(char *line){
             int v = 0; const char *p = arg; while (*p >= '0' && *p <= '9') { v = v*10 + (*p-'0'); p++; }
             if (v < 5 || v > 25) { puts("usage: dockscale <5-25>\n"); }
             else { dock_scale_pct = v; settings_save(); puts("dock scale set\n"); }
-        }
-    }
-    else if (!strcmp(line, "isotest")) {
-        iso_readback_a = 0; iso_readback_b = 0;
-        int ida = task_create(iso_task_a);
-        int idb = task_create(iso_task_b);
-        if (ida < 0 || idb < 0) { puts("no free task slots\n"); }
-        else {
-            for (int i = 0; i < 6; i++) yield(); /* let both tasks actually finish and reap themselves */
-            int ok = (iso_readback_a == 0xAAAAAAAA) && (iso_readback_b == 0xBBBBBBBB);
-            puts(ok ? "isolation: separate address spaces confirmed: ok\n" : "isolation: FAILED (one task saw the other's write)\n");
-        }
-    }
-    else if (!strcmp(line, "reaptest")) {
-        /* Real proof task_exit() actually frees its slot, not just that the
-           kernel doesn't hang: exhaust every slot, confirm the next create
-           fails, exit one, confirm a create then succeeds and reuses that
-           exact slot id, not a coincidence, the same id every time since
-           task_create always takes the lowest free slot. */
-        int ids[16]; /* well above task.c's real MAX_TASKS, just a safe bound for this loop */
-        int n = 0;
-        while (n < 16) { int id = task_create(task_exit); if (id < 0) break; ids[n++] = id; }
-        int full = (task_create(task_exit) < 0); /* every slot taken, including task 0 (the shell), so this must fail */
-        for (int i = 0; i < 5; i++) yield(); /* let the throwaway tasks actually reach task_exit() */
-        int reused = task_create(task_a);
-        int ok = full && reused == ids[0] && reused >= 0; /* task_create always takes the lowest free slot, so the first slot handed out above is the first one reused */
-        puts(ok ? "reap: freed slot really reused: ok\n" : "reap: FAILED\n");
-        for (int i = 0; i < 12; i++) yield(); /* drain task_a's own A-printing + exit so the prompt doesn't land mid-output */
-    }
-    else if (!strcmp(line, "fsuse")) {
-        if (!*arg) { puts("current: "); puts(vfs_current_name()); puts(" (usage: fsuse fat|ramfs)\n"); }
-        else puts(vfs_switch(arg) ? "switched\n" : "no such backend\n");
-    }
-    else if (!strcmp(line, "diskuse")) {
-        if (!*arg) { puts("current: "); puts(blockdev_current_name()); puts(" (usage: diskuse ata|ramdisk; run 'fsuse fat' then 'disktest'/'ls' after switching to see it take effect)\n"); }
-        else puts(blockdev_switch(arg) ? "switched\n" : "no such backend\n");
-    }
-    else if (!strcmp(line, "ls"))    vfs_list(ls_cb);
-    else if (!strcmp(line, "browse")) browse();
-    else if (!strcmp(line, "cat")) {
-        if (!*arg) { puts("usage: cat <file>\n"); }
-        else {
-            char buf[4096];
-            int n = vfs_read_file(arg, buf, sizeof(buf) - 1);
-            /* v1.0.10: a named serial marker with the real returned length,
-               so tools/checks/filerobust-check.py can prove an empty file
-               reads back as n=0 and an oversized (or corrupted: a lying
-               file_size field plus a FAT chain that loops back on itself)
-               file comes back clamped to this buffer's own 4095-byte
-               capacity, not whatever its directory entry or cluster chain
-               claims -- headless, with no screen to scrape. fat_read_file's
-               own `remaining = min(file_size, bufsize)` already bounds the
-               copy regardless of what the on-disk metadata says, so this
-               is a proof marker, not a fix; see that function's own
-               comments in drivers/fat.c for why a corrupted size/chain
-               can't run past bufsize here. */
-            serial_puts("cat "); serial_puts(arg); serial_puts(": ");
-            if (n < 0) serial_puts("not found\n");
-            else {
-                char nb[8]; int ni = 0; unsigned int un = (unsigned int)n;
-                if (un == 0) nb[ni++] = '0';
-                while (un) { nb[ni++] = (char)('0' + un % 10); un /= 10; }
-                nb[ni] = 0;
-                for (int j = 0; j < ni / 2; j++) { char t = nb[j]; nb[j] = nb[ni - 1 - j]; nb[ni - 1 - j] = t; }
-                serial_puts("n="); serial_puts(nb); serial_puts("\n");
-            }
-            if (n < 0) { puts(arg); puts(": not found\n"); }
-            else { buf[n] = 0; puts(buf); putc('\n'); }
         }
     }
     else if (!strcmp(line, "exec")) {
@@ -7085,59 +5757,6 @@ static void run(char *line){
                 if (!exec_user(uargv[0], uargv, uargc, &status)) { puts(uargv[0]); puts(": exec failed (not found, too big, argv too large, or no free task slot)\n"); }
                 else { puts("exit code "); putdec(status); putc('\n'); }
             }
-        }
-    }
-    else if (!strcmp(line, "rm")) {
-        if (!*arg) { puts("usage: rm <file>\n"); }
-        else {
-            /* v39: read it before deleting so it can be recovered. A file
-               too big for the trash, or a full trash, still deletes, but
-               says so plainly rather than implying it's recoverable. */
-            static char rmbuf[TRASH_MAX_SIZE];
-            int n = vfs_read_file(arg, rmbuf, sizeof(rmbuf));
-            int kept = (n > 0) && trash_put(arg, rmbuf, (unsigned int)n);
-            if (!vfs_delete(arg)) puts("not found\n");
-            else puts(kept ? "moved to trash\n" : "deleted permanently (too big for trash, or trash full)\n");
-        }
-    }
-    else if (!strcmp(line, "trash")) {
-        int n = trash_count();
-        if (!n) { puts("trash is empty\n"); }
-        else for (int i = 0; i < n; i++) {
-            putn((unsigned int)i); puts(" "); puts(trash_name(i));
-            puts("  "); putn(trash_size(i)); puts(" bytes\n");
-        }
-    }
-    else if (!strcmp(line, "restore")) {
-        if (!*arg) { puts("usage: restore <number, see trash>\n"); }
-        else {
-            int id = 0; const char *p = arg; while (*p >= '0' && *p <= '9') { id = id*10 + (*p-'0'); p++; }
-            puts(trash_restore(id) ? "restored\n" : "could not restore (bad number, or the write failed)\n");
-        }
-    }
-    else if (!strcmp(line, "cd")) {
-        if (!*arg) { puts("usage: cd <dir> (or ..)\n"); }
-        else { puts(vfs_chdir(arg) ? "ok\n" : "not found or not a directory\n"); }
-    }
-    else if (!strcmp(line, "mkdir")) {
-        if (!*arg) { puts("usage: mkdir <name>\n"); }
-        else { puts(vfs_mkdir(arg) ? "created\n" : "failed (name taken, disk full, or directory full)\n"); }
-    }
-    else if (!strcmp(line, "write")) {
-        if (!*arg) { puts("usage: write <file> <content>\n"); }
-        else {
-            char *content = arg;
-            while (*content && *content != ' ') content++;
-            if (*content) *content++ = 0;
-            int ok = vfs_write_file(arg, content, strlen(content));
-            /* v1.0.10: named serial marker so a full-disk write failure
-               (alloc_cluster's free-cluster scan in drivers/fat.c coming up
-               empty) can be told apart from a hang, headless, and so the
-               very next command in the same boot can be checked for a real
-               "ok" -- proof the shell is still responsive, not just that
-               this one call returned. See tools/checks/filerobust-check.py. */
-            serial_puts("write "); serial_puts(arg); serial_puts(ok ? ": ok\n" : ": failed\n");
-            puts(ok ? "written\n" : "failed (name taken or disk full)\n");
         }
     }
     else if (!strcmp(line, "lspci")) {
@@ -7236,56 +5855,6 @@ static void run(char *line){
 
         puts(ok ? "settingsclick: click hit-tests the row it actually landed on, sidebar sections hit-test correctly, and a toggle survives save/load: ok\n" : "settingsclick: FAILED\n");
         serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so a tools/checks shell script can read the verdict headless */
-    }
-    else if (!strcmp(line, "nettest")) {
-        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
-        else {
-            unsigned char mac[6];
-            net_get_mac(mac);
-            puts("MAC: ");
-            for (int i = 0; i < 6; i++) { puthex(mac[i]); if (i < 5) putc(':'); }
-            putc('\n');
-            static const unsigned char frame[64] = {
-                0xFF,0xFF,0xFF,0xFF,0xFF,0xFF, /* dest: broadcast */
-                0,0,0,0,0,0,                    /* src: filled from our MAC below */
-            };
-            unsigned char buf[64];
-            for (int i = 0; i < 64; i++) buf[i] = frame[i];
-            for (int i = 0; i < 6; i++) buf[6 + i] = mac[i];
-            puts(net_send_raw(buf, sizeof(buf)) ? "send:ok\n" : "send:FAIL (timeout)\n");
-
-            unsigned char gw_mac[6];
-            puts("arp 10.0.2.2: ");
-            if (arp_resolve(0x0A000202, gw_mac)) { /* SLIRP's built-in gateway */
-                for (int i = 0; i < 6; i++) { puthex(gw_mac[i]); if (i < 5) putc(':'); }
-                putc('\n');
-            } else puts("timeout\n");
-
-            unsigned int resolved_ip = 0;
-            int dns_ok = dns_resolve("example.com", 0x0A000203, &resolved_ip); /* SLIRP's built-in DNS proxy */
-            puts("dns example.com: ");
-            if (dns_ok) {
-                putn((resolved_ip >> 24) & 0xFF); putc('.');
-                putn((resolved_ip >> 16) & 0xFF); putc('.');
-                putn((resolved_ip >> 8) & 0xFF); putc('.');
-                putn(resolved_ip & 0xFF); putc('\n');
-            } else puts("timeout/no answer\n");
-
-            puts("tcp GET example.com: ");
-            if (!dns_ok) puts("skipped, no IP\n");
-            else {
-                static const char req[] = "GET / HTTP/1.0\r\nHost: example.com\r\nConnection: close\r\n\r\n";
-                static char resp[1400];
-                int n = tcp_get(resolved_ip, 80, req, sizeof(req) - 1, resp, sizeof(resp) - 1);
-                if (n < 0) puts("FAIL\n");
-                else {
-                    resp[n] = 0;
-                    putn((unsigned int)n); puts(" bytes, starts: ");
-                    for (int i = 0; i < 20 && resp[i] && resp[i] != '\r'; i++) putc(resp[i]);
-                    putc('\n');
-                }
-            }
-        }
     }
     else if (!strcmp(line, "ifconfig")) {
         if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
@@ -7497,172 +6066,6 @@ static void run(char *line){
         if (sign != -1 || dollars != 180) { puts("stocks change format failed\n"); pass = 0; }
         puts(pass ? "stocks formatting: ok\n" : "FAILED\n");
     }
-    else if (!strcmp(line, "pngtest")) {
-        /* v74 (0.66.0): discriminating regression test for drivers/png.c.
-           Three real PNG files are baked in (drivers/png_testdata.h,
-           generated by tools/gen_png_testdata.py): each is a crop of the
-           kernel's own wallpaper source, so the expected pixels are
-           wallpaper_rgb itself, no second copy. Between them they cover
-           all five scanline filters (cycled per row on purpose) and all
-           three DEFLATE block kinds (dynamic Huffman at zlib level 9,
-           stored blocks at level 0, fixed Huffman via a tiny image),
-           RGB and RGBA, multi-IDAT. Each decode is compared byte-for-byte
-           to the crop it came from and FNV-1a hashed; the hash is printed
-           on serial too so tools/png-check.sh can match it against the
-           host's own PIL decode of the identical bytes. Two fault
-           injections finish it: one flipped IDAT byte must fail on the
-           chunk CRC, and the same flip with the CRC recomputed must still
-           fail inside inflate/Adler-32 instead of decoding to garbage. */
-        int pass = 1;
-        /* v75: a fourth fixture, 8-bit indexed (PLTE), the shape every real
-           map tile server serves. Its pixels are palette lookups of a
-           quantized crop, not wallpaper bytes, so pal=1 skips the
-           wallpaper compare and the host hash alone is the oracle. */
-        struct { const char *name; const unsigned char *png; unsigned int len;
-                 unsigned int x0, y0, w, h, ch, fnv; int pal; } cases[4] = {
-            { "rgb_dyn", pngt_rgb_dyn, sizeof pngt_rgb_dyn, PNGT_RGB_DYN_X0, PNGT_RGB_DYN_Y0,
-              PNGT_RGB_DYN_W, PNGT_RGB_DYN_H, PNGT_RGB_DYN_CH, PNGT_RGB_DYN_FNV, PNGT_RGB_DYN_PAL },
-            { "rgba_stored", pngt_rgba_stored, sizeof pngt_rgba_stored, PNGT_RGBA_STORED_X0, PNGT_RGBA_STORED_Y0,
-              PNGT_RGBA_STORED_W, PNGT_RGBA_STORED_H, PNGT_RGBA_STORED_CH, PNGT_RGBA_STORED_FNV, PNGT_RGBA_STORED_PAL },
-            { "rgb_fixed", pngt_rgb_fixed, sizeof pngt_rgb_fixed, PNGT_RGB_FIXED_X0, PNGT_RGB_FIXED_Y0,
-              PNGT_RGB_FIXED_W, PNGT_RGB_FIXED_H, PNGT_RGB_FIXED_CH, PNGT_RGB_FIXED_FNV, PNGT_RGB_FIXED_PAL },
-            { "pal_dyn", pngt_pal_dyn, sizeof pngt_pal_dyn, PNGT_PAL_DYN_X0, PNGT_PAL_DYN_Y0,
-              PNGT_PAL_DYN_W, PNGT_PAL_DYN_H, PNGT_PAL_DYN_CH, PNGT_PAL_DYN_FNV, PNGT_PAL_DYN_PAL },
-        };
-        for (int ci = 0; ci < 4; ci++) {
-            unsigned char *px = 0; unsigned int w = 0, h = 0, ch = 0;
-            int r = png_decode(cases[ci].png, cases[ci].len, &px, &w, &h, &ch);
-            puts("png "); puts(cases[ci].name); puts(": ");
-            if (r != 0) { puts("decode error "); putn((unsigned int)(-r)); puts(" FAILED\n"); pass = 0; continue; }
-            unsigned int mism = 0, fnv = 0x811c9dc5u;
-            if (w != cases[ci].w || h != cases[ci].h || ch != cases[ci].ch) mism = 0xFFFFFFFFu;
-            else if (cases[ci].pal) {
-                for (unsigned int i = 0; i < w * h * ch; i++) { fnv ^= px[i]; fnv *= 0x01000193u; }
-            }
-            else {
-                for (unsigned int y = 0; y < h; y++)
-                    for (unsigned int x = 0; x < w; x++) {
-                        const unsigned char *e = &wallpaper_rgb[((cases[ci].y0 + y) * WALLPAPER_W + cases[ci].x0 + x) * 3];
-                        const unsigned char *d = px + (y * w + x) * ch;
-                        if (e[0] != d[0] || e[1] != d[1] || e[2] != d[2]) mism++;
-                        if (ch == 4 && d[3] != ((x * 7 + y * 3) & 0xFF)) mism++; /* the generator's alpha pattern */
-                    }
-                for (unsigned int i = 0; i < w * h * ch; i++) { fnv ^= px[i]; fnv *= 0x01000193u; }
-            }
-            kfree(px);
-            putn(w); puts("x"); putn(h); puts(" ch="); putn(ch);
-            puts(" mismatches="); putn(mism); puts(" fnv="); puthex(fnv);
-            int ok = (mism == 0 && fnv == cases[ci].fnv);
-            puts(ok ? " ok\n" : " FAILED\n");
-            if (!ok) pass = 0;
-            /* serial copy for the headless harness */
-            { char b[64]; int i = 0; const char *s = "pngtest "; while (*s) b[i++] = *s++;
-              s = cases[ci].name; while (*s) b[i++] = *s++; b[i++] = ' ';
-              b[i++] = ok ? 'o' : 'F'; b[i++] = ok ? 'k' : 'A'; b[i++] = ' ';
-              for (int sh = 28; sh >= 0; sh -= 4) { int nib = (fnv >> sh) & 0xF; b[i++] = nib < 10 ? '0' + nib : 'a' + nib - 10; }
-              b[i++] = '\n'; b[i] = 0; serial_puts(b); }
-        }
-        /* fault injection 1: a flipped IDAT byte must trip the chunk CRC */
-        {
-            unsigned int n = sizeof pngt_rgb_dyn;
-            unsigned char *c = kmalloc(n);
-            unsigned char *px = 0; unsigned int w, h, ch;
-            if (c) {
-                memcpy(c, pngt_rgb_dyn, n);
-                c[5000] ^= 0x55;
-                int r = png_decode(c, n, &px, &w, &h, &ch);
-                if (px) kfree(px);
-                puts(r == PNG_E_CRC ? "png corrupt byte -> crc rejected: ok\n" : "png corrupt byte not rejected: FAILED\n");
-                if (r != PNG_E_CRC) pass = 0;
-                /* fault injection 2: same flip, CRC repaired, must still fail in zlib/Adler */
-                unsigned int pos = 8 + 25;
-                unsigned int clen = ((unsigned int)c[pos] << 24) | ((unsigned int)c[pos+1] << 16) | ((unsigned int)c[pos+2] << 8) | c[pos+3];
-                memcpy(c, pngt_rgb_dyn, n);
-                c[pos + 8 + clen / 2] ^= 0x55;
-                unsigned int crc = png_crc32(c + pos + 4, clen + 4);
-                c[pos + 8 + clen] = crc >> 24; c[pos + 9 + clen] = crc >> 16; c[pos + 10 + clen] = crc >> 8; c[pos + 11 + clen] = crc;
-                px = 0;
-                r = png_decode(c, n, &px, &w, &h, &ch);
-                if (px) kfree(px);
-                int ok2 = (r == PNG_E_ZLIB || r == PNG_E_TRUNCATED);
-                puts(ok2 ? "png corrupt byte, crc repaired -> inflate rejected: ok\n" : "png corrupt inflate not rejected: FAILED\n");
-                if (!ok2) pass = 0;
-                kfree(c);
-            } else { puts("kmalloc failed\n"); pass = 0; }
-        }
-        puts(pass ? "png decoder: ok\n" : "png decoder: FAILED\n");
-        serial_puts(pass ? "pngtest PASS\n" : "pngtest FAIL\n");
-    }
-    else if (!strcmp(line, "jpegtest")) {
-        /* v76: discriminating regression test for drivers/jpeg.c, the same
-           pngtest shape. Five real photographic JPEGs are baked in
-           (drivers/jpeg_testdata.h, generated by tools/gen/gen_jpeg_testdata.py):
-           crops of the kernel's own wallpaper source re-encoded via PIL at
-           4:4:4 and 4:2:0 subsampling, several quality levels, and one
-           grayscale case. Unlike pngtest, there is no PIL-decode oracle
-           baked in here: JPEG is lossy, so a bit-exact match against an
-           independent decoder isn't the bar (see tools/jpeg-host/main.c's
-           comment for that comparison, done host-side against PIL within a
-           documented tolerance). What *is* checked hash-for-hash here is
-           this exact decoder, cross-compiled freestanding, against the
-           same C source compiled natively (tools/checks/jpeg-check.sh runs
-           tools/jpeg-host fresh and diffs the printed hashes), which is a
-           real, meaningful, discriminating test: deterministic integer-
-           only code should decode identically on both targets, and a
-           mismatch means a real cross-compile or freestanding-environment
-           bug, not lossy-format noise. Two fault injections finish it:
-           a file with no SOI marker must be rejected as not-a-JPEG, and a
-           truncated file must fail cleanly rather than reading past the
-           end. */
-        int pass = 1;
-        struct { const char *name; const unsigned char *jpg; unsigned int len;
-                 unsigned int w, h, ch; } cases[5] = {
-            { "photo_q90_420", jpegt_photo_q90_420, sizeof jpegt_photo_q90_420, JPEGT_PHOTO_Q90_420_W, JPEGT_PHOTO_Q90_420_H, JPEGT_PHOTO_Q90_420_CH },
-            { "photo_q75_444", jpegt_photo_q75_444, sizeof jpegt_photo_q75_444, JPEGT_PHOTO_Q75_444_W, JPEGT_PHOTO_Q75_444_H, JPEGT_PHOTO_Q75_444_CH },
-            { "photo_q50_420", jpegt_photo_q50_420, sizeof jpegt_photo_q50_420, JPEGT_PHOTO_Q50_420_W, JPEGT_PHOTO_Q50_420_H, JPEGT_PHOTO_Q50_420_CH },
-            { "photo_q95_444", jpegt_photo_q95_444, sizeof jpegt_photo_q95_444, JPEGT_PHOTO_Q95_444_W, JPEGT_PHOTO_Q95_444_H, JPEGT_PHOTO_Q95_444_CH },
-            { "gray_q85_420", jpegt_gray_q85_420, sizeof jpegt_gray_q85_420, JPEGT_GRAY_Q85_420_W, JPEGT_GRAY_Q85_420_H, JPEGT_GRAY_Q85_420_CH },
-        };
-        for (int ci = 0; ci < 5; ci++) {
-            unsigned char *px = 0; unsigned int w = 0, h = 0, ch = 0;
-            int r = jpeg_decode(cases[ci].jpg, cases[ci].len, &px, &w, &h, &ch);
-            puts("jpeg "); puts(cases[ci].name); puts(": ");
-            if (r != 0) { puts("decode error "); putn((unsigned int)(-r)); puts(" FAILED\n"); pass = 0; continue; }
-            int dims_ok = (w == cases[ci].w && h == cases[ci].h && ch == cases[ci].ch);
-            unsigned int fnv = 0x811c9dc5u;
-            if (dims_ok) for (unsigned int i = 0; i < w * h * ch; i++) { fnv ^= px[i]; fnv *= 0x01000193u; }
-            kfree(px);
-            putn(w); puts("x"); putn(h); puts(" ch="); putn(ch);
-            puts(" fnv="); puthex(fnv);
-            puts(dims_ok ? " ok\n" : " FAILED\n");
-            if (!dims_ok) pass = 0;
-            /* serial copy for the headless harness, same "jpeghash <name> <hash>" line tools/jpeg-host/main.c prints */
-            { char b[64]; int i = 0; const char *s = "jpeghash "; while (*s) b[i++] = *s++;
-              s = cases[ci].name; while (*s) b[i++] = *s++; b[i++] = ' ';
-              for (int sh = 28; sh >= 0; sh -= 4) { int nib = (fnv >> sh) & 0xF; b[i++] = nib < 10 ? '0' + nib : 'a' + nib - 10; }
-              b[i++] = '\n'; b[i] = 0; serial_puts(b); }
-        }
-        /* fault injection 1: no SOI marker at all */
-        {
-            unsigned char c[16];
-            for (int i = 0; i < 16; i++) c[i] = 0;
-            unsigned char *px = 0; unsigned int w, h, ch;
-            int r = jpeg_decode(c, sizeof c, &px, &w, &h, &ch);
-            if (px) kfree(px);
-            puts(r == JPEG_E_SIGNATURE ? "jpeg no SOI -> rejected: ok\n" : "jpeg no SOI not rejected: FAILED\n");
-            if (r != JPEG_E_SIGNATURE) pass = 0;
-        }
-        /* fault injection 2: truncated file */
-        {
-            unsigned char *px = 0; unsigned int w, h, ch;
-            int r = jpeg_decode(jpegt_photo_q90_420, 50, &px, &w, &h, &ch);
-            if (px) kfree(px);
-            puts(r == JPEG_E_TRUNCATED ? "jpeg truncated -> rejected: ok\n" : "jpeg truncated not rejected: FAILED\n");
-            if (r != JPEG_E_TRUNCATED) pass = 0;
-        }
-        puts(pass ? "jpeg decoder: ok\n" : "jpeg decoder: FAILED\n");
-        serial_puts(pass ? "jpegtest PASS\n" : "jpegtest FAIL\n");
-    }
     else if (!strcmp(line, "mousetest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
         else {
@@ -7810,6 +6213,7 @@ void kmain(unsigned int multiboot_info_addr){
                 if (pc[0]=='m' && pc[1]=='a' && pc[2]=='p') wall_theme_override = WALL_WARM;
                 else if (pc[0]=='s' && pc[1]=='a' && pc[2]=='t') wall_theme_override = WALL_SAT;
                 else if (pc[0]=='p' && pc[1]=='h' && pc[2]=='o') wall_theme_override = WALL_PHOTO;
+                else if (pc[0]=='g' && pc[1]=='r' && pc[2]=='e') wall_theme_override = WALL_GREY;
                 break;
             }
         /* 1.0.12: llmhost=HOST / llmport=PORT, the Chat equivalent of

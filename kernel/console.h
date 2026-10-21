@@ -3,6 +3,9 @@
 void putc(char c);
 void puts(const char *s);
 void puthex(unsigned int v);
+void putn(unsigned int v);   /* unsigned decimal */
+void clear(void);            /* the text console, blank, cursor home */
+int get_key(void);           /* blocks for one key: ASCII or app.h KEY_* */
 
 /* The next already-queued keystroke as an ASCII character, or -1 if the
    keyboard ring is empty. Non-blocking on purpose: its one caller is

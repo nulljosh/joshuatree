@@ -5,7 +5,7 @@ Where it is going, what shipped, and the story so far.
 ## Contents
 
 - [Roadmap](#roadmap)
-- [Next priorities (reviewed 2026-10-11)](#next-priorities-reviewed-2026-10-11)
+- [Next priorities (reviewed 2026-10-18)](#next-priorities-reviewed-2026-10-18)
 - [From the gap study (2026-10-11)](#from-the-gap-study-2026-10-11)
 - [Daily driver gaps (Joshua, 2026-10-12: "keep identifying gaps and check them off as we go")](#daily-driver-gaps-joshua-2026-10-12-keep-identifying-gaps-and-check-them-off-as-we-go)
 - [Next few weeks](#next-few-weeks)
@@ -50,93 +50,30 @@ See the Blueprint: where the OS goes after 1.0 section for the structural plan o
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Next priorities (reviewed 2026-10-11)
+## Next priorities (reviewed 2026-10-18)
 
-The ordered list below is the near-term queue. The topic sections keep the longer plan.
+The near-term queue. The topic sections below keep the longer plan, and shipped work is in [the Shipped log section](#shipped-log).
 
-Completed work is in [the Shipped log section](#shipped-log). `VERSION` and the GitHub releases are the source for release numbers.
+**Now: 5.0, Talk to it (Joshua, 2026-10-18: "aim for v5, focus on the mic").** The gate is a ten-minute spoken conversation on the real Pi that opens and changes things. 5.0.0 is cut only after Joshua has had it on the board.
 
-**The road to 3.0 (Joshua, 2026-10-11: "/loop until v3").**
+Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Mac (`tools/claude-relay/stt.py`), voice mode (double-tap and hold Space, a mic mark and a level bar), her voice through `[[say]]` with a mouth in the chat view, and the agent loop. Since 4.17.0 `[[open]]` reaches every app Spotlight opens. Left:
 
-The gate is in `ARCHITECTURE.md` (Decisions): the desktop boots on a real Pi 4 and you can type and click, mouse included.
+1. The board proof (Joshua): the Yeti in a Pi port, `mic` shows the room, hold Space and talk, she answers out loud.
+2. A full-screen face whose mouth follows her voice.
+3. Whatever the board shows is broken.
 
-Tonight:
-- These merge one at a time: the Samantha box case (#505), sound from the 3.5 mm jack (#506), typing into apps with click to focus (#507) and Samantha's voice through the relay (#508).
-- The 3.0 mark is picked from three candidates.
+**Then: the rest of 6.0, Yours.** Accounts, login, sudo, home folders (4.8 to 4.11) and snapshots are in. Still to come: the crash-safe card filesystem, a Users pane in Settings, file permissions and backups.
 
-This week:
-- The card is reflashed with the LAN relay over TLS.
-- The logo and UI refresh.
-- Then 3.0.0 and a QA pass of the landing page.
-
-This month:
-- The first case print from `docs/hardware/`.
-- SD card writes.
-- The local model from the card.
-
-User mode on ARM (M3) is the centrepiece:
-1. The `svc` syscall layer under `user/jtsys.h`.
-2. Calendar as the first shared app on the Pi.
-3. Files and Notes.
-
-Rest of the year: 4.0 "Many windows", the box as a kit, and showing it in person.
-
-The Loop handoff section has the exact state and the M3 slices.
-
-**On the real Pi:** the desktop, USB keyboard, Wi-Fi, network clock and Samantha relay work. Joshua confirmed an HTTPS fetch on the board.
-
-The merged Terminal, bounded agent loop, browser navigation and model controls have QEMU checks. The latest keyboard fixes still need another board pass.
-
-**Released 2.40.0:** PR #502 merged as 264c01d9.
-- Full local and final GitHub gates passed.
-- Deployment and release passed.
-- The public footer, browser demo and ISO checksum were verified.
-- All superseded PRs and remote branches were removed.
-- Physical Pi verification remains for the newer features.
-
-**In review, 2.41.0:** Pi screen sleep blanks HDMI after five idle minutes. It wakes on keyboard or mouse without suspending apps.
-- Focused host and raspi4b mailbox/input checks pass.
-- Full gates and physical HDMI verification remain.
-
-**Next, in order**
-
-1. Codex login from the Pi by device code.
-   - Why: a second agent on the box without typing a key.
-   - Only if the terms research says the device-code flow is allowed for this use. Otherwise Codex runs through the relay on the Mac, read-only.
-   - Check: a relay check with a stub Codex answering a `codex>` question, and the terms decision written here.
-   - Research decision (2026-10-10): use the official Codex CLI on the Mac rather than building a bare-metal OAuth client.
-     - Official [authentication](https://learn.chatgpt.com/docs/auth) and [non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode) docs describe CLI device login and read-only exec.
-     - They do not establish permission for a custom client.
-     - Keep credentials on the Mac.
-     - Before implementation, verify repository-scoped read access, disabled writes/network and bounded requests.
-     - No Codex relay backend exists yet.
-2. Pi security: verify the TLS relay and HTTPS clock on the board, then replace the build-time clock bootstrap.
-   - RNG200 hardware entropy is implemented with health checks and fail-closed TLS, pending board verification.
-   - The code now refuses plaintext Pi relay requests and time rollback.
-   - A certificate valid at build time but expired today can still pass the first clock handshake.
-   - Setup and checks: [`GUIDE.md` (Encrypted Pi relay)](GUIDE.md#encrypted-pi-relay).
-3. The self-update path with a fallback kernel.
-   - SD writes landed in 2.57.0 (files in `JT/` survive a reboot under QEMU, `tools/checks/arm64-sd-check.py`). They wait on a board photo.
-   - Why: a new build still needs a card swap.
-   - Check: a fake release that boots once and falls back.
-4. The local model with real weights read from the SD card.
-   - Why: the kernel runs the forward pass, but release builds carry no weights.
-   - Check: `tools/checks/arm64-llm-check.py` with the model loaded from a FAT image instead of the link.
-5. The Bluetooth mouse on the Pi (Joshua has no wired one).
-   - Pointer and clicks work in QEMU.
-   - The radio bring-up and `bt scan` are slice BT1. Pairing and HID over GATT are BT2. Both are in the Loop handoff section.
-   - Check: a fake controller under QEMU plus one board photo of the cursor moving.
-6. Split `kernel/kernel.c` in slices.
-   - Why: it is too big to work in.
-   - Check: `make` and `./check.sh` after every slice, `tools/checks/check-refs.sh` after each move.
-7. Trademark check before any rename (Folio, Mirage).
-   - Why: a rename on a box with a taken name is a redo.
-   - Check: the search result written in this file.
-
-Notes on ARM, the boot chime, the admin tier and [the Autonomy section](#autonomy) stay open below.
+**Still open from the 2026-10-11 review:**
+- Codex through the relay on the Mac, read-only, never a bare-metal OAuth client on the Pi (research decision 2026-10-10).
+- Pi security on the board: verify the TLS relay and HTTPS clock, then drop the build-time clock bootstrap.
+- Self-update with a fallback kernel. Check: a fake release that boots once and falls back.
+- The local model with real weights read from the card (`tools/checks/arm64-llm-check.py` loading from a FAT image).
+- Split `kernel/kernel.c` and `arch/arm64/main.c`, one behaviour-identical PR each.
+- A trademark search before any rename.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, and fewer get it onto a real board. Lean into that:
-- **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`). Film the first ugly print and every fix. Then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
+- **Our own case.** 3D print the Nimbus case for the Pi 4 (CAD and print pack in `docs/hardware/nimbus/`). Film the first ugly print and every fix. Then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
 - **Nothing underneath.** No Linux, no Raspberry Pi OS: it boots straight into our desktop. Say it on the box and in the first second of the video.
 - **It knows what you want.** The anticipation slice from the Vision section, all on the device. No other hobby OS has an assistant that runs it.
 - **A maker pack.** The breadboard prototype (`docs/GUIDE.md` (Breadboard prototype)) with real drivers for the LED, button and speaker, so people can wire their own things to it.
@@ -170,16 +107,13 @@ Refuted, and why, so nobody re-finds them:
 The research rounds of 2026-10-06 and 2026-10-08 further down still hold. Where they overlap (the crash reporter, W^X, bad-argument syscall tests), the slices here are the ones to build, because they were checked against the tree with a path and line.
 
 Confirmed, 3.0, usable, hours each:
-- [ ] [Sonnet] Caps Lock and held-key repeat on the Pi.
+- [x] [Sonnet] Caps Lock and held-key repeat on the Pi. Already shipped in 2.52.0; 4.15.0 added the missing mutation to its check.
   - `arch/arm64/ask.c` drops every code of 58 or more, so Caps Lock does nothing.
   - `hid_kbd` emits one press per report, so holding Backspace deletes one character (the keyboard is set to idle 0).
   - Track Caps Lock in ask.c (letters only, Shift inverts it).
   - Repeat the last typed key from the main loop after 400 ms, then every 80 ms. Cancel it by release or another key. Typed keys and Backspace only, so Brick is untouched.
   - Check: `tools/checks/arm64-keys-check.py` with a held key over QMP input-send-event (8 to 14 repeats, none after release) and a Caps Lock case through the self-test path.
-- [ ] [Sonnet] Notes autosaves.
-  - `user/notes.c` saves only on Esc or Ctrl+S, and the window's red dot kills the task so a dirty edit is lost.
-  - Save two seconds after the last key, timed with `JT_SYS_TIME` seconds.
-  - Check: a new notes-autosave check under tools/checks that types, waits, closes through the red dot, reopens and finds the text.
+- [x] [Sonnet] Notes autosaves, shipped in 2.55.0 (#518) and found unticked in 4.15.2. `user/notes.c` saves a dirty note two `JT_SYS_TIME` seconds after the last key, so the red dot no longer loses an edit. Check: `tools/checks/notes-autosave-check.py` (i386 kernel; types, waits, closes through the red dot, reopens and finds the text), with a mutation (autosave off) that must fail. Open on the Pi: `JT_SYS_TIME` returns 0 until the network has set the clock (`cal_utc` in `arch/arm64/main.c`), and Notes' `0 - 0 >= 2` never fires, so an offline Pi still does not autosave.
 
 Worth doing, not yet re-checked, in the order the study ranked them:
 - 3.0 stability, hours:
@@ -271,10 +205,9 @@ Worth doing, not yet re-checked, in the order the study ranked them:
     3. The relay running several agent steps (each one a full POST) on the small local model.
   - Time each step with `ticks()` stamps on the UART on the board first.
   - Check: a stub-relay check that fails when a question costs more than one handshake.
-- [ ] [Sonnet] Calendar app on the Pi highlights the UTC day, not the local one.
-  - At 11:20 PM on 11 October the Clock and the dock tile said the 11th and the month grid circled the 12th.
-  - Use the same local date the Clock uses.
-  - Check: extend `tools/checks/arm64-calicon-check.py` with a UTC-after-midnight, local-before-midnight case that finds the circled day.
+- [x] [Sonnet] Calendar app on the Pi circled the UTC day, not the local one, fixed in 4.15.1.
+  - At 11:20 PM on 11 October the Clock and the dock tile said the 11th and the month grid circled the 12th. The app read `SYS_TIME` as raw UTC; on the Pi `SYS_TIME` now returns Vancouver wall time through `clock_offset` in `arch/arm64/main.c`, the one time-zone path the Clock already used.
+  - Check: `tools/checks/arm64-calicon-check.py` boots 06:20 UTC on 12 October, finds the circled day in the Calendar window (the 11th), and a mutation with the grid back on UTC (`--mutate`) circles the 12th and fails.
 - [ ] [Sonnet] Keyboard shortcuts in every app.
   - The Command key (the GUI or Windows key on a PC keyboard) with A select all, C copy, X cut, V paste, Z undo, S save, W close the window, Q quit, N new, F find, Tab to switch windows.
   - Plus Ctrl for the same on a keyboard with no GUI key.
@@ -297,7 +230,7 @@ Worth doing, not yet re-checked, in the order the study ranked them:
   - A `users` and `adduser` command in the Terminal.
   - The i386 build already has Account (change password) and Add user rows in Settings. Reuse that store.
   - Check: a new accounts check that adds a user, logs out and in, and sees a wrong password refused.
-- [ ] [Sonnet] A `reboot` and `shutdown` command in the Terminal and in the menu bar, no Ctrl+Alt chord to remember (the chord stays as the keyboard route).
+- [x] [Sonnet] A `reboot` and `shutdown` command in the Terminal and in the menu bar, no Ctrl+Alt chord to remember (the chord stays as the keyboard route). The commands (3.x) and the tree menu rows (4.x) had shipped unticked; 4.16.0 added the flush and the safe-to-unplug screen. Check: `tools/checks/arm64-power-check.py`.
 
 - [ ] [Sonnet] Books, a reader app for Joshua Tree (both kernels, ring 3 like Notes).
   - A library of plain text and EPUB-as-text books in `JT/BOOKS/`.
@@ -384,7 +317,7 @@ The redesigned footer is live in 2.40.0: a spacious directory, original desert a
 ### From the notebook (Joshua, 2026-10-04)
 Two notebook pages checked against the tree. Already shipped and not listed: menu bar with weather, dock, Activity, Trash, clipboard, Burrow (the Finder), Epiphany tabs, Launchpad-style Apps folder, Music, Movies, landing page, docs at 100 percent, CI, Samantha chat with tools. Wi-Fi was ruled out for 1.0 and is under Our own computer.
 - [ ] [Joshua] Competitor research as a doc: Apple Mac mini against our box on RAM (8 to 16 GB), integrated CPU, multi-display over HDMI, internal or external design, USB-C ports. A good-computer checklist for `docs/GUIDE.md` (Hardware plan).
-- [ ] [Fable] Time Machine: snapshots of the disk with a browse-the-past view. Nothing exists; needs a FAT snapshot design first.
+- [ ] [Fable] Time Machine: a browse-the-past view. Home-folder snapshots exist since 4.12.0 (`snapshot`, `restore N yes` in the Terminal); a window to look through them does not.
 - [ ] [Sonnet] Fullscreen avatar, custom: Samantha (or Joshua's face) full screen as a mode, with the face picked in Settings. The page also lists video, audio and GUI mode as three ways to talk to her.
 - [ ] [Fable] An integrated LLM that runs on the box. The small forward-pass runtime landed; real weights from the SD card remain in Next priorities. A full Turing model still needs a memory and runtime decision.
 - [ ] [Sonnet] Improved chat app: more tools and persistent memory across boots (a file the app reads at start).
@@ -458,7 +391,7 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
   - A second privilege tier on the accounts that already exist (login screen, PBKDF2 passwords, Settings "Add user").
   - An admin flag per account, a password prompt before anything that installs, deletes a user or changes system settings, and a normal-user role that cannot.
   - i386 build first. It touches `kernel/auth.h`, Settings and the syscall gate, not the ARM files, so it can run beside Wi-Fi.
-  - Per-user home folders and file permissions follow (6.0).
+  - Per-user home folders shipped in 4.11.0; file permissions follow (6.0).
 - [ ] [Fable] Sound over DMA.
   - Move the PWM FIFO feed to a DMA channel so long sounds do not hold the CPU, then HDMI audio. Then Movies plays a clip with sound on the Pi.
   - An app's sound goes through DMA since 2.59.0 (Music, M3e, `tools/checks/arm64-music-check.py`), waiting on the board.
@@ -503,7 +436,7 @@ The rest of the Linux gaps, tagged with the version that owns them (Joshua, 2026
 - [ ] [Fable] [4.0] Processes the Unix way: fork and exec, pipes, signals, a process table, exit codes. The base for everything below.
 - [ ] [Fable] [4.0] A real shell and Terminal: a command line with pipes, redirects, job control, a PATH and scripts, so `ls | grep` works. Tabs and splits come after.
 - [ ] [Fable] [6.0] Users and permissions: accounts, file owners and modes, a login screen, an admin role that can install. Joshua's "admin privileges" idea starts here.
-- [ ] [Fable] [6.0] A journaling or copy-on-write filesystem for the card, so a pulled plug mid-write loses nothing (FAT stays for sticks).
+- [x] [Fable] [6.0] A crash-safe card filesystem, so a pulled plug mid-write loses nothing: shipped in 4.13.0 as write ordering plus a mount-time repair on FAT itself, no journal.
 - [ ] [Fable] [7.0] TLS 1.3 in the kernel or a ring-3 library: the gate for HTTPS, so websites, Plex and a real Claude API connection work without a relay.
 - [ ] [Fable] [7.0] A web browser on the Pi (Madobe on this OS; NetSurf is the reference port). Needs TLS, fonts and a JavaScript engine decision.
 - [ ] [Fable] [8.0] A compiler and linker on the box (the Plank compiler first), so the OS can build its own apps. The last piece of "build Joshua Tree inside Joshua Tree".
@@ -609,12 +542,12 @@ The top five gaps from the Research section (written from memory) that were not 
 
 ### Nimbus, the hardware (Joshua, 2026-10-06 night)
 
-The hardware is called Neo in the files (`docs/hardware/neo_cad.py`, the blueprint, the build guide); Strata was the earlier name. Joshua prefers Nimbus and wants the design refreshed in Blender with the original Macintosh as inspiration: a compact, square box.
+Nimbus replaced the stacked-ring Neo case, which was removed in 4.11.6 (Strata was its earlier name). Nimbus is a compact, square box with the original Macintosh as inspiration.
 
 - [ ] [Sonnet] Name check for Nimbus before it goes on a box: domain, trademark search in Canada and the US, and the App Store and GitHub namespaces (the asc-name-creator skill has the bulk domain check). Nimbus is a common word, so confirm it is free for computer hardware.
-- [ ] [Fable] Redesign: a compact, near-square all-in-one in the spirit of the first Macintosh, but an original design with no Apple marks. The Pi 4 (and a larger variant for the mini-ITX board) sits behind a front face that holds a 7 inch screen, a handle recess on top, a vent slot grille, one slot-shaped detail on the front, ports out the back. Built in build123d, exported to STL and STEP, rendered in Blender from the real CAD like the Neo hero image.
-- [ ] [Sonnet] Rename Neo to Nimbus across the repo once the name check passes: file names, the blueprint and build sheets, `docs/GUIDE.md` (Hardware plan), the Money section, the landing page. One PR, with `check-refs` green; mention the old names in a single "formerly Neo, Strata" line.
-- [ ] [Sonnet] A Nimbus build guide, blueprint sheet and assembly steps regenerated from the new CAD.
+- [x] [Fable] Redesign (shipped 4.7.0): a compact, near-square all-in-one in the spirit of the first Macintosh, but an original design with no Apple marks. The Pi 4 (and a larger variant for the mini-ITX board) sits behind a front face that holds a 7 inch screen, a handle recess on top, a vent slot grille, one slot-shaped detail on the front, ports out the back. Built in build123d, exported to STL and STEP, rendered in Blender from the real CAD like the Neo hero image.
+- [x] [Sonnet] Neo removed (4.11.6): its CAD, STLs, renders, blueprint and build guide are gone; Nimbus is the only case.
+- [x] [Sonnet] A Nimbus build guide, blueprint sheet and assembly steps regenerated from the new CAD (4.7.0 print pack).
 
 ### Known limits to recheck
 - [ ] [Sonnet] `SYS_READFILE` reads with interrupts off, so loading mid-song can glitch the audio.
@@ -1109,6 +1042,31 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.19.0 (2026-10-19)**: Talking to Samantha on the Pi is double-tap and hold Space, like Claude Code's voice mode, and nothing else: the typed `hear` command and its quiet detector are gone (Joshua: "replace hear with double click and hold space"). Holding Space now says plainly when there is no USB microphone or no relay token, the two errors `hear` used to give, and `arm64-voicemode-check.py` gained `hear`'s refusal case (a 401 from the words service is reported and nothing reaches the relay).
+- **4.18.3 (2026-10-19)**: Second slice of breaking up `kernel/kernel.c` (now 7,282 lines): the map and satellite wallpapers (tile fetch, theme switch, the baked satellite fallback, `wall_apply`) move to `kernel/wallmap.c` (286 lines) behind `kernel/wallmap.h`, and the 17,000-line satellite header compiles with it instead of with kernel.c. The per-pixel readers stay inlined in kernel.c; the photo is reached through one pointer so its 1.5 MB is linked once. No behaviour change. Checks: `check.sh`, `walldefault-check.sh`, `walldemo-regression-check.py`, `wallcompose-check.py`, `bss-margin-check.py`.
+- **4.18.4 (2026-10-19)**: Third slice of breaking up `kernel/kernel.c` (now 7,037 lines): `SETTINGS.TXT` load and save and the LLM, Mail and Claude relay settings move to `kernel/settings.c` (250 lines) behind `kernel/settings.h`. Same file format, same keys, same bounds checks; the god-file ceiling drops to match.
+- **4.18.5 (2026-10-19)**: Fourth slice of breaking up `kernel/kernel.c` (now 6,724 lines): `pngtest`, `jpegtest`, `heaptest`, `nettest` and `mailtest` leave the shell's 1,729-line `run()` for `kernel/selftest.c`, and the PNG and JPEG test fixtures and `mail.h` compile with them instead of with kernel.c. Same commands, same output; png, jpeg and the shell regression checks pass unchanged.
+- **4.18.6 (2026-10-19)**: Fifth slice of breaking up `kernel/kernel.c` (now 6,556 lines): the scheduler demos (`tasktest`, `fputest`, `preempttest`, `killtest`, `spawntest`, `isotest`, `reaptest`) and the tasks they start move to `kernel/taskdemo.c`. Same commands, same output; the shell regression and fpu checks pass unchanged.
+- **4.18.7 (2026-10-19)**: Sixth slice of breaking up `kernel/kernel.c` (now 6,393 lines): the shell's file commands (`ls`, `cat`, `write`, `rm`, `trash`, `restore`, `cd`, `mkdir`, `browse`, `fsuse`, `diskuse`) move to `kernel/shellfs.c`. Same commands, same output; nine filesystem and shell checks pass unchanged.
+- **4.18.2 (2026-10-19)**: The CI split, reviewed and fixed. A check is ARM by what it runs (qemu-system-aarch64 or an arch/arm64 build), not by the shard it sat on: 30 checks move (Stocks onto the ARM runner, about 25 host-only checks off it), and every shard is now about 11 minutes, the slowest 14 before. `ci-balance.py` reads the ARM shards and the shard count from `check.yml`, the one place they are written, and refuses a count the workflow does not run; `ci-local.sh` starts the ARM group first. Check: `ci-tooling-check.py`, which now also proves check.yml, ci-local.sh and SHARDS agree.
+- **4.18.1 (2026-10-19)**: Asking Samantha for the weather with no reading yet now fetches one: her tool asks the desktop (`jt_refresh`) and waits up to 15 s for `WEATHER.TXT` to move, keys left queued, instead of saying "open Weather first". `samweather-check.py` had been passing or failing on timing (the desktop's own first fetch now usually lands before the question); it now asserts a real reading and a fetch before her answer, and logs to a per-run temp folder instead of a fixed /tmp path.
+- **4.18.0 (2026-10-18)**: A bare `hear` on the Pi records until you stop talking: 1.2 s of quiet after speech sends it, at most 10 s, in 100 ms blocks so a microphone that goes silent still ends. `hear 5` keeps the fixed length. The threshold (`HEAR_LOUD`) is the knob to tune on the Yeti. Check: `hear-quiet-check.py` runs ask.c's real `heard_end` on the host (silence, hiss, speech then quiet, a mid-sentence pause), and its mutant without the reset fails.
+- **4.17.0 (2026-10-18)**: Samantha's `[[open APP]]` on the Pi reaches every app Spotlight opens (Notes, Music, Calendar, Books, the games), by the name Spotlight shows, through the same `dock_activate` its Enter uses. It opened eleven named apps before. The roadmap's 5.0 list now says what is built and what is left. Check: `arm64-agent-check.py` opens Notes and Music and refuses a made-up name; its `--mutate` build without the fallback fails.
+- **4.16.2 (2026-10-18)**: The Calendar app on the Pi circles the local day, not the UTC one. At 11:20 PM on 11 October the Clock said the 11th and the grid circled the 12th, because `SYS_TIME` handed apps raw UTC. It now returns Vancouver wall time from `clock_offset` in `arch/arm64/main.c`, the same offset `clock_local` uses for the Clock. Samantha's "what time is it" and the Weather weekday were reading UTC too and now read local; the other callers only time gaps or seed. Checked with `tools/checks/arm64-calicon-check.py` (06:20 UTC on 12 October circles the 11th; the `--mutate` build with the grid on UTC circles the 12th and fails).
+- **4.16.1 (2026-10-18)**: Two shipped features get the mutation their checks lacked, and their roadmap boxes are ticked. `notes-autosave-check.py` builds a private tree with the timer turned off and must fail on the missing save (`jtvm.py` takes a `JT_KERNEL` override for it); autosave shipped in 2.55.0. `arm64-keys-check.py` rebuilds with held-key repeat disabled and requires the held-j step to fail; Caps Lock and repeat shipped in 2.52.0. A bare `make` links the kernel again (its first rule had become memmap.ld). No kernel change.
+- **4.16.0 (2026-10-18)**: Nimbus closes the landing page. The footer's desert engraving is replaced by the Nimbus render, cut out on the page's paper; a WebGL shader hatches its shadow in the accent and sends rounded waves out from it, the computer you talk to, talking. The plain cutout is the fallback without WebGL; `render_nimbus.py` makes it with `NIMBUS_CUTOUT=1`. Check: `landing-specs-footer-check.mjs`.
+- **4.15.2 (2026-10-18)**: The stacked-ring Neo case is gone: its CAD, STLs, renders, blueprint, build sheet, assembly steps and three GUIDE sections. Nimbus is the only case. `render_nimbus.py` also renders wallpapers (`NIMBUS_WALL` with a size, camera and aim). The Neo film script (`docs/hardware/ad/anim.py`, which built on the deleted concepts.py) goes too.
+- **4.15.1 (2026-10-18)**: The Terminal prompt shows who is signed in: `ann@tree % ` instead of always `joshua@tree % `. With no accounts it stays `joshua@tree % `. `ask_prompt()` rebuilds one static buffer from `current_user` (no heap); the echoed line on the UART carries the same prompt. Checked by `tools/checks/arm64-sudo-check.py` (bob signed in sees `bob@tree % `) and `arm64-zsh-check.py` (no accounts, unchanged).
+- **4.15.0 (2026-10-19)**: A Users pane in the Pi's Settings, so accounts are managed without the Terminal. The sixth section lists the accounts and marks the admins; Add user (name, password twice), Change password (your own needs the old one, someone else's needs an admin), an Admin switch and Remove user with a confirm step. Every privileged change asks the signed-in admin's password through the same `sudo_check` and shares sudo's remembered five minutes; a normal user sees the list and changes only their own password. Passwords are stars on screen and no key line reaches the UART while one is typed. It runs the Terminal commands' own code (`cmd.c` `users_add`, `users_delete`, `users_passwd`). Keys and mouse both work. `arch/arm64/users_ui.h`; `tools/checks/arm64-users-check.py` drives it in QEMU, checks the card across a reboot and the UART for leaks, and catches a pane that skips the admin check.
+- **4.14.0 (2026-10-18)**: Crash-safe card, slice 6 of 6.0. Pulling the power mid-write never corrupts the FAT or loses a replaced file's old contents: new data goes to fresh clusters, one directory-sector write flips the entry, then the old clusters are freed, and at mount a scan frees clusters no entry reaches, syncs the FAT copies and fixes FSInfo's free count. `USERS.TXT` takes the same path. `tools/checks/fat-crash-check.py` cuts the power after every sector write and wants `fsck.fat` clean and the file old or new, never a mix. The scan's bitmap and sectors come from the heap at first mount, so the i386 kernel keeps its 16 KB margin below the program window.
+- **4.13.2 (2026-10-19)**: First slice of breaking up `kernel/kernel.c` (8,048 lines, now 7,572): the menu-bar weather moves to `kernel/weather.c` (490 lines) with `kernel/weather.h` as its whole interface. No behaviour change. Checks: `check.sh`, `ring3weather-check.py`, `samweather-check.py`, `wallfx-check.py` and the shell's own weather self-tests, which now call into weather.c.
+- **4.13.1 (2026-10-18)**: Notes on the Pi saves itself with no network. The two second autosave timed on the clock the network sets, which stays 0 offline, so an offline Pi never saved a typed line unless Esc was pressed. It now times on the uptime ticks. Check: `arm64-notes-check.py` types a line, waits, closes by the red dot and finds it on the card; `--mutate` brings the old timing back and must fail.
+- **4.13.0 (2026-10-19)**: Restart and Shut Down are safe to use at any moment on the Pi. Before either, `power_apply` writes every open file descriptor to the card (`ufile_sync`, so Notes mid-save keeps its text), and a shutdown paints a plain "It is safe to unplug the power now." screen (the Pi 4 cannot cut its own power; on the board it stays up, under QEMU the watchdog still halts the model). The `reboot` and `shutdown` Terminal commands and the tree menu rows already existed and need no sudo. Checked in `tools/checks/arm64-power-check.py`: `reboot` comes back to a fresh boot, a file left unsaved survives it, `shutdown` exits QEMU, and a build without the flush loses the file.
+- **4.12.2 (2026-10-18)**: CI is about three times faster to merge. Every ARM check sat on shard 6, which took about 46 minutes while the other seven took 10 to 15; they are now packed by measured time across shards 6, 8, 9 and 10 (about 12 minutes each, all on the raspi4b runner). `ci-balance.py` keeps ARM on those four, `ci-local.sh` runs them in turn since locally they share `arch/arm64`, and the job ceiling drops from 60 to 30 minutes. Check: `ci-tooling-check.py`.
+- **4.12.1 (2026-10-18)**: The i386 desktop boots to a plain grey wallpaper instead of the satellite photo. Grey, Terracotta, Clay and Ink are the same four colours the Pi offers; they fetch nothing and are never tinted. `wallpaper grey|terracotta|clay|ink` and Settings step through them first, and the photo and map themes stay selectable. Saved `wall=0` to `wall=4` still mean what they did. Check: `walldefault-check.sh` now expects Grey.
+- **4.12.0 (2026-10-18)**: Snapshots of your home folder on the Pi. `snapshot` copies it, `snapshots` lists them (newest three kept) and `restore N yes` puts one back; `fat_rmdir` clears the old ones. New `arch/arm64/snap.c`. Check: `arm64-snap-check.py`, plus a snapshot and restore across a reboot in the accounts QA.
+- **4.11.3 (2026-10-18)**: The roadmap's Next priorities section is current again: the 5.0 voice path in order, what is left of 6.0, and the items still open from the 10-11 review. The old road-to-3.0 queue is gone.
+- **4.11.0 (2026-10-18)**: Per-user home folders on the Pi, slice 4 of 6.0. With accounts, Notes, Music and every other app save into `JT/HOME/<name>/` instead of the shared `JT/`; `~` in the Terminal is that folder (`write`, `cat`, `ls`, `mkdir`, `rm` with no sudo); Samantha's `[[save]]` writes there too. Another person's folder is refused to `cat`, `ls`, `write`, `rm` and apps unless the admin has `sudo` active. `adduser` makes the folder, `deluser` leaves it and says so. No accounts, no change. New `home.c`, `arm64-home-check.py`.
 - **4.10.1 (2026-10-18)**: The landing page's Raspberry Pi section is a bento grid: mixed tile widths, a headline on every tile and a flat terracotta tint on the two lead tiles, CSS only. Checked with `tools/checks/landing-layout-check.mjs` and headless shots at 1280 and 390 wide, light and dark.
 - **4.10.0 (2026-10-18)**: Admins, `sudo` and `passwd` on the Pi, slice 3 of 6.0. `JT/SUDOERS.TXT` lists the admins (the USERS.TXT record format is unchanged); the first account ever made is one. A normal user gets "you are not an admin; try sudo" for `adduser`, `deluser` of someone else, `passwd NAME`, `makeadmin`, `unadmin`, `write`, `rm`, `mkdir` and `cat` of the account files; an admin must still say `sudo`. `sudo COMMAND` asks for the signed-in user's password on the next line (stars on screen, nothing on the UART, not even a key code or a star count, buffer wiped), waits a second on a wrong one, says "NAME is not an admin" after a right one from a normal user, and remembers a success for five minutes (`sudo -k` and every sign-out forget it). `passwd` changes your own password (old, then new twice); `sudo passwd NAME` resets another's; `sudo deluser NAME` needs no password of theirs. `makeadmin NAME`, `unadmin NAME` (never the last admin) and `admins`. USERS.TXT and SUDOERS.TXT cannot be touched by hand, by Samantha or by an app; Settings and Samantha's `[[save]]` write only for an admin. Hardening: logout empties both Terminals' scrollback and the chat history and drops half-typed lines and prompts, the Terminal's key lines no longer spell a password on the UART, an unknown name costs the same PBKDF2 as a wrong password, and on the Pi's quiet boot the login card now goes up before the desktop is first drawn. `arch/arm64/sudo.c`; `tools/checks/arm64-sudo-check.py` runs it on the host under sanitizers, drives ann (admin) and bob in QEMU across three boots, checks the quiet-boot order, and catches a sudo that skips the password check.
 - **4.9.0 (2026-10-18)**: The Pi's login screen, slice 2 of 6.0. With an account in `JT/USERS.TXT` the boot stops at a centred card (name field, masked password field) before the desktop; Return submits, a wrong password shows one plain line, clears the password and waits a second, a right one brings the desktop with the name in the menu bar (`current_user`). `logout` and the tree menu's Log Out close every window and return to it; with no account nothing changes. `arch/arm64/login.c` (the form) and `login_ui.h` (the screen); `tools/checks/arm64-login-check.py` runs the form on the host, the screen in QEMU with screendumps, and a mutant that accepts any password, which it must catch.
@@ -1231,7 +1189,7 @@ The facts today:
 |---|---|---|
 | The OS and the apps | Free, Apache 2.0 | Shipped. Runs in the browser and on a real Pi 4 |
 | Samantha (from Turing, a separate project) | Free | Answers from Turing's small model on the Mac; on the box itself later, no key, no cloud |
-| The case designs (Neo, Neo Pi, the Samantha box) | Free to build for yourself, CC BY-NC-SA 4.0 | Drawn, not printed |
+| The case designs (Nimbus, the Samantha box) | Free to build for yourself, CC BY-NC-SA 4.0 | Drawn, not printed |
 | The Samantha box, built and supported | $500 USD | Not built. No date promised |
 
 The hardware licence is non-commercial on purpose. Anyone can print a case for themselves. Nobody can sell copies of the kit.
@@ -1273,7 +1231,7 @@ The known lines add to roughly $65 to $140 before the board, supply and labour. 
 
 What fills it in, in order:
 1. The Pi 4B and supply retail price.
-2. A real print quote for the Neo Pi STLs.
+2. A real print quote for the Nimbus STLs.
 3. A carrier quote for one boxed kit to a US address.
 
 Before anyone defends the $500, price a Pi 4 kit at retail (board, card, supply, stock case). The $500 has to name what it buys beyond parts: a built, tested, supported box with the OS on it and a person to write to.
@@ -1293,7 +1251,7 @@ A demand gate comes first: 50 people on the waitlist (a guess, move it if real n
 
 Also required first:
 - A Pi that boots to the desktop, takes a keyboard and a mouse and keeps a file across a reboot, on camera, on the real board.
-- A real print of the Neo Pi case that fits (fit test first).
+- A real print of the Nimbus case that fits.
 - A real parts total and shipping quote.
 - An answer on certification.
 - A fulfilment path (who builds, ships and answers mail).

@@ -18,6 +18,7 @@ virtio keyboard, and keys go in through QMP send-key, the path arm64-claude-cons
      the Calculator ("calc: 9999 = ..."); Backspace repeats too. The virtio keyboard has no repeat of its own.
   7. Caps Lock (ask.c): Caps, j, t types "JT"; Shift+j under Caps types "j"; Caps again gives lowercase; Shift alone still
      capitalises, in Spotlight and on the Terminal's line.
+  8. Mutation: main.c made never to arm the repeat (restored afterwards) must fail step 6: a held j types once.
 Every step proves the Terminal is reachable with no mouse. Skips (exit 0) when the tools are missing.
 """
 import json, os, re, shutil, socket, subprocess, sys, tempfile, time
@@ -166,5 +167,47 @@ try:
     key("esc")
 finally:
     q.kill(); q.wait(); shutil.rmtree(tmp, ignore_errors=True)
+
+# ---- 8. mutation: key repeat disabled (main.c never arms rep_code) must FAIL the held-key step ----
+MAIN_C = os.path.join(arch, "main.c"); ARM_LINE = "rep_code = e.code; rep_next = key_ms() + KEY_REPEAT_DELAY_MS;"
+orig = open(MAIN_C).read()
+assert ARM_LINE in orig, "the line that arms the repeat moved; update ARM_LINE"
+def mutant_run():   # boot the mutant, hold j in Spotlight for 1.3 s and count the j typed; a working repeat gives 9 to 15
+    tmp2 = tempfile.mkdtemp(); log2, sock2 = tmp2 + "/uart", tmp2 + "/qmp"
+    q2 = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-nic", "none",
+                           "-global", "virtio-mmio.force-legacy=false", "-device", "ramfb", "-device", "virtio-keyboard-device",
+                           "-display", "none", "-serial", "file:" + log2, "-qmp", "unix:%s,server,nowait" % sock2,
+                           "-kernel", os.path.join(arch, "kernel8.elf")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        u2 = lambda: open(log2, errors="replace").read() if os.path.exists(log2) else ""
+        for _ in range(600):
+            if "M1c fb ok" in u2(): break
+            time.sleep(0.1)
+        else: return None
+        time.sleep(1.0)
+        s2 = socket.socket(socket.AF_UNIX); s2.connect(sock2); f2 = s2.makefile("rw"); f2.readline()
+        def c2(c, **a):
+            f2.write(json.dumps({"execute": c, "arguments": a}) + "\n"); f2.flush()
+            while True:
+                r = json.loads(f2.readline())
+                if "return" in r or "error" in r: return r
+        c2("qmp_capabilities")
+        c2("send-key", keys=[{"type": "qcode", "data": "f1"}]); time.sleep(1.0)
+        m2 = len(u2()); ev = lambda d: [{"type": "key", "data": {"down": d, "key": {"type": "qcode", "data": "j"}}}]
+        c2("input-send-event", events=ev(True)); time.sleep(HOLD); c2("input-send-event", events=ev(False)); time.sleep(0.5)
+        t = re.findall(r"spotlight: (\S*) \d+", u2()[m2:]); return len(t[-1]) if t else 0
+    finally:
+        q2.kill(); q2.wait(); shutil.rmtree(tmp2, ignore_errors=True)
+try:
+    open(MAIN_C, "w").write(orig.replace(ARM_LINE, "rep_code = 0; (void)rep_next;"))
+    if subprocess.run(["make", "-C", arch, "kernel8.elf"], capture_output=True, text=True, timeout=900).returncode:
+        step("mutation: the repeat-disabled build compiles", False)
+    else:
+        got = mutant_run()
+        step("mutation: with repeat disabled a held j types %s j and the 9 to 15 step FAILS (it must not pass)" % got, got is not None and not (9 <= got <= 15))
+finally:
+    open(MAIN_C, "w").write(orig)
+    subprocess.run(["make", "-C", arch, "kernel8.elf"], capture_output=True, text=True, timeout=900)
+    if open(MAIN_C).read() != orig: print("FAIL: main.c was not restored"); sys.exit(1)
 if fails: print("FAIL: " + "; ".join(fails)); sys.exit(1)
-print("PASS: arm64-keys-check: Spotlight, dock keys, F2 and Esc reach the Terminal with no mouse; held keys repeat; Caps Lock")
+print("PASS: arm64-keys-check: Spotlight, dock keys, F2 and Esc reach the Terminal with no mouse; held keys repeat; Caps Lock; a build with repeat disabled is caught")

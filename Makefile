@@ -9,7 +9,7 @@ LD := ld.lld
 
 KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c \
                kernel/paging.c kernel/kheap.c kernel/task.c kernel/exec.c kernel/ring3.c kernel/ring3app.c kernel/syscall.c kernel/brk.c kernel/shellsys.c kernel/r3stress.c \
-               kernel/gui_prims.c kernel/gui_paint.c kernel/dock_geom.c kernel/dock_draw.c kernel/app.c kernel/backtrace.c kernel/entropy.c kernel/auth_kdf.c kernel/picker.c kernel/kernel.c
+               kernel/gui_prims.c kernel/gui_paint.c kernel/dock_geom.c kernel/dock_draw.c kernel/app.c kernel/backtrace.c kernel/entropy.c kernel/auth_kdf.c kernel/picker.c kernel/weather.c kernel/wallmap.c kernel/settings.c kernel/selftest.c kernel/taskdemo.c kernel/shellfs.c kernel/kernel.c
 KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/ring3_asm.S
 DRIVER_SRCS := drivers/ata.c drivers/blockdev.c drivers/ramdisk.c drivers/trash.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c drivers/vmmouse.c \
                drivers/window.c drivers/rtl8139.c drivers/ne2k.c drivers/net.c drivers/http.c drivers/html.c \
@@ -31,6 +31,8 @@ PASS1_OBJS := $(filter-out kernel/symtab.o,$(OBJS))
 # Neither kernel.elf.pass1 nor the generated kernel/symtab.c is committed
 # (see .gitignore); both regenerate from scratch on every build, same as
 # drivers/version.h.
+# A bare `make` links the kernel; without this the first rule below (memmap.ld) was the goal.
+.DEFAULT_GOAL := kernel.elf
 # boot/memmap.ld: kernel/memmap.h's #defines as linker-script symbols, so
 # boot/linker.ld and user/*.ld INCLUDE the same ring-3 addresses the kernel
 # compiles against. Generated, not committed (see .gitignore).

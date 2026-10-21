@@ -34,7 +34,7 @@ static int ct_eq(const unsigned char *a, const unsigned char *b, unsigned n) {  
     for (unsigned i = 0; i < n; i++) d |= (unsigned char)(a[i] ^ b[i]);
     return d == 0;
 }
-static int name_ok(const char *s) {
+int accounts_name_ok(const char *s) {
     unsigned n = slen(s);
     if (!n || n > ACC_NAME_MAX) return 0;
     for (unsigned i = 0; i < n; i++) {
@@ -43,7 +43,7 @@ static int name_ok(const char *s) {
     }
     return 1;
 }
-static int pass_ok(const char *s) { unsigned n = slen(s); return n >= ACC_PASS_MIN && n <= ACC_PASS_MAX; }
+int accounts_pass_ok(const char *s) { unsigned n = slen(s); return n >= ACC_PASS_MIN && n <= ACC_PASS_MAX; }
 static int find(const char *name) { for (unsigned i = 0; i < nusers; i++) if (same(users[i].name, name)) return (int)i; return -1; }
 static void derive(const struct acc *u, const char *pass, unsigned char out[ACC_HASH]) {
     auth_pbkdf2_sha256(pass, slen(pass), u->salt, ACC_SALT, u->iters, out, ACC_HASH);
@@ -136,8 +136,8 @@ unsigned accounts_count(void) { return nusers; }
 const char *accounts_name(unsigned i) { return i < nusers ? users[i].name : ""; }
 
 int accounts_add(const char *name, const char *pass) {
-    if (!name_ok(name)) return ACC_E_NAME;
-    if (!pass_ok(pass)) return ACC_E_PASS;
+    if (!accounts_name_ok(name)) return ACC_E_NAME;
+    if (!accounts_pass_ok(pass)) return ACC_E_PASS;
     if (find(name) >= 0) return ACC_E_DUP;
     if (nusers >= ACC_USERS_MAX) return ACC_E_FULL;
     if (!sd_ready()) return ACC_E_NOCARD;
@@ -183,7 +183,7 @@ int accounts_protected(const char *name) {   /* the two account files, whatever 
 int accounts_passwd(const char *name, const char *pass) {   /* a new password: fresh salt, written to the card first */
     int at = find(name);
     if (at < 0) return ACC_E_NOUSER;
-    if (!pass_ok(pass)) return ACC_E_PASS;
+    if (!accounts_pass_ok(pass)) return ACC_E_PASS;
     if (!sd_ready()) return ACC_E_NOCARD;
     struct acc u = users[at];
     u.iters = ACC_ITERS;

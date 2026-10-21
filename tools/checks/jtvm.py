@@ -10,7 +10,7 @@ app's own marker.
 
 Not a check itself; ci-suite.sh never runs it.
 """
-import json, socket, subprocess, tempfile, time
+import json, os, socket, subprocess, tempfile, time
 from pathlib import Path
 from PIL import Image
 from freeport import free_port
@@ -64,7 +64,8 @@ class VM:
         self.work = Path(work or tempfile.mkdtemp(prefix='jt-vm-'))
         self.log = self.work / ('serial-%d.log' % time.time_ns())
         self.port = free_port()
-        args = ['qemu-system-i386', '-kernel', str(ROOT / 'kernel.elf'), '-display', 'none', '-vga', 'std',
+        # JT_KERNEL names a mutant kernel a check built; the default is the tree's own
+        args = ['qemu-system-i386', '-kernel', os.environ.get('JT_KERNEL') or str(ROOT / 'kernel.elf'), '-display', 'none', '-vga', 'std',
                 '-qmp', f'tcp:127.0.0.1:{self.port},server,nowait', '-serial', 'file:' + str(self.log)]
         if disk:
             args += ['-drive', f'file={disk},format=raw,if=ide']

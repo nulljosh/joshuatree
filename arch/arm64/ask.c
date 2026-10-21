@@ -1,4 +1,4 @@
-/* Claude in the Terminal. The bottom row of the Terminal window (its dock tile, or F1) is a one-line editor behind a zsh style prompt, `joshua@tree % `:
+/* Claude in the Terminal. The bottom row of the Terminal window (its dock tile, or F1) is a one-line editor behind a zsh style prompt, `joshua@tree % ` (`NAME@tree % ` once someone is signed in):
    typed keys land there, Backspace takes one back, Enter runs the line. `browse`, `open N` and `llm` are commands, and so is
    `sam QUESTION`: it goes to the Claude relay on the Mac (tools/claude-relay/relay.py) as one POST through the shared
    IP stack, HTTPS on the Pi and loopback HTTP by default in QEMU. Everything a command prints goes into the Terminal, above the prompt, wrapped to 53 columns (the house
@@ -30,6 +30,8 @@
 #include "claude_cfg.h"
 #include "emmc.h"
 #include "accounts.h"
+#include "login.h"
+#include "home.h"
 int sudo_may_write(void);   /* sudo.c: no accounts, or the signed-in user is an admin */
 #include "../../drivers/fat.h"
 #ifdef CLAUDE_RELEASE        /* a Pi release image: no token, so the Console says `claude: no token` (the Makefile sets it) */
@@ -106,7 +108,7 @@ int ask_select(unsigned pane) {
     return 1;
 }
 
-/* The prompt is zsh style and never changes: `joshua@tree % `. The model that last answered shows in /status, not on the
+/* The prompt is zsh style: `joshua@tree % `, or `NAME@tree % ` for the signed-in account. The model that last answered shows in /status, not on the
    prompt (Samantha is a command now, not the shell). tools/checks/relay-api-check.py keeps ASK_DEFAULT_MODEL in step
    with relay.py's TURING_NAME. */
 #define ASK_DEFAULT_MODEL "Samantha"
@@ -129,7 +131,18 @@ void ask_forget(void) {   /* main.c's login_show: a sign-out takes any half-type
     }
     tui_forget();
 }
-const char *ask_prompt(void) { return pw_on ? pw_label : "joshua@tree % "; }   /* main.c draws it on the bottom row */
+/* 4.14.1: the prompt carries the signed-in name (`ann@tree % `). With nobody signed in (no accounts yet) it stays `joshua@tree % `.
+   One static buffer, rebuilt on every call (current_user changes at sign in and sign out); the name is at most ACC_NAME_MAX of a-z 0-9 _ -. */
+const char *ask_prompt(void) {
+    static char buf[ACC_NAME_MAX + 9];
+    if (pw_on) return pw_label;
+    if (!current_user[0]) return "joshua@tree % ";
+    unsigned k = 0;
+    for (; current_user[k] && k < ACC_NAME_MAX; k++) buf[k] = current_user[k];
+    for (const char *t = "@tree % "; *t; t++) buf[k++] = *t;
+    buf[k] = 0;
+    return buf;   /* main.c draws it on the bottom row */
+}
 /* The relay's "M <name>" line is network data: only "Samantha" (Turing) or a short printable name that starts
    "Claude" is used. */
 static void take_model(const char *s, unsigned n) {
@@ -752,17 +765,18 @@ static void run_actions(void) {
         case ACT_SAVE: {                       /* asked-for files only, into JT/ (emmc.c refuses boot files and non 8.3 names) */
             unsigned at = 0, len = code_block(said, said_n, &at); int ok = 0;
             if (!named_in(sam_q, sam_qn, t)) { kputs("save: "); kputs(t); kputs(" was not in your question, not saved\n"); result_puts("refused, not named by the person\n"); break; }
-            if (!sudo_may_write()) { kputs("save: only an admin saves files\n"); result_puts("refused, not an admin\n"); break; }
+            int homed = home_active();            /* 4.11.0: signed in, the file goes to the person's own folder, whoever they are */
+            if (!homed && !sudo_may_write()) { kputs("save: only an admin saves files\n"); result_puts("refused, not an admin\n"); break; }
             if (accounts_protected(t)) { kputs("save: "); kputs(t); kputs(" is kept by adduser, passwd and makeadmin\n"); result_puts("refused, an account file\n"); break; }
             if (!len) { kputs("save: no code block to save\n"); result_puts("no code block\n"); break; }
             if (!sd_ready()) { kputs("save: no SD card\n"); result_puts("no SD card\n"); break; }
-            ok = sd_write(t, said + at, len) == 1;
-            kputs(ok ? "save: wrote JT/" : "save: could not write "); kputs(t); kputs(ok ? ", cat JT/" : "\n"); if (ok) { kputs(t); kputs(" to read it\n"); }
+            ok = (homed ? home_save(t, said + at, len) : sd_write(t, said + at, len)) == 1;
+            kputs(ok ? (homed ? "save: wrote ~/" : "save: wrote JT/") : "save: could not write "); kputs(t); kputs(ok ? (homed ? ", cat ~/" : ", cat JT/") : "\n"); if (ok) { kputs(t); kputs(" to read it\n"); }
             result_puts(ok ? "saved\n" : "not saved\n");
             break; }
         case ACT_LIST: {                       /* what is in JT/: the same lines `ls JT` prints, sent back to her too */
             rlen_before = rlen; saved_out = cmd_out;
-            cmd_run("ls JT", 5, tee);
+            if (home_active()) cmd_run("ls ~", 4, tee); else cmd_run("ls JT", 5, tee);
             cmd_out = saved_out;           /* cmd_run left its own printer set; the next action prints through the old one */
             if (rlen == rlen_before) result_puts("nothing in JT/\n");
             break; }
@@ -770,7 +784,7 @@ static void run_actions(void) {
             char cmd[ACT_LEN + 8]; unsigned o = 0, okname = k > 0 && k <= 12;
             for (unsigned i = 0; i < k; i++) okname = okname && ((t[i] >= 'a' && t[i] <= 'z') || (t[i] >= 'A' && t[i] <= 'Z') || (t[i] >= '0' && t[i] <= '9') || t[i] == '_' || t[i] == '-' || t[i] == '.');
             if (!okname) { kputs("read: not a file name\n"); result_puts("not a file name\n"); break; }
-            for (const char *p = "cat JT/"; *p; p++) cmd[o++] = *p;
+            for (const char *p = home_active() ? "cat ~/" : "cat JT/"; *p; p++) cmd[o++] = *p;
             for (unsigned i = 0; i < k; i++) cmd[o++] = t[i];
             rlen_before = rlen; saved_out = cmd_out;
             cmd_run(cmd, o, real_puts);   /* cat prints through say_wrapped, which the result buffer already sees */
@@ -1052,14 +1066,12 @@ static void voice_fetch(const char *t, unsigned k) {
     voice_pump();
 }
 
-/* `hear`: the USB microphone for a few seconds, the samples to the Mac's words service (tools/claude-relay/stt.py, the relay's
-   port plus one, the same token and on the Pi the same TLS name), the words printed as "you: ..." and handed to `sam`. The
-   recording blocks the Terminal for those seconds; the post waits like a `sam` turn. HEAR_TEST (arm64-hear-check.py on QEMU
-   virt, which has no microphone) sends half a second of a 440 Hz tone instead of recording. */
+/* Speech into Samantha: voice mode (below) records while Space is held, then hear_post sends the samples to the Mac's
+   words service (tools/claude-relay/stt.py, the relay's port plus one, the same token and on the Pi the same TLS name),
+   prints the words as "you: ..." and hands them to `sam`. HEAR_TEST (QEMU virt, which has no microphone) sends half a
+   second of a 440 Hz tone instead. 4.19.0: the typed `hear` command is gone, the Space hold is the one way in. */
 int usb_mic_ok(void);                                             /* xhci.c */
-unsigned usb_mic_record(short *dst, unsigned max, unsigned ms);
 #define HEAR_HZ 16000
-#define HEAR_MAX_SECS 10
 static void hear_post(const short *pcm, unsigned got, char *raw) {   /* the samples to the words service, the words to sam; raw: REPLY_MAX + 2048 */
     static char token[64];
     for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
@@ -1107,27 +1119,6 @@ static void hear_post(const short *pcm, unsigned got, char *raw) {   /* the samp
     kputs("you: "); kputs(said); kputs("\n");
     sam_command(said, len);
 }
-void hear_command(unsigned secs) {
-    if (secs < 1) secs = 3;
-    if (secs > HEAR_MAX_SECS) secs = HEAR_MAX_SECS;
-    if (sam_state) { kputs("hear: sam is busy, wait for her answer\n"); return; }   /* ac->pending is this very command */
-    if (!CLAUDE_TOKEN_LEN) { kputs("hear: no relay token in this build\n"); return; }
-    unsigned long mark = heap_mark();
-    unsigned max = secs * HEAR_HZ, got;
-    short *pcm = kmalloc(max * 2);
-    char *raw = kmalloc(REPLY_MAX + 2048);
-    if (!pcm || !raw) { kputs("hear: out of memory\n"); heap_release(mark); return; }
-    got = hear_fake(pcm, max);   /* main.c: half a second of a tone on the heartest build, 0 otherwise */
-    if (!got) {
-        if (!usb_mic_ok()) { kputs("hear: no USB microphone found (plug it into a Pi port, then wait a second)\n"); heap_release(mark); return; }
-        kputs("hear: listening for "); kdec(secs); kputs(" s\n");
-        got = usb_mic_record(pcm, max, secs * 1000 + 300);
-    }
-    if (got < HEAR_HZ / 4) kputs("hear: heard nothing\n");
-    else hear_post(pcm, got, raw);
-    heap_release(mark);
-}
-
 /* Voice mode (docs/ROADMAP.md, Joshua 2026-10-07): double-tap Space and hold the second tap; release to send. The two taps
    are swallowed once the hold is confirmed (a quick double tap stays two spaces). While held: "voice: listening" on the
    UART, a mic mark in the menu bar (main.c menubar_mic) and a "listening [####......]" line with a live level bar in the
@@ -1171,6 +1162,9 @@ static void vm_poll(void) {
     unsigned now = ticks();
     if (vm_state == 2 && now - vm_t >= VM_HOLD_TICKS) {           /* the hold is real */
         unsigned n = 0; while (n < 2 && ac->len && ac->line[ac->len - 1] == ' ') { ac->len--; n++; }   /* the two taps' spaces */
+        const char *why = !CLAUDE_TOKEN_LEN ? "voice: no relay token in this build\n"
+                        : !hear_fake(0, 0) && !usb_mic_ok() ? "voice: no USB microphone found (plug it into a Pi port, then wait a second)\n" : 0;
+        if (why) { kputs(why); vm_state = 0; prompt_row(ac->line, ac->len); return; }
         vm_mark = heap_mark(); vm_pcm = kmalloc(VM_MAX_SECS * HEAR_HZ * 2); vm_got = 0; vm_level = 0;
         if (!vm_pcm) { heap_release(vm_mark); vm_state = 0; prompt_row(ac->line, ac->len); return; }
         vm_state = 3; vm_bar_t = now; vm_t = now;

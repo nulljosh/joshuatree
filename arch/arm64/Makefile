@@ -22,7 +22,8 @@
 #   sdwtest     sdw-kernel8.img writes, replaces and deletes files in JT/ at boot and tries the boot files (refused), then a
 #               CMD25 at the card's end; sdr-kernel8.img, booted next on the same card, reads them back and deletes them
 #   notestest   notesw-kernel8.img opens Notes from the dock with made-up USB key reports, types a note and saves it;
-#               notesr-kernel8.img, booted next on the same card, opens Notes and the note again (arm64-notes-check.py)
+#               notesr-kernel8.img, booted next on the same card, opens Notes and the note again; notesa-kernel8.img types a line,
+#               leaves it for four seconds and clicks the red dot, with no network clock (arm64-notes-check.py)
 # The Console's ask> prompt asks the Claude relay. claude_cfg.sh writes its address and token (gitignored) on every build
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token), but only when
 # JT_WIFI_DEV=1 (tools/flash-pi.sh) or CLAUDE_RELAY_TOKEN_FILE is set explicitly (the checks); a release build has neither.
@@ -74,11 +75,11 @@ claude_cfg.h: claude_cfg.sh FORCE
 	@./claude_cfg.sh
 wifi_cfg.h: wifi_cfg.sh FORCE
 	@./wifi_cfg.sh
-ask.o: ask.c claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
+ask.o: ask.c home.h claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
 	$(NETCC) -c ask.c -o $@
 # A Pi image carries the relay token only on the dev card (JT_WIFI_DEV=1, the same flag that carries the Wi-Fi key);
 # a release build has no relay config at all. tools/checks/pi-release-notoken-check.sh proves it. QEMU builds are unchanged.
-pi-ask.o: ask.c claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
+pi-ask.o: ask.c home.h claude_cfg.h tls.h ../../drivers/http.h ../../drivers/net.h
 	$(NETCC) -DPI_BUILD $(if $(filter 1,$(JT_WIFI_DEV)),,-DCLAUDE_RELEASE) -c ask.c -o $@
 ttf.o: ../../drivers/ttf.c
 	$(FPCC) -c $< -o $@
@@ -87,7 +88,7 @@ text.o: text.c ../../drivers/ttf.h ../../lib/text_ink.h
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
 # The Calculator's evaluator: the FPU does the sums, so it is built like text.c; main.c draws its window.
-cmd.o: cmd.c bt.h emmc.h accounts.h sudo.h login.h ../../drivers/fat.h
+cmd.o: cmd.c snap.h bt.h emmc.h accounts.h sudo.h login.h home.h ../../drivers/fat.h
 	$(CC) -c $< -o $@
 calc.o: calc.c
 	$(FPCC) -c $< -o $@
@@ -126,11 +127,11 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o
-PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o
+SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o
+PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
-ufile.o: ufile.c emmc.h ../../drivers/fat.h
+ufile.o: ufile.c home.h emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 # Settings (3.13.0): the choices, JT/SETTINGS.TXT and the version the About page shows, read from VERSION at build time.
 settings.o: settings.c audio.h emmc.h ../../drivers/fat.h ../../VERSION
@@ -145,6 +146,11 @@ login.o: login.c login.h accounts.h
 	$(SDCC) -c $< -o $@
 # Admins and sudo (4.10.0): JT/SUDOERS.TXT, the password check and the five minutes it is remembered.
 sudo.o: sudo.c sudo.h accounts.h login.h emmc.h ../../drivers/fat.h
+	$(SDCC) -c $< -o $@
+# Home folders (4.11.0): JT/HOME/<name>, where apps, ~ and Samantha's save put a signed-in person's files.
+home.o: home.c home.h accounts.h sudo.h login.h emmc.h ../../drivers/fat.h
+	$(SDCC) -c $< -o $@
+snap.o: snap.c snap.h home.h accounts.h login.h emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 emmc.o: emmc.c emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
@@ -210,7 +216,7 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = ../../VERSION settings_ui.h login_ui.h login.h sudo.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = ../../VERSION settings_ui.h users_ui.h login_ui.h login.h sudo.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
 	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
@@ -321,7 +327,8 @@ $(eval $(call variant,sdr,-DSD_SELFTEST=3,,))
 sdwtest: sdw-kernel8.img sdr-kernel8.img
 $(eval $(call variant,notesw,-DNOTES_SELFTEST=1,,))
 $(eval $(call variant,notesr,-DNOTES_SELFTEST=2,,))
-notestest: notesw-kernel8.img notesr-kernel8.img
+$(eval $(call variant,notesa,-DNOTES_SELFTEST=5,,))
+notestest: notesw-kernel8.img notesr-kernel8.img notesa-kernel8.img
 $(eval $(call variant,remw,-DNOTES_SELFTEST=3,,))
 $(eval $(call variant,remr,-DNOTES_SELFTEST=4,,))
 reminderstest: remw-kernel8.img remr-kernel8.img
@@ -338,6 +345,9 @@ FORCE:
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
 $(eval $(call variant,restart,-DPOWER_SELFTEST=2,,))
 
+# power-check: a file left unsaved, `reboot`, the file read back, `shutdown`; the second build skips the flush and must lose the file.
+$(eval $(call variant,powerfile,-DPOWER_FILE_TEST=1,,))
+$(eval $(call variant,powernoflush,-DPOWER_FILE_TEST=1 -DPOWER_NOFLUSH,,))
 $(eval $(call variant,treerestart,-DTREEMENU_SELFTEST=1,,))
 $(eval $(call variant,treeshutdown,-DTREEMENU_SELFTEST=2,,))
 $(eval $(call variant,notice,-DNOTICE_SELFTEST,,))
@@ -353,7 +363,7 @@ audiotest: audio-kernel8.elf
 $(eval $(call variant,usbaudio,-DUSB_AUDIO_TEST,,))
 usbaudiotest: usbaudio-kernel8.elf
 .PHONY: usbaudiotest
-# heartest: `hear` sends half a second of a tone instead of recording (virt has no microphone); arm64-hear-check.py stubs the words service.
+# heartest: voice mode sends half a second of a tone instead of recording (virt has no microphone); arm64-hear-check.py stubs the words service.
 $(eval $(call variant,hear,-DHEAR_TEST,,))
 heartest: hear-kernel8.elf
 .PHONY: heartest

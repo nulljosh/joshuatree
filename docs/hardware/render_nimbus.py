@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from render_kit import build, blender, argv, lin
 PREVIEW = bool(os.environ.get("NIMBUS_PREVIEW"))
-W = int(os.environ.get("NIMBUS_W", 640 if PREVIEW else 1600)); H = round(W * 0.6875)
+W = int(os.environ.get("NIMBUS_W", 640 if PREVIEW else 1600)); H = int(os.environ.get("NIMBUS_H", 0)) or round(W * 0.6875)
 SS = int(os.environ.get("SS", 1 if PREVIEW else 2))      # render at SS times the size, then Lanczos down: tack sharp edges and screen text
 CREAM, INK, TERRA = (0xEF, 0xEB, 0xE4), (0x1C, 0x1C, 0x1E), (0xB5, 0x50, 0x2C)
 SWEEP = (0xC9, 0xC4, 0xBB)
@@ -22,6 +22,14 @@ VIEWS = [("hero", (-620.0, -930.0, 560.0), (-30.0, 20.0, 100.0), 85.0),
          ("rear", (-620.0, -930.0, 560.0), (30.0, -20.0, 100.0), 85.0)]      # the rear is the hero's camera on the product turned half a turn, so backdrop, light and exposure are the same
 BOX = bool(os.environ.get("NIMBUS_BOX"))      # NIMBUS_BOX=1: render the retail box (nimbus-box.jpg) in the same studio instead of the product
 if BOX: VIEWS = [("box", (-570.0, -1200.0, 1320.0), (0.0, 0.0, 70.0), 85.0)]
+# Wallpapers: NIMBUS_WALL=NAME with NIMBUS_W/NIMBUS_H and CAM="x,y,z", AIM="x,y,z", LENS=mm renders nimbus-NAME.jpg, the hero lit the same way
+if os.environ.get("NIMBUS_WALL"):
+    _v = lambda k: tuple(float(c) for c in os.environ[k].split(","))
+    VIEWS = [(os.environ["NIMBUS_WALL"], _v("CAM"), _v("AIM"), float(os.environ.get("LENS", 85)))]
+# NIMBUS_CUTOUT=1: the product and its shadow on transparency, as nimbus-NAME.png, for the landing footer (4.16.0):
+#   SS=1 SAMPLES=256 NIMBUS_CUTOUT=1 NIMBUS_WALL=foot NIMBUS_W=2400 NIMBUS_H=800 CAM="-1210,-1880,1020" AIM="-10,0,140"
+#   then magick nimbus-foot.png -quality 88 -define webp:alpha-quality=100 landing/nimbus-footer.webp
+CUTOUT = bool(os.environ.get("NIMBUS_CUTOUT"))
 
 try:
     import bpy
@@ -43,7 +51,7 @@ if bpy is None:
         blender(__file__, os.path.join(tmp, "mesh"), tmp)
         for name, *_ in VIEWS:
             if not os.path.exists(os.path.join(tmp, name + ".png")): continue
-            subprocess.run(["magick", os.path.join(tmp, name + ".png"), "-filter", "Lanczos", "-resize", "%dx" % W, "-strip", "-quality", "90", os.path.join(out, "nimbus-%s.jpg" % name)], check=True)
+            subprocess.run(["magick", os.path.join(tmp, name + ".png"), "-filter", "Lanczos", "-resize", "%dx" % W, "-strip", "-quality", "90", os.path.join(out, "nimbus-%s.%s" % (name, "png" if CUTOUT else "jpg"))], check=True)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     sys.exit(0)
@@ -152,6 +160,7 @@ for pl in me2.polygons: pl.use_smooth = True
 sweep_m = mat("sweep", SWEEP, 0.5, 0.0, 0.12)
 _b = next(n for n in sweep_m.node_tree.nodes if n.type == "BSDF_PRINCIPLED"); _b.inputs["Emission Color"].default_value = lin(SWEEP); _b.inputs["Emission Strength"].default_value = float(os.environ.get("LIFT", 0.04))
 sw.data.materials.append(sweep_m)
+if CUTOUT: sw.is_shadow_catcher = True; sc.render.film_transparent = True   # the sweep only catches the shadow
 # light: one big soft area above, slightly forward; a dim world for the falloff down the face
 def area(name, size, power, loc, target):
     d = bpy.data.lights.new(name, "AREA"); d.shape = "RECTANGLE"; d.size, d.size_y = size; d.energy = power

@@ -97,14 +97,15 @@ echo
 # plus their Playwright Chromes at once ran the Mac out of memory and
 # rebooted it twice on 2026-10-02.
 CI_LOCAL_JOBS=${CI_LOCAL_JOBS:-2}
-echo "-- suite job: 8 shards, $CI_LOCAL_JOBS at a time, each its own QEMU (-display none) --"
+echo "-- suite job: 11 shards, $CI_LOCAL_JOBS jobs at a time, each its own QEMU (-display none); the ARM shards 6 8 9 10 run in turn in one job --"
 SUITE_LOGS=()
 suite_start=$(date +%s)
-for shard in 0 1 2 3 4 5 6 7; do
-  log="/tmp/jt-ci-local-$$-shard${shard}.log"
+for group in "6 8 9 10" 0 1 2 3 4 5 7; do   # the ARM shards share arch/arm64 (each check cleans it), so never two at once; every
+  # check that builds arch/arm64 is on one of them (ci-balance.py). Longest job first, so it overlaps the host shards.
+  log="/tmp/jt-ci-local-$$-shard${group// /-}.log"
   SUITE_LOGS+=("$log")
   while [ "$(jobs -rp | wc -l)" -ge "$CI_LOCAL_JOBS" ]; do sleep 2; done
-  ( SHARD=$shard SHARDS=8 ./tools/checks/ci-suite.sh > "$log" 2>&1; echo $? > "$log.rc" ) &
+  ( rc=0; for shard in $group; do SHARD=$shard SHARDS=11 ./tools/checks/ci-suite.sh >> "$log" 2>&1 || rc=1; done; echo $rc > "$log.rc" ) &
 done
 wait
 suite_ok=1
@@ -112,12 +113,12 @@ for log in "${SUITE_LOGS[@]}"; do
   [ "$(cat "$log.rc" 2>/dev/null)" = 0 ] || suite_ok=0
 done
 suite_dur=$(( $(date +%s) - suite_start ))
-for i in 0 1 2 3 4 5 6 7; do
-  echo "  shard $i log: ${SUITE_LOGS[$i]}"
-  tail -n 3 "${SUITE_LOGS[$i]}" | sed 's/^/    /'
+for log in "${SUITE_LOGS[@]}"; do
+  echo "  log: $log"
+  tail -n 3 "$log" | sed 's/^/    /'
 done
 if [ "$suite_ok" = 1 ]; then
-  echo "PASS ($suite_dur s): all 8 suite shards"
+  echo "PASS ($suite_dur s): all 11 suite shards"
   PASS=$((PASS + 1))
 else
   echo "FAIL ($suite_dur s): one or more suite shards"

@@ -25,6 +25,8 @@ int accounts_remove(const char *name, const char *pass);
 int accounts_delete(const char *name);                  /* remove with no password: only an admin's sudo may call it */
 int accounts_passwd(const char *name, const char *pass);   /* a new password (fresh salt), written to the card first */
 int accounts_has(const char *name);
+int accounts_name_ok(const char *name);                    /* 1 when name is 1 to 24 characters of a-z 0-9 _ - */
+int accounts_pass_ok(const char *pass);                    /* 1 when pass is 4 to 64 characters */
 int accounts_protected(const char *name);                  /* 1 for USERS.TXT or SUDOERS.TXT: file commands and Samantha leave them alone */
 const char *accounts_reason(int code);    /* a short plain sentence for the Terminal */
 void accounts_wipe(void *p, unsigned n);  /* zero a buffer so the compiler cannot drop it */

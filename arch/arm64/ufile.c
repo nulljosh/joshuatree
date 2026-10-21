@@ -16,6 +16,7 @@
    preempted mid-call, would need fat.c's state per caller first. */
 #include "emmc.h"
 #include "accounts.h"
+#include "home.h"
 #include "../../drivers/fat.h"
 
 int user_in_range(unsigned long a, unsigned long n);   /* main.c: memory the app may have the kernel read */
@@ -50,7 +51,7 @@ int user_writable(unsigned long a, unsigned long n);   /* main.c: memory the ker
 #define READFILE_CAP_MAX (6u << 20)
 
 unsigned ufile_owner;   /* 4.0: the app (slot + 1) whose calls these are, set by main.c before each run; 0 is the boot self-test */
-struct ufd { unsigned owner; int used, dirty; unsigned size, pos, flags; char name[PATH_MAX + 1]; char data[OPEN_MAX_FILE + 1]; };
+struct ufd { unsigned owner; int used, dirty; unsigned size, pos, flags; char home[HOME_DIR_MAX + 1]; char name[PATH_MAX + 1]; char data[OPEN_MAX_FILE + 1]; };
 static struct ufd fds[NFDS];
 static char back[OPEN_MAX_FILE + 1];   /* close's read-back */
 
@@ -65,9 +66,11 @@ static long copy_path(unsigned long a, char *out) {   /* -EFAULT off the app's m
 static unsigned saved_cwd;
 static void path_leave(void) { fat_cwd_set(saved_cwd); }
 /* Split `path` in place and stand in the folder that holds its last `keep` parts (1: a file or folder to open, make or
-   remove; 0: a folder to list), starting from JT/ (made first when `make`). *leaf is what is left. On an error nothing has
+   remove; 0: a folder to list), starting from JT/ (made first when `make`), or from the signed-in person's JT/HOME/<name>/
+   (`home`, made too) when there are accounts. *leaf is what is left. On an error nothing has
    moved. */
-static long path_enter(char *path, int keep, char **leaf, int make) {
+static const char *cur_home(char *buf) { return home_mine(buf) ? buf : 0; }   /* 4.11.0: the signed-in person's folder name, 0 with no accounts */
+static long path_enter(char *path, int keep, char **leaf, int make, const char *home) {
     char *comp[PATH_DEPTH + 1];
     int n = 0;
     *leaf = path;
@@ -91,6 +94,7 @@ static long path_enter(char *path, int keep, char **leaf, int make) {
     saved_cwd = fat_cwd_get();
     fat_cwd_set(0);
     if (!sd_enter_jt(make)) { path_leave(); return -ENOENT; }
+    if (home && !home_in(home, make)) { path_leave(); return -ENOENT; }   /* 4.11.0: with accounts the app's root is JT/HOME/<name>/, never the shared JT/ */
     for (int i = 0; i < n - keep; i++) if (!fat_chdir(comp[i])) { path_leave(); return -ENOENT; }
     *leaf = n ? comp[n - 1] : path;
     return 0;
@@ -109,18 +113,23 @@ static long u_open(unsigned long upath, unsigned long flags) {
     for (int i = 0; i < NFDS; i++) if (!fds[i].used) { slot = i; break; }
     if (slot < 0) return -EMFILE;
     struct ufd *f = &fds[slot];
+    char hb[HOME_DIR_MAX + 1];
+    const char *home = cur_home(hb);
     for (int i = 0; i <= PATH_MAX; i++) { walk[i] = name[i]; if (!name[i]) break; }
-    if ((err = path_enter(walk, 1, &leaf, (flags & O_CREAT) != 0))) return err;
+    if ((err = path_enter(walk, 1, &leaf, (flags & O_CREAT) != 0, home))) return err;
     int n = fat_read_file(leaf, f->data, OPEN_MAX_FILE + 1);
     if (n > OPEN_MAX_FILE) { path_leave(); return -EINVAL; }   /* bigger than one open holds: refused, never cut */
     int exists = n > 0;                                        /* empty and missing read the same, as on i386 */
     if (!exists && !(flags & O_CREAT)) { path_leave(); return -ENOENT; }
-    if ((!exists || (flags & O_TRUNC)) && !fat_replace_file(leaf, "", 0)) { path_leave(); return -ENOSPC; }   /* O_CREAT and O_TRUNC land now */
+    if (!exists && !fat_replace_file(leaf, "", 0)) { path_leave(); return -ENOSPC; }   /* O_CREAT lands now */
     path_leave();
-    f->used = 1; f->dirty = 0; f->owner = ufile_owner; f->flags = (unsigned)flags;
+    /* O_TRUNC of a file that exists lands at close with the new bytes, in one fat_replace_file, so a power cut
+       before close leaves the old file, never an empty one (4.13.0) */
+    f->used = 1; f->dirty = exists && (flags & O_TRUNC); f->owner = ufile_owner; f->flags = (unsigned)flags;
     f->size = exists && !(flags & O_TRUNC) ? (unsigned)n : 0;
     f->pos = flags & O_APPEND ? f->size : 0;
     for (int i = 0; i <= PATH_MAX; i++) { f->name[i] = name[i]; if (!name[i]) break; }
+    for (int i = 0; i <= HOME_DIR_MAX; i++) f->home[i] = home ? home[i] : 0;   /* the flush goes where the open went, whoever is signed in by then */
     return FIRST_FD + slot;
 }
 static long u_read(unsigned long fd, unsigned long buf, unsigned long len) {
@@ -164,7 +173,7 @@ static long flush(struct ufd *f) {   /* the buffer back to the card, then read b
     if (!f->dirty) return 0;
     char walk[PATH_MAX + 1], *leaf;
     for (int i = 0; i <= PATH_MAX; i++) { walk[i] = f->name[i]; if (!f->name[i]) break; }
-    if (path_enter(walk, 1, &leaf, 0)) return -EIO;   /* its folder went away since open */
+    if (path_enter(walk, 1, &leaf, 0, f->home[0] ? f->home : 0)) return -EIO;   /* its folder went away since open */
     int ok = fat_replace_file(leaf, f->data, f->size), n = ok ? fat_read_file(leaf, back, sizeof back) : -1;
     path_leave();
     if (n < 0 || (unsigned)n != f->size) return -EIO;
@@ -197,7 +206,8 @@ static long u_readdir(unsigned long upath, unsigned long out, unsigned long max)
     if (max > READDIR_MAX) max = READDIR_MAX;
     if (max && !user_writable(out, max * (DIRENT_NAME + 8))) return -EFAULT;   /* the whole array, before anything runs */
     if (walk[0] == '.' && !walk[1]) walk[0] = 0;
-    if ((err = path_enter(walk, 0, &leaf, 0))) return err;
+    char hb[HOME_DIR_MAX + 1];
+    if ((err = path_enter(walk, 0, &leaf, 0, cur_home(hb)))) return err;
     dir_total = 0;
     fat_list(collect);
     path_leave();
@@ -209,7 +219,8 @@ static long u_mkdir(unsigned long upath) {
     char walk[PATH_MAX + 1], *leaf;
     long err = copy_path(upath, walk);
     if (err) return err;
-    if ((err = path_enter(walk, 1, &leaf, 1))) return err;
+    char hb[HOME_DIR_MAX + 1];
+    if ((err = path_enter(walk, 1, &leaf, 1, cur_home(hb)))) return err;
     int ok = fat_mkdir(leaf);
     path_leave();
     return ok ? 0 : -ENOSPC;   /* a taken name, a full card or a full folder: fat.c answers only yes or no */
@@ -218,7 +229,8 @@ static long u_unlink(unsigned long upath) {
     char walk[PATH_MAX + 1], *leaf;
     long err = copy_path(upath, walk);
     if (err) return err;
-    if ((err = path_enter(walk, 1, &leaf, 0))) return err;
+    char hb[HOME_DIR_MAX + 1];
+    if ((err = path_enter(walk, 1, &leaf, 0, cur_home(hb)))) return err;
     if (fat_chdir(leaf)) { path_leave(); return -EISDIR; }   /* a folder: never removed through unlink */
     int ok = fat_delete(leaf);
     path_leave();
@@ -230,7 +242,8 @@ static long u_readfile(unsigned long upath, unsigned long buf, unsigned long cap
     long err = copy_path(upath, walk);
     if (err) return err;
     if (!user_writable(buf, cap)) return -EFAULT;
-    if ((err = path_enter(walk, 1, &leaf, 0))) return err;
+    char hb[HOME_DIR_MAX + 1];
+    if ((err = path_enter(walk, 1, &leaf, 0, cur_home(hb)))) return err;
     int n = fat_read_file(leaf, (void *)buf, (unsigned)cap);
     path_leave();
     return n > 0 ? n : -ENOENT;
@@ -255,6 +268,22 @@ long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned
 void ufile_release(void) {
     for (int i = 0; i < NFDS; i++) if (fds[i].used && fds[i].owner == ufile_owner) u_close(FIRST_FD + (unsigned long)i);
 }
+/* Power (4.16.0): every descriptor with unwritten bytes goes to the card before a restart or shutdown; returns how many were
+   written, -1 when one failed. The descriptors stay open (the machine is about to go), so nothing here frees anything. */
+int ufile_sync(void) {
+    int n = 0, bad = 0;
+    for (int i = 0; i < NFDS; i++) if (fds[i].used && fds[i].dirty) { if (flush(&fds[i])) bad = 1; else n++; }
+    return bad ? -1 : n;
+}
+/* The power check's build (main.c POWER_FILE_TEST) calls this: a file an app wrote and has not closed, as Notes is mid-save. */
+void ufile_selftest_dirty(const char *name, const char *text) {
+    struct ufd *f = &fds[NFDS - 1];
+    unsigned n = 0, k = 0;
+    while (text[n] && n < 64) { f->data[n] = text[n]; n++; }
+    for (; name[k] && k < PATH_MAX; k++) f->name[k] = name[k];
+    f->name[k] = 0; f->home[0] = 0;
+    f->used = f->dirty = 1; f->owner = 0; f->flags = O_WRONLY; f->size = f->pos = n;
+}
 /* Folders an app expects before it runs, made inside JT/ (JT/ too) when missing: Notes gets NOTES/NOTES, its default
    folder, as i386's notes_check_support makes it. Without NOTES/ it would fall back to loose files in its root. */
 void ufile_mkdirs(const char *path) {
@@ -262,12 +291,14 @@ void ufile_mkdirs(const char *path) {
     unsigned i = 0;
     for (; path[i] && i < PATH_MAX; i++) walk[i] = path[i];
     walk[i] = 0;
-    if (path_enter(walk, 0, &leaf, 1) == 0) { path_leave(); return; }   /* all there already */
+    char hb[HOME_DIR_MAX + 1];
+    const char *home = cur_home(hb);
+    if (path_enter(walk, 0, &leaf, 1, home) == 0) { path_leave(); return; }   /* all there already */
     for (unsigned k = 0; k <= i; k++) {   /* one more part at a time */
         if (path[k] != '/' && path[k]) continue;
         for (unsigned j = 0; j < k; j++) walk[j] = path[j];
         walk[k] = 0;
-        if (path_enter(walk, 1, &leaf, 1)) return;
+        if (path_enter(walk, 1, &leaf, 1, home)) return;
         fat_mkdir(leaf);   /* fails harmlessly when it is there */
         path_leave();
     }

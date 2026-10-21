@@ -839,7 +839,16 @@ static int run_tool(const char *tool, const char *arg, const char *said) {
 
     if (streq(tool, "weather")) {
         struct jt_sysinfo si; si.wx_have = 0; si.wx_text[0] = 0;
-        if (jt_sysinfo(&si) < (int)sizeof si) { si.wx_have = 0; si.wx_text[0] = 0; }
+        if (jt_sysinfo(&si) < (int)sizeof si) { si.wx_have = 0; si.wx_text[0] = 0; si.data_stamp = 0; }
+        if (!si.wx_have) {   /* no reading yet: ask the desktop to fetch one and wait for WEATHER.TXT to move, up to 15 s. Keys stay queued. */
+            unsigned stamp = si.data_stamp, t0 = now_ticks();
+            jt_refresh(JT_REFRESH_WEATHER, 0);
+            while (now_ticks() - t0 < 1500) {
+                jt_sched_yield();
+                if (jt_sysinfo(&si) >= (int)sizeof si && si.data_stamp != stamp) break;
+            }
+            if (si.data_stamp == stamp) si.wx_have = 0;
+        }
         si.wx_text[JT_WX_TEXT_MAX - 1] = 0;
         if (si.wx_have && si.wx_text[0]) fmt("", si.wx_text);
         else fmt("", "No weather reading yet, open Weather first.");

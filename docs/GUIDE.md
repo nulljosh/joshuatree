@@ -13,8 +13,6 @@ How to use it, put it on a Raspberry Pi, and build the hardware.
 - [Board test](#board-test)
 - [Local model on the Pi](#local-model-on-the-pi)
 - [Hardware plan](#hardware-plan)
-- [Build a Neo box](#build-a-neo-box)
-- [Printable Pi case](#printable-pi-case)
 - [Samantha box](#samantha-box)
 - [Breadboard prototype](#breadboard-prototype)
 
@@ -58,7 +56,7 @@ Content lays itself out again to fit: the Console and Terminal change columns an
 
 **Menu bar messages.** A Wi-Fi join and a Brick result show beside the clock for four seconds. A new message replaces the old one and never takes the keyboard or mouse from your app.
 
-**Power.** Type `reboot` or `shutdown` in Terminal (typing the word is the confirmation). Or press Ctrl+Alt+Delete to restart and Ctrl+Alt+End to shut down; Terminal asks first (Enter proceeds, Escape cancels). On a Mac keyboard Alt is Option and End may need Fn+Right. Both are refused while Samantha is answering. Shutdown asks the firmware to power down the SD interface and halt. It does not cut the board's power.
+**Power.** Type `reboot` or `shutdown` in Terminal (typing the word is the confirmation). Or press Ctrl+Alt+Delete to restart and Ctrl+Alt+End to shut down; Terminal asks first (Enter proceeds, Escape cancels). On a Mac keyboard Alt is Option and End may need Fn+Right. Both are refused while Samantha is answering. Both write every open file to the card first, so a note you were saving is kept. Shutdown powers down the SD interface and shows "It is safe to unplug the power now."; it does not cut the board's power. The same two items, Restart and Shut Down, sit in the tree menu at the left of the menu bar. With accounts, neither needs sudo or a password: it is the signed-in person's own machine.
 
 **Screen sleep.** Five minutes without keyboard or mouse blanks the HDMI picture. A key or mouse move wakes it and still reaches the app. Brick and an active Samantha request keep the screen awake. Apps, USB and networking keep running. This is not suspend and saves nothing. HDMI sleep and wake still need a physical Pi test.
 
@@ -80,7 +78,7 @@ A normal release build includes neither the Wi-Fi key nor the default relay toke
 With an address, the Pi fetches a network clock from a verified HTTPS reply that cannot move behind the build date or an already accepted time (the first check still relies on the build date; see the Encrypted Pi relay section). Without a configured network the Pi scans but does not join, Samantha cannot reach the relay, and the desktop still works.
 
 **Ask Samantha or read a web page.** Open Terminal with F2 or Ctrl+T, or the Terminal and Samantha dock tiles.
-- The prompt is `joshua@tree % `, zsh style. A word that is not a command prints `zsh: command not found`.
+- The prompt is `joshua@tree % `, zsh style (`ann@tree % ` once ann is signed in). A word that is not a command prints `zsh: command not found`.
 - F3 switches between two sessions. Each keeps its typed line, scrollback and conversation until reboot. Finish or stop a request before switching.
 - Console shows boot messages and network errors and takes no questions. Escape from an idle Terminal returns to it. While Samantha works, Escape asks her to stop between action steps.
 - `browse example.com` reads a page as text (a bare host uses HTTPS).
@@ -116,7 +114,7 @@ Files behind it: `tools/flash-pi.sh` (builds and copies the image), `arch/arm64/
 | `bt` | Bluetooth (below). |
 | `beep`, `vol` | `beep` plays a short tone. `vol 40`, `vol up`, `vol down` set the volume 0 to 100. |
 | `mic`, `mic 5` | Listens through a USB microphone for 3 seconds (or 1 to 5) and shows how loud it was. Nothing is saved or sent. |
-| `hear`, `hear 5` | Speak to Samantha. Records 3 seconds (or 1 to 10) from the USB microphone, sends it to the Mac's words service, prints what it heard as `you: ...` and asks her. |
+| Double-tap Space, hold | Speak to Samantha, like Claude Code's voice mode. Tap Space, then tap again and hold: a mic mark and a level bar show while you talk (at most 10 s); let go and it goes to the Mac's words service, prints what it heard as `you: ...` and asks her. A quick double tap without the hold is just two spaces. |
 | hold Space | Talk to Samantha: tap Space twice and keep it held the second time. A mic mark shows in the menu bar and the prompt row shows a level bar; let go to send. Needs a USB microphone and the words service on the Mac. |
 | `sam` | Opens the chat view: her face at the top, the conversation below, your line at the bottom. Her mouth moves while she speaks. Esc closes it. |
 | `sam QUESTION` | Ask Samantha. When her answer carries a `[[say ...]]` line she says it out loud through the jack, with the words printed as `say: ...`. |
@@ -167,7 +165,7 @@ The ARM desktop has a Console and two Terminal sessions in the same spot. One is
 
 **Console: logs only.** Boot messages, Wi-Fi and errors. It has no input row, and typing with it in front does nothing (key echoes go to the UART only). It opens at boot, because on a Pi with no serial cable it is the only debug view. Page Up, Page Down, Home and End scroll it.
 
-**Terminal: the command line.** Its bottom row is a zsh style prompt, `joshua@tree % `. Every command runs and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window. Side-by-side panes remain future work.
+**Terminal: the command line.** Its bottom row is a zsh style prompt, `joshua@tree % ` (`NAME@tree % ` once someone is signed in). Every command runs and prints here, above the prompt, in 53-column lines. Page Up, Page Down, Home and End scroll it too. F3 switches between Terminal 1 and 2. Each keeps its own typed line, scrollback, relay conversation, model and effort. A running request must finish or be stopped before switching. These are two views in one window. Side-by-side panes remain future work.
 
 The commands are in the User guide section. The Samantha dock tile and Spotlight's Samantha entry open this same Terminal on the ARM build and the tile types `sam ` for you, so just add the question. The chat view on the i386 build is unchanged.
 
@@ -220,9 +218,9 @@ Each action is alone on its own line at the end of an answer, inside `[[ ]]`, at
 | Action | What the Pi does |
 |---|---|
 | `[[note TEXT]]` | Prints TEXT as `pi: TEXT`. |
-| `[[say TEXT]]` | Prints TEXT as `say: TEXT`. A caption: the ARM build has no voice yet. |
+| `[[say TEXT]]` | Prints TEXT as `say: TEXT` and says it out loud through the relay's voice. |
 | `[[led blink]]` | Blinks the green light (on QEMU: `pi: no green light on QEMU`). |
-| `[[open APP]]` | Opens an app by name. Only the Calculator opens on ARM so far. Other names print `pi: no app named ...`. |
+| `[[open APP]]` | Opens any app Spotlight lists, by its name (Notes, Music, Calculator, Mines). Other names print `pi: no app named ...`. |
 | `[[browse URL]]` | Fetches an `http://` or `https://` page through the Terminal browser and prints it as text. Any other scheme is unknown. |
 | `[[calc EXPR]]` | Works out EXPR with the Calculator's evaluator and prints `calc: EXPR = RESULT`. |
 | `[[status]]` | Prints the Pi's address, clock and Wi-Fi bars. |
@@ -714,7 +712,9 @@ For Notes: press n, type a line, Esc, Esc, pull the power, boot, open Notes. The
 
 ### Accounts
 
-The Terminal keeps user accounts on the card. `users` lists the names, `adduser NAME PASSWORD` makes one and `deluser NAME PASSWORD` removes one (it needs the right password). A name is 1 to 24 of a to z, 0 to 9, `_` and `-`; a password is 4 to 64 characters with no spaces; eight accounts at most. The password is stored only as a salted hash in `JT/USERS.TXT`, and the Terminal shows it as stars as you type and in the echoed line. With no SD card `adduser` says so and keeps nothing. With at least one account the Pi boots to a login screen before the desktop: type a name, press Return (or Tab) and type the password, then Return. A wrong password says `Wrong name or password.`, clears the password and makes you wait a second, so guessing is slow. The name you signed in as shows in the menu bar. `logout` in the Terminal, or Log Out in the tree menu, closes every window and returns to the login screen. With no account the Pi boots straight to the desktop as before. The mouse does nothing on the login screen, and there is no way to shut down from it yet; pull the power if you must. Admins (4.10.0): the first account ever made is an admin, and `admins` lists them. A normal user is told "you are not an admin; try sudo" for `adduser`, `deluser` of someone else, `write`, `rm`, `mkdir`, `makeadmin` and `unadmin`; an admin runs them as `sudo COMMAND` (for example `sudo adduser bob hunter22`). `sudo` asks for your own password on the next line, shown as stars; Esc cancels. A right password is remembered for five minutes, `sudo -k` forgets it, and a wrong one waits a second. `passwd` changes your own password (the old one, then the new one twice); an admin resets someone else's with `sudo passwd NAME`, and removes an account with `sudo deluser NAME`. `sudo makeadmin NAME` and `sudo unadmin NAME` change who is an admin; the last admin cannot be removed. Admin names live in `JT/SUDOERS.TXT`, which the commands keep, not you. Only an admin's Settings changes are saved to the card.
+The Terminal keeps user accounts on the card. `users` lists the names, `adduser NAME PASSWORD` makes one and `deluser NAME PASSWORD` removes one (it needs the right password). A name is 1 to 24 of a to z, 0 to 9, `_` and `-`; a password is 4 to 64 characters with no spaces; eight accounts at most. The password is stored only as a salted hash in `JT/USERS.TXT`, and the Terminal shows it as stars as you type and in the echoed line. With no SD card `adduser` says so and keeps nothing. With at least one account the Pi boots to a login screen before the desktop: type a name, press Return (or Tab) and type the password, then Return. A wrong password says `Wrong name or password.`, clears the password and makes you wait a second, so guessing is slow. The name you signed in as shows in the menu bar. `logout` in the Terminal, or Log Out in the tree menu, closes every window and returns to the login screen. With no account the Pi boots straight to the desktop as before. The mouse does nothing on the login screen, and there is no way to shut down from it yet; pull the power if you must. Admins (4.10.0): the first account ever made is an admin, and `admins` lists them. A normal user is told "you are not an admin; try sudo" for `adduser`, `deluser` of someone else, `write`, `rm`, `mkdir`, `makeadmin` and `unadmin`; an admin runs them as `sudo COMMAND` (for example `sudo adduser bob hunter22`). `sudo` asks for your own password on the next line, shown as stars; Esc cancels. A right password is remembered for five minutes, `sudo -k` forgets it, and a wrong one waits a second. `passwd` changes your own password (the old one, then the new one twice); an admin resets someone else's with `sudo passwd NAME`, and removes an account with `sudo deluser NAME`. `sudo makeadmin NAME` and `sudo unadmin NAME` change who is an admin; the last admin cannot be removed. Admin names live in `JT/SUDOERS.TXT`, which the commands keep, not you. Only an admin's Settings changes are saved to the card. Home folders (4.11.0): with accounts, a signed-in person's files live in `JT/HOME/NAME` (a name over 8 letters is shortened to five letters, a tilde and two digits). Notes, Music and every other app save there instead of in the shared `JT/`, Samantha's `[[save NAME]]` writes `~/NAME` for whoever is signed in, and in the Terminal `~` means your folder: `write ~/NOTE.TXT TEXT`, `cat ~/NOTE.TXT`, `ls ~`, `mkdir ~/DOCS` and `rm ~/NOTE.TXT` need no sudo. Another person's folder is closed to `cat`, `ls`, `write`, `rm` and to apps, an admin included, until `sudo` (for example `sudo cat jt/home/bob/NOTE.TXT`). `adduser` makes the folder; `deluser` leaves it on the card and says so, and a new account with the same name would see those files. With no accounts nothing changes. Snapshots (4.12.0): `snapshot` copies your home folder into `~/SNAP/N` (the newest three are kept), `snapshots` lists them, and `restore N yes` makes the folder exactly as snapshot N was; plain `restore N` only explains what it would do. Files over 32 KB, and more than 24 entries in one folder, are skipped and counted. Crash safe (4.13.0): if the power goes mid-write, a file you were saving is either the old one or the new one, never half of each, and the next boot quietly frees any space the cut left stranded.
+
+Settings has a Users section too (4.14.0), the same accounts without the Terminal. It lists them and marks the admins. Open a name to change its password, make or remove an admin, or remove it (it asks you to confirm); Add user takes a name and the password twice. Up and Down pick, Return does it, Esc goes back, and the mouse works too. An admin's password is asked for each change like `sudo` and then remembered for five minutes. Anyone else sees the list and can change only their own password, with the old one. With no accounts it says so and Add user makes the first, an admin. Passwords show as stars.
 
 ### Music on the Pi
 
@@ -1143,402 +1143,10 @@ uv run --with build123d --with shapely python docs/hardware/nimbus_cad.py docs/h
 python3 docs/hardware/nimbus_desktop.py --compose                                               # the desktop picture for the screen
 blender -b -t 4 -P docs/hardware/render_nimbus.py -- docs/hardware                             # hero, rear and side renders, headless
 blender -b -P docs/hardware/nimbus_box.py -- docs/hardware                                     # the retail box render
+NIMBUS_WALL=wall-desktop NIMBUS_W=5120 NIMBUS_H=2880 CAM="-1210,-1880,1020" AIM="-10,0,110" SS=1 python3 docs/hardware/render_nimbus.py OUT   # a 5K desktop wallpaper
 uv run --with build123d --with shapely python docs/hardware/nimbus_blueprint.py docs/hardware  # the print blueprint (SVG and PDF)
 uv run --with build123d --with shapely --with trimesh python docs/hardware/nimbus_pack.py docs/hardware   # the print pack
 ```
-
-### Enclosure: Neo
-
-![Neo, front](hardware/neo-hero.jpg)
-
-Neo is a stack of six rings. They run from terracotta at the base to cream at the top, like the layered rock around Joshua Tree. The 2 mm gaps between rings are the vents.
-
-The tree mark is laser engraved half a millimetre into the cap, tone on tone. You see it up close and not across the room.
-
-It's the concept for the custom shell. v0 still ships in a stock mini-ITX case. Neo was called Strata until 2026-10-04.
-
-![Neo, rear I/O](hardware/neo-rear.jpg)
-
-#### The drawing
-
-![Neo blueprint sheet](hardware/neo-blueprint.svg)
-
-The size is 200 x 200 x 55 mm outside. A Mac mini is 127 x 127 x 50. The 170 mm board and its 158.75 mm I/O shield set the floor.
-
-Inside is a 178 mm core tray with 2 mm walls and chamfered corners. That leaves a 174 mm cavity for the 170 mm board.
-
-The rear notch cuts through every ring down to the tray, so the stock 158.75 x 44.45 mm I/O shield fits.
-
-#### Parts
-
-Everything is split to fit a 180 x 180 x 180 mm bed (Bambu A1 mini). All numbers come from `hardware/neo_cad.py`, which fails if any part doesn't fit.
-
-<!-- parts:start -->
-| Part | Size | Print |
-|---|---|---|
-| Rings S0 to S5 | 200 mm square, 6.5 / 7.1 / 7.1 / 7.1 / 7.1 / 7.1 mm thick (base ring first, then equal strata), 2.0 mm vent gap between each, 3 pieces per ring: one 200 mm front with side returns of 50 and 40 mm alternating, and two rear L pieces, so every seam lands on a side face; rings 1 to 5 carry 5 pads under the front and 3 under each rear L (rod corner, arm end, mid), 16.0 x 2.4 mm and 8.4 mm or more behind the face, nut pocket under ring 0 and on top of ring 5 | FDM PLA or PETG at 0.2 mm, one tone each |
-| Cap | 200 mm square frame in 3 pieces (one front U plus two rear L, side cut at 45 mm, 5 mm from the ring 5 seam) and a 178 mm panel in one piece carrying the whole tree, 3 mm thick, panel and frame hole corners R2, tree from `landing/logo.svg` engraved 0.8 mm | Same print, printed right side up |
-| Core tray | 178 mm square, 52.0 mm tall, 2 mm walls, corners chamfered 4.2 mm, vent slots on every gap line, 4 board standoffs printed on the floor, no rear wall | Printed, floor down, no supports |
-| Rear plate | 173.6 x 51.1 mm and 13 mm deep including the facade, one piece, with the 160 x 45 I/O window and a 1.6 mm frame on all four sides, flush with the ring faces | Printed lying flat |
-| Feet | 7.6 mm round, 1.6 mm thick, recessed under ring 0, cover the nut and the rod end | TPU or PLA |
-<!-- parts:end -->
-
-Hardware: 4 M3x50 rods, 8 M3 nuts and 4 M3x8 self-tapping screws. That is 16 fasteners, down from 20. All are off the shelf.
-
-The count is 28 printed pieces in 25 STL files: 18 ring pieces, 4 cap pieces, the tray, the rear plate and 4 feet. That is down from 58 loose pieces.
-
-The 24 loose spacers and the metal standoffs are gone. The spacers and standoffs are printed into parts you already make, and four recessed feet hide the bottom nuts.
-
-Picture version: the Build a Neo box section.
-
-Full STL list with counts: `hardware/stl/manifest.json`. Print settings and steps: the Build a Neo box section.
-
-#### Build it
-
-Follow the Build a Neo box section. The short version: rods and nuts in ring 0, tray in, rings, board on the printed standoffs, rear plate, nuts in ring 5, cap on top.
-
-#### Check before cutting
-
-- Check the board mounting holes against the mini-ITX spacing (154.94 x 157.48 mm) on the real J4125B-ITX. The CAD file uses the spec numbers.
-- Check the tallest part on the board, heatsink included, against the 52 mm tray. The code assumes 30 mm above the PCB, an estimate.
-- Check the power input type, from the board manual, and where its jack lands on the rear I/O.
-- Passive cooling is fine on paper for this SoC. Measure it in the stack under load before calling it done.
-- There is no real print quote yet. The prototype cost below is an estimate. Replace it with the JLC3DP cart total once the STLs are uploaded.
-
-#### Regenerate
-
-Every file here comes from one set of numbers in `hardware/neo_cad.py`.
-
-```sh
-uv run --with build123d python docs/hardware/neo_cad.py docs/hardware   # STEP, STLs, step diagrams
-python3 docs/hardware/blueprint_sheet.py docs/hardware/neo-blueprint.svg
-blender -b -P docs/hardware/concepts.py -- docs/hardware neo  # renders
-```
-
-`neo_cad.py` asserts, in code, that:
-
-- every printed part fits the 180 mm bed (the tray is the biggest at 178 mm)
-- no flat roof is wider than 10 mm, so nothing needs supports (the tall rear window is its own plate, printed flat)
-- every wall is 1.6 mm or thicker, and every mating face has 0.2 mm of clearance
-- the I/O window clears the 158.75 x 44.45 mm shield, the mounting holes match the 154.94 x 157.48 mm mini-ITX pattern, and the tray clears a 30 mm heatsink
-- the rods clear the core and keep 1.6 mm of wall in the smallest ring
-
-These caught real mistakes:
-- The first draft's rods didn't fit the top rings.
-- Its tray window was 158 mm, narrower than the 158.75 mm shield.
-- The rear window was a 160 mm unsupported bridge.
-- Rods had nothing to anchor to at the bottom. So v2 anchors them with nut pockets under ring 0, and the feet now close those pockets from below.
-- Spacers are now pads on the rings, set 8.4 mm behind the face so the gaps read as vents.
-
-### Prototype cost
-
-Print it once before anyone is charged. All of this is an **estimate**, with no quote yet.
-
-The STLs total about 900 cm3 solid. With walls and 15 to 20% infill, that is roughly 450 g of plastic.
-
-| Route | Parts | Shipping | Total | Source |
-|---|---|---|---|---|
-| JLC3DP, PLA or resin, ugly gray | ~$25-45 | ~$15-30 | **~$40-75** | estimate, replace with the cart total |
-| Bambu A1 mini at home | ~$9 plastic (450 g at ~$20/kg) | none | **~$9 after the $299 printer** | estimate |
-| Hardware bag (rods, nuts, standoffs, screws) | ~$7 | included | **~$7** | same estimate as the existing BOM "cables/misc" line |
-
-The existing dev kit BOM above is unchanged. Its numbers still come from the listings and estimates stated there.
-
-### Ordering from JLC3DP
-
-1. Go to jlc3dp.com, pick 3D Printing, and upload the STLs from `hardware/stl/`. Upload each file once. Set the quantity from `manifest.json`: every ring quarter is 1, the cap frame pieces are 1 each, the feet are 4.
-2. Material: PLA or PETG-like FDM if offered, otherwise the cheapest resin (Standard Resin, gray). Layer 0.1 to 0.2 mm.
-3. Color: one per ring. The hex values are in the Build a Neo box section and `hardware/stl/manifest.json`. They run from terracotta at the base to cream at the cap, with black for tray, rear plate and feet. A single grey order has the right shape and no fade.
-4. Quantity per file: from the manifest.
-5. Open the DFM preview. Check that:
-   - every part lies flat as uploaded
-   - no wall is flagged under 1.6 mm
-   - the quarters aren't merged into one body
-   - the rear plate window and the nut pockets show as holes
-
-   If it flags the rear ring quarters, which are cut away for the I/O plate, ask for PETG or accept the risk. The thinnest strip is 4.7 mm tall and stiff once stacked.
-6. Look at the cart total. Write the real number into this page and into `ROADMAP.md` (Money) in place of the estimate. That one number decides the kit margin.
-7. Nothing is ordered until Joshua says so.
-
-## Build a Neo box
-
-![Build sheet](hardware/build-sheet.svg)
-
-Six build steps, then a first boot. About 45 minutes once you have the parts.
-
-It costs about $250 with the board, RAM and drive. Every price here is an estimate until a real quote lands.
-
-The steps, with every part ID, are in Detailed assembly below:
-1. Base with rods and feet.
-2. Tray.
-3. Rings.
-4. Board.
-5. Rear plate.
-6. The cap.
-
-### What you need
-
-| Item | Qty | Where to buy | Estimate |
-|---|---|---|---|
-| Printed parts (28 pieces, 25 files in `stl/`, 4 of the pieces are feet) | 1 set | JLC3DP or your own printer | $40 to 75 printed, about $9 at home |
-| ASRock J4125B-ITX board | 1 | Walmart or Beach Audio listing | about $120 |
-| 8GB DDR4 laptop RAM | 1 | any computer shop | about $25 |
-| 128GB SATA drive and a SATA cable | 1 | any computer shop | about $20 |
-| Small power supply for mini-ITX (picoPSU) | 1 | any computer shop | about $30 |
-| M3 threaded rod 50 mm (4), M3 nuts (8), M3x8 screws (4) | 1 bag | hardware store or Amazon | about $7 |
-| 16GB USB stick with Joshua Tree on it | 1 | ships in the kit | about $8 |
-
-Total about $250, mostly estimate. Only the board price comes from a real listing.
-
-### Colours, one filament per row
-
-The fade is the product, so print each ring in its own colour.
-
-All seven come from one maker's line, **Bambu Lab PLA Matte**. It is the matte PLA made for the A1 mini.
-
-The hex is the one on Bambu's published filament listing, so check the swatch when you buy. `stl/manifest.json` carries the same hex for every file, and the renders use them.
-
-| Parts | Bambu Lab PLA Matte | Hex |
-|---|---|---|
-| ring 0 (3 pieces) | Terracotta | `#B15533` |
-| ring 1 (3) | Caramel | `#AE835B` |
-| ring 2 (3) | Latte Brown | `#D3B7A7` |
-| ring 3 (3) | Bone White | `#CBC6B8` |
-| ring 4 (3) | Desert Tan | `#E8DBB7` |
-| ring 5 (3) | Ivory White | `#FFFFFF` |
-| cap panel and cap frame (4) | Desert Tan | `#E8DBB7` |
-| tray, rear plate, 4 feet | any black PLA | `#1E1C1A` |
-
-### Pick your path
-
-#### I want it done for me
-
-1. Upload every file in `stl/` to jlc3dp.com (3D Printing). Set each quantity from `stl/manifest.json`.
-2. JLC3DP does not match a hex colour, so the fade is a home-print feature. An order there gets you the right shape in the one colour you pick for the whole set, and you can paint or swap rings later.
-3. Order the board from the listing above, with the rest of the table.
-4. When the box arrives, follow the build steps. You need a small Phillips screwdriver and nothing else. Nuts go in by hand.
-
-#### I want to print it myself
-
-1. Printer: Bambu A1 mini, 0.4 mm nozzle, PLA or PETG, no supports.
-2. Every file prints flat, exactly as it is. Rings and cap: 0.2 mm layers, 3 walls, 15% infill. Tray: 20% infill. Rear plate: 100% infill. Feet: TPU if you have it, PLA works.
-3. Print each file in the colour from the table, the number of times `manifest.json` says. About 450 g of plastic and around 30 hours, both estimates.
-4. Sand any blob off the edges. Do not scale a part.
-
-### Something went wrong
-
-| It does this | Do this |
-|---|---|
-| A ring will not slide down | Sand the rod hole edge. Do not scale the file. |
-| The stack rocks | One nut is loose. Lift the cap, tighten the four top nuts a little at a time, glue it back. |
-| The back plate will not go in | Sand its edges. It is a 0.2 mm fit. |
-| The board screws will not bite | Start each screw with a firm push and two turns. The posts are plastic. |
-| Black screen on first boot | Check the USB stick is in a rear port, tap F11, pick the stick with UEFI in its name. |
-
-
-### Detailed assembly
-
-The parts come from `neo_cad.py`. Every STL is in `stl/`. `stl/manifest.json` lists how many of each to print.
-
-The whole machine is one stack:
-- Four rods hold a ring sandwich together.
-- A tray sits in the middle.
-- The board sits in the tray.
-
-#### Tools
-
-- A small Phillips driver for the four board screws
-- Small pliers or a 5.5 mm nut driver
-- A hobby knife and a bit of sandpaper for print blobs
-- Superglue, one drop at a time (rear plate only)
-- A hacksaw or side cutters if your M3 rods are longer than 50 mm
-
-#### Bill of materials
-
-Same lines as the table in the Hardware plan section. The ID is what each step points at.
-
-| ID | Part | Qty | Where |
-|---|---|---|---|
-| P1 | Printed ring pieces (`ring0_*` to `ring5_*`, three per ring: `_front` is the whole 200 mm front with side returns, `_rl` and `_rr` are the rear L pieces), spacer pads already on rings 1 to 5 | 18 pieces | `stl/` |
-| P2 | Printed cap: `cap_panel` (the whole tree, engraved) and three `cap_frame_*` pieces (front U, two rear L) | 4 | `stl/` |
-| P3 | Printed tray, board standoffs already on the floor | 1 | `stl/` |
-| P4 | Printed rear plate, with its outer face flush to the rings | 1 | `stl/` |
-| P5 | Foot, TPU or PLA, recessed under ring 0 | 4 | `stl/` |
-| B1 | ASRock J4125B-ITX board | 1 | listing, ~$120 |
-| B2 | 8GB DDR4 SO-DIMM | 1 | in the board |
-| B3 | 128GB SATA SSD | 1 | in the tray |
-| B4 | PSU, picoPSU or mini-ITX compatible | 1 | rear, plugs into the board |
-| B5 | 16GB USB stick, OS pre-flashed | 1 | in the kit |
-| B6 | M3 threaded rod, 50 mm | 4 | hardware bag |
-| B7 | M3 nut | 8 | hardware bag |
-| B8 | M3x8 self-tapping screw (board to the printed standoffs) | 4 | hardware bag |
-| B9 | Stock I/O shield | 1 | in the board box |
-| B10 | SATA cable | 1 | hardware bag |
-
-#### Print settings
-
-All parts print flat on the bed, in the orientation the STL is already in. No part needs more than 10 mm of bridge, so there are no supports anywhere. Bed: 180 x 180 mm (Bambu A1 mini). Nozzle 0.4 mm.
-
-| Part | Layer | Walls | Infill | Supports |
-|---|---|---|---|---|
-| P1 rings, P2 cap (print pad side up, the STLs are already flipped; each `_front` file is already turned 45 degrees so the 200 mm front lies diagonally on the 180 mm bed) | 0.2 mm | 3 | 15% gyroid | none |
-| P3 tray | 0.2 mm | 3 | 20% gyroid | none |
-| P4 rear plate | 0.2 mm | 3 | 100% | none |
-
-PLA is fine to start. PETG is better if the box will sit near a warm room.
-
-Print each ring in its own colour. The hex per part is in the colour table above and in `stl/manifest.json`.
-
-#### Steps
-
-![Step 1](hardware/assembly/step1-feet-and-rods.svg)
-
-**1. Ring 0 and rods.**
-- Lay the three ring 0 pieces (P1, the front and two rear L pieces, 200 mm like every ring) in a square on the table.
-- Drop a nut (B7) into the hex pocket at each corner from below.
-- Push a rod (B6) up through the hole into it.
-- Press a foot (P5) into the round recess under each corner. It closes the pocket and covers the rod end.
-- Nothing metal shows from underneath.
-
-![Step 2](hardware/assembly/step2-tray.svg)
-
-**2. Tray.** Lower the tray (P3) into the middle of ring 0, between the four rods. The four standoffs are already printed on its floor. Its walls run up flush with the top of ring 5.
-
-![Step 3](hardware/assembly/step3-rings.svg)
-
-**3. Rings.** Slide ring 1 over the rods. Then ring 2, 3, 4, 5. There are no loose spacers.
-
-The pads:
-- Every piece carries its own 2 mm pads, so no piece can drop onto the ring below.
-- There are five pads under the front, and three under each rear L: one at the rod corner along the inner chamfer, one near each arm end, one mid-side.
-- The pads hug the core, 8.4 mm behind the face. So the 2 mm gap shows only shadow, and the corners and the rear stay open for air.
-
-The seams:
-- The front of every ring is one unbroken piece.
-- The cuts land on the side faces at 50 and 40 mm from the front, alternating, so the seams stagger.
-
-The back:
-- The rear pieces with the notch between them are for the I/O.
-- Ring 0 is notched 1.6 mm deep as well. So the plate sits in a recess and shows an even black frame on all four sides.
-
-**4. Board.** Seat the board (B1, with B2 in it) on the printed standoffs and screw it down with the four M3x8 screws (B8). Clip the I/O shield (B9) onto the back of the board. Plug in the SATA cable (B10) and the SSD (B3).
-
-![Step 4](hardware/assembly/step4-rear-plate.svg)
-
-**5. Rear plate.**
-- Lower the plate (P4) from above into the notch at the back of the rings, behind the board, so the shield sits in the window.
-- Its outer face ends flush with the rings.
-- Its top sits level with the cap panel underside, rising to the cap frame rebate behind it.
-- It's a 0.2 mm slip fit. One drop of superglue on each side keeps it there.
-- Plug the power supply (B4) into the board.
-
-![Step 5](hardware/assembly/step5-cap-and-nuts.svg)
-
-**6. Top nuts and cap.**
-- Before the cap, drop a nut (B7) into each of the four hex pockets in the top of ring 5. Run it down until the stack is snug. Snug, not crushed. If a ring is rocking, one nut is loose.
-- Set the three frame pieces (P2) flat on ring 5, with one drop of superglue under each.
-- Lay the cap panel (the tree) in the middle, resting on the tray walls.
-- The frame hides every nut, and no seam crosses the tree.
-
-**7. First boot.**
-- Plug a keyboard into the PS/2 port, a monitor into the board, and the USB stick (B5) into a rear USB port.
-- Power on and tap F11 (or F2, then boot menu) for the board's boot menu.
-- Pick the USB stick, the UEFI entry.
-- You'll see the GRUB menu, then Joshua Tree.
-- If the screen stays black, plug a USB serial adapter into the board's header and read the log. The Hardware plan section, Phase 0, has the whole drill.
-
-#### If something doesn't fit
-
-Cutting down: 58 loose pieces became 28 printed pieces in 25 files. 20 fasteners became 16.
-
-Parts have 0.2 mm of clearance on every mating face.
-- If your printer runs tight, sand the edge. Don't scale the part.
-- If a ring hole won't clear the tray, you printed too hot.
-- Fix the part in `neo_cad.py`, run it again, reprint. That loop is the whole point.
-
-## Printable Pi case
-
-The same stacked-ring look as the [Neo enclosure](#hardware-plan), sized for the Pi.
-
-It has:
-- four rings that get smaller as they climb
-- a cap
-- a tray in the middle that holds the board
-
-Every part fits a 180 mm printer bed. A Bambu A1 mini is enough.
-
-![Front elevation](hardware/neo-pi-front.svg)
-
-Overall size is about 131 x 102 x 27.5 mm.
-
-### Print the fit test first
-
-The port positions come from the Raspberry Pi 4B mechanical drawing. They have not been checked against your board yet.
-
-So print one small part before the rest. It takes about ten minutes.
-
-1. Build the files (below).
-2. Print `fit_test.stl`. It is a flat plate with a thin lip the size of the board and four holes.
-3. Drop the Pi in. The board should sit inside the lip and the four mounting holes should line up with the plate's holes.
-4. If it is off by half a millimetre or more, change `BOARD_L`, `BOARD_S` or `HOLES` in `pi4b.py` and rebuild. The [Samantha box](#samantha-box) reads the same file, so it gets the fix too.
-
-The port windows are cut bigger than the connectors on purpose, so small errors still fit. The mounting holes are the part that has to be right.
-
-### Build the files
-
-```
-uv run --with build123d python docs/hardware/neo_pi_cad.py docs/hardware/pi
-```
-
-That writes one STL per part, the whole thing as a STEP file, and two drawings.
-
-The script stops with an error if:
-- the rods would miss the rings
-- the cap would not cover the tray
-- the tallest port would hit the lid
-
-| File | What it is | Qty |
-|---|---|---|
-| `core_tray.stl` | Floor, walls, four standoffs, port windows, vent slots | 1 |
-| `stratum0.stl` to `stratum3.stl` | The four rings, biggest at the bottom | 1 each |
-| `cap.stl` | The lid | 1 |
-| `fit_test.stl` | The board outline test plate | 1, first |
-
-### What you need besides the prints
-
-- Four M3 bolts, about 40 mm long, four M3 nuts (or threaded rod cut to length). They run through the corners of every ring and the cap.
-- Four M2.5 screws, 6 mm. They hold the Pi to the standoffs. The standoffs are printed and the screws cut their own thread.
-
-### Print settings
-
-- PLA is fine. PETG if the case will sit somewhere warm.
-- 0.2 mm layers, 3 wall loops, 20% infill.
-- No supports. Lay every part flat on its biggest face. The tray prints floor down.
-- Colour: the Neo look runs a dark orange at the bottom to cream at the top. The colours are in [the Hardware plan section](#hardware-plan).
-
-### Assemble
-
-1. Screw the Pi onto the four standoffs in the tray. The USB-C and HDMI ports face the front window, and the USB and Ethernet ports face the right window.
-2. Slide the tray into the biggest ring.
-3. Stack the other three rings and the cap. Run the four bolts down through the corners and tighten the nuts under the base ring.
-4. The gaps between rings are the vents. Leave them open.
-
-### What the windows are for
-
-| Side | What shows through |
-|---|---|
-| Front | USB-C power, both micro-HDMI ports, the 3.5 mm jack |
-| Right | Ethernet and all four USB ports |
-| Back | The 40-pin header, so a serial cable or a HAT still fits with the case closed |
-| Left | The microSD card |
-
-The back window is the one you need on day one. The serial cable plugs into the header while the lid is on.
-
-### Not done yet
-
-- No print has been made. The numbers come from the drawing, so treat the first print as a test.
-- No Pi 5 version. The Pi 5 board is the same size but the ports are laid out differently.
-- No fan. The Pi 4 runs warm under load. The vent gaps are enough for the idle work Joshua Tree does today. A fan mount comes if M3 runs hot.
 
 ## Samantha box
 
@@ -1571,7 +1179,7 @@ Drop the real screen in. It should sit flush with the top and move a hair side t
 
 Then measure the speaker's diameter and height.
 
-The Pi numbers live in `pi4b.py`, shared with the [Neo Pi case](#printable-pi-case).
+The Pi numbers live in `pi4b.py`, shared with the Nimbus CAD.
 
 ```
 uv run --with build123d python3 docs/hardware/samantha_cad.py /tmp/box
@@ -1613,7 +1221,7 @@ It needs a right-angle USB-C plug that stands no more than 12 mm off the box (`P
 - The screen's own HDMI and touch connectors stick out of its back. Their height and place are unknown, so the clearance to the Pi is unchecked.
 - No cable route from the Pi's micro-HDMI to the screen.
 - No mic part is chosen. Joshua's Yeti is too big for this box.
-- No fan. See [the Printable Pi case section](#printable-pi-case).
+- No fan.
 
 The renders come from `python3 docs/hardware/render_samantha.py`. It does three things:
 - It builds the CAD into a temp folder.
@@ -1655,4 +1263,4 @@ Only the serial cable. Joshua Tree prints every boot line on it (the Raspberry P
 The LED, the button and the speaker are wired for the drivers that come next: a GPIO driver for the LED and button, then PWM sound on GPIO18. Until then they sit there quietly.
 
 ---
-Neo Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.
+Nimbus and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.

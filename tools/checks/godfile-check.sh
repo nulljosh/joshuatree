@@ -61,7 +61,13 @@ ratchet_ceiling() {
         # 2026-10-01: Notes moved to ring 3 (user/notes.c); dead gui_wait_close and gui_app_cursor_hide dropped.
         # 2026-10-01: Terminal moved to ring 3 (user/terminal.c); term_* UI and the putc capture hook dropped.
         # 2026-10-01: Samantha moved to ring 3 (user/samantha.c); the in-kernel chat, its face, the chat shell command and chattest are gone.
-        kernel/kernel.c) echo 8705 ;;
+        # 2026-10-19: 4.12.3 moved the menu-bar weather to kernel/weather.c.
+        # 2026-10-19: 4.18.3 moved the map and satellite wallpapers to kernel/wallmap.c.
+        # 2026-10-19: 4.18.4 moved SETTINGS.TXT load and save and the LLM, Mail and Claude settings to kernel/settings.c.
+        # 2026-10-19: 4.18.5 moved pngtest, jpegtest, heaptest, nettest and mailtest (and their test data) to kernel/selftest.c.
+        # 2026-10-19: 4.18.6 moved the scheduler demos (tasktest, fputest, preempttest, killtest, spawntest, isotest, reaptest) to kernel/taskdemo.c.
+        # 2026-10-19: 4.18.7 moved the shell file commands (ls, cat, write, rm, trash, restore, cd, mkdir, browse, fsuse, diskuse) to kernel/shellfs.c.
+        kernel/kernel.c) echo 6393 ;;
         *) echo "$LIMIT" ;;
     esac
 }

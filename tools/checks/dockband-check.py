@@ -25,7 +25,7 @@ for f in (LOG, DUMP):
     try: os.remove(f)
     except FileNotFoundError: pass
 
-q = subprocess.Popen(["qemu-system-i386", "-name", "jt-dockband", "-kernel", "kernel.elf",
+q = subprocess.Popen(["qemu-system-i386", "-name", "jt-dockband", "-kernel", "kernel.elf", "-append", "walltheme=sat",   # 4.11.4: the default is plain grey; this needs a textured wall
                       "-display", "none", "-vga", "std",
                       "-qmp", "tcp:127.0.0.1:%d,server,nowait" % PORT, "-serial", "file:" + LOG],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
