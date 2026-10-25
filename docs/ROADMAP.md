@@ -62,14 +62,14 @@ Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Ma
 2. A full-screen face whose mouth follows her voice. Done in 4.20.0: the Samantha tile opens her chat across the screen.
 3. Whatever the board shows is broken.
 
-**Then: the rest of 6.0, Yours.** Accounts, login, sudo, home folders (4.8 to 4.11) and snapshots are in. Still to come: the crash-safe card filesystem, a Users pane in Settings, file permissions and backups.
+**Then: 6.0, Yours, is nearly in.** Accounts, login, sudo, home folders (4.8 to 4.11), snapshots (4.12), the crash-safe card (4.14) and the Users pane in Settings (4.15) all shipped, and another person's home opens only under sudo. Left: backups off the card (a copy to USB or the Mac), and the board pass for all of it.
 
 **Still open from the 2026-10-11 review:**
 - Codex through the relay on the Mac, read-only, never a bare-metal OAuth client on the Pi (research decision 2026-10-10).
 - Pi security on the board: verify the TLS relay and HTTPS clock, then drop the build-time clock bootstrap.
 - Self-update with a fallback kernel. Check: a fake release that boots once and falls back.
 - The local model with real weights read from the card (`tools/checks/arm64-llm-check.py` loading from a FAT image).
-- Split `kernel/kernel.c` and `arch/arm64/main.c`, one behaviour-identical PR each.
+- Split `kernel/kernel.c` (5,042 lines after 4.20.1, 9,606 on 2026-09-28) and `arch/arm64/main.c` (4,133), one behaviour-identical PR each. Next in kernel.c: `gui_run` and the rest of `run()`.
 - A trademark search before any rename.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, and fewer get it onto a real board. Lean into that:
