@@ -15,7 +15,6 @@
 #include "gui_shapes.h"
 #include "irq.h"
 #include "task.h"
-#define boot_to_phone jt_phone_mode()   /* hint.h reads kernel.c's flag; desktop.h exports it as jt_phone_mode */
 #include "hint.h"
 
 #include "clockicon.h"
