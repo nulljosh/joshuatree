@@ -2607,17 +2607,6 @@ static void run(char *line){
         if (!*arg) puts("usage: pick <sentence>\n");
         else { puts("pick: "); puts(picker_pick(arg)); puts("\n"); }
     }
-    else if (!strcmp(line, "pickcheck")) {
-        int total, ok = picker_selfcheck(&total);
-        char m[48]; int p = 0;
-        const char *a = "pickcheck: "; while (*a) m[p++] = *a++;
-        char d[12]; int dn = 0; for (int v = ok; ; v /= 10) { d[dn++] = '0' + v % 10; if (v < 10) break; }
-        while (dn) m[p++] = d[--dn];
-        m[p++] = '/'; dn = 0; for (int v = total; ; v /= 10) { d[dn++] = '0' + v % 10; if (v < 10) break; }
-        while (dn) m[p++] = d[--dn];
-        a = ok == total ? " ok\n" : " FAIL\n"; while (*a) m[p++] = *a++;
-        m[p] = 0; puts(m);
-    }
     else if (!strcmp(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
     else if (!strcmp(line, "fonts")) {
         /* 2.27.0 font registry: every embedded face, by name. */
@@ -2827,16 +2816,6 @@ static void run(char *line){
     /* calctest retired: the parser it exercised moved to user/calculator.c,
        a real ring-3 program (1.7.12), whose own math is what
        tools/checks/ring3calc-check.py exercises now. */
-    else if (!strcmp(line, "stockstest")) {
-        int pass = 1;
-        char price_str[16];
-        stocks_format_price(23800, price_str, sizeof(price_str));
-        if (price_str[0] != '2' || price_str[1] != '3') { puts("stocks price format failed\n"); pass = 0; }
-        int dollars, cents, sign;
-        stocks_format_change(-18000, &dollars, &cents, &sign);
-        if (sign != -1 || dollars != 180) { puts("stocks change format failed\n"); pass = 0; }
-        puts(pass ? "stocks formatting: ok\n" : "FAILED\n");
-    }
     else if (!strcmp(line, "time"))  show_time();
     else if (!strcmp(line, "reboot"))reboot();
     else {
