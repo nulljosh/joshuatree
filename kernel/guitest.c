@@ -364,6 +364,31 @@ int guitest_run(const char *line, char *arg) {
         puts(ok ? "settingsclick: click hit-tests the row it actually landed on, sidebar sections hit-test correctly, and a toggle survives save/load: ok\n" : "settingsclick: FAILED\n");
         serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so a tools/checks shell script can read the verdict headless */
     }
+    else if (!strcmp(line, "testapps")) {
+        /* A real, permanent diagnostic, not scaffolding bolted on for one
+           test run: automated QA needs to exercise each real app's own
+           launch function, and the only reliable way to drive input from
+           a script is keyboard injection (proven repeatedly this session;
+           QEMU's monitor mouse commands don't reach this kernel's real
+           PS2 driver headlessly, see ROADMAP.md's honest note on that).
+           Any key (Escape included) closes every one of these exactly the
+           same way a real click already does via gui_wait_close, so a
+           script can drive this whole suite with nothing but sendkey. */
+        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
+        else {
+            /* Walks every real app, not just the pinned dock subset: the
+               point of this command is regression coverage of all of
+               them (see apptest.sh), and since v37 the dock deliberately
+               shows only a handful. */
+            for (int i = 0; i < GUI_APPS_FOLDER; i++) gui_launch(i);
+            window_close();
+            clear();
+            puts("testapps done\n");
+        }
+    }
+    /* calctest retired: the parser it exercised moved to user/calculator.c,
+       a real ring-3 program (1.7.12), whose own math is what
+       tools/checks/ring3calc-check.py exercises now. */
     else return 0;
     return 1;
 }
