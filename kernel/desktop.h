@@ -1,6 +1,6 @@
 #ifndef DESKTOP_H
 #define DESKTOP_H
-/* What kernel.c's desktop shares with the units split out of it (kernel/wxtest.c): the menu bar and weather panel
+/* What kernel.c's desktop shares with the units split out of it (kernel/wxtest.c, kernel/guitest.c): the menu bar and weather panel
    geometry, and the day/night grade. kernel.c defines all of these. */
 #define GUI_MENUBAR_H   26
 #define WEATHER_W 220
@@ -22,4 +22,7 @@ void daynight_calc(int hour, int *night_out, int *day_out);   /* pure: the night
 unsigned int gui_daynight_tint_pct(unsigned int rgb, int night, int day);
 unsigned int gui_daynight_tint(unsigned int rgb);            /* at the current hour */
 void gui_draw_weather_panel(void);
+void gui_draw_wallpaper_rows(int y_from, int y_to);   /* the wallpaper's rows, no sway */
+int gui_aa_advance(unsigned char c);                   /* the UI face's advance for c, physical px */
+void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg, int cell);   /* one UI-face glyph */
 #endif
