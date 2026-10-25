@@ -5,7 +5,7 @@ static int brick_left, brick_right;
 static unsigned long brick_last;
 static int brick_x(void) { return win_lx + (win_lw - BRICK_W) / 2; }
 static int brick_y(void) { return win_ly + 54 + (win_lh - win_def[WT_MAIN][1]) / 2; }   /* a taller window (resized) centres the field in it */
-static void brick_paint(void) {
+void brick_paint(void) {
     int s = (int)window_scale(), x = brick_x(), y = brick_y();
     char score[] = "Bricks 00 / 32    Lives 0";
     score[7] = '0' + brick.score / 10; score[8] = '0' + brick.score % 10;
@@ -31,13 +31,13 @@ static void brick_paint(void) {
     fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
     cur_show();
 }
-static void brick_open(void) {
+void brick_open(void) {
     if (brick_live || !fb) return;
     settings_close(); clock_close(); calc_close(); browser_close(); app_kill("closed for Brick"); console_close();
     brick_reset(&brick); brick_left = brick_right = 0; brick_last = 0; brick_live = 1;
     brick_paint(); uart_puts("brick open\n");
 }
-static void brick_close(void) {
+void brick_close(void) {
     if (!brick_live) return;
     brick_live = brick_left = brick_right = 0;
     con_live = 1; console_close(); pane_open(cp);
@@ -53,7 +53,7 @@ int brick_key(unsigned code, unsigned value) {
     if (brick_live) brick_paint();
     return 1;
 }
-static void brick_mouse(int lx, int ly) {
+void brick_mouse(int lx, int ly) {
     if (spot_live || !brick_live || lx < brick_x() || lx >= brick_x() + BRICK_W || ly < brick_y() || ly >= brick_y() + BRICK_H) return;
     brick_move(&brick, lx - brick_x()); brick_paint();
 }

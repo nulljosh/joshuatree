@@ -137,7 +137,7 @@ static void br_mascot_draw(int cx, int top) {   /* the mascot, 96 logical px squ
         *px = out;
     }
 }
-static void browser_paint(int report) {
+void browser_paint(int report) {
     int s = (int)window_scale(), x = br_x(), w = br_w(), y = win_ly + BR_PAGE_Y, h = br_h(), ty = win_ly + 34;
     cur_hide();
 #ifdef BR_TRACE
@@ -323,20 +323,20 @@ static void br_tab(void) {
     }
     browser_paint(0);
 }
-static void browser_open(void) {
+void browser_open(void) {
     if (browser_live || !fb) return;
     settings_close(); clock_close(); brick_close(); calc_close(); app_kill("closed for the Browser"); console_close();
     browser_live = 1; br_frame = 1; br_sel = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0; br_top = 0;
     br_wrap(); bm_sel = 0; if (!bm_loaded) bm_load();
     browser_paint(1); uart_puts("browser open\n");
 }
-static void browser_close(void) {
+void browser_close(void) {
     if (!browser_live) return;
     browser_live = br_edit = 0;
     con_live = 1; console_close(); pane_open(cp);
     uart_puts("browser closed\n");
 }
-static int browser_key(unsigned code) {   /* a key down with the Browser in front and Spotlight closed; always the Browser's */
+int browser_key(unsigned code) {   /* a key down with the Browser in front and Spotlight closed; always the Browser's */
     if (alt_held && (code == 105 || code == 106)) { br_nav(code == 106); return 1; }          /* Alt+Left, Alt+Right */
     if (code == 63 || (ctrl_held && code == 19)) { br_nav(2); return 1; }                      /* F5, Ctrl+R */
     if (ctrl_held && code == 32) { br_star(); return 1; }                                      /* Ctrl+D, the star */
@@ -378,7 +378,7 @@ void browser_wheel(int v) {   /* REL_WHEEL: up is positive */
     if (br_top == was) return;   /* already at that end of the page: nothing moved, so nothing to draw */
     br_msg[0] = 0; browser_paint(0);
 }
-static void browser_click(int lx, int ly) {
+void browser_click(int lx, int ly) {
     int ty = win_ly + 34;
     if (ly >= ty && ly < ty + 22) {
         for (int i = 0; i < 3; i++) if (lx >= win_lx + 10 + i * 26 && lx < win_lx + 32 + i * 26) { br_nav(i); return; }

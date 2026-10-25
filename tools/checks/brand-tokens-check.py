@@ -11,7 +11,8 @@ def read(p): return open(os.path.join(ROOT, p)).read()
 tok = dict(re.findall(r"--([a-z-]+):\s*(#[0-9a-f]{6})", read("docs/brand/tokens.css").split("@media")[0]))
 bad = []
 # desktop colours: the kernel's constants, 0x00RRGGBB
-src = read("kernel/dock_geom.h") + read("kernel/gui_paint.h") + read("arch/arm64/main.c") + read("arch/arm64/wall.c") + read("arch/arm64/settings.c")
+import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from armcore import core_source   # main.c and the parts cut out of it
+src = read("kernel/dock_geom.h") + read("kernel/gui_paint.h") + core_source() + read("arch/arm64/wall.c") + read("arch/arm64/settings.c")
 for name, const in (("dock-tray", "DOCK_TRAY_COLOR"), ("dock-label", "DOCK_LABEL_BG"), ("menubar-rule", "MENUBAR_RULE")):
     m = re.search(r"#define %s\s+0x00([0-9A-Fa-f]{6})" % const, src)
     if not m: bad.append("no #define %s in the source" % const)

@@ -6,7 +6,8 @@ led_blink must never run at boot (a boot-time blink left the USB keyboard dead o
 on `ticks`, which stops at 3, so a wait on it never ends. Samantha's [[led blink]] (ask.c) is its only caller.
 """
 import re, sys
-src = open("arch/arm64/main.c").read()
+sys.path.insert(0, "tools/checks"); from armcore import core_source
+src = core_source()   # main.c and the parts cut out of it
 ok = True
 if not (re.search(r"GPIO_BASE \+ 0x10", src) and re.search(r"GPIO_BASE \+ \(state \? 0x20 : 0x2C\)\) = 1u << 10", src)):
     print("FAIL: led_set does not drive GPIO 42 through GPFSEL4 and GPSET1/GPCLR1 bit 10"); ok = False
