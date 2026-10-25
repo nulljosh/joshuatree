@@ -23,6 +23,13 @@
 #define GICC_BASE 0x08010000UL
 #endif
 #define REG(a) (*(volatile unsigned int *)(a))
+/* Here, not in main.c, so boot.c sees APP_BOOT too and runs its loop on QEMU's raspi4b (4.23.3 lost the windows gate that way). */
+#ifdef WIN_GATE
+#define APP_BOOT "calendar,toroid,notes"   /* the windows gate's three apps (Makefile: wingate) */
+#endif
+#ifdef HANG_TEST
+#define APP_BOOT "calendar,notes"   /* 4.5: slot 0 hangs on its first instruction, slot 1 must keep going (Makefile: hang) */
+#endif
 #include "bt.h"
 #include "audio.h"
 #include "accounts.h"

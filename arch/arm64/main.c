@@ -3253,12 +3253,6 @@ void fb_desktop(void) {
     pane_open(&con_p);   /* the Console is not up at boot: bring it up to be dragged */
     drag_on = 1; win_move_to(win_lx + 100, win_ly + 60); drag_end();
 #endif
-#ifdef WIN_GATE
-#define APP_BOOT "calendar,toroid,notes"   /* the windows gate's three apps (Makefile: wingate) */
-#endif
-#ifdef HANG_TEST
-#define APP_BOOT "calendar,notes"   /* 4.5: slot 0 hangs on its first instruction, slot 1 must keep going (Makefile: hang) */
-#endif
 #ifdef APP_BOOT   /* the apptest build: that app opened at boot, for arm64-appsize-check.py at 1080p (the Pi model has no USB to click with). 4.0: "a,b,c" opens each in turn, for arm64-windows-check.py */
     int boot_multi = 0;
     {   const char *list = APP_BOOT;
