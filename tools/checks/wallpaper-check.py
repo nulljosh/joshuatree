@@ -20,9 +20,10 @@ Then, independently:
      png.c's PLTE support makes the kernel log `wallerr=png -4` and this
      script fail on "no wall= line");
   3. the screen: pmemsave of the real framebuffer after the fetch. The
-     wind band (logical rows 30..395) must be the map, tinted for the
-     current hour exactly the way kernel.c's daynight_calc does it
-     (replicated below), not the baked photo: mean color over that band
+     wind band (logical rows 30..395) must be the map, with the Warm
+     theme's grade (kernel/walltint.h gui_map_tint) and then the hour's
+     tint exactly the way kernel.c's daynight_calc does it (both
+     replicated below), not the baked photo: mean color over that band
      within a small tolerance of the tinted map's mean, and far from the
      photo's. Rain/snow particles are single pixels, invisible to a mean.
 
@@ -150,7 +151,10 @@ band_fb = fb.crop((0, WIND_TOP * sc, W, WIND_HORIZON * sc))
 # the kernel maps logical rows MENUBAR_H..540 onto the whole 540-row source, so source rows for the band are:
 area_h = 540 - MENUBAR_H
 src_y0 = (WIND_TOP - MENUBAR_H) * WALL_H // area_h; src_y1 = (WIND_HORIZON - MENUBAR_H) * WALL_H // area_h
-m_map = tint(mean(ref.crop((0, src_y0, WALL_W, src_y1))))
+def warm(im):   # walltheme=map is WALL_WARM: kernel/walltint.h gui_map_tint, per pixel (red clamps at 255), before the hour's tint
+    r, g, b = im.split()
+    return Image.merge("RGB", (r.point(lambda v: min(255, (v * 272) >> 8)), g.point(lambda v: (v * 248) >> 8), b.point(lambda v: (v * 216) >> 8)))
+m_map = tint(mean(warm(ref.crop((0, src_y0, WALL_W, src_y1)))))
 hdr = open("drivers/wallpaper.h").read()
 body = hdr[hdr.index("{") + 1:hdr.rindex("}")]
 photo = Image.frombytes("RGB", (WALL_W, WALL_H), bytes(int(t) for t in body.replace("\n", "").split(",") if t.strip()))
