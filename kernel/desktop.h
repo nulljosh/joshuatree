@@ -34,4 +34,12 @@ unsigned char cmos(unsigned char reg);   /* kernel.c: one RTC register */
 void cmos_read_time_stable(unsigned char *h, unsigned char *m, unsigned char *wd, unsigned char *dom, unsigned char *mon);   /* kernel.c: the RTC */                   /* folder position to APPS[] slot */
 int gui_aa_advance(unsigned char c);                   /* the UI face's advance for c, physical px */
 void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg, int cell);   /* one UI-face glyph */
+/* kernel.c's boot state and helpers that kernel/desktop.c's gui_run reads (4.23.9). */
+extern int boot_to_samantha, boot_to_phone, boot_res_w, boot_res_h;   /* the boot line's samantha, phone and WxH */
+extern const char *gui_notice_name;   /* the app named by the "is already open" notice, 0 for none */
+void gui_notice_draw(void);
+void gui_order_init(void);   /* the dock's slot order, the portfolio build's or the default */
+extern const char SC[128];   /* PS/2 set 1 scancode to ASCII */
+void r3stress_desktop_round(void);   /* kernel/r3stress.c */
+void pdestress_desktop_round(void);
 #endif

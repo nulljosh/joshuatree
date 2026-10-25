@@ -1037,6 +1037,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.23.9 (2026-10-25)**: `gui_run`, the i386 desktop's event loop, and its lock screen and Apple-menu actions leave `kernel/kernel.c` for `kernel/desktop.c` (1,940 lines to 1,260). Check: `check.sh`, `esc-desktop-check.py`, `lockscreen-check.py`, `design-doc-check.py`.
 - **4.23.8 (2026-10-25)**: The menu bar and the app viewport leave `kernel/kernel.c` for `kernel/menubar.c` and `kernel/appview.c`, and the triangle painter joins `gui_shapes.c` (2,166 lines to 1,940). kernel.c is under the god-file limit and off its ratchet list. Check: `godfile-check.sh`, `menubar-persist-check.py`, `windowdrag-check.py`, `appclose-check.py`.
 - **4.23.7 (2026-10-25)**: The antialiased UI text leaves `kernel/kernel.c` for `kernel/uitext.c` (2,346 lines to 2,166). Check: `textsharp-check.py`, `termmono-check.py`, `textspacing-check.sh`, `design-doc-check.py`.
 - **4.23.6 (2026-10-25)**: The i386 wallpaper painters and the day/night tint leave `kernel/kernel.c` for `kernel/wallpaint.c` (2,827 lines to 2,346). Check: `check.sh`, `frametime-check.py`, `wallboot-check.sh`, `design-doc-check.py`.
@@ -1997,19 +1998,19 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-25, morning. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-25, afternoon. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards. Open a loop PR ready, not as a draft: a push to a draft followed by `gh pr ready` lets the skipped draft run cancel the real one.
 
-**Where things stand.** Main is 4.20.21, aiming at 5.0, Talk to it. Since 4.20.0 the Samantha tile opens her chat across the screen with her face big and the mouth following her voice, so everything in 5.0 is built and waits on the board. `kernel/kernel.c` went from 6,393 to 2,827 lines overnight (4.19.2 to 4.20.21): the window manager, network commands, self-tests, panic screen, shape painters, kernel log, app icons, Apps folder, boot splash, Apple menu and the shell's dispatcher each have their own file. The card flashed on 2026-10-25 carries 4.20.19. `arch/arm64/main.c` is 1,073 lines after 4.23.2 to 4.23.5 moved virtio, the boot sequence, the desktop chrome, keys, windows, the pointer, the crash screen and the console out. `kernel/kernel.c` is 1,940 lines after 4.23.6 to 4.23.8 (wallpaper, UI text, menu bar, app viewport); both god files are now under the 2,000-line limit. The god-file check covers `arch/`.
+**Where things stand.** Main is 4.23.x, aiming at 5.0, Talk to it. 4.23.0 added five games played to the end (Solitaire, Paddle, Bricks, Depths, Snake), i386 only so far. The card flashed on 2026-10-25 carries 4.20.19, so relay-free Samantha (4.21.0) and the games need a reflash. Both god files are under the 2,000-line limit: `arch/arm64/main.c` is 1,073 lines (4.23.2 to 4.23.5 cut it into virtio, boot, desk, keys, windows, appwin, pointer, crash and console) and `kernel/kernel.c` about 1,260 (4.23.6 to 4.23.9 moved the wallpaper, UI text, menu bar, app viewport and `gui_run`). The god-file check covers `arch/`.
 
-**What is left in kernel.c and why.** `gui_run` and `kmain`, plus the text helpers (`wx_*`) that read the static font tables in `drivers/editor_fonts.h`. Those tables need defining once in a `.c` file before the helpers can move. Every header kernel.c used to include whole is now a `.c` file.
+**What is left in kernel.c.** `kmain`, the APPS table, the console and keyboard input, and the dock launch path. A split must keep each `#ifndef` default guarded, keep static state in one file, and move a macro two parts test into the shared header (Lessons, "Splitting a file").
 
 **Next, in order.**
-1. Joshua's board pass on the 4.20.x card: hold Space and talk, the Samantha tile opens her full-screen chat, she answers out loud.
+1. Joshua's board pass on a fresh card: hold Space and talk, the Samantha tile opens her full-screen chat, she answers out loud.
 2. Whatever the board shows is broken.
-3. Split `arch/arm64/main.c`, then the font tables above so `gui_run` and `kmain` can leave kernel.c.
-4. After a split, grep `tools/checks/` for regexes that read `kernel/kernel.c` for code that moved (4.20.10's `burrow-rename-check.py` read the Apple menu's rows from kernel.c).
+3. The games on the Pi (ring-3 apps, so mostly the arm64 launcher and input).
+4. After a split, grep `tools/checks/` for regexes that read the old file for code that moved (`design-doc-check.py` reads many facts by path).
 
 Rules kept:
 - No bare `git stash` (shared across worktrees).
