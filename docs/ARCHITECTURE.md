@@ -2379,7 +2379,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (293 checks)
+### The suite (294 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
