@@ -72,19 +72,28 @@ try:
     qf = sock.makefile("rw")
     qf.readline()  # greeting
     qmp_command(qf, {"execute": "qmp_capabilities"})
-    time.sleep(3)
+    # 4.20.17: wait for the desktop instead of a fixed 3 s, and sample frames until the sway moves one, up to 8 s.
+    # A slow CI runner (PR 664) took both 0.2 s-apart frames before the wallpaper redrew: "frames identical".
+    for _ in range(300):
+        if os.path.exists(LOG) and b"guidesktop" in open(LOG, "rb").read(): break
+        time.sleep(0.1)
+    else:
+        print("FAIL: the desktop never came up (no guidesktop on serial)"); sys.exit(1)
+    time.sleep(1)
 
     dump1 = "/tmp/jt-drunk-frame1.raw"
     dump2 = "/tmp/jt-drunk-frame2.raw"
 
     screenshot(qf, dump1)
-    time.sleep(0.2)
-    screenshot(qf, dump2)
-
     with open(dump1, 'rb') as f:
         img1 = f.read()
-    with open(dump2, 'rb') as f:
-        img2 = f.read()
+    deadline = time.time() + 8
+    while True:
+        time.sleep(0.3)
+        screenshot(qf, dump2)
+        with open(dump2, 'rb') as f:
+            img2 = f.read()
+        if img2 != img1 or time.time() > deadline: break
 
     try: qmp_command(qf, {"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, OSError): pass
