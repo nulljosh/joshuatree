@@ -4268,7 +4268,7 @@ static void run(char *line){
             puts("signal sent (takes effect next time that task is scheduled)\n");
         }
     }
-    else if (guitest_run(line, arg)) {}   /* 4.20.2: cursortest, texttest, wraptest, dockstyletest and settingsclicktest live in kernel/guitest.c */
+    else if (guitest_run(line, arg)) {}   /* 4.20.2: cursortest, texttest, wraptest and dockstyletest live in kernel/guitest.c */
     else if (!strcmp(line, "wind")) {
         if (!strcmp(arg, "off")) { wind_enabled = 0; settings_save(); puts("wind off\n"); }
         else if (!strcmp(arg, "on")) { wind_enabled = 1; settings_save(); puts("wind on\n"); }

@@ -1,4 +1,4 @@
-/* The desktop's drawing self-tests (cursortest, texttest, wraptest, dockstyletest, settingsclicktest), each a shell
+/* The desktop's drawing self-tests (cursortest, texttest, wraptest, dockstyletest), each a shell
    command a headless check types and reads the serial log of. Moved out of kernel.c's run() in 4.20.2. */
 #include "libc.h"
 #include "serial.h"
