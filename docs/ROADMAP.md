@@ -69,7 +69,7 @@ Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Ma
 - Pi security on the board: verify the TLS relay and HTTPS clock, then drop the build-time clock bootstrap.
 - Self-update with a fallback kernel. Check: a fake release that boots once and falls back.
 - The local model with real weights read from the card (`tools/checks/arm64-llm-check.py` loading from a FAT image).
-- Split `kernel/kernel.c` (5,042 lines after 4.20.1, 9,606 on 2026-09-28) and `arch/arm64/main.c` (4,133), one behaviour-identical PR each. Next in kernel.c: `gui_run` and the rest of `run()`.
+- Split `kernel/kernel.c` (3,145 lines after 4.20.10, 9,606 on 2026-09-28) and `arch/arm64/main.c` (4,133), one behaviour-identical PR each. Next in kernel.c: the static headers it includes, then `gui_run` and the rest of `run()` (see the Loop handoff section).
 - A trademark search before any rename.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, and fewer get it onto a real board. Lean into that:
@@ -1978,17 +1978,19 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-19, morning. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-25, early morning. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
-**What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards.
+**What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards. Open a loop PR ready, not as a draft: a push to a draft followed by `gh pr ready` lets the skipped draft run cancel the real one.
 
-**Where things stand.** Aiming at 5.0, Talk to it. The card on the board has main. Talking to Samantha on the Pi is double-tap and hold Space, like Claude Code (the typed `hear` command is gone). The kernel's god file is being broken up one slice at a time: `kernel/kernel.c` was 7,282 lines on the morning of 2026-10-19 and the open stack takes it to 5,173, with settings, the self-tests, the scheduler demos, the shell's file and network commands, the weather and wallpaper tests and the window manager each in their own file. `arch/arm64/main.c` (4,127 lines) is the other file over the 2,000-line ceiling.
+**Where things stand.** Main is 4.20.10, aiming at 5.0, Talk to it. Since 4.20.0 the Samantha tile opens her chat across the screen with her face big and the mouth following her voice, so everything in 5.0 is built and waits on the board. `kernel/kernel.c` went from 6,393 to 3,145 lines overnight (4.19.2 to 4.20.10): the window manager, network commands, self-tests, panic screen, shape painters, kernel log, app icons, Apps folder, boot splash and Apple menu each have their own file. `arch/arm64/main.c` (4,133 lines) was left alone so the card Joshua flashes on 2026-10-25 holds only 4.20.0's Pi changes.
+
+**What is left in kernel.c and why.** `gui_run` (634 lines), `run()` and `kmain`, plus code that calls static functions in headers kernel.c includes (`settings_ui.h`, `auth.h`, `stocks.h`, `clockicon.h`, `phone_home.h`) or reads the static font tables in `drivers/editor_fonts.h`. The next slices need those headers turned into `.c` files with their tables defined once, not duplicated.
 
 **Next, in order.**
-1. Joshua's board pass: hold Space and talk, Spotlight opens any app, Samantha answers the weather with a real reading.
-2. Keep slicing `kernel/kernel.c` (the desktop loop `gui_run` is 630 lines) and then `arch/arm64/main.c`.
-3. A full-screen face whose mouth follows her voice, after the board proof.
-4. Whatever the board shows is broken.
+1. Joshua's board pass on the 4.20.x card: hold Space and talk, the Samantha tile opens her full-screen chat, she answers out loud.
+2. Whatever the board shows is broken.
+3. Split `arch/arm64/main.c`, then the static headers above so `gui_run` and `run()` can leave kernel.c.
+4. After a split, grep `tools/checks/` for regexes that read `kernel/kernel.c` for code that moved (4.20.10's `burrow-rename-check.py` read the Apple menu's rows from kernel.c).
 
 Rules kept:
 - No bare `git stash` (shared across worktrees).
