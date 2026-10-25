@@ -52,7 +52,7 @@ async function open(contextOpts) {
   const page = await ctx.newPage();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('**/api/proxy**', r => r.fulfill({ status: 403, body: '' }));
-  await page.goto(base, { waitUntil: 'load' });
+  await page.goto(base + '?demo', { waitUntil: 'load' });
   return { ctx, page };
 }
 

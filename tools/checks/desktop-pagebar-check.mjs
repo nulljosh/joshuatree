@@ -28,7 +28,7 @@ try {
   const page = await ctx.newPage();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('**/api/proxy**', r => r.fulfill({ status: 403, body: '' }));
-  await page.goto(`http://localhost:${server.address().port}/`, { waitUntil: 'load' });
+  await page.goto(`http://localhost:${server.address().port}/?demo`, { waitUntil: 'load' });
   await page.locator('#hero-poster').click();
   await page.locator('#demo-composer').waitFor({ state: 'visible', timeout: 240000 });
   if (!await page.evaluate(() => document.getElementById('demo-frame').classList.contains('pagebar'))) bad = 'the frame never took the pagebar class';

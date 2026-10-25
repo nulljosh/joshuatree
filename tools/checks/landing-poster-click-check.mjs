@@ -59,7 +59,7 @@ for (const [tag, vp, mobile] of [['desktop click', { width: 1440, height: 900 },
     }
     return route.fulfill({ status: 403, body: '' });
   });
-  await page.goto(base);
+  await page.goto(base + '?demo');
   const visible = await page.evaluate(() => { const e = document.getElementById('hero-poster'); return !!e && !e.hidden && getComputedStyle(e).display !== 'none'; });
   ok(visible, `${tag}: poster is up before the click`);
   if (mobile) ok(!await page.locator('#demo-composer').isVisible(), `${tag}: poster and real composer do not show two input bars`);

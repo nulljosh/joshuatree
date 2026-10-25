@@ -2585,6 +2585,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Landing hero: a real portrait before any click (pixels, undistorted), default boot opens Samantha's face, Esc reaches the desktop, ?desktop opts out, phone and tablet hold; fails if the poster is removed | `tools/checks/hero-poster-check.mjs` | retry |
 | Landing hero: Click or Tap to boot lifts the poster onto her face well before the 60 s fallback, even after the serial log is trimmed | `tools/checks/landing-poster-click-check.mjs` | once |
 | Landing page never overflows horizontally at phone widths | `tools/checks/mobile-overflow-check.mjs` | once |
+| Landing opens on screenshots, the live demo is at ?demo | `tools/checks/landing-shots-hero-check.mjs` | once |
 | Landing: benchmark labels clear, one app count, See the desktop link styled, sections visible on load | `tools/checks/landing-layout-check.mjs` | once |
 | Portfolio voice: on by default, mute button top right, remembered across a reload, absent outside portfolio | `tools/checks/portfolio-mute-check.mjs` | once |
 | Portfolio tour starts even when his face frames are slow and the first Escape presses are lost: his chat exits and Epiphany opens | `tools/checks/portfolio-slowframes-check.mjs` | retry |

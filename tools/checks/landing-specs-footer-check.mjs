@@ -72,7 +72,7 @@ try {
     stage = `${tag}: newPage`;
     const page = await ctx.newPage();
     stage = `${tag}: loading the page`;
-    await page.goto(url, { waitUntil: 'load' });
+    await page.goto(url + '?demo', { waitUntil: 'load' });
     stage = `${tag}: checks`;
     await page.waitForTimeout(500);
 

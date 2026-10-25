@@ -25,7 +25,7 @@ try {
   const page = await ctx.newPage();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('**/api/proxy**', r => r.fulfill({ status: 403, body: '' }));
-  await page.goto(`http://localhost:${server.address().port}/`, { waitUntil: 'load' });
+  await page.goto(`http://localhost:${server.address().port}/?demo`, { waitUntil: 'load' });
   await page.locator('#hero-poster').tap();
   await page.locator('#demo-composer').waitFor({ state: 'visible', timeout: 120000 });
   const n = await page.evaluate(() => [...document.querySelectorAll('input,textarea')].filter(e => e.offsetParent && /Message Samantha/.test((e.getAttribute('aria-label') || '') + (e.placeholder || ''))).length);

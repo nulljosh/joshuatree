@@ -17,7 +17,7 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 
-const url = process.argv[2] || 'https://joshuatree.jaybulb.com';
+const url = process.argv[2] || 'https://joshuatree.jaybulb.com/?demo';
 const outDir = process.argv[3] || 'capture';
 const durationMs = Number(process.argv[4] || 100000);
 fs.mkdirSync(outDir, { recursive: true });
