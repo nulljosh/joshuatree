@@ -49,7 +49,7 @@ names = re.findall(r'/\*\s*\d+\s*\*/\s*\{"([^"]+)"', m.group(1))
 check(len(names) >= 24, "APPS table parsed (%d rows)" % len(names))
 check(names[0] == "Burrow", "APPS[0] is %r, want 'Burrow'" % names[0])
 check("Files" not in names, "no APPS row is named 'Files'")
-menu = re.search(r'"About Joshua Tree",([^}]*?)"Shut Down"', kernel, re.S).group(1)
+menu = re.search(r'"About Joshua Tree",([^}]*?)"Shut Down"', read("kernel/menu.c"), re.S).group(1)   # the Apple menu's rows, kernel/menu.c since 4.20.10
 check('"Burrow"' in menu and '"Files"' not in menu, "menu-bar list says Burrow, not Files")
 check(re.search(r'\{"Burrow",\s*user_burrow,\s*USER_BURROW_LEN,\s*USER_BURROW_CLEN,\s*USER_BURROW_SUM,\s*"BURROW\.BIN"\}', read("kernel/ring3app.c")) is not None,
       "RING3_APPS has the Burrow row (BURROW.BIN)")
