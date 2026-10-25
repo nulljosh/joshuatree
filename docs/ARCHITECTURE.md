@@ -377,7 +377,7 @@ changed.
 | `kernel/dock_geom.c` | Dock geometry and hit-testing: where each icon sits at the current scale, and which slot a click landed on. The ARM build links it too. |
 | `kernel/dock_draw.c` | The i386 dock's animation: the band cache behind hover and drag, and the icons. The tray, shadow and hover label come from `gui_paint.c`, the layout from `dock_geom.c`. |
 | `kernel/apps_geom.h` | Where the Launchpad (Apps folder) puts its glass panel, icons and labels. Pure integer math, centered on any screen, rows drop to fit a short one. |
-| `kernel/hint.h` | The keyboard-hint line every app draws ("esc closes" and friends), skipped on phones where there is no keyboard. Split out of `kernel.c`. |
+| `kernel/hint.c` + `kernel/hint.h` | The keyboard-hint line every app draws ("esc closes" and friends), skipped on phones where there is no keyboard. Split out of `kernel.c`; its own unit since 4.20.12. |
 | `kernel/app.h` | The app interface. One `struct app` per app (name, tile color, glyph, `open`, and `draw`/`key` for apps that run in a desktop window), plus the few desktop services and helpers an app in its own file needs. |
 | `kernel/app.c` | The helpers behind `app.h`, only ones two or more apps were writing by hand: start an app's window with its titlebar, print a number. |
 | `kernel/bench.h` | Built-in benchmarks: boot time, heap, memcpy, context switch, disk read. `bench` in the shell or on the command line. Results in the Benchmarks section. |
