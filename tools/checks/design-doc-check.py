@@ -301,7 +301,7 @@ def secs(name):
 
 
 def boot_draw():
-    return int(rx("kernel/kernel.c", r"#define BOOT_DRAW_TICKS\s+(\d+)")) / ticks_per_second()
+    return int(rx("kernel/bootscreen.c", r"#define BOOT_DRAW_TICKS\s+(\d+)")) / ticks_per_second()
 
 
 def cap(name):
@@ -383,7 +383,7 @@ FACTS = {
     "LAUNCHPAD_MIN_SIDE": ("num", lambda: launchpad(1), "tools/checks/launchpad-centered-check.py"),
     "LABEL_MIN_GAP": ("num", lambda: launchpad(2), "tools/checks/launchpad-centered-check.py"),
     "TICK_HZ": ("num", ticks_per_second, "kernel/irq.c"),
-    "BOOT_DRAW": ("secs", boot_draw, "kernel/kernel.c"),
+    "BOOT_DRAW": ("secs", boot_draw, "kernel/bootscreen.c"),
     "CAP_IN": ("secs", lambda: secs("CAP_IN"), "user/samantha.c"),
     "CAP_QUIET": ("secs", lambda: secs("CAP_QUIET"), "user/samantha.c"),
     "CAP_OUT": ("secs", lambda: secs("CAP_OUT"), "user/samantha.c"),
