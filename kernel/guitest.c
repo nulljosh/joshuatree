@@ -1,4 +1,4 @@
-/* The desktop's drawing self-tests (cursortest, texttest, wraptest, dockstyletest), each a shell
+/* The desktop's drawing self-tests (cursortest, texttest, wraptest, dockstyletest; gfxtest, fonttest and mousetest since 4.20.3), each a shell
    command a headless check types and reads the serial log of. Moved out of kernel.c's run() in 4.20.2. */
 #include "libc.h"
 #include "serial.h"
@@ -9,6 +9,7 @@
 #include "gui_paint.h"
 #include "dock_geom.h"
 #include "dock_draw.h"
+#include "mouse.h"
 #include "desktop.h"
 #include "selftest.h"
 
@@ -247,6 +248,55 @@ int guitest_run(const char *line, char *arg) {
             int shadow_ok = nseen >= 7;
             puts(shadow_ok ? "dock icon shadow: real per-physical-pixel falloff, not blocky: ok\n" : "dock icon shadow: FAILED (blocky/coarse)\n");
             window_close();
+        }
+    }
+    else if (!strcmp(line, "gfxtest")) {
+        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
+        else {
+            window_rect(0, 0, 800, 200, 0x00555555);
+            window_rect(0, 200, 800, 200, 0x007A2048);
+            window_rect(0, 400, 800, 200, 0x00FAF8F6);
+            get_key(); /* leave the picture up until a key is pressed */
+            window_close();
+            clear();
+            puts("back in text mode\n");
+        }
+    }
+    else if (!strcmp(line, "fonttest")) {
+        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
+        else {
+            window_clear(0x00FAF8F6);
+            font_draw_string("Joshua Tree", 20, 20, 0x00555555, -1);
+            font_draw_string("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 20, 60, 0x001C1C1E, -1);
+            font_draw_string("abcdefghijklmnopqrstuvwxyz", 20, 80, 0x001C1C1E, -1);
+            font_draw_string("0123456789 !?.,:;()", 20, 100, 0x001C1C1E, -1);
+            font_draw_string("the quick brown fox jumps", 20, 140, 0x007A2048, -1);
+            get_key();
+            window_close();
+            clear();
+            puts("back in text mode\n");
+        }
+    }
+    else if (!strcmp(line, "mousetest")) {
+        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
+        else {
+            int cx_pos = 400, cy_pos = 300;
+            int buttons = 0;
+            do {
+                window_clear(0x00FAF8F6);
+                window_rect(cx_pos - 5, cy_pos - 5, 10, 10, 0x00555555);
+                window_present(); __asm__ volatile ("hlt"); /* wake on the next IRQ (timer, keyboard, or mouse) */
+                int dx, dy;
+                if (mouse_get_delta(&dx, &dy, &buttons)) {
+                    cx_pos += dx; cy_pos += dy;
+                    mouse_get_absolute(&cx_pos, &cy_pos, (int)window_width(), (int)window_height());
+                    if (cx_pos < 0) cx_pos = 0; if ((unsigned)cx_pos >= window_width())  cx_pos = window_width() - 1;
+                    if (cy_pos < 0) cy_pos = 0; if ((unsigned)cy_pos >= window_height()) cy_pos = window_height() - 1;
+                }
+            } while (!(buttons & 1)); /* left click to exit */
+            window_close();
+            clear();
+            puts("back in text mode\n");
         }
     }
     else return 0;

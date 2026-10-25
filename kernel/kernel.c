@@ -4178,29 +4178,6 @@ static void run(char *line){
         a = ok == total ? " ok\n" : " FAIL\n"; while (*a) m[p++] = *a++;
         m[p] = 0; puts(m);
     }
-    else if (!strcmp(line, "heapgrow")) {
-        /* v34 (0.34.0): real proof the old 0x400000 wall is actually gone,
-           not just that the code compiles. Keeps allocating 4KB chunks
-           (small enough not to instantly exhaust real RAM, big enough to
-           cross the old wall in a bounded number of iterations) until one
-           lands at or past 0x400000, then writes and reads back a real
-           marker through it, real evidence the mapping isn't just
-           allocated but actually usable, not a bus error waiting to
-           happen. Bounded at 2048 iterations (8MB) so a genuinely broken
-           build fails fast instead of hanging. */
-        void *p = 0;
-        int crossed = 0;
-        for (int i = 0; i < 2048 && !crossed; i++) {
-            p = kmalloc(4096);
-            if (!p) { puts("kmalloc failed before crossing 0x400000 (real OOM or a real regression)\n"); break; }
-            if ((unsigned int)p >= 0x400000) crossed = 1;
-        }
-        if (crossed) {
-            *(volatile unsigned int *)p = 0xC0FFEE00;
-            unsigned int back = *(volatile unsigned int *)p;
-            puts(back == 0xC0FFEE00 ? "heap grew past 0x400000 and is real, writable memory: ok\n" : "heap grew past 0x400000 but readback FAILED\n");
-        }
-    }
     else if (!strcmp(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
     else if (!strcmp(line, "fonts")) {
         /* 2.27.0 font registry: every embedded face, by name. */
@@ -4215,41 +4192,6 @@ static void run(char *line){
         putn(pmm_total_frames() * 4); puts("K total (4K frames)\n");
     }
     else if (!strcmp(line, "sleep")) { puts("sleeping 1s...\n"); sleep_ticks(100); puts("awake\n"); }
-    else if (!strcmp(line, "disktest")) {
-        char wbuf[512], rbuf[512];
-        for (int i = 0; i < 512; i++) wbuf[i] = (char)i;
-        if (!blockdev_write_sector(100, wbuf)) { puts("disk write failed (no drive?)\n"); }
-        else if (!blockdev_read_sector(100, rbuf)) { puts("disk read failed\n"); }
-        else {
-            int ok = 1;
-            for (int i = 0; i < 512; i++) if (rbuf[i] != wbuf[i]) { ok = 0; break; }
-            puts(ok ? "wrote+read sector 100: ok\n" : "wrote+read sector 100: MISMATCH\n");
-        }
-    }
-    else if (!strcmp(line, "filetest")) {
-        /* `filetest` writes a known file and reads it back; `filetest read`
-           only reads, never writes, so files-roundtrip-check.sh can prove
-           the bytes written before a reboot are still on the disk after it. */
-        const char *content = "JT_TESTCONTENT_001";
-        const char *filename = "JT_TEST.TXT";
-        int read_only = !strcmp(arg, "read");
-        char rbuf[32]; for (int i = 0; i < 32; i++) rbuf[i] = 0;
-        if (!read_only) vfs_delete(filename);  /* start fresh each time */
-        if (!read_only && !vfs_write_file(filename, (char *)content, 18)) serial_puts("filetest: write failed\n");
-        /* security pass: sizeof(rbuf) - 1, not sizeof(rbuf) -- reserves the
-           last byte so the strcmp below always finds a real NUL even if
-           JT_TEST.TXT on disk is >= 32 bytes (a crafted disk image, not
-           just this command's own 18-byte write), matching the
-           sizeof(buf)-1 convention every other vfs_read_file call in this
-           kernel already follows. */
-        else if (!vfs_read_file(filename, rbuf, sizeof(rbuf) - 1)) serial_puts("filetest: read failed\n");
-        else if (strcmp(rbuf, content)) serial_puts("filetest: content mismatch\n");
-        else serial_puts(read_only ? "filetest: persisted read ok\n" : "filetest: write+read ok\n");
-    }
-    else if (!strcmp(line, "ring3test")) {
-        ring3_test(arg); /* v64: "", "fault", or "spin", see ring3.h; all three come back to the shell */
-    }
-    else if (progtest_run(line)) {}   /* 4.20.1: usertest and notetest live in kernel/progtest.c */
     else if (!strcmp(line, "ps")) {
         for (int i = 0; i < task_max(); i++) {
             char buf[16]; int n = 0; unsigned int v = (unsigned int)i;
@@ -4417,33 +4359,6 @@ static void run(char *line){
     else if (!strcmp(line, "notes")) {
         puts("notes: Notes is a desktop window now, run gui and click it in the dock\n"); /* 2.0 gate 5: no blocking launch from the text shell */
     }
-    else if (!strcmp(line, "gfxtest")) {
-        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
-        else {
-            window_rect(0, 0, 800, 200, 0x00555555);
-            window_rect(0, 200, 800, 200, 0x007A2048);
-            window_rect(0, 400, 800, 200, 0x00FAF8F6);
-            get_key(); /* leave the picture up until a key is pressed */
-            window_close();
-            clear();
-            puts("back in text mode\n");
-        }
-    }
-    else if (!strcmp(line, "fonttest")) {
-        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
-        else {
-            window_clear(0x00FAF8F6);
-            font_draw_string("Joshua Tree", 20, 20, 0x00555555, -1);
-            font_draw_string("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 20, 60, 0x001C1C1E, -1);
-            font_draw_string("abcdefghijklmnopqrstuvwxyz", 20, 80, 0x001C1C1E, -1);
-            font_draw_string("0123456789 !?.,:;()", 20, 100, 0x001C1C1E, -1);
-            font_draw_string("the quick brown fox jumps", 20, 140, 0x007A2048, -1);
-            get_key();
-            window_close();
-            clear();
-            puts("back in text mode\n");
-        }
-    }
     else if (!strcmp(line, "gui")) {
         gui_run();
     }
@@ -4481,28 +4396,6 @@ static void run(char *line){
         stocks_format_change(-18000, &dollars, &cents, &sign);
         if (sign != -1 || dollars != 180) { puts("stocks change format failed\n"); pass = 0; }
         puts(pass ? "stocks formatting: ok\n" : "FAILED\n");
-    }
-    else if (!strcmp(line, "mousetest")) {
-        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
-        else {
-            int cx_pos = 400, cy_pos = 300;
-            int buttons = 0;
-            do {
-                window_clear(0x00FAF8F6);
-                window_rect(cx_pos - 5, cy_pos - 5, 10, 10, 0x00555555);
-                window_present(); __asm__ volatile ("hlt"); /* wake on the next IRQ (timer, keyboard, or mouse) */
-                int dx, dy;
-                if (mouse_get_delta(&dx, &dy, &buttons)) {
-                    cx_pos += dx; cy_pos += dy;
-                    mouse_get_absolute(&cx_pos, &cy_pos, (int)window_width(), (int)window_height());
-                    if (cx_pos < 0) cx_pos = 0; if ((unsigned)cx_pos >= window_width())  cx_pos = window_width() - 1;
-                    if (cy_pos < 0) cy_pos = 0; if ((unsigned)cy_pos >= window_height()) cy_pos = window_height() - 1;
-                }
-            } while (!(buttons & 1)); /* left click to exit */
-            window_close();
-            clear();
-            puts("back in text mode\n");
-        }
     }
     else if (!strcmp(line, "time"))  show_time();
     else if (!strcmp(line, "reboot"))reboot();

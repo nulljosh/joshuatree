@@ -8,6 +8,8 @@
 #include "pic.h"
 #include "irq.h"
 #include "vfs.h"
+#include "blockdev.h"
+#include "ring3.h"
 #include "net.h"
 #include "http.h"
 #include "rtl8139.h"
@@ -334,6 +336,64 @@ int selftest_run(const char *line, char *arg) {
         puts(ok2 ? "mail delete: shifted correctly: ok\n" : "mail delete: FAILED\n");
         vfs_switch(prev_fs_buf);
     }
+    else if (!strcmp(line, "heapgrow")) {
+        /* v34 (0.34.0): real proof the old 0x400000 wall is actually gone,
+           not just that the code compiles. Keeps allocating 4KB chunks
+           (small enough not to instantly exhaust real RAM, big enough to
+           cross the old wall in a bounded number of iterations) until one
+           lands at or past 0x400000, then writes and reads back a real
+           marker through it, real evidence the mapping isn't just
+           allocated but actually usable, not a bus error waiting to
+           happen. Bounded at 2048 iterations (8MB) so a genuinely broken
+           build fails fast instead of hanging. */
+        void *p = 0;
+        int crossed = 0;
+        for (int i = 0; i < 2048 && !crossed; i++) {
+            p = kmalloc(4096);
+            if (!p) { puts("kmalloc failed before crossing 0x400000 (real OOM or a real regression)\n"); break; }
+            if ((unsigned int)p >= 0x400000) crossed = 1;
+        }
+        if (crossed) {
+            *(volatile unsigned int *)p = 0xC0FFEE00;
+            unsigned int back = *(volatile unsigned int *)p;
+            puts(back == 0xC0FFEE00 ? "heap grew past 0x400000 and is real, writable memory: ok\n" : "heap grew past 0x400000 but readback FAILED\n");
+        }
+    }
+    else if (!strcmp(line, "disktest")) {
+        char wbuf[512], rbuf[512];
+        for (int i = 0; i < 512; i++) wbuf[i] = (char)i;
+        if (!blockdev_write_sector(100, wbuf)) { puts("disk write failed (no drive?)\n"); }
+        else if (!blockdev_read_sector(100, rbuf)) { puts("disk read failed\n"); }
+        else {
+            int ok = 1;
+            for (int i = 0; i < 512; i++) if (rbuf[i] != wbuf[i]) { ok = 0; break; }
+            puts(ok ? "wrote+read sector 100: ok\n" : "wrote+read sector 100: MISMATCH\n");
+        }
+    }
+    else if (!strcmp(line, "filetest")) {
+        /* `filetest` writes a known file and reads it back; `filetest read`
+           only reads, never writes, so files-roundtrip-check.sh can prove
+           the bytes written before a reboot are still on the disk after it. */
+        const char *content = "JT_TESTCONTENT_001";
+        const char *filename = "JT_TEST.TXT";
+        int read_only = !strcmp(arg, "read");
+        char rbuf[32]; for (int i = 0; i < 32; i++) rbuf[i] = 0;
+        if (!read_only) vfs_delete(filename);  /* start fresh each time */
+        if (!read_only && !vfs_write_file(filename, (char *)content, 18)) serial_puts("filetest: write failed\n");
+        /* security pass: sizeof(rbuf) - 1, not sizeof(rbuf) -- reserves the
+           last byte so the strcmp below always finds a real NUL even if
+           JT_TEST.TXT on disk is >= 32 bytes (a crafted disk image, not
+           just this command's own 18-byte write), matching the
+           sizeof(buf)-1 convention every other vfs_read_file call in this
+           kernel already follows. */
+        else if (!vfs_read_file(filename, rbuf, sizeof(rbuf) - 1)) serial_puts("filetest: read failed\n");
+        else if (strcmp(rbuf, content)) serial_puts("filetest: content mismatch\n");
+        else serial_puts(read_only ? "filetest: persisted read ok\n" : "filetest: write+read ok\n");
+    }
+    else if (!strcmp(line, "ring3test")) {
+        ring3_test(arg); /* v64: "", "fault", or "spin", see ring3.h; all three come back to the shell */
+    }
+    else if (progtest_run(line)) {}   /* 4.20.1: usertest and notetest live in kernel/progtest.c */
     else return 0;
     return 1;
 }
