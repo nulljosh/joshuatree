@@ -25,8 +25,11 @@ unsigned int gui_daynight_tint(unsigned int rgb);            /* at the current h
 void gui_draw_weather_panel(void);
 void gui_draw_wallpaper_rows(int y_from, int y_to);
 void gui_draw_wallpaper_rect(int x, int y, int w, int h);   /* repaint a rectangle of wallpaper */
+extern int portfolio_dock;              /* booted with `portfolio`: the hidden Portfolio app shows */
 int gui_apps_n(void);                    /* apps the folder shows (Portfolio only in portfolio mode) */
-int gui_app_at(int k);                   /* folder position to APPS[] slot */
+int gui_app_at(int k);
+void gui_refuse_open(int icon);          /* kernel.c: say why an app cannot open */
+void cmos_read_time_stable(unsigned char *h, unsigned char *m, unsigned char *wd, unsigned char *dom, unsigned char *mon);   /* kernel.c: the RTC */                   /* folder position to APPS[] slot */
 int gui_aa_advance(unsigned char c);                   /* the UI face's advance for c, physical px */
 void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg, int cell);   /* one UI-face glyph */
 #endif

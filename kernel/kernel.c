@@ -582,7 +582,7 @@ int gui_order[GUI_ICON_COUNT];
    landing's embed.js when jaybulb.com/os.html frames it): the dock is
    Joshua's own apps instead of the system set. Same slot count, Apps folder
    and Trash stay at the ends; everything left out is still in the Apps folder. */
-static int portfolio_dock;
+int portfolio_dock;   /* kernel/phone_home.c reads it too */
 int gui_apps_n(void){ return portfolio_dock ? GUI_APPS_FOLDER : GUI_APPS_FOLDER - 1; } /* apps the folder and phone home list */
 int gui_app_at(int k){ return (!portfolio_dock && k >= GUI_APP_PORTFOLIO) ? k + 1 : k; } /* grid position to APPS[] index */
 int jt_portfolio_mode(void){ return portfolio_dock; } /* ring3app.c: windowed ring-3 apps get "portfolio" in argv so Samantha wears Joshua's face */
@@ -596,7 +596,7 @@ static int boot_to_samantha;
 static int boot_to_phone, boot_res_w, boot_res_h;
 int jt_phone_mode(void){ return boot_to_phone; } /* ring3app.c: windowed ring-3 apps get argv[1]="phone" so they can show libjt/osk */
 #include "hint.h"
-static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
+#include "phone_home.h" /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 21, 20, 8, 10, 12, 14, 11, 9, 13, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Tonchi, Hikko, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 int dock_hover = -1; /* slot whose label is showing */
@@ -1904,7 +1904,7 @@ static void gui_menu_run_item(int item){
         for (;;) __asm__ volatile ("hlt");
     }
 }
-#include "phone_home.h" /* v1.8.0: phone mode's real home screen, see its own header comment */
+/* phone_home.h (included above): phone mode's real home screen, kernel/phone_home.c since 4.20.18 */
 static void gui_run(void){
     /* v42: 16:9, 960x540 logical at 2x = 1920x1080 physical, the native
        size of the monitor this actually runs fullscreen on. QEMU's cocoa
