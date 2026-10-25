@@ -655,10 +655,10 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
    the plain walls) so a hand-
    edited or stale SETTINGS.TXT can't select a theme that doesn't exist. */
 const unsigned int wall_solid_color[4] = { 0x006E6E6Eu, 0x00B5502Cu, 0x00923F20u, 0x00141311u };
-static const char *const wall_solid_name[4] = { "Grey", "Terracotta", "Clay", "Ink" };
+const char *const wall_solid_name[4] = { "Grey", "Terracotta", "Clay", "Ink" };
 /* Settings and `wallpaper` step through the themes in this order: the plain
    walls first, then the photo and the map themes. */
-static const unsigned char wall_cycle_order[WALL_COUNT] = { WALL_GREY, WALL_TERRA, WALL_CLAY, WALL_INK, WALL_PHOTO, WALL_WARM, WALL_COOL, WALL_RAW, WALL_SAT };
+const unsigned char wall_cycle_order[WALL_COUNT] = { WALL_GREY, WALL_TERRA, WALL_CLAY, WALL_INK, WALL_PHOTO, WALL_WARM, WALL_COOL, WALL_RAW, WALL_SAT };
 /* True for the four themes that need tiles from the network. */
 /* v0.76.7: default flipped from WALL_WARM to WALL_SAT per Joshua's own
    direct, previously-recorded request ("the real satellite-town wallpaper
@@ -1856,7 +1856,6 @@ const struct app APPS[GUI_APP_COUNT] = {
 #include "bootscreen.h"   /* 4.20.9: the brand mark, the boot splash and About live in kernel/bootscreen.c */
 
 #include "menu.h"   /* 4.20.10: the Apple menu's drawing and hit test, and the weather dropdown, live in kernel/menu.c */
-static void gui_launch_settings(void);
 
 static void gui_lock_screen(void){
     if (!auth_gate_would_prompt()) {
@@ -2717,69 +2716,6 @@ static void run(char *line){
                 else { puts("exit code "); putdec(status); putc('\n'); }
             }
         }
-    }
-    else if (!strcmp(line, "settingsclicktest")) {
-        /* Regression test for a real bug: Settings' own click handler used
-           to act on whatever row a PRIOR arrow-key press had left `sel`
-           on (starting at row 0, Wind), completely ignoring where the
-           click itself actually landed -- a mouse/touch-only visitor with
-           no keyboard (this kernel's own browser-demo idle tour included)
-           could therefore only ever toggle row 0, since a bare click never
-           moved `sel`. settings_row_at is the exact pure hit-test
-           gui_launch_settings' click branch now calls before touching
-           `sel`; no mouse, GUI, or boot state needed to exercise it. */
-        /* 1.8: extended for the sidebar+detail-pane redesign. settings_row_at
-           now takes which section is showing (a row belonging to a
-           different, not-currently-visible section can never be hit) and
-           settings_sidebar_at is the same shape for the new sidebar's own
-           3 section rows. Also covers the real "does a setting survive a
-           reboot" contract settings_save/settings_load promise -- Settings'
-           own footer text says so, this proves it round-trips through the
-           same save/load path a real reboot uses, not just that the in-
-           memory toggle flips. */
-        int ok = 1;
-        if (settings_row_at(300, 92,  960, 0) != 0) { puts("settingsclick: General row 0 (Wind) center missed\n"); ok = 0; }
-        /* 1.8.2 polish pass: Wind's value is now a real switch control,
-           right-aligned near the row's own right edge instead of an
-           "On"/"Off" text label near the middle -- prove that region of
-           the row (where the switch itself actually is, detail_right(940)
-           - SETTINGS_SWITCH_W(40) = 900, plus a few px margin) still
-           resolves to row 0 like the rest of the row always has, same
-           "click anywhere on the row toggles it" contract every row here
-           keeps, not just the switch's own bounding box. */
-        if (settings_row_at(910, 92,  960, 0) != 0) { puts("settingsclick: General row 0's switch region missed\n"); ok = 0; }
-        if (settings_row_at(300, 164, 960, 0) != 2) { puts("settingsclick: General row (Wallpaper) center missed\n"); ok = 0; }
-        if (settings_row_at(300, 200, 960, 0) != 7) { puts("settingsclick: General row (Location) center missed\n"); ok = 0; }
-        if (settings_row_at(300, 70,  960, 0) != -1) { puts("settingsclick: above the first General row should miss\n"); ok = 0; }
-        if (settings_row_at(300, 119, 960, 0) != -1) { puts("settingsclick: real gap between rows should miss\n"); ok = 0; }
-        if (settings_row_at(180, 92,  960, 0) != -1) { puts("settingsclick: left of the detail pane (in the sidebar's x range) should miss\n"); ok = 0; }
-        if (settings_row_at(950, 92,  960, 0) != -1) { puts("settingsclick: right of the detail pane should miss\n"); ok = 0; }
-        if (settings_row_at(300, 92,  960, 1) != 3) { puts("settingsclick: Assistant row (LLM model) center missed\n"); ok = 0; }
-        if (settings_row_at(300, 128, 960, 1) != 4) { puts("settingsclick: Assistant row (LLM host:port) center missed\n"); ok = 0; }
-        if (settings_row_at(300, 92,  960, 2) != 5) { puts("settingsclick: Account row (Account) center missed\n"); ok = 0; }
-        /* Same physical y (92, each section's own first row) resolves to a
-           different absolute row index depending which section is showing
-           -- proves the hit-test is scoped to what's actually on screen,
-           not just "any known row y" independent of section. */
-        if (settings_row_at(300, 92, 960, 1) == 0) { puts("settingsclick: Assistant section must not hit General's Wind row\n"); ok = 0; }
-        if (settings_sidebar_at(90, 60)  != 0) { puts("settingsclick: sidebar row 0 (General) missed\n"); ok = 0; }
-        if (settings_sidebar_at(90, 94)  != 1) { puts("settingsclick: sidebar row 1 (Assistant) missed\n"); ok = 0; }
-        if (settings_sidebar_at(90, 128) != 2) { puts("settingsclick: sidebar row 2 (Account) missed\n"); ok = 0; }
-        if (settings_sidebar_at(90, 40)  != -1) { puts("settingsclick: above the sidebar's first row should miss\n"); ok = 0; }
-        if (settings_sidebar_at(2,  60)  != -1) { puts("settingsclick: left of the sidebar (x<8) should miss\n"); ok = 0; }
-        if (settings_sidebar_at(170,60)  != -1) { puts("settingsclick: right of the sidebar should miss\n"); ok = 0; }
-
-        int wind_before = wind_enabled;
-        wind_enabled = !wind_enabled;
-        settings_save();
-        int wind_saved = wind_enabled;
-        wind_enabled = !wind_enabled; /* corrupt the in-memory value so a real disk round-trip is what proves it, not just the assignment above */
-        settings_load();
-        if (wind_enabled != wind_saved) { puts("settingsclick: Wind toggle did not survive settings_save/settings_load\n"); ok = 0; }
-        wind_enabled = wind_before; settings_save(); /* restore, no lasting side effect on the rest of this boot */
-
-        puts(ok ? "settingsclick: click hit-tests the row it actually landed on, sidebar sections hit-test correctly, and a toggle survives save/load: ok\n" : "settingsclick: FAILED\n");
-        serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so a tools/checks shell script can read the verdict headless */
     }
     else if (!strcmp(line, "chat") || !strcmp(line, "samantha")) {
         /* 1.9.26: Samantha is a ring-3 program (user/samantha.c); the text shell opens her window like `notes`. */

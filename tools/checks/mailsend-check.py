@@ -85,7 +85,7 @@ check("syscall: bearer only for /api/mail/send on the Worker", "path_is_mail_sen
 check("syscall: bearer disarmed after the call", "http_post_set_bearer(0)" in sc)
 check("no syscall returns the token", "mail_token" not in rd("kernel/syscall.h").replace("mail_token_get", "") and "mail_token" not in rd("user/jtsys.h"))
 check("settings persist mailtoken", "mailtoken=" in rd("kernel/settings.c") and "is_mailtoken" in rd("kernel/settings.c"))
-check("settings row exists", "Mail token" in rd("kernel/settings_ui.h"))
+check("settings row exists", "Mail token" in rd("kernel/settings_ui.c"))
 check("http.c adds Authorization: Bearer", "Authorization: Bearer" in rd("drivers/http.c"))
 abi = rd("ARCHITECTURE.md") if os.path.exists(os.path.join(ROOT, "ARCHITECTURE.md")) else rd("docs/ARCHITECTURE.md")
 check("SYSCALL-ABI documents /api/mail/send", "/api/mail/send" in abi and "never" in abi)

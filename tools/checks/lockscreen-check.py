@@ -83,10 +83,10 @@ WRONG_PASSWORD = 'wrongpass9'
 LOGO_X, LOGO_Y = 16, 13
 SETTINGS_MENU_X, SETTINGS_MENU_Y = 94, 111
 ROW_ADDUSER = 6
-# 1.8's redesign (kernel/settings_ui.h) replaced the old flat 8-row list
+# 1.8's redesign (kernel/settings_ui.c) replaced the old flat 8-row list
 # with a left sidebar of sections (General/Assistant/Account) and a right
 # detail pane showing only the current section's rows. Mirrors
-# kernel/settings_ui.h's own SETTINGS_SECTION_ROWS / SETTINGS_SIDEBAR_* /
+# kernel/settings_ui.c's own SETTINGS_SECTION_ROWS / SETTINGS_SIDEBAR_* /
 # SETTINGS_DETAIL_* constants, same fix tools/checks/auth-flow-check.py's
 # click_settings_row() carries -- pick the row's section in the sidebar
 # first, then click the row inside it.
