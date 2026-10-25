@@ -23,7 +23,11 @@ void daynight_calc(int hour, int *night_out, int *day_out);   /* pure: the night
 unsigned int gui_daynight_tint_pct(unsigned int rgb, int night, int day);
 unsigned int gui_daynight_tint(unsigned int rgb);            /* at the current hour */
 void gui_draw_weather_panel(void);
-void gui_draw_wallpaper_rows(int y_from, int y_to);   /* the wallpaper's rows, no sway */
+void gui_draw_wallpaper_rows(int y_from, int y_to);
+void gui_draw_wallpaper_rect(int x, int y, int w, int h);   /* repaint a rectangle of wallpaper */
+int gui_apps_n(void);                    /* apps the folder shows (Portfolio only in portfolio mode) */
+int gui_app_at(int k);                   /* folder position to APPS[] slot */
+int gui_clock_minute_tick(int *seen);    /* 1 when the minute moved since *seen (clockicon.h) */   /* the wallpaper's rows, no sway */
 int gui_aa_advance(unsigned char c);                   /* the UI face's advance for c, physical px */
 void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg, int cell);   /* one UI-face glyph */
 #endif
