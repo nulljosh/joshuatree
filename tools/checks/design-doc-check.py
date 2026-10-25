@@ -230,12 +230,12 @@ def pixel_scale():
 
 
 def night_hours():
-    return "%s-%s" % (rx("kernel/kernel.c", r"hour >= 18 && hour < (\d+)\) night"),
-                      rx("kernel/kernel.c", r"hour >= (\d+) && hour < 8\) night"))
+    return "%s-%s" % (rx("kernel/wallpaint.c", r"hour >= 18 && hour < (\d+)\) night"),
+                      rx("kernel/wallpaint.c", r"hour >= (\d+) && hour < 8\) night"))
 
 
 def day_hours():
-    a, b = rxs("kernel/kernel.c", r"hour >= (\d+) && hour < (\d+)\) day = \d+;")
+    a, b = rxs("kernel/wallpaint.c", r"hour >= (\d+) && hour < (\d+)\) day = \d+;")
     return "%s-%s" % (a, b)
 
 
@@ -347,12 +347,12 @@ FACTS = {
     "MONO_APPS": ("str", mono_apps, "user/*.c (who calls jt_mono_draw)"),
     "SERIF_USES": ("num", serif_uses, "kernel/, user/, drivers/ (TTF_FACE_SERIF, editor_glyphs family 1)"),
     "DEFAULT_WALLPAPER": ("str", lambda: rx("kernel/kernel.c", r"^(?:static )?int wall_theme = (\w+);"), "kernel/kernel.c"),
-    "NIGHT_FLOOR": ("hex", lambda: hexval(rx("kernel/kernel.c", r"return gui_lerp\(rgb, (0x[0-9A-Fa-f]+), night, 100\)")), "kernel/kernel.c"),
-    "NIGHT_PCT": ("num", lambda: int(rx("kernel/kernel.c", r"else night = (\d+);")), "kernel/kernel.c"),
-    "NIGHT_HOURS": ("str", night_hours, "kernel/kernel.c"),
-    "DAY_TINT": ("hex", lambda: hexval(rx("kernel/kernel.c", r"return gui_lerp\(rgb, (0x[0-9A-Fa-f]+), day, 100\)")), "kernel/kernel.c"),
-    "DAY_PCT": ("num", lambda: int(rxs("kernel/kernel.c", r"hour >= (\d+) && hour < (\d+)\) day = (\d+);")[2]), "kernel/kernel.c"),
-    "DAY_HOURS": ("str", day_hours, "kernel/kernel.c"),
+    "NIGHT_FLOOR": ("hex", lambda: hexval(rx("kernel/wallpaint.c", r"return gui_lerp\(rgb, (0x[0-9A-Fa-f]+), night, 100\)")), "kernel/wallpaint.c"),
+    "NIGHT_PCT": ("num", lambda: int(rx("kernel/wallpaint.c", r"else night = (\d+);")), "kernel/wallpaint.c"),
+    "NIGHT_HOURS": ("str", night_hours, "kernel/wallpaint.c"),
+    "DAY_TINT": ("hex", lambda: hexval(rx("kernel/wallpaint.c", r"return gui_lerp\(rgb, (0x[0-9A-Fa-f]+), day, 100\)")), "kernel/wallpaint.c"),
+    "DAY_PCT": ("num", lambda: int(rxs("kernel/wallpaint.c", r"hour >= (\d+) && hour < (\d+)\) day = (\d+);")[2]), "kernel/wallpaint.c"),
+    "DAY_HOURS": ("str", day_hours, "kernel/wallpaint.c"),
     "GUI_MENUBAR_H": ("num", lambda: int(rx("kernel/desktop.h", r"#define GUI_MENUBAR_H\s+(\d+)")), "kernel/desktop.h"),
     "MENUBAR_WHITE": ("num", menubar_white, "kernel/kernel.c"),
     "MENUBAR_RULE": ("hex", lambda: hexval(rx("kernel/kernel.c", r"gui_hairline_h\(0, GUI_MENUBAR_H - 1, \(int\)window_width\(\), (0x[0-9A-Fa-f]+)\)")), "kernel/kernel.c"),

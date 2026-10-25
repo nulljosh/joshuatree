@@ -1037,6 +1037,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.23.6 (2026-10-25)**: The i386 wallpaper painters and the day/night tint leave `kernel/kernel.c` for `kernel/wallpaint.c` (2,827 lines to 2,346). Check: `check.sh`, `frametime-check.py`, `wallboot-check.sh`, `design-doc-check.py`.
 - **4.23.5 (2026-10-25)**: The keyboard paths, window drag and resize, app windows, the pointer, the crash screen and the console leave the Pi's `main.c` for six files (2,646 lines to 1,073). Build-time macros two parts test live in `kmain.h`. Check: `godfile-check.sh`, `arm64-windows-check.py`, `arm64-crash-check.py`, `arm64-keys-check.py`.
 - **4.23.4 (2026-10-25)**: The tree menu, the menu bar, the boot splash and the desktop's first paint leave the Pi's `main.c` for `desk.c` (3,426 lines to 2,646). Checks that read the core's source now read every part through `tools/checks/armcore.py`. Check: `godfile-check.sh`, `arm64-treemenu-check.py`, `arm64-quietboot-check.py`.
 - **4.23.3 (2026-10-25)**: Input and the boot sequence leave the Pi's `main.c` for `boot.c`, with a shared header, `kmain.h`, for every part cut from it (3,896 lines to 3,426). CI installs WebKit only in the demo job, since its media libraries made the suite's browser install take 12 minutes on a slow mirror. Check: `godfile-check.sh`, the arm64 suite.
