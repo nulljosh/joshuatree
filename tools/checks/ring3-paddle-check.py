@@ -4,7 +4,7 @@
 Boots headless with `open=padd`. Reads the framebuffer to find the ball (the
 only terracotta inside the window) and your paddle (the ink at the window's
 left edge). The ball must move between two frames; three presses of Up must
-lift the paddle; with your paddle parked at the top, someone must score within 40 seconds
+lift the paddle (after space serves); with your paddle parked at the top, someone must score within 40 seconds
 ("paddle: score"); p must freeze the ball; Esc must close it with exit 0.
 
 Discriminating: stop stepping the game on the clock, drop the key handler
@@ -79,6 +79,7 @@ try:
         fails.append("Paddle was never launched as a ring-3 program (open=padd flag or ring3app.c broken)")
     if not wait_serial("paddle: ring-3 window ", 10):
         fails.append("the program did not report its window through write()")
+    key("spc")   # serve
     time.sleep(1.5)   # past the serve pause
     a = frame()
     if os.environ.get("JT_SHOT"): a.save(os.environ["JT_SHOT"])

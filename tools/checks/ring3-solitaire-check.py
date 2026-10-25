@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Solitaire (Klondike, draw one) runs as a ring-3 program and plays by the rules.
+"""Solitaire (Klondike, draw one) runs as a ring-3 program and the fixed first deal can be won.
 
 Boots headless with `open=soli`. user/solitaire.c deals its first game from a
-fixed xorshift seed, so this check deals the same cards with the same
-generator and keeps its own copy of the game. It plays a greedy game by
-keyboard (a sends cards up, then a column move that turns a card over, then
-the waste onto a column, else draw) and every "solitaire: move" line the app
-logs must be the move this model made, in order. Cards are counted after
-every move: "solitaire: bad state" fails it. Esc must close it with exit 0.
+fixed xorshift seed. This check deals the same cards, searches for a win with
+a depth-first solver over the app's own rules (only the moves the app allows:
+waste or column up to the foundations, waste or a column's run onto a column,
+draw and turn over), then plays that win by keyboard. Every "solitaire: move"
+line the app logs must be the move the model made, in order, the app must say
+"solitaire: won", and cards are counted after every move ("solitaire: bad
+state" fails it). Esc must close it with exit 0.
 
-Discriminating: change the seed, the shuffle, the colour rule, the rank rule
-or which run a column move takes in user/solitaire.c and the moves differ.
+Discriminating: change the seed, the shuffle, the colour or rank rule, which
+run a column move takes, or the win test in user/solitaire.c and the moves
+differ or the win never comes.
 
 Usage: tools/checks/ring3-solitaire-check.py   (from the repo root, after make kernel.elf)
 """
@@ -27,7 +29,6 @@ PORT = free_port()
 SEED = 0x2545F491
 UP = 0x80
 TABLE = (0xE9, 0xE3, 0xD9)
-STEPS = 160
 
 def rank(c): return (c & 0x7F) % 13 + 1
 def suit(c): return (c & 0x7F) // 13
@@ -103,6 +104,69 @@ class Game:
         return None
     def won(self): return sum(len(f) for f in self.found) == 52
 
+# The search: states are (stock, waste, foundation heights, columns) as tuples, moves in the app's own terms.
+def start_state(g): return (tuple(g.stock), (), (0, 0, 0, 0), tuple(tuple(t) for t in g.tab))
+def fits_col_t(c,t):
+    if not t: return rank(c)==13
+    return bool(t[-1]&UP) and red(t[-1])!=red(c) and rank(t[-1])==rank(c)+1
+def moves(st):
+    stock,waste,found,tab=st
+    out=[]
+    def flip(t):
+        t=list(t)
+        if t and not (t[-1]&UP): t[-1]|=UP
+        return tuple(t)
+    # to foundation
+    if waste:
+        c=waste[-1]
+        if rank(c)==found[suit(c)]+1:
+            f=list(found); f[suit(c)]+=1
+            out.append((('w','f'),(stock,waste[:-1],tuple(f),tab),0))
+    for i,t in enumerate(tab):
+        if t and (t[-1]&UP) and rank(t[-1])==found[suit(t[-1])]+1:
+            f=list(found); f[suit(t[-1])]+=1; nt=list(tab); nt[i]=flip(t[:-1])
+            out.append(((str(i+1),'f'),(stock,waste,tuple(f),tuple(nt)),0))
+    # tab to tab (app semantics: first face-up index that fits)
+    for s,t in enumerate(tab):
+        first=next((i for i,c in enumerate(t) if c&UP),None)
+        if first is None: continue
+        for d in range(7):
+            if d==s: continue
+            i=first
+            while i<len(t) and not fits_col_t(t[i],tab[d]): i+=1
+            if i>=len(t): continue
+            if i==0 and not tab[d] : continue  # king from bare column to empty: pointless
+            nt=list(tab); nt[d]=tab[d]+t[i:]; nt[s]=flip(t[:i])
+            pri=1 if (i>0 and not (t[i-1]&UP)) else 3
+            out.append(((str(s+1),str(d)),(stock,waste,found,tuple(nt)),pri))
+    if waste:
+        c=waste[-1]
+        for d in range(7):
+            if fits_col_t(c,tab[d]):
+                nt=list(tab); nt[d]=tab[d]+(c,)
+                out.append((('w',str(d)),(stock,waste[:-1],found,tuple(nt)),2))
+    if stock: out.append((('d',),(stock[:-1],waste+(stock[-1]|UP,),found,tab),4))
+    elif waste: out.append((('d',),(tuple(c&0x7F for c in reversed(waste)),(),found,tab),5))
+    out.sort(key=lambda x:x[2])
+    return out
+def solve(st, limit=400000):
+    seen=set(); path=[]; n=[0]
+    sys.setrecursionlimit(10000)
+    def key(s): return s
+    def dfs(s):
+        if sum(s[2])==52: return True
+        n[0]+=1
+        if n[0]>limit: return False
+        if s in seen: return False
+        seen.add(s)
+        for mv,ns,_ in moves(s):
+            path.append(mv)
+            if dfs(ns): return True
+            path.pop()
+        return False
+    ok=dfs(st)
+    return ok, path, n[0]
+
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
     try: os.remove(f)
@@ -160,33 +224,31 @@ try:
     if table < 2000:
         fails.append(f"the window does not show the card table ({table} table samples)")
 
-    # 2. play the same greedy game on both sides
-    for step in range(STEPS):
-        if g.won(): break
-        before = len(g.moves)
-        g.auto(); key("a")
-        if len(g.moves) > before: continue
-        rm = g.reveal_move()
-        if rm:
-            g.move(*rm); key(rm[0]); key(str(rm[1] + 1)); continue
-        wm = next((d for d in range(7) if g.run_start("w", d) is not None), None)
-        if wm is not None:
-            g.move("w", wm); key("w"); key(str(wm + 1)); continue
-        g.draw(); key("d")
-    for _ in range(50):
+    # 2. find a win for this deal and play it on both sides
+    ok, plan, tried = solve(start_state(g))
+    print(f"solver: {'a win in ' + str(len(plan)) + ' moves' if ok else 'no win found'} after {tried} states")
+    if not ok:
+        fails.append("the solver found no win for the first deal: pick a winnable seed")
+    for mv in plan if ok else []:
+        if mv == ("d",):
+            g.draw(); key("d"); continue
+        src, dst = mv
+        g.move(src, "f" if dst == "f" else int(dst))
+        key(src); key("f" if dst == "f" else str(int(dst) + 1))
+    for _ in range(80):
         if len(app_moves()) >= len(g.moves): break
         time.sleep(0.1)
     got = app_moves()
     print(f"model made {len(g.moves)} moves, the app logged {len(got)}, {sum(len(x) for x in g.found)} cards up")
-    if len(g.moves) < 5:
-        fails.append("the scripted game made fewer than 5 moves, so it proves little: pick another seed")
     if got != g.moves:
         diff = next((i for i in range(min(len(got), len(g.moves))) if got[i] != g.moves[i]), min(len(got), len(g.moves)))
         fails.append(f"move {diff} differs: app {got[diff:diff + 2]} vs model {g.moves[diff:diff + 2]}")
     if "solitaire: bad state" in serial():
         fails.append("the app lost or doubled a card")
-    if g.won() and not wait_serial("solitaire: won", 3):
-        fails.append("the model won but the app never said so")
+    if ok and not g.won():
+        fails.append("the model did not end won after the plan: the solver and the model disagree")
+    if ok and not wait_serial("solitaire: won", 5):
+        fails.append("the plan won the game but the app never said so")
 
     # 3. Esc closes it cleanly
     keys_before = serial().count("SOLITAIRE.BIN exited 0")
@@ -213,4 +275,4 @@ if fails:
     print("--- serial tail ---")
     print(serial()[-1500:])
     sys.exit(1)
-print("PASS: Solitaire ran at ring 3, dealt the expected cards, every move matched the rules model, and it closed on Esc")
+print("PASS: Solitaire ran at ring 3, dealt the expected cards, a full win was played move for move against the rules model, and it closed on Esc")

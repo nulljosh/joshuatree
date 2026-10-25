@@ -34,7 +34,7 @@ static const unsigned ROWC[ROWS] = {0x008E3A1E, 0x00B5502C, 0x00C9673F, 0x00D989
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 static unsigned char alive[ROWS][COLS] JT_DATA = {{0}};
 static int bx JT_DATA = 0, by JT_DATA = 0, vx JT_DATA = 0, vy JT_DATA = 0;
-static int px JT_DATA = 0, left JT_DATA = 0, lives JT_DATA = 0, score JT_DATA = 0, wait JT_DATA = 0, paused JT_DATA = 0, over JT_DATA = 0;
+static int px JT_DATA = 0, left JT_DATA = 0, lives JT_DATA = 0, score JT_DATA = 0, wait JT_DATA = 0, paused JT_DATA = 0, over JT_DATA = 0, held JT_DATA = 1;   /* held: the ball rides the paddle until space */
 static int oldbx JT_DATA = -1, oldby JT_DATA = -1, oldpx JT_DATA = -1;
 
 static void say(const char *s) { unsigned n = 0; while (s[n]) n++; jt_write(1, s, n); }
@@ -58,7 +58,7 @@ static int text(const char *s, int x, int y, unsigned fg, int face) { return jt_
 static void serve(void) {   /* from just above the paddle, up and a little to the right */
     bx = (px + PW / 2 - BS / 2) * FP; by = (py() - BS - 2) * FP;
     vx = 24; vy = -3 * FP;
-    wait = 70;
+    wait = 0; held = 1;
 }
 static void reset(void) {
     for (int r = 0; r < ROWS; r++) for (int c = 0; c < COLS; c++) alive[r][c] = 1;
@@ -76,7 +76,7 @@ static void band(void) {
     utoa10((unsigned)lives, num);
     x = text("   Balls ", x, 12, HINT, JT_FACE_BODY); text(num, x, 12, INK, JT_FACE_BOLD);
     const char *msg = over ? (left ? "Out of balls. Space plays again." : "Cleared. Space plays again.")
-                    : paused ? "Paused. p plays on." : "Left and Right move   p pauses   esc closes";
+                    : paused ? "Paused. p plays on." : held ? "Space launches   Left and Right move   esc closes" : "Left and Right move   p pauses   esc closes";
     text(msg, 16, 12, over && !left ? 0x002F7B4F : HINT, JT_FACE_BODY);
 }
 static void full(void) {
@@ -126,7 +126,7 @@ static int clampx(int x) { if (x < 0) x = 0; if (x > cw() - PW) x = cw() - PW; r
 
 static void step(void) {
     if (over || paused) return;
-    if (wait) { wait--; bx = (px + PW / 2 - BS / 2) * FP; return; }   /* the ball rides the paddle until the serve */
+    if (held || wait) { if (wait) wait--; bx = (px + PW / 2 - BS / 2) * FP; return; }   /* the ball rides the paddle until space */
     bx += vx; by += vy;
     int lo = 0, hi = (cw() - BS) * FP, top = TOP * FP;
     if (bx < lo) { bx = lo; vx = -vx; }
@@ -170,6 +170,7 @@ void _start(int argc, char **argv) {
                 else if (k == JT_KEY_RIGHT || k == 'd') px = clampx(px + 28);
                 else if (k == 'p' && !over) { paused = !paused; band(); }
                 else if (k == ' ' && over) { reset(); full(); }
+                else if (k == ' ' && held) { held = 0; band(); }
             } else if (ev.kind == JT_EV_CLICK || ev.kind == JT_EV_DRAG) px = clampx(ev.a - PW / 2);   /* a click or drag puts the paddle there */
             frame(); flags = JT_POLL_PRESENT;
             continue;

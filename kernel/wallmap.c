@@ -14,7 +14,7 @@
 #include "wall_sat.h"
 #include "wallmap.h"
 
-/* 4.23.1: the tree photo ships packed (drivers/wallpaper.h: up-filtered, then deflated, about 520KB in place of
+/* 4.23.0: the tree photo ships packed (drivers/wallpaper.h: up-filtered, then deflated, about 520KB in place of
    1.5MB of raw RGB), which is what gave the kernel image room for more apps. The default wall is plain grey, so
    nothing pays to unpack it until something shows it: the Photo wall, a map wall before its tiles land, the
    satellite fallback, pngtest and wxtest. If the heap or the inflate fails, the caller gets the plain row back,

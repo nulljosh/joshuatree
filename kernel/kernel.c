@@ -64,7 +64,7 @@ int ring3app_write_packed(const char *file, const unsigned char *packed, unsigne
 
    4.11.4: the default is now a plain grey (WALL_GREY), wall_src points at
    wall_solid_row for the four plain walls, and nothing is fetched. */
-const unsigned char *wall_photo, *const wall_photo_z = wallpaper_z; const unsigned int wall_photo_z_len = WALLPAPER_Z_LEN; /* 4.23.1: packed; wallmap.c's wall_photo_get unpacks it on first use. Only this file includes drivers/wallpaper.h */
+const unsigned char *wall_photo, *const wall_photo_z = wallpaper_z; const unsigned int wall_photo_z_len = WALLPAPER_Z_LEN; /* 4.23.0: packed; wallmap.c's wall_photo_get unpacks it on first use. Only this file includes drivers/wallpaper.h */
 const unsigned char *wall_src = wall_solid_row;
 /* v0.83.x: a REAL, once-captured satellite photograph (kernel/wall_sat.h,
    tools/gen/gen_wall_sat.py -- the same real mt0.google.com tiles

@@ -38,7 +38,7 @@
  * (the window's 33 pages now end at 0xC05C0000 exactly). Solitaire, Paddle, Bricks, Depths and Snake took
  * .bss to 428 bytes under the window. The 64KB move of all three that the note above allows was tried first
  * and the kernel reset in a loop right after "entropy:": .userfb ending at 0xC0800000, the very end of the
- * table, does not boot. So that move is out, and there is no slack left here. 4.23.1 then packed the 1.5MB
+ * table, does not boot. So that move is out, and there is no slack left here. 4.23.0 then packed the 1.5MB
  * raw wallpaper photo in drivers/wallpaper.h (tools/gen/wallraw.py), which left about 1MB between .bss and
  * the window: the next room comes from the image, not from moving these. */
 

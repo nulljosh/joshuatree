@@ -38,7 +38,7 @@ else:
 im = im.resize((out_w, out_h), Image.LANCZOS)
 data = im.tobytes()
 
-import sys; sys.path.insert(0, "."); from wallraw import write_header   # 4.23.1: packed, see wallraw.py
+import sys; sys.path.insert(0, "."); from wallraw import write_header   # 4.23.0: packed, see wallraw.py
 n = write_header(data, out_w, out_h)
 print(f'wrote drivers/wallpaper.h ({out_w}x{out_h}, {len(data)} bytes raw, {n} packed)')
 EOF

@@ -1,6 +1,6 @@
 """The baked wallpaper photo: pack it into drivers/wallpaper.h, or read its raw RGB back out.
 
-4.23.1: the header holds the photo up-filtered (each byte minus the one a row above, as PNG's Up filter) and
+4.23.0: the header holds the photo up-filtered (each byte minus the one a row above, as PNG's Up filter) and
 deflated, about 520KB in place of 1.5MB of raw RGB. The kernel unpacks it the first time something shows it
 (kernel.c's wall_photo_get). Tools and checks that need the pixels call wallpaper_rgb().
 """

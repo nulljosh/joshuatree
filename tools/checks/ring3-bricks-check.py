@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bricks runs as a ring-3 program: the serve breaks a brick, a key moves the paddle, p pauses.
 
-Boots headless with `open=bric`. The first serve goes up into the wall, so
+Boots headless with `open=bric`. Space launches the ball, which goes up into the wall, so
 "bricks: brick 1" must show within 15 seconds. Reads the framebuffer to find
 the paddle (the ink in the bottom strip of the window): three presses of
 Left must move it left. p must freeze the ball (the terracotta square below
@@ -89,6 +89,7 @@ try:
     print(f"the paddle's middle {x0} then {x1} after three Lefts")
     if x0 is None or x1 is None or x1 >= x0 - 60:
         fails.append("Left did not move the paddle")
+    key("spc")   # launch: the ball rides the paddle until space
     if not wait_serial("bricks: brick 1", 15):
         fails.append("the first serve did not break a brick")
     time.sleep(1)

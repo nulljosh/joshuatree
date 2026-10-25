@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install a real Chromium for the vendored playwright package
-        run: timeout 6m npx playwright install --with-deps chromium || timeout 6m npx playwright install --with-deps chromium
+        run: timeout 12m npx playwright install --with-deps chromium || timeout 8m npx playwright install --with-deps chromium
       - name: Capture screenshots + video of the live idle tour
         run: node tools/checks/live-visual-capture.mjs https://joshuatree.jaybulb.com/?demo capture
       # Real pixel analysis printed straight to this job's own log, not a

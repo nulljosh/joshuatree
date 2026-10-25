@@ -32,7 +32,7 @@
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 static int bx JT_DATA = 0, by JT_DATA = 0, vx JT_DATA = 0, vy JT_DATA = 0;   /* the ball, in FP units */
 static int ly JT_DATA = 0, ry JT_DATA = 0;                                   /* paddle tops, in pixels */
-static int me JT_DATA = 0, cpu JT_DATA = 0, wait JT_DATA = 0, paused JT_DATA = 0, over JT_DATA = 0;
+static int me JT_DATA = 0, cpu JT_DATA = 0, wait JT_DATA = 0, paused JT_DATA = 0, over JT_DATA = 0, ready JT_DATA = 0;   /* ready: space served the first ball */
 static int oldbx JT_DATA = -1, oldby JT_DATA = -1, oldly JT_DATA = -1, oldry JT_DATA = -1;
 static unsigned seed JT_DATA = 0x6D2B79F5u;
 
@@ -60,7 +60,7 @@ static void serve(int toward) {   /* toward: +1 the computer, -1 you */
     wait = 70;
 }
 static void reset(void) {
-    me = cpu = over = paused = 0;
+    me = cpu = over = paused = ready = 0;
     ly = ry = TOP + chh() / 2 - PH / 2;
     serve(1);
 }
@@ -76,7 +76,7 @@ static void scores(void) {
     text(a, cw() / 2 - 40 - jt_text_width(JT_FACE_BOLD, a), 10, INK, JT_FACE_BOLD);
     text(b, cw() / 2 + 40, 10, INK, JT_FACE_BOLD);
     const char *msg = over ? (me > cpu ? "You win. Space plays again." : "The computer wins. Space plays again.")
-                    : paused ? "Paused. p plays on." : "Up and Down move   p pauses   esc closes";
+                    : paused ? "Paused. p plays on." : !ready ? "Space serves   Up and Down move   esc closes" : "Up and Down move   p pauses   esc closes";
     text(msg, 16, 12, over && me > cpu ? 0x002F7B4F : HINT, JT_FACE_BODY);
 }
 static void full(void) {
@@ -110,7 +110,7 @@ static void point(int mine) {
 static int clampy(int y) { if (y < TOP) y = TOP; if (y > (int)win.height - PH) y = (int)win.height - PH; return y; }
 
 static void step(void) {
-    if (over || paused) return;
+    if (over || paused || !ready) return;
     /* the computer follows the ball, a little slower than it can move */
     int target = by / FP + BS / 2 - PH / 2;
     if (vx > 0) { if (ry < target - 2) ry += 2; else if (ry > target + 2) ry -= 2; }
@@ -163,6 +163,7 @@ void _start(int argc, char **argv) {
                 else if (k == JT_KEY_DOWN || k == 's') ly = clampy(ly + 22);
                 else if (k == 'p' && !over) { paused = !paused; scores(); }
                 else if (k == ' ' && over) { reset(); full(); }
+                else if (k == ' ' && !ready) { ready = 1; scores(); }
             }
             frame(); flags = JT_POLL_PRESENT;
             continue;

@@ -70,7 +70,7 @@ static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 static struct foe foes[MAXE] JT_DATA = {{0, 0, 0, 0, 0}};
 static int zbuf[MAXCOL / CS] JT_DATA = {0};
 static int nfoes JT_DATA = 0, px JT_DATA = 0, py JT_DATA = 0, ang JT_DATA = 0, health JT_DATA = 0, kills JT_DATA = 0;
-static int over JT_DATA = 0, flash JT_DATA = 0, dirty JT_DATA = 1;
+static int over JT_DATA = 0, flash JT_DATA = 0, dirty JT_DATA = 1, awake JT_DATA = 0;   /* awake: you walked, turned or fired */
 
 static void say(const char *s) { unsigned n = 0; while (s[n]) n++; jt_write(1, s, n); }
 static int utoa10(unsigned v, char *buf) {
@@ -103,7 +103,7 @@ static unsigned shade(unsigned c, int f) {   /* f out of 256 */
 }
 
 static void start(void) {
-    nfoes = 0; kills = 0; health = 100; over = 0; ang = 0; flash = 0;
+    nfoes = 0; kills = 0; health = 100; over = 0; ang = 0; flash = 0; awake = 0;
     for (int y = 0; y < MH; y++) for (int x = 0; x < MW; x++) {
         if (MAP[y][x] == 'P') { px = x * ONE + ONE / 2; py = y * ONE + ONE / 2; }
         if (MAP[y][x] == 'M' && nfoes < MAXE) { struct foe *f = &foes[nfoes++]; f->x = x * ONE + ONE / 2; f->y = y * ONE + ONE / 2; f->alive = 1; f->flash = 0; f->bite = 0; }
@@ -232,7 +232,7 @@ static void fire(void) {
 }
 static void tick(void) {
     if (flash) { flash--; dirty = 1; }
-    if (over) return;
+    if (over || !awake) return;
     for (int i = 0; i < nfoes; i++) {
         struct foe *f = &foes[i];
         if (!f->alive) continue;
@@ -241,7 +241,7 @@ static void tick(void) {
         int d2 = ax * ax + ay * ay;   /* Q16 squared tiles */
         if (d2 > 7 * 7 * 65536) continue;
         if (d2 < 52000) {   /* about 0.9 of a tile: it bites */
-            if (++f->bite >= 40) { f->bite = 0; health -= 10; f->flash = 8; say_n("depths: health ", health < 0 ? 0 : health); if (health <= 0) { over = 2; say("depths: down\n"); } }
+            if (++f->bite >= 80) { f->bite = 0; health -= 10; f->flash = 8; say_n("depths: health ", health < 0 ? 0 : health); if (health <= 0) { over = 2; say("depths: down\n"); } }
             dirty = 1;
             continue;
         }
@@ -277,6 +277,7 @@ void _start(int argc, char **argv) {
                 int k = ev.a;
                 if (k == '`') { say("depths: crashing on purpose\n"); *(volatile unsigned *)0 = 1; }
                 if (k == JT_KEY_ESC) break;
+                if (!over) awake = 1;
                 if (over) { if (k == ' ') start(); }
                 else if (k == JT_KEY_UP || k == 'w') walk(1);
                 else if (k == JT_KEY_DOWN || k == 's') walk(-1);

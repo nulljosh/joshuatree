@@ -29,7 +29,7 @@
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 static unsigned short body[MAXN] JT_DATA = {0};   /* cells as y * MAXW + x, head first */
 static int len JT_DATA = 0, gw JT_DATA = 0, gh JT_DATA = 0, dir JT_DATA = 0, next_dir JT_DATA = 0;
-static int apple JT_DATA = 0, apples JT_DATA = 0, over JT_DATA = 0, paused JT_DATA = 0, every JT_DATA = 8, wait JT_DATA = 0;
+static int apple JT_DATA = -1, apples JT_DATA = 0, over JT_DATA = 0, paused JT_DATA = 0, every JT_DATA = 8, wait JT_DATA = 0, moving JT_DATA = 0;   /* moving: an arrow started it */
 static unsigned seed JT_DATA = 0x1B8735BFu;   /* chosen so the first apple sits ahead of the head in the default window */
 
 static unsigned rnd(void) { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; return seed; }
@@ -68,20 +68,20 @@ static void band(void) {
     rect(0, TOP - 1, (int)win.width, 1, LINE);
     utoa10((unsigned)apples, num);
     int x = text("Apples ", (int)win.width - 120, 12, HINT, JT_FACE_BODY); text(num, x, 12, HEAD, JT_FACE_BOLD);
-    text(over ? "Game over. Space plays again." : paused ? "Paused. p plays on." : "Arrows steer   p pauses   esc closes",
+    text(over ? "Game over. Space plays again." : paused ? "Paused. p plays on." : !moving ? "An arrow starts it   p pauses   esc closes" : "Arrows steer   p pauses   esc closes",
          16, 12, HINT, JT_FACE_BODY);
 }
 static void full(void) {
     rect(0, TOP, (int)win.width, (int)win.height - TOP, BG);
     for (int y = 0; y < gh; y++) for (int x = 0; x < gw; x++) cell(y * MAXW + x, GRID);
     for (int i = len - 1; i >= 0; i--) cell(body[i], i ? BODY : HEAD);
-    cell(apple, APPLE);
+    if (apple >= 0) cell(apple, APPLE);
     band();
 }
 static void start(void) {
     gw = ((int)win.width - 16) / CELL; if (gw > MAXW) gw = MAXW;
     gh = ((int)win.height - TOP - 16) / CELL; if (gh > MAXH) gh = MAXH;
-    len = 4; dir = next_dir = 0; apples = 0; over = paused = 0; every = 8; wait = 0;
+    len = 4; dir = next_dir = 0; apples = 0; over = paused = moving = 0; every = 8; wait = 0; apple = -1;
     int y = gh / 2;
     for (int i = 0; i < len; i++) body[i] = (unsigned short)(y * MAXW + 6 - i);
     full();
@@ -89,7 +89,7 @@ static void start(void) {
 }
 
 static void step(void) {   /* dir: 0 right, 1 down, 2 left, 3 up */
-    if (over || paused) return;
+    if (over || paused || !moving) return;
     if (++wait < every) return;
     wait = 0;
     dir = next_dir;
@@ -144,6 +144,7 @@ void _start(int argc, char **argv) {
                 else if (k == JT_KEY_UP || k == 'w') want = 3;
                 else if (k == 'p' && !over) { paused = !paused; band(); }
                 else if (k == ' ' && over) start();
+                if (want >= 0 && !moving && !over) { moving = 1; band(); }
                 if (want >= 0 && want != (dir + 2) % 4) next_dir = want;   /* never straight back onto the neck */
             }
             flags = JT_POLL_PRESENT;

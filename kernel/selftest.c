@@ -58,7 +58,7 @@ int selftest_run(const char *line, char *arg) {
             { "pal_dyn", pngt_pal_dyn, sizeof pngt_pal_dyn, PNGT_PAL_DYN_X0, PNGT_PAL_DYN_Y0,
               PNGT_PAL_DYN_W, PNGT_PAL_DYN_H, PNGT_PAL_DYN_CH, PNGT_PAL_DYN_FNV, PNGT_PAL_DYN_PAL },
         };
-        const unsigned char *photo = wall_photo_get();   /* 4.23.1: the photo is packed until first use */
+        const unsigned char *photo = wall_photo_get();   /* 4.23.0: the photo is packed until first use */
         if (photo == wall_solid_row) { puts("png: the photo did not unpack FAILED\n"); pass = 0; }
         for (int ci = 0; ci < 4; ci++) {
             unsigned char *px = 0; unsigned int w = 0, h = 0, ch = 0;
