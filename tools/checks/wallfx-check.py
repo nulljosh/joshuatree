@@ -101,8 +101,8 @@ def tint(c):
     if night: return tuple((v * (100 - night) + t * night) // 100 for v, t in zip(c, (0x20, 0x10, 0x09)))
     if day:   return tuple((v * (100 - day) + 0xDD * day) // 100 for v in c)
     return c
-hdr = open("drivers/wallpaper.h").read(); body = hdr[hdr.index("{") + 1:hdr.rindex("}")]
-photo = Image.frombytes("RGB", (960, 540), bytes(int(t) for t in body.replace("\n", "").split(",") if t.strip()))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "gen")); from wallraw import wallpaper_rgb
+photo = Image.frombytes("RGB", (960, 540), wallpaper_rgb())
 src_y0 = (WIND_TOP - 22) * 540 // 518; src_y1 = (WIND_HORIZON - 22) * 540 // 518
 pb = photo.crop((0, src_y0, 960, src_y1)).tobytes(); pn = len(pb) // 3
 m_photo = tint(tuple(sum(pb[i::3]) / pn for i in range(3)))

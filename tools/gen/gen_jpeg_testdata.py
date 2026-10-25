@@ -25,8 +25,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 hdr = open(f'{ROOT}/drivers/wallpaper.h').read()
 W = int(re.search(r'#define WALLPAPER_W (\d+)', hdr).group(1))
 H = int(re.search(r'#define WALLPAPER_H (\d+)', hdr).group(1))
-body = hdr[hdr.index('{') + 1:hdr.rindex('}')]
-wall = bytes(int(t) for t in body.replace('\n', '').split(',') if t.strip())
+sys.path.insert(0, f'{ROOT}/tools/gen'); from wallraw import wallpaper_rgb
+wall = wallpaper_rgb()
 assert len(wall) == W * H * 3, (len(wall), W * H * 3)
 
 

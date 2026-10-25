@@ -195,9 +195,8 @@ def satellite_color(im):
         out.append(tuple(max(0, min(255, l + (v - l) * 5 // 4 if v >= l else l - ((l - v) * 5 // 4))) for v in (r, g, b)))
     res = Image.new("RGB", im.size); res.putdata(out); return res
 m_sat = tint(mean(satellite_color(ref.crop((0, src_y0, WALL_W, src_y1)))))
-hdr = open("drivers/wallpaper.h").read()
-body = hdr[hdr.index("{") + 1:hdr.rindex("}")]
-photo = Image.frombytes("RGB", (WALL_W, WALL_H), bytes(int(t) for t in body.replace("\n", "").split(",") if t.strip()))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "gen")); from wallraw import wallpaper_rgb
+photo = Image.frombytes("RGB", (WALL_W, WALL_H), wallpaper_rgb())
 m_photo = tint(mean(photo.crop((0, src_y0, WALL_W, src_y1))))
 m_fb = mean(band_fb)
 d_sat = max(abs(a - b) for a, b in zip(m_fb, m_sat)); d_photo = max(abs(a - b) for a, b in zip(m_fb, m_photo))

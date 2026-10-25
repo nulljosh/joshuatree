@@ -38,12 +38,7 @@ else:
 im = im.resize((out_w, out_h), Image.LANCZOS)
 data = im.tobytes()
 
-with open('drivers/wallpaper.h', 'w') as f:
-    f.write('#ifndef WALLPAPER_HDR_H\n#define WALLPAPER_HDR_H\n')
-    f.write(f'#define WALLPAPER_W {out_w}\n#define WALLPAPER_H {out_h}\n')
-    f.write('static const unsigned char wallpaper_rgb[] = {\n')
-    for i in range(0, len(data), 24):
-        f.write(','.join(str(b) for b in data[i:i+24]) + ',\n')
-    f.write('};\n#endif\n')
-print(f'wrote drivers/wallpaper.h ({out_w}x{out_h}, {len(data)} bytes)')
+import sys; sys.path.insert(0, "."); from wallraw import write_header   # 4.23.1: packed, see wallraw.py
+n = write_header(data, out_w, out_h)
+print(f'wrote drivers/wallpaper.h ({out_w}x{out_h}, {len(data)} bytes raw, {n} packed)')
 EOF

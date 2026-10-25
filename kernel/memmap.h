@@ -38,9 +38,9 @@
  * (the window's 33 pages now end at 0xC05C0000 exactly). Solitaire, Paddle, Bricks, Depths and Snake took
  * .bss to 428 bytes under the window. The 64KB move of all three that the note above allows was tried first
  * and the kernel reset in a loop right after "entropy:": .userfb ending at 0xC0800000, the very end of the
- * table, does not boot. So that move is out, and there is no slack left here. The next room comes from the
- * kernel image itself: drivers/wallpaper.h bakes the Joshua Tree photo as 1.5MB of raw RGB, and storing it
- * compressed frees over a megabyte. */
+ * table, does not boot. So that move is out, and there is no slack left here. 4.23.1 then packed the 1.5MB
+ * raw wallpaper photo in drivers/wallpaper.h (tools/gen/wallraw.py), which left about 1MB between .bss and
+ * the window: the next room comes from the image, not from moving these. */
 
 #define JT_USER_BASE        0xC059F000 /* program window: JT_USER_IMAGE_PAGES of image, then 1 page of stack (.userimg) */
 #define JT_USER_IMAGE_PAGES 0x20       /* 32 pages = 128KB of image (code+data) per ring-3 program; was 7 (28KB) until 2026-10-01, briefly 0x80 for face frames before SYS_BRK */

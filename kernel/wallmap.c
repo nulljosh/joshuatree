@@ -14,6 +14,25 @@
 #include "wall_sat.h"
 #include "wallmap.h"
 
+/* 4.23.1: the tree photo ships packed (drivers/wallpaper.h: up-filtered, then deflated, about 520KB in place of
+   1.5MB of raw RGB), which is what gave the kernel image room for more apps. The default wall is plain grey, so
+   nothing pays to unpack it until something shows it: the Photo wall, a map wall before its tiles land, the
+   satellite fallback, pngtest and wxtest. If the heap or the inflate fails, the caller gets the plain row back,
+   which every wall reader already handles, never a short buffer. */
+const unsigned char *wall_photo_get(void){
+    if (wall_photo) return wall_photo;
+    unsigned int row = WALLPAPER_W * 3, n = row * WALLPAPER_H;
+    unsigned char *p = (unsigned char *)kmalloc(n);
+    if (!p || png_zlib_inflate(wall_photo_z, wall_photo_z_len, p, n) != 0) {
+        serial_puts("wallpaper: photo unpack failed\n");
+        if (p) kfree(p);
+        return wall_solid_row;
+    }
+    for (unsigned int i = row; i < n; i++) p[i] = (unsigned char)(p[i] + p[i - row]);   /* undo the Up filter, top down */
+    serial_puts("wallpaper: photo unpacked\n");
+    return wall_photo = p;
+}
+
 /* 1.1.1: tilehost=/tileport=, the wall_fetch equivalent of wxhost= above --
    for tools/checks/wallcompose-check.py to point BOTH tile hosts
    (a.tile.opentopomap.org for map themes, mt0.google.com for Satellite)
@@ -260,9 +279,9 @@ void wall_apply(int want_map){
            guess about where we are running. If the decode ever fails this
            still falls back to the tree photo, never a blank desktop. */
         wall_sat_init();
-        next = wall_sat_rgb ? wall_sat_rgb : wall_photo;
+        next = wall_sat_rgb ? wall_sat_rgb : wall_photo_get();
     } else {
-        next = (want_map && wall_map) ? wall_map : wall_photo;
+        next = (want_map && wall_map) ? wall_map : wall_photo_get();
     }
     if (next == wall_src && wall_theme == wall_last_theme) return;
     /* Real-evidence marker for tools/checks/wallboot-check.sh, the same

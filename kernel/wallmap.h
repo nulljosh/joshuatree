@@ -33,7 +33,10 @@ void wall_switch_theme(int theme);
 void wall_apply(int want_map);               /* point wall_src at the photo, a plain colour, the satellite or the map */
 
 /* from kernel.c: the desktop's wallpaper state */
-extern const unsigned char *const wall_photo;   /* drivers/wallpaper.h's baked photo (1.5 MB: only kernel.c includes it) */
+extern const unsigned char *wall_photo;         /* the baked photo, unpacked: 0 until wall_photo_get() first runs */
+extern const unsigned char *const wall_photo_z; /* drivers/wallpaper.h's packed photo (about 520KB; only kernel.c includes it) */
+extern const unsigned int wall_photo_z_len;
+const unsigned char *wall_photo_get(void);      /* the photo, unpacked on first call; wall_solid_row if that fails */
 extern const unsigned char *wall_src;
 extern unsigned char *wall_sat_rgb, *wall_map;
 extern const char *const wall_solid_name[4];             /* kernel.c: Grey, Terracotta, Clay, Ink */
