@@ -184,7 +184,7 @@ def dejavu_faces():
 
 
 def gui_text_px():
-    fam, wt, size = (int(x) for x in rxs("kernel/kernel.c", r"GUI_AA_GLYPH\(c\) \(&editor_glyphs\[\(\((\d+) \* 2 \+ (\d+)\) \* 4 \+ (\d+)\)"))
+    fam, wt, size = (int(x) for x in rxs("kernel/uitext.c", r"GUI_AA_GLYPH\(c\) \(&editor_glyphs\[\(\((\d+) \* 2 \+ (\d+)\) \* 4 \+ (\d+)\)"))
     families = ast.literal_eval(rx("tools/gen/gen_editor_fonts.py", r"for family in (\(.*?\)):"))
     sizes = ast.literal_eval(rx("tools/gen/gen_editor_fonts.py", r"for size in (\(.*?\)):"))
     if families[fam] != "DejaVuSans" or wt != 0:
@@ -215,7 +215,7 @@ def serif_uses():
 
 
 def ui_glyph_range():
-    body = func_body("kernel/kernel.c", "void gui_aa_char(unsigned char c")
+    body = func_body("kernel/uitext.c", "void gui_aa_char(unsigned char c")
     lo, hi = re.search(r"if \(c < (\d+) \|\| c > (\d+)\)", body).groups()
     return "%s-%s" % (lo, hi)
 
@@ -319,7 +319,7 @@ def cap_ease():
 FACTS = {
     "DESKTOP": ("str", desktop, "kernel/kernel.c"),
     "PIXEL_SCALE": ("num", pixel_scale, "kernel/kernel.c"),
-    "UI_GLYPH_RANGE": ("str", ui_glyph_range, "kernel/kernel.c"),
+    "UI_GLYPH_RANGE": ("str", ui_glyph_range, "kernel/uitext.c"),
     "SQUIRCLE_N": ("num", squircle_n, "tools/gen/restyle_icons.py"),
     "TOL_SQUIRCLE": ("num", lambda: float(rx("tools/checks/iconinset-check.py", r"^TOL_SQUIRCLE = ([\d.]+)")), "tools/checks/iconinset-check.py"),
     "GLYPH_TOP_MARGIN": ("num", lambda: glyph_margin(0), "tools/gen/restyle_icons.py"),
@@ -339,7 +339,7 @@ FACTS = {
     "LEXLY_BLUE": ("hex", lexly_blue, "tools/gen/import_fleet_icons.py and art/icons/tonchi.svg"),
     "FLEET_ICONS": ("num", fleet_count, "tools/gen/import_fleet_icons.py"),
     "DEJAVU_FACES": ("num", dejavu_faces, "drivers/ttf.h, drivers/ttf.c"),
-    "GUI_TEXT_PX": ("num", gui_text_px, "kernel/kernel.c, tools/gen/gen_editor_fonts.py"),
+    "GUI_TEXT_PX": ("num", gui_text_px, "kernel/uitext.c, tools/gen/gen_editor_fonts.py"),
     "BODY_PX": ("num", lambda: float(rx("tools/gen/gen_user_text.c", r"#define BODY_PX ([\d.]+)f")), "tools/gen/gen_user_text.c"),
     "DISP_PX": ("num", lambda: float(rx("tools/gen/gen_user_text.c", r"#define DISP_PX ([\d.]+)f")), "tools/gen/gen_user_text.c"),
     "MONO_PX": ("num", lambda: float(rx("tools/gen/gen_user_text.c", r"#define MONO_PX ([\d.]+)f")), "tools/gen/gen_user_text.c"),

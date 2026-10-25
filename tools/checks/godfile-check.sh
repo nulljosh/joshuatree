@@ -71,7 +71,7 @@ ratchet_ceiling() {
         # 2026-10-19: 4.19.1 moved the shell network commands, the text web browser, serve/serveapp/build and the embedded app pages to kernel/shellnet.c.
         # 2026-10-19: 4.19.1 moved the weather and wallpaper self-tests to kernel/wxtest.c and the per-pixel grades to kernel/walltint.h.
         # 2026-10-19: 4.19.1 moved the window manager to kernel/multiwin.c.
-        kernel/kernel.c) echo 2346 ;;
+        kernel/kernel.c) echo 2166 ;;
         # 2026-10-25: 4.23.2 put arch/ under this check (it never scanned it) after the virtio drivers moved to arch/arm64/virtio.c.
         arch/arm64/main.c) echo 1073 ;;
         *) echo "$LIMIT" ;;
