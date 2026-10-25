@@ -16,6 +16,9 @@ PROGRAM = {
     "app-bookrank": "bookrank", "app-tonchi": "tonchi", "app-curbfind": "curbfind", "app-epiphany": "epiphany",
     "app-hamurapi": "hamurabi", "app-windgate": "windgate", "app-panes": "panes",
 }
+# Tiles drawn by the kernel itself, not one program: the desktop is the menu bar, wallpaper and dock.
+KERNEL = {"desktop": ["kernel/menu.c", "kernel/dock_draw.c", "kernel/dock_geom.c", "kernel/icons.c", "kernel/icon_art.h",
+                      "kernel/gui_paint.c", "kernel/gui_prims.c", "kernel/gui_shapes.c", "kernel/wallmap.c", "kernel/clockicon.c"]}
 # Headers a program includes that also change its picture (the sprite sheet and the rules and story the game shows).
 EXTRA = {"samantha-chat": ["user/samcaps.h"], "app-hamurapi": ["user/hamurabi_sprites.h", "user/hamurabi_rules.h", "user/hamurabi_story.h"]}
 # Shared drawing code every program links in. Changing it can change every tile.
@@ -26,6 +29,7 @@ SCRIPT = "tools/landing-shots.py"
 
 
 def sources(tile):
+    if tile in KERNEL: return KERNEL[tile]
     return [f"user/{PROGRAM[tile]}.c"] + EXTRA.get(tile, []) + SHARED
 
 

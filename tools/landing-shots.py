@@ -49,7 +49,7 @@ FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
          "panes": ("pane", "panes: ring-3 window", "panes: tabs a=1 b=1")}   # Windgate: offline by design; Space starts it and the shot lands mid in-breath
 FILE = {"bookrank": "app-bookrank", "tonchi": "app-tonchi", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
         "hamurabi": "app-hamurapi", "windgate": "app-windgate", "panes": "app-panes", "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
-        "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks"}
+        "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks", "desktop": "desktop"}
 
 
 def shoot(name):
@@ -126,7 +126,7 @@ def shoot(name):
                 time.sleep(1.0)
             if name == "windgate":
                 key("spc"); time.sleep(2.0)    # start the breath: the tile shows the circle growing
-        else:
+        elif name != "desktop":               # the desktop shot is the screen as it boots, no app open
             click(SLOT0_X + SLOT[name] * PITCH + ICON // 2, DOCK_Y)
             time.sleep(1.5)
 
@@ -152,18 +152,22 @@ def shoot(name):
                 sys.exit("FAIL weather: never got a live reading (wxstate=ok)")
         elif name == "stocks":
             time.sleep(4)
-        move(LOGICAL_W - 2, 2)                 # park the pointer outside the window crop
+        if name == "desktop": move(700, 250)   # the whole screen is the shot: the pointer sits on the wallpaper, whole
+        else: move(LOGICAL_W - 2, 2)           # park the pointer outside the window crop
         time.sleep(1.0)
 
-        x, y, w, h = WIN_OF.get(name, WIN)
-        img = frame().crop((x * SCALE, y * SCALE, (x + w) * SCALE, (y + h) * SCALE)).resize(OUT, Image.LANCZOS)
+        if name == "desktop":                  # the whole screen, half size: menu bar, wallpaper, dock
+            img = frame().resize((W // 2, H // 2), Image.LANCZOS)
+        else:
+            x, y, w, h = WIN_OF.get(name, WIN)
+            img = frame().crop((x * SCALE, y * SCALE, (x + w) * SCALE, (y + h) * SCALE)).resize(OUT, Image.LANCZOS)
         out = f"landing/shots/{FILE[name]}.webp"
         for qual in (85, 80, 70, 60):
             img.save(out, "WEBP", quality=qual, method=6)
             if os.path.getsize(out) < 120 * 1024: break
         sys.path.insert(0, os.path.join(REPO, "tools")); import landing_shots_manifest as M
         M.record(FILE[name])
-        print(f"saved {out} {OUT[0]}x{OUT[1]} ({os.path.getsize(out)} bytes, q={qual})")
+        print(f"saved {out} {img.size[0]}x{img.size[1]} ({os.path.getsize(out)} bytes, q={qual})")
     finally:
         q.terminate()
         try: q.wait(timeout=5)
@@ -173,8 +177,8 @@ def shoot(name):
 if __name__ == "__main__":
     if "--record" in sys.argv:
         sys.path.insert(0, os.path.join(REPO, "tools")); import landing_shots_manifest as M
-        for t in M.PROGRAM: M.record(t)
+        for t in list(M.PROGRAM) + list(M.KERNEL): M.record(t)
         sys.exit(0)
     subprocess.run(["make", "-s", "kernel.elf"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for n in (sys.argv[1:] or list(SLOT) + list(FLEET)):
+    for n in (sys.argv[1:] or ["desktop"] + list(SLOT) + list(FLEET)):
         shoot(n)
