@@ -371,7 +371,7 @@ static int browser_key(unsigned code) {   /* a key down with the Browser in fron
     }
     return 1;
 }
-static void browser_wheel(int v) {   /* REL_WHEEL: up is positive */
+void browser_wheel(int v) {   /* REL_WHEEL: up is positive */
     if (!browser_live || spot_live || !v) return;
     int was = br_top;
     br_scroll(br_top - v * 3);

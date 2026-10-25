@@ -15,6 +15,7 @@ PROGRAM = {
     "app-terminal": "terminal", "app-stocks": "stocks", "samantha-chat": "samantha",
     "app-bookrank": "bookrank", "app-tonchi": "tonchi", "app-curbfind": "curbfind", "app-epiphany": "epiphany",
     "app-hamurapi": "hamurabi", "app-windgate": "windgate", "app-panes": "panes",
+    "app-solitaire": "solitaire", "app-paddle": "paddle", "app-bricks": "bricks", "app-depths": "depths", "app-snake": "snake",
 }
 # Tiles drawn by the kernel itself, not one program: the desktop is the menu bar, wallpaper and dock.
 KERNEL = {"desktop": ["kernel/menu.c", "kernel/dock_draw.c", "kernel/dock_geom.c", "kernel/icons.c", "kernel/icon_art.h",

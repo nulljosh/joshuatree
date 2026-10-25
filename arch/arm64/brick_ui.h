@@ -43,7 +43,7 @@ static void brick_close(void) {
     con_live = 1; console_close(); pane_open(cp);
     uart_puts("brick closed\n");
 }
-static int brick_key(unsigned code, unsigned value) {
+int brick_key(unsigned code, unsigned value) {
     if (!brick_live) return 0;
     if (code == 105 || code == 30) brick_left = value != 0;
     else if (code == 106 || code == 32) brick_right = value != 0;
@@ -57,7 +57,7 @@ static void brick_mouse(int lx, int ly) {
     if (spot_live || !brick_live || lx < brick_x() || lx >= brick_x() + BRICK_W || ly < brick_y() || ly >= brick_y() + BRICK_H) return;
     brick_move(&brick, lx - brick_x()); brick_paint();
 }
-static void brick_tick(void) {
+void brick_tick(void) {
     if (!brick_live) return;
     if (spot_live) { brick_left = brick_right = 0; brick_last = 0; return; }
     unsigned long now, freq;

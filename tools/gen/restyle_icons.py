@@ -345,6 +345,49 @@ APPS_ONLY = {
       <circle cx="64" cy="62" r="25" fill="#FAF8F4"/>
       <circle cx="55" cy="53" r="6" fill="#B5502C"/>"""),
 
+    # Solitaire (4.23): two cream cards, the back one tilted, a terracotta spade on the front, on the
+    # accent #b5502c. Flat, no text, no pips beyond the one suit.
+    "solitaire": ("#B5502C", "#B5502C", "",
+              """
+      <rect x="22" y="32" width="52" height="70" rx="8" fill="#E4DDD3" transform="rotate(-12 48 67)"/>
+      <rect x="46" y="26" width="54" height="74" rx="8" fill="#FAF8F4"/>
+      <path d="M73 42 C66 50 58 57 58 66 C58 73 66 76 71 71 L68 83 L78 83 L75 71 C80 76 88 73 88 66 C88 57 80 50 73 42 Z" fill="#B5502C"/>"""),
+
+    # Paddle (4.23.0): two cream paddles and a terracotta ball on near-black ink, the arcade at night.
+    # Flat, no net, no score.
+    "paddle": ("#1C1C1E", "#1C1C1E", "",
+              """
+      <rect x="22" y="34" width="12" height="44" rx="6" fill="#FAF8F4"/>
+      <rect x="94" y="52" width="12" height="44" rx="6" fill="#FAF8F4"/>
+      <rect x="58" y="58" width="14" height="14" rx="3" fill="#B5502C"/>"""),
+
+    # Bricks (4.23.0): a wall of cream bricks with one knocked out, a terracotta ball and a paddle, on
+    # near-black ink like Paddle. Flat, no score.
+    "bricks": ("#1C1C1E", "#1C1C1E", "",
+              """
+      <rect x="20" y="28" width="26" height="12" rx="3" fill="#FAF8F4"/>
+      <rect x="51" y="28" width="26" height="12" rx="3" fill="#FAF8F4"/>
+      <rect x="82" y="28" width="26" height="12" rx="3" fill="#FAF8F4"/>
+      <rect x="20" y="45" width="26" height="12" rx="3" fill="#FAF8F4"/>
+      <rect x="82" y="45" width="26" height="12" rx="3" fill="#FAF8F4"/>
+      <rect x="57" y="68" width="12" height="12" rx="3" fill="#B5502C"/>
+      <rect x="40" y="94" width="48" height="10" rx="5" fill="#FAF8F4"/>"""),
+
+    # Depths (4.23.0): a corridor in one-point perspective, terracotta walls running to a pale door, on
+    # dark umber. Flat, no creature, no gun.
+    "depths": ("#2A2724", "#2A2724", "",
+              """
+      <polygon points="22,24 50,46 50,82 22,104" fill="#B5502C"/>
+      <polygon points="106,24 78,46 78,82 106,104" fill="#8E3A1E"/>
+      <rect x="54" y="50" width="20" height="32" rx="2" fill="#FAF8F4"/>"""),
+
+    # Snake (4.23.0): a cream snake in three bends with a terracotta apple, on Reminders' deep green.
+    # Flat, no grid, no eyes.
+    "snake": ("#375A4A", "#375A4A", "",
+              """
+      <path d="M28 92 H64 V64 H40 V36 H92" fill="none" stroke="#FAF8F4" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="96" cy="84" r="10" fill="#B5502C"/>"""),
+
     "search": ("#9AA3B1", "#303A48", "",
                """
       <circle cx="52" cy="52" r="23" fill="none" stroke="#ECEFF3" stroke-width="11"/>

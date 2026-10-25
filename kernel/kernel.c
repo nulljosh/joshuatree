@@ -64,8 +64,8 @@ int ring3app_write_packed(const char *file, const unsigned char *packed, unsigne
 
    4.11.4: the default is now a plain grey (WALL_GREY), wall_src points at
    wall_solid_row for the four plain walls, and nothing is fetched. */
-const unsigned char *const wall_photo = wallpaper_rgb;   /* wallmap.c reaches the photo through this; only this file includes drivers/wallpaper.h */
-const unsigned char *wall_src = wallpaper_rgb;
+const unsigned char *wall_photo, *const wall_photo_z = wallpaper_z; const unsigned int wall_photo_z_len = WALLPAPER_Z_LEN; /* 4.23.0: packed; wallmap.c's wall_photo_get unpacks it on first use. Only this file includes drivers/wallpaper.h */
+const unsigned char *wall_src = wall_solid_row;
 /* v0.83.x: a REAL, once-captured satellite photograph (kernel/wall_sat.h,
    tools/gen/gen_wall_sat.py -- the same real mt0.google.com tiles
    wall_fetch() itself pulls for WALL_SAT, baked in at build time), decoded
@@ -694,7 +694,6 @@ int wind_enabled = 1; /* settings.c reads and writes it */
 /* gui_blend, gui_line_sqrt: moved to gui_prims.c/.h (pure color/math
    primitives, no state of their own). */
 
-
 /* v65 (0.62.0): day/night tint. Direct request, building on v60's real-
    weather sway: the baked wallpaper photo (wallpaper_rgb, a compile-time
    constant, no image decoder in this freestanding kernel to regenerate it
@@ -833,9 +832,6 @@ static unsigned int gui_wallpaper_color(int row){
 #define aa_band gui_aa_band /* one band, owned by gui_paint.c with the circle and capsule painters both builds share */
 #define AA_BAND aa_band
 
-
-
-
 /* Real revision, not the first attempt: reported as reading like "tubes",
    not cursive, and looking at it fresh the diagnosis is exactly that,
    three real problems, not one. Thickness relative to letter height was
@@ -890,7 +886,7 @@ static int wind_phase = 0;     /* -256..256, current displacement scale */
 int wind_weather_pct = 100;
 
 static int gui_wind_shift(int row){ /* source-pixel shift for this screen row, in 8.8 fixed point */
-    if (wall_src != wallpaper_rgb) return 0; /* v75: streets don't sway; the tick still runs (zero shift) so rain/snow keep compositing */
+    if (!wall_src || wall_src != wall_photo) return 0; /* v75: streets don't sway; the tick still runs (zero shift) so rain/snow keep compositing */
     if (row >= WIND_HORIZON_ROW) return 0;
     int h = WIND_HORIZON_ROW - row;                     /* 0..365 */
     int amp = (h * h) / (365 * 365 / 14);               /* up to ~14 logical px at the very top, ~6 at the crown */
@@ -914,7 +910,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
 static int wind_base_width = 0; void music_ring3_open(void); void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void tonchi_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void hikko_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
-void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void); void panes_ring3_open(void); void claude_ring3_open(void); void mines_ring3_open(void); void books_ring3_open(void);
+void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void); void panes_ring3_open(void); void claude_ring3_open(void); void mines_ring3_open(void); void books_ring3_open(void); void solitaire_ring3_open(void); void paddle_ring3_open(void); void bricks_ring3_open(void); void depths_ring3_open(void); void snake_ring3_open(void);
 
 int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
@@ -1469,7 +1465,6 @@ void gui_draw_app_titlebar(const char *title){
     font_draw_string(title, 84, 12, 0x00555555, -1);
 }
 
-
 /* v85: the old one-shot gui_launch_chat (no history, /api/generate, a
    200-byte message cap) lived here; replaced by chat.h's real GUI app
    with scrollback and VFS-backed history, included below alongside the
@@ -1829,6 +1824,11 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 29 */ {"Claude",     0x00B5502C, gui_icon_chat,       claude_ring3_open,     0, 0}, /* 2.14: Claude Code through the relay (user/claude.c, tools/claude-relay/relay.py), ring 3, Apps folder only; authored art (art/icons/claude.svg) covers the icon */
     /* 30 */ {"Mines",      0x00556B85, gui_icon_apps,       mines_ring3_open,      0, 0}, /* Minesweeper, ring 3 (user/mines.c), Apps folder only; authored art is art/icons/mines.svg, a cream mine on the accent */
     /* 31 */ {"Books",      0x008E3A1E, gui_icon_book,       books_ring3_open,      0, 0}, /* 2.66: plain-text reader, ring 3 (user/books.c), Apps folder only like Mines; authored art is art/icons/books.svg */
+    /* 32 */ {"Solitaire",  0x00B5502C, gui_icon_apps,       solitaire_ring3_open,  0, 0}, /* 4.23: Klondike, ring 3 (user/solitaire.c), Apps folder only like Mines; authored art is art/icons/solitaire.svg */
+    /* 33 */ {"Paddle",       0x001C1C1E, gui_icon_apps,       paddle_ring3_open,       0, 0}, /* 4.23: Paddle against the computer, ring 3 (user/paddle.c), Apps folder only; authored art is art/icons/paddle.svg */
+    /* 34 */ {"Bricks",     0x00B5502C, gui_icon_apps,       bricks_ring3_open,     0, 0}, /* 4.23: the brick-breaking game, ring 3 (user/bricks.c), Apps folder only; authored art is art/icons/bricks.svg */
+    /* 35 */ {"Depths",     0x002A2724, gui_icon_apps,       depths_ring3_open,     0, 0}, /* 4.23: a first-person maze shooter, ring 3 (user/depths.c), Apps folder only; authored art is art/icons/depths.svg */
+    /* 36 */ {"Snake",      0x00375A4A, gui_icon_apps,       snake_ring3_open,      0, 0}, /* 4.23: Snake, ring 3 (user/snake.c), Apps folder only; authored art is art/icons/snake.svg */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
        tinted background like every real app above. 2026-09-27: this used

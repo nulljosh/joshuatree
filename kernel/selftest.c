@@ -58,6 +58,8 @@ int selftest_run(const char *line, char *arg) {
             { "pal_dyn", pngt_pal_dyn, sizeof pngt_pal_dyn, PNGT_PAL_DYN_X0, PNGT_PAL_DYN_Y0,
               PNGT_PAL_DYN_W, PNGT_PAL_DYN_H, PNGT_PAL_DYN_CH, PNGT_PAL_DYN_FNV, PNGT_PAL_DYN_PAL },
         };
+        const unsigned char *photo = wall_photo_get();   /* 4.23.0: the photo is packed until first use */
+        if (photo == wall_solid_row) { puts("png: the photo did not unpack FAILED\n"); pass = 0; }
         for (int ci = 0; ci < 4; ci++) {
             unsigned char *px = 0; unsigned int w = 0, h = 0, ch = 0;
             int r = png_decode(cases[ci].png, cases[ci].len, &px, &w, &h, &ch);
@@ -71,7 +73,8 @@ int selftest_run(const char *line, char *arg) {
             else {
                 for (unsigned int y = 0; y < h; y++)
                     for (unsigned int x = 0; x < w; x++) {
-                        const unsigned char *e = &wall_photo[((cases[ci].y0 + y) * WALLPAPER_W + cases[ci].x0 + x) * 3];
+                        if (photo == wall_solid_row) break;   /* no photo: already failed above, never read past the two-row buffer */
+                        const unsigned char *e = &photo[((cases[ci].y0 + y) * WALLPAPER_W + cases[ci].x0 + x) * 3];
                         const unsigned char *d = px + (y * w + x) * ch;
                         if (e[0] != d[0] || e[1] != d[1] || e[2] != d[2]) mism++;
                         if (ch == 4 && d[3] != ((x * 7 + y * 3) & 0xFF)) mism++; /* the generator's alpha pattern */

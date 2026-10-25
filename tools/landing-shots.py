@@ -46,10 +46,16 @@ FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
          "epiphany": ("epip", "epiphany: ring-3 window", "epiphany: fetch"),   # (open= flag, window opened, offline fallback chosen)
          "hamurabi": ("hamu", "hamurabi: ring-3 window", "hamurabi: phase title"),   # Hamurapi: its title scene, drawn from first frame, no network
          "windgate": ("windgate", "windgate: ring-3 window", "windgate: clock ready"),
-         "panes": ("pane", "panes: ring-3 window", "panes: tabs a=1 b=1")}   # Windgate: offline by design; Space starts it and the shot lands mid in-breath
+         "panes": ("pane", "panes: ring-3 window", "panes: tabs a=1 b=1"),
+         "solitaire": ("soli", "solitaire: ring-3 window", "solitaire: tops"),   # the games (4.23.0): each draws its first frame with no network
+         "paddle": ("padd", "paddle: ring-3 window", "paddle: ring-3 window"),
+         "bricks": ("bric", "bricks: ring-3 window", "bricks: ring-3 window"),
+         "depths": ("dept", "depths: ring-3 window", "depths: ready"),
+         "snake": ("snak", "snake: ring-3 window", "snake: first apple")}   # Windgate: offline by design; Space starts it and the shot lands mid in-breath
 FILE = {"bookrank": "app-bookrank", "tonchi": "app-tonchi", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
         "hamurabi": "app-hamurapi", "windgate": "app-windgate", "panes": "app-panes", "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
-        "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks", "desktop": "desktop"}
+        "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks", "desktop": "desktop",
+        "solitaire": "app-solitaire", "paddle": "app-paddle", "bricks": "app-bricks", "depths": "app-depths", "snake": "app-snake"}
 
 
 def shoot(name):

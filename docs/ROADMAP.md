@@ -217,8 +217,7 @@ Worth doing, not yet re-checked, in the order the study ranked them:
   - Port them one at a time, Weather and Reminders first, then Mail and Stocks (they need the live backends).
   - Each one gets its own check.
   - (Finder shipped in 3.14.0.)
-
-- [ ] [Sonnet] Pi boots to a splash, not the log.
+- [ ] [Sonnet] Pi boot polish (the splash itself shipped in 3.8.3):
   - The mark on the brand fill with the thin progress bar, held until the desktop is up. The Console never flashes on the way. The log stays one dock click away, and a FAIL still raises it.
   - Then a login screen.
   - The first few seconds after the desktop appears take no keys. Find why and fix it.
@@ -447,9 +446,8 @@ The rest of the Linux gaps, tagged with the version that owns them (Joshua, 2026
 From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal Pi 4 projects, have and we do not), in order:
 - [ ] [Fable] VNC server: the Pi's screen on the Mac over Wi-Fi, so debugging stops needing photos and demos need no monitor. After Wi-Fi stage 2.
 - [ ] [Fable] A USB stick as the first disk: mass storage over the xHCI driver we have, likely faster to "files survive a reboot" than EMMC2.
-- [ ] [Fable] Doom: the classic proof a platform is real, and Joshua's chosen benchmark (2026-10-06: "if we can get doom working that's sort of a benchmark"). Full speed with sound on the Pi is the flag right after 3.0. Keyboard first, gamepad next.
+- [ ] [Fable] Doom: the classic proof a platform is real, and Joshua's chosen benchmark (2026-10-06: "if we can get doom working that's sort of a benchmark"). Full speed with sound on the Pi is the flag right after 3.0. Keyboard first, gamepad next. Depths (4.23.0) is our own raycaster in its spirit; the real port still needs a small C library, the GPL doomgeneric source kept apart from the Apache tree, and Freedoom data loaded from the disk, not baked into the kernel.
 - [ ] [Sonnet] USB gamepad: a HID report parser beside the keyboard and mouse. Doom and Hamurapi on the couch.
-- [ ] [Sonnet] Paddle, a two-player bounce game (the Pong idea under our own name), and Snake. Small, original, no third-party code or assets.
 - [ ] [Fable] An Atari-style console: our own 6502 core and a tiny TIA-like video chip. Only homebrew games whose authors allow redistribution, never original cartridges (the ROMs are copyrighted). Avoid Tetris-like and Space-Invaders-like designs.
 - [ ] [Sonnet] Drop files from the Mac over Wi-Fi: a tiny upload server on the Pi (plain HTTP PUT), no card swap.
 - [ ] [Sonnet] `joshuatree.local`: mDNS so the Pi announces its name on the network.
@@ -598,7 +596,6 @@ Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk)
 ## Apps after 2.2 (cheapest first, one agent and one PR each)
 
 - [ ] [Haiku] Photos: browse and view JPEG and PNG from Files, next and previous by arrow key. The decoders already exist.
-- [ ] [Haiku] Solitaire. Same shape: one app, one boot check that plays a scripted game.
 - [ ] [Sonnet] Voice Memos: record with `SYS_AUDIO_RECORD`, save a WAV to Files, play it back in Music.
 - [ ] [Sonnet] Samantha media tools: "play something", "pause", "what's playing", one check each.
 - [ ] [Sonnet] Movie trim: cut, split and join clips at frame boundaries and save a new AVI. The iMovie-lite step.
@@ -664,10 +661,8 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Sonnet] App switcher and global hotkeys.
 - [ ] [Sonnet] Lock screen, sleep, and ACPI shutdown.
 - [ ] [Sonnet] Maps app. The wallpaper already fetches map tiles.
-- [ ] [Haiku] Screenshot tool.
 - [ ] [Sonnet] Undo in editors.
 - [ ] [Sonnet] Files app view options: list, grid, columns, with adjustable sorting and grouping.
-- [ ] [Haiku] About This Computer: remove uptime counter, show clean system info.
 - [ ] [Sonnet] Mail account configuration: setup for multiple accounts, IMAP/POP/SMTP settings.
 - [ ] [Sonnet] Chat app redesign: expanded capabilities, better interface, rename to Sam.
 - [ ] [Sonnet] Shell pipes, redirection, and environment variables.
@@ -692,7 +687,7 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
 - [ ] [Sonnet] Video editor: basic timeline, trimming, and export.
-- [ ] [Sonnet] Basic games: Pong, Chess, Conway's Game of Life, fully playable in the OS.
+- [ ] [Sonnet] Chess, fully playable in the OS. (Paddle and Toroid, the Game of Life, are in.)
 - [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
 - [ ] [Sonnet] Installing and updating apps from inside the OS.
 - [ ] [Sonnet] Native Bible app (public-domain KJV on the disk image, book and chapter picker, search).
@@ -1042,6 +1037,10 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.23.3 (2026-10-25)**: Input and the boot sequence leave the Pi's `main.c` for `boot.c`, with a shared header, `kmain.h`, for every part cut from it (3,896 lines to 3,426). CI installs WebKit only in the demo job, since its media libraries made the suite's browser install take 12 minutes on a slow mirror. Check: `godfile-check.sh`, the arm64 suite.
+- **4.23.2 (2026-10-25)**: The Pi build's god file starts to split: the virtio drivers leave `arch/arm64/main.c` for `virtio.c`, and the god-file check now covers `arch/`. Check: `godfile-check.sh`.
+- **4.23.1 (2026-10-25)**: Each game played to the end. That found Paddle rallying forever, Bricks stuck in one column, and Depths creatures chasing through walls; all three are fixed. Snake got a step mode so a script can play it. Checks: `games-sim-check.py`, `ring3-depths-check.py`, `ring3-snake-check.py`.
+- **4.23.0 (2026-10-25)**: Five games in the Apps folder: Solitaire, Paddle (the Pong idea), Bricks (the Breakout idea), Depths (a first-person maze shooter, all our own code) and Snake. To fit them, the baked tree photo ships packed and unpacks on first use, about 1 MB back under the app window. Checks: `ring3-solitaire-check.py`, `ring3-paddle-check.py`, `ring3-bricks-check.py`, `ring3-depths-check.py`, `ring3-snake-check.py`, `png-check.sh`.
 - **4.22.1 (2026-10-25)**: CI's Playwright install gets six minutes and one retry. GitHub's runners sometimes hang in it, and a hung install sat for the whole 30 minute job before anyone could rerun it (it hit #671 twice and #672 once). Check: the suite job itself.
 - **4.22.0 (2026-10-25)**: The landing page opens on screenshots. The desktop shot leads, every app has a tile, and the page loads no emulator. The live demo is one click away at `?demo` (or any of its old links, like `?desktop`), where the page is what it was before (Joshua: "remove the demo from the landing page, just show screenshots"). Check: `tools/checks/landing-shots-hero-check.mjs`.
 - **4.21.1 (2026-10-25)**: The README opens on the whole desktop, then six main apps (Samantha, Notes, Calendar, Terminal, Weather, Hamurapi), and says Samantha answers with no relay (Joshua: "first should be the desktop, second the main apps"). `tools/landing-shots.py desktop` takes it headless; the desktop is mapped to the kernel files that draw it. Check: `tools/checks/landing-shots-fresh-check.py`.
@@ -1997,7 +1996,7 @@ Updated 2026-10-25, morning. The loop's working notes live in `~/.claude/loops/j
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards. Open a loop PR ready, not as a draft: a push to a draft followed by `gh pr ready` lets the skipped draft run cancel the real one.
 
-**Where things stand.** Main is 4.20.21, aiming at 5.0, Talk to it. Since 4.20.0 the Samantha tile opens her chat across the screen with her face big and the mouth following her voice, so everything in 5.0 is built and waits on the board. `kernel/kernel.c` went from 6,393 to 2,827 lines overnight (4.19.2 to 4.20.21): the window manager, network commands, self-tests, panic screen, shape painters, kernel log, app icons, Apps folder, boot splash, Apple menu and the shell's dispatcher each have their own file. The card flashed on 2026-10-25 carries 4.20.19. `arch/arm64/main.c` (4,133 lines) was left alone so the card Joshua flashes on 2026-10-25 holds only 4.20.0's Pi changes.
+**Where things stand.** Main is 4.20.21, aiming at 5.0, Talk to it. Since 4.20.0 the Samantha tile opens her chat across the screen with her face big and the mouth following her voice, so everything in 5.0 is built and waits on the board. `kernel/kernel.c` went from 6,393 to 2,827 lines overnight (4.19.2 to 4.20.21): the window manager, network commands, self-tests, panic screen, shape painters, kernel log, app icons, Apps folder, boot splash, Apple menu and the shell's dispatcher each have their own file. The card flashed on 2026-10-25 carries 4.20.19. `arch/arm64/main.c` is 3,426 lines after 4.23.2 and 4.23.3 moved the virtio drivers and the boot sequence out; the aim is 1,000. The god-file check covers `arch/`.
 
 **What is left in kernel.c and why.** `gui_run` and `kmain`, plus the text helpers (`wx_*`) that read the static font tables in `drivers/editor_fonts.h`. Those tables need defining once in a `.c` file before the helpers can move. Every header kernel.c used to include whole is now a `.c` file.
 
@@ -2037,6 +2036,4 @@ The native repro stays in `samantha-reset-repro.py`.
 Separate and pre-existing at the time, not this bug: `speak: status=403`. The speak POST never reached the check's intercept.
 
 ## Ingested 2026-10-25
-- [ ] Remove the demo from the landing page. Just show screenshots of all use cases.
-- [ ] Question: what is it built on, Linux, Unix, etcetera? What is best? (Answer in wiki/joshuatree.md; it is from-scratch i386 and Pi 4, so check what that note should say.)
 - [ ] Repost to r/osdev once the account has 5+ karma (see launch/roadmap.md).

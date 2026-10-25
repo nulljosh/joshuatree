@@ -384,7 +384,7 @@ int wxtest_run(const char *line, char *arg) {
         wall_theme = WALL_RAW;   unsigned int wall_dispatch_raw  = gui_wall_tint(gray);
         wall_theme = WALL_SAT;   unsigned int wall_dispatch_sat  = gui_wall_tint(gray);
         unsigned int wall_dispatch_sat_green = gui_wall_tint(0x00208020);
-        wall_src = wall_photo; wall_theme = WALL_COOL;
+        wall_src = wall_photo_get(); wall_theme = WALL_COOL;
         unsigned int wall_dispatch_photo = gui_wall_tint(gray); /* Photo guard: must ignore wall_theme entirely */
         wall_src = wall_solid_row; wall_theme = WALL_SAT; /* a plain wall is never graded, whatever wall_theme says */
         unsigned int wall_dispatch_solid = gui_wall_tint(gray);

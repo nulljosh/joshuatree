@@ -11,6 +11,16 @@
 #include "wallpaper.h"
 #include "png_testdata.h"
 
+/* 4.23.0: drivers/wallpaper.h holds the photo packed (up-filtered, then deflated; tools/gen/wallraw.py). Unpack it
+   once, the way kernel/wallmap.c's wall_photo_get does, so the crops below compare against the same pixels. */
+static unsigned char wallpaper_rgb[WALLPAPER_W * WALLPAPER_H * 3];
+static int unpack_photo(void) {
+    unsigned row = WALLPAPER_W * 3, n = row * WALLPAPER_H;
+    if (png_zlib_inflate(wallpaper_z, WALLPAPER_Z_LEN, wallpaper_rgb, n) != 0) return 0;
+    for (unsigned i = row; i < n; i++) wallpaper_rgb[i] = (unsigned char)(wallpaper_rgb[i] + wallpaper_rgb[i - row]);
+    return 1;
+}
+
 static unsigned fnv(const unsigned char *p, unsigned n) {
     unsigned h = 0x811c9dc5;
     for (unsigned i = 0; i < n; i++) { h ^= p[i]; h *= 0x01000193; }
@@ -57,6 +67,7 @@ static int corrupt_past_crc(void) {
 }
 
 int main(void) {
+    if (!unpack_photo()) { printf("wallpaper: unpack FAIL\n"); return 1; }
     int bad = 0;
     bad |= check("rgb_dyn", pngt_rgb_dyn, sizeof pngt_rgb_dyn, PNGT_RGB_DYN_X0, PNGT_RGB_DYN_Y0, PNGT_RGB_DYN_W, PNGT_RGB_DYN_H, 3, PNGT_RGB_DYN_FNV, 0);
     bad |= check("rgba_stored", pngt_rgba_stored, sizeof pngt_rgba_stored, PNGT_RGBA_STORED_X0, PNGT_RGBA_STORED_Y0, PNGT_RGBA_STORED_W, PNGT_RGBA_STORED_H, 4, PNGT_RGBA_STORED_FNV, 0);
