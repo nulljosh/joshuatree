@@ -19,6 +19,8 @@
 #include "jpeg_testdata.h"
 #include "mail.h"
 #include "wallmap.h"
+#include "stocks.h"
+#include "picker.h"
 #include "selftest.h"
 
 int selftest_run(const char *line, char *arg) {
@@ -394,6 +396,27 @@ int selftest_run(const char *line, char *arg) {
         ring3_test(arg); /* v64: "", "fault", or "spin", see ring3.h; all three come back to the shell */
     }
     else if (progtest_run(line)) {}   /* 4.20.1: usertest and notetest live in kernel/progtest.c */
+    else if (!strcmp(line, "stockstest")) {
+        int pass = 1;
+        char price_str[16];
+        stocks_format_price(23800, price_str, sizeof(price_str));
+        if (price_str[0] != '2' || price_str[1] != '3') { puts("stocks price format failed\n"); pass = 0; }
+        int dollars, cents, sign;
+        stocks_format_change(-18000, &dollars, &cents, &sign);
+        if (sign != -1 || dollars != 180) { puts("stocks change format failed\n"); pass = 0; }
+        puts(pass ? "stocks formatting: ok\n" : "FAILED\n");
+    }
+    else if (!strcmp(line, "pickcheck")) {
+        int total, ok = picker_selfcheck(&total);
+        char m[48]; int p = 0;
+        const char *a = "pickcheck: "; while (*a) m[p++] = *a++;
+        char d[12]; int dn = 0; for (int v = ok; ; v /= 10) { d[dn++] = '0' + v % 10; if (v < 10) break; }
+        while (dn) m[p++] = d[--dn];
+        m[p++] = '/'; dn = 0; for (int v = total; ; v /= 10) { d[dn++] = '0' + v % 10; if (v < 10) break; }
+        while (dn) m[p++] = d[--dn];
+        a = ok == total ? " ok\n" : " FAIL\n"; while (*a) m[p++] = *a++;
+        m[p] = 0; puts(m);
+    }
     else return 0;
     return 1;
 }
