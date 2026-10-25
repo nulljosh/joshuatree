@@ -20,7 +20,7 @@ ROWS=$(grep "^bench " "$LOG" | grep -v done | tr -d "\r" | awk '{printf "| %s | 
 printf "| Benchmark | Result |\n|---|---|\n%s\n" "$ROWS"
 if [ "${1:-}" = "--write" ]; then
   BENCHDOC=$(
-    echo "The kernel boots headless in QEMU on this Mac, runs \`kernel/bench.h\` and prints the numbers over serial. Run \`tools/bench.sh\` yourself; the numbers move with the host. Version $(cat VERSION), $(date +%Y-%m-%d)."
+    echo "The kernel boots headless in QEMU on this Mac, runs \`kernel/bench.c\` and prints the numbers over serial. Run \`tools/bench.sh\` yourself; the numbers move with the host. Version $(cat VERSION), $(date +%Y-%m-%d)."
     echo
     printf "| Benchmark | Result |\n|---|---|\n%s\n" "$ROWS"
     echo

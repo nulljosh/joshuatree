@@ -9,6 +9,7 @@
 #include "user_hello.h"
 #include "user_note.h"
 #include "selftest.h"
+#include "shell.h"
 
 /* ---- usertest: the ring-3 reference program, end to end -------------------
    The real proof that docs/ARCHITECTURE.md is a contract and not a wish.
