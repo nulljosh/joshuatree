@@ -26,17 +26,17 @@ tiles = sorted(f[:-5] for f in os.listdir(shots) if f.endswith(".webp"))
 have = M.load()
 fails = []
 for t in tiles:
-    if t not in M.PROGRAM:
+    if t not in M.PROGRAM and t not in M.KERNEL:
         fails.append(f"{t}.webp has no source mapping in tools/landing_shots_manifest.py")
     elif t not in have:
         fails.append(f"{t}.webp was never recorded: run tools/landing-shots.py {t}")
     elif have[t] != M.source_hash(t):
-        fails.append(f"{t}.webp is stale: {M.PROGRAM[t]}.c, the shared drawing code or the shot script changed. "
+        fails.append(f"{t}.webp is stale: {', '.join(M.sources(t)[:2])}, the shared drawing code or the shot script changed. "
                      f"Retake it: python3 tools/landing-shots.py <name>")
-for t in M.PROGRAM:
+for t in list(M.PROGRAM) + list(M.KERNEL):
     if t not in tiles: fails.append(f"{t}.webp is mapped but missing from landing/shots/")
 for t in have:
-    if t not in M.PROGRAM: fails.append(f"sources.json lists {t}, which is not a tile")
+    if t not in M.PROGRAM and t not in M.KERNEL: fails.append(f"sources.json lists {t}, which is not a tile")
 if fails:
     print("FAIL:"); [print("  - " + f) for f in fails]; sys.exit(1)
 print(f"PASS: all {len(tiles)} landing tiles match the sources that draw them")

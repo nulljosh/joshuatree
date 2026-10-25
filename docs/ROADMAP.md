@@ -1042,6 +1042,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.21.1 (2026-10-25)**: The README opens on the whole desktop, then six main apps (Samantha, Notes, Calendar, Terminal, Weather, Hamurapi), and says Samantha answers with no relay (Joshua: "first should be the desktop, second the main apps"). `tools/landing-shots.py desktop` takes it headless; the desktop is mapped to the kernel files that draw it. Check: `tools/checks/landing-shots-fresh-check.py`.
 - **4.21.0 (2026-10-25)**: Samantha answers without the relay. When the Mac's relay is out of reach, or the card has no relay token at all, `sam` asks Turing's hosted Samantha at turing.jaybulb.com over HTTPS and prints her answer. Only the question goes out, never the token. Acting on the Pi (`[[open]]`, notes) still needs the relay (Joshua: "fix it so we don't need the relay"). Check: `tools/checks/arm64-sam-hosted-check.py`.
 - **4.20.0 (2026-10-25)**: The Samantha tile opens her chat across the screen, menu bar to dock, so her face is the big one (14 rows) with the mouth following her voice. That is the 5.0 full-screen face. The big face now starts at 21 rows, since a full window at 800x600 has about 24. Check: `tools/checks/arm64-samtile-check.py`.
 - **4.19.1 (2026-10-25)**: Samantha's face in the chat view is twice as big in a tall window (14 rows when the window has 28 or more, still 7 in a medium one, none in a short one), a step toward the full-screen face for 5.0. Check: `tools/checks/arm64-voice-check.py` still draws it and her mouth still follows the clip.
@@ -2032,3 +2033,8 @@ The hunt did turn up real kernel hardening that shipped with the fix:
 The native repro stays in `samantha-reset-repro.py`.
 
 Separate and pre-existing at the time, not this bug: `speak: status=403`. The speak POST never reached the check's intercept.
+
+## Ingested 2026-10-25
+- [ ] Remove the demo from the landing page. Just show screenshots of all use cases.
+- [ ] Question: what is it built on, Linux, Unix, etcetera? What is best? (Answer in wiki/joshuatree.md; it is from-scratch i386 and Pi 4, so check what that note should say.)
+- [ ] Repost to r/osdev once the account has 5+ karma (see launch/roadmap.md).
