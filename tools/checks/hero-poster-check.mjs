@@ -127,7 +127,7 @@ const serial = page => page.evaluate(() => window.__jt && window.__jt.serial || 
 // ---- 1-3: desktop 1440x900, default boot --------------------------------------------------
 {
   const page = await newPage({ width: 1440, height: 900 });
-  await page.goto(base);
+  await page.goto(base + '?demo');
   await page.waitForSelector('#hero-poster', { state: 'visible', timeout: 15000 }).catch(() => {});
   await page.waitForFunction(() => { const i = document.querySelector('#hero-poster img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 }).catch(() => {}); // a missing poster is reported by assertPosterPixels, not thrown here
   const before = await assertPosterPixels(page, 'desktop before click', true);
@@ -168,7 +168,7 @@ const serial = page => page.evaluate(() => window.__jt && window.__jt.serial || 
 // ---- 3b: keyboard takeover must lift the poster (Tab to the demo, Enter) --------------------
 {
   const page = await newPage({ width: 1440, height: 900 });
-  await page.goto(base);
+  await page.goto(base + '?demo');
   await page.waitForSelector('#hero-poster', { state: 'visible', timeout: 15000 }).catch(() => {});
   await page.waitForFunction(() => window.__jt && window.__jt.ready, null, { timeout: DEADLINE });
   await page.focus('#v86-embed');
@@ -185,7 +185,7 @@ const serial = page => page.evaluate(() => window.__jt && window.__jt.serial || 
 const shotDir = process.env.HERO_SHOTS;
 async function wakeCase(tag, name, vp, mobile) {
   const page = await newPage(vp, { mobile });
-  await page.goto(base);
+  await page.goto(base + '?demo');
   await page.waitForFunction(() => { const i = document.querySelector('#hero-poster img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 }).catch(() => {});
   if (shotDir) await page.screenshot({ path: path.join(shotDir, `${name}-1-before.png`) });
   if (mobile) await page.tap('#hero-poster'); else await page.click('#hero-poster');
@@ -253,7 +253,7 @@ await wakeCase('phone early tap', 'phone', { width: 390, height: 844 }, true);
 // ---- 5: phone 390 and tablet 820 -----------------------------------------------------------
 for (const [tag, vp, mobile, wantSrc, wantR] of [['phone 390', { width: 390, height: 844 }, true, 'samantha-phone.webp', 430 / 760], ['tablet 820', { width: 820, height: 1180 }, false, 'samantha.webp', 16 / 9]]) {
   const page = await newPage(vp, { mobile });
-  await page.goto(base);
+  await page.goto(base + '?demo');
   await page.waitForFunction(() => { const i = document.querySelector('#hero-poster img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 }).catch(() => {}); // a missing poster is reported by assertPosterPixels, not thrown here
   const r = await assertPosterPixels(page, tag, true);
   if (r.problems.length) r.problems.forEach(p => fail(`${tag}: ${p}`)); else ok(`${tag}: poster is a real, undistorted portrait`);
@@ -279,7 +279,7 @@ for (const [tag, vp, mobile, wantSrc, wantR] of [['phone 390', { width: 390, hei
 // ---- 6: self-test, the assertion must FAIL when the poster is gone --------------------------
 {
   const page = await newPage({ width: 1440, height: 900 }, { blockPoster: true });
-  await page.goto(base);
+  await page.goto(base + '?demo');
   await page.waitForTimeout(2000);
   const r = await assertPosterPixels(page, 'self-test, poster blocked', true);
   if (r.problems.length === 0) fail('self-test: the poster assertion PASSED with the poster images blocked, so it proves nothing'); else ok(`self-test: with the poster removed the assertion fails (${r.problems.length} problem${r.problems.length > 1 ? 's' : ''}: ${r.problems[0]})`);

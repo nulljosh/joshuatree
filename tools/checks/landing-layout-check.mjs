@@ -53,7 +53,7 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 try {
   for (const w of [390, 360, 1280]) {
     const page = await browser.newPage({ viewport: { width: w, height: 844 } });
-    await page.goto(url, { waitUntil: 'load' });
+    await page.goto(url + '?demo', { waitUntil: 'load' });
     await page.waitForTimeout(700);
     // The benchmarks and chart live in collapsed Tech specs accordions; a
     // collapsed <details> has no measurable boxes, so open every one first.

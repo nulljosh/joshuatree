@@ -58,7 +58,7 @@ const fail = (msg) => { console.log('FAIL: ' + msg); process.exitCode = 1; };
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 try {
   const page = await browser.newPage({ colorScheme: 'light', viewport: { width: 1440, height: 900 } });
-  await page.goto(url);
+  await page.goto(url + '?demo');
   const injected = (await page.locator('h1').textContent()).trim();
 
   // 2. real light-mode contrast between the H1 and whatever is behind it

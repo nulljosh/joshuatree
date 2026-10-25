@@ -266,6 +266,7 @@ retry|1|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./t
 retry|5|Landing hero: a real portrait before any click (pixels, undistorted), default boot opens Samantha's face, Esc reaches the desktop, ?desktop opts out, phone and tablet hold; fails if the poster is removed|node ./tools/checks/hero-poster-check.mjs
 once |0|Landing hero: Click or Tap to boot lifts the poster onto her face well before the 60 s fallback, even after the serial log is trimmed|node ./tools/checks/landing-poster-click-check.mjs
 once |3|Landing page never overflows horizontally at phone widths|node ./tools/checks/mobile-overflow-check.mjs
+once |3|Landing opens on screenshots, the live demo is at ?demo|node ./tools/checks/landing-shots-hero-check.mjs
 once |1|Landing: benchmark labels clear, one app count, See the desktop link styled, sections visible on load|node ./tools/checks/landing-layout-check.mjs
 once |7|Portfolio voice: on by default, mute button top right, remembered across a reload, absent outside portfolio|node ./tools/checks/portfolio-mute-check.mjs
 retry|4|Portfolio tour starts even when his face frames are slow and the first Escape presses are lost: his chat exits and Epiphany opens|node ./tools/checks/portfolio-slowframes-check.mjs
