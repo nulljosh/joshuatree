@@ -1,5 +1,5 @@
 #!/bin/sh
-# Compiles kernel/auth.h natively (host clang, a tiny in-memory VFS + GUI
+# Compiles kernel/auth.c natively (host clang, a tiny in-memory VFS + GUI
 # stand-ins in tools/auth-host/main.c) and runs a real, discriminating
 # test suite against it. Same fast-inner-loop relationship
 # tools/png-host-check.sh has to drivers/png.c: seconds, no QEMU, but the

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end proof of the whole account story on a fresh disk image, the
 1.0 gate Joshua asked for directly: "it needs account creation and login,
-super stable and secure." kernel/auth.h and tools/auth-host/ already prove
+super stable and secure." kernel/auth.c and tools/auth-host/ already prove
 the crypto and USERS.TXT parsing logic in isolation (tools/checks/
 auth-check.sh, a host-compiled unit suite); this proves the real, whole
 flow through the actual GUI, on the actual boot path, the way a person at
@@ -25,7 +25,7 @@ The flow, each step polled on a real kernel symbol or window_present_count
      with the login time printed and bounded, wrong passwords rejected
      both times.
   1. Fresh image, first boot, no USERS.TXT: no gate, desktop reachable
-     (kernel/auth.h's own documented design: nothing configured, nothing
+     (kernel/auth.c's own documented design: nothing configured, nothing
      to protect).
   2. Settings -> Add user "joshua" / "hidden valley 1". auth_user_count
      flips to 1 in kernel memory; USERS.TXT on the raw disk image (read
@@ -44,7 +44,7 @@ The flow, each step polled on a real kernel symbol or window_present_count
      The raw disk image never contains either plaintext password at any
      point, and the salt/hash actually rotated (not left stale).
 
-Real bug found and fixed by writing this check: kernel/auth.h's login-
+Real bug found and fixed by writing this check: kernel/auth.c's login-
 rejection message and kernel.c's "Password changed."/"Account created."
 status lines were drawn into the back buffer but never presented before
 falling into sleep_ticks() -- drivers/window.c's own header comment
@@ -345,7 +345,7 @@ def check(label, condition):
 
 
 def legacy_hash(salt, password):
-    # The pre-1.7.9 scheme kernel/auth.h still verifies (never writes):
+    # The pre-1.7.9 scheme kernel/auth.c still verifies (never writes):
     # sha256(salt || password), then 199,999 more rounds of sha256 over
     # the previous digest. Computed here on the host so the fixture is an
     # honest old-format record, not one the new kernel wrote for itself.
