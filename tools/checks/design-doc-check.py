@@ -184,7 +184,7 @@ def dejavu_faces():
 
 
 def gui_text_px():
-    fam, wt, size = (int(x) for x in rxs("kernel/kernel.c", r"GUI_AA_GLYPH\(c\) \(&editor_glyphs\[\(\((\d+) \* 2 \+ (\d+)\) \* 4 \+ (\d+)\)"))
+    fam, wt, size = (int(x) for x in rxs("kernel/uitext.c", r"GUI_AA_GLYPH\(c\) \(&editor_glyphs\[\(\((\d+) \* 2 \+ (\d+)\) \* 4 \+ (\d+)\)"))
     families = ast.literal_eval(rx("tools/gen/gen_editor_fonts.py", r"for family in (\(.*?\)):"))
     sizes = ast.literal_eval(rx("tools/gen/gen_editor_fonts.py", r"for size in (\(.*?\)):"))
     if families[fam] != "DejaVuSans" or wt != 0:
@@ -215,7 +215,7 @@ def serif_uses():
 
 
 def ui_glyph_range():
-    body = func_body("kernel/kernel.c", "void gui_aa_char(unsigned char c")
+    body = func_body("kernel/uitext.c", "void gui_aa_char(unsigned char c")
     lo, hi = re.search(r"if \(c < (\d+) \|\| c > (\d+)\)", body).groups()
     return "%s-%s" % (lo, hi)
 
@@ -230,12 +230,12 @@ def pixel_scale():
 
 
 def night_hours():
-    return "%s-%s" % (rx("kernel/kernel.c", r"hour >= 18 && hour < (\d+)\) night"),
-                      rx("kernel/kernel.c", r"hour >= (\d+) && hour < 8\) night"))
+    return "%s-%s" % (rx("kernel/wallpaint.c", r"hour >= 18 && hour < (\d+)\) night"),
+                      rx("kernel/wallpaint.c", r"hour >= (\d+) && hour < 8\) night"))
 
 
 def day_hours():
-    a, b = rxs("kernel/kernel.c", r"hour >= (\d+) && hour < (\d+)\) day = \d+;")
+    a, b = rxs("kernel/wallpaint.c", r"hour >= (\d+) && hour < (\d+)\) day = \d+;")
     return "%s-%s" % (a, b)
 
 
@@ -270,7 +270,7 @@ def window_frame(i):
 
 
 def menubar_white():
-    a, b = rxs("kernel/kernel.c", r"gui_lerp\(gui_wallpaper_color\(row\), 0x00FFFFFF, (\d+), (\d+)\)")
+    a, b = rxs("kernel/menubar.c", r"gui_lerp\(gui_wallpaper_color\(row\), 0x00FFFFFF, (\d+), (\d+)\)")
     return int(a) * 100 // int(b)
 
 
@@ -319,7 +319,7 @@ def cap_ease():
 FACTS = {
     "DESKTOP": ("str", desktop, "kernel/kernel.c"),
     "PIXEL_SCALE": ("num", pixel_scale, "kernel/kernel.c"),
-    "UI_GLYPH_RANGE": ("str", ui_glyph_range, "kernel/kernel.c"),
+    "UI_GLYPH_RANGE": ("str", ui_glyph_range, "kernel/uitext.c"),
     "SQUIRCLE_N": ("num", squircle_n, "tools/gen/restyle_icons.py"),
     "TOL_SQUIRCLE": ("num", lambda: float(rx("tools/checks/iconinset-check.py", r"^TOL_SQUIRCLE = ([\d.]+)")), "tools/checks/iconinset-check.py"),
     "GLYPH_TOP_MARGIN": ("num", lambda: glyph_margin(0), "tools/gen/restyle_icons.py"),
@@ -339,7 +339,7 @@ FACTS = {
     "LEXLY_BLUE": ("hex", lexly_blue, "tools/gen/import_fleet_icons.py and art/icons/tonchi.svg"),
     "FLEET_ICONS": ("num", fleet_count, "tools/gen/import_fleet_icons.py"),
     "DEJAVU_FACES": ("num", dejavu_faces, "drivers/ttf.h, drivers/ttf.c"),
-    "GUI_TEXT_PX": ("num", gui_text_px, "kernel/kernel.c, tools/gen/gen_editor_fonts.py"),
+    "GUI_TEXT_PX": ("num", gui_text_px, "kernel/uitext.c, tools/gen/gen_editor_fonts.py"),
     "BODY_PX": ("num", lambda: float(rx("tools/gen/gen_user_text.c", r"#define BODY_PX ([\d.]+)f")), "tools/gen/gen_user_text.c"),
     "DISP_PX": ("num", lambda: float(rx("tools/gen/gen_user_text.c", r"#define DISP_PX ([\d.]+)f")), "tools/gen/gen_user_text.c"),
     "MONO_PX": ("num", lambda: float(rx("tools/gen/gen_user_text.c", r"#define MONO_PX ([\d.]+)f")), "tools/gen/gen_user_text.c"),
@@ -347,15 +347,15 @@ FACTS = {
     "MONO_APPS": ("str", mono_apps, "user/*.c (who calls jt_mono_draw)"),
     "SERIF_USES": ("num", serif_uses, "kernel/, user/, drivers/ (TTF_FACE_SERIF, editor_glyphs family 1)"),
     "DEFAULT_WALLPAPER": ("str", lambda: rx("kernel/kernel.c", r"^(?:static )?int wall_theme = (\w+);"), "kernel/kernel.c"),
-    "NIGHT_FLOOR": ("hex", lambda: hexval(rx("kernel/kernel.c", r"return gui_lerp\(rgb, (0x[0-9A-Fa-f]+), night, 100\)")), "kernel/kernel.c"),
-    "NIGHT_PCT": ("num", lambda: int(rx("kernel/kernel.c", r"else night = (\d+);")), "kernel/kernel.c"),
-    "NIGHT_HOURS": ("str", night_hours, "kernel/kernel.c"),
-    "DAY_TINT": ("hex", lambda: hexval(rx("kernel/kernel.c", r"return gui_lerp\(rgb, (0x[0-9A-Fa-f]+), day, 100\)")), "kernel/kernel.c"),
-    "DAY_PCT": ("num", lambda: int(rxs("kernel/kernel.c", r"hour >= (\d+) && hour < (\d+)\) day = (\d+);")[2]), "kernel/kernel.c"),
-    "DAY_HOURS": ("str", day_hours, "kernel/kernel.c"),
+    "NIGHT_FLOOR": ("hex", lambda: hexval(rx("kernel/wallpaint.c", r"return gui_lerp\(rgb, (0x[0-9A-Fa-f]+), night, 100\)")), "kernel/wallpaint.c"),
+    "NIGHT_PCT": ("num", lambda: int(rx("kernel/wallpaint.c", r"else night = (\d+);")), "kernel/wallpaint.c"),
+    "NIGHT_HOURS": ("str", night_hours, "kernel/wallpaint.c"),
+    "DAY_TINT": ("hex", lambda: hexval(rx("kernel/wallpaint.c", r"return gui_lerp\(rgb, (0x[0-9A-Fa-f]+), day, 100\)")), "kernel/wallpaint.c"),
+    "DAY_PCT": ("num", lambda: int(rxs("kernel/wallpaint.c", r"hour >= (\d+) && hour < (\d+)\) day = (\d+);")[2]), "kernel/wallpaint.c"),
+    "DAY_HOURS": ("str", day_hours, "kernel/wallpaint.c"),
     "GUI_MENUBAR_H": ("num", lambda: int(rx("kernel/desktop.h", r"#define GUI_MENUBAR_H\s+(\d+)")), "kernel/desktop.h"),
-    "MENUBAR_WHITE": ("num", menubar_white, "kernel/kernel.c"),
-    "MENUBAR_RULE": ("hex", lambda: hexval(rx("kernel/kernel.c", r"gui_hairline_h\(0, GUI_MENUBAR_H - 1, \(int\)window_width\(\), (0x[0-9A-Fa-f]+)\)")), "kernel/kernel.c"),
+    "MENUBAR_WHITE": ("num", menubar_white, "kernel/menubar.c"),
+    "MENUBAR_RULE": ("hex", lambda: hexval(rx("kernel/menubar.c", r"gui_hairline_h\(0, GUI_MENUBAR_H - 1, \(int\)window_width\(\), (0x[0-9A-Fa-f]+)\)")), "kernel/menubar.c"),
     "DOCK_TRAY_COLOR": ("hex", lambda: hexval(rx("kernel/dock_geom.h", r"#define DOCK_TRAY_COLOR\s+(0x[0-9A-Fa-f]+)")), "kernel/dock_geom.h"),
     "WINDOW_BODY": ("hex", lambda: window_frame(0), "kernel/gui_paint.c"),
     "WINDOW_RADIUS": ("num", lambda: window_frame(1), "kernel/gui_paint.c"),

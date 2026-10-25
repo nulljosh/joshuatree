@@ -43,35 +43,7 @@ EXEMPT=(
 # script must run under macOS's stock bash 3.2, which has no `declare -A`.)
 ratchet_ceiling() {
     case "$1" in
-        # 2026-09-27: 1.7.0's integration release deliberately merged two
-        # old draft PRs (#219 Clock, #257 app switcher + screenshot key)
-        # on top of the 9620 ceiling guard-checks (#250) set earlier the
-        # same night, real feature lines, not silent bloat. Ratcheted up
-        # once to the merged total; still only shrinks from here.
-        # 2026-09-28: 1.7.4's integration release deliberately merged
-        # three more draft PRs (#258 DHCP, #259 drunk mode, #260 voice-in)
-        # on top of that 9841 ceiling, each adding real kmain command-line
-        # handling and feature code, not silent bloat. Ratcheted up once
-        # more to the merged total; still only shrinks from here.
-        # 2026-09-28: dock band/tray/icon drawing moved to
-        # kernel/dock_draw.c/.h (refactor/kernel-split-1). Ceiling lowered
-        # to match, never to go back up.
-        # 2026-09-30: 1.9.12 moved Calendar to ring 3 (user/calendar.c).
-        # 2026-09-30: 1.9.13 dropped the search.h include. Down one more.
-        # 2026-10-01: Stocks moved to ring 3; the dock row points at stocks_ring3_open (stocks.h).
-        # 2026-10-01: Notes moved to ring 3 (user/notes.c); dead gui_wait_close and gui_app_cursor_hide dropped.
-        # 2026-10-01: Terminal moved to ring 3 (user/terminal.c); term_* UI and the putc capture hook dropped.
-        # 2026-10-01: Samantha moved to ring 3 (user/samantha.c); the in-kernel chat, its face, the chat shell command and chattest are gone.
-        # 2026-10-19: 4.12.3 moved the menu-bar weather to kernel/weather.c.
-        # 2026-10-19: 4.18.3 moved the map and satellite wallpapers to kernel/wallmap.c.
-        # 2026-10-19: 4.18.4 moved SETTINGS.TXT load and save and the LLM, Mail and Claude settings to kernel/settings.c.
-        # 2026-10-19: 4.18.5 moved pngtest, jpegtest, heaptest, nettest and mailtest (and their test data) to kernel/selftest.c.
-        # 2026-10-19: 4.18.6 moved the scheduler demos (tasktest, fputest, preempttest, killtest, spawntest, isotest, reaptest) to kernel/taskdemo.c.
-        # 2026-10-19: 4.18.7 moved the shell file commands (ls, cat, write, rm, trash, restore, cd, mkdir, browse, fsuse, diskuse) to kernel/shellfs.c.
-        # 2026-10-19: 4.19.1 moved the shell network commands, the text web browser, serve/serveapp/build and the embedded app pages to kernel/shellnet.c.
-        # 2026-10-19: 4.19.1 moved the weather and wallpaper self-tests to kernel/wxtest.c and the per-pixel grades to kernel/walltint.h.
-        # 2026-10-19: 4.19.1 moved the window manager to kernel/multiwin.c.
-        kernel/kernel.c) echo 2827 ;;
+        # kernel/kernel.c left this list on 2026-10-25: 4.23.8 brought it under LIMIT (6,393 lines at its peak).
         # 2026-10-25: 4.23.2 put arch/ under this check (it never scanned it) after the virtio drivers moved to arch/arm64/virtio.c.
         arch/arm64/main.c) echo 1073 ;;
         *) echo "$LIMIT" ;;
