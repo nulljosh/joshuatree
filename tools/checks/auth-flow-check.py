@@ -87,13 +87,13 @@ LOGO_X, LOGO_Y = 16, 13
 SETTINGS_MENU_X, SETTINGS_MENU_Y = 94, 111
 ROW_ACCOUNT = 5
 ROW_ADDUSER = 6
-# 1.8's redesign (kernel/settings_ui.h) replaced the old flat 8-row list
+# 1.8's redesign (kernel/settings_ui.c) replaced the old flat 8-row list
 # with a left sidebar of sections (General/Assistant/Account) and a right
 # detail pane showing only the current section's rows -- SETTINGS_ROWS_Y
 # no longer exists and a bare click at the old absolute row y no longer
 # lands anywhere (it's now inside the sidebar's own x range, and row 6
 # isn't even drawn until the Account section is selected). Mirrors
-# kernel/settings_ui.h's own SETTINGS_SECTION_ROWS / SETTINGS_SIDEBAR_* /
+# kernel/settings_ui.c's own SETTINGS_SECTION_ROWS / SETTINGS_SIDEBAR_* /
 # SETTINGS_DETAIL_* constants so a click_settings_row() call reaches a row
 # the same way a person clicking the real UI would: pick the section in
 # the sidebar first, then the row inside it.

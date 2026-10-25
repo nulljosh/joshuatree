@@ -36,6 +36,8 @@ void wall_apply(int want_map);               /* point wall_src at the photo, a p
 extern const unsigned char *const wall_photo;   /* drivers/wallpaper.h's baked photo (1.5 MB: only kernel.c includes it) */
 extern const unsigned char *wall_src;
 extern unsigned char *wall_sat_rgb, *wall_map;
+extern const char *const wall_solid_name[4];             /* kernel.c: Grey, Terracotta, Clay, Ink */
+extern const unsigned char wall_cycle_order[];          /* kernel.c: the order Settings and `wallpaper` step through */
 extern unsigned char wall_solid_row[WALLPAPER_W * 3 * 2];
 extern int wall_map_tx, wall_map_ty, wall_map_cx, wall_map_cy, wall_map_is_sat, wall_theme;
 extern const unsigned int wall_solid_color[4];
