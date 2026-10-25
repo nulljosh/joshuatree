@@ -137,6 +137,7 @@ static void step(void) {
         by = (py() - BS) * FP; vy = -vy;
         vx = (x + BS / 2 - (px + PW / 2)) * 2;   /* steeper off the ends */
         if (vy > -3 * FP) vy = -3 * FP;
+        if (vx > -8 && vx < 8) vx = x + BS / 2 < px + PW / 2 ? -8 : 8;   /* never straight up: a centre hit bounced in one cleared column forever */
     }
     hit_brick();
     if (y > (int)win.height) lose();

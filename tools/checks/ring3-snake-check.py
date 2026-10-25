@@ -5,7 +5,9 @@ Boots headless with `open=snak`. The first apple comes from a fixed seed and
 sits ahead of the head in the default window, so with no steering the snake
 must eat it ("snake: apple 1"). Left is pressed first: a reverse onto its own
 neck must be ignored, or the run ends at once. After the apple, Up must turn
-it into the top wall ("snake: over 1"). Esc must close it with exit 0.
+it into the top wall ("snake: over 1"). Then space starts again, p pauses, and
+the check plays twelve apples one cell at a time with n, steering around the
+snake's own body to each apple the app announces. Esc must close it with exit 0.
 
 Discriminating: stop the clock, drop the reverse guard, the growth or the
 wall test in user/snake.c and one of these fails.
@@ -82,6 +84,51 @@ try:
     if not wait_serial("snake: over 1", 15):
         fails.append("Up did not turn the snake into the top wall")
 
+    # 2. play a long game exactly: space starts again, p pauses, and each n moves one cell. The check keeps the
+    # same snake, finds a way to each apple the app announces ("snake: apple at C") around its own body, and
+    # steers there one cell at a time. Twelve apples is past both speed-ups and a body of 16.
+    GW, GH, MAXW = 49, 18, 64
+    key("spc"); time.sleep(0.3); key("p"); time.sleep(0.2)
+    body = [(9 * MAXW + 6 - i) for i in range(4)]
+    heading, target, eaten = 0, None, 0
+    names = {0: "right", 1: "down", 2: "left", 3: "up"}
+    def apple_at():
+        lines = [l for l in serial().splitlines() if "snake: apple at " in l]
+        return int(lines[-1].rsplit(" ", 1)[1]) if lines else None
+    def way(frm, to, blocked):
+        prev, todo = {frm: None}, [frm]
+        while todo:
+            c = todo.pop(0)
+            if c == to: break
+            x, y = c % MAXW, c // MAXW
+            for d, (dx, dy) in enumerate(((1, 0), (0, 1), (-1, 0), (0, -1))):
+                nx, ny = x + dx, y + dy
+                n = ny * MAXW + nx
+                if 0 <= nx < GW and 0 <= ny < GH and n not in prev and n not in blocked: prev[n] = (c, d); todo.append(n)
+        if to not in prev: return None
+        steps, c = [], to
+        while prev[c]: c, d = prev[c]; steps.append(d)
+        return steps[::-1]
+    for _ in range(12):
+        target = apple_at()
+        steps = way(body[0], target, set(body[:-1]))
+        if steps is None: fails.append(f"no way to the apple at {target} around the body"); break
+        for d in steps:
+            if d != heading: key(names[d]); heading = d
+            key("n")
+            x, y = body[0] % MAXW, body[0] // MAXW
+            x += (1, 0, -1, 0)[d]; y += (0, 1, 0, -1)[d]
+            body.insert(0, y * MAXW + x)
+            if body[0] != target: body.pop()
+        eaten += 1
+        if not wait_serial(f"snake: apple {eaten}\n", 5): fails.append(f"the snake reached the apple at {target} but the app did not count apple {eaten}"); break
+        for _ in range(30):
+            if apple_at() != target: break
+            time.sleep(0.1)
+    print(f"step mode: {eaten} apples eaten, body {len(body)}")
+    if serial().count("snake: over ") > 1:
+        fails.append("the snake died during the scripted game: the app and the check disagree about the board")
+
     exits = serial().count("SNAKE.BIN exited 0")
     key("esc")
     if not wait_serial("snake: closed", 5):
@@ -106,4 +153,4 @@ if fails:
     print("--- serial tail ---")
     print(serial()[-1500:])
     sys.exit(1)
-print("PASS: Snake ran at ring 3, ate the apple ahead, ignored a reverse, died at the wall, and closed on Esc")
+print("PASS: Snake ran at ring 3, ate the apple ahead, ignored a reverse, died at the wall, played twelve apples in step mode, and closed on Esc")

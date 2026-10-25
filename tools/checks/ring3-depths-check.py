@@ -3,17 +3,18 @@
 
 Boots headless with `open=dept`. You start facing east down the top corridor
 with a creature four tiles ahead, so space must log "depths: hit 1". The
-picture must show the ceiling and the floor colours and a shaded wall, a turn
-(Left) and a step (Up) must each change the picture, and Esc must close it
-with exit 0.
+picture must show the ceiling and the floor colours and a shaded wall. Then it
+plays the level through: the shortest path to the pale door, by Left, Right
+and Up, firing after every tile, must end in "depths: escaped". Esc must close
+it with exit 0.
 
 Discriminating: break the raycaster, the projection that puts the creature
-in the crosshair, or the key handler in user/depths.c and one of these fails.
+in the crosshair, the walk or the door, or the key handler in user/depths.c and one of these fails.
 
 Usage: tools/checks/ring3-depths-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
-from PIL import Image, ImageChops
+from PIL import Image
 from freeport import free_port
 from scratch import scratch_dir
 
@@ -62,11 +63,10 @@ try:
     def key(k):
         r = cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k}]}})
         if "error" in r: raise SystemExit(f"FAIL: QMP rejected send-key {k}: {r['error']}")
-        time.sleep(0.15)
+        time.sleep(0.08)
     def frame():
         cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
         return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB").crop(WIN)
-    def changed(a, b): return ImageChops.difference(a, b).getbbox() is not None
 
     if not wait_serial("ring3app: launching DEPTHS.BIN at ring 3", 40):
         fails.append("Depths was never launched as a ring-3 program (open=dept flag or ring3app.c broken)")
@@ -85,12 +85,39 @@ try:
     key("spc")
     if not wait_serial("depths: hit 1", 3):
         fails.append("space did not hit the creature straight ahead")
-    time.sleep(0.3)
-    b = frame(); key("left"); time.sleep(0.4); c = frame()
-    if not changed(b, c): fails.append("Left did not turn the view")
-    for _ in range(3): key("right")
-    d = frame(); key("up"); key("up"); time.sleep(0.4); e = frame()
-    if not changed(d, e): fails.append("Up did not move you")
+    # 2. play it through: the shortest way to the pale door, turning by Left/Right and walking by Up, a shot after
+    # every tile. Each Up is a fifth of a tile and eight Lefts are a quarter turn, so the walk lands on tile centres.
+    MAZE = [l.split('"')[1] for l in open("user/depths.c").read().split("static const char MAP[MH][MW + 1] = {")[1].split("};")[0].strip().splitlines()]
+    start = next((x, y) for y, r in enumerate(MAZE) for x, ch in enumerate(r) if ch == "P")
+    door = next((x, y) for y, r in enumerate(MAZE) for x, ch in enumerate(r) if ch == "E")
+    prev, todo = {start: None}, [start]
+    while todo:
+        x, y = todo.pop(0)
+        for dx, dy in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+            n = (x + dx, y + dy)
+            if n not in prev and MAZE[n[1]][n[0]] != "#": prev[n] = (x, y); todo.append(n)
+    path, at = [], door
+    while at: path.append(at); at = prev[at]
+    path.reverse()
+    facing, seen_bites = 0, 0   # east; Left adds a quarter turn toward +y
+    for (x0, y0), (x1, y1) in zip(path, path[1:]):
+        need = {(1, 0): 0, (0, 1): 1, (-1, 0): 2, (0, -1): 3}[(x1 - x0, y1 - y0)]
+        turn = (need - facing) % 4
+        for _ in range(8 * (turn if turn < 3 else 1)): key("left" if turn < 3 else "right")
+        facing = need
+        for _ in range(5): key("up")
+        if "depths: escaped" in serial() or "depths: down" in serial(): break
+        key("spc")
+        bitten = serial().count("depths: health ")
+        if bitten > seen_bites:   # something is biting: look all the way round, firing at each quarter, like a player would
+            seen_bites = bitten
+            for _ in range(8):   # an eighth of a turn at a time
+                for _ in range(4): key("left")
+                key("spc")
+    healths = [int(l.rsplit(" ", 1)[1]) for l in serial().splitlines() if "depths: health " in l]
+    print(f"walked {len(path) - 1} tiles to the door, {serial().count('depths: hit ')} creatures down, health {healths[-1] if healths else 100}")
+    if not wait_serial("depths: escaped", 3):
+        fails.append("the walk to the pale door did not get out" + (" (the creatures got you first)" if "depths: down" in serial() else ""))
 
     exits = serial().count("DEPTHS.BIN exited 0")
     key("esc")
@@ -116,4 +143,4 @@ if fails:
     print("--- serial tail ---")
     print(serial()[-1500:])
     sys.exit(1)
-print("PASS: Depths ran at ring 3, drew walls, floor and ceiling, hit the creature ahead, turned and walked, and closed on Esc")
+print("PASS: Depths ran at ring 3, drew walls, floor and ceiling, hit the creature ahead, walked the maze to the door and got out, and closed on Esc")

@@ -111,9 +111,10 @@ static int clampy(int y) { if (y < TOP) y = TOP; if (y > (int)win.height - PH) y
 
 static void step(void) {
     if (over || paused || !ready) return;
-    /* the computer follows the ball, a little slower than it can move */
+    /* the computer follows the ball once it crosses into its half, a little slower than the ball can move: without
+       the half-court wait a steady player and the computer rallied forever (tools/checks/games-sim-check.py) */
     int target = by / FP + BS / 2 - PH / 2;
-    if (vx > 0) { if (ry < target - 2) ry += 2; else if (ry > target + 2) ry -= 2; }
+    if (vx > 0 && bx / FP > cw() / 2) { if (ry < target - 2) ry += 2; else if (ry > target + 2) ry -= 2; }
     ry = clampy(ry);
     if (wait) { wait--; return; }
     bx += vx; by += vy;

@@ -79,6 +79,7 @@ try:
         fails.append("Paddle was never launched as a ring-3 program (open=padd flag or ring3app.c broken)")
     if not wait_serial("paddle: ring-3 window ", 10):
         fails.append("the program did not report its window through write()")
+    time.sleep(0.8)   # the window takes keys a moment after it reports itself
     key("spc")   # serve
     time.sleep(1.5)   # past the serve pause
     a = frame()

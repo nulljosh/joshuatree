@@ -3,7 +3,8 @@
  * A grid sized to the window, a snake that grows by one cell for each apple, and walls that end the run, as does
  * your own tail. The arrows (or w, a, s, d) turn it; it cannot reverse onto itself. It moves on the kernel tick
  * clock like user/paddle.c, a cell every eight ticks to start and a little faster with every five apples, and only
- * the cells that changed are repainted. p pauses, space plays again, esc closes.
+ * the cells that changed are repainted. p pauses, and n then moves one cell a press (how a script plays it exactly);
+ * space plays again, esc closes.
  *
  * Apples come from a fixed xorshift seed, so tools/checks/ring3-snake-check.py knows where the first one is,
  * steers onto it and expects "snake: apple 1".
@@ -60,6 +61,7 @@ static int on_snake(int c) { for (int i = 0; i < len; i++) if (body[i] == c) ret
 static void place_apple(void) {
     do { int y = (int)(rnd() % (unsigned)gh); apple = y * MAXW + (int)(rnd() % (unsigned)gw); } while (on_snake(apple));
     cell(apple, APPLE);
+    say_n("snake: apple at ", apple);
 }
 
 static void band(void) {
@@ -88,10 +90,14 @@ static void start(void) {
     place_apple();
 }
 
-static void step(void) {   /* dir: 0 right, 1 down, 2 left, 3 up */
+static void advance(void);
+static void step(void) {   /* on the clock: one cell every `every` ticks */
     if (over || paused || !moving) return;
     if (++wait < every) return;
     wait = 0;
+    advance();
+}
+static void advance(void) {   /* one cell. dir: 0 right, 1 down, 2 left, 3 up */
     dir = next_dir;
     int hx = body[0] % MAXW, hy = body[0] / MAXW;
     hx += dir == 0 ? 1 : dir == 2 ? -1 : 0;
@@ -143,6 +149,7 @@ void _start(int argc, char **argv) {
                 else if (k == JT_KEY_LEFT || k == 'a') want = 2;
                 else if (k == JT_KEY_UP || k == 'w') want = 3;
                 else if (k == 'p' && !over) { paused = !paused; band(); }
+                else if (k == 'n' && paused && !over) advance();   /* paused: one cell per press, for a scripted game */
                 else if (k == ' ' && over) start();
                 if (want >= 0 && !moving && !over) { moving = 1; band(); }
                 if (want >= 0 && want != (dir + 2) % 4) next_dir = want;   /* never straight back onto the neck */

@@ -3,8 +3,8 @@
  *
  * A grid raycaster in fixed point (positions in 1/65536 of a tile, a 256-step circle, a quarter sine table), one ray
  * per two logical columns, walls shaded by distance and by which face was hit. Creatures are billboards drawn after
- * the walls against a depth buffer, so a wall hides them. They walk toward you when you are near and bite when they
- * reach you. Up and Down (or w and s) walk, Left and Right (or a and d) turn, space fires at whatever is in the
+ * the walls against a depth buffer, so a wall hides them. They walk toward you when they can see you (no wall on the
+ * straight line between) and bite when they reach you. Up and Down (or w and s) walk, Left and Right (or a and d) turn, space fires at whatever is in the
  * crosshair. Find the pale door to get out. Space after the end plays again, esc closes.
  *
  * Same clock as user/paddle.c: one step per kernel tick from SYS_TASKS. A frame is rendered only when something
@@ -217,18 +217,26 @@ static void walk(int sign) {
     if (!solid(ex >> 16, py >> 16)) px = nx;
     if (!solid(px >> 16, ey >> 16)) py = ny;
 }
-static void fire(void) {
-    int W = vw(), best = -1, bestd = 0x7FFFFFFF;
+static void fire(void) {   /* the nearest creature in front of you, inside the crosshair's cone (wider up close), that no wall hides */
+    int W = vw(), best = -1, bestd = 0x7FFFFFFF, wall = zbuf[(W / 2) / CS];
     flash = 6;
     for (int i = 0; i < nfoes; i++) {
-        int sx, ty, sh;
-        if (!foes[i].alive || !project(&foes[i], &sx, &ty, &sh)) continue;
-        if (iabs(sx - W / 2) > sh / 4 || ty >= zbuf[(W / 2) / CS] + ONE / 4) continue;   /* not in the crosshair, or behind a wall */
-        if (ty < bestd) { bestd = ty; best = i; }
+        if (!foes[i].alive) continue;
+        int spx = foes[i].x - px, spy = foes[i].y - py;
+        int depth = (int)(((long long)dirx() * spx + (long long)diry() * spy) >> 14);
+        int lat = (int)(((long long)diry() * spx - (long long)dirx() * spy) >> 14);
+        if (depth <= 0 || depth >= wall + ONE / 4 || iabs(lat) > ONE * 45 / 100 + depth / 8) continue;
+        if (depth < bestd) { bestd = depth; best = i; }
     }
     if (best < 0) return;
     foes[best].alive = 0; kills++;
     say_n("depths: hit ", kills);
+}
+/* Whether a creature can see you: the straight line between you, sampled every quarter tile, crosses no wall. */
+static int sees(const struct foe *f) {
+    int dx = px - f->x, dy = py - f->y, n = (iabs(dx) > iabs(dy) ? iabs(dx) : iabs(dy)) / (ONE / 4) + 1;
+    for (int i = 1; i < n; i++) if (solid((f->x + dx / n * i) >> 16, (f->y + dy / n * i) >> 16)) return 0;
+    return 1;
 }
 static void tick(void) {
     if (flash) { flash--; dirty = 1; }
@@ -239,7 +247,7 @@ static void tick(void) {
         if (f->flash) f->flash--;
         int dx = px - f->x, dy = py - f->y, ax = iabs(dx) >> 8, ay = iabs(dy) >> 8;
         int d2 = ax * ax + ay * ay;   /* Q16 squared tiles */
-        if (d2 > 7 * 7 * 65536) continue;
+        if (d2 > 7 * 7 * 65536 || !sees(f)) continue;   /* out of range, or a wall between you: it waits */
         if (d2 < 52000) {   /* about 0.9 of a tile: it bites */
             if (++f->bite >= 80) { f->bite = 0; health -= 10; f->flash = 8; say_n("depths: health ", health < 0 ? 0 : health); if (health <= 0) { over = 2; say("depths: down\n"); } }
             dirty = 1;
