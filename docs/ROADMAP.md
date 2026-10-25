@@ -687,7 +687,6 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
 - [ ] [Sonnet] Video editor: basic timeline, trimming, and export.
-- [ ] [Sonnet] Chess, fully playable in the OS. (Paddle and Toroid, the Game of Life, are in.)
 - [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
 - [ ] [Sonnet] Installing and updating apps from inside the OS.
 - [ ] [Sonnet] Native Bible app (public-domain KJV on the disk image, book and chapter picker, search).
@@ -1037,6 +1036,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.25.0 (2026-10-25)**: Chess, you as White against the computer, on both builds (Apps folder, the Pi's Spotlight and Launchpad). The rules and the opponent are `user/chess_core.h`, which the host compiles and counts against the standard perft numbers; the board takes the cursor, clicks or typed moves. Check: `chess-core-check.py`, `ring3-chess-check.py`, `arm64-games-check.py`.
 - **4.24.0 (2026-10-25)**: The five 4.23 games run on the Pi: Spotlight and the Launchpad list Solitaire, Paddle, Bricks, Depths and Snake, the unchanged user/*.c at EL0. Solitaire moves its help under the cards in a narrow window and Paddle's scores sit at the bar's right end. The Launchpad is seven across and Spotlight shows its first 20 rows. Check: `arm64-games-check.py`, `arm64-launchpad-check.py`, `arm64-spotlight-check.py`.
 - **4.23.9 (2026-10-25)**: `gui_run`, the i386 desktop's event loop, and its lock screen and Apple-menu actions leave `kernel/kernel.c` for `kernel/desktop.c` (1,940 lines to 1,260). Check: `check.sh`, `esc-desktop-check.py`, `lockscreen-check.py`, `design-doc-check.py`.
 - **4.23.8 (2026-10-25)**: The menu bar and the app viewport leave `kernel/kernel.c` for `kernel/menubar.c` and `kernel/appview.c`, and the triangle painter joins `gui_shapes.c` (2,166 lines to 1,940). kernel.c is under the god-file limit and off its ratchet list. Check: `godfile-check.sh`, `menubar-persist-check.py`, `windowdrag-check.py`, `appclose-check.py`.
@@ -2010,7 +2010,7 @@ Updated 2026-10-25, afternoon. The loop's working notes live in `~/.claude/loops
 **Next, in order.**
 1. Joshua's board pass on a fresh card: hold Space and talk, the Samantha tile opens her full-screen chat, she answers out loud.
 2. Whatever the board shows is broken.
-3. Chess, and the real Doom port (GPL doomgeneric with Freedoom from disk, kept separate from the rest).
+3. The real Doom port waits on Joshua's yes to bring GPL code into the tree (doomgeneric kept in its own folder, Freedoom loaded from disk).
 4. After a split, grep `tools/checks/` for regexes that read the old file for code that moved (`design-doc-check.py` reads many facts by path).
 
 Rules kept:

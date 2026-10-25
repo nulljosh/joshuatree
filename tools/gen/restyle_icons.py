@@ -388,6 +388,14 @@ APPS_ONLY = {
       <path d="M28 92 H64 V64 H40 V36 H92" fill="none" stroke="#FAF8F4" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="96" cy="84" r="10" fill="#B5502C"/>"""),
 
+    # Chess (4.25.0): one cream pawn, head, collar, body and base, on Depths' near-black ink. Flat, no board.
+    "chess": ("#302C29", "#302C29", "",
+              """
+      <circle cx="64" cy="38" r="15" fill="#FAF8F4"/>
+      <path d="M48 56 H80 L74 64 H54 Z" fill="#FAF8F4"/>
+      <path d="M55 64 H73 L81 92 H47 Z" fill="#FAF8F4"/>
+      <rect x="36" y="92" width="56" height="13" rx="5" fill="#FAF8F4"/>"""),
+
     "search": ("#9AA3B1", "#303A48", "",
                """
       <circle cx="52" cy="52" r="23" fill="none" stroke="#ECEFF3" stroke-width="11"/>

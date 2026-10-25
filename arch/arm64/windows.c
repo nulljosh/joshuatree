@@ -201,7 +201,7 @@ int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx && x <
 static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
 void dock_activate(int slot);
 void ask_prefill(const char *s);   /* ask.c: type s on the Terminal's empty line */
-const char *const game_names[9] = {"Mines", "Toroid", "Hamurabi", "Keyrate", "Solitaire", "Paddle", "Bricks", "Depths", "Snake"};
+const char *const game_names[10] = {"Mines", "Toroid", "Hamurabi", "Keyrate", "Solitaire", "Paddle", "Bricks", "Depths", "Snake", "Chess"};
 int lp_mode;                       /* 4.1.2: spot_live holds the Launchpad's card, not Spotlight's bar */
 void lp_open(void);
 void lp_click(int lx, int ly);

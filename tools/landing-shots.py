@@ -51,11 +51,12 @@ FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
          "paddle": ("padd", "paddle: ring-3 window", "paddle: ring-3 window"),
          "bricks": ("bric", "bricks: ring-3 window", "bricks: ring-3 window"),
          "depths": ("dept", "depths: ring-3 window", "depths: ready"),
-         "snake": ("snak", "snake: ring-3 window", "snake: first apple")}   # Windgate: offline by design; Space starts it and the shot lands mid in-breath
+         "snake": ("snak", "snake: ring-3 window", "snake: first apple"),
+         "chess": ("ches", "chess: ring-3 window", "chess: new game")}   # Windgate: offline by design; Space starts it and the shot lands mid in-breath
 FILE = {"bookrank": "app-bookrank", "tonchi": "app-tonchi", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
         "hamurabi": "app-hamurapi", "windgate": "app-windgate", "panes": "app-panes", "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
         "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks", "desktop": "desktop",
-        "solitaire": "app-solitaire", "paddle": "app-paddle", "bricks": "app-bricks", "depths": "app-depths", "snake": "app-snake"}
+        "solitaire": "app-solitaire", "paddle": "app-paddle", "bricks": "app-bricks", "depths": "app-depths", "snake": "app-snake", "chess": "app-chess"}
 
 
 def shoot(name):

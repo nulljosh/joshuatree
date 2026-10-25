@@ -5,7 +5,7 @@
 #define GUI_MENUBAR_H   26
 #define WEATHER_W 220
 #define GUI_FLYOUT_RADIUS 14   /* the menu-bar flyouts' corner radius, the dock's own (see kernel.c) */
-#define GUI_APP_COUNT   39 /* 37 real apps + the Apps folder + Trash; Snake (36) pushed Apps/Trash to 37/38; Depths (35) to 36/37; Bricks (34) to 35/36; Paddle (33) to 34/35; Solitaire (32) to 33/34; Books (31) pushed Apps/Trash to 32/33; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurapi (26) to 27/28, 2.8 Windgate (27) to 28/29, 2.11 Panes (28) to 29/30, 2.14 Claude (29) to 30/31, Mines (30) to 31/32 */
+#define GUI_APP_COUNT   40 /* 38 real apps + the Apps folder + Trash; Chess (37) pushed Apps/Trash to 38/39; Snake (36) pushed Apps/Trash to 37/38; Depths (35) to 36/37; Bricks (34) to 35/36; Paddle (33) to 34/35; Solitaire (32) to 33/34; Books (31) pushed Apps/Trash to 32/33; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurapi (26) to 27/28, 2.8 Windgate (27) to 28/29, 2.11 Panes (28) to 29/30, 2.14 Claude (29) to 30/31, Mines (30) to 31/32 */
 #define GUI_APP_PANES   28 /* the one app that gets Ctrl chords as KEY_CTL_* (kernel/app.h) */
 #define GUI_APP_PORTFOLIO 21 /* hidden from the Apps folder and phone home unless the boot line says "portfolio" (his site embed); the public OS ships without it */
 #include "app.h"

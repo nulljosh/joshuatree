@@ -611,6 +611,18 @@ drivers/user_snake.h: user/snake.bin tools/gen/gen_user_bin.py
 
 kernel/ring3app.o: drivers/user_snake.h
 
+# Chess (4.25.0): Apps folder only. The rules and the opponent are user/chess_core.h.
+user/chess.o: user/chess.c user/chess_core.h user/jtsys.h user/libjt/text.h user/libjt/hires.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/chess.bin: user/chess.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/chess.o user/libjt.a
+
+drivers/user_chess.h: user/chess.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/chess.bin drivers/user_chess.h user_chess
+
+kernel/ring3app.o: drivers/user_chess.h
+
 drivers/user_mail.h: user/mail.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/mail.bin drivers/user_mail.h user_mail
 
@@ -680,6 +692,7 @@ clean:
 	rm -f user/bricks.o user/bricks.bin drivers/user_bricks.h
 	rm -f user/depths.o user/depths.bin drivers/user_depths.h
 	rm -f user/snake.o user/snake.bin drivers/user_snake.h
+	rm -f user/chess.o user/chess.bin drivers/user_chess.h
 	rm -f joshuatree.iso boot/memmap.ld
 	rm -rf build/iso_root
 
