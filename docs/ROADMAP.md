@@ -69,7 +69,7 @@ Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Ma
 - Pi security on the board: verify the TLS relay and HTTPS clock, then drop the build-time clock bootstrap.
 - Self-update with a fallback kernel. Check: a fake release that boots once and falls back.
 - The local model with real weights read from the card (`tools/checks/arm64-llm-check.py` loading from a FAT image).
-- Split `kernel/kernel.c` (3,145 lines after 4.20.10, 9,606 on 2026-09-28) and `arch/arm64/main.c` (4,133), one behaviour-identical PR each. Next in kernel.c: the static headers it includes, then `gui_run` and the rest of `run()` (see the Loop handoff section).
+- Split `kernel/kernel.c` (2,827 lines after 4.20.21, 9,606 on 2026-09-28) and `arch/arm64/main.c` (4,133), one behaviour-identical PR each. Next in kernel.c: `gui_run` and `kmain` (see the Loop handoff section).
 - A trademark search before any rename.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, and fewer get it onto a real board. Lean into that:
@@ -1050,6 +1050,7 @@ One line per version. The full release notes live in the GitHub releases and `gi
 - **4.18.5 (2026-10-19)**: Fourth slice of breaking up `kernel/kernel.c` (now 6,724 lines): `pngtest`, `jpegtest`, `heaptest`, `nettest` and `mailtest` leave the shell's 1,729-line `run()` for `kernel/selftest.c`, and the PNG and JPEG test fixtures and `mail.h` compile with them instead of with kernel.c. Same commands, same output; png, jpeg and the shell regression checks pass unchanged.
 - **4.18.6 (2026-10-19)**: Fifth slice of breaking up `kernel/kernel.c` (now 6,556 lines): the scheduler demos (`tasktest`, `fputest`, `preempttest`, `killtest`, `spawntest`, `isotest`, `reaptest`) and the tasks they start move to `kernel/taskdemo.c`. Same commands, same output; the shell regression and fpu checks pass unchanged.
 - **4.18.7 (2026-10-19)**: Sixth slice of breaking up `kernel/kernel.c` (now 6,393 lines): the shell's file commands (`ls`, `cat`, `write`, `rm`, `trash`, `restore`, `cd`, `mkdir`, `browse`, `fsuse`, `diskuse`) move to `kernel/shellfs.c`. Same commands, same output; nine filesystem and shell checks pass unchanged.
+- **4.20.21 (2026-10-25)**: The shell's dispatcher leaves `kernel/kernel.c` (3,033 lines to 2,827): `split_argv` and `run()` move to `kernel/shell.c` byte for byte, apart from comparing against `wall_photo` instead of including the 1.5 MB photo header a second time. `kernel/bench.h` becomes `kernel/bench.c`, so the shell and kmain share one copy. Checks: `tools/checks/shellregress-check.sh`, `tools/checks/shellname-check.sh`, `tools/checks/notetest-check.sh`, `tools/checks/usertest-check.sh`, `tools/checks/files-roundtrip-check.sh`, `tools/checks/picker-check.sh`.
 - **4.20.20 (2026-10-25)**: `tools/checks/wallpaper-check.py` (real network, not in the suite) failed on main: it expected the map with only the hour's tint, but `walltheme=map` is the Warm theme, which also applies `gui_map_tint`. It now models that grade per pixel; the screen matches within 0.4 of 255. The map wallpaper itself was fine.
 - **4.20.19 (2026-10-25)**: `testapps`, the last self-test in the shell's `run()`, joins `kernel/guitest.c` byte for byte now that `gui_launch` is shared through `kernel/desktop.h`. kernel.c is 3,033 lines. Check: `./check.sh`.
 - **4.20.18 (2026-10-25)**: `kernel/phone_home.h`, phone mode's home screen, becomes `kernel/phone_home.c`, the last of the static headers kernel.c included whole. Its header names the four calls kernel.c makes; `portfolio_dock`, `gui_refuse_open` and `cmos_read_time_stable` are declared in `kernel/desktop.h`. kernel.c is 3,058 lines. Checks: `tools/checks/phone-boot-check.py`, `tools/checks/phone-samantha-back-check.py`.
@@ -1988,18 +1989,18 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-25, early morning. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-25, morning. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards. Open a loop PR ready, not as a draft: a push to a draft followed by `gh pr ready` lets the skipped draft run cancel the real one.
 
-**Where things stand.** Main is 4.20.10, aiming at 5.0, Talk to it. Since 4.20.0 the Samantha tile opens her chat across the screen with her face big and the mouth following her voice, so everything in 5.0 is built and waits on the board. `kernel/kernel.c` went from 6,393 to 3,145 lines overnight (4.19.2 to 4.20.10): the window manager, network commands, self-tests, panic screen, shape painters, kernel log, app icons, Apps folder, boot splash and Apple menu each have their own file. `arch/arm64/main.c` (4,133 lines) was left alone so the card Joshua flashes on 2026-10-25 holds only 4.20.0's Pi changes.
+**Where things stand.** Main is 4.20.21, aiming at 5.0, Talk to it. Since 4.20.0 the Samantha tile opens her chat across the screen with her face big and the mouth following her voice, so everything in 5.0 is built and waits on the board. `kernel/kernel.c` went from 6,393 to 2,827 lines overnight (4.19.2 to 4.20.21): the window manager, network commands, self-tests, panic screen, shape painters, kernel log, app icons, Apps folder, boot splash, Apple menu and the shell's dispatcher each have their own file. The card flashed on 2026-10-25 carries 4.20.19. `arch/arm64/main.c` (4,133 lines) was left alone so the card Joshua flashes on 2026-10-25 holds only 4.20.0's Pi changes.
 
-**What is left in kernel.c and why.** `gui_run` (634 lines), `run()` and `kmain`, plus code that calls static functions in headers kernel.c includes (none left: `clockicon.h`, `hint.h`, `stocks.h`, `auth.h`, `settings_ui.h` and `phone_home.h` became `.c` files in 4.20.11 to 4.20.18) or reads the static font tables in `drivers/editor_fonts.h`. The next slices need those headers turned into `.c` files with their tables defined once, not duplicated.
+**What is left in kernel.c and why.** `gui_run` and `kmain`, plus the text helpers (`wx_*`) that read the static font tables in `drivers/editor_fonts.h`. Those tables need defining once in a `.c` file before the helpers can move. Every header kernel.c used to include whole is now a `.c` file.
 
 **Next, in order.**
 1. Joshua's board pass on the 4.20.x card: hold Space and talk, the Samantha tile opens her full-screen chat, she answers out loud.
 2. Whatever the board shows is broken.
-3. Split `arch/arm64/main.c`, then the static headers above so `gui_run` and `run()` can leave kernel.c.
+3. Split `arch/arm64/main.c`, then the font tables above so `gui_run` and `kmain` can leave kernel.c.
 4. After a split, grep `tools/checks/` for regexes that read `kernel/kernel.c` for code that moved (4.20.10's `burrow-rename-check.py` read the Apple menu's rows from kernel.c).
 
 Rules kept:
