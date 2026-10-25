@@ -59,7 +59,7 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Mac (`tools/claude-relay/stt.py`), voice mode (double-tap and hold Space, a mic mark and a level bar), her voice through `[[say]]` with a mouth in the chat view, and the agent loop. Since 4.17.0 `[[open]]` reaches every app Spotlight opens. Left:
 
 1. The board proof (Joshua): the Yeti in a Pi port, `mic` shows the room, hold Space and talk, she answers out loud.
-2. A full-screen face whose mouth follows her voice.
+2. A full-screen face whose mouth follows her voice. Done in 4.20.0: the Samantha tile opens her chat across the screen.
 3. Whatever the board shows is broken.
 
 **Then: the rest of 6.0, Yours.** Accounts, login, sudo, home folders (4.8 to 4.11) and snapshots are in. Still to come: the crash-safe card filesystem, a Users pane in Settings, file permissions and backups.
@@ -1042,6 +1042,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.20.0 (2026-10-25)**: The Samantha tile opens her chat across the screen, menu bar to dock, so her face is the big one (14 rows) with the mouth following her voice. That is the 5.0 full-screen face. The big face now starts at 21 rows, since a full window at 800x600 has about 24. Check: `tools/checks/arm64-samtile-check.py`.
 - **4.19.1 (2026-10-25)**: Samantha's face in the chat view is twice as big in a tall window (14 rows when the window has 28 or more, still 7 in a medium one, none in a short one), a step toward the full-screen face for 5.0. Check: `tools/checks/arm64-voice-check.py` still draws it and her mouth still follows the clip.
 - **4.19.0 (2026-10-19)**: Talking to Samantha on the Pi is double-tap and hold Space, like Claude Code's voice mode, and nothing else: the typed `hear` command and its quiet detector are gone (Joshua: "replace hear with double click and hold space"). Holding Space now says plainly when there is no USB microphone or no relay token, the two errors `hear` used to give, and `arm64-voicemode-check.py` gained `hear`'s refusal case (a 401 from the words service is reported and nothing reaches the relay).
 - **4.18.3 (2026-10-19)**: Second slice of breaking up `kernel/kernel.c` (now 7,282 lines): the map and satellite wallpapers (tile fetch, theme switch, the baked satellite fallback, `wall_apply`) move to `kernel/wallmap.c` (286 lines) behind `kernel/wallmap.h`, and the 17,000-line satellite header compiles with it instead of with kernel.c. The per-pixel readers stay inlined in kernel.c; the photo is reached through one pointer so its 1.5 MB is linked once. No behaviour change. Checks: `check.sh`, `walldefault-check.sh`, `walldemo-regression-check.py`, `wallcompose-check.py`, `bss-margin-check.py`.
