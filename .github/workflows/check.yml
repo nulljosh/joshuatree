@@ -158,7 +158,7 @@ jobs:
       - name: Install Node dependencies
         run: npm install --no-audit --no-fund
       - name: Install Chromium and WebKit for Playwright
-        run: npx playwright install --with-deps chromium webkit
+        run: timeout 6m npx playwright install --with-deps chromium webkit || timeout 6m npx playwright install --with-deps chromium webkit
       # One step, the whole suite. tools/checks/ci-suite.sh holds the
       # manifest and the per-check comments that used to live here as ~40
       # separate workflow steps. That shape stopped the job at the first
@@ -210,9 +210,9 @@ jobs:
       - name: Install Node dependencies
         run: npm install --no-audit --no-fund
       - name: Install a real Chromium for Playwright
-        run: npx playwright install --with-deps chromium
+        run: timeout 6m npx playwright install --with-deps chromium || timeout 6m npx playwright install --with-deps chromium
       - name: Install a real WebKit for Playwright
-        run: npx playwright install --with-deps webkit
+        run: timeout 6m npx playwright install --with-deps webkit || timeout 6m npx playwright install --with-deps webkit
       - name: Landing demo Chat check (retries once on a timing flake)
         run: node tools/checks/demochat-check.mjs || (sleep 10 && node tools/checks/demochat-check.mjs)
       - name: Landing demo cursor glides, never teleports (retries once)
