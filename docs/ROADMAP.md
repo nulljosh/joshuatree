@@ -2032,3 +2032,9 @@ The hunt did turn up real kernel hardening that shipped with the fix:
 The native repro stays in `samantha-reset-repro.py`.
 
 Separate and pre-existing at the time, not this bug: `speak: status=403`. The speak POST never reached the check's intercept.
+
+## Ingested 2026-10-25
+- [ ] README screenshots need refreshing. First should be the desktop, second the main apps etcetera.
+- [ ] Remove the demo from the landing page. Just show screenshots of all use cases.
+- [ ] Question: what is it built on, Linux, Unix, etcetera? What is best? (Answer in wiki/joshuatree.md; it is from-scratch i386 and Pi 4, so check what that note should say.)
+- [ ] Repost to r/osdev once the account has 5+ karma (see launch/roadmap.md).
