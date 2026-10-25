@@ -26,6 +26,5 @@ void gui_icon_trash(int cx, int cy, int s, unsigned int bg);
 void gui_icon_weather(int cx, int cy, int s, unsigned int bg);
 void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int size, unsigned int under);
 void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size);
-void gui_icon_overlay_draw(int icon, int cx_center, int cy_bottom, int size);   /* kernel.c: clockicon.h's overlay */
 void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned int color);   /* kernel.c */
 #endif
