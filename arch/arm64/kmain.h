@@ -68,6 +68,7 @@ void app_push(unsigned kind, int a, int b);
 void app_tick(void);
 int apps_live(void);
 extern int brick_live;
+extern int br_frame;   /* browser_ui.h: the Browser's frame needs drawing (windows.c sets it after a move) */
 void calc_close(void);
 void calc_did(int ran);
 extern int calc_live, calc_front;
@@ -235,7 +236,9 @@ int front_close(void);
 #define GICC(o) REG(GICC_BASE + (o))
 extern unsigned long heap_next;
 extern unsigned heap_oom;
+#ifndef HEAP_SIZE   /* the oomtest builds (Makefile) shrink it so an allocation fails on purpose */
 #define HEAP_SIZE (16UL << 20)
+#endif
 extern int hover_slot;
 int in_box(int x, int y, int bx, int by, int bw, int bh);
 void *kmalloc(unsigned int n);

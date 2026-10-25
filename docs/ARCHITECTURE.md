@@ -2307,6 +2307,10 @@ What keeps going wrong when agents work this repo, and the rule that stops it. E
 Problem: `main.c` defined `APP_BOOT` for the windows and hang builds, and once `main()` moved to `boot.c` its `#if defined(APP_BOOT)` was false there, so the poll loop never ran on QEMU's raspi4b and no app was ever scheduled (4.23.3, caught by `arm64-windows-check.py` in CI).
 Rule: a macro that more than one part tests lives in `kmain.h`; after a cut, grep every part for `#if` names defined only in another part.
 
+**A cut can copy state or drop a guard without a build error.**
+Problem: in 4.23.5 `windows.c` kept its own `static int br_frame`, so a Browser resize set a copy the painter never read, and `HEAP_SIZE` reached `kmain.h` without its `#ifndef`, so the out-of-memory build's `-DHEAP_SIZE` was overridden; everything built (caught by `arm64-resize-check.py` and `arm64-oom-check.py` in CI).
+Rule: after a cut, list file-scope statics by name across every part and the headers they include (one name, one file), and keep every `#ifndef NAME` guard around a default that a build flag can set.
+
 ### Merges
 
 **Generated files conflict on every merge.**

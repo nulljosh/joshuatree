@@ -33,7 +33,6 @@ int in_box(int x, int y, int bx, int by, int bw, int bh);
 void clock_paint(void);
 void brick_paint(void);
 void browser_paint(int report);
-static int br_frame;
 int win_def[3][2];   /* each window's size when the desktop drew it first: the Console family's, the Calculator's, an app's */
 static int *win_rc(int t, int i) {   /* window t's x, y, w, h (i = 0..3); the app's are the front app's, so no table can hold their addresses */
     static int *const a[2][4] = { { &win_lx, &win_ly, &win_lw, &win_lh }, { &calc_lx, &calc_ly, &calc_lw, &calc_lh } };

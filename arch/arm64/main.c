@@ -224,9 +224,6 @@ unsigned long l3[APP_SLOTS * ARENA_BLOCKS * 512] __attribute__((aligned(4096)));
 #define UP_HEAP  0x200000UL /* M3e: the app's brk heap, from the second block up to where the window buffer starts (11 MiB since 3.9.0), EL0 read-write, never executable */
 #define ARENA_SIZE ((unsigned long)ARENA_BLOCKS << 21)
 unsigned long heap_next;
-#ifndef HEAP_SIZE   /* the oomtest builds (arch/arm64/Makefile) shrink it so an allocation fails on purpose */
-#define HEAP_SIZE (16UL << 20)
-#endif
 unsigned heap_oom;   /* allocations refused so far: fb_init tells an out-of-memory font failure from a bad font */
 void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects; 0 when the heap is full, and every caller checks */
     unsigned long p = (heap_next + 15) & ~15UL;

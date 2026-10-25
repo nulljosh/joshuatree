@@ -21,7 +21,7 @@ unsigned browser_loads(void);
 static unsigned short br_off[BR_VL_MAX], br_len[BR_VL_MAX];   /* wrapped line i: an offset into the page text and a length */
 static unsigned br_n, br_lines;                              /* wrapped lines, and the page's own lines (the `page N lines` log) */
 static int br_top, br_edit, br_loading;
-static int br_frame = 1;   /* the window frame needs drawing: set on open, cleared once drawn, so a scroll or a keystroke repaints the well and not the frame */
+int br_frame = 1;   /* the window frame needs drawing: set on open, cleared once drawn, so a scroll or a keystroke repaints the well and not the frame */
 static unsigned char *br_mascot;   /* the mascot's decoded RGBA, or 0 when it would not decode */
 static int br_mascot_tried;
 static unsigned br_sel;   /* the link Tab has picked, 1-based; 0 when none */
