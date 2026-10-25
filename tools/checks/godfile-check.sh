@@ -70,7 +70,7 @@ ratchet_ceiling() {
         # 2026-10-19: 4.19.1 moved the shell network commands, the text web browser, serve/serveapp/build and the embedded app pages to kernel/shellnet.c.
         # 2026-10-19: 4.19.1 moved the weather and wallpaper self-tests to kernel/wxtest.c and the per-pixel grades to kernel/walltint.h.
         # 2026-10-19: 4.19.1 moved the window manager to kernel/multiwin.c.
-        kernel/kernel.c) echo 4629 ;;
+        kernel/kernel.c) echo 4464 ;;
         *) echo "$LIMIT" ;;
     esac
 }
