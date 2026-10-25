@@ -270,7 +270,7 @@ def window_frame(i):
 
 
 def menubar_white():
-    a, b = rxs("kernel/kernel.c", r"gui_lerp\(gui_wallpaper_color\(row\), 0x00FFFFFF, (\d+), (\d+)\)")
+    a, b = rxs("kernel/menubar.c", r"gui_lerp\(gui_wallpaper_color\(row\), 0x00FFFFFF, (\d+), (\d+)\)")
     return int(a) * 100 // int(b)
 
 
@@ -354,8 +354,8 @@ FACTS = {
     "DAY_PCT": ("num", lambda: int(rxs("kernel/wallpaint.c", r"hour >= (\d+) && hour < (\d+)\) day = (\d+);")[2]), "kernel/wallpaint.c"),
     "DAY_HOURS": ("str", day_hours, "kernel/wallpaint.c"),
     "GUI_MENUBAR_H": ("num", lambda: int(rx("kernel/desktop.h", r"#define GUI_MENUBAR_H\s+(\d+)")), "kernel/desktop.h"),
-    "MENUBAR_WHITE": ("num", menubar_white, "kernel/kernel.c"),
-    "MENUBAR_RULE": ("hex", lambda: hexval(rx("kernel/kernel.c", r"gui_hairline_h\(0, GUI_MENUBAR_H - 1, \(int\)window_width\(\), (0x[0-9A-Fa-f]+)\)")), "kernel/kernel.c"),
+    "MENUBAR_WHITE": ("num", menubar_white, "kernel/menubar.c"),
+    "MENUBAR_RULE": ("hex", lambda: hexval(rx("kernel/menubar.c", r"gui_hairline_h\(0, GUI_MENUBAR_H - 1, \(int\)window_width\(\), (0x[0-9A-Fa-f]+)\)")), "kernel/menubar.c"),
     "DOCK_TRAY_COLOR": ("hex", lambda: hexval(rx("kernel/dock_geom.h", r"#define DOCK_TRAY_COLOR\s+(0x[0-9A-Fa-f]+)")), "kernel/dock_geom.h"),
     "WINDOW_BODY": ("hex", lambda: window_frame(0), "kernel/gui_paint.c"),
     "WINDOW_RADIUS": ("num", lambda: window_frame(1), "kernel/gui_paint.c"),

@@ -175,3 +175,22 @@ void gui_rounded_rect_gradient(int x, int y, int w, int h, unsigned int color_to
         }
     }
 }
+
+/* v44.1: antialiased. The old version rounded each row's half-width to a
+   whole pixel, so both slanted edges were staircases (the pencil tip in
+   every dock render). Exact half-width in 8.8 fixed point; the outermost
+   pixel on each side is blended by its fractional coverage against what
+   is already there. */
+void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned int color){
+    if (h <= 0) return;
+    for (int row = 0; row < h; row++){
+        int w256 = (half_w * 256 * (h - row)) / h;   /* half-width, 8.8 */
+        int wi = w256 >> 8, frac = w256 & 255;
+        if (wi > 0) window_rect(cx - wi + 1, y0 + row, 2 * wi - 1, 1, color);
+        if (frac) {
+            unsigned int l = window_get_pixel(cx - wi, y0 + row), r = window_get_pixel(cx + wi, y0 + row);
+            window_pixel(cx - wi, y0 + row, gui_lerp(l, color, frac, 256));
+            window_pixel(cx + wi, y0 + row, gui_lerp(r, color, frac, 256));
+        }
+    }
+}
