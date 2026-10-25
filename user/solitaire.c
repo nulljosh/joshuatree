@@ -156,7 +156,7 @@ static void pick(int what) {
         if (what >= WASTE && p[what].n && (top(what) & UP)) sel = what;
         return;
     }
-    if (what != sel) move(sel, what < 0 ? -1 : what - TAB);
+    if (what != sel && (what < 0 || what >= TAB)) move(sel, what < 0 ? -1 : what - TAB);   /* the waste is never a place: it just cancels */
     sel = -1;
 }
 

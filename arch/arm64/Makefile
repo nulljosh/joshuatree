@@ -216,9 +216,14 @@ userapps.o: userapps.S $(UAPPS:%=uapp_%.bin)
 	$(CC) -c userapps.S -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-MAINDEP = ../../VERSION settings_ui.h users_ui.h login_ui.h login.h sudo.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
-main.o: main.c $(MAINDEP)
-	$(CC) $(MAINFLAGS) -c $< -o $@
+# main.c is being split (4.23.2 on): MAINSRC is main.c and the files cut out of it. Every build that compiles main.c
+# compiles each of them with the same flags (a test build's -D, PI_BUILD, MAINFLAGS) and links them into the one
+# object (ld -r) the image links, so the split never changes what a test build turns on, nor any link line.
+MAINSRC = main.c virtio.c
+ccmain = set -e; for f in $(MAINSRC); do $(CC) $(1) -c $$f -o $(2).$${f%.c}.o; done; ld.lld -r -o $(2) $(patsubst %.c,$(2).%.o,$(MAINSRC))
+MAINDEP = ../../VERSION virtio.h settings_ui.h users_ui.h login_ui.h login.h sudo.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+main.o: $(MAINSRC) $(MAINDEP)
+	$(call ccmain,$(MAINFLAGS),$@)
 pci.o: pci.c
 	$(CC) -c $< -o $@
 xhci.o: xhci.c
@@ -258,8 +263,8 @@ pi-start.o: start.S
 # JT_KEY_DEBUG=1 turns on the key debug line in the menu bar (main.c KEY_DEBUG). It used to ride on JT_WIFI_DEV=1, so the dev card showed raw reports; release builds and the dev card never do now.
 # PICON: every Pi image prints its console on the mini UART (GPIO 14/15, ALT5); the PL011 is the Bluetooth radio's (bt.c).
 PICON = -DCONSOLE_MINI_UART
-pi-main.o: main.c $(MAINDEP)
-	$(CC) -DPI_BUILD $(PICON) $(if $(filter 1,$(JT_KEY_DEBUG)),-DKEY_DEBUG) -c $< -o $@
+pi-main.o: $(MAINSRC) $(MAINDEP)
+	$(call ccmain,-DPI_BUILD $(PICON) $(if $(filter 1,$(JT_KEY_DEBUG)),-DKEY_DEBUG),$@)
 kernel8.elf: start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
 	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
 pi-kernel8.elf: pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(LLMOBJ) linker.ld
@@ -269,10 +274,10 @@ kernel8.img: pi-kernel8.elf
 pi: wifi-fw bt-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
-$(1)-main.o: main.c $(MAINDEP)
-	$(CC) $(2) -c $$< -o $$@
-$(1)-pi-main.o: main.c $(MAINDEP)
-	$(CC) -DPI_BUILD $(PICON) $(2) -c $$< -o $$@
+$(1)-main.o: $(MAINSRC) $(MAINDEP)
+	$$(call ccmain,$(2),$$@)
+$(1)-pi-main.o: $(MAINSRC) $(MAINDEP)
+	$$(call ccmain,-DPI_BUILD $(PICON) $(2),$$@)
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
 $(1)-kernel8.elf: start.o $(1)-vectors.o $(USEROBJ) $(1)-main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld

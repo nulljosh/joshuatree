@@ -1,9 +1,9 @@
 {
   "app-bookrank": "9e06a7f9dbea36ec",
-  "app-bricks": "cad0bc8f51d30067",
+  "app-bricks": "de1b71e2f8d2530c",
   "app-calendar": "f93497f45447ab09",
   "app-curbfind": "05f678d533cc6a14",
-  "app-depths": "f457bf7a26a1fa0c",
+  "app-depths": "a83fe48dea1d9336",
   "app-epiphany": "2faa6c7c5bfc1d7a",
   "app-files": "743663c33c7d1c2b",
   "app-hamurapi": "1e9c18e186a8307f",
@@ -11,12 +11,12 @@
   "app-paddle": "84e3c7f44e39c0fd",
   "app-panes": "168942e7f2b838ce",
   "app-snake": "5f68f13a3627d4e1",
-  "app-solitaire": "6b088db8ec504055",
+  "app-solitaire": "f1633ef7df46fc12",
   "app-stocks": "1592ada1bd17a416",
   "app-terminal": "7a2082d0ec4ec8cc",
   "app-tonchi": "93381e53c56b63b8",
   "app-weather": "f34fa168277d063f",
   "app-windgate": "09668b5b07449a05",
-  "desktop": "ad95e00bd923c86e",
+  "desktop": "96bb7341275af5f6",
   "samantha-chat": "0cf9b2b76c6146da"
 }

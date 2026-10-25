@@ -89,6 +89,7 @@ try:
     # steers there one cell at a time. Twelve apples is past both speed-ups and a body of 16.
     GW, GH, MAXW = 49, 18, 64
     key("spc"); time.sleep(0.3); key("p"); time.sleep(0.2)
+    mark = len(serial())   # the first game already logged "snake: apple 1"
     body = [(9 * MAXW + 6 - i) for i in range(4)]
     heading, target, eaten = 0, None, 0
     names = {0: "right", 1: "down", 2: "left", 3: "up"}
@@ -121,7 +122,10 @@ try:
             body.insert(0, y * MAXW + x)
             if body[0] != target: body.pop()
         eaten += 1
-        if not wait_serial(f"snake: apple {eaten}\n", 5): fails.append(f"the snake reached the apple at {target} but the app did not count apple {eaten}"); break
+        for _ in range(50):
+            if f"snake: apple {eaten}\n" in serial()[mark:]: break
+            time.sleep(0.1)
+        if f"snake: apple {eaten}\n" not in serial()[mark:]: fails.append(f"the snake reached the apple at {target} but the app did not count apple {eaten}"); break
         for _ in range(30):
             if apple_at() != target: break
             time.sleep(0.1)

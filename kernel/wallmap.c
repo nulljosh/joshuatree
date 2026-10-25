@@ -20,12 +20,15 @@
    satellite fallback, pngtest and wxtest. If the heap or the inflate fails, the caller gets the plain row back,
    which every wall reader already handles, never a short buffer. */
 const unsigned char *wall_photo_get(void){
+    static int failed;   /* one try: a heap too small now is too small on the next wall switch too */
     if (wall_photo) return wall_photo;
+    if (failed) return wall_solid_row;
     unsigned int row = WALLPAPER_W * 3, n = row * WALLPAPER_H;
     unsigned char *p = (unsigned char *)kmalloc(n);
     if (!p || png_zlib_inflate(wall_photo_z, wall_photo_z_len, p, n) != 0) {
         serial_puts("wallpaper: photo unpack failed\n");
         if (p) kfree(p);
+        failed = 1;
         return wall_solid_row;
     }
     for (unsigned int i = row; i < n; i++) p[i] = (unsigned char)(p[i] + p[i - row]);   /* undo the Up filter, top down */

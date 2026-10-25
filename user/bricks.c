@@ -116,7 +116,7 @@ static int hit_brick(void) {   /* the brick under the ball, broken; returns 1 wh
         char line[40] = "bricks: brick "; int l = 14;
         l += utoa10((unsigned)(ROWS * COLS - left), line + l); line[l++] = '\n'; line[l] = 0;
         say(line);
-        if (!left) { over = 1; say("bricks: cleared\n"); }
+        if (!left) { over = 1; say("bricks: cleared\n"); rect(oldbx, oldby, BS, BS, BG); oldbx = -1; }
         band();
         return 1;
     }

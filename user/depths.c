@@ -217,6 +217,12 @@ static void walk(int sign) {
     if (!solid(ex >> 16, py >> 16)) px = nx;
     if (!solid(px >> 16, ey >> 16)) py = ny;
 }
+/* Whether a creature can see you: the straight line between you, sampled every quarter tile, crosses no wall. */
+static int sees(const struct foe *f) {
+    int dx = px - f->x, dy = py - f->y, n = (iabs(dx) > iabs(dy) ? iabs(dx) : iabs(dy)) / (ONE / 4) + 1;
+    for (int i = 1; i < n; i++) if (solid((f->x + dx / n * i) >> 16, (f->y + dy / n * i) >> 16)) return 0;
+    return 1;
+}
 static void fire(void) {   /* the nearest creature in front of you, inside the crosshair's cone (wider up close), that no wall hides */
     int W = vw(), best = -1, bestd = 0x7FFFFFFF, wall = zbuf[(W / 2) / CS];
     flash = 6;
@@ -225,18 +231,12 @@ static void fire(void) {   /* the nearest creature in front of you, inside the c
         int spx = foes[i].x - px, spy = foes[i].y - py;
         int depth = (int)(((long long)dirx() * spx + (long long)diry() * spy) >> 14);
         int lat = (int)(((long long)diry() * spx - (long long)dirx() * spy) >> 14);
-        if (depth <= 0 || depth >= wall + ONE / 4 || iabs(lat) > ONE * 45 / 100 + depth / 8) continue;
+        if (depth <= 0 || depth >= wall + ONE / 4 || iabs(lat) > ONE * 45 / 100 + depth / 8 || !sees(&foes[i])) continue;   /* a wall between: no shot */
         if (depth < bestd) { bestd = depth; best = i; }
     }
     if (best < 0) return;
     foes[best].alive = 0; kills++;
     say_n("depths: hit ", kills);
-}
-/* Whether a creature can see you: the straight line between you, sampled every quarter tile, crosses no wall. */
-static int sees(const struct foe *f) {
-    int dx = px - f->x, dy = py - f->y, n = (iabs(dx) > iabs(dy) ? iabs(dx) : iabs(dy)) / (ONE / 4) + 1;
-    for (int i = 1; i < n; i++) if (solid((f->x + dx / n * i) >> 16, (f->y + dy / n * i) >> 16)) return 0;
-    return 1;
 }
 static void tick(void) {
     if (flash) { flash--; dirty = 1; }

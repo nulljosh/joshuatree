@@ -73,6 +73,7 @@ int selftest_run(const char *line, char *arg) {
             else {
                 for (unsigned int y = 0; y < h; y++)
                     for (unsigned int x = 0; x < w; x++) {
+                        if (photo == wall_solid_row) break;   /* no photo: already failed above, never read past the two-row buffer */
                         const unsigned char *e = &photo[((cases[ci].y0 + y) * WALLPAPER_W + cases[ci].x0 + x) * 3];
                         const unsigned char *d = px + (y * w + x) * ch;
                         if (e[0] != d[0] || e[1] != d[1] || e[2] != d[2]) mism++;

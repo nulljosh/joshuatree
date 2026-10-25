@@ -34,6 +34,7 @@ EXEMPT=(
     "drivers/dejavu_serif_bold_font.h"
     "drivers/dejavu_mono_font.h"
     "drivers/dejavu_mono_bold_font.h"
+    "arch/arm64/face_art.h"   # tools/gen/gen_face_art.py
 )
 
 # Ratchet: files already over LIMIT the day this check landed. Ceiling is
@@ -71,6 +72,8 @@ ratchet_ceiling() {
         # 2026-10-19: 4.19.1 moved the weather and wallpaper self-tests to kernel/wxtest.c and the per-pixel grades to kernel/walltint.h.
         # 2026-10-19: 4.19.1 moved the window manager to kernel/multiwin.c.
         kernel/kernel.c) echo 2827 ;;
+        # 2026-10-25: 4.23.2 put arch/ under this check (it never scanned it) after the virtio drivers moved to arch/arm64/virtio.c.
+        arch/arm64/main.c) echo 3896 ;;
         *) echo "$LIMIT" ;;
     esac
 }
@@ -95,7 +98,7 @@ while IFS= read -r -d '' f; do
         echo "FAIL: $f is $lines lines, over its ceiling of $ceiling"
         fail=1
     fi
-done < <(find kernel drivers lib user -type f \( -name '*.c' -o -name '*.h' \) -print0 2>/dev/null)
+done < <(find kernel drivers lib user arch -type f \( -name '*.c' -o -name '*.h' \) -print0 2>/dev/null)
 
 if [ "$fail" -eq 0 ]; then
     echo "godfile-check: OK, all hand-written files under their ceiling"
