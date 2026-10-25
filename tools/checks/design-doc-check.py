@@ -212,7 +212,7 @@ def serif_uses():
 
 
 def ui_glyph_range():
-    body = func_body("kernel/kernel.c", "static void gui_aa_char(unsigned char c")
+    body = func_body("kernel/kernel.c", "void gui_aa_char(unsigned char c")
     lo, hi = re.search(r"if \(c < (\d+) \|\| c > (\d+)\)", body).groups()
     return "%s-%s" % (lo, hi)
 
