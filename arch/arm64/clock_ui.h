@@ -1,6 +1,6 @@
 /* One read-only Clock window, using the desktop's Vancouver time conversion. */
 static unsigned long clock_shown = ~0UL;
-static void clock_paint(void) {
+void clock_paint(void) {
     unsigned long utc = cal_utc();
     unsigned h = 0, m = 0, mo = 0, d = 0;
     char time[9] = "--:--", date[32] = "Waiting for network time";
@@ -31,12 +31,12 @@ static void clock_paint(void) {
     if (win_sizing) return;   /* a resize redraws the same minute: no second log line */
     con_quiet = 1; uart_puts("clock: "); uart_puts(time); uart_putc(' '); uart_puts(date); uart_putc('\n');
 }
-static void clock_open(void) {
+void clock_open(void) {
     if (clock_live || !fb) return;
     settings_close(); brick_close(); calc_close(); browser_close(); app_kill("closed for the Clock"); console_close(); clock_live = 1;
     clock_paint(); uart_puts("clock open\n");
 }
-static void clock_close(void) {
+void clock_close(void) {
     if (!clock_live) return;
     clock_live = 0; con_live = 1; console_close(); pane_open(cp);
     uart_puts("clock closed\n");

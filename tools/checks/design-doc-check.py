@@ -35,6 +35,9 @@ class Gone(Exception):
 
 
 def text(path):
+    if path == "arch/arm64/main.c":   # the Pi core: main.c and the parts cut out of it (tools/checks/armcore.py)
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from armcore import core_source
+        return core_source()
     with open(os.path.join(ROOT, path), errors="replace") as f:
         return f.read()
 

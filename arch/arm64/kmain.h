@@ -68,6 +68,7 @@ void app_push(unsigned kind, int a, int b);
 void app_tick(void);
 int apps_live(void);
 extern int brick_live;
+extern int br_frame;   /* browser_ui.h: the Browser's frame needs drawing (windows.c sets it after a move) */
 void calc_close(void);
 void calc_did(int ran);
 extern int calc_live, calc_front;
@@ -175,4 +176,244 @@ void grab(const char *t);
 int has(const char *w);
 extern char seen[256];
 #define MENUBAR_H 26             /* docs/ARCHITECTURE.md: GUI_MENUBAR_H, on the 960x540 grid */
+extern char _heap_start[];
+#define app_ch (ap->ch)
+#define app_cw (ap->cw)
+int app_dock(const char *name);
+void app_kill(const char *how);
+#define app_lh (ap->lh)
+#define app_lw (ap->lw)
+extern int ask_char(unsigned code);
+extern int ask_edit(unsigned code);
+extern int ask_select(unsigned pane);
+void brick_close(void);
+void browser_close(void);
+int browser_key(unsigned code);
+extern int browser_live;
+extern int cal_shown;
+int cal_today(void);
+unsigned long cal_utc(void);
+extern int calc_lh;
+extern int calc_lw;
+extern int calc_lx;
+extern int calc_ly;
+void calc_open(void);
+void clip_put(const char *s, unsigned n);
+unsigned clip_take(char *o, unsigned room);
+void clock_close(void);
+extern int clock_live;
+extern long clock_year;
+extern int con_ch;
+extern int con_cols;
+extern int con_cw;
+void con_layout(int win_x, int win_y, int win_w, int win_h);
+extern int con_rows;
+void con_start(void);
+extern int con_x;
+extern int con_y;
+void console_close(void);
+void console_frame(void);
+void console_open(void);
+void cur_show(void);
+extern unsigned disp_h;
+extern unsigned disp_w;
+void dock_activate(int slot);
+extern unsigned *dock_band;
+void dock_hover(int slot);
+extern unsigned *dock_mem;
+void dock_paint(void);
+extern int dock_sel;
+void dock_select(int slot);
+int dock_tile(int slot, int shadow);
+unsigned fb_color(unsigned c);
+extern unsigned fb_pitch;
+#define FB_RAM_BASE ((HEAP_END + (2UL << 20) - 1) & ~((2UL << 20) - 1))
+#define FB_RAM_MAX (16UL << 20)
+extern unsigned *fb_scan;
+int fb_setup(void);
+extern int fb_swap;
+int front_close(void);
+#define GICC(o) REG(GICC_BASE + (o))
+extern unsigned long heap_next;
+extern unsigned heap_oom;
+#ifndef HEAP_SIZE   /* the oomtest builds (Makefile) shrink it so an allocation fails on purpose */
+#define HEAP_SIZE (16UL << 20)
+#endif
+extern int hover_slot;
+int in_box(int x, int y, int bx, int by, int bw, int bh);
+void *kmalloc(unsigned int n);
+int lp_on_arm(int slot);
+void m1b_selftest(void);
+#define MENUBAR_RULE 0x00BDB8B0  /* docs/ARCHITECTURE.md: MENUBAR_RULE */
+extern int mono_adv;
+extern int mono_h;
+extern int mono_ok;
+extern int mono_w;
+int off_begin(int x, int y, int w, int h);
+void off_end(void);
+void off_reserve(int w, int h);
+int sc(int v);
+void settings_close(void);
+int settings_key(unsigned code);
+extern int settings_live;
+#define SPOT_FINDER (GUI_ICON_COUNT + 6)  /* 3.14.0: the Finder, user/finder.c at EL0; the dock has no Finder tile, so Spotlight and Samantha's open reach it */
+int spot_hmax(void);
+int spot_key(unsigned code);
+#define SPOT_LAST (GUI_ICON_COUNT + 11)
+extern int spot_lx;
+extern int spot_ly;
+const char *spot_name(int slot);
+void spot_open(void);
+#define SPOT_ROW 20
+extern int spot_tree;
+extern unsigned *spot_under;
+#define SPOT_W 300
+extern unsigned term_index;
+#define term_p terminals[term_index]
+extern int text_draw(int which, const char *s, int x, int baseline, int px10, unsigned fg, unsigned *fb, unsigned pitch, int w, int h);
+extern int text_init(void);
+extern int text_width(int which, const char *s, int px10);
+extern volatile unsigned irq_ticks;
+#define TIMER_INTID 30   /* the EL1 physical timer, a private interrupt on every GIC */
+#define TREE_H 112
+#define TREE_W 220
+extern char vectors[];
+void wall_fill(int x, int y, int w, int h);
+extern int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);
+extern int win_def[3][2];
+extern int win_lh;
+extern int win_lw;
+extern int win_lx;
+extern int win_ly;
+extern int win_sizing;
+#define WT_APP  2
+#define WT_CALC 1
+#define WT_MAIN 0
+#define HEAP_END ((unsigned long)_heap_start + HEAP_SIZE)
+extern unsigned *off_buf;
+unsigned long off_screen_hash(int x, int y, int w, int h);
+extern int calc_press(const char *k);
+extern int drag_on;
+void win_move_to(int nx, int ny);
+extern unsigned long fp_spin(volatile unsigned *t, unsigned want);
+void uart_hex(unsigned long v);
+void splash_mark(int cx, int cy, int T, unsigned ink, unsigned bg);
+#define APPLE_N 48   /* apple_mask.h: the bitten apple after the tribute line, one copy in main.c */
+extern const unsigned char apple_mask[APPLE_N * APPLE_N];
+#define app_close_at (ap->close_at)
+void term_output(int on);
+#define BUSY (1u << 3)
+extern volatile unsigned mbox[36] __attribute__((aligned(64)));
+int mbox_call(void);
+#define UART_FR   (UART_BASE + 0x18)
+void brick_mouse(int lx, int ly);
+void brick_open(void);
+void brick_paint(void);
+void browser_click(int lx, int ly);
+void browser_open(void);
+void browser_paint(int report);
+unsigned long civil_days(long y, unsigned m, unsigned d);
+void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day);
+long clock_offset(unsigned long utc);
+void clock_open(void);
+void clock_paint(void);
+int menubar_click(int x, int y);
+void set_paint(void);
+void settings_click(int lx, int ly);
+void settings_open(int sec);
+int tree_bar_hit(void);
+void tree_click(int lx, int ly);
+void tree_hover(int lx, int ly);
+void tree_key(unsigned code);
+void tree_open(void);
+void dcache_clean(void *p, unsigned long n);
+void splash_abort(void);
+void app_paint(void);
+void cal_overlay(unsigned *tile, int pw, int today);
+const char *dock_app_name(int slot);
+unsigned long heap_mark(void);
+void heap_release(unsigned long m);
+extern int lp_mode;
+#define SPOT_BOOKS (GUI_ICON_COUNT + 4)   /* 2.66: Books, the same: Spotlight only, not on the dock */
+#define SPOT_BROWSER (GUI_ICON_COUNT + 3) /* the Browser is in Spotlight only too: the dock's 11 slots stay as they are */
+#define SPOT_CALC (GUI_ICON_COUNT + 5)    /* 3.7.5: the Calculator, in Spotlight too (its dock tile is Apps); opens the calc window */
+#define SPOT_GAME0 (GUI_ICON_COUNT + 8)   /* 3.19.0: Mines, Toroid, Hamurabi and Keyrate, the unchanged user/NAME.c at EL0, Spotlight only */
+#define SPOT_MUSIC (GUI_ICON_COUNT + 2)   /* M3e: Music is in Spotlight (and the app table) but not on the dock, a decision */
+#define SPOT_SETTINGS (GUI_ICON_COUNT + 7) /* 3.13.0: Settings, in Spotlight and the menu bar's status icons; the dock keeps its 11 tiles */
+extern const struct user_app user_apps[];
+void lp_click(int lx, int ly);
+void lp_open(void);
+#define app_bh (ap->bh)
+#define app_bw (ap->bw)
+#define app_kick (ap->kick)
+#define app_q (ap->q)
+#define app_qh (ap->qh)
+#define app_qt (ap->qt)
+void app_raise(void);
+extern int app_top;
+#define app_wbytes (ap->wbytes)
+extern unsigned char app_z[APP_SLOTS];
+extern unsigned app_zn;
+extern void ask_redraw(void);
+void calc_cell(int i, int *x, int *y, int *w, int *h);
+extern const char *calc_key(int i);
+extern int calc_keys(int *cols);
+void calc_paint(void);
+void calc_raise(void);
+void con_fit(void);
+extern int con_wx;
+extern int con_wy;
+extern int cur_frozen;
+extern int cur_wanted;
+void fb_hold(void);
+extern int fb_mute;
+void fb_release(void);
+extern int fb_tag;
+void pane_draw(void);
+void tribute_paint(void);
+#define UWIN_MAX (0x1000000UL - UP_WIN)   /* the arena's end, 16 MiB, less where the buffer starts */
+void wall_minus(int ox, int oy, int ow, int oh, int nx, int ny, int nw, int nh);
+void wall_vacate(int lx, int ly, int lw, int lh, int ring_only);
+#define UP_WIN   0xD00000UL
+#define app_hi (ap->hi)
+void app_kill_one(const char *how);
+#define app_rs_log (ap->rs_log)
+#define app_running (ap->running)
+int app_start(const struct user_app *a);
+void app_z_drop(unsigned sl);
+void app_z_front(unsigned sl);
+extern unsigned long l3[];
+#define UB (ap->base)
+int user_in_range(unsigned long a, unsigned long n);
+int user_writable(unsigned long a, unsigned long n);
+#define CON_BG 0x00ffffff
+void con_draw(unsigned i);
+void con_hint(void);
+unsigned con_line_off(unsigned line);
+unsigned con_nlines(void);
+void con_place(int win_x, int win_y, int win_w, int win_h);
+int con_rows_total(void);
+void con_summary(void);
+void con_wipe(void);
+extern int cur_on;
+extern int tui_face_rows;
+void con_tx(char c);
+extern int fb_defer;
+extern int off_on;
+extern int con_to_term;
+extern int face_mouth;
+extern const char *const dock_names[GUI_ICON_COUNT];   /* crash.c */
+extern const char *const game_names[4];               /* windows.c */
+#define VGAFONT_FIRST 32                              /* drivers/vgafont.h: the fallback 8x16 font, one copy, in console.c */
+#define VGAFONT_LAST 126
+extern const unsigned char *const vgafont;
+long app_text(unsigned long req);
+void app_window_close(void);
+long app_window_open(unsigned long info, unsigned long flags);
+long app_window_poll(unsigned long ev, unsigned long flags);
+unsigned long cal_local(void);
+void crash(const struct frame *f);
+#define ICON_ART_SIZE 148                             /* kernel/icon_art.h: the app art, one copy, in crash.c */
+extern const unsigned char *const *const icon_art;
+extern const unsigned int *const icon_art_len;
 #endif /* KMAIN_H */

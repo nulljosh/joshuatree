@@ -1,18 +1,8 @@
-/* virtio.c: moved out of main.c (4.23.2), the god-file split. Compiled twice: virtio.o for QEMU's virt machine,
-   pi-virtio.o with PI_BUILD, where the same names are the Pi's stand-ins (its network card is the Wi-Fi chip). */
+/* virtio.c: moved out of main.c (4.23.2), the god-file split. Part of main.o (MAINSRC), built with main.c's flags; with
+   PI_BUILD the same names are the Pi's stand-ins (its network card is the Wi-Fi chip). */
+#include "kmain.h"   /* the platform addresses, REG and GICD, and main.c's console and cache helpers */
 #include "virtio.h"
-#define REG(a) (*(volatile unsigned int *)(a))
-#define GICD_BASE 0x08000000UL   /* QEMU virt's GICv2 distributor, as main.c has it */
-#define GICD(o) REG(GICD_BASE + (o))
-void kputs(const char *s); void kdec(unsigned v); void kx(unsigned v);   /* main.c's console */
 void *kmalloc(unsigned int n);
-static void uart_puts(const char *s) { kputs(s); }
-static void uart_putc(char c) { char s[2] = {c, 0}; kputs(s); }
-static void uart_dec(unsigned v) { kdec(v); }
-static void dcache_clean(void *p, unsigned long n) {   /* push lines out to RAM, where the device reads: main.c's, three lines */
-    for (unsigned long a = (unsigned long)p & ~63UL; a < (unsigned long)p + n; a += 64) __asm__ volatile ("dc civac, %0" :: "r"(a) : "memory");
-    __asm__ volatile ("dsb sy" ::: "memory");
-}
 
 /* ---- M2: devices on QEMU's virt machine. 32 virtio-mmio slots from 0x0A000000, 0x200 apart, each says which device
    sits there: 1 is a network card, 18 is input (keyboard or tablet). Modern virtio (version 2) only: QEMU needs

@@ -104,13 +104,13 @@ static void set_saved(void) {
     settings_save();
     set_log(settings_saved() > 0 ? "saved" : settings_saved() == -2 ? "kept until restart, admins save" : "save failed, no card", -1, 0);
 }
-static void set_paint(void);
+void set_paint(void);
 #include "users_ui.h"
 static void set_card(int *cx, int *cy) { *cx = win_lx + 8 + SET_SB_W + 16; *cy = win_ly + 74; }
 static void set_step_box(int cx, int ry, int plus, int *x, int *y) {   /* the - and + buttons: 16 pixel squares either side of a 70 pixel value */
     *x = cx + SET_CARD_W - 14 - 16 - (plus ? 0 : 16 + 6 + 70 + 6); *y = ry + 7;
 }
-static void set_paint(void) {
+void set_paint(void) {
     int s = (int)window_scale(), wx = win_lx, wy = win_ly, ww = win_lw, wh = win_lh, cx, cy;
     set_card(&cx, &cy);
     cur_hide();
@@ -180,7 +180,7 @@ static void set_section(int sec) {
     set_log("section", set_sec, set_names[set_sec]);
     if (settings_live) set_paint();
 }
-static void settings_open(int sec) {
+void settings_open(int sec) {
     if (!fb) return;
     if (settings_live) { set_section(sec); return; }
     brick_close(); calc_close(); browser_close(); clock_close(); app_kill("closed for Settings");
@@ -190,7 +190,7 @@ static void settings_open(int sec) {
     set_log("open", -1, 0);
     set_section(sec);
 }
-static void settings_close(void) {
+void settings_close(void) {
     if (!settings_live) return;
     int s = (int)window_scale(), x = win_lx * s, y = win_ly * s, w = win_lw * s, h = win_lh * s;
     settings_live = 0; us_reset();
@@ -224,7 +224,7 @@ static void set_adjust(int r, int dir) {   /* a value in the open section, one s
     if (set_sec == SET_SOUND) { cur_hide(); menubar_wifi(mb_wifi); cur_show(); }   /* the speaker in the menu bar follows the level */
     set_paint();
 }
-static int settings_key(unsigned code) {   /* a key down with Settings in front: every key is its own */
+int settings_key(unsigned code) {   /* a key down with Settings in front: every key is its own */
     if (set_sec == SET_USERS && us_focus) return us_key(code);   /* the pane has the keys: Esc steps back out of it */
     if (code == 1) settings_close();
     else if (set_sec == SET_USERS && (code == 28 || code == 96 || code == 57 || code == 106)) us_enter();
@@ -235,7 +235,7 @@ static int settings_key(unsigned code) {   /* a key down with Settings in front:
     else if (code == 15 && set_row >= 0) { set_row = set_next_row(set_sec, set_row); set_paint(); }
     return 1;
 }
-static void settings_click(int lx, int ly) {   /* a click inside the window (the close dot is the caller's) */
+void settings_click(int lx, int ly) {   /* a click inside the window (the close dot is the caller's) */
     int cx, cy; set_card(&cx, &cy);
     for (int i = 0; i < SET_SECTIONS; i++) {
         int y = win_ly + 40 + i * 30;

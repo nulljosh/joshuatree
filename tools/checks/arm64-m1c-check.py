@@ -67,9 +67,11 @@ def art_tile(var, pw, under=(0xef, 0xeb, 0xe4)):
 # it did (2.12.5): the console's page wipe ran after the only clean, and the screen kept just the two pixel columns of
 # old text left of a cache line boundary. So the source itself is checked: every console draw and wipe cleans what it
 # touched, and the boot code finds its stack and .bss PC-relative, wherever the firmware loaded it.
-main_c = open(os.path.join(arch, "main.c")).read()
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from armcore import core_source
+main_c = core_source()   # main.c and the parts cut out of it
 def body(name):
-    i = main_c.find("static void %s(" % name); j = main_c.find("\n}\n", i)
+    m = re.search(r"\n(static )?void %s\(" % name, main_c); i = m.start() if m else -1; j = main_c.find("\n}\n", i)
     return main_c[i:j] if i >= 0 else ""
 for fn in ("con_glyph", "con_wipe"):
     if "fb_flush(" not in body(fn): fails.append(f"main.c {fn}() no longer cleans the cache over what it drew: a real Pi will not show it")

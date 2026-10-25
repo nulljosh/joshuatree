@@ -26,8 +26,10 @@ if subprocess.run(["make", "-C", arch, "crashtest"], capture_output=True).return
     print("FAIL: arch/arm64 `make crashtest` does not build"); sys.exit(1)
 fails = []
 
-main_c = open(os.path.join(arch, "main.c")).read()
-i = main_c.find("static void crash(const struct frame *f) {"); body = main_c[i:main_c.find("\n}\n", i)] if i >= 0 else ""
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from armcore import core_source
+main_c = core_source()   # main.c and the parts cut out of it (crash() is in crash.c)
+i = main_c.find("void crash(const struct frame *f) {"); body = main_c[i:main_c.find("\n}\n", i)] if i >= 0 else ""
 if "fb_flush(" not in body: fails.append("main.c crash() does not clean the data cache over the panel: a real Pi would not show it")
 elif "text_draw(" in body or "console_putc(" in body or "uart_puts(" in body: fails.append("main.c crash() uses the rasterizer, the console or uart_puts: it must stay integer-only and independent of them")
 else: print("  ok: crash() cleans the cache over the panel and uses only the VGA font and the raw UART")

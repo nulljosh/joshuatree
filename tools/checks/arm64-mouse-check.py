@@ -30,7 +30,9 @@ if subprocess.run(["make", "-C", arch], capture_output=True).returncode:
 fails = []
 
 # The board-only half: every arrow move and the close button clean what they drew out of the data cache.
-main_c = open(os.path.join(arch, "main.c")).read()
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from armcore import core_source
+main_c = core_source()   # main.c and the parts cut out of it
 def body(name):   # the definition, not a forward declaration
     m = re.search(r"\n(static )?void %s\([^)]*\) \{" % name, main_c)
     return main_c[m.start():main_c.find("\n}\n", m.start())] if m else ""

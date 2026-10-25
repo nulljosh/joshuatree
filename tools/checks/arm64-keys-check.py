@@ -168,8 +168,10 @@ try:
 finally:
     q.kill(); q.wait(); shutil.rmtree(tmp, ignore_errors=True)
 
-# ---- 8. mutation: key repeat disabled (boot.c never arms rep_code) must FAIL the held-key step ----
-MAIN_C = os.path.join(arch, "boot.c"); ARM_LINE = "rep_code = e.code; rep_next = key_ms() + KEY_REPEAT_DELAY_MS;"
+# ---- 8. mutation: key repeat disabled (the core never arms rep_code) must FAIL the held-key step ----
+ARM_LINE = "rep_code = e.code; rep_next = key_ms() + KEY_REPEAT_DELAY_MS;"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from armcore import part_with
+MAIN_C = part_with(ARM_LINE) or os.path.join(arch, "main.c")   # whichever part of the core holds it
 orig = open(MAIN_C).read()
 assert ARM_LINE in orig, "the line that arms the repeat moved; update ARM_LINE"
 def mutant_run():   # boot the mutant, hold j in Spotlight for 1.3 s and count the j typed; a working repeat gives 9 to 15
