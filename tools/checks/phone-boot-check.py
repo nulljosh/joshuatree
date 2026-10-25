@@ -253,7 +253,7 @@ except Exception as e:
 # (icons at Calendar's and Keyrate's real cells, not blank background),
 # tapping Calendar opens it full width below the status bar (same
 # gui_draw_app_titlebar dot every full-screen app draws, kernel/
-# phone_home.h reuses gui_apps_launch's existing full-screen-open branch
+# phone_home.c reuses gui_apps_launch's existing full-screen-open branch
 # rather than a new one), Esc returns to the grid, then the same round
 # trip for Keyrate -- a real ring-3 program (kernel/ring3app.c), proving
 # the full-screen host works for both in-kernel and ring-3 apps.
@@ -327,7 +327,7 @@ try:
                         return True
             return False
 
-        # Grid geometry from kernel/phone_home.h's phone_home_grid_geom:
+        # Grid geometry from kernel/phone_home.c's phone_home_grid_geom:
         # PHONE_HOME_COLS=5 (v1.8.0: 4 cols put 26 apps at 7 rows and the
         # last row -- Activity, Clock -- never fit inside the 760px
         # screen, unreachable by any tap; 5 cols is 6 rows, clears it with
@@ -439,7 +439,7 @@ except Exception as e:
 # Fourth scenario (demo A+ pass): tapping Samantha's own face on the phone
 # boot avatar screen must NOT abandon the visitor into the console --
 # kernel/chat.h's chat_boot_samantha_open loop now only exits on KEY_ESC
-# (the back chevron injects it via kbd_inject, phone_home.h's
+# (the back chevron injects it via kbd_inject, phone_home.c's
 # phone_back_zone_tick), a raw click anywhere else -- most commonly her
 # own face -- falls through and keeps the input box focused. Proves that
 # live: boot straight into her avatar with a real (stubbed) face loaded,
@@ -605,12 +605,12 @@ try:
             print(f"PASS: avatar/face still on screen after sending: rgb={after_send_color}")
 
         # Back chevron: same top-left 44x40 tap zone every phone screen
-        # hit-tests (phone_home.h's phone_back_zone_tick), injects a real
+        # hit-tests (phone_home.c's phone_back_zone_tick), injects a real
         # ESC regardless of which loop is reading keys right now (the
         # windowed chat console gui_launch_chat_app landed on after enter).
         # ESC from there returns to gui_run's caller, which for
         # boot_to_phone always lands on phone_home_run's grid.
-        # Mail is APPS[1]: grid geometry from phone_home.h's
+        # Mail is APPS[1]: grid geometry from phone_home.c's
         # phone_home_grid_geom, same COLS/CELL_W/CELL_H/TILE/Y0 constants
         # scenario 3 above already established.
         COLS4, CELL_W4, CELL_H4, TILE4, Y04 = 5, 86, 96, 48, 56
