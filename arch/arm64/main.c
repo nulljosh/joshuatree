@@ -1402,7 +1402,7 @@ int png_decode(const unsigned char *data, unsigned int len, unsigned char **out,
 /* The chat view's face (5.0, "Samantha is the interface"): her portrait above the rows, from face_art.h (two frames of the
    web Samantha's face, mouth closed and mouth open), blended by how loud her voice is at that moment (ask.c voice_level,
    from the clip the sound path is playing), so her mouth opens with what she says. Seven rows when the window has room
-   for them, none in a short window. "face: on" on the UART when it is drawn; ask.c logs the mouth. */
+   for them, fourteen in a tall one (28 rows or more), none in a short window. "face: on" on the UART when it is drawn; ask.c logs the mouth. */
 static unsigned char *face_idle, *face_talk; static int face_tried, face_mouth = -1;
 static void face_blit(int mouth) {
     if (!face_tried) {
@@ -1434,7 +1434,7 @@ void con_tui_mouth(int mouth) {   /* ask.c, while her voice plays: only the face
 void con_tui_begin(void) {
     if (!con_rows_total()) return;
     int held = cur_hold();
-    tui_face_rows = con_rows >= 14 ? 7 : 0;
+    tui_face_rows = con_rows < 14 ? 0 : con_rows >= 28 ? 14 : 7;   /* a tall window gets a face twice as big */
     con_wipe();
     for (unsigned r = 0; r < TUI_ROWS; r++) tui_shadow[r][0] = 0;
     if (tui_face_rows) { face_mouth = -1; face_blit(0); tui_log("face: on"); }   /* the UART only, never the window */
