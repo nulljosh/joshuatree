@@ -551,6 +551,66 @@ drivers/user_books.h: user/books.bin tools/gen/gen_user_bin.py
 
 kernel/ring3app.o: drivers/user_books.h
 
+# Solitaire (4.23.0): Klondike, draw one, Apps folder only.
+user/solitaire.o: user/solitaire.c user/jtsys.h user/libjt/text.h user/libjt/hires.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/solitaire.bin: user/solitaire.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/solitaire.o user/libjt.a
+
+drivers/user_solitaire.h: user/solitaire.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/solitaire.bin drivers/user_solitaire.h user_solitaire
+
+kernel/ring3app.o: drivers/user_solitaire.h
+
+# Paddle (4.23.0): against the computer, Apps folder only.
+user/paddle.o: user/paddle.c user/jtsys.h user/libjt/text.h user/libjt/hires.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/paddle.bin: user/paddle.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/paddle.o user/libjt.a
+
+drivers/user_paddle.h: user/paddle.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/paddle.bin drivers/user_paddle.h user_paddle
+
+kernel/ring3app.o: drivers/user_paddle.h
+
+# Bricks (4.23.0): the brick-breaking game, Apps folder only.
+user/bricks.o: user/bricks.c user/jtsys.h user/libjt/text.h user/libjt/hires.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/bricks.bin: user/bricks.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/bricks.o user/libjt.a
+
+drivers/user_bricks.h: user/bricks.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/bricks.bin drivers/user_bricks.h user_bricks
+
+kernel/ring3app.o: drivers/user_bricks.h
+
+# Depths (4.23.0): a first-person maze shooter, Apps folder only.
+user/depths.o: user/depths.c user/jtsys.h user/libjt/text.h user/libjt/hires.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/depths.bin: user/depths.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/depths.o user/libjt.a
+
+drivers/user_depths.h: user/depths.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/depths.bin drivers/user_depths.h user_depths
+
+kernel/ring3app.o: drivers/user_depths.h
+
+# Snake (4.23.0): Apps folder only.
+user/snake.o: user/snake.c user/jtsys.h user/libjt/text.h user/libjt/hires.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/snake.bin: user/snake.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/snake.o user/libjt.a
+
+drivers/user_snake.h: user/snake.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/snake.bin drivers/user_snake.h user_snake
+
+kernel/ring3app.o: drivers/user_snake.h
+
 drivers/user_mail.h: user/mail.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/mail.bin drivers/user_mail.h user_mail
 
@@ -615,6 +675,11 @@ clean:
 	rm -f user/claude.o user/claude.bin drivers/user_claude.h
 	rm -f user/mines.o user/mines.bin drivers/user_mines.h
 	rm -f user/books.o user/books.bin drivers/user_books.h
+	rm -f user/solitaire.o user/solitaire.bin drivers/user_solitaire.h
+	rm -f user/paddle.o user/paddle.bin drivers/user_paddle.h
+	rm -f user/bricks.o user/bricks.bin drivers/user_bricks.h
+	rm -f user/depths.o user/depths.bin drivers/user_depths.h
+	rm -f user/snake.o user/snake.bin drivers/user_snake.h
 	rm -f joshuatree.iso boot/memmap.ld
 	rm -rf build/iso_root
 

@@ -83,6 +83,11 @@
 #include "user_claude.h"
 #include "user_mines.h"
 #include "user_books.h"
+#include "user_solitaire.h"
+#include "user_paddle.h"
+#include "user_bricks.h"
+#include "user_depths.h"
+#include "user_snake.h"
 #include "pmm.h"
 #include "brk.h"
 #include "app.h"
@@ -148,6 +153,11 @@ static const struct ring3_app RING3_APPS[] = {
     {"Claude", user_claude, USER_CLAUDE_LEN, USER_CLAUDE_CLEN, USER_CLAUDE_SUM, "CLAUDE.BIN"},
     {"Mines", user_mines, USER_MINES_LEN, USER_MINES_CLEN, USER_MINES_SUM, "MINES.BIN"},
     {"Books", user_books, USER_BOOKS_LEN, USER_BOOKS_CLEN, USER_BOOKS_SUM, "BOOKS.BIN"},
+    {"Solitaire", user_solitaire, USER_SOLITAIRE_LEN, USER_SOLITAIRE_CLEN, USER_SOLITAIRE_SUM, "SOLITAIRE.BIN"},
+    {"Paddle", user_paddle, USER_PADDLE_LEN, USER_PADDLE_CLEN, USER_PADDLE_SUM, "PADDLE.BIN"},
+    {"Bricks", user_bricks, USER_BRICKS_LEN, USER_BRICKS_CLEN, USER_BRICKS_SUM, "BRICKS.BIN"},
+    {"Depths", user_depths, USER_DEPTHS_LEN, USER_DEPTHS_CLEN, USER_DEPTHS_SUM, "DEPTHS.BIN"},
+    {"Snake", user_snake, USER_SNAKE_LEN, USER_SNAKE_CLEN, USER_SNAKE_SUM, "SNAKE.BIN"},
 };
 
 /* 2.7.1: the embedded binaries are stored compressed (tools/gen/gen_user_bin.py).
@@ -358,6 +368,11 @@ void panes_ring3_open(void)      { ring3app_launch(&RING3_APPS[28]); } /* 2.11: 
 void claude_ring3_open(void)     { ring3app_launch(&RING3_APPS[29]); } /* 2.14: Apps folder, open=claude */
 void mines_ring3_open(void)      { ring3app_launch(&RING3_APPS[30]); } /* Minesweeper: Apps folder, open=mine */
 void books_ring3_open(void)     { ring3app_launch(&RING3_APPS[31]); } /* 2.66: plain-text reader, Apps folder, open=books */
+void solitaire_ring3_open(void) { ring3app_launch(&RING3_APPS[32]); } /* 4.23: Klondike, Apps folder, open=soli */
+void paddle_ring3_open(void)      { ring3app_launch(&RING3_APPS[33]); } /* 4.23: Paddle, Apps folder, open=padd */
+void bricks_ring3_open(void)    { ring3app_launch(&RING3_APPS[34]); } /* 4.23: Bricks, Apps folder, open=bric */
+void depths_ring3_open(void)    { ring3app_launch(&RING3_APPS[35]); } /* 4.23: Depths, Apps folder, open=dept */
+void snake_ring3_open(void)     { ring3app_launch(&RING3_APPS[36]); } /* 4.23: Snake, Apps folder, open=snak */
 void samantha_ring3_open(void)   { ring3app_launch(&RING3_APPS[23]); } /* 1.9.26: dock slot 6, the shell commands and phone mode */
 void notes_ring3_launch(void)    { ring3app_launch(&RING3_APPS[21]); } /* kernel.c's notes_ring3_open runs the legacy NOTES.TXT migration first */
 int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[17]); } 
@@ -448,6 +463,11 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='l' && pc[7]=='a' && pc[8]=='u') { ring3app_autoopen_slot = 29; serial_puts("autoopen=claude\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='m' && pc[6]=='i' && pc[7]=='n' && pc[8]=='e') { ring3app_autoopen_slot = 30; serial_puts("autoopen=mines\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='b' && pc[6]=='o' && pc[7]=='o' && pc[8]=='k' && pc[9]=='s') { ring3app_autoopen_slot = 31; serial_puts("autoopen=books\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='o' && pc[7]=='l' && pc[8]=='i') { ring3app_autoopen_slot = 32; serial_puts("autoopen=solitaire\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='a' && pc[7]=='d' && pc[8]=='d') { ring3app_autoopen_slot = 33; serial_puts("autoopen=paddle\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='b' && pc[6]=='r' && pc[7]=='i' && pc[8]=='c') { ring3app_autoopen_slot = 34; serial_puts("autoopen=bricks\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='d' && pc[6]=='e' && pc[7]=='p' && pc[8]=='t') { ring3app_autoopen_slot = 35; serial_puts("autoopen=depths\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='n' && pc[7]=='a' && pc[8]=='k') { ring3app_autoopen_slot = 36; serial_puts("autoopen=snake\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
         if (pc[0]=='b' && pc[1]=='r' && pc[2]=='k' && pc[3]=='p' && pc[4]=='o' && pc[5]=='k' && pc[6]=='e') { brkpoke_armed = 1; serial_puts("brkpoke armed\n"); }
     }

@@ -32,9 +32,17 @@
  * 2026-10-04: all three moved up 64KB (0xC0587000 to 0xC0597000). Hamurabi's binary (a sprite
  * sheet and the scene) took the 54KB gap between .bss and the window to under the 16KB
  * tools/checks/bss-margin-check.py insists on, and the linker refused. The end of .userfb is now
- * 0xC07F0000, 64KB under the end of the second 4MB table: one more move this size is the last. */
+ * 0xC07F0000, 64KB under the end of the second 4MB table: one more move this size is the last.
+ *
+ * 2026-10-25: JT_USER_BASE alone moved up 32KB (0xC0597000 to 0xC059F000), into the gap under .dmabuf
+ * (the window's 33 pages now end at 0xC05C0000 exactly). Solitaire, Paddle, Bricks, Depths and Snake took
+ * .bss to 428 bytes under the window. The 64KB move of all three that the note above allows was tried first
+ * and the kernel reset in a loop right after "entropy:": .userfb ending at 0xC0800000, the very end of the
+ * table, does not boot. So that move is out, and there is no slack left here. The next room comes from the
+ * kernel image itself: drivers/wallpaper.h bakes the Joshua Tree photo as 1.5MB of raw RGB, and storing it
+ * compressed frees over a megabyte. */
 
-#define JT_USER_BASE        0xC0597000 /* program window: JT_USER_IMAGE_PAGES of image, then 1 page of stack (.userimg) */
+#define JT_USER_BASE        0xC059F000 /* program window: JT_USER_IMAGE_PAGES of image, then 1 page of stack (.userimg) */
 #define JT_USER_IMAGE_PAGES 0x20       /* 32 pages = 128KB of image (code+data) per ring-3 program; was 7 (28KB) until 2026-10-01, briefly 0x80 for face frames before SYS_BRK */
 #define JT_DMABUF_BASE      0xC05C0000 /* 64KB Sound Blaster DMA, 64KB aligned (.dmabuf) */
 #define JT_USER_FB          0xC05D0000 /* ring-3 window framebuffer (.userfb) */

@@ -218,7 +218,6 @@ Worth doing, not yet re-checked, in the order the study ranked them:
   - Each one gets its own check.
   - (Finder shipped in 3.14.0.)
 
-- [ ] [Sonnet] Pi boots to a splash, not the log.
   - The mark on the brand fill with the thin progress bar, held until the desktop is up. The Console never flashes on the way. The log stays one dock click away, and a FAIL still raises it.
   - Then a login screen.
   - The first few seconds after the desktop appears take no keys. Find why and fix it.
@@ -447,9 +446,8 @@ The rest of the Linux gaps, tagged with the version that owns them (Joshua, 2026
 From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal Pi 4 projects, have and we do not), in order:
 - [ ] [Fable] VNC server: the Pi's screen on the Mac over Wi-Fi, so debugging stops needing photos and demos need no monitor. After Wi-Fi stage 2.
 - [ ] [Fable] A USB stick as the first disk: mass storage over the xHCI driver we have, likely faster to "files survive a reboot" than EMMC2.
-- [ ] [Fable] Doom: the classic proof a platform is real, and Joshua's chosen benchmark (2026-10-06: "if we can get doom working that's sort of a benchmark"). Full speed with sound on the Pi is the flag right after 3.0. Keyboard first, gamepad next.
+- [ ] [Fable] Doom: the classic proof a platform is real, and Joshua's chosen benchmark (2026-10-06: "if we can get doom working that's sort of a benchmark"). Full speed with sound on the Pi is the flag right after 3.0. Keyboard first, gamepad next. Depths (4.23.0) is our own raycaster in its spirit; the real port still needs a small C library, the GPL doomgeneric source kept apart from the Apache tree, and Freedoom data loaded from the disk, not baked into the kernel.
 - [ ] [Sonnet] USB gamepad: a HID report parser beside the keyboard and mouse. Doom and Hamurapi on the couch.
-- [ ] [Sonnet] Paddle, a two-player bounce game (the Pong idea under our own name), and Snake. Small, original, no third-party code or assets.
 - [ ] [Fable] An Atari-style console: our own 6502 core and a tiny TIA-like video chip. Only homebrew games whose authors allow redistribution, never original cartridges (the ROMs are copyrighted). Avoid Tetris-like and Space-Invaders-like designs.
 - [ ] [Sonnet] Drop files from the Mac over Wi-Fi: a tiny upload server on the Pi (plain HTTP PUT), no card swap.
 - [ ] [Sonnet] `joshuatree.local`: mDNS so the Pi announces its name on the network.
@@ -598,7 +596,6 @@ Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk)
 ## Apps after 2.2 (cheapest first, one agent and one PR each)
 
 - [ ] [Haiku] Photos: browse and view JPEG and PNG from Files, next and previous by arrow key. The decoders already exist.
-- [ ] [Haiku] Solitaire. Same shape: one app, one boot check that plays a scripted game.
 - [ ] [Sonnet] Voice Memos: record with `SYS_AUDIO_RECORD`, save a WAV to Files, play it back in Music.
 - [ ] [Sonnet] Samantha media tools: "play something", "pause", "what's playing", one check each.
 - [ ] [Sonnet] Movie trim: cut, split and join clips at frame boundaries and save a new AVI. The iMovie-lite step.
@@ -664,10 +661,8 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Sonnet] App switcher and global hotkeys.
 - [ ] [Sonnet] Lock screen, sleep, and ACPI shutdown.
 - [ ] [Sonnet] Maps app. The wallpaper already fetches map tiles.
-- [ ] [Haiku] Screenshot tool.
 - [ ] [Sonnet] Undo in editors.
 - [ ] [Sonnet] Files app view options: list, grid, columns, with adjustable sorting and grouping.
-- [ ] [Haiku] About This Computer: remove uptime counter, show clean system info.
 - [ ] [Sonnet] Mail account configuration: setup for multiple accounts, IMAP/POP/SMTP settings.
 - [ ] [Sonnet] Chat app redesign: expanded capabilities, better interface, rename to Sam.
 - [ ] [Sonnet] Shell pipes, redirection, and environment variables.
@@ -692,7 +687,7 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
 - [ ] [Sonnet] Video editor: basic timeline, trimming, and export.
-- [ ] [Sonnet] Basic games: Pong, Chess, Conway's Game of Life, fully playable in the OS.
+- [ ] [Sonnet] Chess, fully playable in the OS. (Paddle and Toroid, the Game of Life, are in.)
 - [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
 - [ ] [Sonnet] Installing and updating apps from inside the OS.
 - [ ] [Sonnet] Native Bible app (public-domain KJV on the disk image, book and chapter picker, search).
@@ -1042,6 +1037,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.23.0 (2026-10-25)**: Five games, each a ring-3 app in the Apps folder with its own icon (Joshua: "Solitaire, let's go", then the Atari game Jobs worked on, then Doom). Solitaire is Klondike, draw one, by key or click. Paddle is the Pong idea and Bricks the Breakout idea, under our own names, on a kernel-tick clock that repaints only what moved. Depths is a first-person maze shooter in the spirit of Doom, all our own code and art: a fixed-point raycaster, creatures behind a depth buffer, a pale door out (the real Doom port stays open: GPL source, a C library, Freedoom data from disk). Snake grows, speeds up, and dies at walls. The program window moved up 32 KB to fit them; the 64 KB move to the table's end does not boot. Checks: `ring3-solitaire-check.py` (same deal and moves as a rules model), `ring3-paddle-check.py`, `ring3-bricks-check.py`, `ring3-depths-check.py`, `ring3-snake-check.py`.
 - **4.22.1 (2026-10-25)**: CI's Playwright install gets six minutes and one retry. GitHub's runners sometimes hang in it, and a hung install sat for the whole 30 minute job before anyone could rerun it (it hit #671 twice and #672 once). Check: the suite job itself.
 - **4.22.0 (2026-10-25)**: The landing page opens on screenshots. The desktop shot leads, every app has a tile, and the page loads no emulator. The live demo is one click away at `?demo` (or any of its old links, like `?desktop`), where the page is what it was before (Joshua: "remove the demo from the landing page, just show screenshots"). Check: `tools/checks/landing-shots-hero-check.mjs`.
 - **4.21.1 (2026-10-25)**: The README opens on the whole desktop, then six main apps (Samantha, Notes, Calendar, Terminal, Weather, Hamurapi), and says Samantha answers with no relay (Joshua: "first should be the desktop, second the main apps"). `tools/landing-shots.py desktop` takes it headless; the desktop is mapped to the kernel files that draw it. Check: `tools/checks/landing-shots-fresh-check.py`.
@@ -2037,6 +2033,4 @@ The native repro stays in `samantha-reset-repro.py`.
 Separate and pre-existing at the time, not this bug: `speak: status=403`. The speak POST never reached the check's intercept.
 
 ## Ingested 2026-10-25
-- [ ] Remove the demo from the landing page. Just show screenshots of all use cases.
-- [ ] Question: what is it built on, Linux, Unix, etcetera? What is best? (Answer in wiki/joshuatree.md; it is from-scratch i386 and Pi 4, so check what that note should say.)
 - [ ] Repost to r/osdev once the account has 5+ karma (see launch/roadmap.md).
