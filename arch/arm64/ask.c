@@ -419,7 +419,67 @@ static void local(const char *q, unsigned n) {
     kputs("llm: "); kdec(npos); kputs(" tokens, "); kdec(tps10 / 10); kputs("."); kdec(tps10 % 10); kputs(" tok/s\n");
 }
 int llm_present(void);
-static void fallback(const char *q, unsigned n) { if (llm_present()) local(q, n); }   /* silent in a build with no model */
+
+/* Turing's hosted Samantha: POST /api/chat on turing.jaybulb.com (Ollama's chat shape, {"message":{"content":...}}), over
+   HTTPS with the public roots. It answers when the relay is out of reach, so a card with no relay, or a release card with
+   no token, still talks. No token or Pi status goes out, only the question. 1 when she answered.
+   ponytail: one question, no history and no [[actions]]; the relay stays the way to act on the Pi. */
+#ifdef PI_BUILD
+#define HOSTED_HOST (SAM_HOSTED_HOST[0] ? SAM_HOSTED_HOST : "turing.jaybulb.com")
+#else
+#define HOSTED_HOST SAM_HOSTED_HOST   /* QEMU: only when a check names one */
+#endif
+static const char *said; static unsigned said_n;   /* the answer she says out loud (voice mode) */
+static int hosted(const char *q, unsigned n) {
+    static char req[2 * ASK_MAX + 512], out[REPLY_MAX];
+    const char *host = HOSTED_HOST;
+    if (!host[0] || !net_get_gateway()) return 0;
+    char body[2 * ASK_MAX + 96]; unsigned b = 0, k = 0;
+    for (const char *p = "{\"messages\":[{\"role\":\"user\",\"content\":\""; *p; p++) body[b++] = *p;
+    for (unsigned i = 0; i < n && i < ASK_MAX; i++) {
+        char c = q[i];
+        if (c == '"' || c == '\\') body[b++] = '\\';
+        body[b++] = (unsigned char)c < 32 ? ' ' : c;
+    }
+    for (const char *p = "\"}],\"stream\":false}"; *p; p++) body[b++] = *p;
+    char digits[10]; unsigned dn = 0, v = b;
+    do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    const char *parts[] = {"POST /api/chat HTTP/1.0\r\nHost: ", host, "\r\nContent-Type: application/json\r\nContent-Length: "};
+    for (unsigned i = 0; i < 3; i++) for (const char *p = parts[i]; *p; p++) req[k++] = *p;
+    while (dn) req[k++] = digits[--dn];
+    for (const char *p = "\r\nConnection: close\r\n\r\n"; *p; p++) req[k++] = *p;
+    for (unsigned i = 0; i < b; i++) req[k++] = body[i];
+    kputs("samantha: asking "); kputs(host); kputs("\n");
+    unsigned long mark = heap_mark();
+    char *raw = kmalloc(REPLY_MAX + 2048);
+    int got = raw ? https_fetch_timeout(host, SAM_HOSTED_PORT, req, k, raw, REPLY_MAX + 2048, ASK_TICKS) : -1;
+    int start = got > 0 && http_status_of(raw, (unsigned)got) == 200 ? http_body_start(raw, (unsigned)got) : -1;
+    unsigned m = 0;
+    if (start >= 0) {   /* the "content" string, unescaped; \uXXXX becomes '?' (the Worker sends UTF-8 as it is) */
+        static const char key[] = "\"content\":\"";
+        for (int i = start; i + (int)sizeof key - 1 <= got && !m; i++) {
+            unsigned j = 0;
+            while (j < sizeof key - 1 && raw[i + j] == key[j]) j++;
+            if (j < sizeof key - 1) continue;
+            for (int c = i + (int)j; c < got && raw[c] != '"' && m < sizeof out - 1; c++) {
+                char ch = raw[c];
+                if (ch == '\\' && c + 1 < got) {
+                    ch = raw[++c];
+                    if (ch == 'n') ch = '\n'; else if (ch == 't') ch = ' ';
+                    else if (ch == 'u') { c += 4; ch = '?'; }
+                }
+                out[m++] = ch;
+            }
+            break;
+        }
+    }
+    heap_release(mark);
+    if (!m) { kputs("samantha: "); kputs(host); kputs(" did not answer\n"); return 0; }
+    said = out; said_n = m;
+    say_wrapped("sam: ", out, m);
+    return 1;
+}
+static void fallback(const char *q, unsigned n) { if (!hosted(q, n) && llm_present()) local(q, n); }   /* silent in a build with neither */
 
 static unsigned pi_status(char *st) {   /* "ip 10.0.0.189, utc 1791..., wifi 3/3" into st (80 bytes), returns its length */
     unsigned k = 0, ip = net_get_ip(); unsigned long u = net_clock_utc();
@@ -726,7 +786,7 @@ int calc_eval_str(const char *src, int deg, char *out);   /* calc.c: 0 ok, out h
 void input_drain(void);                      /* main.c: the keys that queued during a request */
 
 /* Runs the recorded actions, printing each outcome, and writes the same outcomes into `result` for the next turn. */
-static const char *said; static unsigned said_n; static unsigned rlen_before; static void (*saved_out)(const char *);
+static unsigned rlen_before; static void (*saved_out)(const char *);
 static void tee(const char *s) { real_puts(s); result_puts(s); }   /* a command's line to the Terminal and into the result */   /* the answer whose actions run, for [[save]] */
 static void run_actions(void) {
     static const char *const names[] = {"", "note", "led blink", "say", "open", "browse", "calc", "status", "save", "list", "read"};

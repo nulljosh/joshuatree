@@ -19,6 +19,12 @@ file=${CLAUDE_RELAY_TOKEN_FILE:-$HOME/.claude-relay-token}
 case "$host" in ''|*[!A-Za-z0-9.-]*) echo "claude_cfg: CLAUDE_RELAY_HOST must be an address or host name, using 10.0.2.2" >&2; host=10.0.2.2 ;; esac
 case "$port" in ''|*[!0-9]*) port=0 ;; esac
 if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then echo "claude_cfg: CLAUDE_RELAY_PORT must be 1 to 65535, using 8765" >&2; port=8765; fi
+# Turing's hosted Samantha (ask.c's hosted()), asked when the relay is out of reach. Empty means the board's default,
+# turing.jaybulb.com:443; a QEMU build asks it only when a check names SAM_HOSTED_HOST, so the checks stay off the internet.
+hosted=${SAM_HOSTED_HOST:-}
+hport=${SAM_HOSTED_PORT:-443}
+case "$hosted" in *[!A-Za-z0-9.-]*) echo "claude_cfg: SAM_HOSTED_HOST must be a host name, leaving it unset" >&2; hosted= ;; esac
+case "$hport" in ''|*[!0-9]*) hport=443 ;; esac
 tok=
 if [ "${JT_WIFI_DEV:-0}" != 1 ] && [ -z "${CLAUDE_RELAY_TOKEN_FILE:-}" ]; then host=; port=0; file=/dev/null; fi   # release build: no secret, no relay
 [ -r "$file" ] && tok=$(LC_ALL=C tr -d ' \t\r\n' < "$file")
@@ -35,6 +41,8 @@ tmp=$O.tmp
     echo "#define CLAUDE_PORT $port"
     echo "#define CLAUDE_TLS $tls"
     echo "#define CLAUDE_TOKEN_LEN $n"
+    echo "#define SAM_HOSTED_HOST \"$hosted\""
+    echo "#define SAM_HOSTED_PORT $hport"
     printf 'static const volatile unsigned char claude_token[] = {'   # volatile: stays in rodata as bytes, so a token scan of the image finds it
     [ -n "$tok" ] && printf '%s' "$tok" | od -An -v -tu1 | tr -s ' \n' '  ' | sed 's/^ *//; s/ *$//; s/ /, /g; s/$/, /'
     echo '0 };'
