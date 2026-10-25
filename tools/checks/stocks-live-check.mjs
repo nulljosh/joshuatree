@@ -35,7 +35,8 @@ try {
   }
 } finally { globalThis.fetch=original; }
 // Compile the actual parser and fetch routine, not a handwritten copy.
-const source=readFileSync(new URL('../../kernel/stocks.h',import.meta.url),'utf8').split('static void stocks_format_price')[0];
+const stocksC=readFileSync(new URL('../../kernel/stocks.c',import.meta.url),'utf8');   // 4.20.13: a .c with kernel includes; take it from the first #define
+const source=stocksC.slice(stocksC.indexOf('#define STOCKS_MAX')).split('void stocks_format_price')[0];
 const dir=mkdtempSync(tmpdir()+'/jt-stocks-');
 try {
 writeFileSync(dir+'/test.c',`#include <assert.h>
