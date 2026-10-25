@@ -1402,7 +1402,7 @@ int png_decode(const unsigned char *data, unsigned int len, unsigned char **out,
 /* The chat view's face (5.0, "Samantha is the interface"): her portrait above the rows, from face_art.h (two frames of the
    web Samantha's face, mouth closed and mouth open), blended by how loud her voice is at that moment (ask.c voice_level,
    from the clip the sound path is playing), so her mouth opens with what she says. Seven rows when the window has room
-   for them, fourteen in a tall one (28 rows or more), none in a short window. "face: on" on the UART when it is drawn; ask.c logs the mouth. */
+   for them, fourteen in a tall one (21 rows or more), none in a short window. "face: on" on the UART when it is drawn; ask.c logs the mouth. */
 static unsigned char *face_idle, *face_talk; static int face_tried, face_mouth = -1;
 static void face_blit(int mouth) {
     if (!face_tried) {
@@ -1434,10 +1434,10 @@ void con_tui_mouth(int mouth) {   /* ask.c, while her voice plays: only the face
 void con_tui_begin(void) {
     if (!con_rows_total()) return;
     int held = cur_hold();
-    tui_face_rows = con_rows < 14 ? 0 : con_rows >= 28 ? 14 : 7;   /* a tall window gets a face twice as big */
+    tui_face_rows = con_rows < 14 ? 0 : con_rows >= 21 ? 14 : 7;   /* a tall window (the Samantha tile's, 4.20.0) gets a face twice as big */
     con_wipe();
     for (unsigned r = 0; r < TUI_ROWS; r++) tui_shadow[r][0] = 0;
-    if (tui_face_rows) { face_mouth = -1; face_blit(0); tui_log("face: on"); }   /* the UART only, never the window */
+    if (tui_face_rows) { face_mouth = -1; face_blit(0); tui_log(tui_face_rows > 7 ? "face: on, big\n" : "face: on\n"); }   /* the UART only, never the window */
     cur_release(held);
 }
 void con_tui_rows(const char *const *rows, unsigned n) {
@@ -2368,6 +2368,12 @@ static void win_set(int t, int nx, int ny, int nw, int nh) {   /* the one place 
     cur_frozen--;
     fb_release();
 }
+static void sam_fill(void) {   /* 4.20.0: the Samantha tile opens her chat across the screen, menu bar to dock, so her face is the big one */
+    if (!fb || brick_live || clock_live || browser_live || settings_live || calc_front || app_front || cp != &term_p) return;
+    int s = (int)window_scale(), top = sg(MENUBAR_H) / s + 8, bottom = gui_dock_band_top() - 22;
+    win_set(WT_MAIN, 16, top, (int)fb_w / s - 32, bottom - top);
+    uart_puts("dock Samantha: full\n");
+}
 static void win_move_to(int nx, int ny) {   /* the front window (or the Console family's, when none is up) to this place, held whole between the menu bar and the dock's band */
     int t = drag_on || rs_on ? drag_t : WT_MAIN;
     int s = (int)window_scale(), top = sg(MENUBAR_H) / s + 8, bottom = gui_dock_band_top() - 22, w = *win_rc(t, 2), h = *win_rc(t, 3), right = (int)fb_w / s - w;
@@ -2502,7 +2508,7 @@ static void dock_activate(int slot) {   /* a dock tile, from a click, a dock key
     clock_close();
     browser_close();
     if (app_dock(dock_app_name(slot))) return;   /* slot 1 is the Burrow tile: the file window, called Finder on the Pi */   /* Calendar, Notes, Music and Books: user/NAME.c at EL0, in its own window */
-    if (slot == 7) { ask_prefill("sam "); pane_open(&term_p); ask_redraw(); con_quiet = 1; uart_puts("dock Samantha: sam ready\n"); return; }   /* 3.9.8: the Samantha tile is the Terminal with `sam ` already typed */
+    if (slot == 7) { ask_prefill("sam "); pane_open(&term_p); sam_fill(); ask_redraw(); con_quiet = 1; uart_puts("dock Samantha: sam ready\n"); return; }   /* 3.9.8: the Samantha tile is the Terminal with `sam ` already typed */
     if (slot == 6) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
     console_open();
     uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");

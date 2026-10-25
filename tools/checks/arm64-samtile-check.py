@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""ARM64 Samantha dock tile (3.9.8): a click on the Samantha tile (slot 7) opens the Terminal with `sam ` already typed on the ask> line.
+"""ARM64 Samantha dock tile (3.9.8): a click on the Samantha tile (slot 7) opens the Terminal with `sam ` already typed on the ask> line;
+since 4.20.0 the Terminal fills the screen from the menu bar to the dock, so the chat view draws her big face.
 
 Joshua's board test: the tile did nothing he could see (the empty Terminal looks like the Terminal tile's). Headless QEMU virt with
 a USB keyboard and mouse behind a hub, like arm64-mouse-check.py. It clicks the Terminal tile (slot 6) and measures the ink on the
 prompt row, then clicks the Samantha tile: the row must carry more ink (`sam ` is typed there), Enter must run `sam` with no question
-(UART `tui| open`, the chat view; it was a usage line before 4.2.0), and a click on the Terminal tile afterwards must not clear what is typed.
+(UART `tui| open`, the chat view; it was a usage line before 4.2.0), deleting `sam ` changes one text row, and `sam` draws the big face (only a window of 21 rows or more gets it).
 Skips (exit 0) when clang, ld.lld or qemu-system-aarch64 is missing. Usage: tools/checks/arm64-samtile-check.py
 """
 import json, os, shutil, socket, subprocess, sys, tempfile, time
@@ -85,9 +86,11 @@ try:
         win_w, win_h = 500 * H // 600, 350 * H // 600; wx, wy = (W - win_w) // 2, 100 * H // 600
         sc = lambda v: v * H // 600
 
-        def prompt_ink():
-            img = shot()
-            return sum(1 for y in range(wy + sc(32 + 18 * 16), wy + sc(32 + 19 * 16)) for x in range(wx + 8, wx + win_w - 4) if max(px(img, x, y)) < 0x90)
+        def key(*names):
+            for k in names:
+                for down in (True, False):
+                    cmd("input-send-event", events=[{"type": "key", "data": {"down": down, "key": {"type": "qcode", "data": k}}}])
+                time.sleep(0.1)
 
         n0 = len(uart())
         if not move_to(*slot_centre(W, H, 6)): fails.append("could not move onto the Terminal tile")
@@ -95,22 +98,27 @@ try:
             click()
             if not wait_for("terminal open", 30, n0): fails.append("the Terminal tile printed no 'terminal open'")
             else:
-                empty = prompt_ink()
                 n1 = len(uart())
                 if not move_to(*slot_centre(W, H, 7)): fails.append("could not move onto the Samantha tile")
                 else:
                     click()
                     if not wait_for("dock Samantha: sam ready", 30, n1):
                         fails.append(f"the Samantha tile did not bring up the Terminal, got {uart()[-300:]!r}")
+                    elif "dock Samantha: full" not in uart()[n1:]:
+                        fails.append("the Samantha tile did not open the Terminal across the screen (no 'dock Samantha: full')")
                     else:
-                        typed = prompt_ink()
-                        if typed < empty + 15: fails.append(f"the Samantha tile left the prompt empty ({empty} ink pixels before, {typed} after)")
-                        else: print(f"  ok: the Samantha tile opens the Terminal with `sam ` typed ({empty} -> {typed} ink pixels on the prompt row)")
+                        time.sleep(0.5); typed = shot(); key("backspace", "backspace", "backspace", "backspace"); time.sleep(0.5); empty = shot()
+                        ys = [y for y in range(H) for x in range(0, W, 2) if px(typed, x, y) != px(empty, x, y)]
+                        if len(ys) < 15: fails.append(f"the Samantha tile left the prompt empty ({len(ys)} pixels changed by deleting it)")
+                        elif max(ys) - min(ys) > sc(20): fails.append(f"deleting `sam ` changed more than one row (y {min(ys)} to {max(ys)})")
+                        else: print(f"  ok: the Samantha tile opens the Terminal across the screen with `sam ` typed (prompt row at y {min(ys)})")
                         n2 = len(uart())
-                        cmd("input-send-event", events=[{"type": "key", "data": {"down": True, "key": {"type": "qcode", "data": "ret"}}}])
-                        cmd("input-send-event", events=[{"type": "key", "data": {"down": False, "key": {"type": "qcode", "data": "ret"}}}])
-                        if not wait_for("tui| open", 40, n2): fails.append(f"Enter on the prefilled line did not run `sam`, got {uart()[-300:]!r}")
-                        else: print("  ok: Enter on the prefilled line runs `sam` (it opens the chat view)")
+                        key("s", "a", "m", "ret")
+                        if not wait_for("tui| open", 40, n2): fails.append(f"Enter on the prompt did not run `sam`, got {uart()[-300:]!r}")
+                        elif not wait_for("face: on, big", 40, n2): fails.append(f"the full-screen chat view did not draw the big face, got {uart()[-300:]!r}")
+                        else: print("  ok: `sam` opens the chat view with the big face")
+                        if os.environ.get("SAMTILE_SHOT"):   # a PPM of the chat view, for the release notes
+                            time.sleep(1); cmd("screendump", filename=os.environ["SAMTILE_SHOT"]); time.sleep(0.4)
     if "KERNEL CRASH" in uart(): fails.append("the kernel crashed")
 finally:
     q.kill(); q.wait()
