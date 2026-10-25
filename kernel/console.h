@@ -2,6 +2,7 @@
 #define CONSOLE_H
 void putc(char c);
 void puts(const char *s);
+void putdec(int v);   /* kernel.c: a signed number */
 void puthex(unsigned int v);
 void putn(unsigned int v);   /* unsigned decimal */
 void clear(void);            /* the text console, blank, cursor home */
