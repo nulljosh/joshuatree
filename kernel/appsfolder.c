@@ -18,7 +18,7 @@
 #define boot_to_phone jt_phone_mode()   /* hint.h reads kernel.c's flag; desktop.h exports it as jt_phone_mode */
 #include "hint.h"
 
-#define gui_clock_tick gui_clock_minute_tick   /* clockicon.h stays with kernel.c */
+#include "clockicon.h"
 
 /* v37: the Apps folder. Every real app, laid out as a grid, so the dock
    can stay a short pinned list instead of growing until the icons are too

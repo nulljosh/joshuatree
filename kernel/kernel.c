@@ -373,7 +373,7 @@ static u8 cmos(u8 reg){ outb(0x70, reg); return inb(0x71); }
    suspect, retry (bounded, this chip's update window is under 2ms on
    real hardware). */
 static int cmos_update_in_progress(void){ outb(0x70, 0x0A); return inb(0x71) & 0x80; }
-static void cmos_read_time_stable(u8 *h, u8 *m, u8 *wd, u8 *dom, u8 *mon){
+void cmos_read_time_stable(u8 *h, u8 *m, u8 *wd, u8 *dom, u8 *mon){
     for (int tries = 0; tries < 8; tries++) {
         while (cmos_update_in_progress()) {}
         u8 hh = cmos(4), mm = cmos(2), wdv = cmos(6), domv = cmos(7), monv = cmos(8);
@@ -1316,8 +1316,6 @@ void gui_draw_menubar(void){
 
 #include "icons.h"   /* 4.20.7: the app icon painters and their cache live in kernel/icons.c */
 #include "clockicon.h"
-void gui_icon_overlay_draw(int icon, int cx_center, int cy_bottom, int size){ gui_icon_overlay(icon, cx_center, cy_bottom, size); }   /* kernel/icons.c draws the Clock hands through this */
-int gui_clock_minute_tick(int *seen){ return gui_clock_tick(seen); }   /* kernel/appsfolder.c: the Clock tile follows the minute */
 
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
    slot currently being dragged, drawn separately so it can float free of

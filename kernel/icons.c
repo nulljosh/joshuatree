@@ -19,7 +19,6 @@ _Static_assert(GUI_ICON_ART_SIZE == ICON_ART_SIZE, "gui_paint.h and icon_art.h d
 
 #define aa_band gui_aa_band
 #define AA_BAND aa_band
-#define gui_icon_overlay gui_icon_overlay_draw
 
 /* Real pictograms, not letters: there's no image decoder or asset pipeline
    in this kernel (deliberately, see ROADMAP.md's font/asset scope notes),
@@ -671,7 +670,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     return out;
 }
 
-/* clockicon.h stays with kernel.c (its time source lives there); gui_icon_overlay is reached through gui_icon_overlay_draw. */
+#include "clockicon.h"
 
 void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int size, unsigned int under){
     int x = cx_center - size / 2, y = cy_bottom - size;
