@@ -28,6 +28,7 @@ void gui_draw_wallpaper_rect(int x, int y, int w, int h);   /* repaint a rectang
 extern int portfolio_dock;              /* booted with `portfolio`: the hidden Portfolio app shows */
 int gui_apps_n(void);                    /* apps the folder shows (Portfolio only in portfolio mode) */
 int gui_app_at(int k);
+void gui_launch(int icon);               /* kernel.c: open an app, folder or Trash by APPS[] slot */
 void gui_refuse_open(int icon);          /* kernel.c: say why an app cannot open */
 void cmos_read_time_stable(unsigned char *h, unsigned char *m, unsigned char *wd, unsigned char *dom, unsigned char *mon);   /* kernel.c: the RTC */                   /* folder position to APPS[] slot */
 int gui_aa_advance(unsigned char c);                   /* the UI face's advance for c, physical px */

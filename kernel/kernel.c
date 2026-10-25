@@ -1661,7 +1661,7 @@ char *wx_put_int(char *o, int v){
     return o;
 }
 
-static void gui_launch(int icon); /* mutually recursive with the folder: the folder launches apps, and the dock launches the folder */
+void gui_launch(int icon); /* mutually recursive with the folder: the folder launches apps, and the dock launches the folder */
 #include "apps_geom.h"
 #include "appsfolder.h"   /* 4.20.8: the Apps folder lives in kernel/appsfolder.c */
 
@@ -1713,7 +1713,7 @@ static int fs_ok_global = 0;
    ARM build links too; on i386 their text is plain font_draw_string. */
 void gui_text(const char *s, int x, int y, unsigned int fg){ font_draw_string(s, x, y, fg, -1); }
 int gui_text_width(const char *s){ return font_string_width(s); }
-static void gui_launch(int icon){
+void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
 
@@ -2727,31 +2727,6 @@ static void run(char *line){
     else if (!strcmp(line, "gui")) {
         gui_run();
     }
-    else if (!strcmp(line, "testapps")) {
-        /* A real, permanent diagnostic, not scaffolding bolted on for one
-           test run: automated QA needs to exercise each real app's own
-           launch function, and the only reliable way to drive input from
-           a script is keyboard injection (proven repeatedly this session;
-           QEMU's monitor mouse commands don't reach this kernel's real
-           PS2 driver headlessly, see ROADMAP.md's honest note on that).
-           Any key (Escape included) closes every one of these exactly the
-           same way a real click already does via gui_wait_close, so a
-           script can drive this whole suite with nothing but sendkey. */
-        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
-        else {
-            /* Walks every real app, not just the pinned dock subset: the
-               point of this command is regression coverage of all of
-               them (see apptest.sh), and since v37 the dock deliberately
-               shows only a handful. */
-            for (int i = 0; i < GUI_APPS_FOLDER; i++) gui_launch(i);
-            window_close();
-            clear();
-            puts("testapps done\n");
-        }
-    }
-    /* calctest retired: the parser it exercised moved to user/calculator.c,
-       a real ring-3 program (1.7.12), whose own math is what
-       tools/checks/ring3calc-check.py exercises now. */
     else if (!strcmp(line, "time"))  show_time();
     else if (!strcmp(line, "reboot"))reboot();
     else {
