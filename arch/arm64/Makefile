@@ -219,9 +219,9 @@ vectors.o: vectors.S
 # main.c is being split (4.23.2 on): MAINSRC is main.c and the files cut out of it. Every build that compiles main.c
 # compiles each of them with the same flags (a test build's -D, PI_BUILD, MAINFLAGS) and links them into the one
 # object (ld -r) the image links, so the split never changes what a test build turns on, nor any link line.
-MAINSRC = main.c virtio.c
+MAINSRC = main.c virtio.c boot.c
 ccmain = set -e; for f in $(MAINSRC); do $(CC) $(1) -c $$f -o $(2).$${f%.c}.o; done; ld.lld -r -o $(2) $(patsubst %.c,$(2).%.o,$(MAINSRC))
-MAINDEP = ../../VERSION virtio.h settings_ui.h users_ui.h login_ui.h login.h sudo.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = ../../VERSION virtio.h kmain.h settings_ui.h users_ui.h login_ui.h login.h sudo.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: $(MAINSRC) $(MAINDEP)
 	$(call ccmain,$(MAINFLAGS),$@)
 pci.o: pci.c

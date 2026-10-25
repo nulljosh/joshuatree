@@ -73,7 +73,7 @@ ratchet_ceiling() {
         # 2026-10-19: 4.19.1 moved the window manager to kernel/multiwin.c.
         kernel/kernel.c) echo 2827 ;;
         # 2026-10-25: 4.23.2 put arch/ under this check (it never scanned it) after the virtio drivers moved to arch/arm64/virtio.c.
-        arch/arm64/main.c) echo 3896 ;;
+        arch/arm64/main.c) echo 3426 ;;
         *) echo "$LIMIT" ;;
     esac
 }

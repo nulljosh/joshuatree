@@ -40,7 +40,7 @@ static void us_reset(void) { us_wipe(); us_focus = 0; us_view = UV_LIST; us_sel 
 static int us_me(const char *n) { return current_user[0] && us_eq(n, current_user); }
 static int us_admin_viewer(void) { return current_user[0] && sudo_is_admin(current_user); }
 static int us_secret_view(void) { return us_view == UV_FORM || us_view == UV_AUTH; }
-static int set_secret(void) { return settings_live && set_sec == SET_USERS && us_focus && (us_secret_view() || us_hush); }   /* main.c keeps `key N` lines off the UART while 1 */
+int set_secret(void) { return settings_live && set_sec == SET_USERS && us_focus && (us_secret_view() || us_hush); }   /* main.c keeps `key N` lines off the UART while 1 */
 static void us_log(const char *what, const char *name) { set_log(what, -1, name && name[0] ? name : 0); }
 static void us_say(const char *m) { us_copy(us_msg, m, sizeof us_msg); }
 static void us_leave_secret(void) { if (us_secret_view()) us_hush = 1; }   /* the key that closes a password view, and its release, stay off the UART too */
