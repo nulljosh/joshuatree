@@ -1,6 +1,6 @@
-/* Native host harness for kernel/auth.h, run by tools/checks/auth-check.sh.
+/* Native host harness for kernel/auth.c, run by tools/checks/auth-check.sh.
    Same relationship tools/png-host/main.c has to drivers/png.c: this
-   compiles the real kernel/auth.h header natively (fast iteration, no
+   compiles the real kernel/auth.c header natively (fast iteration, no
    QEMU boot), while the in-kernel path (auth_gate wired into gui_run,
    exercised by every real boot) is what actually ships.
 
@@ -71,7 +71,8 @@ static int get_key_or_click(void) { return 0; }
 #define KEY_CLICK 260
 #define GUI_BG 0x00FAF8F6
 
-#include "auth.h"
+#define AUTH_HOST 1   /* kernel/auth_env.h: the stand-ins above, not the kernel headers */
+#include "auth.c"     /* the real kernel/auth.c, a header until 4.20.15 */
 
 static int fails = 0;
 static void check(const char *name, int ok) {

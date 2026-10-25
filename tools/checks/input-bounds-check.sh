@@ -3,7 +3,7 @@
 # kernel/kernel.c and kernel/*.h (Notes, Reminders, Mail, Contacts,
 # Calculator, Search, Chat, Terminal, Settings, the auth.h login prompt).
 # That audit's real findings live in drivers/json.c (network JSON, an
-# unsigned-underflow guard was missing on maxlen==0/1) and kernel/auth.h
+# unsigned-underflow guard was missing on maxlen==0/1) and kernel/auth.c
 # (auth_const_time_eq, the one place docs/ARCHITECTURE.md calls out as
 # worth being paranoid about). Both compile clean on the host, so both get
 # fed over-long, adversarial input here under ASan+UBSan, same shape
@@ -13,12 +13,12 @@
 # json_extract_string/json_extract_number_text/json_escape are compiled
 # straight from drivers/json.c (the real file kernel.c/chat.h link
 # against). auth_const_time_eq is copied verbatim into the test driver
-# below rather than #including kernel/auth.h, because that header pulls in
+# below rather than #including kernel/auth.c, because that header pulls in
 # this kernel's GUI/VFS globals (window_rect, vfs_read_file, klog, ...) at
 # file scope and isn't meant to compile standalone; tools/auth-host/main.c
 # already stubs that whole surface for the broader auth-check.sh suite,
 # and re-doing that here would just duplicate it for one already-tiny,
-# already-pure function. If auth_const_time_eq's body in kernel/auth.h
+# already-pure function. If auth_const_time_eq's body in kernel/auth.c
 # ever changes, this copy needs updating too -- a drift the two loops
 # below are simple enough to keep in sync by eye.
 set -e
@@ -30,7 +30,7 @@ cat > "$out/t.c" <<'C'
 #include <string.h>
 #include "json.h"
 
-/* Verbatim copy of kernel/auth.h's auth_const_time_eq (see this script's
+/* Verbatim copy of kernel/auth.c's auth_const_time_eq (see this script's
    header comment for why it's copied rather than included). */
 static int auth_const_time_eq(const unsigned char *a, const unsigned char *b, unsigned int len) {
     unsigned char diff = 0;
