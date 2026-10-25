@@ -1049,6 +1049,7 @@ One line per version. The full release notes live in the GitHub releases and `gi
 - **4.18.5 (2026-10-19)**: Fourth slice of breaking up `kernel/kernel.c` (now 6,724 lines): `pngtest`, `jpegtest`, `heaptest`, `nettest` and `mailtest` leave the shell's 1,729-line `run()` for `kernel/selftest.c`, and the PNG and JPEG test fixtures and `mail.h` compile with them instead of with kernel.c. Same commands, same output; png, jpeg and the shell regression checks pass unchanged.
 - **4.18.6 (2026-10-19)**: Fifth slice of breaking up `kernel/kernel.c` (now 6,556 lines): the scheduler demos (`tasktest`, `fputest`, `preempttest`, `killtest`, `spawntest`, `isotest`, `reaptest`) and the tasks they start move to `kernel/taskdemo.c`. Same commands, same output; the shell regression and fpu checks pass unchanged.
 - **4.18.7 (2026-10-19)**: Sixth slice of breaking up `kernel/kernel.c` (now 6,393 lines): the shell's file commands (`ls`, `cat`, `write`, `rm`, `trash`, `restore`, `cd`, `mkdir`, `browse`, `fsuse`, `diskuse`) move to `kernel/shellfs.c`. Same commands, same output; nine filesystem and shell checks pass unchanged.
+- **4.19.2 (2026-10-25)**: Three more slices out of `kernel/kernel.c` (6,393 lines to 5,173). The shell's network commands (`lspci`, `ifconfig`, `netscan`, `web`, `serve`, `serveapp`, `build`, `tcpmatchtest`, `rxclamptest`), the text web browser and the nine embedded app pages move to `kernel/shellnet.c`. The weather and wallpaper self-tests move to `kernel/wxtest.c`, with the per-pixel wallpaper grades in `kernel/walltint.h` (still always inlined) and the shared menu bar geometry in `kernel/desktop.h`. The window manager (the window table, open, close, focus, snapping, the switcher, screenshots) moves to `kernel/multiwin.c`. The stale `activity-check.py`, which failed on main and was not in the suite, is gone; `ring3activity-check.py` covers it. The Loop handoff section now says where things stand.
 - **4.18.2 (2026-10-19)**: The CI split, reviewed and fixed. A check is ARM by what it runs (qemu-system-aarch64 or an arch/arm64 build), not by the shard it sat on: 30 checks move (Stocks onto the ARM runner, about 25 host-only checks off it), and every shard is now about 11 minutes, the slowest 14 before. `ci-balance.py` reads the ARM shards and the shard count from `check.yml`, the one place they are written, and refuses a count the workflow does not run; `ci-local.sh` starts the ARM group first. Check: `ci-tooling-check.py`, which now also proves check.yml, ci-local.sh and SHARDS agree.
 - **4.18.1 (2026-10-19)**: Asking Samantha for the weather with no reading yet now fetches one: her tool asks the desktop (`jt_refresh`) and waits up to 15 s for `WEATHER.TXT` to move, keys left queued, instead of saying "open Weather first". `samweather-check.py` had been passing or failing on timing (the desktop's own first fetch now usually lands before the question); it now asserts a real reading and a fetch before her answer, and logs to a per-run temp folder instead of a fixed /tmp path.
 - **4.18.0 (2026-10-18)**: A bare `hear` on the Pi records until you stop talking: 1.2 s of quiet after speech sends it, at most 10 s, in 100 ms blocks so a microphone that goes silent still ends. `hear 5` keeps the fixed length. The threshold (`HEAR_LOUD`) is the knob to tune on the Yeti. Check: `hear-quiet-check.py` runs ask.c's real `heard_end` on the host (silence, hiss, speech then quiet, a mid-sentence pause), and its mutant without the reset fails.
@@ -1966,30 +1967,23 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Joshua, 2026-10-11: "/loop until v3", then "v3 today. No issues, no stale branches. All PRs merged safely. All changes flashed to SD."
+Updated 2026-10-19, morning. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
-Version 3.0.0 "Hold it" cuts when the desktop boots on a real Raspberry Pi 4 and you can type and click on it, mouse included, with apps in user mode. The board pass that proves it is the Board test section of `GUIDE.md` (User guide).
+**What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards.
 
-3.0.0 has since been released. The state of the queue lives in the open pull requests and the GitHub releases, not here.
+**Where things stand.** Aiming at 5.0, Talk to it. The card on the board has main. Talking to Samantha on the Pi is double-tap and hold Space, like Claude Code (the typed `hear` command is gone). The kernel's god file is being broken up one slice at a time: `kernel/kernel.c` was 7,282 lines on the morning of 2026-10-19 and the open stack takes it to 5,173, with settings, the self-tests, the scheduler demos, the shell's file and network commands, the weather and wallpaper tests and the window manager each in their own file. `arch/arm64/main.c` (4,127 lines) is the other file over the 2,000-line ceiling.
 
-Not yet seen on the board when this was written:
-- Bluetooth pairing (only run against QEMU's fake radio)
-- sound out of the jack
-- Music through DMA
-- SD writes
-- user mode apps
-- screen sleep
-
-All were proven in QEMU first. What fails on the board becomes the next patch.
-
-After 3.0: 4.0 is many windows at once, mobile first. 5.0 is talk to it. A Joshua Tree MCP server (boot, type, screenshot, serial, one check, flash, queue) is the first tool after 3.0.
+**Next, in order.**
+1. Joshua's board pass: hold Space and talk, Spotlight opens any app, Samantha answers the weather with a real reading.
+2. Keep slicing `kernel/kernel.c` (the desktop loop `gui_run` is 630 lines) and then `arch/arm64/main.c`.
+3. A full-screen face whose mouth follows her voice, after the board proof.
+4. Whatever the board shows is broken.
 
 Rules kept:
 - No bare `git stash` (shared across worktrees).
 - Generated files (VERSION, landing/*) take main's side in a merge and are regenerated.
-- No keys on the public card.
-- Flash only the dev card.
-- Every X.0.0 ships a refreshed logo and UI. 3.0 has the crayon tree on terracotta and Tree Sans.
+- No keys on the public card. Flash only the dev card, and only when Joshua says it is in.
+- Every X.0.0 ships a refreshed logo and UI.
 
 ## Samantha reset postmortem
 
