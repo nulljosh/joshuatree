@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""ARM64 games: Spotlight opens Mines, Toroid, Hamurabi and Keyrate (the unchanged user/*.c at EL0), one real move each
+"""ARM64 games: Spotlight opens Mines, Toroid, Hamurabi, Keyrate and (4.24.0) Solitaire, Paddle, Bricks, Depths and Snake
+(the unchanged user/*.c at EL0), one real move each
 changes the pixels, and each closes (headless QEMU, own private scratch). Set ARM_GAMES_SHOTS=dir to keep a screenshot of each."""
 import json
 import os
@@ -68,7 +69,8 @@ try:
     command("qmp_capabilities")
 
     # Spotlight finds all four by name (Hamurabi's game shows as Hamurapi, so both spellings find it)
-    for typed, row in (("mine", "Mines"), ("toro", "Toroid"), ("hamurabi", "Hamurapi"), ("hamurapi", "Hamurapi"), ("keyr", "Keyrate")):
+    for typed, row in (("mine", "Mines"), ("toro", "Toroid"), ("hamurabi", "Hamurapi"), ("hamurapi", "Hamurapi"), ("keyr", "Keyrate"),
+                      ("soli", "Solitaire"), ("padd", "Paddle"), ("bricks", "Bricks"), ("dept", "Depths"), ("snak", "Snake")):
         n = len(uart()); key("f1")
         for k in typed: key(k)
         assert "spotlight: %s 1\n" % typed in uart()[n:], "Spotlight does not find " + typed + "\n" + uart()[-400:]
@@ -102,8 +104,15 @@ try:
     time.sleep(.4); b = shot("keyrate-b")
     assert win(a) != win(b), "Keyrate: typing changed nothing"
     keep("keyrate", b); close("keyrate")
+    for app, move in (("solitaire", "d"), ("paddle", "w"), ("bricks", "a"), ("depths", "a"), ("snake", "w")):
+        open_app(app, app)                          # 4.24.0: the 4.23 games wait for a key, then one move each
+        a = shot(app + "-a")
+        for _ in range(3): key(move, 60)
+        time.sleep(.6); b = shot(app + "-b")
+        assert win(a) != win(b), app + ": " + move + " changed nothing"
+        keep(app, b); close(app)
     assert "EL0 fault" not in uart()[base:], "an app faulted\n" + uart()[-600:]
-    print("PASS: Spotlight opens Mines, Toroid, Hamurabi and Keyrate at EL0; a reveal, a generation, a year and typing each change the pixels and each closes on Esc", flush=True)
+    print("PASS: Spotlight opens Mines, Toroid, Hamurabi, Keyrate, Solitaire, Paddle, Bricks, Depths and Snake at EL0; a move in each changes the pixels and each closes on Esc", flush=True)
 finally:
     if f: f.close()
     if s: s.close()

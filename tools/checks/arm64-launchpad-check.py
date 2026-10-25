@@ -2,10 +2,10 @@
 """ARM64 Launchpad (4.1.2): the dock's first tile, Apps, opens a centred cream card with a grid of every app, not the Calculator.
 
 QEMU's virt machine with ramfb and a USB keyboard and mouse behind a hub (the focus check's setup). Through QMP it:
-  - clicks the Apps tile: "launchpad open 22", a cream card (560x352 at scale 1) appears, every one of its 22 cells has icon art
+  - clicks the Apps tile: "launchpad open 27", a cream card (646x352 at scale 1) appears, every one of its 27 cells has icon art
     in it and a name under it, the one name with no ARM app (Trash) is greyed
     (no dark ink in the name strip), and no "calc open" is printed (the Apps tile used to open the Calculator);
-  - the arrow keys walk the selection over all 22 names (Right, Left, Down, Up, edges stop), and every name the grid shows is a
+  - the arrow keys walk the selection over all 27 names (Right, Left, Down, Up, edges stop), and every name the grid shows is a
     name Spotlight finds when typed ("spotlight: NAME n", n >= 1), so one list drives both; "apps" finds nothing in Spotlight;
   - Esc closes the card and the pixels under it are the desktop again, pixel for pixel; so does a click outside the card;
   - a click on the Calculator cell closes the card and opens the Calculator window (red dot on screen), whose red dot closes it;
@@ -32,7 +32,7 @@ icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 10 * 6) // 11))
 dock_x0, dock_y0 = (W - (11 * icon + 10 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
 def slot_centre(slot): return dock_x0 + 10 + slot * (icon + 6) + icon // 2, dock_y0 + 10 + icon // 2
 CREAM, RED = (0xfa, 0xf8, 0xf4), (0xff, 0x5f, 0x57)
-CARD_W, CARD_H, PAD, TOP, CW, CH, COLS, N = 560, 352, 22, 20, 86, 78, 6, 22
+CARD_W, CARD_H, PAD, TOP, CW, CH, COLS, N = 646, 352, 22, 20, 86, 78, 7, 27   # 4.24.0: the five games made 27, seven across
 CALC = 15   # the Calculator is the 16th name (slot 16)
 GREYED = ["Trash"]
 
@@ -106,7 +106,7 @@ try:
         return True
 
     n0 = len(uart())
-    ok = click(*slot_centre(0), "launchpad open 22")
+    ok = click(*slot_centre(0), "launchpad open %d" % N)
     if ok:
         a = shot(); box = card_box(a)
         if not box or (box[2], box[3]) != (CARD_W, CARD_H): fails.append(f"the Launchpad card is not {CARD_W}x{CARD_H} cream, got {box}")
@@ -131,8 +131,8 @@ try:
                 got = re.findall(r"launchpad: (\d+) (\w+)\n", uart())[-1:]
                 names.append(got[0] if got else None)
             nm = [g[1] for g in names if g]
-            if [g[0] for g in names if g] != [str(i) for i in range(1, N + 1)] or len(set(nm)) != N: fails.append(f"the arrow walk did not visit 22 distinct cells in order: {names}")
-            else: print("  ok: Right and Down walk the selection over 22 distinct names: " + ", ".join(nm))
+            if [g[0] for g in names if g] != [str(i) for i in range(1, N + 1)] or len(set(nm)) != N: fails.append(f"the arrow walk did not visit {N} distinct cells in order: {names}")
+            else: print("  ok: Right and Down walk the selection over " + str(N) + " distinct names: " + ", ".join(nm))
             greyed = [nm[k] for k in range(N) if nm[k] in GREYED]
             if sorted(greyed) != sorted(GREYED): fails.append(f"the greyed names are not just Trash: {greyed}")
             else:
@@ -154,7 +154,7 @@ try:
                 if not hit or hit[0][0] != name.lower() or int(hit[0][1]) < 1: missing.append(name)
                 key("esc"); wait_for(has("spotlight close", n), 30)
             if missing: fails.append(f"names the Launchpad shows that Spotlight does not find: {missing}")
-            else: print("  ok: all 22 names are found by Spotlight: one list drives both")
+            else: print("  ok: all " + str(N) + " names are found by Spotlight: one list drives both")
             n = len(uart()); key("f1"); wait_for(has("spotlight open", n), 30)
             for ch in "apps": key(ch)
             time.sleep(0.2)
@@ -170,7 +170,7 @@ try:
                 for _ in range(8): key("down")
                 for _ in range(5): key("right")
                 k1 = re.findall(r"launchpad: (\d+) (\w+)\n", uart())[-1:]
-                if k0 != ["1"] or k1 != [("22", "Keyrate")]: fails.append(f"selection did not stop at the edges: {k0} {k1}")
+                if k0 != ["1"] or k1 != [(str(N), "Snake")]: fails.append(f"selection did not stop at the edges: {k0} {k1}")
                 else: print("  ok: the selection stops at the first and last cell")
                 if not click(30, 100, "launchpad close"): pass
                 elif region(base, *box) != region(shot(), *box): fails.append("a click outside the card did not put the desktop back")

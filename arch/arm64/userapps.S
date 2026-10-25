@@ -27,6 +27,11 @@
     app toroid
     app hamurabi
     app keyrate
+    app solitaire
+    app paddle
+    app bricks
+    app depths
+    app snake
 
 /* M3c part 2: loop, the scheduler's test program, made by hand in the same image format: one code page, then the trailer
    { "JTU1", 4096 bytes of code, an empty relocation list }. It asks for its window, then yields forever: it never polls,
@@ -116,6 +121,11 @@ fpkeep_img_end:
 .Lname_toroid:   .asciz "toroid"
 .Lname_hamurabi: .asciz "hamurabi"
 .Lname_keyrate:  .asciz "keyrate"
+.Lname_solitaire: .asciz "solitaire"
+.Lname_paddle: .asciz "paddle"
+.Lname_bricks: .asciz "bricks"
+.Lname_depths: .asciz "depths"
+.Lname_snake: .asciz "snake"
 .Lname_loop:     .asciz "loop"
 .Lname_fpkeep:   .asciz "fpkeep"
 
@@ -136,6 +146,11 @@ user_apps:
     .quad .Lname_toroid, toroid_img, toroid_img_end
     .quad .Lname_hamurabi, hamurabi_img, hamurabi_img_end
     .quad .Lname_keyrate, keyrate_img, keyrate_img_end
+    .quad .Lname_solitaire, solitaire_img, solitaire_img_end
+    .quad .Lname_paddle, paddle_img, paddle_img_end
+    .quad .Lname_bricks, bricks_img, bricks_img_end
+    .quad .Lname_depths, depths_img, depths_img_end
+    .quad .Lname_snake, snake_img, snake_img_end
     .quad .Lname_loop, loop_img, loop_img_end
     .quad .Lname_fpkeep, fpkeep_img, fpkeep_img_end
     .quad 0, 0, 0

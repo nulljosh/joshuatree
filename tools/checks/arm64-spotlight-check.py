@@ -9,7 +9,7 @@ from scratch import scratch_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 TMP = Path(scratch_dir("spotlight"))
-APPS = 22   # 10 dock tiles (the Apps tile is the Launchpad since 4.1.2, not an app) + Clock, Brick, Music, Browser, Books + Calculator + Finder + Settings + Mines, Toroid, Hamurapi, Keyrate
+APPS = 20   # the rows Spotlight holds (keys.c SPOT_MAX): 27 entries since 4.24.0 (10 dock tiles, Clock, Brick, Music, Browser, Books, Calculator, Finder, Settings, nine games), an empty query shows the first 20
 subprocess.run(["make", "-s", "-C", str(ROOT / "arch/arm64"), "kernel8.elf"], check=True)
 log = TMP / "uart"; sock = TMP / "qmp"
 q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256",
@@ -36,13 +36,13 @@ try:
         command("send-key", {"keys": [{"type": "qcode", "data": name}], "hold-time": 50}); time.sleep(.15)
     command("qmp_capabilities")
     key("f1")
-    assert f"spotlight:  {APPS}\n" in uart(), "an empty query must list all %d apps\n%s" % (APPS, uart()[-600:])
+    assert f"spotlight:  {APPS}\n" in uart(), "an empty query must fill all %d rows\n%s" % (APPS, uart()[-600:])
     for k in "calc": key(k)
     assert "spotlight: calc 1\n" in uart(), "typing calc must show exactly Calculator\n" + uart()[-600:]
     key("ret")
     time.sleep(.3)
     assert "calc open" in uart().split("spotlight: calc 1\n")[-1], "Enter did not open the Calculator"
-    print("PASS: empty Spotlight lists all %d apps, typing calc shows Calculator and Enter opens it" % APPS, flush=True)
+    print("PASS: empty Spotlight fills its %d rows, typing calc shows Calculator and Enter opens it" % APPS, flush=True)
 finally:
     if f: f.close()
     if s: s.close()

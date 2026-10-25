@@ -207,7 +207,8 @@ static void draw(void) {
         else { slot(x, TOPY); suit_at(s, x + CW / 2, TOPY + CH / 2, 10, EDGE); }
     }
     /* the columns, fanned to fit the window */
-    int avail = (int)win.height - TABY - 8;
+    int narrow = (int)win.width - (colx(7) + 14) < 200;   /* the Pi's 560-wide window: the help moves to two lines at the bottom */
+    int avail = (int)win.height - TABY - 8 - (narrow ? 44 : 0);
     for (int col = 0; col < 7; col++) {
         struct pile *q = &p[TAB + col];
         int x = colx(col), y = TABY, down = 0, ups = 0;
@@ -228,10 +229,18 @@ static void draw(void) {
     /* the side panel */
     int tx = colx(7) + 14, ty = TOPY + 4;
     char num[12];
+    const char *status = won ? "You won." : sel >= 0 ? "Now pick where it goes." : "Klondike, draw one";
+    unsigned scol = won ? 0x002F7B4F : HINT;
     bold("Solitaire", tx, ty, INK);
-    text(won ? "You won." : sel >= 0 ? "Now pick where it goes." : "Klondike, draw one", tx, ty + 26, won ? 0x002F7B4F : HINT);
     utoa10((unsigned)(p[FOUND].n + p[FOUND + 1].n + p[FOUND + 2].n + p[FOUND + 3].n), num);
-    int x2 = text(num, tx, ty + 48, HINT); text(" of 52 up", x2, ty + 48, HINT);
+    int x2 = text(num, tx, ty + 26, HINT); text(" of 52 up", x2, ty + 26, HINT);
+    if (narrow) {
+        int by = (int)win.height - 44;
+        text(status, PAD, by, scol);
+        text("d draws   w, 1 to 7 picks   1 to 7 or f moves   a sends up   r deals   esc closes", PAD, by + 22, HINT);
+        return;
+    }
+    text(status, tx, ty + 48, scol);
     text("d or space draws", tx, ty + 86, HINT);
     text("w, 1 to 7 picks a pile", tx, ty + 108, HINT);
     text("then 1 to 7 or f moves it", tx, ty + 130, HINT);

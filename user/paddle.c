@@ -73,8 +73,9 @@ static void scores(void) {
     rect(0, 0, cw(), TOP, BG);
     rect(0, TOP - 1, cw(), 1, LINE);
     utoa10((unsigned)me, a); utoa10((unsigned)cpu, b);
-    text(a, cw() / 2 - 40 - jt_text_width(JT_FACE_BOLD, a), 10, INK, JT_FACE_BOLD);
-    text(b, cw() / 2 + 40, 10, INK, JT_FACE_BOLD);
+    int bx = cw() - 16 - jt_text_width(JT_FACE_BOLD, b);   /* you, then the computer, at the bar's right end like Bricks and Snake */
+    text(b, bx, 10, INK, JT_FACE_BOLD);
+    text(a, bx - 28 - jt_text_width(JT_FACE_BOLD, a), 10, INK, JT_FACE_BOLD);
     const char *msg = over ? (me > cpu ? "You win. Space plays again." : "The computer wins. Space plays again.")
                     : paused ? "Paused. p plays on." : !ready ? "Space serves   Up and Down move   esc closes" : "Up and Down move   p pauses   esc closes";
     text(msg, 16, 12, over && me > cpu ? 0x002F7B4F : HINT, JT_FACE_BODY);

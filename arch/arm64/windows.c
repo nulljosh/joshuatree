@@ -201,15 +201,7 @@ int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx && x <
 static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
 void dock_activate(int slot);
 void ask_prefill(const char *s);   /* ask.c: type s on the Terminal's empty line */
-#define SPOT_MUSIC (GUI_ICON_COUNT + 2)   /* M3e: Music is in Spotlight (and the app table) but not on the dock, a decision */
-#define SPOT_BROWSER (GUI_ICON_COUNT + 3) /* the Browser is in Spotlight only too: the dock's 11 slots stay as they are */
-#define SPOT_BOOKS (GUI_ICON_COUNT + 4)   /* 2.66: Books, the same: Spotlight only, not on the dock */
-#define SPOT_CALC (GUI_ICON_COUNT + 5)    /* 3.7.5: the Calculator, in Spotlight too (its dock tile is Apps); opens the calc window */
-#define SPOT_FINDER (GUI_ICON_COUNT + 6)  /* 3.14.0: the Finder, user/finder.c at EL0; the dock has no Finder tile, so Spotlight and Samantha's open reach it */
-#define SPOT_SETTINGS (GUI_ICON_COUNT + 7) /* 3.13.0: Settings, in Spotlight and the menu bar's status icons; the dock keeps its 11 tiles */
-#define SPOT_GAME0 (GUI_ICON_COUNT + 8)   /* 3.19.0: Mines, Toroid, Hamurabi and Keyrate, the unchanged user/NAME.c at EL0, Spotlight only */
-#define SPOT_LAST (GUI_ICON_COUNT + 11)
-const char *const game_names[4] = {"Mines", "Toroid", "Hamurabi", "Keyrate"};
+const char *const game_names[9] = {"Mines", "Toroid", "Hamurabi", "Keyrate", "Solitaire", "Paddle", "Bricks", "Depths", "Snake"};
 int lp_mode;                       /* 4.1.2: spot_live holds the Launchpad's card, not Spotlight's bar */
 void lp_open(void);
 void lp_click(int lx, int ly);
