@@ -14,6 +14,8 @@ int sd_ready(void); int sd_write(const char *name, const void *data, unsigned le
 int fat_read_file(const char *name, void *buf, unsigned bufsize); int fat_chdir(const char *name); void fat_cwd_set(unsigned int cluster);   /* drivers/fat.c */
 const char *browser_link(unsigned n);
 unsigned browser_loads(void);
+int browser_field_secret(unsigned n);
+static unsigned br_field;   /* 6.15.0: the form field (its link number) the address bar is editing, 0 when it edits the address */
 const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h);   /* 6.14.0: image k's 0RGB pixels and kept size, 0 when it did not load */
 #define BR_ROW 16          /* a page line, logical pixels */
 #define BR_PAGE_Y 64       /* the page well's top, under the toolbar */
@@ -217,9 +219,12 @@ void browser_paint(int report) {
         int sx = fx + fw - 20, sy = ty + 5; unsigned saved = browser_url()[0] && bm_find(browser_url()) >= 0;
         for (int r = 0; r < 11; r++) for (int c = 0; c < 11; c++) if (star[r] >> (10 - c) & 1) window_rect(sx + c, sy + r, 1, 1, saved ? BR_ACCENT : 0x00B8B2A8);
     }
-    const char *shown = br_edit ? br_addr : browser_url();
+    char stars[BR_ADDR_MAX + 1]; unsigned sn = 0;
+    if (br_field && browser_field_secret(br_field)) { while (sn < br_addr_n) stars[sn++] = '*'; }
+    stars[sn] = 0;
+    const char *shown = br_field && browser_field_secret(br_field) ? stars : br_edit ? br_addr : browser_url();
     while (*shown && gui_text_width(shown) > fw - 36) shown++;   /* a long address shows its end */
-    gui_text(*shown || br_edit ? shown : "Type an address and press Enter", fx + 6, ty + 3, *shown || br_edit ? 0x001C1C1E : 0x0075726E);
+    gui_text(*shown || (br_edit && !br_field) ? shown : br_field ? "Type the field's text" : "Type an address and press Enter", fx + 6, ty + 3, *shown || br_edit ? 0x001C1C1E : 0x0075726E);
     if (br_edit) window_rect(fx + 7 + gui_text_width(shown), ty + 4, 1, 14, BR_ACCENT);
     window_rect(x - 1, y - 1, w + 2, h + 2, 0x00DDD8CE); window_rect(x, y, w, h, 0x00faf8f4);
     unsigned len; const char *t = browser_text(&len);
@@ -324,7 +329,7 @@ static void br_sink(const char *s) {   /* browse_command's output: lines for the
 }
 static void br_run(const char *cmd) {   /* one browse_command line, with "loading..." up while it blocks */
     unsigned before = browser_loads();
-    br_msg[0] = 0; br_err[0] = 0; br_edit = 0; br_loading = 1;
+    br_msg[0] = 0; br_err[0] = 0; br_edit = 0; br_field = 0; br_loading = 1;
     browser_paint(0);
     void (*old)(const char *) = cmd_out;
     cmd_out = br_sink; br_ln_n = 0;
@@ -351,6 +356,18 @@ static void br_run(const char *cmd) {   /* one browse_command line, with "loadin
    in front), and otherwise a search, on DuckDuckGo's page that needs no JavaScript. */
 #define BR_SEARCH "https://html.duckduckgo.com/html/?q="
 static void br_load(void) {   /* Enter in the address bar */
+    if (br_field) {   /* 6.15.0: the bar was a form field: fill N TEXT, the page stays */
+        char cmd[BR_ADDR_MAX + 16] = "fill "; unsigned n = 5; char d[5]; unsigned z = 0, v = br_field;
+        do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) cmd[n++] = d[--z];
+        cmd[n++] = ' ';
+        for (unsigned i = 0; i < br_addr_n && n < sizeof cmd - 1; i++) cmd[n++] = br_addr[i];
+        cmd[n] = 0;
+        void (*old)(const char *) = cmd_out; cmd_out = br_sink; browse_command(cmd, n); cmd_out = old;
+        con_quiet = 1; uart_puts("browser: filled field "); uart_dec(br_field); uart_putc('\n');
+        br_set(br_msg, "field set: Tab to the button and press Enter", sizeof br_msg);
+        br_field = 0; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; browser_paint(0);
+        return;
+    }
     if (!br_addr_n) return;
     char cmd[260]; unsigned n = 0;
     int scheme = br_has(br_addr, "://"), space = br_has(br_addr, " "), dot = br_has(br_addr, ".");
@@ -379,6 +396,14 @@ static void br_nav(int what) {   /* 0 back, 1 forward, 2 reload */
     br_run(word[what]);
 }
 static void br_follow(unsigned n) {   /* link n, as a click on it would */
+    const char *l = browser_link(n);
+    if (l && l[0] == 'f' && l[1] == 'i' && l[5] == ':') {   /* a form field: the address bar becomes its editor */
+        br_field = n; br_edit = 1; br_addr_n = 0; br_addr[0] = 0;
+        br_set(br_msg, "type, then press Enter", sizeof br_msg);
+        con_quiet = 1; uart_puts("browser: editing field "); uart_dec(n); uart_putc('\n');
+        browser_paint(0);
+        return;
+    }
     char cmd[16] = "open "; unsigned o = 5; char d[5]; unsigned z = 0, v = n;
     do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) cmd[o++] = d[--z];
     cmd[o] = 0;
@@ -424,7 +449,7 @@ static void br_tab(void) {
     unsigned want = br_sel + 1;
     if (!browser_link(want)) want = 1;
     if (!browser_link(want)) return;
-    br_sel = want; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0;
+    br_sel = want; br_edit = 0; br_field = 0; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0;
     unsigned len; const char *t = browser_text(&len);
     for (unsigned vi = 0; vi < br_n; vi++) {
         char buf[128]; unsigned n = br_len[vi], e;
@@ -455,9 +480,9 @@ int browser_key(unsigned code) {   /* a key down with the Browser in front and S
     if (alt_held && (code == 105 || code == 106)) { br_nav(code == 106); return 1; }          /* Alt+Left, Alt+Right */
     if (code == 63 || (ctrl_held && code == 19)) { br_nav(2); return 1; }                      /* F5, Ctrl+R */
     if (ctrl_held && code == 32) { br_star(); return 1; }                                      /* Ctrl+D, the star */
-    if (ctrl_held && code == 38) { br_edit = 1; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); return 1; }   /* Ctrl+L */
+    if (ctrl_held && code == 38) { br_field = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); return 1; }   /* Ctrl+L */
     int page = br_rows() > 1 ? br_rows() - 1 : 1;
-    if (code == 1) { if (br_edit) { br_edit = 0; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); } else browser_close(); return 1; }
+    if (code == 1) { if (br_edit) { br_field = 0; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); } else browser_close(); return 1; }
     if (code == 104 || code == 109 || code == 102 || code == 107 || code == 103 || code == 108) {
         br_scroll(code == 104 ? br_top - page : code == 109 ? br_top + page : code == 102 ? 0 : code == 107 ? (int)br_n : code == 103 ? br_top - 1 : br_top + 1);
         br_msg[0] = 0; browser_paint(0); return 1;
@@ -498,7 +523,7 @@ void browser_click(int lx, int ly) {
     if (ly >= ty && ly < ty + 22) {
         for (int i = 0; i < 3; i++) if (lx >= win_lx + 10 + i * 26 && lx < win_lx + 32 + i * 26) { br_nav(i); return; }
         if (lx >= win_lx + win_lw - 36 && lx < win_lx + win_lw - 10) { br_star(); return; }   /* the star */
-        if (lx >= win_lx + 92 && lx < win_lx + win_lw - 10) { br_edit = 1; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); }
+        if (lx >= win_lx + 92 && lx < win_lx + win_lw - 10) { br_field = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); }
         return;
     }
     if (br_empty() && st_count() && lx >= br_x() && lx < br_x() + br_w()) {   /* a start-page row opens its page */
