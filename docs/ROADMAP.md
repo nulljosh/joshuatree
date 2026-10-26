@@ -150,6 +150,24 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 
 ## Daily driver gaps (Joshua, 2026-10-12: "keep identifying gaps and check them off as we go")
 
+Gap study, 2026-10-26 (Joshua ran `/mobbin`). Our apps beside the App Store screens of Fantastical, Bear, Drafts, Things 3, Mercury Weather, CARROT Weather, Delta, Documents by Readdle and Termius. Skipped: anything needing their cloud, accounts, ads or paywalls. Ordered by what gets touched every day, polish before novelty, on the device before the cloud. Each row is one minor version, built on both desktops where the app runs on both, with light and dark screenshots beside the rival's sheet before it ships.
+
+| # | Gap | Who has it | Size | Status |
+|---|---|---|---|---|
+| 1 | Notes: Cmd+F finds text in the open note, and a search field over all notes | Bear, Drafts | M | open |
+| 2 | Calendar: the day's events listed under the month grid, not only dots | Fantastical | M | open |
+| 3 | Weather: one line for the next hour ("rain starting in 11 min") from Open-Meteo's 15-minute data | CARROT, Fantastical | S | open |
+| 4 | Weather: the next 24 hours as a temperature curve, not only a row of icons | Mercury | M | open |
+| 5 | Reminders: Today and Upcoming views, with a date on a reminder | Things 3 | M | open |
+| 6 | Burrow: a search field over the folder, and a Recents list | Documents | S | open |
+| 7 | Notes: word and character count in the editor | Bear | S | open |
+| 8 | Terminal: Ctrl+R searches the command history | Termius | S | open |
+| 9 | Weather: saved cities, swipe or arrow between them | Mercury, CARROT | M | open |
+| 10 | Calendar: type an event in plain words ("lunch with Sam Tuesday 1pm") and it lands on the day | Fantastical | M | open |
+| 11 | Stocks: holdings, a total and the day's gain over the watchlist | Delta | M | open |
+| 12 | Desktop widgets: weather, today's events and reminders on the wallpaper | Mercury, CARROT, Things 3 | L | open |
+| 13 | A real dark mode across the apps, not only the Terminal | Things 3, Fantastical | L | open |
+
 
 ## Next few weeks
 
