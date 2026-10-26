@@ -453,6 +453,37 @@ def backup_write(root, user, files):
         raise
 
 
+BACKUP_SEND_MAX = 512 * 1024   # the Pi's BACKUP_MAX: it holds no more
+BACKUP_PI_DEPTH = 7            # names in one path the Pi takes back (snap.c DEPTH_MAX folders, then the file)
+
+
+def backup_latest(root, user):
+    """The newest finished backup for user, packed like snap_pack, or None when there is none. Only what backup_unpack
+    would take goes in: a name that is not 8.3, a link, a file over 32 KB or past the Pi's limit is left out. Folders
+    named .incoming-* are runs still being written and never count."""
+    home = os.path.join(os.path.realpath(root), user)
+    if not os.path.isdir(home) or os.path.realpath(home) != home: return None
+    runs = sorted(d for d in os.listdir(home) if not d.startswith(".") and os.path.isdir(os.path.join(home, d)) and not os.path.islink(os.path.join(home, d)))
+    if not runs: return None
+    run = os.path.join(home, runs[-1])
+    out = bytearray(b"JTB1")
+    for dirpath, dirs, names in os.walk(run):
+        dirs[:] = sorted(d for d in dirs if BACKUP_NAME_RE.fullmatch(d) and not os.path.islink(os.path.join(dirpath, d)))
+        rel = os.path.relpath(dirpath, run).replace(os.sep, "/")
+        parts = [] if rel == "." else rel.split("/")
+        if len(parts) + 2 > BACKUP_PI_DEPTH: dirs[:] = []   # a file one folder down would be one name too deep
+        if not parts: dirs[:] = [d for d in dirs if d.upper() != "SNAP"]
+        for name in sorted(names):
+            if not parts and name.upper() in ("SNAP", "_DONE"): continue   # the Pi refuses its own snapshot folder and marker
+            full = os.path.join(dirpath, name)
+            if not BACKUP_NAME_RE.fullmatch(name) or os.path.islink(full) or not os.path.isfile(full): continue
+            with open(full, "rb") as f: data = f.read(BACKUP_FILE_MAX + 1)
+            path = "/".join(parts + [name]).encode()
+            if len(data) > BACKUP_FILE_MAX or len(path) > 120 or len(out) + 5 + len(path) + len(data) > BACKUP_SEND_MAX: continue
+            out += bytes([len(path)]) + path + len(data).to_bytes(4, "little") + data
+    return bytes(out)
+
+
 class Relay:
     def __init__(self, cfg, token):
         self.cfg = cfg
@@ -548,6 +579,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except OSError: return self.reply(500, "The Mac could not write the backup.", n, t0)
         return self.reply(200, "%d file%s, %d bytes, kept on the Mac in %s/%s" % (count, "" if count == 1 else "s", total, user, folder), n, t0)
 
+    def backup_latest(self, query, n, t0):
+        q = urllib.parse.parse_qs(query, keep_blank_values=True)
+        user = q.get("user", [""])[0]
+        if set(q) != {"user"} or len(q["user"]) != 1 or not BACKUP_USER_RE.fullmatch(user): return self.reply(400, "Say whose backup it is.", n, t0)
+        try: data = backup_latest(self.relay.cfg.backup_dir, user)
+        except OSError: return self.reply(500, "The Mac could not read the backup.", n, t0)
+        if data is None: return self.reply(404, "The Mac keeps no backup for %s yet. Run backup first." % user, n, t0)
+        return self.reply_bytes(data, n, t0)
+
     def tts(self, raw, ctype, n, t0):
         r = self.relay
         if ctype == "application/json":
@@ -572,9 +612,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         t0 = time.time()
         r = self.relay
         route, _, query = self.path.partition("?")
-        if route not in ("/api/claude", "/api/tts", "/api/backup"): return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
-        if route == "/api/backup" and not r.cfg.backup_dir: return self.reply(404, "This relay keeps no backups. Start it with --backup-dir FOLDER.", 0, t0)
-        if route != "/api/backup" and query: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
+        backups = route in ("/api/backup", "/api/backup/latest")
+        if route not in ("/api/claude", "/api/tts") and not backups: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
+        if backups and not r.cfg.backup_dir: return self.reply(404, "This relay keeps no backups. Start it with --backup-dir FOLDER.", 0, t0)
+        if not backups and query: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
         auth = self.headers.get("Authorization", "")
         given = auth[7:].strip().encode() if auth.startswith("Bearer ") else b""
         if not hmac.compare_digest(given, r.token): return self.reply(401, "Wrong or missing relay token.", 0, t0)  # TOKEN-CHECK
@@ -585,6 +626,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if n > (BACKUP_MAX_BODY if route == "/api/backup" else r.cfg.max_body): return self.reply(413, "That prompt is too long for the relay.", n, t0)
         raw = self.rfile.read(n)
         if route == "/api/backup": return self.backup(raw, query, n, t0)
+        if route == "/api/backup/latest": return self.backup_latest(query, n, t0)
         ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
         if route == "/api/tts": return self.tts(raw, ctype, n, t0)
         session = ""

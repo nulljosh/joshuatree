@@ -722,6 +722,8 @@ Settings has a Users section too (4.14.0), the same accounts without the Termina
 
 **Backups to the Mac** (5.2.0). `backup` in the Terminal sends your home folder to the relay on your Mac in one go, so a lost card does not lose your notes. It takes what a snapshot takes: files up to 32 KB, 512 KB in all, and says how many it left out. The relay keeps backups only when you start it with `--backup-dir FOLDER`; each one lands in `FOLDER/<your name>/<date and time>/`, written to a hidden folder first and renamed when every file is in, so a cut-off backup leaves nothing half done. It checks every name before it writes anything (8.3 names only, nothing that climbs out of the folder) and never runs Claude for it.
 
+**Restore from the Mac** (5.3.0). `restore mac yes` brings your newest backup back from the relay (plain `restore mac` only says what it will do). It takes a snapshot first, so `restore N yes` with that number undoes it, then writes each file over the one of the same name. Files the backup lacks stay where they are, and a file over 32 KB or a folder in the way is left alone and counted. The relay sends only names the Pi takes, and the Pi checks them again before it writes a byte.
+
 ### Music on the Pi
 
 The Pi plays songs from its card out of the 3.5 mm jack. It uses the PC's own `user/music.c` in user mode. It has no dock tile: press F1 and type music.

@@ -707,6 +707,27 @@ static int relay_post_tls(const char *body, unsigned body_len, const char *token
 /* backup (5.2.0): the signed-in person's home folder, packed by snap.c into one container, sent to the relay's /api/backup in one
    request with the bearer token. The relay keeps it on the Mac only when it was started with --backup-dir, and answers in one
    line ("N files, M bytes in FOLDER") or says why not. */
+static void user_path(char *path, const char *base) {   /* base then the signed-in name; path holds 64 */
+    unsigned p = 0;
+    for (; base[p]; p++) path[p] = base[p];
+    for (unsigned k = 0; current_user[k] && k < ACC_NAME_MAX && p + 1 < 64; k++) path[p++] = current_user[k];
+    path[p] = 0;
+}
+static int mac_post(const char *path, const char *body, unsigned len, char *reply, unsigned max, int *status) {   /* with the token, wiped after */
+    static char token[64];
+    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
+    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+#if defined(PI_BUILD) || CLAUDE_TLS
+    int got = relay_post_tls_to(path, body, len, token, reply, max, status);
+#else
+    http_post_set_bearer(token);
+    int got = http_post_timeout(CLAUDE_HOST, path, CLAUDE_PORT, body, len, reply, max, ASK_TICKS);
+    http_post_set_bearer(0);
+    *status = http_last_status();
+#endif
+    for (int i = 0; i < 64; i++) token[i] = 0;
+    return got;
+}
 void backup_command(void) {
     if (!CLAUDE_TOKEN_LEN) { kputs("backup: this card has no relay token, so there is no Mac to send to\n"); return; }
     if (!net_get_gateway()) { kputs("backup: no network\n"); return; }
@@ -719,23 +740,10 @@ void backup_command(void) {
         kputs(r == -9 ? "backup: out of memory\n" : r == -1 ? "backup: no SD card\n" : r == -2 ? "backup: nobody is signed in, so there is no home folder\n" : "backup: the card would not read\n");
         heap_release(mark); return;
     }
-    char path[48] = "/api/backup?user="; unsigned p = 17;
-    for (unsigned k = 0; current_user[k] && k < ACC_NAME_MAX && p + 1 < sizeof path; k++) path[p++] = current_user[k];
-    path[p] = 0;
+    char path[64];
+    user_path(path, "/api/backup?user=");
     kputs("backup: sending "); kdec(files); kputs(files == 1 ? " file to the Mac\n" : " files to the Mac\n");
-    static char token[64];
-    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
-    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
-    int status;
-#if defined(PI_BUILD) || CLAUDE_TLS
-    int got = relay_post_tls_to(path, (const char *)box, len, token, reply, 400, &status);
-#else
-    http_post_set_bearer(token);
-    int got = http_post_timeout(CLAUDE_HOST, path, CLAUDE_PORT, (const char *)box, len, reply, 400, ASK_TICKS);
-    http_post_set_bearer(0);
-    status = http_last_status();
-#endif
-    for (int i = 0; i < 64; i++) token[i] = 0;
+    int status, got = mac_post(path, (const char *)box, len, reply, 400, &status);
     char line[420]; unsigned o = 0;
     for (int i = 0; got > 0 && i < got && o + 1 < sizeof line; i++) line[o++] = reply[i] == '\n' ? ' ' : reply[i];
     while (o && line[o - 1] == ' ') o--;
@@ -747,6 +755,44 @@ void backup_command(void) {
     else if (status == 401) kputs("backup: the relay refused this card's token\n");
     else { kputs("backup: the relay said no: "); kputs(line); kputs("\n"); }
     if (status == 200 && skipped) { kputs("backup: "); kdec(skipped); kputs(" left out (over 32 KB, too deep, or past the 512 KB total)\n"); }
+}
+
+/* restore from the Mac (5.3.0): the relay's /api/backup/latest sends the newest backup it keeps for this name, packed the
+   same way; snap.c checks all of it, takes a snapshot, then writes it into the home folder. */
+void restore_mac_command(void) {
+    if (!CLAUDE_TOKEN_LEN) { kputs("restore mac: this card has no relay token, so there is no Mac to ask\n"); return; }
+    if (!net_get_gateway()) { kputs("restore mac: no network\n"); return; }
+    if (!current_user[0]) { kputs("restore mac: nobody is signed in, so there is no home folder\n"); return; }
+    unsigned long mark = heap_mark();
+    unsigned char *box = kmalloc(BACKUP_MAX);
+    if (!box) { kputs("restore mac: out of memory\n"); heap_release(mark); return; }
+    char path[64];
+    user_path(path, "/api/backup/latest?user=");
+    kputs("restore mac: asking the Mac for your newest backup\n");
+    int status, got = mac_post(path, "", 0, (char *)box, BACKUP_MAX, &status);
+    if (got < 0) kputs("restore mac: the relay on the Mac did not answer\n");
+    else if (status != 200) {
+        char line[200]; unsigned o = 0;
+        for (int i = 0; i < got && o + 1 < sizeof line; i++) line[o++] = box[i] == '\n' ? ' ' : (char)box[i];
+        line[o] = 0;
+        kputs(status == 401 ? "restore mac: the relay refused this card's token\n" : "restore mac: ");
+        if (status != 401) { kputs(line); kputs("\n"); }
+    } else {
+        unsigned id = 0, files = 0, skipped = 0;
+        int r = snap_unpack(box, (unsigned)got, &id, &files, &skipped);
+        if (r == -4) kputs("restore mac: that is not a good backup, nothing was written\n");
+        else if (r < 0) kputs(r == -1 ? "restore mac: no SD card\n" : "restore mac: nobody is signed in\n");
+        else if (r == 0) {
+            kputs("restore mac: the card would not take it");
+            if (id) { kputs("; restore "); kdec(id); kputs(" yes puts back what was there"); }
+            kputs("\n");
+        } else {
+            kputs("restore mac: "); kdec(files); kputs(files == 1 ? " file back from the Mac" : " files back from the Mac");
+            kputs(", snapshot "); kdec(id); kputs(" taken first\n");
+            if (skipped) { kputs("restore mac: "); kdec(skipped); kputs(" left alone (a folder, or a file the snapshot could not hold, in the way)\n"); }
+        }
+    }
+    heap_release(mark);
 }
 
 static void no_answer(void) {   /* "sam: no answer in 30s (relay at a.b.c.d)": the prompt comes back, the busy flag clears in sam_run */

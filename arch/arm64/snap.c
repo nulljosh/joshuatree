@@ -207,6 +207,70 @@ int snap_pack(unsigned char *out, unsigned cap, unsigned *len, unsigned *files, 
     *len = pk_n; *files = n_files; *skipped = n_skipped;
     return ok;
 }
+static int name_ok(const unsigned char *s, unsigned n) {   /* 8.3, the relay's BACKUP_NAME_RE: no dot names, no slash, no space */
+    unsigned k = 0, base = 0, ext = 0, dot = 0;
+    for (; k < n; k++) {
+        unsigned char c = s[k];
+        if (c == '.') { if (dot || !base) return 0; dot = 1; continue; }
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '~' || c == '-')) return 0;
+        if (dot) ext++; else base++;
+    }
+    return base >= 1 && base <= 8 && (dot ? ext >= 1 && ext <= 3 : 1);
+}
+/* One pass over a container: write 0 checks every entry, write 1 puts each file under home. A file already in home is
+   written over only when the snapshot `snap` (taken just before) holds it, so nothing the snapshot missed (past 24 in a
+   folder, over 32 KB, unreadable) is lost. -4 when it is not a good container, 0 when the card refused, 1 done. */
+static int unpack(const unsigned char *in, unsigned len, unsigned home, unsigned snap, int write) {
+    if (len < 4 || in[0] != 'J' || in[1] != 'T' || in[2] != 'B' || in[3] != '1') return -4;
+    for (unsigned i = 4; i < len;) {
+        unsigned plen = in[i++];
+        if (!plen || i + plen + 4 > len) return -4;
+        const unsigned char *path = in + i; i += plen;
+        unsigned size = (unsigned)in[i] | (unsigned)in[i + 1] << 8 | (unsigned)in[i + 2] << 16 | (unsigned)in[i + 3] << 24; i += 4;
+        if (size > SNAP_FILE_MAX || size > len - i) return -4;
+        const unsigned char *data = in + i; i += size;
+        unsigned folder = home, sf = snap, start = 0, depth = 0;
+        for (unsigned k = 0; k <= plen; k++) {
+            if (k < plen && path[k] != '/') continue;
+            unsigned cn = k - start;
+            if (!name_ok(path + start, cn) || depth > DEPTH_MAX) return -4;
+            char name[13];
+            for (unsigned c = 0; c < cn; c++) name[c] = (char)path[start + c];
+            name[cn] = 0;
+            if (top_skip(depth == 0, name)) return -4;   /* never the snapshots, never a marker */
+            if (write && k < plen) {
+                if (!(folder = sub_make(folder, name))) return 0;
+                sf = sf ? sub_of(sf, name) : 0;
+            }
+            if (write && k == plen) {
+                char one[1];
+                fat_cwd_set(folder);
+                int here = fat_read_file(name, one, 1) >= 0, kept = 0;
+                if (here && sf) { fat_cwd_set(sf); kept = fat_read_file(name, one, 1) >= 0; }
+                if (sub_of(folder, name) || (here && !kept)) n_skipped++;   /* a folder, or a file the snapshot lacks: left alone */
+                else { fat_cwd_set(folder); if (!fat_replace_file(name, data, size)) return 0; n_files++; n_bytes += size; }
+            }
+            start = k + 1; depth++;
+        }
+    }
+    return 1;
+}
+int snap_unpack(const unsigned char *in, unsigned len, unsigned *snap_id, unsigned *files, unsigned *skipped) {
+    unsigned home, snaps, f, s;
+    char name[12];
+    int r = unpack(in, len, 0, 0, 0);
+    if (r <= 0) return r;
+    if ((r = snap_take(snap_id, &f, &s)) <= 0) return r;
+    if ((r = ready(&home, &snaps, 0)) <= 0) return r;
+    put_num(name, *snap_id);
+    unsigned snap = snaps ? sub_of(snaps, name) : 0;
+    if (!snap) { fat_cwd_set(0); return 0; }
+    n_files = n_bytes = n_skipped = 0;
+    r = unpack(in, len, home, snap, 1);
+    fat_cwd_set(0);
+    *files = n_files; *skipped = n_skipped;
+    return r;
+}
 int snap_take(unsigned *id, unsigned *files, unsigned *skipped) {
     unsigned home, snaps, ids[SNAP_LIST_MAX], all[SNAP_LIST_MAX];
     int r = ready(&home, &snaps, 1);
