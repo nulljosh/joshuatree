@@ -5,7 +5,8 @@ appears take no keys"; the stamps in arch/arm64/boot.c find out why on the board
 Boots the virt build with a keyboard and, with no settling sleep, sends Cmd+Space the moment `M2 input ready` is out:
   1. the UART says `first key N ms after the desktop`, with N under 5000;
   2. Spotlight opens on that first chord ("spotlight open");
-  3. no main-loop step held the keys up (no `slow step` line) on a healthy boot.
+  3. no main-loop step held the keys up (no `slow step` line) on a healthy boot;
+  4. `boottime` in the Terminal repeats the stamp, so the board's numbers can be read without a serial cable.
 
 Discriminating: drop the first-key stamp in input_event and step 1 fails.
 
@@ -65,6 +66,15 @@ try:
     check("Spotlight opens on the very first chord", wait("spotlight open", 5), uart()[-300:])
     time.sleep(1)
     check("no main-loop step held the keys up", "slow step" not in uart(), re.findall(r"slow step .*", uart()))
+    def key(k): command("send-key", {"keys": [{"type": "qcode", "data": k}], "hold-time": 50}); time.sleep(.15)
+    key("esc"); key("f2"); time.sleep(.5)
+    for c in "boottime": key(c)
+    n = uart().count("first key ")
+    key("ret")
+    for _ in range(60):
+        if uart().count("first key ") > n: break
+        time.sleep(.05)
+    check("`boottime` in the Terminal repeats the stamp", uart().count("first key ") > n, uart()[-300:])
 finally:
     q.terminate()
     try: q.wait(5)

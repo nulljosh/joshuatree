@@ -36,20 +36,26 @@ static void app_key(unsigned code) {   /* a key down for the app in front, as th
     else if (!k) k = ask_char(code);
     if (k) app_push(1, k, 0);
 }
-/* The Pi took no keys for its first few seconds on the desktop (roadmap). These stamps find out why on the board: the
-   Console names any step of the main loop that held the keys up for 100 ms or more, and when the first key arrived. */
+/* The Pi took no keys for its first few seconds on the desktop (roadmap). These stamps find out why on the board: when the
+   first key arrived after the desktop, and any step of the main loop that held the keys up for 100 ms or more in the first
+   half minute. They go to the UART and to `boottime` in the Terminal, never the Console, whose picture checks hold still.
+   The login screen's own wait for a wrong password is not counted. */
 static unsigned long desk_ms;   /* key_ms() as the main loop starts */
-static void pass_note(const char *what, unsigned long t0) {
+static char stamps[512];
+static unsigned stamps_n;
+const char *boot_stamps(void) { return stamps; }   /* cmd.c: `boottime` */
+static void stamp(const char *s) { con_quiet = 1; uart_puts(s); while (*s && stamps_n < sizeof stamps - 1) stamps[stamps_n++] = *s++; }
+static void stamp_dec(unsigned long v) { char b[24]; int k = 23; b[k] = 0; do b[--k] = (char)('0' + v % 10); while ((v /= 10) && k); stamp(b + k); }
+static void pass_note(const char *what, unsigned long t0, int login) {
     unsigned long ms = key_ms() - t0;
-    if (ms < 100 || !desk_ms || t0 - desk_ms > 30000) return;   /* the first half minute only: later, a `sam` or a heavy app is slow on purpose */
-    uart_puts("slow step "); uart_puts(what); uart_putc(' '); uart_dec((unsigned)ms); uart_puts(" ms, ");
-    uart_dec((unsigned)(t0 - desk_ms)); uart_puts(" ms after the desktop\n");
+    if (ms < 100 || !desk_ms || login || login_live || t0 - desk_ms > 30000) return;   /* later, a `sam` or a heavy app is slow on purpose */
+    stamp("slow step "); stamp(what); stamp(" "); stamp_dec(ms); stamp(" ms, "); stamp_dec(t0 - desk_ms); stamp(" ms after the desktop\n");
 }
-#define TIMED(f) do { unsigned long t_ = key_ms(); f; pass_note(#f, t_); } while (0)
+#define TIMED(f) do { unsigned long t_ = key_ms(); int l_ = login_live; f; pass_note(#f, t_, l_); } while (0)
 void input_event(struct input_event e) {
     static int first_key;
-    if (e.type == 1 && e.value == 1 && desk_ms && !first_key) {
-        first_key = 1; uart_puts("first key "); uart_dec((unsigned)(key_ms() - desk_ms)); uart_puts(" ms after the desktop\n");
+    if (e.type == 1 && e.value == 1 && desk_ms && !first_key && !login_live) {
+        first_key = 1; stamp("first key "); stamp_dec(key_ms() - desk_ms); stamp(" ms after the desktop\n");
     }
 #ifdef PI_BUILD
     if (e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) screen_activity();   /* any key or button or a move wakes the screen */
