@@ -635,7 +635,8 @@ drivers/user_stocks.h: user/stocks.bin tools/gen/gen_user_bin.py
 drivers/user_activity.h: user/activity.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/activity.bin drivers/user_activity.h user_activity
 
-kernel/kernel.o: drivers/user_wc.h
+kernel/kmain.o: drivers/user_wc.h drivers/version.h   # 4.25.1: kmain.c holds the wc program and prints the version
+kernel/desktop.o: drivers/version.h
 kernel/progtest.o: drivers/user_hello.h drivers/user_note.h
 drivers/user_fbpoke.h: user/fbpoke.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/fbpoke.bin drivers/user_fbpoke.h user_fbpoke
