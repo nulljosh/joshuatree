@@ -10,6 +10,8 @@
 #include "../../drivers/http.h"
 #include "tls.h"
 #include "../../drivers/inflate.h"
+#include "../../drivers/png.h"
+#include "../../drivers/jpeg.h"
 
 extern void (*cmd_out)(const char *s);         /* cmd.c */
 void cmd_dec(unsigned v);
@@ -32,6 +34,14 @@ void *kmalloc(unsigned int n);
 #define BR_SMALL '\x02'
 #define BR_BOLD '\x03'
 #define BR_PLAIN '\x04'
+/* 6.14.0: an inline image is a line of its own, BR_IMG then 0x10 + its number. The window draws the picture there. */
+#define BR_IMG '\x05'
+#define IMG_MAX 4
+#define IMG_W 400           /* logical px: an image is kept at most this wide and tall, scaled down to fit, never up */
+#define IMG_H 300
+static char img_url[IMG_MAX][URL_MAX];
+static unsigned nimg, img_w[IMG_MAX], img_h[IMG_MAX];   /* images on the page, and each one's kept size (0 when it did not load) */
+static unsigned img_px[IMG_MAX][IMG_W * IMG_H];         /* 0RGB, img_w[k] to a row. ponytail: static, 1.9 MB; the heap is a bump that callers roll back */
 #define PAGE_LINES 16       /* ponytail: a fixed page; the Terminal's own rows if its height should set it */
 /* Budgets in ticks (100 a second). A fetch answers or fails in about 10 s: 3 s for DNS, 4 s for the SYN-ACK, 8 s for
    each piece of the reply (tls.c's own read budget matches). The stack's defaults are 20 s each, which on a real LAN
@@ -241,7 +251,7 @@ static int is_tag(const char *tag, unsigned tn, const char *w) {   /* the tag na
 static void to_text(const char *h, unsigned n) {
     unsigned o = 0, i = 0, skip = 0, space = 1;
     int in_title = 0, link = 0; unsigned tl = 0;
-    nlinks = 0; title[0] = 0;
+    nlinks = 0; nimg = 0; title[0] = 0;
     while (i < n) {
         char c = h[i];
         if (skip) {   /* inside script or style: only the literal closing tag ends it; a '<' in code is not a tag */
@@ -273,6 +283,18 @@ static void to_text(const char *h, unsigned n) {
                     } else if (link) {   /* "text [3]" */
                         o = put(text, o, ' '); o = put(text, o, '['); char d[4]; unsigned k = 0, v = (unsigned)link; do d[k++] = (char)('0' + v % 10); while (v /= 10); while (k) o = put(text, o, d[--k]);
                         o = put(text, o, ']'); link = 0; space = 0;
+                    }
+                }
+                else if (!close && is_tag(tag, tn, "img")) {   /* src="..." on a line of its own */
+                    for (unsigned k = 1; k + 4 < tn && nimg < IMG_MAX; k++) if (starts(tag + k, "src=") && (tag[k - 1] == ' ' || tag[k - 1] == '\n' || tag[k - 1] == '\t')) {
+                        unsigned s = k + 4; char q = tag[s]; unsigned z;
+                        if (q == '"' || q == '\'') { s++; z = s; while (z < tn && tag[z] != q) z++; } else { z = s; while (z < tn && tag[z] != ' ' && tag[z] != '\n' && tag[z] != '\t') z++; if (z == tn && z > s && tag[z - 1] == '/') z--; }   /* <img src=x/> */
+                        resolve(tag + s, z - s, img_url[nimg]);
+                        if (img_url[nimg][0]) {
+                            if (o && text[o - 1] != '\n') o = put(text, o, '\n');
+                            o = put(text, o, BR_IMG); o = put(text, o, (char)(0x10 + nimg++)); o = put(text, o, '\n'); space = 1;
+                        }
+                        break;
                     }
                 }
                 else if (is_tag(tag, tn, "b") || is_tag(tag, tn, "strong")) { if (!in_title) o = put(text, o, close ? BR_PLAIN : BR_BOLD); }
@@ -403,6 +425,67 @@ static char *page_body(char *raw, unsigned got, unsigned *n) {
     return body;
 }
 
+/* 6.14.0: the page's images, after its text: each fetched like a page (quietly), decoded (PNG or baseline JPEG) and scaled
+   to fit IMG_W x IMG_H. One line each on the log: "browser: image N WxH" or "browser: image N failed". */
+static void sink(const char *s) { (void)s; }
+static int jpeg_size(const unsigned char *d, unsigned n, unsigned *w, unsigned *h) {   /* the frame's size off its SOF marker */
+    for (unsigned i = 2; i + 9 < n;) {
+        if (d[i] != 0xFF) return 0;
+        unsigned m = d[i + 1], len = (unsigned)d[i + 2] << 8 | d[i + 3];
+        if (m >= 0xC0 && m <= 0xC3) { *h = (unsigned)d[i + 5] << 8 | d[i + 6]; *w = (unsigned)d[i + 7] << 8 | d[i + 8]; return *w && *h; }
+        i += 2 + len;
+    }
+    return 0;
+}
+static void fit(unsigned sw, unsigned sh, unsigned *dw, unsigned *dh) {   /* scaled down to fit, aspect kept, never up */
+    *dw = sw; *dh = sh;
+    if (*dw > IMG_W) { *dh = *dh * IMG_W / *dw; *dw = IMG_W; }
+    if (*dh > IMG_H) { *dw = *dw * IMG_H / *dh; *dh = IMG_H; }
+    if (!*dw) *dw = 1;
+    if (!*dh) *dh = 1;
+}
+static int decode_image(unsigned k, const unsigned char *d, unsigned n) {   /* 1 with img_px[k] filled */
+    unsigned sw, sh, dw, dh, ch;
+    if (n > 3 && d[0] == 0xFF && d[1] == 0xD8) {
+        if (!jpeg_size(d, n, &sw, &sh)) return 0;
+        fit(sw, sh, &dw, &dh);
+        if (jpeg_decode_scaled32(d, n, img_px[k], dw, dh, &sw, &sh) != 0) return 0;
+    } else {
+        unsigned char *px;
+        if (png_decode(d, n, &px, &sw, &sh, &ch) != 0) return 0;
+        fit(sw, sh, &dw, &dh);
+        for (unsigned y = 0; y < dh; y++) for (unsigned x = 0; x < dw; x++) {   /* nearest pixel; alpha over the page's off-white */
+            const unsigned char *q = px + ((unsigned long)(y * sh / dh) * sw + x * sw / dw) * ch;
+            unsigned r = q[0], g = ch >= 3 ? q[1] : q[0], b = ch >= 3 ? q[2] : q[0], a = ch == 4 ? q[3] : ch == 2 ? q[1] : 255;
+            r = (r * a + 0xfa * (255 - a)) / 255; g = (g * a + 0xf8 * (255 - a)) / 255; b = (b * a + 0xf4 * (255 - a)) / 255;
+            img_px[k][y * dw + x] = r << 16 | g << 8 | b;
+        }
+    }
+    img_w[k] = dw; img_h[k] = dh;
+    return 1;
+}
+unsigned int ticks(void);   /* ip.c, 100 a second */
+#define IMG_TICKS 500   /* every image a page has gets 5 s in all: the window blocks while they load, and a slow host must not hold it */
+static void load_images(char *raw) {
+    char page[URL_MAX]; scopy(page, cur, slen(cur), URL_MAX);
+    unsigned t0 = ticks();
+    for (unsigned k = 0; k < nimg; k++) {
+        if (ticks() - t0 > IMG_TICKS) { img_w[k] = img_h[k] = 0; kputs("browser: image "); kdec(k + 1); kputs(" skipped, too slow\n"); continue; }
+        unsigned long mark = heap_mark();
+        void (*was)(const char *) = cmd_out; cmd_out = sink;
+        unsigned n = 0; char *body = 0;
+        int got = fetch(img_url[k], raw, RAW_MAX);
+        if (got > 0 && http_status_of(raw, (unsigned)got) == 200) body = page_body(raw, (unsigned)got, &n);
+        cmd_out = was;
+        img_w[k] = img_h[k] = 0;
+        int ok = body && decode_image(k, (const unsigned char *)body, n);
+        heap_release(mark);
+        kputs("browser: image "); kdec(k + 1);
+        if (ok) { kputs(" "); kdec(img_w[k]); kputs("x"); kdec(img_h[k]); kputs("\n"); } else kputs(" failed\n");
+    }
+    scopy(cur, page, slen(page), URL_MAX);
+}
+
 static void show(const char *url, int push) {
     unsigned long mark = heap_mark();
     char vid[12];
@@ -420,6 +503,7 @@ static void show(const char *url, int push) {
     char *body = got > 0 ? page_body(raw, (unsigned)got, &blen) : 0;
     if (body) {
         to_text(body, blen);
+        load_images(raw);
         if (push) {   /* a new page: it follows the one on screen, anything after that is forgotten */
             if (hn && hi + 1 < hn) hn = hi + 1;
             if (hn == HIST_MAX) { for (unsigned k = 1; k < HIST_MAX; k++) scopy(hist[k - 1], hist[k], slen(hist[k]), URL_MAX); hn--; }
@@ -511,5 +595,6 @@ int browse_command(const char *q, unsigned n) {
 const char *browser_text(unsigned *len) { *len = tlen; return text; }   /* the page as lines of text, '\n' between them, "[N]" after a link */
 const char *browser_title(void) { return title; }                     /* its <title>, up to 60 characters, "" when it has none */
 const char *browser_url(void) { return cur; }                          /* the page on screen, "" before the first */
+const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h) { if (k >= nimg || !img_w[k]) return 0; *w = img_w[k]; *h = img_h[k]; return img_px[k]; }   /* 6.14.0 */
 const char *browser_link(unsigned n) { return n && n <= nlinks ? links[n - 1] : 0; }
 unsigned browser_loads(void) { return loads; }

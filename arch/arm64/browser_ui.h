@@ -14,16 +14,18 @@ int sd_ready(void); int sd_write(const char *name, const void *data, unsigned le
 int fat_read_file(const char *name, void *buf, unsigned bufsize); int fat_chdir(const char *name); void fat_cwd_set(unsigned int cluster);   /* drivers/fat.c */
 const char *browser_link(unsigned n);
 unsigned browser_loads(void);
+const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h);   /* 6.14.0: image k's 0RGB pixels and kept size, 0 when it did not load */
 #define BR_ROW 16          /* a page line, logical pixels */
 #define BR_PAGE_Y 64       /* the page well's top, under the toolbar */
 #define BR_VL_MAX 1024     /* wrapped lines kept: 8 KiB of page never needs more than this */
 #define BR_ADDR_MAX 200
 #define BR_ACCENT 0x00b5502c
 static unsigned short br_off[BR_VL_MAX], br_len[BR_VL_MAX];   /* wrapped line i: an offset into the page text and a length */
-/* 6.13.0: each wrapped line's style. The low two bits: 0 body text, 1 an h1 or h2 (bold, 20 px, two rows tall), 2 an h3 to
-   h6 (bold, body size), 3 the second row under a big heading's line; BR_ST_BOLD when the line starts inside <b>. */
+/* 6.13.0: each wrapped line's style. The low three bits: 0 body text, 1 an h1 or h2 (bold, 20 px, two rows tall), 2 an h3
+   to h6 (bold, body size), 3 the second row under a big heading's line, 4 (6.14.0) one BR_ROW slice of an inline image,
+   its number and slice in br_off (k * 32 + slice); BR_ST_BOLD when the line starts inside <b>. */
 static unsigned char br_sty[BR_VL_MAX];
-#define BR_ST_BOLD 4
+#define BR_ST_BOLD 8
 static int br_face(unsigned kind, int bold) { return kind == 1 || kind == 2 || bold ? 1 : 2; }   /* text.c: 1 sans bold, 2 sans */
 static int br_px(unsigned kind, int s) { return (kind == 1 ? 200 : 120) * s; }
 static unsigned br_n, br_lines;                              /* wrapped lines, and the page's own lines (the `page N lines` log) */
@@ -137,6 +139,11 @@ static void br_wrap(void) {   /* the page into lines that fit the well: break at
         unsigned a = i, kind = 0; int bold = 0;
         if (a < e && (t[a] == '\x01' || t[a] == '\x02')) kind = (unsigned)t[a] == 1 ? 1 : 2;
         if (a == e) { br_off[br_n] = (unsigned short)a; br_sty[br_n] = 0; br_len[br_n++] = 0; }
+        if (e - a == 2 && t[a] == '\x05') {   /* an image line: as many rows as the picture is tall */
+            unsigned k = (unsigned)t[a + 1] - 0x10, iw, ih;
+            if (browser_image(k, &iw, &ih)) for (unsigned sl = 0; sl * BR_ROW < ih && sl < 32 && br_n < BR_VL_MAX; sl++) { br_off[br_n] = (unsigned short)(k * 32 + sl); br_sty[br_n] = 4; br_len[br_n++] = 0; }
+            a = e;
+        }
         while (a < e && br_n < BR_VL_MAX) {
             unsigned b = a, sp = 0; int w = 0, start_bold = bold, b_at_sp = bold;
             while (b < e && b - a < 127) {
@@ -223,8 +230,20 @@ void browser_paint(int report) {
         unsigned num = br_mark(buf, n, 0, &e);
         int ly = y + 4 + r * BR_ROW;
         for (unsigned f = 0, fe, k; br_sel && (k = br_mark(buf, n, f, &fe)); f = fe) if (k == br_sel) { window_rect(x + 2, ly - 2, w - 4, BR_ROW, 0x00F3E2D8); break; }
-        unsigned kind = br_sty[vi] & 3; int bold = (br_sty[vi] & BR_ST_BOLD) != 0;
+        unsigned kind = br_sty[vi] & 7; int bold = (br_sty[vi] & BR_ST_BOLD) != 0;
         if (kind == 3) continue;   /* the lower half of a big heading */
+        if (kind == 4) {   /* one slice of an image, each logical pixel an s x s square */
+            unsigned k = br_off[vi] >> 5, sl = br_off[vi] & 31, iw, ih;
+            const unsigned *px = browser_image(k, &iw, &ih);
+            for (unsigned yy = sl * BR_ROW; px && yy < ih && yy < (sl + 1) * BR_ROW; yy++)
+                for (unsigned xx = 0; xx < iw && (int)xx < w - 12; xx++) {
+                    unsigned c = fb_color(px[yy * iw + xx]);
+                    for (int dy = 0; dy < s; dy++) for (int dx = 0; dx < s; dx++)
+                        fb[(unsigned)((ly + (int)(yy - sl * BR_ROW)) * s + dy) * fb_pitch + (unsigned)((x + 6 + (int)xx) * s + dx)] = c;
+                }
+            if (report && px && !sl) { con_quiet = 1; uart_puts("browser: shows image "); uart_dec(k + 1); uart_puts(" at "); uart_dec((unsigned)(x + 6) * (unsigned)s); uart_putc(','); uart_dec((unsigned)ly * (unsigned)s); uart_putc('\n'); }
+            continue;
+        }
         {   /* runs of one face: marks switch bold, the heading's own face and size cover the whole line */
             unsigned fg = fb_color(num ? BR_ACCENT : 0x001C1C1E);
             int px = (x + 6) * s, base = kind == 1 ? (ly + 24) * s : ly * s + 25 * s / 2;   /* gui_text's baseline; a big heading's sits 24 down its two rows */

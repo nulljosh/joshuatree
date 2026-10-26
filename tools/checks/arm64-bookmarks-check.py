@@ -158,6 +158,9 @@ try:
     time.sleep(0.5)
     b.key("ctrl", "l"); b.type_text("raspberry pi"); b.key("ret")
     check("words with a space search DuckDuckGo's page", b.wait_for("browser: search raspberry pi", 10) and b.wait_for("browser: load https://html.duckduckgo.com/html/?q=raspberry+pi", 10), b.uart()[-400:])
+    at = b.uart().rfind("q=raspberry+pi")   # the search's load ends one way or the other (on CI's network a real page, images and all) before the next address is typed
+    end = time.time() + 60
+    while time.time() < end and "browser: page " not in b.uart()[at:] and "browser: status " not in b.uart()[at:]: time.sleep(0.2)
     time.sleep(0.5); b.key("ctrl", "l"); b.type_text("example.org"); b.key("ret")
     check("a bare host gets https:// in front", b.wait_for("browser: load https://example.org\n", 10), b.uart()[-400:])
     b.stop(); b = None
