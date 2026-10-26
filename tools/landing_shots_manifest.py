@@ -17,16 +17,16 @@ PROGRAM = {
     "app-hamurapi": "hamurabi", "app-windgate": "windgate", "app-panes": "panes",
     "app-solitaire": "solitaire", "app-paddle": "paddle", "app-bricks": "bricks", "app-depths": "depths", "app-snake": "snake", "app-chess": "chess",
 }
-# Tiles drawn by the kernel itself, not one program: the desktop is the menu bar, wallpaper and dock.
-KERNEL = {"desktop": ["kernel/menu.c", "kernel/dock_draw.c", "kernel/dock_geom.c", "kernel/icons.c", "kernel/icon_art.h",
+# Tiles drawn by the kernel itself, not one program: the hero is the menu bar, wallpaper and dock, with the Terminal and Weather open
+# (their programs are added below SHARED).
+KERNEL = {"desktop-apps": ["kernel/menu.c", "kernel/dock_draw.c", "kernel/dock_geom.c", "kernel/icons.c", "kernel/icon_art.h",
                       "kernel/gui_paint.c", "kernel/gui_prims.c", "kernel/gui_shapes.c", "kernel/wallmap.c", "kernel/clockicon.c"]}
 # Headers a program includes that also change its picture (the sprite sheet and the rules and story the game shows).
 EXTRA = {"samantha-chat": ["user/samcaps.h"], "app-chess": ["user/chess_core.h"], "app-hamurapi": ["user/hamurabi_sprites.h", "user/hamurabi_rules.h", "user/hamurabi_story.h"]}
-# The README's hero: the desktop with the Terminal and Weather open, so their programs count too (filled in below SHARED).
 # Shared drawing code every program links in. Changing it can change every tile.
 SHARED = ["lib/text_ink.h", "user/libjt/mono.c", "user/libjt/aamono.h", "user/jtsys.h", "user/libjt/text.c", "user/libjt/text.h", "user/libjt/aafont.h",
           "user/libjt/stdio.c", "user/libjt/stdio.h", "user/libjt/string.c", "user/libjt/stdlib.c"]
-KERNEL["desktop-apps"] = KERNEL["desktop"] + ["user/weather.c", "user/terminal.c"] + SHARED
+KERNEL["desktop-apps"] += ["user/weather.c", "user/terminal.c"] + SHARED
 # The shot script itself: a new crop, size or clock changes every tile.
 SCRIPT = "tools/landing-shots.py"
 
