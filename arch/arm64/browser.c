@@ -41,7 +41,20 @@ void *kmalloc(unsigned int n);
 #define IMG_H 300
 static char img_url[IMG_MAX][URL_MAX];
 static unsigned nimg, img_w[IMG_MAX], img_h[IMG_MAX];   /* images on the page, and each one's kept size (0 when it did not load) */
-static unsigned img_px[IMG_MAX][IMG_W * IMG_H];         /* 0RGB, img_w[k] to a row. ponytail: static, 1.9 MB; the heap is a bump that callers roll back */
+static unsigned img_px[IMG_MAX][IMG_W * IMG_H];
+/* 6.15.0: forms and cookies. A text field or a submit button is a numbered link like any other, its "URL" field:K or
+   submit:F; `fill N TEXT` sets a field and opening a submit link sends its form, GET as a query or POST as a body. */
+#define FORM_MAX 4
+#define FIELD_MAX 16
+static struct { char action[URL_MAX]; int post; } forms[FORM_MAX];
+static struct { unsigned form; char name[32], value[64]; unsigned char kind; } fields[FIELD_MAX];   /* kind 0 text, 1 password, 2 hidden */
+static unsigned nforms, nfields;
+static const char *post_body; static unsigned post_len;   /* the next fetch POSTs this, on its first hop only */
+/* The cookie jar: name=value per host, sent back to that host alone. A Secure cookie is taken and sent over https only.
+   ponytail: no Domain or Path matching and no expiry beyond Max-Age=0; it lives until the Pi restarts. */
+#define COOKIE_MAX 24
+static struct { char host[128], name[32], value[192]; int secure; } jar[COOKIE_MAX];
+static unsigned njar;         /* 0RGB, img_w[k] to a row. ponytail: static, 1.9 MB; the heap is a bump that callers roll back */
 #define PAGE_LINES 16       /* ponytail: a fixed page; the Terminal's own rows if its height should set it */
 /* Budgets in ticks (100 a second). A fetch answers or fails in about 10 s: 3 s for DNS, 4 s for the SYN-ACK, 8 s for
    each piece of the reply (tls.c's own read budget matches). The stack's defaults are 20 s each, which on a real LAN
@@ -149,7 +162,40 @@ static void yt_play(const char *vid) {
     save_here("PLAYNOW.TXT", "YT.AVI\n", 7);
     app_dock("movies");
 }
-static int fetch(const char *url, char *raw, unsigned max) {
+static void take_cookies(const char *raw, unsigned got, const struct url *u) {   /* Set-Cookie lines of one reply into the jar */
+    int hb = http_body_start(raw, got); unsigned h = hb < 0 ? got : (unsigned)hb;
+    for (unsigned i = 0; i + 11 < h; i++) {
+        if ((i && raw[i - 1] != '\n') || !starts(raw + i, "set-cookie:")) continue;
+        unsigned a = i + 11; while (a < h && raw[a] == ' ') a++;
+        unsigned eq = a; while (eq < h && raw[eq] != '=' && raw[eq] != ';' && raw[eq] != '\r') eq++;
+        if (eq >= h || raw[eq] != '=' || eq == a || eq - a >= sizeof jar[0].name) continue;
+        unsigned v = eq + 1, ve = v; while (ve < h && raw[ve] != ';' && raw[ve] != '\r' && raw[ve] != '\n') ve++;
+        unsigned le = ve; while (le < h && raw[le] != '\r' && raw[le] != '\n') le++;
+        int secure = 0, gone = 0;
+        for (unsigned k = ve; k < le; k++) if (raw[k] == ';') {
+            unsigned t = k + 1; while (t < le && raw[t] == ' ') t++;
+            if (starts(raw + t, "secure") && (t + 6 == le || raw[t + 6] == ';' || raw[t + 6] == ' ')) secure = 1;
+            if (starts(raw + t, "max-age=0") || starts(raw + t, "max-age=-")) gone = 1;
+        }
+        if (secure && !u->tls) continue;   /* a page over plain http may not set a Secure cookie */
+        unsigned c = 0;
+        for (; c < njar; c++) {   /* the same host and name: replaced */
+            unsigned m = 0; while (jar[c].host[m] && jar[c].host[m] == u->host[m]) m++;
+            unsigned q = 0; while (a + q < eq && jar[c].name[q] == raw[a + q]) q++;
+            if (!jar[c].host[m] && !u->host[m] && a + q == eq && !jar[c].name[q]) break;
+        }
+        if (gone) { if (c < njar) jar[c] = jar[--njar]; continue; }
+        if (c == njar) { if (njar == COOKIE_MAX) continue; njar++; }
+        scopy(jar[c].host, u->host, slen(u->host), sizeof jar[c].host);
+        scopy(jar[c].name, raw + a, eq - a, sizeof jar[c].name);
+        scopy(jar[c].value, raw + v, ve - v, sizeof jar[c].value);
+        jar[c].secure = secure;
+        kputs("browser: cookie "); kputs(jar[c].name); kputs(secure ? " (secure)\n" : "\n");
+    }
+}
+static int fetch_once(const char *url, char *raw, unsigned max);
+static int fetch(const char *url, char *raw, unsigned max) { int r = fetch_once(url, raw, max); post_body = 0; post_len = 0; return r; }
+static int fetch_once(const char *url, char *raw, unsigned max) {
     char next[URL_MAX], vid[12];
     scopy(cur, url, slen(url), URL_MAX);
     if (yt_id(url, vid)) {   /* the page about the video, from the Mac's video service, behind a header show() can skip */
@@ -166,12 +212,28 @@ static int fetch(const char *url, char *raw, unsigned max) {
     for (int hop = 0; hop <= 3; hop++) {
         struct url u;
         if (!parse_url(cur, &u)) { kputs("browser: bad url\n"); return -1; }
-        static char req[URL_MAX + 160]; unsigned n = 0;
-        for (const char *p = "GET "; *p; p++) req[n++] = *p;
+        static char req[URL_MAX + 3072]; unsigned n = 0;
+        const char *body = hop == 0 ? post_body : 0; unsigned blen = body ? post_len : 0;
+        #define RQ(str) for (const char *p_ = (str); *p_ && n < sizeof req - 1; p_++) req[n++] = *p_
+        RQ(body ? "POST " : "GET ");
         for (unsigned i = 0; i < u.path_len; i++) req[n++] = u.path[i];
-        for (const char *p = " HTTP/1.1\r\nHost: "; *p; p++) req[n++] = *p;
-        for (const char *p = u.host; *p; p++) req[n++] = *p;
-        for (const char *p = "\r\nUser-Agent: JoshuaTree/1.0\r\nAccept-Encoding: gzip\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
+        RQ(" HTTP/1.1\r\nHost: "); RQ(u.host);
+        RQ("\r\nUser-Agent: JoshuaTree/1.0\r\nAccept-Encoding: gzip\r\nConnection: close\r\n");
+        for (unsigned c = 0, first = 1; c < njar; c++) {
+            unsigned m = 0; while (jar[c].host[m] && jar[c].host[m] == u.host[m]) m++;
+            if (jar[c].host[m] || u.host[m] || (jar[c].secure && !u.tls)) continue;
+            RQ(first ? "Cookie: " : "; "); RQ(jar[c].name); RQ("="); RQ(jar[c].value); first = 0;
+        }
+        if (req[n - 1] != '\n') RQ("\r\n");   /* a Cookie line went in */
+        if (body) {
+            char d[8]; unsigned k = 0, v = blen; do d[k++] = (char)('0' + v % 10); while (v /= 10);
+            RQ("Content-Type: application/x-www-form-urlencoded\r\nContent-Length: ");
+            while (k) req[n++] = d[--k];
+            RQ("\r\n");
+        }
+        RQ("\r\n");
+        for (unsigned i = 0; i < blen && n < sizeof req - 1; i++) req[n++] = body[i];
+        #undef RQ
         /* Each stage prints one line when it passes, so a photo of the screen says where a failed fetch stopped. */
         unsigned ip; int got;
         if (!http_resolve_host(u.host, &ip)) { kputs(net_last_error() == NET_ERR_DNS_TIMEOUT ? "browser: dns timeout\n" : "browser: no such host\n"); return -1; }
@@ -199,6 +261,7 @@ static int fetch(const char *url, char *raw, unsigned max) {
         if (!u.tls) kputs("browser: tcp ok\n");
         raw[got] = 0;
         if ((unsigned)got >= max - 1) kputs("browser: page too big, showing the first 4 MiB\n");
+        take_cookies(raw, (unsigned)got, &u);
         int status = http_status_of(raw, (unsigned)got);
         kputs("browser: http "); kdec((unsigned)status); kputs(status >= 400 ? " (the server refused)\n" : status < 200 ? " (not a page)\n" : "\n");
         if (status >= 300 && status < 400) {
@@ -248,10 +311,32 @@ static int is_tag(const char *tag, unsigned tn, const char *w) {   /* the tag na
     unsigned k = slen(w);
     return tn >= k && starts(tag, w) && (tn == k || tag[k] == ' ' || tag[k] == '\n' || tag[k] == '\t' || tag[k] == '/');
 }
+static int attr(const char *tag, unsigned tn, const char *name, unsigned *s, unsigned *z) {   /* name= in a tag: value at tag[*s..*z) */
+    unsigned k0 = slen(name);
+    for (unsigned k = 1; k + k0 <= tn; k++) if (starts(tag + k, name) && (tag[k - 1] == ' ' || tag[k - 1] == '\n' || tag[k - 1] == '\t')) {
+        unsigned a = k + k0, b; char q = a < tn ? tag[a] : 0;
+        if (q == '"' || q == '\'') { a++; b = a; while (b < tn && tag[b] != q) b++; }
+        else { b = a; while (b < tn && tag[b] != ' ' && tag[b] != '\n' && tag[b] != '\t') b++; if (b == tn && b > a && tag[b - 1] == '/') b--; }
+        *s = a; *z = b; return 1;
+    }
+    return 0;
+}
+static int is_val(const char *tag, unsigned s, unsigned z, const char *w) { return z - s == slen(w) && starts(tag + s, w); }
+static unsigned mark(unsigned o, int link) {   /* " [N]" after a link's text */
+    o = put(text, o, ' '); o = put(text, o, '['); char d[4]; unsigned k = 0, v = (unsigned)link; do d[k++] = (char)('0' + v % 10); while (v /= 10); while (k) o = put(text, o, d[--k]);
+    return put(text, o, ']');
+}
+static int pseudo_link(const char *kind, unsigned k) {   /* field:K or submit:F as the next link; its number, or 0 when the list is full */
+    if (nlinks >= LINK_MAX) return 0;
+    unsigned o = 0; for (const char *p = kind; *p; p++) links[nlinks][o++] = *p;
+    links[nlinks][o++] = (char)('0' + k); links[nlinks][o] = 0;
+    return (int)++nlinks;
+}
 static void to_text(const char *h, unsigned n) {
     unsigned o = 0, i = 0, skip = 0, space = 1;
     int in_title = 0, link = 0; unsigned tl = 0;
-    nlinks = 0; nimg = 0; title[0] = 0;
+    nlinks = 0; nimg = 0; nforms = nfields = 0; title[0] = 0;
+    int in_form = -1;
     while (i < n) {
         char c = h[i];
         if (skip) {   /* inside script or style: only the literal closing tag ends it; a '<' in code is not a tag */
@@ -284,6 +369,51 @@ static void to_text(const char *h, unsigned n) {
                         o = put(text, o, ' '); o = put(text, o, '['); char d[4]; unsigned k = 0, v = (unsigned)link; do d[k++] = (char)('0' + v % 10); while (v /= 10); while (k) o = put(text, o, d[--k]);
                         o = put(text, o, ']'); link = 0; space = 0;
                     }
+                }
+                else if (is_tag(tag, tn, "form")) {
+                    if (close) in_form = -1;
+                    else if (nforms < FORM_MAX) {
+                        unsigned s, z;
+                        if (attr(tag, tn, "action=", &s, &z) && z > s) resolve(tag + s, z - s, forms[nforms].action); else scopy(forms[nforms].action, cur, slen(cur), URL_MAX);
+                        forms[nforms].post = attr(tag, tn, "method=", &s, &z) && is_val(tag, s, z, "post");
+                        in_form = (int)nforms++;
+                    }
+                }
+                else if (!close && in_form >= 0 && is_tag(tag, tn, "input")) {
+                    unsigned s, z, ts = 0, tz = 0;
+                    int typed = attr(tag, tn, "type=", &ts, &tz);
+                    int submit = typed && (is_val(tag, ts, tz, "submit") || is_val(tag, ts, tz, "image"));
+                    int hidden = typed && is_val(tag, ts, tz, "hidden"), pw = typed && is_val(tag, ts, tz, "password");
+                    int texty = !typed || pw || is_val(tag, ts, tz, "text") || is_val(tag, ts, tz, "search") || is_val(tag, ts, tz, "email") || is_val(tag, ts, tz, "url") || is_val(tag, ts, tz, "tel");
+                    if (submit) {
+                        int l = pseudo_link("submit:", (unsigned)in_form);
+                        if (o && text[o - 1] != ' ' && text[o - 1] != '\n') o = put(text, o, ' ');
+                        if (attr(tag, tn, "value=", &s, &z) && z > s) for (unsigned i = s; i < z; i++) o = put(text, o, tag[i]);
+                        else for (const char *p = "Submit"; *p; p++) o = put(text, o, *p);
+                        if (l) o = mark(o, l);
+                        space = 0;
+                    } else if ((hidden || texty) && nfields < FIELD_MAX && attr(tag, tn, "name=", &s, &z) && z > s) {
+                        unsigned k = nfields++;
+                        fields[k].form = (unsigned)in_form; fields[k].kind = (unsigned char)(hidden ? 2 : pw ? 1 : 0);
+                        scopy(fields[k].name, tag + s, z - s, sizeof fields[k].name);
+                        fields[k].value[0] = 0;
+                        if (attr(tag, tn, "value=", &s, &z)) scopy(fields[k].value, tag + s, z - s, sizeof fields[k].value);
+                        if (!hidden) {   /* "name: value [N]", a password as stars */
+                            int l = pseudo_link("field:", k);
+                            if (o && text[o - 1] != ' ' && text[o - 1] != '\n') o = put(text, o, ' ');
+                            for (const char *p = fields[k].name; *p; p++) o = put(text, o, *p);
+                            o = put(text, o, ':'); o = put(text, o, ' ');
+                            if (!fields[k].value[0]) for (int i = 0; i < 8; i++) o = put(text, o, '_');
+                            for (const char *p = fields[k].value; *p; p++) o = put(text, o, pw ? '*' : *p);
+                            if (l) o = mark(o, l);
+                            space = 0;
+                        }
+                    }
+                }
+                else if (in_form >= 0 && is_tag(tag, tn, "button")) {   /* a submit button unless type=button or reset; its text, then [N] */
+                    unsigned s, z;
+                    if (!close) link = attr(tag, tn, "type=", &s, &z) && (is_val(tag, s, z, "button") || is_val(tag, s, z, "reset")) ? 0 : pseudo_link("submit:", (unsigned)in_form);
+                    else if (link) { o = mark(o, link); link = 0; space = 0; }
                 }
                 else if (!close && is_tag(tag, tn, "img")) {   /* src="..." on a line of its own */
                     for (unsigned k = 1; k + 4 < tn && nimg < IMG_MAX; k++) if (starts(tag + k, "src=") && (tag[k - 1] == ' ' || tag[k - 1] == '\n' || tag[k - 1] == '\t')) {
@@ -523,6 +653,38 @@ static unsigned number(const char *q, unsigned n, unsigned s, unsigned *end) {
 }
 static int word(const char *q, unsigned n, const char *w) { unsigned k = slen(w); return n == k && starts(q, w); }
 
+/* 6.15.0: a form's named fields as name=value&..., percent-encoded, into out; then GET action?query or POST it. */
+static unsigned urlenc(char *out, unsigned o, unsigned max, const char *v) {
+    static const char hex[] = "0123456789ABCDEF";
+    for (; *v && o + 3 < max; v++) {
+        unsigned char c = (unsigned char)*v;
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '~') out[o++] = (char)c;
+        else if (c == ' ') out[o++] = '+';
+        else { out[o++] = '%'; out[o++] = hex[c >> 4]; out[o++] = hex[c & 15]; }
+    }
+    return o;
+}
+static void submit(unsigned f) {
+    static char query[1024]; unsigned o = 0;
+    for (unsigned k = 0; k < nfields; k++) if (fields[k].form == f) {
+        if (o) query[o++] = '&';
+        o = urlenc(query, o, sizeof query, fields[k].name);
+        if (o < sizeof query - 1) query[o++] = '=';
+        o = urlenc(query, o, sizeof query, fields[k].value);
+    }
+    query[o] = 0;
+    char url[URL_MAX]; scopy(url, forms[f].action, slen(forms[f].action), URL_MAX);
+    kputs(forms[f].post ? "browser: post " : "browser: get "); kputs(url); kputs("\n");
+    if (forms[f].post) { post_body = query; post_len = o; }
+    else {   /* the query replaces any the action had */
+        unsigned u = 0; while (url[u] && url[u] != '?') u++;
+        url[u++] = '?';
+        for (unsigned i = 0; i < o && u < URL_MAX - 1; i++) url[u++] = query[i];
+        url[u] = 0;
+    }
+    show(url, 1);
+}
+
 /* One command line, after cmd.c trimmed it. 1 when it was a browser command. */
 int browse_command(const char *q, unsigned n) {
     if (n > 7 && starts(q, "browse ")) {
@@ -541,8 +703,21 @@ int browse_command(const char *q, unsigned n) {
     if (n > 5 && starts(q, "open ")) {
         unsigned e, k = number(q, n, 5, &e);
         if (e != n || !k || k > nlinks) { kputs("browser: no such link\n"); return 1; }
+        if (starts(links[k - 1], "field:")) {
+            kputs("browser: field "); kputs(fields[links[k - 1][6] - '0'].name); kputs(", fill "); kdec(k); kputs(" TEXT sets it\n");
+            return 1;
+        }
+        if (starts(links[k - 1], "submit:")) { submit((unsigned)(links[k - 1][7] - '0')); return 1; }
         char url[URL_MAX]; scopy(url, links[k - 1], slen(links[k - 1]), URL_MAX);
         show(url, 1);
+        return 1;
+    }
+    if (n > 5 && starts(q, "fill ")) {   /* 6.15.0: fill N TEXT, N a field's link number */
+        unsigned e, k = number(q, n, 5, &e);
+        if (!k || k > nlinks || !starts(links[k - 1], "field:") || (e < n && q[e] != ' ')) { kputs("browser: no such field\n"); return 1; }
+        unsigned f = (unsigned)(links[k - 1][6] - '0'), t = e < n ? e + 1 : n;
+        scopy(fields[f].value, q + t, n - t, sizeof fields[f].value);
+        kputs("browser: field "); kputs(fields[f].name); kputs(" set\n");   /* never the value: it may be a password */
         return 1;
     }
     if (word(q, n, "back") || word(q, n, "forward")) {
@@ -596,5 +771,6 @@ const char *browser_text(unsigned *len) { *len = tlen; return text; }   /* the p
 const char *browser_title(void) { return title; }                     /* its <title>, up to 60 characters, "" when it has none */
 const char *browser_url(void) { return cur; }                          /* the page on screen, "" before the first */
 const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h) { if (k >= nimg || !img_w[k]) return 0; *w = img_w[k]; *h = img_h[k]; return img_px[k]; }   /* 6.14.0 */
+int browser_field_secret(unsigned n) { return n && n <= nlinks && starts(links[n - 1], "field:") && fields[links[n - 1][6] - '0'].kind == 1; }   /* 6.15.0: a password field */
 const char *browser_link(unsigned n) { return n && n <= nlinks ? links[n - 1] : 0; }
 unsigned browser_loads(void) { return loads; }
