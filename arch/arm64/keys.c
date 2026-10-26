@@ -23,12 +23,12 @@ static int spot_match(const char *name) {   /* the typed text, case folded, anyw
     }
     return 0;
 }
-const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : slot == SPOT_BROWSER ? "Browser" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_CALC ? "Calculator" : slot == SPOT_FINDER ? "Finder" : slot == SPOT_SETTINGS ? "Settings" : slot == SPOT_GAME0 + 2 ? "Hamurapi" : slot >= SPOT_GAME0 ? game_names[slot - SPOT_GAME0] : dock_names[slot]; }
+const char *spot_name(int slot) { return slot == GUI_ICON_COUNT ? "Clock" : slot == GUI_ICON_COUNT + 1 ? "Brick" : slot == SPOT_MUSIC ? "Music" : slot == SPOT_BROWSER ? "Blackcomb" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_CALC ? "Calculator" : slot == SPOT_FINDER ? "Finder" : slot == SPOT_SETTINGS ? "Settings" : slot == SPOT_GAME0 + 2 ? "Hamurapi" : slot >= SPOT_GAME0 ? game_names[slot - SPOT_GAME0] : dock_names[slot]; }
 int spot_hmax(void) { return 34 + SPOT_ROW * SPOT_MAX + 6; }
 static void spot_paint(void) {
     int s = (int)window_scale();
     spot_n = 0;
-    for (int i = 1; i <= SPOT_LAST && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i)) || (i >= SPOT_GAME0 && spot_match(game_names[i - SPOT_GAME0]))) spot_hits[spot_n++] = i;
+    for (int i = 1; i <= SPOT_LAST && spot_n < SPOT_MAX; i++) if (spot_match(spot_name(i)) || (i >= SPOT_GAME0 && spot_match(game_names[i - SPOT_GAME0])) || (i == SPOT_BROWSER && spot_match("Browser"))) spot_hits[spot_n++] = i;   /* 6.7.0: Blackcomb is still found as the Browser */
     if (spot_sel >= spot_n) spot_sel = spot_n ? spot_n - 1 : 0;
     cur_hide();
     int hmax = spot_hmax(), w = SPOT_W * s, h = hmax * s, x = spot_lx * s, y = spot_ly * s;

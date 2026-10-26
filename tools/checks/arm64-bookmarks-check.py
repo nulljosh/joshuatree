@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Browser bookmarks on the ARM64 desktop (arch/arm64/browser_ui.h), over a stub HTTP server on the host.
+"""Blackcomb's bookmarks, Recent and search on the ARM64 desktop (arch/arm64/browser_ui.h), over a stub HTTP server on the host.
 
 Boots the virt build with a keyboard, a tablet, a network card and the check card (sdcard.py) as a virtio disk.
   1. First boot: the Browser loads two stub pages; a click on the star in the address bar saves the first, Ctrl+D the
@@ -8,6 +8,9 @@ Boots the virt build with a keyboard, a tablet, a network card and the check car
   2. Second boot on the same card: the Browser opens empty and lists both pages (`browser: shows bookmark N URL`). Tab
      picks the first, Enter opens it (the stub server sees GET /one). A click on the star, now on a saved page, takes it
      off: the card's file keeps only the second line.
+  3. 6.7.0, Blackcomb: the first boot leaves JT/HISTORY.TXT, the pages opened newest first; the second boot opens it from
+     Spotlight by the name Blackcomb and lists them under Recent (`browser: shows recent N URL`). Typed words with a space
+     search (`browser: load https://html.duckduckgo.com/html/?q=raspberry+pi`), and a bare host gets https:// in front.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-bookmarks-check.py   (from the repo root)
 """
@@ -59,7 +62,7 @@ subprocess.run(["make", "-C", str(arch), "clean"], capture_output=True, timeout=
 r = subprocess.run(["make", "-C", str(arch), "kernel8.elf"], capture_output=True, text=True, timeout=600)
 if r.returncode: print(r.stdout[-2000:], r.stderr[-2000:]); print("FAIL: arch/arm64 does not build"); sys.exit(1)
 
-QCODE = {":": ("shift", "semicolon"), "/": ("slash",), ".": ("dot",)}
+QCODE = {":": ("shift", "semicolon"), "/": ("slash",), ".": ("dot",), " ": ("spc",)}
 class Session:
     def __init__(self, tag):
         self.log, sock = tmp / (tag + ".uart"), tmp / (tag + ".qmp")
@@ -100,9 +103,9 @@ class Session:
                                                      {"type": "abs", "data": {"axis": "y", "value": int(y * 32767 / 600)}}]}); time.sleep(0.2)
         for down in (True, False):
             self.command("input-send-event", {"events": [{"type": "btn", "data": {"button": "left", "down": down}}]}); time.sleep(0.1)
-    def open_browser(self):
+    def open_browser(self, name="browser"):
         self.key("f1")
-        for k in "browser": self.key(k)
+        for k in name: self.key(k)
         self.key("ret")
         return self.wait_for("browser open", 10)
     def stop(self):
@@ -134,15 +137,18 @@ try:
     time.sleep(0.5)
     a.stop(); a = None
     check("BOOKMARK.TXT read off the card image: one line a page", on_card() == ONE + " One\n" + TWO + " Two\n", on_card())
+    hist = mt("mtype", "::JT/HISTORY.TXT").stdout.decode(errors="replace")
+    check("HISTORY.TXT holds the pages opened, newest first", hist == TWO + " Two\n" + ONE + " One\n", hist)
 
     seen.clear()
     b = Session("second"); b.connect()
     if not b.wait_for("M2 input ready", 40): print("FAIL: did not boot", b.uart()[-600:]); sys.exit(1)
     time.sleep(0.5)
     check("DHCP leased an address (second boot)", b.wait_for("net dhcp 10.0.2.15 gw 10.0.2.2", 30), b.uart()[-300:])
-    check("Spotlight opens the Browser (second boot)", b.open_browser(), b.uart()[-400:])
+    check("Spotlight opens it by the name Blackcomb (second boot)", b.open_browser("blackcomb"), b.uart()[-400:])
     check("the card's two bookmarks load", b.wait_for("browser: bookmarks loaded 2", 5), b.uart()[-300:])
     check("the empty Browser lists both pages", b.wait_for("browser: shows bookmark 1 " + ONE, 5) and b.wait_for("browser: shows bookmark 2 " + TWO, 5), b.uart()[-500:])
+    check("and Recent under them, newest first", b.wait_for("browser: shows recent 1 " + TWO, 5) and b.wait_for("browser: shows recent 2 " + ONE, 5), b.uart()[-500:])
     b.key("tab")
     check("Tab picks the first saved page", b.wait_for("browser: selected bookmark 1", 10), b.uart()[-300:])
     b.key("ret")
@@ -150,6 +156,10 @@ try:
     b.click(*STAR)
     check("a star on a saved page takes it off", b.wait_for("browser: star removed " + ONE, 10), b.uart()[-400:])
     time.sleep(0.5)
+    b.key("ctrl", "l"); b.type_text("raspberry pi"); b.key("ret")
+    check("words with a space search DuckDuckGo's page", b.wait_for("browser: search raspberry pi", 10) and b.wait_for("browser: load https://html.duckduckgo.com/html/?q=raspberry+pi", 10), b.uart()[-400:])
+    time.sleep(0.5); b.key("ctrl", "l"); b.type_text("example.org"); b.key("ret")
+    check("a bare host gets https:// in front", b.wait_for("browser: load https://example.org\n", 10), b.uart()[-400:])
     b.stop(); b = None
     check("the card keeps only the second line", on_card() == TWO + " Two\n", on_card())
 finally:
@@ -158,4 +168,4 @@ finally:
     server.shutdown()
     subprocess.run(["make", "-C", str(arch), "clean"], capture_output=True, timeout=60)
 if fails: print("FAIL: " + ", ".join(fails)); sys.exit(1)
-print("PASS: the star saves a page to JT/BOOKMARK.TXT, a fresh boot lists it on the empty Browser, Tab then Enter opens it, a star on a saved page removes it")
+print("PASS: the star saves a page to JT/BOOKMARK.TXT, a fresh boot lists it and Recent on Blackcomb's start page, Tab then Enter opens it, a star on a saved page removes it, and words search")

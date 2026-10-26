@@ -11,6 +11,8 @@ the address bar takes the typed URL and Enter loads it. Then:
      the first screen back pixel for pixel; the page area never draws below its well.
   5. A closed port ends in the plain words "the page did not load", the old page stays.
   6. Esc closes the window and the Console comes back.
+  6.8.0: a title in UTF-8 with curly quotes and a dash reads as ASCII, and a page whose words are all script logs
+     `browser: needs javascript` (the well says so) instead of going blank.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or PIL is missing.
 Usage: tools/checks/arm64-browser-app-check.py   (from the repo root)
 """
@@ -156,6 +158,14 @@ try:
     PAGES["/forms"] = FORMS % port
     key("ctrl", "l"); type_text("http://10.0.2.2:%d/forms" % port); key("ret")
     check("bare, single-quoted, protocol-relative and double-quoted hrefs inside a <p> are four links", wait_for("links: 4, open N follows one", 40), uart()[-600:])
+
+    # 6.8.0: UTF-8 punctuation reads as ASCII, and a page whose words are all script says so instead of going blank
+    PAGES["/utf8"] = "<html><head><title>It\u2019s \u201cquoted\u201d \u2014 yes</title></head><body><p>caf\u00e9 \u2026</p></body></html>"
+    PAGES["/script"] = "<html><head><title>App</title><script>document.write('hi')</script></head><body><div id=app></div><script>run()</script></body></html>"
+    key("ctrl", "l"); type_text("http://10.0.2.2:%d/utf8" % port); key("ret")
+    check("curly quotes and a dash in UTF-8 read as ASCII", wait_for("browser: It's \"quoted\" - yes", 40), uart()[-400:])
+    key("ctrl", "l"); type_text("http://10.0.2.2:%d/script" % port); key("ret")
+    check("a page of only script says it needs JavaScript", wait_for("browser: needs javascript", 40), uart()[-400:])
 
     key("ctrl", "l"); type_text("http://10.0.2.2:%d/one" % dead_port); key("ret")
     check("a closed port says it in plain words", wait_for("browser: status the page did not load", 40), uart()[-500:])

@@ -1296,6 +1296,53 @@ static void hear_post(const short *pcm, unsigned got, char *raw) {   /* the samp
     kputs("you: "); kputs(said); kputs("\n");
     sam_command(said, len);
 }
+/* 6.9.0, YouTube in Blackcomb: a watch page is JavaScript, so browser.c asks the Mac's video service instead
+   (tools/claude-relay/yt.py, the relay's port plus two, the same token and on the Pi the same TLS name). yt_post sends one
+   POST there: the body comes back in out, *status is the HTTP status, the result its length or -1 with no answer.
+   /api/yt/page is a plain page about the video (6.9.0); /api/yt/avi the video itself as a Movies clip (6.10.0). */
+static int yt_post(const char *path, const char *body, unsigned blen, char *out, unsigned max, int *status, unsigned ticks) {
+    static char token[64], req[320];
+    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
+    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    int n; unsigned k = 0; *status = 0;
+    char digits[10]; unsigned dn = 0, v = blen;
+    do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    /* one request, sent as it is and read back into out, so a clip of several MiB is held once (http_post keeps a second copy) */
+    const char *parts[] = {"POST ", path, " HTTP/1.0\r\nHost: jt-relay\r\nAuthorization: Bearer ", token, "\r\nContent-Type: text/plain\r\nContent-Length: "};   /* jt-relay: RELAY_NAME, the name the relay's certificate carries */
+    for (unsigned i = 0; i < 5; i++) for (const char *p = parts[i]; *p && k < sizeof req - 64; p++) req[k++] = *p;
+    while (dn) req[k++] = digits[--dn];
+    for (const char *p = "\r\nConnection: close\r\n\r\n"; *p; p++) req[k++] = *p;
+    for (unsigned i = 0; i < blen && k < sizeof req; i++) req[k++] = body[i];
+    for (int i = 0; i < 64; i++) token[i] = 0;
+#if defined(PI_BUILD) || CLAUDE_TLS
+    if (!relay_ip && relay_open() < 0) n = -1;
+    else {
+        if (relay_ip) tcp_close();
+        n = tls_connect_private(relay_ip, (unsigned short)(relay_port + 2), RELAY_NAME) < 0 || tls_handshake() < 0 ? -1
+            : tls_exchange_timeout(req, k, out, max - 1, ticks);
+    }
+#else
+    unsigned ip;
+    n = http_resolve_host(CLAUDE_HOST, &ip) ? tcp_get_timeout(ip, (unsigned short)(CLAUDE_PORT + 2), req, k, out, max - 1, ticks) : -1;
+#endif
+    for (unsigned i = 0; i < k; i++) ((volatile char *)req)[i] = 0;
+    if (n > 0) {
+        *status = http_status_of(out, (unsigned)n);
+        int start = http_body_start(out, (unsigned)n);
+        n = start < 0 ? -1 : n - start;
+        for (int i = 0; i < n; i++) out[i] = out[start + i];
+    }
+    return n;
+}
+int yt_page(const char *vid, char *out, unsigned max, int *status) { return yt_post("/api/yt/page", vid, 11, out, max, status, ASK_TICKS); }
+int yt_avi(const char *vid, unsigned cap, char *out, int *status) {   /* the clip, made to fit cap bytes; up to two minutes for yt-dlp and ffmpeg */
+    char body[24]; unsigned k = 0, dn = 0, max = cap; char d[10];
+    for (int i = 0; i < 11; i++) body[k++] = vid[i];
+    body[k++] = ' ';
+    do { d[dn++] = (char)('0' + cap % 10); cap /= 10; } while (cap);
+    while (dn) body[k++] = d[--dn];
+    return yt_post("/api/yt/avi", body, k, out, max + 1, status, 12000);   /* 120 s at 100 ticks a second */
+}
 /* Voice mode (docs/ROADMAP.md, Joshua 2026-10-07): double-tap Space and hold the second tap; release to send. The two taps
    are swallowed once the hold is confirmed (a quick double tap stays two spaces). While held: "voice: listening" on the
    UART, a mic mark in the menu bar (main.c menubar_mic) and a "listening [####......]" line with a live level bar in the
