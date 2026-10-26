@@ -36,7 +36,27 @@ static void app_key(unsigned code) {   /* a key down for the app in front, as th
     else if (!k) k = ask_char(code);
     if (k) app_push(1, k, 0);
 }
+/* The Pi took no keys for its first few seconds on the desktop (roadmap). These stamps find out why on the board: when the
+   first key arrived after the desktop, and any step of the main loop that held the keys up for 100 ms or more in the first
+   half minute. They go to the UART and to `boottime` in the Terminal, never the Console, whose picture checks hold still.
+   The login screen's own wait for a wrong password is not counted. */
+static unsigned long desk_ms;   /* key_ms() as the main loop starts */
+static char stamps[512];
+static unsigned stamps_n;
+const char *boot_stamps(void) { return stamps; }   /* cmd.c: `boottime` */
+static void stamp(const char *s) { con_quiet = 1; uart_puts(s); while (*s && stamps_n < sizeof stamps - 1) stamps[stamps_n++] = *s++; }
+static void stamp_dec(unsigned long v) { char b[24]; int k = 23; b[k] = 0; do b[--k] = (char)('0' + v % 10); while ((v /= 10) && k); stamp(b + k); }
+static void pass_note(const char *what, unsigned long t0, int login) {
+    unsigned long ms = key_ms() - t0;
+    if (ms < 100 || !desk_ms || login || login_live || t0 - desk_ms > 30000) return;   /* later, a `sam` or a heavy app is slow on purpose */
+    stamp("slow step "); stamp(what); stamp(" "); stamp_dec(ms); stamp(" ms, "); stamp_dec(t0 - desk_ms); stamp(" ms after the desktop\n");
+}
+#define TIMED(f) do { unsigned long t_ = key_ms(); int l_ = login_live; f; pass_note(#f, t_, l_); } while (0)
 void input_event(struct input_event e) {
+    static int first_key;
+    if (e.type == 1 && e.value == 1 && desk_ms && !first_key && !login_live) {
+        first_key = 1; stamp("first key "); stamp_dec(key_ms() - desk_ms); stamp(" ms after the desktop\n");
+    }
 #ifdef PI_BUILD
     if (e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) screen_activity();   /* any key or button or a move wakes the screen */
 #endif
@@ -384,10 +404,11 @@ void main(void) {
         *(volatile unsigned char *)(GICD_BASE + 0x400 + 27) = 0x80;
         GICD(0x100) = 1u << 27;
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
+        desk_ms = key_ms();
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            usb_poll(); virtio_input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); dock_dots_tick(); audio_pump(); screen_tick(); login_tick();   /* only the display sleeps: USB stays polled */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick());   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
@@ -403,7 +424,7 @@ void main(void) {
             if (usb_ok || brick_live || notice_up() || rep_code || bt_busy() || apps_live() || audio_busy() || ask_pending()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
-            usb_poll(); virtio_input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); dock_dots_tick(); login_tick();   /* an app parked on yield runs again here */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(login_tick());   /* an app parked on yield runs again here */
 #ifdef HANG_TEST
             hang_tick();
 #endif

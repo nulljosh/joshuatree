@@ -2418,7 +2418,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (304 checks)
+### The suite (305 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2507,6 +2507,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Running-app dots in the dock on both desktops: Notes (i386), the Console's Terminal and Calendar (Pi) get one small dark dot under their tile while open, and it goes when they close | `tools/checks/dockdots-check.py` | retry |
 | Every typeface loads at boot: 14 of 14 on i386 and 3 of 3 on the Pi before the desktop, and a broken face (fontbreak=inter) is named and drawn as DejaVu Sans while the desktop still comes up | `tools/checks/fonts-boot-check.py` | once |
 | Cmd+Tab and Ctrl+Tab on the Pi: Calendar and Notes open, each chord brings the window behind to the front, and a bare Tab stays with the app | `tools/checks/arm64-cmdtab-check.py` | retry |
+| The Pi desktop takes keys from its first moment: Cmd+Space sent the instant the desktop is up opens Spotlight, the first key is stamped and no main-loop step stalls the keys | `tools/checks/arm64-firstkey-check.py` | retry |
 | Paddle finishes and can be won, and Bricks can be cleared: their physics played to the end on the host by a scripted player | `tools/checks/games-sim-check.py` | once |
 | Movies plays a real AVI with sound at ring 3, audio-led: frame within one of the audio clock, drift under 100 ms, pause holds frame and sound (checked in the wav and on the framebuffer), seek by bar and keys, fullscreen, a damaged clip / non-AVI / over-cap file each show an error, closes on Esc, desktop alive | `tools/checks/movie-check.py` | retry |
 | Hamurapi (Hamurabi in the sources) is playable as a ring-3 program: draws its real title scene (sprite pixels equal the sheet), plays a classic reign by keyboard, a story reign with cards and choices and the robot's demo, and every year it logs equals a host replay of the same rules header, closes on Esc, desktop alive | `tools/checks/ring3hamurabi-check.py` | retry |
