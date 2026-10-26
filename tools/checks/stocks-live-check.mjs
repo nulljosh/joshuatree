@@ -75,5 +75,5 @@ execFileSync(dir+'/test');
 } finally {rmSync(dir,{recursive:true,force:true});}
 // Refresh is on demand now (the ring-3 Stocks program asks, the desktop loop refetches); the old 6000-tick kernel loop is gone with the in-kernel window.
 assert.match(readFileSync(new URL('../../user/stocks.c',import.meta.url),'utf8'),/jt_refresh\(JT_REFRESH_STOCKS, range \| sel << 8\)/);
-assert.match(readFileSync(new URL('../../kernel/kernel.c',import.meta.url),'utf8'),/rk == JT_REFRESH_STOCKS\) \{[^}]*stocks_fetch\(stx_range_hint\)/);
+assert.match(readFileSync(new URL('../../kernel/desktop.c',import.meta.url),'utf8'),/rk == JT_REFRESH_STOCKS\) \{[^}]*stocks_fetch\(stx_range_hint\)/);
 console.log('PASS: real Worker routes, quotes/history, partial failures, strict kernel parser, stale retention and refresh');

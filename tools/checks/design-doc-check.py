@@ -221,12 +221,12 @@ def ui_glyph_range():
 
 
 def desktop():
-    w, h, s = rxs("kernel/kernel.c", r"&& !window_open_scaled\((\d+), (\d+), 32, (\d+)\)")
+    w, h, s = rxs("kernel/desktop.c", r"&& !window_open_scaled\((\d+), (\d+), 32, (\d+)\)")
     return "%sx%s" % (w, h)
 
 
 def pixel_scale():
-    return int(rxs("kernel/kernel.c", r"&& !window_open_scaled\((\d+), (\d+), 32, (\d+)\)")[2])
+    return int(rxs("kernel/desktop.c", r"&& !window_open_scaled\((\d+), (\d+), 32, (\d+)\)")[2])
 
 
 def night_hours():
@@ -240,7 +240,7 @@ def day_hours():
 
 
 def dock_icon():
-    w, h, scale = rxs("kernel/kernel.c", r"&& !window_open_scaled\((\d+), (\d+), 32, (\d+)\)")
+    w, h, scale = rxs("kernel/desktop.c", r"&& !window_open_scaled\((\d+), (\d+), 32, (\d+)\)")
     pct = int(rx("kernel/kernel.c", r"^int dock_scale_pct = (\d+);"))
     n = int(rx("kernel/dock_geom.h", r"#define GUI_ICON_COUNT\s+(\d+)"))
     d = {k: int(rx("kernel/dock_geom.h", r"#define %s\s+(\d+)" % k)) for k in ("DOCK_BUDGET", "DOCK_GAP", "DOCK_PAD")}
@@ -317,8 +317,8 @@ def cap_ease():
 
 # kind: hex, num, secs, str, max (the doc value is a ceiling the measured value must stay under)
 FACTS = {
-    "DESKTOP": ("str", desktop, "kernel/kernel.c"),
-    "PIXEL_SCALE": ("num", pixel_scale, "kernel/kernel.c"),
+    "DESKTOP": ("str", desktop, "kernel/desktop.c"),
+    "PIXEL_SCALE": ("num", pixel_scale, "kernel/desktop.c"),
     "UI_GLYPH_RANGE": ("str", ui_glyph_range, "kernel/uitext.c"),
     "SQUIRCLE_N": ("num", squircle_n, "tools/gen/restyle_icons.py"),
     "TOL_SQUIRCLE": ("num", lambda: float(rx("tools/checks/iconinset-check.py", r"^TOL_SQUIRCLE = ([\d.]+)")), "tools/checks/iconinset-check.py"),
@@ -371,7 +371,7 @@ FACTS = {
     "DOCK_SLOTS": ("num", lambda: int(rx("kernel/dock_geom.h", r"#define GUI_ICON_COUNT\s+(\d+)")), "kernel/dock_geom.h"),
     "DOCK_ORDER": ("str", dock_order, "kernel/kernel.c"),
     "dock_scale_pct": ("num", lambda: int(rx("kernel/kernel.c", r"^int dock_scale_pct = (\d+);")), "kernel/kernel.c"),
-    "DOCK_ICON": ("num", dock_icon, "kernel/dock_geom.[ch], kernel/kernel.c"),
+    "DOCK_ICON": ("num", dock_icon, "kernel/dock_geom.[ch], kernel/desktop.c"),
     "DOCK_GAP": ("num", lambda: int(rx("kernel/dock_geom.h", r"#define DOCK_GAP\s+(\d+)")), "kernel/dock_geom.h"),
     "DOCK_PAD": ("num", lambda: int(rx("kernel/dock_geom.h", r"#define DOCK_PAD\s+(\d+)")), "kernel/dock_geom.h"),
     "DOCK_MARGIN_BOT": ("num", lambda: int(rx("kernel/dock_geom.h", r"#define DOCK_MARGIN_BOT\s+(\d+)")), "kernel/dock_geom.h"),
