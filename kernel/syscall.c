@@ -831,7 +831,7 @@ static int sys_tasks(u32 out, u32 kill, u32 c) {
     return rc;
 }
 
-/* 1.9.11: SYS_HTTP_GET, what the Curbfind app fetches its live rows with.
+/* 1.9.11: SYS_HTTP_GET, what the Scrounge app fetches its live rows with.
    This is the first syscall that puts the kernel's network stack behind a
    ring-3 caller, so it is deliberately narrow: the host and port are
    fixed here, the caller names only the path, and the path is copied out

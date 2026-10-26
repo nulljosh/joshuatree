@@ -82,7 +82,7 @@ try:
     # Open the Apps folder from the dock.
     move(centre(APPS_FOLDER_SLOT), ICON_ROW_Y); time.sleep(0.4)
     click(); time.sleep(1.0)
-    # Click squarely on the Curbfind tile.
+    # Click squarely on the Scrounge tile.
     move(*tile_click(LOG)); time.sleep(0.3)
     click()
     deadline = time.time() + 15

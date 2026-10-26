@@ -1758,7 +1758,7 @@ if (typeof document !== "undefined") (function () {
   // grid with the same tile selected, so one 'd' then Enter steps through the
   // 18 slots after the dock's own eight. Stocks has its own dock scene.
   var APPS_FOLDER_TOUR = [
-    { name: 'Curbfind', dwell: 1800 }, { name: 'Keyrate', dwell: 1800 }, { name: 'Bookrank', dwell: 1800 },
+    { name: 'Scrounge', dwell: 1800 }, { name: 'Keyrate', dwell: 1800 }, { name: 'Bookrank', dwell: 1800 },
     { name: 'Quotes', dwell: 1800 }, { name: 'Tonchi', dwell: 1800 },
     { name: 'Toroid', dwell: 1800 }, { name: 'Hikko', dwell: 1800 },
     { name: 'Fieldbook', dwell: 1800 }, { name: 'Contacts', dwell: 1800 }, { name: 'Calculator', dwell: 1800, keys: '12*7\n' },
@@ -1766,7 +1766,7 @@ if (typeof document !== "undefined") (function () {
     { name: 'Activity', dwell: 4200, down: 3 }, { name: 'Clock', dwell: 1800 }
   ];
   function appsFolderScript() {
-    var s = [{ type: 'wait', ms: 1200 }, { type: 'keys', text: 'dddddddd', speed: 120 }, { type: 'wait', ms: 500 }]; // select Curbfind, tile 8
+    var s = [{ type: 'wait', ms: 1200 }, { type: 'keys', text: 'dddddddd', speed: 120 }, { type: 'wait', ms: 500 }]; // select Scrounge, tile 8
     APPS_FOLDER_TOUR.forEach(function (a, i) {
       if (i > 0) s.push({ type: 'keys', text: 'd', speed: 100 });
       if (a.skip) return;
@@ -2422,7 +2422,7 @@ if (typeof document !== "undefined") (function () {
   // The phone's version of the app tour. The phone has a home grid, not a dock: tap each app's icon, run the same
   // script the desktop tour uses, press Escape (the phone's back), and finish by opening him again.
   // Grid maths from kernel/phone_home.h: 5 columns of 86 px, rows 96 px apart, the first row starts 56 px down.
-  var PHONE_GRID = { Samantha: 6, Curbfind: 8, Keyrate: 9, Bookrank: 10, Quotes: 11, Tonchi: 12, Toroid: 13, Hikko: 14, Calculator: 17, Epiphany: 20 };
+  var PHONE_GRID = { Samantha: 6, Scrounge: 8, Keyrate: 9, Bookrank: 10, Quotes: 11, Tonchi: 12, Toroid: 13, Hikko: 14, Calculator: 17, Epiphany: 20 };
   function showComposer(on) { var c = document.getElementById("demo-composer"); if (c) c.style.visibility = on ? "" : "hidden"; }   // the phone's chat bar floats over an open app and hides its last rows
   function phoneIconPos(name) { var i = PHONE_GRID[name]; return [(i % 5) * 86 + 43, 56 + Math.floor(i / 5) * 96 + 30]; }
   async function phonePortfolioTour(gen) {
@@ -2592,13 +2592,13 @@ if (typeof document !== "undefined") (function () {
       { type: 'wait', ms: 900 },
       { type: 'keys', text: '4', speed: 200 } // Situation
     ],
-    Curbfind: browseList(4),
+    Scrounge: browseList(4),
     Bookrank: browseList(4),
     Hikko: browseList(2).concat([{ type: 'keys', text: 'u', speed: 200 }, { type: 'wait', ms: 500 }, { type: 'scancodes', codes: downTimes(2), speed: 350 }, { type: 'keys', text: 'u', speed: 200 }]), // upvote two ideas
     Keyrate: [{ type: 'wait', ms: 700 }, { type: 'keys', text: 'A real OS, from scratch, and every app on it. ', speed: 70 }]
   };
-  var PORTFOLIO_DWELL = { Epiphany: 16000, Curbfind: 7000, Bookrank: 6000, Hikko: 7000, Keyrate: 8000 };
-  var PORTFOLIO_TOUR = ['Epiphany', 'Curbfind', 'Bookrank', 'Tonchi', 'Hikko', 'Quotes', 'Keyrate', 'Toroid']
+  var PORTFOLIO_DWELL = { Epiphany: 16000, Scrounge: 7000, Bookrank: 6000, Hikko: 7000, Keyrate: 8000 };
+  var PORTFOLIO_TOUR = ['Epiphany', 'Scrounge', 'Bookrank', 'Tonchi', 'Hikko', 'Quotes', 'Keyrate', 'Toroid']
     // Tonchi, Quotes and Toroid are click-only cards in the kernel, so they get a short beat instead of seconds of blank window.
     .map(function (name, i) { return { name: name, slot: i + 2, script: PORTFOLIO_SCRIPTS[name] || [], dwell: PORTFOLIO_DWELL[name] || 3000 }; }); // slot 1 is the Portfolio list, the show opens the apps themselves, never the list
   // Boot takes a few seconds; the tour waits for graphical mode plus a
