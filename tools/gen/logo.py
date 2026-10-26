@@ -1,4 +1,4 @@
-# The Joshua tree mark, 3.0: the crayon tree, tightened.
+# The Joshua tree mark, 3.0: the crayon tree, tightened. 4.0 and 5.0 each grew it one tuft.
 #
 # The 2.25 marker scribble drawn again with a surer hand: steadier, heavier lines for the trunk and the three arms,
 # a trunk that swells where the marker pressed, a dense knot of loops at the end of every arm with paper showing
@@ -46,10 +46,14 @@ RIGHT = tilt([(54.0, 59.5), (63.5, 59.5), (70.0, 53.5), (72.0, 47.5)])
 # instead of three. (It first hung off the foot of the trunk, which at avatar size read as something else
 # entirely.) Same hand, same ground.
 LOW = tilt([(37.5, 61.0), (36.0, 56.5), (34.5, 52.5), (33.5, 48.0)])
-ARMS = (LEFT, MID, RIGHT, LOW)
+# 5.0, Talk to it: a fifth tuft, low on the long left arm and reaching out sideways the way old Joshua trees do, so
+# the tree grows one more each major, as the fourth came with 4.0. (Up off the right arm it crowded the middle knot.)
+# The bold copy keeps three arms, like the fourth.
+OUT = tilt([(36.0, 62.5), (30.0, 63.5), (24.0, 63.0), (19.5, 60.5)])
+ARMS = (LEFT, MID, RIGHT, LOW, OUT)
 CROTCH_L, CROTCH_R = tilt([(50.0, 59.0)])[0], tilt([(55.0, 57.0)])[0]
 # Each tuft its own size: (arm, knot radius, loops, blades, blade reach). The bold copy takes SMALL_R.
-TUFTS = ((LEFT, 7.2, 5, 3, 3.6), (MID, 9.4, 6, 4, 3.4), (RIGHT, 8.0, 5, 3, 3.2), (LOW, 5.4, 4, 3, 2.6))
+TUFTS = ((LEFT, 7.2, 5, 3, 3.6), (MID, 9.4, 6, 4, 3.4), (RIGHT, 8.0, 5, 3, 3.2), (LOW, 5.4, 4, 3, 2.6), (OUT, 4.8, 4, 3, 2.4))
 SMALL_R = (6.6, 8.2, 7.0, 4.8)
 # The bold copy's ground, flat so it lands on one pixel row at 16 px (bold_box puts it there).
 SMALL_GROUND_Y = 87.8
@@ -146,6 +150,8 @@ def big():
     le, me, re = ((offset(a, 3.2, 2.4, -1), offset(a, 3.2, 2.4, +1)) for a in (LEFT, MID, RIGHT))
     own = random.Random(40)   # its own pen, so the first three tufts stay exactly as 3.0 drew them
     lo = shaky(own, offset(LOW, 2.6, 1.8, -1), 0.3), shaky(own, offset(LOW, 2.6, 1.8, +1), 0.3)
+    own5 = random.Random(50)   # and the fifth its own again, so the 4.0 tree stays as it was
+    hi = shaky(own5, offset(OUT, 2.4, 1.7, -1), 0.3), shaky(own5, offset(OUT, 2.4, 1.7, +1), 0.3)
     outer_l = shaky(rnd, tl[:-1] + le[0][1:], 0.4)
     outer_r = shaky(rnd, list(reversed(re[1][1:])) + list(reversed(tr[:-1])), 0.4)
     crotch_l = shaky(rnd, list(reversed(le[1][1:])) + [CROTCH_L] + me[0][1:], 0.4)
@@ -158,9 +164,10 @@ def big():
     for arm, r, loops, count, reach in TUFTS:
         cx, cy, up = tip(arm, 4.5)
         if arm is LOW: rnd = own
+        if arm is OUT: rnd = own5
         knots.append(scribble(rnd, cx, cy, r, loops, 0.6, (0.8, 0.66)))
         blades += flicks(rnd, cx, cy, up, r, count, reach)
-    return [(2.6, accent, [ground]), (1.8, None, [outer_l, outer_r, crotch_l, crotch_r, lo[0], lo[1]]), (2.7, None, press),
+    return [(2.6, accent, [ground]), (1.8, None, [outer_l, outer_r, crotch_l, crotch_r, lo[0], lo[1], hi[0], hi[1]]), (2.7, None, press),
             (3.5, None, press2), (1.6, None, knots), (2.0, None, blades)]
 
 

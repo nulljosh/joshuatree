@@ -20,7 +20,8 @@ PROGRAM = {
 # Tiles drawn by the kernel itself, not one program: the hero is the menu bar, wallpaper and dock, with the Terminal and Weather open
 # (their programs are added below SHARED).
 KERNEL = {"desktop-apps": ["kernel/menu.c", "kernel/dock_draw.c", "kernel/dock_geom.c", "kernel/icons.c", "kernel/icon_art.h",
-                      "kernel/gui_paint.c", "kernel/gui_prims.c", "kernel/gui_shapes.c", "kernel/wallmap.c", "kernel/clockicon.c"]}
+                      "kernel/gui_paint.c", "kernel/gui_prims.c", "kernel/gui_shapes.c", "kernel/wallmap.c", "kernel/clockicon.c",
+                           "kernel/menubar.c", "kernel/boot_mark.h"]}
 # Headers a program includes that also change its picture (the sprite sheet and the rules and story the game shows).
 EXTRA = {"samantha-chat": ["user/samcaps.h"], "app-chess": ["user/chess_core.h"], "app-hamurapi": ["user/hamurabi_sprites.h", "user/hamurabi_rules.h", "user/hamurabi_story.h"]}
 # Shared drawing code every program links in. Changing it can change every tile.
