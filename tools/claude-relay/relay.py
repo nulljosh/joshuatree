@@ -518,7 +518,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not (isinstance(model, str) and isinstance(effort, str) and model in MODELS and effort in EFFORTS):   # a whitelist: anything else, even a real model id, is refused
                 return self.reply(400, "Unknown model or effort.", n, t0)
             pi = d.get("pi", "") if isinstance(d.get("pi", ""), str) else ""
-            self.pi_status = pi[:120]
+            self.pi_status = pi[:240]   # the Pi status, its brevity line and the plugin rows (arch/arm64/ask.c post)
             if not isinstance(prompt, str) or not isinstance(session, str): return self.reply(400, "Bad JSON.", n, t0)
         else:
             prompt = raw.decode("utf-8", "replace")

@@ -16,6 +16,7 @@
 void kputs(const char *s);   /* main.c: the UART and the log of the window in front */
 void say_wrapped(const char *prefix, const char *s, unsigned n);   /* ask.c */
 int browse_command(const char *q, unsigned n);                     /* browser.c */
+int nimble_command(const char *q, unsigned n);                     /* nimble.c: `nimble QUESTION` */
 int ask_command(const char *q, unsigned n);                        /* ask.c: "stop" and the /model, /effort, /status, /clear, /help commands */
 void ask_claude(const char *q, unsigned n);                        /* ask.c: `llm PROMPT` */
 void sam_command(const char *q, unsigned n);                       /* ask.c: `sam QUESTION`, queued and answered without blocking the prompt */
@@ -38,7 +39,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
+                           "top, bottom, find WORD, nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
                            "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
@@ -464,7 +465,7 @@ int users_passwd(const char *name, const char *pass, void (*out)(const char *)) 
     cmd_out = saved; return r;
 }
 static int blocked_while_sam(const char *q, unsigned n) {   /* the one TCP connection and the heap are in use: these would collide */
-    static const char *const names[] = {"browse", "open", "back", "forward", "reload", "llm", "bt", "userrun"};
+    static const char *const names[] = {"browse", "open", "back", "forward", "reload", "nimble", "llm", "bt", "userrun"};
     for (unsigned a = 0; a < sizeof names / sizeof *names; a++) {
         unsigned k = 0;
         while (names[a][k] && k < n && q[k] == names[a][k]) k++;
@@ -571,6 +572,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     }
     if (ask_command(q, n)) return;
     if (browse_command(q, n)) return;
+    if (nimble_command(q, n)) return;
     if (is(q, n, "llm")) { ask_claude(q, n); return; }
     not_found(q, n);
 }
