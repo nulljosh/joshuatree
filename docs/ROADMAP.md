@@ -106,13 +106,11 @@ Refuted, and why, so nobody re-finds them:
 The research rounds of 2026-10-06 and 2026-10-08 further down still hold. Where they overlap (the crash reporter, W^X, bad-argument syscall tests), the slices here are the ones to build, because they were checked against the tree with a path and line.
 
 Confirmed, 3.0, usable, hours each:
-- [x] [Sonnet] Caps Lock and held-key repeat on the Pi. Already shipped in 2.52.0; 4.15.0 added the missing mutation to its check.
   - `arch/arm64/ask.c` drops every code of 58 or more, so Caps Lock does nothing.
   - `hid_kbd` emits one press per report, so holding Backspace deletes one character (the keyboard is set to idle 0).
   - Track Caps Lock in ask.c (letters only, Shift inverts it).
   - Repeat the last typed key from the main loop after 400 ms, then every 80 ms. Cancel it by release or another key. Typed keys and Backspace only, so Brick is untouched.
   - Check: `tools/checks/arm64-keys-check.py` with a held key over QMP input-send-event (8 to 14 repeats, none after release) and a Caps Lock case through the self-test path.
-- [x] [Sonnet] Notes autosaves, shipped in 2.55.0 (#518) and found unticked in 4.15.2. `user/notes.c` saves a dirty note two `JT_SYS_TIME` seconds after the last key, so the red dot no longer loses an edit. Check: `tools/checks/notes-autosave-check.py` (i386 kernel; types, waits, closes through the red dot, reopens and finds the text), with a mutation (autosave off) that must fail. Open on the Pi: `JT_SYS_TIME` returns 0 until the network has set the clock (`cal_utc` in `arch/arm64/main.c`), and Notes' `0 - 0 >= 2` never fires, so an offline Pi still does not autosave.
 
 Worth doing, not yet re-checked, in the order the study ranked them:
 - 3.0 stability, hours:
@@ -152,7 +150,6 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 
 ## Daily driver gaps (Joshua, 2026-10-12: "keep identifying gaps and check them off as we go")
 
-- [x] [Sonnet] Browser bookmarks, in 4.0.6. A star in the address bar (or Ctrl+D) saves the open page to `JT/BOOKMARK.TXT` (8.3 allows eight letters before the dot, so not BOOKMARKS), one line a page: address, then title. The empty Browser lists the saved pages; Tab then Enter, or a click, opens one; a star on a saved page takes it off. Twelve pages at most. Check: `tools/checks/arm64-bookmarks-check.py`.
 
 ## Next few weeks
 
@@ -164,19 +161,6 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 
   Each step is its own PR with its own check against a local test page.
 
-- [ ] [Fable] Browser app on the Pi, its own dock tile and window (goal 2026-10-12, "browser working tonight").
-  - The text browser already lives behind the Terminal (`browse URL`, `arch/arm64/browser.c`): HTTPS through `tls.c`, redirects, readable text, numbered links, history.
-  - This is the window around it:
-    - an address bar you type into, and Enter loads
-    - the page as text in Tree Sans, with headings bigger and links in the accent colour
-    - a click on a link follows it
-    - scroll wheel and Page Up and Down
-    - Back, Forward and Reload buttons
-    - a status line
-    - the loading and error states in plain words
-  - No images, CSS layout or JavaScript yet. Say so on a page that needs them.
-  - A Safari-style compass tile from the icon composer.
-  - Check: an arm64 check against a stub HTTPS server (as `tools/checks/pi-actions-check.py` does) that types a URL, clicks a link and goes back, reading the window's serial lines.
 - [ ] [Sonnet] The dock grows to the default macOS set that exists on Joshua Tree.
   - Music, Books, Clock, Calculator and the Browser join the 11 tiles (Apps, Finder, Mail, Calendar, Notes, Reminders, Terminal, Samantha, Weather, Stocks, Trash).
   - One flat house-style icon each from the icon composer, in the Mac's order. The dock narrows its tiles to fit.
@@ -203,7 +187,6 @@ Worth doing, not yet re-checked, in the order the study ranked them:
     3. The relay running several agent steps (each one a full POST) on the small local model.
   - Time each step with `ticks()` stamps on the UART on the board first.
   - Check: a stub-relay check that fails when a question costs more than one handshake.
-- [x] [Sonnet] Calendar app on the Pi circled the UTC day, not the local one, fixed in 4.15.1.
   - At 11:20 PM on 11 October the Clock and the dock tile said the 11th and the month grid circled the 12th. The app read `SYS_TIME` as raw UTC; on the Pi `SYS_TIME` now returns Vancouver wall time through `clock_offset` in `arch/arm64/main.c`, the one time-zone path the Clock already used.
   - Check: `tools/checks/arm64-calicon-check.py` boots 06:20 UTC on 12 October, finds the circled day in the Calendar window (the 11th), and a mutation with the grid back on UTC (`--mutate`) circles the 12th and fails.
 - [ ] [Sonnet] Keyboard shortcuts in every app.
@@ -211,29 +194,8 @@ Worth doing, not yet re-checked, in the order the study ranked them:
   - Plus Ctrl for the same on a keyboard with no GUI key.
   - One table in the shell. Apps handle the actions.
   - Check: an arm64 key check that sends each chord through QMP and sees its serial line.
-- [ ] [Sonnet] Mail and Stocks say "not on ARM yet" on the Pi, so do Weather and Reminders.
-  - Port them one at a time, Weather and Reminders first, then Mail and Stocks (they need the live backends).
-  - Each one gets its own check.
-  - (Finder shipped in 3.14.0.)
-- [ ] [Sonnet] Pi boot polish (the splash itself shipped in 3.8.3):
-  - The mark on the brand fill with the thin progress bar, held until the desktop is up. The Console never flashes on the way. The log stays one dock click away, and a FAIL still raises it.
-  - Then a login screen.
-  - The first few seconds after the desktop appears take no keys. Find why and fix it.
-  - Check: extend `tools/checks/arm64-m1c-check.py` to screendump the splash before the desktop and see no Console frame pixels.
-- [ ] [Fable] User accounts on the Pi.
-  - A login screen with a name and password.
-  - Accounts stored on the card's `JT/` (salted hash, never the password).
-  - Notes and Music keyed to the signed-in user's folder.
-  - A `users` and `adduser` command in the Terminal.
-  - The i386 build already has Account (change password) and Add user rows in Settings. Reuse that store.
-  - Check: a new accounts check that adds a user, logs out and in, and sees a wrong password refused.
-- [x] [Sonnet] A `reboot` and `shutdown` command in the Terminal and in the menu bar, no Ctrl+Alt chord to remember (the chord stays as the keyboard route). The commands (3.x) and the tree menu rows (4.x) had shipped unticked; 4.16.0 added the flush and the safe-to-unplug screen. Check: `tools/checks/arm64-power-check.py`.
+- [ ] [Sonnet] The first few seconds after the Pi desktop appears take no keys. Find why and fix it. (The splash, its bar and the login screen shipped: `arm64-splash-check.py`, `arm64-splashbar-check.py`, `arm64-login-check.py`.)
 
-- [ ] [Sonnet] Books, a reader app for Joshua Tree (both kernels, ring 3 like Notes).
-  - A library of plain text and EPUB-as-text books in `JT/BOOKS/`.
-  - One page at a time with the arrow keys, a remembered place per book, Tree Sans at body size.
-  - Ships with one book in the card image: Make Something Wonderful, Steve Jobs in his own words (the Steve Jobs Archive, free to read), the book the tribute line ends on.
-  - Check: a new books check under tools/checks that opens the app, turns two pages and reopens on the saved page.
 
 - [ ] [Sonnet] A small voxel building game as a native Joshua Tree app, software-rendered: walk, place and break blocks.
   - Pick a name that is not Minecraft.
@@ -431,7 +393,6 @@ The rest of the Linux gaps, tagged with the version that owns them (Joshua, 2026
 - [ ] [Fable] [4.0] Processes the Unix way: fork and exec, pipes, signals, a process table, exit codes. The base for everything below.
 - [ ] [Fable] [4.0] A real shell and Terminal: a command line with pipes, redirects, job control, a PATH and scripts, so `ls | grep` works. Tabs and splits come after.
 - [ ] [Fable] [6.0] Users and permissions: accounts, file owners and modes, a login screen, an admin role that can install. Joshua's "admin privileges" idea starts here.
-- [x] [Fable] [6.0] A crash-safe card filesystem, so a pulled plug mid-write loses nothing: shipped in 4.13.0 as write ordering plus a mount-time repair on FAT itself, no journal.
 - [ ] [Fable] [7.0] TLS 1.3 in the kernel or a ring-3 library: the gate for HTTPS, so websites, Plex and a real Claude API connection work without a relay.
 - [ ] [Fable] [7.0] A web browser on the Pi (Madobe on this OS; NetSurf is the reference port). Needs TLS, fonts and a JavaScript engine decision.
 - [ ] [Fable] [8.0] A compiler and linker on the box (the Plank compiler first), so the OS can build its own apps. The last piece of "build Joshua Tree inside Joshua Tree".
@@ -454,8 +415,6 @@ Sources: Onyx on Circle (Adafruit blog, 2026-09-29), Circle's feature list (gith
 Round 2, 2026-10-06 night (Raspberry Pi OS Trixie and RISC OS on the Pi 4). Small, all after Wi-Fi:
 - [ ] [Fable] Both HDMI ports: the Pi 4 drives two monitors; a second framebuffer through the mailbox display id, the desktop spanning or mirroring.
 - [ ] [Sonnet] A Screen settings page on the Pi: resolution, scale, which HDMI, saved on the card.
-- [x] [Sonnet] Screen sleep implemented in the 2.41.0 branch: five idle minutes blank HDMI, keys or mouse wake, active Brick and assistant requests keep it awake. Host timing/failure controls and raspi4b mailbox/input checks: `tools/checks/arm64-screen-idle-check.py`. Full release gate and physical HDMI check remain.
-- [x] [Sonnet] Pi notification strip implemented in 2.38.0: Wi-Fi joined and Brick results appear briefly in the menu bar, clear after four seconds and leave clock/status/input intact. Apps share `menubar_notify`; file drops and updates can use it when those features exist. Check: `tools/checks/arm64-notice-check.py`. Full release gate and board verification remain.
 - [ ] [Fable] Bluetooth audio: speakers and headphones over the same CYW43455 radio. After Bluetooth for the mouse.
 Note: RISC OS on the Pi 4 still lists USB 3 as unsupported (riscosopen.org port status); Joshua Tree got xHCI working on the board on 2026-10-06.
 Round 3, 2026-10-06 night (macOS Tahoe 26 and Windows 11 2026). Joshua Tree already has the glass look (v48); these are what the two big desktops added that we lack:
@@ -539,9 +498,6 @@ The top five gaps from the Research section (written from memory) that were not 
 Nimbus replaced the stacked-ring Neo case, which was removed in 4.11.6 (Strata was its earlier name). Nimbus is a compact, square box with the original Macintosh as inspiration.
 
 - [ ] [Sonnet] Name check for Nimbus before it goes on a box: domain, trademark search in Canada and the US, and the App Store and GitHub namespaces (the asc-name-creator skill has the bulk domain check). Nimbus is a common word, so confirm it is free for computer hardware.
-- [x] [Fable] Redesign (shipped 4.7.0): a compact, near-square all-in-one in the spirit of the first Macintosh, but an original design with no Apple marks. The Pi 4 (and a larger variant for the mini-ITX board) sits behind a front face that holds a 7 inch screen, a handle recess on top, a vent slot grille, one slot-shaped detail on the front, ports out the back. Built in build123d, exported to STL and STEP, rendered in Blender from the real CAD like the Neo hero image.
-- [x] [Sonnet] Neo removed (4.11.6): its CAD, STLs, renders, blueprint and build guide are gone; Nimbus is the only case.
-- [x] [Sonnet] A Nimbus build guide, blueprint sheet and assembly steps regenerated from the new CAD (4.7.0 print pack).
 
 ### Known limits to recheck
 - [ ] [Sonnet] `SYS_READFILE` reads with interrupts off, so loading mid-song can glitch the audio.
@@ -906,11 +862,7 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
 
 ### The plan to 10
 
-- [x] 2.0: Apps leave the kernel. Each app is its own protected program, so one crash can't take the machine down. Shipped as 2.0.0; every 2.x step since is in the Shipped log section and the GitHub releases, newest first.
   - 1.7.7 took the first step: Keyrate runs as a real ring-3 process with its own window, and crashing it on purpose leaves the desktop standing.
-- [x] 2.1: Music. A player app in its own protected space: WAV first, then MP3 through a small public-domain decoder, a library from Files, play and pause through the sound driver it already has.
-- [x] 2.2: Video. A player app: motion-JPEG first (reusing the JPEG decoder the kernel already has) with sound in sync, then a real codec when the hardware allows.
-- [x] 2.5: Joshua on the web. Numbered 2.5 on Joshua's call, so the plan's 2.1 Music and 2.2 Video are still open. The portfolio at jaybulb.com is Joshua's own: the chat is titled Joshua, answers in the first person and speaks in his cloned voice, and the page opens on a 28 second lip-synced intro of him before the live OS takes over. Done, shipped as 2.5.0.
 - 3.0: Hold it. Joshua Tree runs on a real Raspberry Pi 4: the desktop boots on the board and you can type and click on it, mouse included. Sound from the 3.5 mm jack, Samantha over Wi-Fi through the Mac relay, a new mark. The reference mini PC (UEFI, a real disk, a real network card) moves to a later 3.x.
 - 3.1: The Samantha box ships as a kit. The printed case from `docs/hardware/`, a Pi 4, a 7 inch screen, a speaker and the card, bring your own parts (MONEY.md has the math).
 - 4.0: Many windows. Real multitasking: a window server, real processes, pipes, a Terminal with tabs and splits. Three apps run at once, one crashes, the other two do not notice. Doom is the proof. May go mobile first: one app full screen, a home grid, gestures.
