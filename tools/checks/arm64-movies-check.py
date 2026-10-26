@@ -10,7 +10,7 @@ frame's number drawn as six black or white squares) and NOTAVI.AVI (text, not a 
   4. NOTAVI.AVI shows an error line, not a crash, and the desktop is still up (Esc closes the app, Spotlight opens).
   5. LONG.AVI is CLIP.AVI with 6.5 MB of padding spliced into its movi list after frame 19, so frames 20 to 39 sit past
      the 6 MB that SYS_READFILE holds: it plays all 40 frames, streamed from the card with SYS_READAT (fat_read_at).
-  6. QuickTime-style controls (6.2.0): LOOP.AVI is CLIP.AVI's frames three times over (6 s). `f` in it goes fullscreen with
+  6. QuickTime-style controls (6.2.0): LOOP.AVI is CLIP.AVI's frames six times over (12 s, so a slow runner cannot reach its end before the fade). `f` in it goes fullscreen with
      the floating bar up (its pale pause icon on the screen, `movie=controls 1`); 3 s with no input fades it away
      (`movie=controls 0`, the pale pixels gone); a key brings it back.
 
@@ -53,8 +53,8 @@ struct.pack_into("<I", long, 4, len(long) - 8)                                  
 struct.pack_into("<I", long, m - 8, struct.unpack("<I", long[m - 8:m - 4])[0] + len(pad))   # movi LIST size
 (TMP / "long").write_bytes(bytes(long)); mt("mcopy", str(TMP / "long"), "::JT/LONG.AVI")
 movi = clip[m:]                                       # the movi body, to the end of the file (no idx1 in the fixture)
-loop = bytearray(clip[:m] + movi * 3)
-struct.pack_into("<I", loop, 4, len(loop) - 8); struct.pack_into("<I", loop, m - 8, 4 + len(movi) * 3)
+loop = bytearray(clip[:m] + movi * 6)
+struct.pack_into("<I", loop, 4, len(loop) - 8); struct.pack_into("<I", loop, m - 8, 4 + len(movi) * 6)
 (TMP / "loop").write_bytes(bytes(loop)); mt("mcopy", str(TMP / "loop"), "::JT/LOOP.AVI")
 (TMP / "notavi").write_text("this is not a movie\n" * 40); mt("mcopy", str(TMP / "notavi"), "::JT/NOTAVI.AVI")
 
@@ -138,7 +138,7 @@ try:
         if sel() == "LOOP.AVI": break
         key("down" if (sel() or "") < "LOOP.AVI" else "up"); time.sleep(0.3)
     n = len(uart()); key("ret")
-    if wait("movie=play LOOP.AVI frames=120", 15, n):
+    if wait("movie=play LOOP.AVI frames=240", 15, n):
         time.sleep(0.6); p0 = pale(shot("loop-window"))
         n = len(uart()); key("f")
         up = wait("movie=controls 1", 5, n); time.sleep(0.4); p1 = pale(shot("loop-bar"))
@@ -147,7 +147,7 @@ try:
         check("3 s with no input fades it away (movie=controls 0, the pale pixels gone)", gone and p2 < p1 - 40, (gone, p1, p2))
         n = len(uart()); key("left")
         check("a key brings it back", wait("movie=controls 1", 5, n), uart()[n:][-200:])
-    else: check("LOOP.AVI plays (120 frames)", False, uart()[n:][-300:])
+    else: check("LOOP.AVI plays (240 frames)", False, uart()[n:][-300:])
     key("esc"); time.sleep(0.3); key("esc"); time.sleep(0.5)
     n = len(uart()); key("esc"); time.sleep(0.5); key("esc"); time.sleep(0.5)
     key("meta_l", "spc")

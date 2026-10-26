@@ -462,6 +462,12 @@ static unsigned ov_want(void) {
     if (idle >= OV_HOLD + OV_FADE) return 0;
     return 8u - (idle - OV_HOLD) * 8u / OV_FADE;
 }
+static void say(const char *s);
+static void ov_set(unsigned want) {   /* the bar's level; going to 0, and coming back up to 8 while playing, is said once whichever path got there */
+    if (!want && ov_level) say("movie=controls 0");
+    if (want == 8 && ov_level < 8 && mode == M_PLAY) say("movie=controls 1");
+    ov_level = want;
+}
 /* The floating bar: the picture's bottom strip blended toward ink by level/8 * 3/4, the controls on it once it is half up. */
 static void draw_overlay(unsigned pos_ms, unsigned level) {
     if (!level) return;
@@ -554,7 +560,7 @@ static void draw_all(unsigned pos_ms) {
     rect(vx, vy, vw, vh, STAGE);
     if (!fs) { draw_head(); draw_bar(pos_ms); }
     if (shown >= 0) draw_picture();
-    if (fs) { ov_level = ov_want(); draw_overlay(pos_ms, ov_level); }
+    if (fs) { ov_set(ov_want()); draw_overlay(pos_ms, ov_level); }
 }
 
 /* ---- the player's heartbeat -------------------------------------------- */
@@ -584,7 +590,7 @@ static void tick(void) {
                 shown = (int)f; shown_n++;
                 if (!fs) { rect(vx, vy, vw, vh, STAGE); }
                 draw_picture();
-                if (fs) { ov_level = ov_want(); draw_overlay(ms, ov_level); }
+                if (fs) { ov_set(ov_want()); draw_overlay(ms, ov_level); }
                 dirty = 1;
             } else if (++bad_run >= 5) { fail("The movie is damaged and stopped playing", "corrupt"); return; }
             else shown = (int)f;      /* keep the last good picture, move on */
@@ -594,9 +600,8 @@ static void tick(void) {
     if (sec != last_sec) { last_sec = sec; dirty = 1; }
     if (fs && ov_want() != ov_level) {                       /* the fade, between frames too */
         unsigned want = ov_want();
-        if (!want) say("movie=controls 0");
         rect(vx, vy, vw, vh, STAGE); if (shown >= 0) draw_picture();
-        ov_level = want; draw_overlay(ms, ov_level); dirty = 1;
+        ov_set(want); draw_overlay(ms, ov_level); dirty = 1;
     }
 }
 
@@ -728,12 +733,10 @@ void _start(int argc, char **argv) {
             continue;
         }
         if (r != 1) break;
-        unsigned was = fs ? ov_level : 0;
         if (ev.kind == JT_EV_KEY || ev.kind == JT_EV_CLICK) { ov_seen = ticks(); dirty = 1; }
         if (ev.kind == JT_EV_KEY) on_key(ev.a);
         else if (ev.kind == JT_EV_CLICK) on_click(ev.a, ev.b);
         if (dirty) { draw_all(clock_ms()); dirty = 0; }
-        if (fs && mode == M_PLAY && was < 8 && ov_level == 8) say("movie=controls 1");
         flags = JT_POLL_PRESENT;
     }
     say("movies: closed");
