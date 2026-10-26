@@ -40,6 +40,7 @@ int jpeg_decode_scaled(const unsigned char *data, unsigned int len, unsigned sho
 #define PALE   0x00F5F0EB
 
 #define MAX_FILE   (6u * 1024u * 1024u) /* the heap is 8MB; leave room for the index and the decoder */
+#define HEAD_MAX   (64u * 1024u)        /* 6.1.0, streamed: the headers (hdrl and the movi list's start) are read from here */
 #define MAX_CHUNKS 40000u
 #define HEAD_H     28
 #define BAR_H      44
@@ -61,9 +62,12 @@ static char errmsg[72] JT_DATA = {0};
 static char errname[JT_DIRENT_NAME] JT_DATA = {0};
 
 /* the open clip */
-static unsigned char *fbuf JT_DATA = 0;
+static unsigned char *fbuf JT_DATA = 0;                    /* the whole file, or when streamed only its first HEAD_MAX bytes */
+static int streamed JT_DATA = 0;                            /* 6.1.0: chunks are read from the card as they play (SYS_READAT) */
+static char spath[JT_PATH_MAX + 1] JT_DATA = {0};
+static unsigned char *rbuf JT_DATA = 0; static unsigned rcap JT_DATA = 0;   /* the one chunk read last */
 static struct avi av JT_DATA;
-static unsigned *voff JT_DATA = 0, *vlen JT_DATA = 0;     /* video chunks: offset into fbuf, length */
+static unsigned *voff JT_DATA = 0, *vlen JT_DATA = 0;     /* video chunks: offset in the file, length */
 static unsigned *aoff JT_DATA = 0, *alen JT_DATA = 0, *acum JT_DATA = 0; /* audio chunks; acum[i] = output samples before chunk i */
 static unsigned nv JT_DATA = 0, na JT_DATA = 0, total_samples JT_DATA = 0;
 static unsigned short *vbuf JT_DATA = 0;                    /* decoded frame, RGB565 */
@@ -164,7 +168,8 @@ static void close_clip(void) {
     if (aoff) free(aoff); if (alen) free(alen); if (acum) free(acum);
     if (vbuf) free(vbuf);
     if (stage) free(stage);
-    fbuf = 0; voff = vlen = aoff = alen = acum = 0; vbuf = 0; stage = 0;
+    if (rbuf) free(rbuf);
+    fbuf = 0; voff = vlen = aoff = alen = acum = 0; vbuf = 0; stage = 0; rbuf = 0; rcap = 0; streamed = 0;
     nv = na = 0; have_audio = 0; audio_clock = 0; waiting_idle = run_started = feed_done = 0;
 }
 static void fail(const char *why, const char *code) {
@@ -174,9 +179,43 @@ static void fail(const char *why, const char *code) {
     struct ln l = {{0}, 0}; ln_s(&l, "movie=error "); ln_s(&l, code); ln_out(&l);
 }
 
+/* len bytes of the clip from file offset off: in memory, or read from the card into rbuf when streamed. 0 when the read fails. */
+static const unsigned char *fetch(unsigned off, unsigned len) {
+    if (!streamed) return fbuf + off;
+    if (len > rcap) {
+        if (rbuf) free(rbuf);
+        rbuf = (unsigned char *)malloc(len); rcap = rbuf ? len : 0;
+        if (!rbuf) return 0;
+    }
+    return jt_readat(spath, off, rbuf, len) == (int)len ? rbuf : 0;
+}
 static int decode_frame(unsigned f) {
     unsigned w = 0, h = 0;
-    return jpeg_decode_scaled(fbuf + voff[f], vlen[f], vbuf, dw, dh, &w, &h);
+    const unsigned char *src = fetch(voff[f], vlen[f]);
+    return src ? jpeg_decode_scaled(src, vlen[f], vbuf, dw, dh, &w, &h) : -1;
+}
+static unsigned le32_(const unsigned char *p) { return p[0] | p[1] << 8 | p[2] << 16 | (unsigned)p[3] << 24; }
+/* The movi list walked from the card, avi_next's rules (step into LIST 'rec ', a cut-off chunk ends it), reading only each
+   chunk's 8 byte header. fill 0 counts nv and na; fill 1 records the offsets. 0 when a read fails. */
+static int stream_index(unsigned mend, int fill) {
+    unsigned pos = av.movi, vi = 0, ai = 0, acc = 0, step = av.achannels * (av.abits / 8u);
+    unsigned char h[8];
+    while (pos + 8 <= mend) {
+        if (jt_readat(spath, pos, h, 8) != 8) return 0;
+        unsigned body = pos + 8, raw = le32_(h + 4);
+        if (h[0] == 'L' && h[1] == 'I' && h[2] == 'S' && h[3] == 'T') { pos = body + 4; continue; }
+        if (raw > mend - body) break;
+        pos = body + raw + (raw & 1);
+        if (h[0] < '0' || h[0] > '9' || h[1] < '0' || h[1] > '9') continue;
+        unsigned st = (unsigned)(h[0] - '0') * 10u + (unsigned)(h[1] - '0');
+        if (st == av.vstream && h[2] == 'd' && (h[3] == 'c' || h[3] == 'b')) { if (fill) { voff[vi] = body; vlen[vi] = raw; } vi++; }
+        else if (av.arate && st == av.astream && h[2] == 'w' && h[3] == 'b') {
+            if (fill) { aoff[ai] = body; alen[ai] = raw; acum[ai] = acc; acc += step ? raw / step : 0; } ai++;
+        }
+        if (vi > MAX_CHUNKS || ai > MAX_CHUNKS) break;
+    }
+    if (!fill) { nv = vi; na = ai; } else { acum[na] = total_samples = acc; }
+    return 1;
 }
 
 /* Queue state after stop: wait until idle, then feed from the chunk holding sample s. */
@@ -220,6 +259,29 @@ static void open_clip(int idx) {
     for (int k = 0; fname[k] && l < JT_PATH_MAX; k++) path[l++] = fname[k];
     path[l] = 0;
 
+    /* 6.1.0: where the kernel reads part of a file (the Pi), every clip streams from the card and size is no limit */
+    for (int k = 0; k <= l; k++) spath[k] = path[k];
+    if (e->size >= 12 && (fbuf = (unsigned char *)malloc(HEAD_MAX))) {
+        int h = jt_readat(spath, 0, fbuf, e->size < HEAD_MAX ? e->size : HEAD_MAX);
+        if (h == -38) { free(fbuf); fbuf = 0; }                    /* -ENOSYS: i386, the whole file below */
+        else {
+            streamed = 1;
+            if (h < 12) { fail("Could not read the file", "read"); return; }
+            int r = avi_open(&av, fbuf, (unsigned)h);
+            if (r == AVI_E_UNSUP) { fail("Only motion-JPEG video with PCM sound plays here", "unsupported"); return; }
+            if (r != AVI_OK || av.movi < 12) { fail("This is not a playable AVI file", "format"); return; }
+            unsigned mend = av.movi - 4 + le32_(fbuf + av.movi - 8);   /* the movi list's own size, not the head's */
+            if (mend > e->size || mend < av.movi) mend = e->size;
+            if (!stream_index(mend, 0)) { fail("Could not read the file", "read"); return; }
+            if (!nv) { fail("The movie has no video frames", "empty"); return; }
+            if (nv > MAX_CHUNKS || na > MAX_CHUNKS) { fail("The movie has too many chunks", "toomany"); return; }
+            voff = (unsigned *)malloc(nv * 4u); vlen = (unsigned *)malloc(nv * 4u);
+            aoff = (unsigned *)malloc((na + 1) * 4u); alen = (unsigned *)malloc((na + 1) * 4u); acum = (unsigned *)malloc((na + 1) * 4u);
+            if (!voff || !vlen || !aoff || !alen || !acum) { fail("Not enough memory to index the movie", "nomem"); return; }
+            if (!stream_index(mend, 1)) { fail("Could not read the file", "read"); return; }
+            goto indexed;
+        }
+    }
     if (e->size > MAX_FILE) {
         char m[72] = "Too big to play here: "; int n = 22;
         n += utoa10((e->size + 1048575u) / 1048576u, m + n);
@@ -252,6 +314,7 @@ static void open_clip(int idx) {
         else { aoff[ai] = off; alen[ai] = c.len; acum[ai] = acc; acc += step ? c.len / step : 0; ai++; }
     }
     acum[na] = total_samples = acc;
+indexed:
     us = av.us_per_frame;
     dur_ms = nv * (us / 1000u) + nv * (us % 1000u) / 1000u;
 
@@ -301,7 +364,8 @@ static void feed_audio(void) {
             if (feed_off >= have) { feed_chunk++; feed_off = 0; continue; }
             unsigned take = have - feed_off;
             if (take > AUDIO_STAGE) take = AUDIO_STAGE;
-            stage_len = avi_audio8(&av, fbuf + aoff[feed_chunk] + feed_off * step, take * step, stage, AUDIO_STAGE);
+            const unsigned char *src = fetch(aoff[feed_chunk] + feed_off * step, take * step);
+            stage_len = src ? avi_audio8(&av, src, take * step, stage, AUDIO_STAGE) : 0;
             stage_off = 0; feed_off += take;
             if (feed_off >= have) { feed_chunk++; feed_off = 0; }
             if (!stage_len) continue;

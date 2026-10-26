@@ -263,7 +263,7 @@ extern int settings_live;
 #define SPOT_FINDER (GUI_ICON_COUNT + 6)  /* 3.14.0: the Finder, user/finder.c at EL0; the dock has no Finder tile, so Spotlight and Samantha's open reach it */
 int spot_hmax(void);
 int spot_key(unsigned code);
-#define SPOT_LAST (GUI_ICON_COUNT + 17)   /* 4.24.0: the games end the list (game_names, windows.c); 4.25.0 added Chess */
+#define SPOT_LAST (GUI_ICON_COUNT + 18)   /* 4.24.0: the games end the list (game_names, windows.c); 4.25.0 added Chess, 6.1.0 Movies */
 extern int spot_lx;
 extern int spot_ly;
 const char *spot_name(int slot);
@@ -407,7 +407,7 @@ extern int off_on;
 extern int con_to_term;
 extern int face_mouth;
 extern const char *const dock_names[GUI_ICON_COUNT];   /* crash.c */
-extern const char *const game_names[10];               /* windows.c */
+extern const char *const game_names[11];               /* windows.c */
 #define VGAFONT_FIRST 32                              /* drivers/vgafont.h: the fallback 8x16 font, one copy, in console.c */
 #define VGAFONT_LAST 126
 extern const unsigned char *const vgafont;
