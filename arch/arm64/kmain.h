@@ -236,6 +236,7 @@ extern unsigned *fb_scan;
 int fb_setup(void);
 extern int fb_swap;
 int front_close(void);
+int app_cycle(void);
 #define GICC(o) REG(GICC_BASE + (o))
 extern unsigned long heap_next;
 extern unsigned heap_oom;
