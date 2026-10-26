@@ -56,7 +56,12 @@ struct dir_entry {
 static u16 rd16(u8 *p) { return p[0] | (p[1] << 8); }
 static u32 rd32(u8 *p) { return rd16(p) | ((u32)rd16(p + 2) << 16); }
 
+/* Where the last ranged read stopped, so a file read front to back (a movie, 6.1.0) walks its cluster chain once
+   instead of from the start on every call. ponytail: one remembered file; a second file read in turns walks again. Any write, delete or mount forgets it, so a reused cluster is never read as the old file's. */
+static u32 at_first, at_index, at_cluster;
+
 int fat_mount(void) {
+    at_first = 0;
     u8 boot[512];
     if (!blockdev_read_sector(0, boot)) return 0;
 
@@ -317,31 +322,44 @@ static int find_free_slot(u32 dir_cluster, u32 *out_lba, int *out_index) {
 }
 
 int fat_read_file(const char *name, void *buf, unsigned int bufsize) {
+    return fat_read_at(name, 0, buf, bufsize);
+}
+
+int fat_read_at(const char *name, unsigned int off, void *buf, unsigned int len) {
     if (!mounted) return -1;
     struct dir_entry *e = find_entry_in(current_dir_cluster, name);
     if (!e || (e->attr & ATTR_DIRECTORY)) return -1;
+    if (off >= e->file_size) return 0;
 
-    u32 remaining = e->file_size < bufsize ? e->file_size : bufsize;
+    u32 remaining = e->file_size - off < len ? e->file_size - off : len;
     u32 total = remaining;
-    u32 cluster = entry_cluster(e);
+    u32 first = entry_cluster(e), per = (u32)sectors_per_cluster * 512u;
+    u32 want = off / per, index = 0, cluster = first;
+    if (at_first == first && at_index <= want && at_cluster >= 2) { index = at_index; cluster = at_cluster; }
+    while (index < want && cluster >= 2 && cluster < eoc) { cluster = fat_entry_read(cluster); index++; }
+    u32 skip = off % per;
     u8 *out = (u8 *)buf;
     u8 sector[512];
 
     while (remaining > 0 && cluster >= 2 && cluster < eoc) {
+        at_first = first; at_index = index; at_cluster = cluster;
         u32 lba = cluster_to_lba(cluster);
         for (u8 s = 0; s < sectors_per_cluster && remaining > 0; s++) {
+            if (skip >= 512) { skip -= 512; continue; }
             if (!blockdev_read_sector(lba + s, sector)) return (int)(total - remaining);
-            u32 chunk = remaining < 512 ? remaining : 512;
-            for (u32 i = 0; i < chunk; i++) out[i] = sector[i];
+            u32 chunk = 512 - skip < remaining ? 512 - skip : remaining;
+            for (u32 i = 0; i < chunk; i++) out[i] = sector[skip + i];
             out += chunk;
             remaining -= chunk;
+            skip = 0;
         }
-        cluster = fat_entry_read(cluster);
+        if (remaining) { cluster = fat_entry_read(cluster); index++; }
     }
     return (int)(total - remaining);
 }
 
 int fat_delete(const char *name) {
+    at_first = 0;
     if (!mounted) return 0;
     u8 want[11];
     to_fat_name(name, want);
@@ -421,6 +439,7 @@ int fat_chdir(const char *name) {
 }
 
 int fat_mkdir(const char *name) {
+    at_first = 0;
     if (!mounted || !*name) return 0;
     if (find_entry_in(current_dir_cluster, name)) return 0; /* name taken */
     u32 slot_lba; int slot_idx;   /* the slot first, so a full directory never costs a cluster */
@@ -469,6 +488,7 @@ failed:
    nothing but "." and "..". Same order as fat_delete: entry first, then the
    clusters. */
 int fat_rmdir(const char *name) {
+    at_first = 0;
     if (!mounted || !*name) return 0;
     struct dir_entry *e = find_entry_in(current_dir_cluster, name);
     if (!e || !(e->attr & ATTR_DIRECTORY)) return 0;
@@ -496,6 +516,7 @@ empty:
 }
 
 static int write_file(const char *name, const void *data, unsigned int len, int replace) {
+    at_first = 0;
     if (!mounted || !*name) return 0;
     struct dir_entry *existing = find_entry_in(current_dir_cluster, name);
     if (existing && (!replace || (existing->attr & ATTR_DIRECTORY))) return 0;

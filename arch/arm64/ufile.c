@@ -249,6 +249,24 @@ static long u_readfile(unsigned long upath, unsigned long buf, unsigned long cap
     return n > 0 ? n : -ENOENT;
 }
 
+/* SYS_READAT (403, 6.1.0): len bytes of a file from byte off, into a user buffer, through fat_read_at; Movies streams
+   clips bigger than READFILE's 6 MB with it. The argument block and the whole buffer are checked before anything runs. */
+struct readat_args { unsigned long buf; unsigned int off, len; };
+static long u_readat(unsigned long upath, unsigned long uargs) {
+    if (!user_writable(uargs, sizeof(struct readat_args))) return -EFAULT;
+    struct readat_args a = *(const struct readat_args *)uargs;
+    if (!a.len || a.len > READFILE_CAP_MAX) return -EINVAL;
+    char walk[PATH_MAX + 1], *leaf;
+    long err = copy_path(upath, walk);
+    if (err) return err;
+    if (!user_writable(a.buf, a.len)) return -EFAULT;
+    char hb[HOME_DIR_MAX + 1];
+    if ((err = path_enter(walk, 1, &leaf, 0, cur_home(hb)))) return err;
+    int n = fat_read_at(leaf, a.off, (void *)a.buf, a.len);
+    path_leave();
+    return n < 0 ? -ENOENT : n;
+}
+
 /* main.c's exc_el0_sync: the file calls, by user/jtsys.h's numbers; -ENOSYS for anything else. */
 long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned long a2) {
     switch (n) {
@@ -261,6 +279,7 @@ long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned
     case 389: return u_mkdir(a0);
     case 390: return u_unlink(a0);
     case 401: return u_readfile(a0, a1, a2);
+    case 403: return u_readat(a0, a1);
     }
     return -ENOSYS;
 }
