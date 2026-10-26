@@ -27,6 +27,7 @@ static void terminals_forget(void) {   /* a sign-out empties both Terminals' scr
         terminals[t].len = terminals[t].col = terminals[t].row = terminals[t].anchor = 0; terminals[t].scrolled = 0; terminals[t].vtop = terminals[t].vlast = 0;
     }
 }
+void settings_user_wall(void);                            /* settings.c: ~/WALL.TXT, else the card's */
 static int logout_flag;
 void logout_request(void) { logout_flag = 1; }   /* cmd.c: the next pass of the main loop does it, outside the command */
 void login_wait_ms(unsigned ms) {
@@ -82,6 +83,7 @@ static void login_show(void) {
     terminals_forget();                                   /* and clears the Terminals' scrollback */
     login_live = 1;
     cur_hide();
+    settings_user_wall();                                 /* nobody is signed in: the card's wallpaper, not the last person's */
     fb_rect(0, 0, (int)fb_w, (int)fb_h, wall_get());
     fb_flush(0, 0, (int)fb_w, (int)fb_h);
     login_paint();
@@ -90,6 +92,7 @@ static void login_show(void) {
 static void login_done(void) {
     login_live = 0;
     con_quiet = 1; uart_puts("login: signed in "); uart_puts(current_user); uart_putc('\n');
+    settings_user_wall();                                 /* 6.0: their own wallpaper, painted just below */
     if (desktop_deferred) { desktop_deferred = 0; fb_desktop(); fb_diag(); }   /* the Pi's first desktop paint waited for this */
     else wall_repaint();                                  /* the desktop again, the name in its bar */
     if (con_live) { con_live = 0; pane_open(cp); }        /* the boot log's window, drawn whole again as a wallpaper change does */

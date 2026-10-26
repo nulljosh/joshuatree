@@ -102,7 +102,7 @@ static void set_log(const char *what, int n, const char *name) {
 }
 static void set_saved(void) {
     settings_save();
-    set_log(settings_saved() > 0 ? "saved" : settings_saved() == -2 ? "kept until restart, admins save" : "save failed, no card", -1, 0);
+    set_log(settings_saved() == 1 ? "saved" : settings_saved() == 2 ? "wallpaper saved, the rest admins save" : settings_saved() == -2 ? "kept until restart, admins save" : "save failed, no card", -1, 0);
 }
 void set_paint(void);
 #include "users_ui.h"
@@ -169,7 +169,7 @@ void set_paint(void) {
     else if (set_sec == SET_SOUND) gui_text("The same level the volume keys change.", cx, hy, SET_HINT);
     else if (set_sec == SET_DOCK) gui_text(settings_dock() == dock_pct_boot ? "A new size shows from the next restart." : "Restart to see the new size.", cx, hy, SET_HINT);
     else if (set_sec == SET_TIME) gui_text("The Pi has no battery clock; it asks the network.", cx, hy, SET_HINT);
-    const char *st = settings_saved() > 0 ? "Saved on the card." : settings_saved() == -2 ? "Only an admin saves: kept until restart." : settings_saved() < 0 ? "No card: kept until restart." : "";
+    const char *st = settings_saved() == 1 ? "Saved on the card." : settings_saved() == 2 ? "Your wallpaper is saved. The rest only an admin saves." : settings_saved() == -2 ? "Only an admin saves: kept until restart." : settings_saved() < 0 ? "No card: kept until restart." : "";
     gui_text(st, cx, wy + wh - 52, SET_HINT);
     gui_text("Arrow keys pick and change, Esc closes", cx, wy + wh - 32, SET_HINT);
     fb_flush(wx * s, wy * s, ww * s, wh * s);
