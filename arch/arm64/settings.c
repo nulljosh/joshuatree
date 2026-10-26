@@ -1,5 +1,6 @@
 /* The Pi's Settings, the part that is not drawing: what the choices are, the file they live in, and loading it at boot.
    JT/SETTINGS.TXT holds three lines, `volume=70`, `wall=0` and `dock=7`, the same key=value shape the i386 SETTINGS.TXT uses.
+   With accounts (6.0) the wallpaper is each person's own: ~/WALL.TXT holds `wall=N`, and the card's is the login screen's.
    A missing, short or hand-edited file is never an error: every value is range-checked and a bad line is ignored. With no
    card the choices live in memory until the next boot and the screen says so. main.c draws the window (settings_ui.h);
    tools/checks/arm64-settings-check.py runs this file on the host under sanitizers, then drives the window in QEMU. */
@@ -12,6 +13,10 @@ void wall_set(unsigned rgb);          /* wall.c */
 void desktop_wall_changed(void);      /* main.c: repaint the desktop if it is up */
 void kputs(const char *s); void kdec(unsigned v);   /* main.c: the UART (and the Console) */
 int sudo_may_write(void);             /* sudo.c: no accounts, or the signed-in user is an admin */
+int home_active(void);                /* home.c (6.0): accounts exist and somebody is signed in */
+int home_mine(char out[9]);
+int home_in(const char *dir, int make);
+int home_save(const char *name, const void *data, unsigned len);
 
 #define SET_FILE "SETTINGS.TXT"
 #define SET_WALLS 4
@@ -20,7 +25,9 @@ int sudo_may_write(void);             /* sudo.c: no accounts, or the signed-in u
 static const struct { const char *name; unsigned rgb; } walls[SET_WALLS] = {
     { "Grey", 0x006E6E6Eu }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u } };
 static int wall_pick;                 /* index into walls */
-static int saved_state;               /* 0 not yet saved, 1 on the card, -1 no card or the card refused it, -2 not an admin */
+static int saved_state;               /* 0 not yet saved, 1 on the card, 2 only the wallpaper (yours), -1 no card or the card refused it, -2 not an admin */
+static int card_wall;                 /* JT/SETTINGS.TXT's wallpaper: the login screen's, and anyone's with no ~/WALL.TXT */
+#define WALL_FILE "WALL.TXT"          /* 6.0, Yours: each person's wallpaper, `wall=N`, in their own home folder */
 
 const char *settings_version(void) {
 #ifdef JT_VERSION
@@ -76,9 +83,26 @@ unsigned settings_format(char *out, int vol, int wall, int dock) {
 }
 void settings_save(void) {
     char buf[48];
+    int mine = 0;
+    if (home_active()) {                                      /* 6.0: the wallpaper is yours, saved in your home with no admin needed */
+        char w[8] = "wall=0\n"; w[5] = (char)('0' + wall_pick);
+        mine = sd_ready() && home_save(WALL_FILE, w, 7) == 1;
+    }
     unsigned n = settings_format(buf, audio_volume(), wall_pick, dock_scale_pct);
-    if (!sudo_may_write()) { saved_state = -2; return; }     /* 4.10.0: only an admin saves settings; anyone else's change lasts until restart */
+    if (!sudo_may_write()) { saved_state = mine ? 2 : -2; return; }     /* 4.10.0: only an admin saves the rest; anyone else's lasts until restart */
     saved_state = sd_ready() && sd_write(SET_FILE, buf, n) == 1 ? 1 : -1;
+    if (saved_state == 1) card_wall = wall_pick;
+}
+/* At sign-in and at the login screen (login_ui.h): the signed-in person's ~/WALL.TXT, else the card's wallpaper. The caller
+   repaints. */
+void settings_user_wall(void) {
+    int w = card_wall, v = 0, d = 0;
+    char dir[9], t[16];
+    if (home_active() && home_mine(dir) && sd_ready() && sd_enter_jt(0)) {
+        if (home_in(dir, 0)) { int got = fat_read_file(WALL_FILE, t, sizeof t); if (got > 0) settings_parse(t, (unsigned)got, &v, &w, &d); }
+        fat_cwd_set(0);
+    }
+    if (w != wall_pick) settings_set_wall(w);
 }
 /* After sd_mount, before the desktop is first painted on the Pi. The choices that need the screen (the wallpaper) repaint it
    when it is already up, as on QEMU's virt machine, where the desktop is drawn before the card is looked at. */
@@ -92,6 +116,7 @@ void settings_load(void) {
     settings_parse(buf, (unsigned)got, &vol, &wall, &dock);
     audio_set_volume(vol);
     settings_set_dock(dock);
+    card_wall = wall;
     if (wall != wall_pick) { settings_set_wall(wall); desktop_wall_changed(); }
     saved_state = 1;
     kputs("settings loaded volume "); kdec((unsigned)audio_volume()); kputs(" wall "); kdec((unsigned)wall_pick); kputs(" dock "); kdec((unsigned)dock_scale_pct); kputs("\n");

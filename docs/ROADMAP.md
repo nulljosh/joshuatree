@@ -245,10 +245,10 @@ A guess at the shape, in Joshua's words as far as they are known. Each version h
 | **6.0 Yours** | One machine, many people, and it keeps your stuff safe. Accounts, a locked disk, Time Machine snapshots, backups. | Delete a file, go back in time, get it back. Pull the plug mid-write, lose nothing. |
 | **7.0 Online** | The real internet. TLS 1.3, Wi-Fi, a real browser (Madobe on this OS), mail and calendar that sync. | You do a normal day of web, mail and calendar on it. |
 | **8.0 Build things** | The machine builds its own apps. The Plank compiler on the box, an SDK, apps as signed bundles, a store for them. | Someone who is not Joshua writes and installs an app without touching the kernel source. |
-| **9.0 The kit** | The hardware is a product. Neo Kit revisions, two displays, GPU, USB audio, storage and camera. | A stranger builds a Neo from the guide and it boots first try. |
+| **9.0 The kit** | The hardware is a product. Nimbus Kit revisions, two displays, GPU, USB audio, storage and camera. | A stranger builds a Nimbus from the guide and it boots first try. |
 | **10.0 Daily driver** | Boring and trusted. A security audit against the threat model, accessibility, languages, long-term support. | Joshua uses it as his only computer for a month. |
 
-**Version 100** is not a plan, it is the point of the whole thing: a computer small enough to read end to end, that you can build yourself from open parts, and that talks to you like a person. Its test is a child with the guide, a Neo Kit and an afternoon, who ends the day with their own computer and understands every layer of it. Everything above is steps toward that.
+**Version 100** is not a plan, it is the point of the whole thing: a computer small enough to read end to end, that you can build yourself from open parts, and that talks to you like a person. Its test is a child with the guide, a Nimbus Kit and an afternoon, who ends the day with their own computer and understands every layer of it. Everything above is steps toward that.
 
 Order of work from 3.0 on (Joshua, 2026-10-11): usable first, then stable, then polished.
 - Usable means a person can do a real thing on the board without the Mac: open an app, type, save, come back tomorrow.
