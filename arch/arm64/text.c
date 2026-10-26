@@ -6,6 +6,7 @@
 #include "../../lib/text_ink.h"   /* the coverage curve i386 and libjt use, so the Pi's text is as dense and sharp as theirs */
 unsigned long heap_mark(void);
 void heap_release(unsigned long mark);
+void uart_puts(const char *s);
 
 static ttf_font_t *face[3];   /* 0 mono, 1 sans bold, 2 sans */
 
@@ -13,7 +14,10 @@ int text_init(void) {
     face[0] = ttf_load_face(TTF_FACE_MONO);
     face[1] = ttf_load_face(TTF_FACE_SANS_BOLD);
     face[2] = ttf_load_face(TTF_FACE_SANS);
-    return face[0] && face[1] && face[2];
+    int ok = (face[0] != 0) + (face[1] != 0) + (face[2] != 0);   /* 4.27.0: the i386 boot's "fonts N of N ok" line, for the Pi's three faces */
+    char line[] = "fonts 0 of 3 ok\n"; line[6] = (char)('0' + ok);
+    uart_puts(line);
+    return ok == 3;
 }
 
 /* Draws one string with its baseline at `baseline`, returns the pen x after it. `fg` is already in the framebuffer's

@@ -45,12 +45,16 @@ const char *ttf_face_name(ttf_face_t face) {
     return ttf_registry[face].name;
 }
 
+static unsigned ttf_broken;   /* 4.27.0: faces the boot preload (kernel/uitext.c) could not parse or draw with */
+void ttf_mark_broken(ttf_face_t face) { if ((int)face >= 0 && face < TTF_FACE_COUNT) ttf_broken |= 1u << face; }
+int ttf_face_ok(ttf_face_t face) { return (int)face >= 0 && face < TTF_FACE_COUNT && !(ttf_broken >> face & 1); }
+
 int ttf_face_by_name(const char *name) {
     if (!name) return -1;
     for (int i = 0; i < TTF_FACE_COUNT; i++) {
         const char *a = ttf_registry[i].name, *b = name;
         while (*a && *a == *b) { a++; b++; }
-        if (*a == 0 && *b == 0) return i;
+        if (*a == 0 && *b == 0) return ttf_face_ok((ttf_face_t)i) ? i : -1;   /* a broken face is not offered */
     }
     return -1;
 }
@@ -184,6 +188,7 @@ struct ttf_font {
     stbtt_fontinfo info;
 };
 
+unsigned ttf_font_bytes(void) { return (unsigned)sizeof(ttf_font_t); }   /* one loaded face's kmalloc: the blob itself stays in rodata */
 ttf_font_t *ttf_load(const unsigned char *data) {
     ttf_font_t *f = (ttf_font_t *)kmalloc(sizeof(ttf_font_t));
     if (!f) return 0;
@@ -198,7 +203,7 @@ ttf_font_t *ttf_load_default(void) {
 }
 
 ttf_font_t *ttf_load_face(ttf_face_t face) {
-    if ((int)face < 0 || face >= TTF_FACE_COUNT) return ttf_load(dejavu_font_data);
+    if ((int)face < 0 || face >= TTF_FACE_COUNT || !ttf_face_ok(face)) return ttf_load(dejavu_font_data);   /* a broken face draws as DejaVu Sans */
     return ttf_load(ttf_registry[face].data);
 }
 

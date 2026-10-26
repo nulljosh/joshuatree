@@ -10,6 +10,7 @@
 #include "ttf.h"
 #include "ttf_render.h"
 #include "editor_fonts.h"
+#include "serial.h"
 #include "uitext.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
@@ -187,4 +188,51 @@ char *wx_put_int(char *o, int v){
     char d[8]; int n = 0; if (!v) d[n++] = '0'; while (v && n < 7) { d[n++] = (char)('0' + v % 10); v /= 10; }
     while (n) *o++ = d[--n];
     return o;
+}
+
+/* 4.27.0: every face parsed once at boot (Joshua, 2026-10-07: "load the entire typeface on every boot, for concurrency
+   and reliability"), each asked for one glyph, the good ones kept in ttfr_fonts for the whole run. One line says how
+   many worked and what it cost, so a broken face shows at boot rather than the first time an app draws with it; a
+   broken face is marked (drivers/ttf.c) and draws as DejaVu Sans. `fontbreak=NAME` on the boot line feeds that face a
+   blob that is not a font, so tools/checks/fonts-boot-check.py can see the failure path run for real. */
+static int font_break = -1;
+void uitext_cmdline(const char *cl) {
+    for (const char *p = cl; p && *p; p++) {
+        const char *k = "fontbreak=", *q = p;
+        while (*k && *q == *k) { k++; q++; }
+        if (*k) continue;
+        char name[24]; int n = 0;
+        while (*q && *q != ' ' && n < 23) name[n++] = *q++;
+        name[n] = 0;
+        font_break = ttf_face_by_name(name);
+        return;
+    }
+}
+static void put_num(char *line, int *l, unsigned v) {
+    char t[12]; int n = 0;
+    do { t[n++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (n) line[(*l)++] = t[--n];
+}
+int uitext_fonts_preload(void) {
+    static const unsigned char not_a_font[64] = {0};   /* zeros: no font tag and no tables, so the parse stops at once */
+    char line[160] = "fonts "; int l = 6, ok = 0, broken = 0;
+    char bad[96]; int bl = 0;
+    for (int i = 0; i < TTF_FACE_COUNT; i++) {
+        ttf_font_t *f = i == font_break ? ttf_load(not_a_font) : ttf_load_face((ttf_face_t)i);
+        ttf_glyph_t g;
+        int good = f && ttf_glyph(f, 'A', 24.0f, &g) == 0;
+        if (good) { good = g.width > 0 && g.height > 0; ttf_free_glyph(&g); }
+        if (good) { if (ttfr_fonts[i]) ttf_free(ttfr_fonts[i]); ttfr_fonts[i] = f; ok++; continue; }
+        if (f) ttf_free(f);
+        ttf_mark_broken((ttf_face_t)i); broken++;
+        for (const char *nm = ttf_face_name((ttf_face_t)i); *nm && bl < 80; nm++) bad[bl++] = *nm;
+        bad[bl++] = ' ';
+    }
+    put_num(line, &l, (unsigned)ok); for (const char *t = " of "; *t; t++) line[l++] = *t;
+    put_num(line, &l, TTF_FACE_COUNT); for (const char *t = " ok, "; *t; t++) line[l++] = *t;
+    put_num(line, &l, (unsigned)ok * ttf_font_bytes()); for (const char *t = " bytes of heap kept"; *t; t++) line[l++] = *t;
+    if (broken) { for (const char *t = "; broken, drawn as DejaVu Sans: "; *t; t++) line[l++] = *t; for (int k = 0; k < bl - 1; k++) line[l++] = bad[k]; }
+    line[l++] = '\n'; line[l] = 0;
+    serial_puts(line);
+    return ok;
 }

@@ -223,6 +223,7 @@ void kmain(unsigned int multiboot_info_addr){
         stocks_cmdline(cl0); /* stkhost=HOST:PORT, kernel/stocks.h */
         jt_clip_cmdline(cl0); /* cliptrace, kernel/syscall.c: content hash on the CLIPCOPY/CLIPPASTE lines */
         jt_facehost_cmdline(cl0); /* facehost=HOST[:PORT], kernel/syscall.c: where ring-3 Samantha fetches her face and speech */
+        uitext_cmdline(cl0); /* fontbreak=NAME, kernel/uitext.c: one face fed a blob that is not a font */
     }
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
     klog("vga_text_mode_init: text mode 3 programmed");
@@ -260,6 +261,7 @@ void kmain(unsigned int multiboot_info_addr){
     klog(fs_ok ? "fat_mount: FAT16 filesystem mounted" : "fat_mount: no filesystem found");
     fat_vfs_register(); /* registered regardless of fs_ok: an unmounted fat backend just returns real failures, same as before v29 */
     ramfs_init();
+    klog(uitext_fonts_preload() == TTF_FACE_COUNT ? "fonts: every face loaded" : "fonts: a face failed, drawn as DejaVu Sans");   /* 4.27.0 */
     klog("vfs: fat + ramfs backends registered, fat active");
     /* v86 (0.71.0): real root cause of "Files shows no files" on the
        browser demo, confirmed by reading vfs_register (drivers/vfs.c):
