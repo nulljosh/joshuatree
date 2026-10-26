@@ -193,7 +193,7 @@ Worth doing, not yet re-checked, in the order the study ranked them:
   - The Command key (the GUI or Windows key on a PC keyboard) with A select all, C copy, X cut, V paste, Z undo, S save, W close the window, Q quit, N new, F find, Tab to switch windows.
   - Plus Ctrl for the same on a keyboard with no GUI key.
   - One table in the shell. Apps handle the actions.
-  - Done on the Pi: C X V A S W Q, Space and Tab (`arm64-cmdtab-check.py`). Left: Z undo, N new and F find, which each app has to handle.
+  - Done on the Pi: C X V A S W Q N, Space and Tab (`arm64-cmdtab-check.py`); N is a new note in Notes on both kernels. Left: Z undo and F find, which each app has to handle.
   - Check: an arm64 key check that sends each chord through QMP and sees its serial line.
 - [ ] [Sonnet] The first few seconds after the Pi desktop appears take no keys. Find why and fix it. Since 4.28.1 `boottime` in the Terminal says `first key N ms after the desktop` and `slow step NAME N ms`; read those on the board, then fix the step it names. (The splash, its bar and the login screen shipped: `arm64-splash-check.py`, `arm64-splashbar-check.py`, `arm64-login-check.py`.)
 
@@ -982,6 +982,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.29.0 (2026-10-26)**: Cmd+N (or Ctrl+N) is a new document, on both kernels: one new key code, `JT_KEY_NEW` (316), from the chord tables in `kernel/ring3app.c`, `kernel/multiwin.c` and `arch/arm64/boot.c`. Notes takes it as a new note, from the list or from the editor (the open note is saved first). Checks: `clipboard-check.py` (i386), `arm64-clipboard-check.py` (Pi).
 - **4.28.1 (2026-10-26)**: Stamps for the Pi's dead first seconds. The UART and the Terminal's new `boottime` say when the first key arrived after the desktop and names any main-loop step that held the keys up 100 ms or more in the first half minute (`TIMED` in `arch/arm64/boot.c`). QEMU takes keys at once, so the cause is on the board; the next board test reads it. Check: `arm64-firstkey-check.py`.
 - **4.28.0 (2026-10-26)**: Cmd+Tab on the Pi, from the keyboard-shortcuts item. Cmd+Tab or Ctrl+Tab brings the app window furthest back to the front (`app_cycle` in `arch/arm64/appwin.c`), so taps walk every open window; i386 already had its switcher. Check: `arm64-cmdtab-check.py`.
 - **4.27.0 (2026-10-26)**: Every typeface loads at boot (Joshua, 2026-10-07: "load the entire typeface on every boot"): i386 parses all 14 faces and draws one glyph from each before the desktop, keeps them (1,792 bytes of heap) and prints `fonts 14 of 14 ok`; a face that fails is named, stops being offered by name and draws as DejaVu Sans. The Pi prints the same line for its three. Check: `fonts-boot-check.py`.

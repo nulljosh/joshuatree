@@ -4,6 +4,7 @@
 The Cmd key is the keyboard's Super/Windows key (QMP qcode meta_l). One boot, every key through the virtio keyboard:
   1. Spotlight opens Notes, `n` starts a note, "pasteok" is typed, Cmd+A selects it (Notes says edsel=0,7), Cmd+C copies
      it (the kernel says CLIPCOPY:7: user/notes.c reached the one kernel buffer through JT_SYS_CLIPBOARD, 399).
+     Cmd+N then starts a second note (a second `notes: new=`), the first saved on the way.
   2. Spotlight opens the Terminal; Cmd+V puts the text on the input line (CLIPPASTE:7) and Enter runs it, which the
      shell can only answer with "zsh: command not found: pasteok", so the text itself crossed from Notes to the Terminal.
   3. Cmd+X on a typed line cuts it (CLIPCOPY:3) and Cmd+V puts it back (CLIPPASTE:3): the Terminal's own line works.
@@ -85,6 +86,11 @@ try:
     check("Cmd+A selects the text in Notes", wait_for("edsel=0,7", 5))
     key("meta_l", "c")
     check("Cmd+C reaches the kernel clipboard (CLIPCOPY:7)", wait_for("CLIPCOPY:7", 5))
+    news = uart().count("notes: new=")
+    key("meta_l", "n")
+    end = time.time() + 5
+    while time.time() < end and uart().count("notes: new=") <= news: time.sleep(.1)
+    check("Cmd+N in the editor starts a second note", uart().count("notes: new=") > news)
     mark = len(uart())
     spot("terminal")
     check("Terminal opened", wait_for("terminal open", 10, mark) or wait_for("focus terminal", 2, mark))

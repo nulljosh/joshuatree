@@ -602,6 +602,7 @@ void _start(int argc, char **argv) {
             ev.a = key;
             if (ev.a == JT_KEY_ESC && ed_has_sel()) { esel = -1; ed_draw(); }
             else if (ev.a == JT_KEY_ESC) { edit_close(); draw(); }
+            else if (ev.a == JT_KEY_NEW) { edit_close(); new_note(); if (editing) ed_draw(); else draw(); }   /* Cmd+N: this note saved, a fresh one open */
             else { ed_key(ev.a); if (edirty) edit_t = now_ticks(); ed_draw(); }
             flags = JT_POLL_PRESENT;
             continue;
@@ -618,7 +619,7 @@ void _start(int argc, char **argv) {
             if (k == JT_KEY_ESC && !armed) break;
             else if (k == JT_KEY_ESC) { say("notes: delete cancelled", -1); }
             else if (k == '\t') focus = !focus;
-            else if (k == 'n') { new_note(); if (editing) { ed_draw(); flags = JT_POLL_PRESENT; continue; } }
+            else if (k == 'n' || k == JT_KEY_NEW) { new_note(); if (editing) { ed_draw(); flags = JT_POLL_PRESENT; continue; } }
             else if (k == 'f') new_folder();
             else if (k == 'd') {
                 if (armed) delete_note();
