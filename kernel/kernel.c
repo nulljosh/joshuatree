@@ -696,7 +696,7 @@ int wind_enabled = 1; /* settings.c reads and writes it */
 
 #include "wallpaint.h"   /* the wallpaper painters and the day/night tint, kernel/wallpaint.c */
 void music_ring3_open(void); void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void tonchi_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void hikko_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
-void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void); void panes_ring3_open(void); void claude_ring3_open(void); void mines_ring3_open(void); void books_ring3_open(void); void solitaire_ring3_open(void); void paddle_ring3_open(void); void bricks_ring3_open(void); void depths_ring3_open(void); void snake_ring3_open(void);
+void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void); void panes_ring3_open(void); void claude_ring3_open(void); void mines_ring3_open(void); void books_ring3_open(void); void solitaire_ring3_open(void); void paddle_ring3_open(void); void bricks_ring3_open(void); void depths_ring3_open(void); void snake_ring3_open(void); void chess_ring3_open(void);
 
 int gui_ring3_windowed(int icon);
 volatile unsigned jt_data_stamp = 0; /* bumped whenever WEATHER.TXT or STOCKS.TXT is rewritten; windows poll it through SYS_SYSINFO */
@@ -942,6 +942,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 34 */ {"Bricks",     0x00B5502C, gui_icon_apps,       bricks_ring3_open,     0, 0}, /* 4.23: the brick-breaking game, ring 3 (user/bricks.c), Apps folder only; authored art is art/icons/bricks.svg */
     /* 35 */ {"Depths",     0x002A2724, gui_icon_apps,       depths_ring3_open,     0, 0}, /* 4.23: a first-person maze shooter, ring 3 (user/depths.c), Apps folder only; authored art is art/icons/depths.svg */
     /* 36 */ {"Snake",      0x00375A4A, gui_icon_apps,       snake_ring3_open,      0, 0}, /* 4.23: Snake, ring 3 (user/snake.c), Apps folder only; authored art is art/icons/snake.svg */
+    /* 37 */ {"Chess",      0x00302C29, gui_icon_apps,       chess_ring3_open,      0, 0}, /* 4.25: Chess against the computer, ring 3 (user/chess.c), Apps folder only; authored art is art/icons/chess.svg */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
        tinted background like every real app above. 2026-09-27: this used

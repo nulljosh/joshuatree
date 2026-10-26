@@ -84,7 +84,7 @@ ART = {
     27: "windgate",
     28: "panes",
     29: "claude",
-    # 30 is Mines, 31 is Books, 32 is Solitaire, 33 is Paddle, 34 is Bricks, 35 is Depths, 36 is Snake. Apps and Trash are 37/38.
+    # 30 is Mines, 31 is Books, 32 is Solitaire, 33 is Paddle, 34 is Bricks, 35 is Depths, 36 is Snake, 37 is Chess. Apps and Trash are 38/39.
     30: "mines",
     31: "books",
     32: "solitaire",
@@ -92,8 +92,9 @@ ART = {
     34: "bricks",
     35: "depths",
     36: "snake",
-    37: "apps",
-    38: "trash",
+    37: "chess",
+    38: "apps",
+    39: "trash",
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by

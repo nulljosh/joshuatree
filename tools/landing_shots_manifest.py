@@ -15,13 +15,13 @@ PROGRAM = {
     "app-terminal": "terminal", "app-stocks": "stocks", "samantha-chat": "samantha",
     "app-bookrank": "bookrank", "app-tonchi": "tonchi", "app-curbfind": "curbfind", "app-epiphany": "epiphany",
     "app-hamurapi": "hamurabi", "app-windgate": "windgate", "app-panes": "panes",
-    "app-solitaire": "solitaire", "app-paddle": "paddle", "app-bricks": "bricks", "app-depths": "depths", "app-snake": "snake",
+    "app-solitaire": "solitaire", "app-paddle": "paddle", "app-bricks": "bricks", "app-depths": "depths", "app-snake": "snake", "app-chess": "chess",
 }
 # Tiles drawn by the kernel itself, not one program: the desktop is the menu bar, wallpaper and dock.
 KERNEL = {"desktop": ["kernel/menu.c", "kernel/dock_draw.c", "kernel/dock_geom.c", "kernel/icons.c", "kernel/icon_art.h",
                       "kernel/gui_paint.c", "kernel/gui_prims.c", "kernel/gui_shapes.c", "kernel/wallmap.c", "kernel/clockicon.c"]}
 # Headers a program includes that also change its picture (the sprite sheet and the rules and story the game shows).
-EXTRA = {"samantha-chat": ["user/samcaps.h"], "app-hamurapi": ["user/hamurabi_sprites.h", "user/hamurabi_rules.h", "user/hamurabi_story.h"]}
+EXTRA = {"samantha-chat": ["user/samcaps.h"], "app-chess": ["user/chess_core.h"], "app-hamurapi": ["user/hamurabi_sprites.h", "user/hamurabi_rules.h", "user/hamurabi_story.h"]}
 # Shared drawing code every program links in. Changing it can change every tile.
 SHARED = ["lib/text_ink.h", "user/libjt/mono.c", "user/libjt/aamono.h", "user/jtsys.h", "user/libjt/text.c", "user/libjt/text.h", "user/libjt/aafont.h",
           "user/libjt/stdio.c", "user/libjt/stdio.h", "user/libjt/string.c", "user/libjt/stdlib.c"]
