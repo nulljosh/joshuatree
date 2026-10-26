@@ -328,9 +328,9 @@ async function handleQuotes() {
   return new Response(lines.join("\n") + "\n", {headers: WIRE});
 }
 
-// Curbfind, local to the visitor: Cloudflare's own geo-IP city, slugged the
-// way Craigslist names its areas, against Curbfind's real deal-ranked search
-// (curbfind/worker). Unknown area falls back to Vancouver. Wire format:
+// Scrounge, local to the visitor: Cloudflare's own geo-IP city, slugged the
+// way Craigslist names its areas, against Scrounge's real deal-ranked search
+// (scrounge/worker). Unknown area falls back to Vancouver. Wire format:
 // first line is the city, then `score|price|neighbourhood|title` rows.
 const CURBFIND_API = "https://curbside-api.trommatic.workers.dev/api/search?sort=deal&city=";
 async function handleDeals(request) {

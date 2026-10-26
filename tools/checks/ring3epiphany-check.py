@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Epiphany runs as a real ring-3 process, the nineteenth app out of the
-kernel (roadmap 2.0, 1.9.17), on SYS_HTTP_GET like Curbfind.
+kernel (roadmap 2.0, 1.9.17), on SYS_HTTP_GET like Scrounge.
 
 Boots headless with `open=epip`, which launches Epiphany from the dock path
 the moment the desktop is up. Epiphany is user/epiphany.c, a flat binary run

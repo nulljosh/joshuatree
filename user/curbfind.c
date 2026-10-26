@@ -171,7 +171,7 @@ static void cf_fetch(void) {
         int sc = 0; for (char *q = f[0]; *q >= '0' && *q <= '9'; q++) sc = sc * 10 + (*q - '0');
         cf_live[live].title = f[3]; cf_live[live].price = f[1]; cf_live[live].neighbourhood = f[2];
         cf_live[live].score = sc > 10 ? 10 : sc;
-        cf_live[live].reason = "Priced well under the median for its search. Live from Craigslist, ranked by Curbfind's own deal score.";
+        cf_live[live].reason = "Priced well under the median for its search. Live from Craigslist, ranked by Scrounge's own deal score.";
         live++;
     }
     if (live) { cf_rows = cf_live; cf_n = live; }

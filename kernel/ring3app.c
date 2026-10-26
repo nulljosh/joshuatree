@@ -13,14 +13,14 @@
    1.9.7: Contacts joins it, the thirteenth app out.
    1.9.8: Hikko joins it, the fourteenth app out.
    1.9.9: Reminders joins it, the fifteenth app out.
-   1.9.11: Curbfind joins it, the sixteenth app out, with one new syscall (SYS_HTTP_GET).
+   1.9.11: Scrounge joins it, the sixteenth app out, with one new syscall (SYS_HTTP_GET).
    1.9.12: Calendar joins it, the seventeenth app out.
    1.9.13: Search joins it, the eighteenth app out, with one new syscall (SYS_READDIR).
-   1.9.19: Epiphany joins it, the nineteenth app out, on SYS_HTTP_GET like Curbfind.
+   1.9.19: Epiphany joins it, the nineteenth app out, on SYS_HTTP_GET like Scrounge.
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid,
-   Calculator, Quotes, Bookrank, Homeqi, Tonchi, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Hikko, Reminders, Curbfind, Calendar and Search followed the same path. Each app's dock entry lands here,
+   Calculator, Quotes, Bookrank, Homeqi, Tonchi, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Hikko, Reminders, Scrounge, Calendar and Search followed the same path. Each app's dock entry lands here,
    and everything else stays as it was: gui_launch_from_dock has already
    drawn the window chrome and set the viewport by the time this runs,
    just as for an in-kernel app.
@@ -135,7 +135,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Contacts", user_contacts, USER_CONTACTS_LEN, USER_CONTACTS_CLEN, USER_CONTACTS_SUM, "CONTACTS.BIN"},
     {"Thinkpond", user_hikko, USER_HIKKO_LEN, USER_HIKKO_CLEN, USER_HIKKO_SUM, "HIKKO.BIN"},
     {"Reminders", user_reminders, USER_REMINDERS_LEN, USER_REMINDERS_CLEN, USER_REMINDERS_SUM, "REMINDERS.BIN"},
-    {"Curbfind", user_curbfind, USER_CURBFIND_LEN, USER_CURBFIND_CLEN, USER_CURBFIND_SUM, "CURBFIND.BIN"},
+    {"Scrounge", user_curbfind, USER_CURBFIND_LEN, USER_CURBFIND_CLEN, USER_CURBFIND_SUM, "CURBFIND.BIN"},
     {"Calendar", user_calendar, USER_CALENDAR_LEN, USER_CALENDAR_CLEN, USER_CALENDAR_SUM, "CALENDAR.BIN"},
     {"Search", user_search, USER_SEARCH_LEN, USER_SEARCH_CLEN, USER_SEARCH_SUM, "SEARCH.BIN"},
     {"Epiphany", user_epiphany, USER_EPIPHANY_LEN, USER_EPIPHANY_CLEN, USER_EPIPHANY_SUM, "EPIPHANY.BIN"},
@@ -480,7 +480,7 @@ void ring3app_autoopen_run(int mx, int my){
     if (ring3app_autoopen_slot < 0) return;
     int slot = ring3app_autoopen_slot; ring3app_autoopen_slot = -1;
     editor_mouse_x = mx; editor_mouse_y = my;
-    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Tonchi's, Plan's, Fieldbook's, Clock's, Portfolio's, Activity's, Contacts', Hikko's, Reminders', Curbfind's, Calendar's or Search's APPS slot */
+    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Tonchi's, Plan's, Fieldbook's, Clock's, Portfolio's, Activity's, Contacts', Hikko's, Reminders', Scrounge's, Calendar's or Search's APPS slot */
     if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
     if (brkpoke_armed) { brkpoke_armed = 0; brkpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);

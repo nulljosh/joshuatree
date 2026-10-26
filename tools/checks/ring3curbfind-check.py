@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Curbfind runs as a real ring-3 process, the sixteenth app out of the kernel
+"""Scrounge runs as a real ring-3 process, the sixteenth app out of the kernel
 (roadmap 2.0, 1.9.11), and the one syscall it needed refuses what it must.
 
-Boots headless with `open=curb`, which launches Curbfind from the dock path
-the moment the desktop is up. Curbfind is user/curbfind.c, a flat binary
+Boots headless with `open=curb`, which launches Scrounge from the dock path
+the moment the desktop is up. Scrounge is user/curbfind.c, a flat binary
 loaded off the VFS by exec_user and run at CPL 3 through the table-driven
 launcher (kernel/ring3app.c, RING3_APPS). Its live rows come through
 SYS_HTTP_GET (387), the first syscall that puts the network stack behind a
@@ -112,7 +112,7 @@ try:
 
     # 1. the program is up, the fetch fell back, the samples are drawn
     if not wait_serial("ring3app: launching CURBFIND.BIN at ring 3", 40):
-        fails.append("Curbfind was never launched as a ring-3 program (open=curb flag or ring3app.c broken)")
+        fails.append("Scrounge was never launched as a ring-3 program (open=curb flag or ring3app.c broken)")
     if not wait_serial("syscall: window opened for ring-3 task", 10):
         fails.append("SYS_WINDOW_OPEN never succeeded from ring 3")
     if not wait_serial("curbfind: ring-3 window 804x345", 10):
@@ -168,9 +168,9 @@ try:
     if not wait_serial("curbfind: closed", 5):
         fails.append("Esc did not reach the program (no closed line)")
     if not wait_serial("CURBFIND.BIN exited 0", 5, exits + 1):
-        fails.append("Curbfind did not exit 0 on Esc")
+        fails.append("Scrounge did not exit 0 on Esc")
     if not wait_serial("syscall: window released, task gone", 5):
-        fails.append("Curbfind did not release its window on Esc")
+        fails.append("Scrounge did not release its window on Esc")
     move(*PARK); time.sleep(0.5)
     for _ in range(100):
         if not near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): break
@@ -190,7 +190,7 @@ try:
         time.sleep(0.1)
         if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): opened = True; break
     print(f"Mail opens from the dock after the close: {'yes' if opened else 'NO'}")
-    if not opened: fails.append("Mail did not open from a dock click after Curbfind closed: desktop not responsive")
+    if not opened: fails.append("Mail did not open from a dock click after Scrounge closed: desktop not responsive")
     keys("esc"); time.sleep(0.5)
 finally:
     try: cmd({"execute": "quit"})
@@ -205,4 +205,4 @@ if fails:
     print("--- serial tail ---")
     print(serial()[-1500:])
     sys.exit(1)
-print("PASS: Curbfind ran at ring 3 with its own window, fell back to the samples when SYS_HTTP_GET found no NIC, selected by key and click, had every bad path and pointer refused by the kernel, closed on Esc, and the desktop stayed alive")
+print("PASS: Scrounge ran at ring 3 with its own window, fell back to the samples when SYS_HTTP_GET found no NIC, selected by key and click, had every bad path and pointer refused by the kernel, closed on Esc, and the desktop stayed alive")

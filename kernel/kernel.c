@@ -438,7 +438,7 @@ void putn(unsigned int v){   /* console.h */
    advance, the same fixed-cell assumption v77 root-caused and fixed on the
    AA path everywhere else; on any HTML app view or Chat answer (both run
    inside the scaled GUI, so the AA hook is live) a real word like
-   "Curbfind" rendered as "Curbf ind", confirmed on a real framebuffer dump.
+   "Scrounge" rendered as "Curbf ind", confirmed on a real framebuffer dump.
    Fixed the same way v77 fixed the other four: word width and per-glyph
    placement now go through font_string_width/font_draw_string's own
    proportional pen instead of wlen*8/x+=8. Words longer than WORD_MAX
@@ -558,7 +558,7 @@ const struct app APPS[GUI_APP_COUNT];
    dock's shape, direct request: Apps folder still first (v39's own call,
    unchanged), then Files (Finder), then Mail/Calendar/Notes/Reminders as
    one contiguous core-app cluster, then Terminal/Chat/Weather as the
-   utility group, Trash still fixed last. Curbfind, previously pinned
+   utility group, Trash still fixed last. Scrounge, previously pinned
    here as the one fleet app in an otherwise-utility dock, moves to
    Apps-folder-only: with four more core apps now competing for pinned
    slots, a single fleet app sitting in the dock read as arbitrary rather
@@ -597,7 +597,7 @@ int boot_to_phone, boot_res_w, boot_res_h;
 int jt_phone_mode(void){ return boot_to_phone; } /* ring3app.c: windowed ring-3 apps get argv[1]="phone" so they can show libjt/osk */
 #include "hint.h"
 #include "phone_home.h" /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
-static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 21, 20, 8, 10, 12, 14, 11, 9, 13, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Tonchi, Hikko, Quotes, Keyrate, Toroid */
+static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 21, 20, 8, 10, 12, 14, 11, 9, 13, GUI_TRASH}; /* Portfolio, Epiphany, Scrounge, Bookrank, Tonchi, Hikko, Quotes, Keyrate, Toroid */
 void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 int dock_hover = -1; /* slot whose label is showing */
 
@@ -914,7 +914,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   terminal_ring3_open,   0, 0}, /* ring 3 (user/terminal.c), a compositor window */
     /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       samantha_ring3_open,   0, 0}, /* 1.9.26: ring 3 (user/samantha.c), the last app out of the kernel */
     /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    weather_ring3_open,    0, 0}, /* 1.9.22: ring 3 (user/weather.c) */
-    /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        curbfind_ring3_open,   0, 0}, /* 1.9.11: ring 3 (user/curbfind.c) */
+    /*  8 */ {"Scrounge",   0x007A2048, gui_icon_pin,        curbfind_ring3_open,   0, 0}, /* 1.9.11: ring 3 (user/curbfind.c) */
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       bookrank_ring3_open,   0, 0}, /* 2.0: ring 3 too (user/bookrank.c) */
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
