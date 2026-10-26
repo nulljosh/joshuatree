@@ -5,8 +5,9 @@
   1080
  ],
  "fps": 30,
- "font": "../../../tools/fonts/treesans/TreeSans-Regular.ttf",
- "font_size": 112,
+ "font": "../../../tools/fonts/treesans/TreeSans-Medium.ttf",
+ "font_bold": "../../../tools/fonts/treesans/TreeSansDisplay-Bold.ttf",
+ "font_size": 100,
  "palette": {
   "paper": "#faf8f4",
   "ink": "#141311",
@@ -14,12 +15,15 @@
   "terra": "#b5502c",
   "clay": "#923F20"
  },
+ "sky": "ink",
+ "glow": [
+  "paper",
+  "terra"
+ ],
  "open": {
-  "sky": "ink",
-  "disc": "terra",
-  "secs": 1.2
+  "secs": 1.6
  },
- "shots": [
+ "pool": [
   {
    "image": "../nimbus-rear.jpg",
    "focus": [
@@ -27,18 +31,7 @@
     0.6
    ],
    "zoom": 3.4,
-   "sky": "paper",
-   "secs": 0.6
-  },
-  {
-   "image": "../nimbus-hero.jpg",
-   "focus": [
-    0.44,
-    0.44
-   ],
-   "zoom": 3.2,
-   "sky": "ink",
-   "secs": 0.6
+   "sky": "paper"
   },
   {
    "image": "../first-boot-2026-10-06.jpg",
@@ -47,8 +40,16 @@
     0.42
    ],
    "zoom": 1.0,
-   "sky": "paper",
-   "secs": 0.6
+   "sky": "ink"
+  },
+  {
+   "image": "../nimbus-hero.jpg",
+   "focus": [
+    0.44,
+    0.44
+   ],
+   "zoom": 3.2,
+   "sky": "paper"
   },
   {
    "image": "../usb-first-light-2026-10-06.jpg",
@@ -57,8 +58,7 @@
     0.4
    ],
    "zoom": 1.7,
-   "sky": "ink",
-   "secs": 0.6
+   "sky": "ink"
   },
   {
    "image": "../breadboard.jpg",
@@ -67,18 +67,7 @@
     0.45
    ],
    "zoom": 1.5,
-   "sky": "ink",
-   "secs": 0.6
-  },
-  {
-   "image": "../samantha-box-front.jpg",
-   "focus": [
-    0.45,
-    0.55
-   ],
-   "zoom": 1.6,
-   "sky": "paper",
-   "secs": 0.6
+   "sky": "paper"
   },
   {
    "image": "../../../landing/shots/app-terminal.webp",
@@ -87,19 +76,16 @@
     0.32
    ],
    "zoom": 1.7,
-   "sky": "paper",
-   "secs": 0.6
+   "sky": "paper"
   },
   {
-   "image": "../../../landing/face/hd.jpg",
+   "image": "../samantha-box-front.jpg",
    "focus": [
-    0.5,
-    0.42
+    0.45,
+    0.55
    ],
-   "zoom": 1.9,
-   "sky": "ink",
-   "word": "It's",
-   "secs": 0.7
+   "zoom": 1.6,
+   "sky": "ink"
   },
   {
    "image": "../../../landing/shots/app-weather.webp",
@@ -108,9 +94,7 @@
     0.42
    ],
    "zoom": 2.0,
-   "sky": "paper",
-   "word": "^",
-   "secs": 0.7
+   "sky": "ink"
   },
   {
    "image": "../../brand/mascot.png",
@@ -119,9 +103,16 @@
     0.8
    ],
    "zoom": 1.3,
-   "sky": "ink",
-   "word": "all",
-   "secs": 0.8
+   "sky": "ink"
+  },
+  {
+   "image": "../../../landing/shots/app-stocks.webp",
+   "focus": [
+    0.5,
+    0.5
+   ],
+   "zoom": 1.6,
+   "sky": "ink"
   },
   {
    "image": "../../../landing/shots/desktop-apps.webp",
@@ -130,48 +121,197 @@
     0.9
    ],
    "zoom": 1.8,
-   "sky": "paper",
-   "word": "yours.",
-   "secs": 0.75
+   "sky": "paper"
+  },
+  {
+   "image": "../../../landing/shots/app-calendar.webp",
+   "focus": [
+    0.7,
+    0.4
+   ],
+   "zoom": 1.8,
+   "sky": "ink"
+  },
+  {
+   "image": "../../../landing/face/hd.jpg",
+   "focus": [
+    0.5,
+    0.42
+   ],
+   "zoom": 1.9,
+   "sky": "ink"
+  },
+  {
+   "image": "../../../landing/shots/app-solitaire.webp",
+   "focus": [
+    0.5,
+    0.5
+   ],
+   "zoom": 1.5,
+   "sky": "paper"
+  },
+  {
+   "image": "../../../landing/shots/app-hamurapi.webp",
+   "focus": [
+    0.5,
+    0.5
+   ],
+   "zoom": 1.4,
+   "sky": "ink"
+  },
+  {
+   "image": "../../../landing/shots/app-chess.webp",
+   "focus": [
+    0.5,
+    0.5
+   ],
+   "zoom": 1.6,
+   "sky": "paper"
+  },
+  {
+   "image": "../../brand/mascot.png",
+   "focus": [
+    0.5,
+    0.3
+   ],
+   "zoom": 1.3,
+   "sky": "ink"
+  },
+  {
+   "image": "../../../landing/hero/samantha.webp",
+   "focus": [
+    0.5,
+    0.45
+   ],
+   "zoom": 1.6,
+   "sky": "paper"
   },
   {
    "fill": "grey",
-   "sky": "paper",
-   "word": "^",
-   "secs": 0.6
+   "sky": "paper"
   },
   {
    "fill": "terra",
-   "sky": "ink",
-   "word": "^",
-   "secs": 0.6
+   "sky": "ink"
+  },
+  {
+   "image": "../nimbus-rear.jpg",
+   "focus": [
+    0.53,
+    0.6
+   ],
+   "zoom": 3.4,
+   "sky": "paper"
   },
   {
    "fill": "clay",
-   "sky": "paper",
-   "word": "^",
-   "secs": 0.6
+   "sky": "paper"
+  },
+  {
+   "image": "../first-boot-2026-10-06.jpg",
+   "focus": [
+    0.5,
+    0.42
+   ],
+   "zoom": 1.0,
+   "sky": "ink"
   },
   {
    "fill": "ink",
-   "sky": "paper",
-   "word": "^",
-   "secs": 0.9
+   "sky": "paper"
+  },
+  {
+   "image": "../../../landing/face/hd.jpg",
+   "focus": [
+    0.5,
+    0.42
+   ],
+   "zoom": 1.9,
+   "sky": "paper"
+  },
+  {
+   "fill": "grey",
+   "sky": "ink"
+  },
+  {
+   "image": "../../../landing/shots/desktop-apps.webp",
+   "focus": [
+    0.5,
+    0.9
+   ],
+   "zoom": 1.8,
+   "sky": "paper"
+  },
+  {
+   "fill": "terra",
+   "sky": "paper"
+  },
+  {
+   "image": "../../../landing/shots/app-weather.webp",
+   "focus": [
+    0.8,
+    0.42
+   ],
+   "zoom": 2.0,
+   "sky": "ink"
+  },
+  {
+   "fill": "clay",
+   "sky": "ink"
+  },
+  {
+   "image": "../../brand/mascot.png",
+   "focus": [
+    0.5,
+    0.8
+   ],
+   "zoom": 1.3,
+   "sky": "paper"
+  },
+  {
+   "fill": "ink",
+   "sky": "paper"
+  },
+  {
+   "image": "../nimbus-hero.jpg",
+   "focus": [
+    0.44,
+    0.44
+   ],
+   "zoom": 3.2,
+   "sky": "ink"
+  },
+  {
+   "fill": "terra",
+   "sky": "ink"
   }
+ ],
+ "schedule": {
+  "count": 34,
+  "first": 1.05,
+  "last": 0.12
+ },
+ "words": [
+  [
+   12,
+   "It's"
+  ],
+  [
+   16,
+   "all"
+  ],
+  [
+   18,
+   "yours."
+  ]
  ],
  "title": {
   "text": "Joshua Tree 6.0",
-  "sky": "ink",
-  "disc": "terra",
-  "secs": 2.0
+  "secs": 1.4
  },
  "end": {
   "mark": "../../brand/mark-paper.png",
   "name": "Joshua Tree",
-  "sky": "ink",
-  "ink": "paper",
-  "secs": 3.0,
-  "scale": 1.1
- },
- "music": true
+  "secs": 3.0
+ }
 }
