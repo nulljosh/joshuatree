@@ -5,6 +5,8 @@ status icons and JT/SETTINGS.TXT.
   1. Host: settings.c under sanitizers with stubbed card and audio. The file text it writes is `volume=70`, `wall=0`, `dock=7`;
      parsing takes a value only when it is a whole number in range (a bad line, a 5 digit number, a lone key, CRLF, a missing
      final newline); loading applies volume, wallpaper and dock size; saving with no card says so and keeps the choice.
+     6.0: a signed-in person who is not an admin saves the wallpaper to ~/WALL.TXT; sign-in applies it, the login screen and
+     anyone without one get the card's, and an out-of-range one is ignored.
   2. QEMU virt, headless, with ramfb, a virtio keyboard and tablet and the check card (sdcard.py) as a virtio disk. Spotlight (F1,
      "sett", Enter) opens Settings in About. The window's close dot and the six sidebar tiles are sampled from a screendump:
      each tile is terracotta with its own glyph (no two the same). Down and Up walk About, Display, Sound, Dock, Date and Time, Users (the Users pane is arm64-users-check.py).
@@ -48,7 +50,15 @@ void audio_set_volume(int v) { vol = v < 0 ? 0 : v > 100 ? 100 : v; }
 int sd_ready(void) { return card; }
 int sd_enter_jt(int make) { (void)make; return card; }
 int sd_write(const char *name, const void *data, unsigned len) { assert(!strcmp(name, "SETTINGS.TXT")); memcpy(file, data, len); file_len = (int)len; written++; return 1; }
-int fat_read_file(const char *name, void *buf, unsigned cap) { assert(!strcmp(name, "SETTINGS.TXT")); if (file_len < 0) return -1; assert((unsigned)file_len <= cap); memcpy(buf, file, (unsigned)file_len); return file_len; }
+static int signed_in, home_len = -1; static char home_file[16];   /* 6.0: the signed-in person's ~/WALL.TXT */
+int fat_read_file(const char *name, void *buf, unsigned cap) {
+    if (!strcmp(name, "WALL.TXT")) { assert(signed_in); if (home_len < 0) return -1; memcpy(buf, home_file, (unsigned)home_len); return home_len; }
+    assert(!strcmp(name, "SETTINGS.TXT")); if (file_len < 0) return -1; assert((unsigned)file_len <= cap); memcpy(buf, file, (unsigned)file_len); return file_len; }
+void fat_cwd_set(unsigned c) { (void)c; }
+int home_active(void) { return signed_in; }
+int home_mine(char out[9]) { if (!signed_in) return 0; strcpy(out, "bob"); return 1; }
+int home_in(const char *dir, int make) { (void)make; return !strcmp(dir, "bob"); }
+int home_save(const char *name, const void *data, unsigned len) { assert(signed_in && !strcmp(name, "WALL.TXT") && len < sizeof home_file); memcpy(home_file, data, len); home_len = (int)len; return 1; }
 int fat_chdir(const char *n) { (void)n; return 1; }
 void wall_set(unsigned rgb) { wall_rgb = (int)rgb; }
 void desktop_wall_changed(void) { repaints++; }
@@ -83,7 +93,15 @@ int main(void) {
     may = 1;
     card = 0; vol = 20; settings_save(); assert(settings_saved() == -1 && vol == 20 && settings_wall() == 2);   /* no card: said, and the choices stay */
     file_len = -1; card = 1; vol = 70; settings_load(); assert(vol == 70);                                         /* no file: nothing changes */
-    puts("PASS: settings.c file text, bounded parsing, load, save and the no-card case");
+    /* 6.0, Yours: the card says Clay (2); bob, not an admin, saves Ink; his wallpaper is his, the card's stays Clay */
+    file_len = -1; card = 1; settings_set_wall(2); settings_save(); assert(settings_saved() == 1);
+    signed_in = 1; may = 0; settings_set_wall(3); { int w = written; settings_save(); assert(settings_saved() == 2 && written == w && home_len == 7 && !memcmp(home_file, "wall=3\n", 7)); }
+    signed_in = 0; settings_user_wall(); assert(settings_wall() == 2 && wall_rgb == 0x00923F20);    /* the login screen: the card's */
+    signed_in = 1; settings_user_wall(); assert(settings_wall() == 3 && wall_rgb == 0x00141311);    /* bob signs in: his */
+    home_len = -1; settings_user_wall(); assert(settings_wall() == 2);                               /* no WALL.TXT: the card's */
+    memcpy(home_file, "wall=9\n", 7); home_len = 7; settings_user_wall(); assert(settings_wall() == 2);   /* out of range: ignored */
+    signed_in = 0; may = 1;
+    puts("PASS: settings.c file text, bounded parsing, load, save, the no-card case and each person's own wallpaper");
     return 0;
 }
 '''

@@ -387,6 +387,7 @@ jobs:
       # (which this kernel cannot speak), --live prints that plainly and
       # fails this one step rather than passing silently on a misread.
       - name: Chat reaches the real turing.jaybulb.com:80 (Samantha, plain HTTP)
+        timeout-minutes: 3   # a hung live answer must not run out the whole job's 15 minutes (it did on #692)
         run: python3 tools/checks/chat-samantha-check.py --live || (sleep 15 && python3 tools/checks/chat-samantha-check.py --live) || true
       # 1.1.0: same real-network proof for the tool picker, chat_pick's own
       # /api/pick. No host override, so this exercises the real, deployed
@@ -395,6 +396,7 @@ jobs:
       # real picker just not naming new_reminder for this exact phrasing,
       # is not this kernel's bug), so this never fails the job.
       - name: Chat's tool picker reaches the real turing.jaybulb.com:80 (/api/pick)
+        timeout-minutes: 3
         run: python3 tools/checks/chattools-check.py --live || (sleep 15 && python3 tools/checks/chattools-check.py --live) || true
 
   # One status, one gate. main's branch protection used to require three

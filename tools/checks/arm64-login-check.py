@@ -11,6 +11,7 @@
      prints `login: wrong password`, takes at least a second and leaves the screen up; the right one signs in and the
      screendump has the menu bar back with the name in the menu bar; the Terminal's `logout` brings the screen back and a
      right password gets the desktop again; no typed password and no key line ever reached the UART before the sign-in.
+     6.0: ann's ~/WALL.TXT says Ink, so her desktop is Ink while the login screen before and after is the card's grey.
   3. A card with no accounts boots with no login screen and `logout` says there is nobody to sign out.
   4. Mutation: login.c made to accept any password must FAIL part 2's wrong-password step (it is restored afterwards).
 Skips (exit 0) when the tools are missing.
@@ -103,7 +104,7 @@ salt = bytes(range(32, 48))
 RECORD = "ann:p2:100000:%s:%s\n" % (salt.hex(), hashlib.pbkdf2_hmac("sha256", b"hunter22", salt, 100000, 32).hex())
 
 
-def make_card(tag, users):
+def make_card(tag, users, wall=None):
     card = os.path.join(tmp, tag + ".img")
     build_card(card, False)
     def mt(*a): return subprocess.run([a[0], "-i", f"{card}@@{PART * 512}", *a[1:]], capture_output=True, env=MT)
@@ -111,6 +112,10 @@ def make_card(tag, users):
     if users:
         f = os.path.join(tmp, tag + ".users"); open(f, "w").write(users)
         if mt("mcopy", f, "::JT/USERS.TXT").returncode: print("FAIL: mtools could not write USERS.TXT"); sys.exit(1)
+    if wall is not None:   # 6.0: ann's own wallpaper in her home
+        f = os.path.join(tmp, tag + ".wall"); open(f, "w").write("wall=%d\n" % wall)
+        for d in ("::JT/HOME", "::JT/HOME/ann"): mt("mmd", d)
+        if mt("mcopy", f, "::JT/HOME/ann/WALL.TXT").returncode: print("FAIL: mtools could not write WALL.TXT"); sys.exit(1)
     return card
 
 
@@ -171,7 +176,7 @@ class Session:
         self.q.wait()
 
 
-WALL = (0x6E, 0x6E, 0x6E)
+WALL, INK = (0x6E, 0x6E, 0x6E), (0x14, 0x13, 0x11)
 def desktop_up(sh):   # the menu bar is on screen: some pixel of the top rows is not the bare wallpaper (the login screen is wallpaper and one card)
     w, h, _ = sh; return any(Session.px(sh, x, y) != WALL for y in range(0, 20, 3) for x in range(0, w, 5))
 def accent_in_bar(sh):
@@ -198,7 +203,7 @@ def wrong_phase(S):
     return on_login, got, secs, S.shot()
 
 
-S = Session("a", make_card("a", RECORD))
+S = Session("a", make_card("a", RECORD, wall=3))
 try:
     if not boot_to_login(S): check("the card with an account boots to the login screen", False, S.uart()[-600:]); raise SystemExit
     on_login, got, secs, sh2 = wrong_phase(S)
@@ -213,6 +218,7 @@ try:
     check("no typed password and no key line reached the UART before the sign-in", not [s for s in SECRETS if s in S.uart()] and "key " not in pre.split("login: screen up")[-1], pre[-300:])
     time.sleep(0.5); sh3 = S.shot()
     check("the screendump is the desktop again (the menu bar is back)", desktop_up(sh3))
+    check("ann's own wallpaper (Ink, from ~/WALL.TXT) is the desktop's", S.px(sh3, 30, 300) == INK, S.px(sh3, 30, 300))
     na = accent_in_bar(sh3)
     check("the signed-in name is in the menu bar in terracotta (%d accent pixels)" % na, na > 10)
     # the Terminal's logout
@@ -222,6 +228,7 @@ try:
     check("`logout` in the Terminal says it is signing out and the login screen comes back", S.wait_for("logout: signing out", 20, m) and S.wait_for("login: screen up", 20, m), S.uart()[-300:])
     time.sleep(0.5); sh4 = S.shot()
     check("... the screendump is the login screen, not the desktop", not desktop_up(sh4))
+    check("... on the card's grey again, not ann's Ink", S.px(sh4, 30, 300) == WALL, S.px(sh4, 30, 300))
     check("... and the menu bar name is gone from the screen", accent_in_bar(sh4) < na // 2 + 1)
     m = len(S.uart()); S.typ("ann"); S.key("ret"); S.typ("hunter22"); S.key("ret")
     check("signing in again works", S.wait_for("login: desktop up", 150, m), S.uart()[-300:])
