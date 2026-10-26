@@ -166,6 +166,14 @@ int tls_recv(char *buf, unsigned max, unsigned ticks) {   /* bytes read, 0 when 
     return e == BR_ERR_OK || e == BR_ERR_IO ? 0 : failed();
 }
 void tls_close(void) { tcp_close(); }
+/* 6.20.0: STARTTLS. The TCP connection a plain-text protocol opened (SMTP on 587) becomes TLS, checked against host like
+   any other; tls_handshake runs next. */
+int tls_upgrade(const char *host) {
+    tls_err = 0; read_ticks = TLS_READ_TICKS;
+    if (!host || !*host) { tls_err = TLS_ERR_CONNECT; tcp_close(); return -1; }
+    if (!setup(host, 0)) { tls_err = TLS_ERR_ENTROPY; tcp_close(); return -1; }
+    return 0;
+}
 /* The three steps in one, after a DNS lookup of host (TLS_ERR_DNS when that fails). */
 int https_fetch_timeout(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max, unsigned reply_ticks) {
     unsigned ip;

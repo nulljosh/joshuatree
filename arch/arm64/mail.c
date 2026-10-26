@@ -4,9 +4,12 @@
    account is not the one that logged in to mail. It goes over TLS to port 993 alone, the server's certificate checked
    against the Mozilla roots like any https page; there is no plain-text IMAP (HOST:PORT moves the port, never the TLS). `mail` lists the newest ten, `mail N`
    shows message N through the browser's renderer (browser_render), plain text or HTML, its remote images never fetched.
-   tools/checks/arm64-mail-check.py runs it against a fixture IMAP server. */
+   6.20.0 sends: `mail send TO SUBJECT | BODY` and `mail reply N BODY` over SMTP submission, STARTTLS on 587 before any
+   AUTH (or TLS from the first byte on 465). tools/checks/arm64-mail-check.py and arm64-smtp-check.py run it against
+   fixture servers. */
 #include "tls.h"
 #include "../../drivers/http.h"
+#include "../../drivers/net.h"
 
 extern void (*cmd_out)(const char *s);   /* cmd.c */
 void cmd_dec(unsigned v);
@@ -25,6 +28,8 @@ static char m_host[128], m_user[96], m_pass[128], m_owner[40];
 static unsigned short m_port = MAIL_PORT;   /* HOST:PORT picks another, still over TLS */
 static int m_ready;
 static unsigned m_seq[MAIL_LIST], m_n;   /* the listed messages' sequence numbers, newest first */
+static char m_addr[MAIL_LIST][96], m_subj[MAIL_LIST][72];   /* 6.20.0: each listed message's sender address and subject, for mail reply */
+static char s_host[128]; static unsigned short s_port;      /* the SMTP server: mail smtp HOST[:PORT], else imap. becomes smtp. on 587 */
 static char *rb; static unsigned rlen;
 static unsigned m_tag;
 
@@ -142,7 +147,7 @@ static void list(void) {
     cmd[o++] = ':'; v = total; do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) cmd[o++] = d[--z];
     for (const char *p = " (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])"; *p; p++) cmd[o++] = *p;
     if (imap(cmd, o) != 1) { cmd_out("mail: the server would not list the inbox\n"); close_session(); heap_release(mark); return; }
-    struct { unsigned seq; char from[40], subj[72]; } row[MAIL_LIST]; unsigned nr = 0;
+    struct { unsigned seq; char from[40], subj[72], addr[96]; } row[MAIL_LIST]; unsigned nr = 0;
     unsigned at = 0, seq, ln; const char *lit;
     while (nr < MAIL_LIST && next_fetch(&at, &seq, &lit, &ln)) {
         row[nr].seq = seq;
@@ -150,12 +155,18 @@ static void list(void) {
         unsigned lt = 0; while (f[lt] && f[lt] != '<') lt++;   /* the name before <address>, else the address */
         if (lt) { while (lt && f[lt - 1] == ' ') lt--; copy(row[nr].from, f[0] == '"' ? f + 1 : f, f[0] == '"' ? lt - 2 : lt, sizeof row[nr].from); }
         else copy(row[nr].from, f, slen(f), sizeof row[nr].from);
+        {   /* the address: inside <...>, else the whole field */
+            unsigned a0 = 0; while (f[a0] && f[a0] != '<') a0++;
+            if (f[a0]) { unsigned a1 = ++a0; while (f[a1] && f[a1] != '>') a1++; copy(row[nr].addr, f + a0, a1 - a0, sizeof row[nr].addr); }
+            else copy(row[nr].addr, f, slen(f), sizeof row[nr].addr);
+        }
         field(lit, ln, "Subject:", row[nr].subj, sizeof row[nr].subj);
         nr++;
     }
     close_session();
     cmd_out("mail: "); cmd_dec(total); cmd_out(total == 1 ? " message, the newest first\n" : " messages, the newest first\n");
     for (unsigned i = nr; i-- > 0;) {   /* newest first */
+        copy(m_addr[m_n], row[i].addr, slen(row[i].addr), sizeof m_addr[0]); copy(m_subj[m_n], row[i].subj, slen(row[i].subj), sizeof m_subj[0]);
         m_seq[m_n++] = row[i].seq;
         cmd_dec(m_n); cmd_out("  "); cmd_out(row[i].from[0] ? row[i].from : "(no sender)"); cmd_out(": "); cmd_out(row[i].subj[0] ? row[i].subj : "(no subject)"); cmd_out("\n");
     }
@@ -273,6 +284,125 @@ static void open_message(unsigned k) {
     heap_release(mark);
 }
 
+/* ---- 6.20.0: sending over SMTP submission ----
+   Port 587 by default, where the server must offer STARTTLS before anything else is said (AUTH never goes in the clear);
+   port 465 is TLS from the first byte. AUTH PLAIN with the same app password; one plain-text message, its lines
+   dot-stuffed. The server's address comes from `mail smtp HOST[:PORT]`, else the IMAP host with imap. made smtp. */
+static int s_tls;
+static int s_line(char *buf, unsigned max) {   /* one reply, multi-line ones whole ("250-" lines then "250 "): its code, or -1 */
+    unsigned n = 0;
+    for (;;) {
+        int r = s_tls ? tls_recv(buf + n, max - n - 1, 1000) : tcp_read(buf + n, max - n - 1, 1000);
+        if (r <= 0) return -1;
+        n += (unsigned)r; buf[n] = 0;
+        unsigned ls = 0;   /* the last whole line's start */
+        for (unsigned i = 0; i + 1 < n; i++) if (buf[i] == '\r' && buf[i + 1] == '\n') {
+            if (i - ls >= 4 && buf[ls + 3] == ' ') return (buf[ls] - '0') * 100 + (buf[ls + 1] - '0') * 10 + (buf[ls + 2] - '0');
+            ls = i + 2;
+        }
+        if (n + 1 >= max) return -1;
+    }
+}
+static int s_send(const char *d, unsigned n) { return s_tls ? tls_send(d, n) : (tcp_write(d, n) ? 0 : -1); }   /* tcp_write: 1 when all of it went */
+static int s_cmd(const char *c, unsigned n, char *buf, unsigned max) {   /* a command line, then its reply code */
+    char line[600];
+    if (n + 2 > sizeof line) return -1;
+    for (unsigned i = 0; i < n; i++) line[i] = c[i];
+    line[n] = '\r'; line[n + 1] = '\n';
+    int r = s_send(line, n + 2);
+    accounts_wipe(line, sizeof line);   /* AUTH carries the password */
+    return r < 0 ? -1 : s_line(buf, max);
+}
+static unsigned b64(const unsigned char *in, unsigned n, char *out) {
+    static const char t[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    unsigned o = 0;
+    for (unsigned i = 0; i < n; i += 3) {
+        unsigned v = (unsigned)in[i] << 16 | (i + 1 < n ? (unsigned)in[i + 1] << 8 : 0) | (i + 2 < n ? in[i + 2] : 0);
+        out[o++] = t[v >> 18 & 63]; out[o++] = t[v >> 12 & 63];
+        out[o++] = i + 1 < n ? t[v >> 6 & 63] : '='; out[o++] = i + 2 < n ? t[v & 63] : '=';
+    }
+    return o;
+}
+static int addr_ok(const char *a) {   /* one plain address: a dot after the @, no space, no angle brackets, no control bytes */
+    unsigned at = 0, dot = 0, n = 0;
+    for (; a[n]; n++) { unsigned char c = (unsigned char)a[n]; if (c <= ' ' || c == '<' || c == '>' || c == ',' || c == 127) return 0; if (c == '@') at = n; if (at && c == '.') dot = 1; }
+    return at && dot && n < 96;
+}
+static void smtp_send(const char *to, const char *subj, const char *body, unsigned bn) {
+    if (!addr_ok(to)) { cmd_out("mail: that is not one plain address\n"); return; }
+    char host[128]; unsigned short port = s_port;
+    if (s_host[0]) copy(host, s_host, slen(s_host), sizeof host);
+    else if (starts(m_host, "imap.")) { copy(host, "smtp.", 5, sizeof host); copy(host + 5, m_host + 5, slen(m_host + 5), sizeof host - 5); }
+    else copy(host, m_host, slen(m_host), sizeof host);
+    if (!port) port = 587;
+    unsigned long mark = heap_mark();
+    char *buf = kmalloc(8192); unsigned ip;
+    if (!buf) { cmd_out("mail: out of memory\n"); heap_release(mark); return; }
+    if (!http_resolve_host(host, &ip)) { cmd_out("mail: no such host "); cmd_out(host); cmd_out("\n"); heap_release(mark); return; }
+    s_tls = port == 465;
+    if (s_tls ? (tls_connect(ip, port, host) < 0 || tls_handshake() < 0) : !tcp_open(ip, port)) { cmd_out("mail: could not reach "); cmd_out(host); cmd_out("\n"); heap_release(mark); return; }
+    const char *why = 0;
+    if (s_line(buf, 8192) != 220) why = "the server did not greet";
+    else if (s_cmd("EHLO joshuatree", 15, buf, 8192) != 250) why = "the server refused EHLO";
+    else if (!s_tls) {
+        int has = 0; for (unsigned i = 0; buf[i]; i++) if (starts(buf + i, "STARTTLS")) has = 1;
+        if (!has) why = "the server offers no STARTTLS, and the password never goes in the clear";
+        else if (s_cmd("STARTTLS", 8, buf, 8192) != 220) why = "the server refused STARTTLS";
+        else if (tls_upgrade(host) < 0 || tls_handshake() < 0) { why = tls_last_error() == 62 ? "its certificate is not trusted" : "the secure connection failed"; s_tls = -1; }
+        else { s_tls = 1; if (s_cmd("EHLO joshuatree", 15, buf, 8192) != 250) why = "the server refused EHLO"; }
+    }
+    if (!why) {   /* AUTH PLAIN: \0user\0password, base64 */
+        unsigned char raw[256]; unsigned rn = 0;
+        raw[rn++] = 0; for (const char *p = m_user; *p && rn < 120; p++) raw[rn++] = (unsigned char)*p;
+        raw[rn++] = 0; for (const char *p = m_pass; *p && rn < 250; p++) raw[rn++] = (unsigned char)*p;
+        char cmd[400]; unsigned o = 0; for (const char *p = "AUTH PLAIN "; *p; p++) cmd[o++] = *p;
+        o += b64(raw, rn, cmd + o);
+        int r = s_cmd(cmd, o, buf, 8192);
+        accounts_wipe(raw, sizeof raw); accounts_wipe(cmd, sizeof cmd);
+        if (r != 235) why = "the server refused the user or the app password";
+    }
+    if (!why) {
+        char cmd[160]; unsigned o = 0;
+        for (const char *p = "MAIL FROM:<"; *p; p++) cmd[o++] = *p;
+        for (const char *p = m_user; *p; p++) cmd[o++] = *p;
+        cmd[o++] = '>';
+        if (s_cmd(cmd, o, buf, 8192) != 250) why = "the server refused the sender";
+        else {
+            o = 0; for (const char *p = "RCPT TO:<"; *p; p++) cmd[o++] = *p;
+            for (const char *p = to; *p; p++) cmd[o++] = *p;
+            cmd[o++] = '>';
+            int r = s_cmd(cmd, o, buf, 8192);
+            if (r != 250 && r != 251) why = "the server refused that address";
+            else if (s_cmd("DATA", 4, buf, 8192) != 354) why = "the server refused DATA";
+        }
+    }
+    if (!why) {   /* the message: a few headers, a blank line, the body with "." lines doubled, then "." alone */
+        char *m = kmalloc(bn * 2 + 1024); unsigned w = 0;
+        if (!m) why = "out of memory";
+        else {
+            #define PUT(str) for (const char *p_ = (str); *p_; p_++) m[w++] = *p_
+            PUT("From: "); PUT(m_user); PUT("\r\nTo: "); PUT(to); PUT("\r\nSubject: ");
+            for (const char *p = subj; *p; p++) m[w++] = (unsigned char)*p < 0x20 ? ' ' : *p;   /* no header injection */
+            PUT("\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nUser-Agent: Joshua Tree\r\n\r\n");
+            int bol = 1;
+            for (unsigned i = 0; i < bn; i++) {
+                if (bol && body[i] == '.') m[w++] = '.';
+                if (body[i] == '\n' && (!i || body[i - 1] != '\r')) m[w++] = '\r';
+                m[w++] = body[i]; bol = body[i] == '\n';
+            }
+            if (!bol) PUT("\r\n");
+            PUT(".\r\n");
+            #undef PUT
+            if (s_send(m, w) < 0 || s_line(buf, 8192) != 250) why = "the server did not take the message";
+        }
+    }
+    if (s_tls >= 0) { if (s_send("QUIT\r\n", 6) == 0) s_line(buf, 8192); }
+    tcp_close();
+    if (why) { cmd_out("mail: not sent, "); cmd_out(why); cmd_out("\n"); }
+    else { cmd_out("mail: sent to "); cmd_out(to); cmd_out("\n"); }
+    heap_release(mark);
+}
+
 /* cmd.c, once the app password is typed. Tried at once, so a wrong one is said now, not at the next `mail`. */
 void mail_password(const char *pass) {
     copy(m_pass, pass, slen(pass), sizeof m_pass);
@@ -310,8 +440,45 @@ int mail_command(const char *q, unsigned n) {   /* 1 when it was a mail command 
         ask_mail_password(m_user);
         return 1;
     }
+    if (an > 5 && starts(a, "smtp ")) {   /* mail smtp HOST[:PORT] */
+        unsigned i = 5; while (i < an && a[i] == ' ') i++;
+        if (an - i >= sizeof s_host || i == an) { cmd_out("mail: use mail smtp HOST[:PORT]\n"); return 1; }
+        copy(s_host, a + i, an - i, sizeof s_host); s_port = 0;
+        for (unsigned c = 0; s_host[c]; c++) if (s_host[c] == ':') {
+            unsigned v = 0, d = c + 1; while (s_host[d] >= '0' && s_host[d] <= '9' && v < 70000) v = v * 10 + (unsigned)(s_host[d++] - '0');
+            if (s_host[d] || !v || v > 65535) { cmd_out("mail: that port is not a number from 1 to 65535\n"); s_host[0] = 0; return 1; }
+            s_port = (unsigned short)v; s_host[c] = 0; break;
+        }
+        cmd_out("mail: sending through "); cmd_out(s_host); cmd_out("\n");
+        return 1;
+    }
+    if (an > 5 && (starts(a, "send ") || starts(a, "reply "))) {   /* mail send TO SUBJECT | BODY, mail reply N BODY */
+        if (!m_ready) { cmd_out("mail: not signed in, use mail login HOST USER\n"); return 1; }
+        int reply = starts(a, "reply ");
+        unsigned i = reply ? 6 : 5; while (i < an && a[i] == ' ') i++;
+        unsigned t0 = i; while (i < an && a[i] != ' ') i++;
+        char to[96], subj[100];
+        if (reply) {
+            unsigned k = 0; for (unsigned c = t0; c < i; c++) k = a[c] >= '0' && a[c] <= '9' ? k * 10 + (unsigned)(a[c] - '0') : 9999;
+            if (!k || k > m_n) { cmd_out("mail: no such message, list the inbox with mail first\n"); return 1; }
+            copy(to, m_addr[k - 1], slen(m_addr[k - 1]), sizeof to);
+            unsigned o = 0; if (!starts(m_subj[k - 1], "re:")) { copy(subj, "Re: ", 4, sizeof subj); o = 4; }
+            copy(subj + o, m_subj[k - 1], slen(m_subj[k - 1]), sizeof subj - o);
+            while (i < an && a[i] == ' ') i++;
+            smtp_send(to, subj, a + i, an - i);
+            return 1;
+        }
+        copy(to, a + t0, i - t0, sizeof to);
+        while (i < an && a[i] == ' ') i++;
+        unsigned bar = i; while (bar < an && a[bar] != '|') bar++;
+        unsigned se = bar; while (se > i && a[se - 1] == ' ') se--;
+        copy(subj, a + i, se - i, sizeof subj);
+        unsigned b0 = bar < an ? bar + 1 : an; while (b0 < an && a[b0] == ' ') b0++;
+        smtp_send(to, subj, a + b0, an - b0);
+        return 1;
+    }
     unsigned k = 0, i = 0; while (i < an && a[i] >= '0' && a[i] <= '9') k = k * 10 + (unsigned)(a[i++] - '0');
     if (i && i == an) { if (!m_ready) cmd_out("mail: not signed in, use mail login HOST USER\n"); else open_message(k); return 1; }
-    cmd_out("mail: use mail, mail N, mail login HOST USER or mail logout\n");
+    cmd_out("mail: use mail, mail N, mail send TO SUBJECT | BODY, mail reply N BODY, mail smtp HOST[:PORT], mail login HOST USER or mail logout\n");
     return 1;
 }

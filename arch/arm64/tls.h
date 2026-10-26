@@ -17,5 +17,6 @@ int https_last_status(void);
 int tls_send(const void *buf, unsigned n);                      /* 6.18.0: a conversation over the open connection (IMAP) */
 int tls_recv(char *buf, unsigned max, unsigned ticks);
 void tls_close(void);
+int tls_upgrade(const char *host);   /* 6.20.0: STARTTLS on the open TCP connection */
 int tls_last_error(void);   /* after a -1: a TLS_ERR_* above, or BearSSL's own code (62 = certificate not trusted) */
 #endif
