@@ -21,4 +21,10 @@ int snap_restore(unsigned id, unsigned *files, unsigned *skipped);
    -1 no card, -2 nobody is signed in. */
 #define BACKUP_MAX (512u * 1024u)
 int snap_pack(unsigned char *out, unsigned cap, unsigned *len, unsigned *files, unsigned *skipped);
+/* restore from the Mac (5.3.0): a container from the relay back into the home folder. Every name, depth and size is checked
+   before a byte is written; then a snapshot is taken (*snap_id), so `restore N yes` undoes it; then each file goes in over the
+   one of the same name, but only one the snapshot holds. Files the container lacks stay. A folder, or a file the snapshot
+   missed (over SNAP_FILE_MAX, past SNAP_LIST_MAX), in the way is left and counted.
+   1 restored, 0 the card refused, -1 no card, -2 nobody is signed in, -4 not a good container (nothing written). */
+int snap_unpack(const unsigned char *in, unsigned len, unsigned *snap_id, unsigned *files, unsigned *skipped);
 #endif

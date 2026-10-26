@@ -49,6 +49,11 @@ static int has_dir(const char *path) { char p[100]; strcpy(p, path); fat_cwd_set
 static unsigned seen; static unsigned seen_id[8]; static char seen_info[8][24];
 static void cb(unsigned id, const char *info) { if (seen < 8) { seen_id[seen] = id; strcpy(seen_info[seen], info); seen++; } }
 #define H "JT/HOME/ann"
+static unsigned box(unsigned char *o, unsigned n, const char *path, const char *data) {   /* one entry of a JTB1 container */
+    if (!n) { memcpy(o, "JTB1", 4); n = 4; }
+    unsigned pl = (unsigned)strlen(path), dl = (unsigned)strlen(data);
+    o[n++] = (unsigned char)pl; memcpy(o + n, path, pl); n += pl; memcpy(o + n, &dl, 4); n += 4; memcpy(o + n, data, dl); return n + dl;
+}
 
 int main(int argc, char **argv) {
     (void)argc; img = fopen(argv[1], "r+b"); assert(img);
@@ -83,6 +88,41 @@ int main(int argc, char **argv) {
     assert(!strcmp(get(H "/DOCS/DEEP", "D.TXT"), "delta") && !strcmp(get(H, "BIG.DAT"), big));   /* a file too big to be in any snapshot is left alone */
     seen = 0; assert(snap_list(cb) == 3);
     puts("ok restore: changed and deleted files back, files and folders made since removed, the snapshots themselves kept");
+
+    static const char *bad[][2] = { {"../ESC.TXT", "x"}, {"/ETC.TXT", "x"}, {"BAD NAME.TXT", "x"}, {"TOOLONGNAME.TXT", "x"}, {".HIDDEN", "x"},
+                                    {"A/B/C/D/E/F/G/H.TXT", "x"}, {"SNAP/1/A.TXT", "x"}, {"_DONE", "x"}, {"DOCS//A.TXT", "x"}, {"A.TXTX", "x"} };
+    unsigned sid;
+    for (unsigned i = 0; i < sizeof bad / sizeof *bad; i++) {
+        unsigned char c[200]; unsigned n = box(c, 0, "OK.TXT", "fine"); n = box(c, n, bad[i][0], bad[i][1]);
+        assert(snap_unpack(c, n, &sid, &files, &skipped) == -4);
+    }
+    { unsigned char c[200]; unsigned n = box(c, 0, "OK.TXT", "fine");
+      assert(snap_unpack(c, n - 1, &sid, &files, &skipped) == -4);                        /* cut short */
+      c[0] = 'X'; assert(snap_unpack(c, n, &sid, &files, &skipped) == -4);                /* bad magic */
+      n = box(c, 0, "OK.TXT", "fine"); c[4 + 1 + 6] = 0xff; assert(snap_unpack(c, n, &sid, &files, &skipped) == -4); }   /* a size past the end */
+    static unsigned char huge[40100]; unsigned hn = box(huge, 0, "OK.TXT", "fine"); memcpy(huge + hn, "\x07" "BIG.TXT", 8); hn += 8;
+    unsigned hs = 40000; memcpy(huge + hn, &hs, 4); hn += 4 + hs; assert(snap_unpack(huge, hn, &sid, &files, &skipped) == -4);   /* over 32 KB */
+    assert(!get(H, "OK.TXT"));
+    seen = 0; assert(snap_list(cb) == 3 && seen_id[2] == 5);
+    puts("ok unpack refuses .., absolute, spaced, long, dot, too deep, SNAP, _DONE, empty, cut short, bad magic and big, writes nothing, takes no snapshot");
+
+    put(H, "KEEP.TXT", "mine");
+    unsigned char c[1000]; unsigned n = box(c, 0, "A.TXT", "from mac"); n = box(c, n, "MAC/M1.TXT", "m1"); n = box(c, n, "DOCS/DEEP/D.TXT", "delta2");
+    n = box(c, n, "BIG.DAT", "small"); n = box(c, n, "DOCS", "a file where a folder is");
+    assert(snap_unpack(c, n, &sid, &files, &skipped) == 1 && sid == 6 && files == 3 && skipped == 2);
+    assert(!strcmp(get(H, "A.TXT"), "from mac") && !strcmp(get(H "/MAC", "M1.TXT"), "m1") && !strcmp(get(H "/DOCS/DEEP", "D.TXT"), "delta2"));
+    assert(!strcmp(get(H, "KEEP.TXT"), "mine") && !strcmp(get(H, "BIG.DAT"), big) && has_dir(H "/DOCS"));
+    assert(!strcmp(get(H "/SNAP/6", "A.TXT"), "alpha") && !strcmp(get(H "/SNAP/6", "KEEP.TXT"), "mine"));
+    assert(snap_restore(6, &files, &skipped) == 1 && !strcmp(get(H, "A.TXT"), "alpha") && !has_dir(H "/MAC"));
+    for (int i = 0; i < 26; i++) { char nm[13]; snprintf(nm, sizeof nm, "F%02d.TXT", i); put(H "/MANY", nm, "card"); }
+    n = 0; for (int i = 0; i < 26; i++) { char nm[20]; snprintf(nm, sizeof nm, "MANY/F%02d.TXT", i); n = box(c, n, nm, "mac"); }
+    assert(snap_unpack(c, n, &sid, &files, &skipped) == 1 && sid == 7 && files + skipped == 26 && skipped >= 2);
+    unsigned card_left = 0; for (int i = 0; i < 26; i++) { char nm[13]; snprintf(nm, sizeof nm, "F%02d.TXT", i);
+        int in_snap = get(H "/SNAP/7/MANY", nm) != 0; char *now = get(H "/MANY", nm);
+        assert(in_snap ? !strcmp(now, "mac") : !strcmp(now, "card")); card_left += !in_snap; }
+    assert(card_left == skipped);
+    puts("ok unpack never writes over a file the snapshot missed (26 in a folder, 24 fit): it is left and counted");
+    puts("ok unpack: snapshot first, files in over the same names, others kept, a big file and a folder in the way left alone, and restore undoes it");
 
     go(H "/DOCS"); assert(!fat_rmdir("DEEP")); assert(fat_cwd_get()); fat_cwd_set(0);
     puts("PASS: snap.c");
