@@ -62,7 +62,23 @@ Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Ma
 2. A full-screen face whose mouth follows her voice. Done in 4.20.0: the Samantha tile opens her chat across the screen.
 3. Whatever the board shows is broken.
 
-**Then: 7.0, Online.** 6.0, Yours, shipped (2026-10-26): accounts, login, sudo and home folders (4.8 to 4.11), snapshots (4.12), the crash-safe card (4.14), the Users pane (4.15), backups to the Mac and back (5.2.0, 5.3.0), and each person's own wallpaper. Its board pass is on the card now. Next is the real internet: TLS 1.3, a real browser, mail and calendar that sync.
+**Now: 7.0, Online (Joshua, 2026-10-26: "let's focus on internet next").** 6.0, Yours, shipped (2026-10-26): accounts, login, sudo and home folders (4.8 to 4.11), snapshots (4.12), the crash-safe card (4.14), the Users pane (4.15), backups to the Mac and back (5.2.0, 5.3.0), and each person's own wallpaper. The gate for 7.0 is a normal day of web, mail and calendar on the board.
+
+What is there today: Wi-Fi joins from the card's config, DNS and the clock come from the network, and a text browser (`arch/arm64/browser.c`) fetches HTTPS through BearSSL (`tls.c`). Its limits: TLS 1.2 only, 37 baked-in root certificates, a 64 KB reply cap, text only (no images, no clicks on links, no forms, no cookies). Mail and Calendar read files on the card and sync nothing. There is no Ethernet driver for the Pi.
+
+The steps, one minor version each, cheapest unblock first:
+- [ ] [Sonnet] The whole web's certificates: the Mozilla root list (about 150 roots) through `tools/gen/tls-ta.py`, so any public HTTPS site verifies. Check: a QEMU fetch from a local TLS server signed by a test root, and a refusal for a root not in the list.
+- [ ] [Fable] Real pages: stream the reply instead of the 64 KB cap, chunked transfer, gzip through the inflate the PNG decoder already has, and keep-alive. Check: a 2 MB chunked gzip page from a local server reads whole.
+- [ ] [Fable] The Browser draws the page: headings, paragraphs, lists, bold, links you click, and inline PNG and JPEG (both decoders are on the board). A reader-style subset of CSS; no JavaScript for 7.0 (a decision to revisit at 8.0). Check: a fixture page's pixels.
+- [ ] [Sonnet] Forms and cookies: GET and POST forms and a cookie jar per user, so search (html.duckduckgo.com) and simple logins work. Check: a local server that sets a cookie and reads it back.
+- [ ] [Sonnet] Tabs, bookmarks, Top Sites and full-text history search (from the Snow Leopard list). Check: three tabs, a bookmark kept across a reboot.
+- [ ] [Haiku] Downloads into Files, and `fetch URL` in the Terminal. Check: a download lands in the home folder with its size.
+- [ ] [Fable] Mail over IMAP and TLS: the real inbox (an app password for iCloud or Gmail), headers first and bodies on open, plain text and simple HTML through the Browser's renderer. The password lives in a per-user keychain sealed with the login password (PBKDF2 is already on the board). Check: a local IMAP fixture server.
+- [ ] [Sonnet] Sending mail over SMTP submission: compose, reply and send. Check: the fixture server receives the message.
+- [ ] [Sonnet] Calendar subscriptions: an `.ics` URL over HTTPS, read only; then two-way CalDAV (iCloud). Check: a fixture feed's events on the month grid.
+- [ ] [Sonnet] Wi-Fi from Settings: scan, pick a network, type its password (WPA2 already joins from the config file). Check: QEMU cannot scan, so a unit test of the pane plus the board pass.
+- [ ] [Fable] Later, not a 7.0 blocker: TLS 1.3 (BearSSL stops at 1.2, and most sites still offer 1.2), and Ethernet through the Pi 4's GENET.
+
 
 **Still open from the 2026-10-11 review:**
 - Codex through the relay on the Mac, read-only, never a bare-metal OAuth client on the Pi (research decision 2026-10-10).
@@ -249,6 +265,13 @@ A guess at the shape, in Joshua's words as far as they are known. Each version h
 | **10.0 Daily driver** | Boring and trusted. A security audit against the threat model, accessibility, languages, long-term support. | Joshua uses it as his only computer for a month. |
 
 **Version 100** is not a plan, it is the point of the whole thing: a computer small enough to read end to end, that you can build yourself from open parts, and that talks to you like a person. Its test is a child with the guide, a Nimbus Kit and an afternoon, who ends the day with their own computer and understands every layer of it. Everything above is steps toward that.
+
+**What stands between here and 10 (2026-10-26).** 7.0 is the list under Next priorities. After it:
+- 8.0 Build things: the Plank compiler and a linker on the box, SDK headers, an editor fit for code, a debugger that steps a ring-3 app, signed app bundles and an `install` command fed by a page on the landing.
+- 9.0 The kit: the Nimbus revisions, the 8 inch HDMI screen and the DSI touch screen both driven, the GPU (V3D) for compositing, USB storage, a camera, and a guide a stranger finishes on the first try.
+- 10.0 Daily driver: a security audit against the threat model, a screen reader, languages, self-update with a fallback kernel, and a month as Joshua's only computer.
+
+**Version 1000** (a guess, 2026-10-26): a computer that outlives its maker. It rebuilds itself from its own source in one sitting, the whole source still reads like a book, it runs on any open board, and people who never met Joshua keep it going.
 
 Order of work from 3.0 on (Joshua, 2026-10-11): usable first, then stable, then polished.
 - Usable means a person can do a real thing on the board without the Mac: open an app, type, save, come back tomorrow.
@@ -1976,26 +1999,23 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-26, 01:10 Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-26, 03:00 Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
-**What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards. Open a loop PR ready, not as a draft: a push to a draft followed by `gh pr ready` lets the skipped draft run cancel the real one.
+**What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time.
 
-**Where things stand.** Main is 5.3.0. Since 5.0 it gained Nimble on the Pi, the Terminal and Samantha's plugin (5.1.0), a backup of the home folder to the Mac (5.2.0), and a restore from the Mac (5.3.0). The restore takes a snapshot first and never overwrites a file the snapshot missed. Open: #693, 6.0.0 "Yours", from the `logo-6` branch. It is in CI, and it merges on green, which reaches the loop goal of 0 open issues and 0 open PRs. 6.0 also adds a three-minute limit on each live Samantha CI step. 6.0 adds a sixth tuft to the logo, each person's own wallpaper, and the Nimbus Kit (renamed from Neo Kit) with its parts list in `docs/GUIDE.md`. The SD card for the board pass is flashed with the 6.0 build. The repo has 0 open GitHub issues.
+**Where things stand.** Main is 6.0.0, Yours. #695 (6.1.0 and 6.2.0: Movies on the Pi, any length, with QuickTime-style controls) is in CI. Stacked on it, local and passing their checks: `genie` (6.3.0 the magnifying dock, 6.4.0 one motion curve in `lib/ease.h`, 6.5.0 minimize with the genie), `landing-wall` (6.5.1, the landing hero and app wall) and `buttons` (6.6.0, window buttons like a Mac's).
 
-**Waiting on Joshua.** The board pass on the 6.0 card, tomorrow (2026-10-27), with the 10-step test list from chat. The 8-inch HDMI screen for the Nimbus case, which he plans to buy on 2026-10-27. Then the older asks: what `boottime` prints in the Terminal after a board boot, a yes to bring GPL code into the tree for the real Doom port, whether dock hover zoom comes back (removed on purpose in #46 on 2026-09-20), and a launch-with-file path for Preview.
+**Waiting on Joshua.** The board pass on the newest card (the test list: login and backup, Movies, the magnifying dock, the genie, grey back-window buttons). The 8 inch HDMI screen for the Nimbus case.
 
 **Next, in order.**
-1. Let CI finish on #693. Merge it the moment it is green, alone, and only after the branch is up to date.
-2. Whatever the board pass shows is broken. Fix it on a new branch and merge that next.
-3. The items above that wait on his word.
-4. After any split, the Lessons entries under "Splitting a file", and a `make clean && make` before the push.
-
-**Splitting a file.** Five traps turned up, each now a Lessons entry in `docs/ARCHITECTURE.md`: a macro one part defines and another tests, a static copied into two parts, an `#ifndef` default copied without its guard, dead globals shadowed by a macro of the same name, and a generated header the Makefile only tied to the old object.
+1. Merge #695 on green, then this roadmap PR, then push `genie`, `landing-wall` and `buttons` one PR at a time, each rebased on main.
+2. 7.0, Online: the steps under Next priorities, top down, starting with the full root list.
+3. Whatever the board pass shows is broken.
 
 Restart prompt:
 
 ```
-/loop to the next major (6.0), semver; goal: 0 GitHub issues, 0 stale branches, all PRs merged safely. Use roadmap and loop pickup
+/loop until v10
 ```
 
 Rules kept:
@@ -2003,7 +2023,7 @@ Rules kept:
 - Generated files (VERSION, landing/*) take main's side in a merge and are regenerated.
 - No keys on the public card. Flash only the dev card, and only when Joshua says it is in.
 - Every X.0.0 ships a refreshed logo and UI.
-- Leave the `logo-6` branch and its worktree alone until #693 is merged or closed.
+- No number in landing or ad copy without a source (the $35 Pi price was wrong).
 
 ## Samantha reset postmortem
 
