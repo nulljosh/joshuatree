@@ -190,9 +190,8 @@ Worth doing, not yet re-checked, in the order the study ranked them:
   - The relay stays the default when the Mac answers. The local model answers when it does not.
   - Check: `tools/checks/arm64-llm-check.py` extended to the real model's tokenizer and a fixed prompt.
 
-- [ ] [Sonnet] Dock shading and magnification, like the Mac.
-  - The tray's shadow is a hard dark band under its bottom edge on the Pi (photo 2026-10-12). It should be a soft falloff that fades over 10 to 14 px. Each tile's drop shadow should do the same.
-  - Then Settings rows for dock size and hover magnification (off, small, large). The hovered tile and its two neighbours grow smoothly.
+- [ ] [Sonnet] Dock magnification, like the Mac. (The soft tray shadow is done: `gui_draw_dock_tray` in `kernel/gui_paint.c` fades it over `DOCK_SHADOW_REACH` on both desktops, `dockband-check.py`.)
+  - Settings rows for hover magnification (off, small, large); dock size already has a row. The hovered tile and its two neighbours grow smoothly.
   - Share `kernel/dock_draw.c` so both desktops match.
   - Check: `tools/checks/arm64-m1c-check.py` samples the shadow gradient, and a dock-magnify check reads the hovered tile's size.
 
@@ -711,7 +710,6 @@ The Mac apps and menu bar pieces this OS still lacks, listed so they can be pick
 ## Tests and the loop
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck. See the Loop handoff section for what's merging right now.
 
-- [ ] [Sonnet] Notes repaints its whole buffer on every key. `tools/checks/editorflash-check.sh` still counts the old in-kernel `editorchrome` marker, which ring-3 Notes never writes. The work: repaint only the text area on plain keys, draw the chrome once, and assert the present counts. Not done in the 2.0.0 CI slice.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
 - [ ] [Sonnet] Boot splash shows the real engraved tree mark at full resolution, not the stick tree.
 - [ ] [Fable] Typography QA across Notes, the document app and the Terminal: spacing between letters, baselines, sizes and weights, every printable character, long lines, wrapping, selection. This kernel is a word processor from scratch, so text gets its own checks.
