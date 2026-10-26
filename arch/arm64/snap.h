@@ -15,4 +15,10 @@ int snap_take(unsigned *id, unsigned *files, unsigned *skipped);
 int snap_list(void (*cb)(unsigned id, const char *info));
 /* 1 restored, 0 the card refused, -1 no card, -2 nobody signed in, -3 no such snapshot. Small files the snapshot lacks are removed. */
 int snap_restore(unsigned id, unsigned *files, unsigned *skipped);
+/* backup (5.2.0): the same walk as a snapshot, packed for the relay to keep on the Mac. The container is "JTB1", then per file
+   one byte of path length, the path (8.3 names joined by /), four bytes of size (little end first) and the bytes. Same limits
+   as a snapshot, plus BACKUP_MAX for the whole: a file that would pass it is skipped and counted. 1 packed, 0 the card refused,
+   -1 no card, -2 nobody is signed in. */
+#define BACKUP_MAX (512u * 1024u)
+int snap_pack(unsigned char *out, unsigned cap, unsigned *len, unsigned *files, unsigned *skipped);
 #endif

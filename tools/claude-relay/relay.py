@@ -389,6 +389,70 @@ def run_tts(cfg, usage, text):
     return pcm
 
 
+# Backups (5.2.0): the Pi's `backup` sends its signed-in person's home folder as one container (arch/arm64/snap.h snap_pack):
+# "JTB1", then per file a byte of path length, the path (8.3 names joined by /), four bytes of size, little end first, and
+# the bytes. The relay keeps it only when started with --backup-dir. The body is network input that writes files on this
+# Mac, so every name is checked before anything is written, the files land in a temporary folder inside the backup folder
+# and that folder is renamed into place only once all of them are written: a cut-off request leaves nothing behind.
+BACKUP_MAX_BODY = 600 * 1024
+BACKUP_FILE_MAX = 32768
+BACKUP_FILES_MAX = 4000
+BACKUP_DEPTH_MAX = 8
+BACKUP_USER_RE = re.compile(r"[a-z0-9_-]{1,24}")
+BACKUP_NAME_RE = re.compile(r"[A-Za-z0-9_~-]{1,8}(\.[A-Za-z0-9_~-]{1,3})?")
+
+
+def backup_unpack(raw):
+    """[(parts, bytes)] from a container, or ValueError with the reason in plain words."""
+    if raw[:4] != b"JTB1": raise ValueError("That is not a Joshua Tree backup.")
+    files, seen, i = [], set(), 4
+    while i < len(raw):
+        if len(files) >= BACKUP_FILES_MAX: raise ValueError("Too many files.")
+        plen = raw[i]; i += 1
+        if plen == 0 or i + plen + 4 > len(raw): raise ValueError("The backup is cut short.")
+        try: path = raw[i:i + plen].decode("ascii")
+        except UnicodeDecodeError: raise ValueError("A file name is not plain ASCII.")
+        i += plen
+        parts = path.split("/")
+        if len(parts) > BACKUP_DEPTH_MAX: raise ValueError("A folder is nested too deep.")
+        if not all(BACKUP_NAME_RE.fullmatch(c) for c in parts): raise ValueError("A file name is not an 8.3 name.")
+        size = int.from_bytes(raw[i:i + 4], "little"); i += 4
+        if size > BACKUP_FILE_MAX or i + size > len(raw): raise ValueError("A file is too big or cut short.")
+        key = tuple(c.upper() for c in parts)
+        if key in seen or any(key[:k] in seen for k in range(1, len(key))): raise ValueError("A file name repeats.")
+        seen.add(key)
+        files.append((parts, raw[i:i + size])); i += size
+    if any(f[:k] in seen for f in seen for k in range(1, len(f))): raise ValueError("A file name repeats.")
+    return files
+
+
+def backup_write(root, user, files):
+    """Write the files to root/user/<time>/ through a temporary folder; returns (files, bytes, that folder's name)."""
+    import shutil
+    root = os.path.realpath(root)
+    home = os.path.join(root, user)
+    os.makedirs(home, mode=0o700, exist_ok=True)
+    if os.path.realpath(home) != home: raise ValueError("The backup folder for that name is not a plain folder.")
+    run = time.strftime("%Y-%m-%d-%H%M%S")
+    tmp = os.path.join(home, ".incoming-%s-%d" % (run, threading.get_ident()))
+    os.mkdir(tmp, 0o700)
+    try:
+        total = 0
+        for parts, data in files:
+            target = os.path.join(tmp, *parts)
+            if not os.path.realpath(target).startswith(tmp + os.sep): raise ValueError("A file name leaves the backup folder.")
+            os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
+            with open(target, "xb") as f: f.write(data)
+            total += len(data)
+        final, k = os.path.join(home, run), 2
+        while os.path.exists(final): final = os.path.join(home, "%s-%d" % (run, k)); k += 1
+        os.rename(tmp, final)
+        return len(files), total, os.path.basename(final)
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+
+
 class Relay:
     def __init__(self, cfg, token):
         self.cfg = cfg
@@ -472,6 +536,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.close_connection = True
         self.log_line(200, nin, len(data), t0)
 
+    def backup(self, raw, query, n, t0):
+        q = urllib.parse.parse_qs(query, keep_blank_values=True)
+        user = q.get("user", [""])[0]
+        if set(q) != {"user"} or len(q["user"]) != 1 or not BACKUP_USER_RE.fullmatch(user): return self.reply(400, "Say whose backup it is.", n, t0)
+        if len(raw) != n: return self.reply(400, "The backup is cut short.", n, t0)
+        try:
+            files = backup_unpack(raw)
+            count, total, folder = backup_write(self.relay.cfg.backup_dir, user, files)
+        except ValueError as e: return self.reply(400, str(e), n, t0)
+        except OSError: return self.reply(500, "The Mac could not write the backup.", n, t0)
+        return self.reply(200, "%d file%s, %d bytes, kept on the Mac in %s/%s" % (count, "" if count == 1 else "s", total, user, folder), n, t0)
+
     def tts(self, raw, ctype, n, t0):
         r = self.relay
         if ctype == "application/json":
@@ -495,7 +571,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         t0 = time.time()
         r = self.relay
-        if self.path not in ("/api/claude", "/api/tts"): return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
+        route, _, query = self.path.partition("?")
+        if route not in ("/api/claude", "/api/tts", "/api/backup"): return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
+        if route == "/api/backup" and not r.cfg.backup_dir: return self.reply(404, "This relay keeps no backups. Start it with --backup-dir FOLDER.", 0, t0)
+        if route != "/api/backup" and query: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
         auth = self.headers.get("Authorization", "")
         given = auth[7:].strip().encode() if auth.startswith("Bearer ") else b""
         if not hmac.compare_digest(given, r.token): return self.reply(401, "Wrong or missing relay token.", 0, t0)  # TOKEN-CHECK
@@ -503,10 +582,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try: n = int(self.headers.get("Content-Length", ""))
         except ValueError: return self.reply(411, "Send a Content-Length.", 0, t0)
         if n < 0: return self.reply(400, "Bad length.", 0, t0)
-        if n > r.cfg.max_body: return self.reply(413, "That prompt is too long for the relay.", n, t0)
+        if n > (BACKUP_MAX_BODY if route == "/api/backup" else r.cfg.max_body): return self.reply(413, "That prompt is too long for the relay.", n, t0)
         raw = self.rfile.read(n)
+        if route == "/api/backup": return self.backup(raw, query, n, t0)
         ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
-        if self.path == "/api/tts": return self.tts(raw, ctype, n, t0)
+        if route == "/api/tts": return self.tts(raw, ctype, n, t0)
         session = ""
         model, effort = "auto", "medium"
         if ctype == "application/json":
@@ -590,6 +670,7 @@ def main(argv=None):
     ap.add_argument("--tts-daily-chars", type=int, default=5000, help="most characters per local day, kept across restarts")
     ap.add_argument("--tts-usage-file", default=TTS_DEFAULT_USAGE_FILE, help="where the day's character count is kept")
     ap.add_argument("--tts-base", default=TTS_DEFAULT_BASE, help="ElevenLabs base URL (tests point it at a loopback stub)")
+    ap.add_argument("--backup-dir", default="", help="keep the Pi's `backup` uploads here, one folder per person and time (off when unset)")
     ap.add_argument("--tools", default=",".join(READ_ONLY_TOOLS),
                     help="comma-separated built-in tools (default Read,Grep,Glob: read-only)")
     args = ap.parse_args(argv)
@@ -611,6 +692,9 @@ def main(argv=None):
         context.load_cert_chain(os.path.expanduser(args.tls_cert), os.path.expanduser(args.tls_key))
     args.tools = [t for t in args.tools.split(",") if t]
     args.cwd = os.path.abspath(os.path.expanduser(args.cwd))
+    if args.backup_dir:
+        args.backup_dir = os.path.abspath(os.path.expanduser(args.backup_dir))
+        os.makedirs(args.backup_dir, mode=0o700, exist_ok=True)
     token = read_token(args)
     if any(t not in READ_ONLY_TOOLS for t in args.tools):
         sys.stderr.write("claude-relay: WARNING tools %s are not read-only. Claude can change files or run "

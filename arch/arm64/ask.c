@@ -32,6 +32,7 @@
 #include "accounts.h"
 #include "login.h"
 #include "home.h"
+#include "snap.h"
 int sudo_may_write(void);   /* sudo.c: no accounts, or the signed-in user is an admin */
 #include "../../drivers/fat.h"
 #ifdef CLAUDE_RELEASE        /* a Pi release image: no token, so the Console says `claude: no token` (the Makefile sets it) */
@@ -672,7 +673,9 @@ done:
 }
 
 static int relay_post_tls_to(const char *path, const char *body, unsigned body_len, const char *token, char *reply, unsigned reply_max, int *status) {
-    static char req[2 * RESULT_MAX + 640 + sizeof(RELAY_NAME)];   /* +128 for the plugin rows in the pi field */
+    static char req_s[2 * RESULT_MAX + 640 + sizeof(RELAY_NAME)];   /* +128 for the plugin rows in the pi field */
+    char *req = req_s;   /* a backup's body is bigger: the caller's heap mark gives this back */
+    if (body_len + 512 + sizeof(RELAY_NAME) > sizeof req_s && !(req = kmalloc(body_len + 512 + sizeof(RELAY_NAME)))) return -1;
     char digits[10]; unsigned n = 0, dn = 0, v = body_len;
     *status = 0;
     if (relay_open() < 0) return -1;          /* nothing sent: the token stays home */
@@ -700,6 +703,51 @@ static int relay_post_tls(const char *body, unsigned body_len, const char *token
     return relay_post_tls_to("/api/claude", body, body_len, token, reply, REPLY_MAX, status);
 }
 #endif
+
+/* backup (5.2.0): the signed-in person's home folder, packed by snap.c into one container, sent to the relay's /api/backup in one
+   request with the bearer token. The relay keeps it on the Mac only when it was started with --backup-dir, and answers in one
+   line ("N files, M bytes in FOLDER") or says why not. */
+void backup_command(void) {
+    if (!CLAUDE_TOKEN_LEN) { kputs("backup: this card has no relay token, so there is no Mac to send to\n"); return; }
+    if (!net_get_gateway()) { kputs("backup: no network\n"); return; }
+    unsigned long mark = heap_mark();
+    unsigned char *box = kmalloc(BACKUP_MAX);
+    char *reply = kmalloc(512);
+    unsigned len = 0, files = 0, skipped = 0;
+    int r = box && reply ? snap_pack(box, BACKUP_MAX, &len, &files, &skipped) : -9;
+    if (r <= 0) {
+        kputs(r == -9 ? "backup: out of memory\n" : r == -1 ? "backup: no SD card\n" : r == -2 ? "backup: nobody is signed in, so there is no home folder\n" : "backup: the card would not read\n");
+        heap_release(mark); return;
+    }
+    char path[48] = "/api/backup?user="; unsigned p = 17;
+    for (unsigned k = 0; current_user[k] && k < ACC_NAME_MAX && p + 1 < sizeof path; k++) path[p++] = current_user[k];
+    path[p] = 0;
+    kputs("backup: sending "); kdec(files); kputs(files == 1 ? " file to the Mac\n" : " files to the Mac\n");
+    static char token[64];
+    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
+    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    int status;
+#if defined(PI_BUILD) || CLAUDE_TLS
+    int got = relay_post_tls_to(path, (const char *)box, len, token, reply, 400, &status);
+#else
+    http_post_set_bearer(token);
+    int got = http_post_timeout(CLAUDE_HOST, path, CLAUDE_PORT, (const char *)box, len, reply, 400, ASK_TICKS);
+    http_post_set_bearer(0);
+    status = http_last_status();
+#endif
+    for (int i = 0; i < 64; i++) token[i] = 0;
+    char line[420]; unsigned o = 0;
+    for (int i = 0; got > 0 && i < got && o + 1 < sizeof line; i++) line[o++] = reply[i] == '\n' ? ' ' : reply[i];
+    while (o && line[o - 1] == ' ') o--;
+    line[o] = 0;
+    heap_release(mark);
+    if (got < 0) kputs("backup: the relay on the Mac did not answer\n");
+    else if (status == 200) { kputs("backup: "); kputs(line); kputs("\n"); }
+    else if (status == 404) kputs("backup: the relay on the Mac does not keep backups; start it with --backup-dir FOLDER\n");
+    else if (status == 401) kputs("backup: the relay refused this card's token\n");
+    else { kputs("backup: the relay said no: "); kputs(line); kputs("\n"); }
+    if (status == 200 && skipped) { kputs("backup: "); kdec(skipped); kputs(" left out (over 32 KB, too deep, or past the 512 KB total)\n"); }
+}
 
 static void no_answer(void) {   /* "sam: no answer in 30s (relay at a.b.c.d)": the prompt comes back, the busy flag clears in sam_run */
     kputs("sam: no answer in "); kdec(ASK_SECS); kputs("s (relay at ");

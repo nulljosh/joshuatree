@@ -16,7 +16,8 @@
 void kputs(const char *s);   /* main.c: the UART and the log of the window in front */
 void say_wrapped(const char *prefix, const char *s, unsigned n);   /* ask.c */
 int browse_command(const char *q, unsigned n);                     /* browser.c */
-int nimble_command(const char *q, unsigned n);                     /* nimble.c: `nimble QUESTION` */
+int nimble_command(const char *q, unsigned n);
+void backup_command(void);                                         /* ask.c: `backup`, the home folder to the relay on the Mac */                     /* nimble.c: `nimble QUESTION` */
 int ask_command(const char *q, unsigned n);                        /* ask.c: "stop" and the /model, /effort, /status, /clear, /help commands */
 void ask_claude(const char *q, unsigned n);                        /* ask.c: `llm PROMPT` */
 void sam_command(const char *q, unsigned n);                       /* ask.c: `sam QUESTION`, queued and answered without blocking the prompt */
@@ -41,7 +42,7 @@ void power_run(int off);                                   /* main.c: the confir
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
-                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), reboot, shutdown, help.";
+                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;
@@ -552,6 +553,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (word_is(q, n, "passwd") || is(q, n, "passwd")) { passwd_command(q + 6 + (n > 6), n > 6 ? n - 7 : 0); return; }
     if (word_is(q, n, "makeadmin") || is(q, n, "makeadmin")) { admin_command(q + 9 + (n > 9), n > 9 ? n - 10 : 0, 1); return; }
     if (word_is(q, n, "unadmin") || is(q, n, "unadmin")) { admin_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 0); return; }
+    if (word_is(q, n, "backup")) { backup_command(); return; }
     if (word_is(q, n, "boottime")) { const char *boot_stamps(void); const char *t = boot_stamps(); cmd_out(*t ? t : "boottime: no key yet and no slow step\n"); return; }   /* boot.c: the dead first seconds, timed */
     if (word_is(q, n, "logout")) { if (accounts_count()) { cmd_out("logout: signing out\n"); logout_request(); } else cmd_out("logout: no accounts, nobody to sign out\n"); return; }
     if (word_is(q, n, "adduser") || is(q, n, "adduser")) { account_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 0); return; }

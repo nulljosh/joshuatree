@@ -160,6 +160,53 @@ static unsigned list_ids(unsigned snaps, unsigned *ids, unsigned cap, int only_d
     return m;
 }
 
+static unsigned char *pk; static unsigned pk_n, pk_cap;
+static int pack_tree(unsigned src, char *path, unsigned plen, int depth, int top) {   /* 1 all went in or was counted, 0 a read went wrong mid-walk */
+    struct ent list[SNAP_LIST_MAX];
+    unsigned n = collect(src, list);
+    n_skipped += col_over;
+    for (unsigned i = 0; i < n; i++) {
+        if (top_skip(top, list[i].name)) continue;
+        unsigned k = plen, nl = 0;
+        while (list[i].name[nl]) nl++;
+        if (plen + 1 + nl > 120) { n_skipped++; continue; }
+        if (plen) path[k++] = '/';
+        for (unsigned c = 0; c < nl; c++) path[k++] = list[i].name[c];
+        path[k] = 0;
+        if (list[i].dir) {
+            unsigned s = sub_of(src, list[i].name);
+            if (!s || depth >= DEPTH_MAX) n_skipped++;
+            else if (!pack_tree(s, path, k, depth + 1, 0)) return 0;
+        } else {
+            unsigned need = 1 + k + 4 + list[i].size;
+            if (list[i].size > SNAP_FILE_MAX || pk_n + need > pk_cap) { n_skipped++; path[plen] = 0; continue; }
+            fat_cwd_set(src);
+            int got = fat_read_file(list[i].name, buf, sizeof buf);
+            if (got < 0 || (unsigned)got != list[i].size) { n_skipped++; path[plen] = 0; continue; }
+            pk[pk_n++] = (unsigned char)k;
+            for (unsigned c = 0; c < k; c++) pk[pk_n++] = (unsigned char)path[c];
+            for (unsigned b = 0; b < 4; b++) pk[pk_n++] = (unsigned char)((unsigned)got >> (8 * b));
+            for (int c = 0; c < got; c++) pk[pk_n++] = (unsigned char)buf[c];
+            n_files++; n_bytes += (unsigned)got;
+        }
+        path[plen] = 0;
+    }
+    return 1;
+}
+int snap_pack(unsigned char *out, unsigned cap, unsigned *len, unsigned *files, unsigned *skipped) {
+    unsigned home, snaps;
+    int r = ready(&home, &snaps, 0);
+    if (r <= 0) return r;
+    if (cap < 4) { fat_cwd_set(0); return 0; }
+    pk = out; pk_cap = cap; pk_n = 0;
+    for (const char *m = "JTB1"; *m; m++) pk[pk_n++] = (unsigned char)*m;
+    n_files = n_bytes = n_skipped = 0;
+    char path[128]; path[0] = 0;
+    int ok = pack_tree(home, path, 0, 0, 1);
+    fat_cwd_set(0);
+    *len = pk_n; *files = n_files; *skipped = n_skipped;
+    return ok;
+}
 int snap_take(unsigned *id, unsigned *files, unsigned *skipped) {
     unsigned home, snaps, ids[SNAP_LIST_MAX], all[SNAP_LIST_MAX];
     int r = ready(&home, &snaps, 1);
