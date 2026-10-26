@@ -70,6 +70,10 @@ def capsule(img, slot):
     cx, ly = x0 + 10 + slot * (icon + 6) + icon // 2, y0 - 21
     return [px(img, (cx + d) * s, (ly + 1) * s) for d in range(-10, 11, 2)]
 LABEL = (0xf4, 0xf1, 0xec)
+def has_label(img, slot):   # 6.3.0: the tile under the pointer grows, and its label rides up with it, so look from the plain spot upward
+    w, h, _ = img; s, icon, x0, y0 = geom(w, h)
+    cx = x0 + 10 + slot * (icon + 6) + icon // 2
+    return any(all(px(img, (cx + d) * s, (ly + 1) * s) == LABEL for d in range(-10, 11, 2)) for ly in range(y0 - 21, y0 - 21 - icon, -1))
 
 tmp = tempfile.mkdtemp()
 log, sock = tmp + "/uart", tmp + "/qmp"
@@ -125,7 +129,7 @@ try:
             if b < 25 + b0 or wh < 15: fails.append(f"no arrow at the pointer over slot 3: {b} black (boot screen {b0}), {wh} white pixels")
             else: print(f"  ok: the arrow is drawn at {cx},{cy}: {b} black body, {wh} white outline pixels")
             cap = capsule(img, 3)
-            if any(c != LABEL for c in cap): fails.append(f"no hover label capsule over slot 3 when the pointer is on it: {cap}")
+            if not has_label(img, 3): fails.append(f"no hover label capsule over slot 3 when the pointer is on it: {cap}")
             else: print("  ok: the hover label follows the pointer onto slot 3 (Calendar)")
         # off the dock, onto bare wallpaper right of the window: label gone, the band exactly as at boot, arrow at the new spot
         ox, oy = W - 60, H // 3
@@ -229,7 +233,7 @@ if "raspi4b" in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capt
                     cx, cy = slot_centre(1920, 1080, 3)
                     b, wh = arrow(img, cx, cy, 2)
                     if b < 100 or wh < 60: fails.append(f"pi 1080p: no scale-2 arrow over slot 3 ({b} black, {wh} white pixels)")
-                    elif any(c != LABEL for c in capsule(img, 3)): fails.append("pi 1080p: no hover label under the arrow over slot 3")
+                    elif not has_label(img, 3): fails.append("pi 1080p: no hover label under the arrow over slot 3")
                     else: print(f"  ok: pi 1080p, the arrow at scale 2 ({b} black, {wh} white pixels) with the label over slot 3")
         finally:
             q.kill(); q.wait()

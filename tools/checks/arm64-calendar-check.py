@@ -152,7 +152,9 @@ try:
     check("the window wears the Calculator's frame: its red dot, and the content inside the screen", px(a, fx + 19, fy + 16) == RED and fx + fw <= W and fy + fh <= dock_y0, (fx, fy, fw, fh))
     title, tx, tw = ink_mask(a, fx + 80, fy + 4, fw - 100, 22)
     lx = slot_centre(3)[0]
-    label, _, lw = ink_mask(a, lx - 38, dock_y0 - 22, 76, 19)   # the dock's hover label, "Calendar", the pointer is on its tile
+    grow = re.findall(r"dock magnify 3 size (\d+) of (\d+)", uart())   # 6.3.0: the tile under the pointer is magnified, its label rides above it
+    up = int(grow[-1][0]) - int(grow[-1][1]) if grow else 0
+    label, _, lw = ink_mask(a, lx - 38, dock_y0 - 22 - (up - 8 if up else 0), 76, 19)   # the dock's hover label, "Calendar", the pointer is on its tile (raised by the growth)
     same = len(title ^ label) <= max(4, len(label) // 20)
     check("the title is Calendar: its ink is the dock label's word pixel for pixel (%d of %d differ), centred in the frame" % (len(title ^ label), len(label)),
           label and same and abs(tx + tw / 2 - (fx + fw / 2)) <= 2, (tw, lw, tx, fx))

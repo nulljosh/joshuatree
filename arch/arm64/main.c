@@ -729,7 +729,7 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
     app_frame.elr = entry; app_sp = UB + UP_ASTACK + APP_STACK_PAGES * 4096UL;
-    app_cur = a; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
+    app_cur = a; ap->min = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
     uart_puts("M3c app "); uart_puts(a->name); uart_puts(" starts\n");
     return 0;
 }

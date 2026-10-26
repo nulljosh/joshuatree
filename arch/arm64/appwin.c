@@ -1,6 +1,7 @@
 /* appwin.c: cut out of main.c (the god-file split). An EL0 app's window: its frame and title, its buffer blitted in, and its events queued. Built as part of main.o (the Makefile's MAINSRC) with
    main.c's own flags; what it shares with main.c is declared in kmain.h. */
 #include "kmain.h"
+#include "../../lib/ease.h"
 /* ---- M3c part 2: an EL0 app's window. The Calculator's frame and title (the app's name), placed like it over the right of
    the Console, but as tall as fits between the menu bar and the dock: calendar.c's month grid needs about 320 rows. The app
    draws into its own buffer, app_cw by app_ch pixels at UP_WIN in its address space, and JT_SYS_WINDOW_POLL with
@@ -44,6 +45,7 @@ static void app_blit(void) {
     }
 }
 void app_paint(void) {   /* the frame, then the last frame the app presented */
+    if (ap->min) return;   /* 6.5.0: a minimized window draws nothing until the dock brings it back */
     char t[16]; unsigned n = 0;
     for (const char *p = app_cur ? app_cur->name : "app"; *p && n < sizeof t - 1; p++, n++) t[n] = n ? *p : (char)(*p & ~32);   /* "calendar" is titled Calendar */
     t[n] = 0;
@@ -62,8 +64,10 @@ static void app_repaint_all(void) {   /* every app window, back to front: what a
     for (int z = (int)app_zn - 1; z >= 0; z--) { ap = &apps[app_z[z]]; app_paint(); }
     ap = keep;
 }
+static void app_unminimize(void);
 void app_raise(void) {   /* this app's window in front of the Console, the Terminal and the other apps, with the keys */
     if (!app_wbytes) return;
+    if (ap->min) { app_unminimize(); return; }
     int was = app_front && app_top == (int)ap->slot;
     app_front = 1;
     app_z_front(ap->slot);
@@ -160,6 +164,7 @@ long app_window_poll(unsigned long ev, unsigned long flags) {
 }
 void app_window_close(void) {
     if (!app_wbytes) return;
+    if (ap->min) { ap->min = 0; app_shown = 0; return; }   /* 6.5.0: minimized, so nothing of it is on screen and it is out of the z order already */
     cur_hide();
     wall_vacate(app_lx, app_ly, app_lw, app_lh, 0);   /* the frame and a ring round it: anything that overhung the frame goes too */
     app_shown = 0;
@@ -196,4 +201,121 @@ int app_dock(const char *name) {
         return 1;
     }
     return 0;
+}
+
+/* 6.5.0: minimize into the dock with the genie (the Mac OS X 2000 introduction). The yellow dot takes the front app's window
+   off the screen and out of the z order while the app keeps running (its dock dot stays lit); its dock tile, Spotlight or
+   the Launchpad bring it back the same way in reverse. The genie: over GENIE_MS on lib/ease.h's curve, the window's rows
+   pinch toward the tile, the nearer the dock the narrower, while its bottom stretches down to the tile (the first 45
+   percent); then the top slides down after it. Each frame puts back the desktop under the whole path from a copy and draws
+   the window's snapshot warped on top, all in the back buffer, one copy to the screen per frame. Out of memory for the two
+   copies, it minimizes without the animation. */
+#define GENIE_MS 400
+static int genie_slot(void) {   /* the app's own dock tile, else the last before the Trash, where a Mac keeps minimized windows */
+    for (int k = 1; k < GUI_ICON_COUNT - 1; k++) {
+        const char *n = dock_app_name(k), *a = app_cur->name; unsigned i = 0;
+        while (n[i] && (n[i] | 32) == a[i]) i++;
+        if (!n[i] && !a[i]) return k;
+    }
+    return GUI_ICON_COUNT - 2;
+}
+static unsigned genie_frames;
+static void genie_run(const unsigned *snap, const unsigned *bg, int out) {   /* out: window to tile; else tile to window */
+    int s = (int)window_scale(), X0 = app_lx * s, Y0 = app_ly * s, W = app_lw * s, H = app_lh * s;
+    int k = genie_slot(), TL = gui_slot_x(k) * s, TW = DOCK_ICON * s, TT = (gui_dock_y0() + DOCK_PAD) * s, TB = TT + TW;
+    int bx0 = X0 < TL ? X0 : TL, bx1 = X0 + W > TL + TW ? X0 + W : TL + TW, by0 = Y0, by1 = TB > (int)fb_h ? (int)fb_h : TB;
+    if (bx0 < 0) bx0 = 0;
+    if (bx1 > (int)fb_w) bx1 = (int)fb_w;
+    int bw = bx1 - bx0;
+    unsigned long f = cnt_hz() / 1000, t0 = cnt_now();
+    int held = fb_defer; fb_defer = 0;   /* each frame goes to the screen now, even inside a click handler's hold (it would show only the last) */
+    genie_frames = 0;
+    for (;;) {
+        unsigned long e = (cnt_now() - t0) / (f ? f : 1);
+        int lin = e >= GENIE_MS ? 1000 : (int)(e * 1000 / GENIE_MS), p = out ? ease_out(lin) : 1000 - ease_out(lin);
+        int s1 = p >= 450 ? 1000 : p * 1000 / 450, s2 = p <= 350 ? 0 : (p - 350) * 1000 / 650;
+        int top = Y0 + (TT - Y0) * s2 / 1000, bot = Y0 + H + (TB - Y0 - H) * s1 / 1000;
+        for (int y = by0; y < by1; y++) for (int x = bx0; x < bx1; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = bg[(unsigned)(y - by0) * (unsigned)bw + (unsigned)(x - bx0)];
+        if (bot > top) for (int y = top; y < bot && y < by1; y++) {
+            int u = (y - Y0) * 1000 / (TB - Y0), sm = u * u / 1000 * (3000 - 2 * u) / 1000;   /* smoothstep: the pinch grows toward the dock */
+            int pin = sm * s1 / 1000, fr = pin + s2 * (1000 - pin) / 1000;
+            int l = X0 + (TL - X0) * fr / 1000, r = X0 + W + (TL + TW - X0 - W) * fr / 1000, sy = (y - top) * H / (bot - top);
+            if (r <= l || sy < 0 || sy >= H) continue;
+            for (int x = l < bx0 ? bx0 : l; x < r && x < bx1; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = snap[(unsigned)sy * (unsigned)W + (unsigned)((x - l) * W / (r - l))];
+        }
+        fb_flush(bx0, by0, bw, by1 - by0);
+        genie_frames++;
+        if (e >= GENIE_MS) break;
+    }
+    /* the desktop back exactly under the path; the caller draws the window, if it is coming back */
+    for (int y = by0; y < by1; y++) for (int x = bx0; x < bx1; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = bg[(unsigned)(y - by0) * (unsigned)bw + (unsigned)(x - bx0)];
+    fb_flush(bx0, by0, bw, by1 - by0);
+    fb_defer = held;
+}
+static unsigned *genie_copy(int x0, int y0, int w, int h) {   /* a rectangle of the back buffer, physical pixels */
+    if (x0 < 0) { w += x0; x0 = 0; }
+    if (x0 + w > (int)fb_w) w = (int)fb_w - x0;
+    if (y0 + h > (int)fb_h) h = (int)fb_h - y0;
+    if (w <= 0 || h <= 0) return 0;
+    unsigned *c = kmalloc((unsigned)(w * h) * 4);
+    if (c) for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) c[(unsigned)(y * w + x)] = fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)];
+    return c;
+}
+static void genie_bbox(int *x0, int *y0, int *w, int *h) {
+    int s = (int)window_scale(), k = genie_slot(), TL = gui_slot_x(k) * s, TW = DOCK_ICON * s, TB = (gui_dock_y0() + DOCK_PAD) * s + TW;
+    int a = app_lx * s < TL ? app_lx * s : TL, b = (app_lx + app_lw) * s > TL + TW ? (app_lx + app_lw) * s : TL + TW;
+    *x0 = a; *y0 = app_ly * s; *w = b - a; *h = TB - app_ly * s;
+}
+static void genie_say(const char *what) {
+    con_quiet = 1; uart_puts("app "); uart_puts(what); uart_putc(' '); uart_puts(app_cur->name);
+    uart_puts(", genie "); uart_dec(genie_frames); uart_puts(" frames\n");
+}
+void app_minimize(void) {
+    if (!app_wbytes || ap->min) return;
+    struct app *me = ap;
+    int s = (int)window_scale(), x0, y0, w, h;
+    unsigned long mark = heap_mark();
+    cur_hide();
+    unsigned *snap = genie_copy(app_lx * s, app_ly * s, app_lw * s, app_lh * s);
+    fb_hold();   /* the window leaves the back buffer; the screen still shows it until the genie's first frame */
+    wall_vacate(app_lx, app_ly, app_lw, app_lh, 0);
+    me->min = 1;
+    app_z_drop(me->slot);
+    app_top = app_zn ? (int)app_z[0] : -1;
+    app_front = app_top >= 0;
+    if (app_front) { ap = &apps[app_top]; app_repaint_all(); }
+    else if (con_live) { wall_vacate(win_lx, win_ly, win_lw, win_lh, 0); con_live = 0; pane_open(cp); }
+    struct app *front = ap; ap = me;
+    genie_bbox(&x0, &y0, &w, &h);
+    unsigned *bg = snap ? genie_copy(x0, y0, w, h) : 0;
+    int go = snap && bg && x0 >= 0 && x0 + w <= (int)fb_w, X = app_lx * s, Y = app_ly * s, W = app_lw * s, H = app_lh * s;
+    if (go) for (int y = 0; y < H && Y + y < (int)fb_h; y++) for (int x = 0; x < W && X + x < (int)fb_w; x++) fb[(unsigned)(Y + y) * fb_pitch + (unsigned)(X + x)] = snap[(unsigned)(y * W + x)];
+    fb_release();   /* the window is back in the buffer as it was on screen, so this copy changes nothing; nested holds would swallow the frames */
+    genie_frames = 0;
+    if (go) genie_run(snap, bg, 1);
+    heap_release(mark);
+    genie_say("minimize");
+    ap = front;
+    cur_show();
+}
+static void app_unminimize(void) {
+    int s = (int)window_scale(), x0, y0, w, h;
+    unsigned long mark = heap_mark();
+    cur_hide();
+    genie_bbox(&x0, &y0, &w, &h);
+    fb_hold();   /* the window drawn once into the back buffer for its snapshot, then taken out again, before any copy to the screen */
+    unsigned *bg = genie_copy(x0, y0, w, h);
+    ap->min = 0;
+    app_paint();
+    unsigned *snap = bg ? genie_copy(app_lx * s, app_ly * s, app_lw * s, app_lh * s) : 0;
+    if (bg) for (int y = 0; y < h && y0 + y < (int)fb_h; y++) for (int x = 0; x < w; x++) fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)] = bg[(unsigned)(y * w + x)];
+    fb_release();   /* the buffer is the screen again: nothing visible changed */
+    genie_frames = 0;
+    if (snap && bg && x0 >= 0 && x0 + w <= (int)fb_w) genie_run(snap, bg, 0);
+    heap_release(mark);
+    app_front = 1;
+    app_z_front(ap->slot);
+    app_repaint_all();
+    genie_say("restore");
+    cur_show();
 }
