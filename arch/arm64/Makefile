@@ -36,8 +36,8 @@ NETPORT ?= 0
 # The IP stack is the i386 kernel's own drivers/net.c and drivers/http.c, built against drivers/nic.h (-DNET_NIC)
 # instead of the PC network cards. -mstrict-align: a real board's firmware may leave alignment checks on.
 NETCC = $(CC) -DNET_NIC -mstrict-align -I../../drivers -I../../kernel
-NETOBJ = rng.o net.o http.o ip.o clock.o tls.o browser.o mail.o nimble.o $(BSSLOBJ)
-NETLD = rng.o net.o http.o ip.o clock.o tls.o browser.o mail.o nimble.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
+NETOBJ = rng.o net.o http.o ip.o clock.o tls.o browser.o mail.o ics.o nimble.o $(BSSLOBJ)
+NETLD = rng.o net.o http.o ip.o clock.o tls.o browser.o mail.o ics.o nimble.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
 all: kernel8.elf
 rng.o: rng.c rng.h
 	$(CC) -c $< -o $@
@@ -75,6 +75,8 @@ nimble.o: nimble.c tls.h ../../drivers/net.h ../../drivers/http.h FORCE
 browser.o: browser.c tls.h ../../drivers/net.h ../../drivers/http.h
 	$(NETCC) -c $< -o $@
 mail.o: mail.c tls.h ../../drivers/http.h   # 6.18.0: IMAP over TLS
+	$(NETCC) -c $< -o $@
+ics.o: ics.c   # 6.19.0: calendar subscriptions
 	$(NETCC) -c $< -o $@
 tls.o: tls.c rng.h tls.h tls_ta.h ../../drivers/net.h ../../drivers/http.h
 	$(NETCC) -I$(BSSL)/inc -I$(BSSL)/shim -I../../lib -c tls.c -o $@

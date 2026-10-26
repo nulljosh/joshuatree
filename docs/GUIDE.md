@@ -137,6 +137,8 @@ While Samantha is answering, the network commands (`browse`, `open`, `back`, `fo
 
 HTTPS knows 126 root certificates: Mozilla's whole list, the one Firefox trusts, plus a few older roots some chains still end in. A site signed by anyone else fails with a TLS error, on purpose. There is no JavaScript, no images and no styled layout. It keeps up to 8 KB of text, 32 links and 8 pages of history, and the status line says plainly when a page did not load.
 
+**Calendar subscriptions.** `calendar subscribe https://...` (or a `webcal://` link) copies a calendar feed's events into Calendar, beside your own; run it again to refresh, `calendar unsubscribe` to drop them. A day you already have an event on keeps yours.
+
 **Mail.** At the Terminal, `mail login imap.mail.me.com you@icloud.com` (or `imap.gmail.com`) asks for an app password, made on your account's security page, never your real one. It stays in memory until `mail logout` or a sign-out and only ever goes over TLS. `mail` lists the ten newest, `mail N` opens one as a page; its pictures are never fetched, since a fetched picture tells the sender you opened it.
 
 **Books.** Reads plain text. Lists every `.TXT` in `JT/BOOKS/` (drop your own in from the Mac). Up and Down pick, Enter opens, Right or Space turns a page, Left goes back, Esc returns then closes. The page is saved next to the book as `NAME.POS`. A book over 3 MB is refused.

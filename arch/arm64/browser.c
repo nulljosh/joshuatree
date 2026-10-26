@@ -871,6 +871,20 @@ void browser_render(const char *html, unsigned n, const char *name) {
     say_wrapped("browser: ", title[0] ? title : cur, slen(title[0] ? title : cur));
     show_lines(0, PAGE_LINES);
 }
+/* 6.19.0: GET url quietly for another part of the kernel (ics.c): its body, chunks joined and gzip undone, in a buffer the
+   caller's heap mark covers. The HTTP status, or -1 when nothing came back; the page on screen is left alone. */
+int browser_get(const char *url, char **body, unsigned *n) {
+    char was[URL_MAX]; scopy(was, cur, slen(cur), URL_MAX);
+    *body = 0; *n = 0;
+    char *raw = kmalloc(RAW_MAX);
+    if (!raw) return -1;
+    void (*out)(const char *) = cmd_out; cmd_out = sink;
+    int got = fetch(url, raw, RAW_MAX), st = got > 0 ? http_status_of(raw, (unsigned)got) : -1;
+    if (got > 0) *body = page_body(raw, (unsigned)got, n);
+    cmd_out = out;
+    scopy(cur, was, slen(was), URL_MAX);
+    return *body ? st : -1;
+}
 int browser_field_secret(unsigned n) { return n && n <= nlinks && starts(links[n - 1], "field:") && fields[links[n - 1][6] - '0'].kind == 1; }   /* 6.15.0: a password field */
 const char *browser_link(unsigned n) { return n && n <= nlinks ? links[n - 1] : 0; }
 unsigned browser_loads(void) { return loads; }
