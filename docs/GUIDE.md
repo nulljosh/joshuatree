@@ -720,6 +720,8 @@ The Terminal keeps user accounts on the card. `users` lists the names, `adduser 
 
 Settings has a Users section too (4.14.0), the same accounts without the Terminal. It lists them and marks the admins. Open a name to change its password, make or remove an admin, or remove it (it asks you to confirm); Add user takes a name and the password twice. Up and Down pick, Return does it, Esc goes back, and the mouse works too. An admin's password is asked for each change like `sudo` and then remembered for five minutes. Anyone else sees the list and can change only their own password, with the old one. With no accounts it says so and Add user makes the first, an admin. Passwords show as stars.
 
+**Backups to the Mac** (5.2.0). `backup` in the Terminal sends your home folder to the relay on your Mac in one go, so a lost card does not lose your notes. It takes what a snapshot takes: files up to 32 KB, 512 KB in all, and says how many it left out. The relay keeps backups only when you start it with `--backup-dir FOLDER`; each one lands in `FOLDER/<your name>/<date and time>/`, written to a hidden folder first and renamed when every file is in, so a cut-off backup leaves nothing half done. It checks every name before it writes anything (8.3 names only, nothing that climbs out of the folder) and never runs Claude for it.
+
 ### Music on the Pi
 
 The Pi plays songs from its card out of the 3.5 mm jack. It uses the PC's own `user/music.c` in user mode. It has no dock tile: press F1 and type music.
