@@ -3,7 +3,7 @@
   "app-bricks": "21a58f7fb2350fcb",
   "app-calendar": "96cf64cee9a03100",
   "app-chess": "dbe80759c86b243a",
-  "app-curbfind": "f60970117ae3c48d",
+  "app-curbfind": "07e6eee0bbe6646c",
   "app-depths": "15333eb16b7997fe",
   "app-epiphany": "26019c730646f62d",
   "app-files": "2fcc2a7c39636e68",
@@ -19,5 +19,5 @@
   "app-weather": "0f90003f1e249c8b",
   "app-windgate": "022e1f3e3337b41d",
   "desktop-apps": "ee856e6100413526",
-  "samantha-chat": "c8c88d4345bdef8f"
+  "samantha-chat": "1a5dad3bc4f6ca21"
 }
