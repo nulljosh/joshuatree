@@ -1975,13 +1975,13 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-26, 01:00 Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-26, 01:10 Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards. Open a loop PR ready, not as a draft: a push to a draft followed by `gh pr ready` lets the skipped draft run cancel the real one.
 
-**Where things stand.** Main is 5.3.0. Since 5.0 it gained Nimble on the Pi, the Terminal and Samantha's plugin (5.1.0), a backup of the home folder to the Mac (5.2.0), and a restore from the Mac (5.3.0). The restore takes a snapshot first and never overwrites a file the snapshot missed. Open: #693, 6.0.0 "Yours", from the `logo-6` branch. It is ready, and its checks were still running when this was written. 6.0 adds a sixth tuft to the logo, each person's own wallpaper, and the Nimbus Kit (renamed from Neo Kit) with its parts list in `docs/GUIDE.md`. The SD card for the board pass is flashed with the 6.0 build. The repo has 0 open GitHub issues.
+**Where things stand.** Main is 5.3.0. Since 5.0 it gained Nimble on the Pi, the Terminal and Samantha's plugin (5.1.0), a backup of the home folder to the Mac (5.2.0), and a restore from the Mac (5.3.0). The restore takes a snapshot first and never overwrites a file the snapshot missed. Open: #693, 6.0.0 "Yours", from the `logo-6` branch. It is in CI, and it merges on green, which reaches the loop goal of 0 open issues and 0 open PRs. 6.0 also adds a three-minute limit on each live Samantha CI step. 6.0 adds a sixth tuft to the logo, each person's own wallpaper, and the Nimbus Kit (renamed from Neo Kit) with its parts list in `docs/GUIDE.md`. The SD card for the board pass is flashed with the 6.0 build. The repo has 0 open GitHub issues.
 
-**Waiting on Joshua.** The board pass on the 6.0 card. The 8-inch HDMI screen for the Nimbus case, which he plans to buy on 2026-10-27. Then the older asks: what `boottime` prints in the Terminal after a board boot, a yes to bring GPL code into the tree for the real Doom port, whether dock hover zoom comes back (removed on purpose in #46 on 2026-09-20), and a launch-with-file path for Preview.
+**Waiting on Joshua.** The board pass on the 6.0 card, tomorrow (2026-10-27), with the 10-step test list from chat. The 8-inch HDMI screen for the Nimbus case, which he plans to buy on 2026-10-27. Then the older asks: what `boottime` prints in the Terminal after a board boot, a yes to bring GPL code into the tree for the real Doom port, whether dock hover zoom comes back (removed on purpose in #46 on 2026-09-20), and a launch-with-file path for Preview.
 
 **Next, in order.**
 1. Let CI finish on #693. Merge it the moment it is green, alone, and only after the branch is up to date.
