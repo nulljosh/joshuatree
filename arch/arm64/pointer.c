@@ -47,7 +47,7 @@ void con_fit(void) {   /* a resized Console or Terminal: the grid for the rectan
 }
 void console_frame(void) {   /* the i386 window frame, and a white well for the text */
     int s = (int)window_scale();
-    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? (term_index ? "Terminal 2" : "Terminal 1") : "Console");
+    gui_draw_window_frame_st(win_lx, win_ly, win_lw, win_lh, cp == &term_p ? (term_index ? "Terminal 2" : "Terminal 1") : "Console", tl_state(0));
     fb_rect((win_lx + 8) * s, (win_ly + 30) * s, (win_lw - 16) * s, (win_lh - 38) * s, CON_BG);
 }
 int term_front(void) { return cp == &term_p && !calc_front && !app_front && (con_live || !fb); }   /* with no screen at all, the UART is the Terminal */
@@ -225,7 +225,7 @@ void calc_cell(int i, int *x, int *y, int *w, int *h) {   /* key i's box on the 
 void calc_paint(void) {
     int s = (int)window_scale(), x0 = calc_lx + 12, w0 = calc_lw - 24, y0 = calc_ly + CALC_TOP, f = calc_flags();
     cur_hide();
-    gui_draw_window_frame(calc_lx, calc_ly, calc_lw, calc_lh, "Calculator");
+    gui_draw_window_frame_st(calc_lx, calc_ly, calc_lw, calc_lh, "Calculator", tl_state(1));
     window_rect(x0, y0, w0, CALC_DISP, 0x00DDD8CE);
     window_rect(x0 + 1, y0 + 1, w0 - 2, CALC_DISP - 2, 0x00FFFFFF);
     const char *in = calc_input(), *out = calc_output();

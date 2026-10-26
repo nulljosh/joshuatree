@@ -261,10 +261,10 @@ def dock_order():
 
 
 def window_frame(i):
-    body = func_body("kernel/gui_paint.c", "void gui_draw_window_frame(")
+    body = func_body("kernel/gui_paint.c", "void gui_draw_window_frame_st(") + func_body("kernel/gui_paint.c", "void gui_draw_traffic(")   # 6.6.0: the dots have their own painter
     body_col, radius = re.search(r"gui_rounded_rect_on_wallpaper\(x, y, w, h, (0x[0-9A-Fa-f]+), (\d+)\)", body).groups()
     rule = re.search(r"gui_hairline_h\(x \+ 8, y \+ 29, w - 16, (0x[0-9A-Fa-f]+)\)", body).group(1)
-    close = re.search(r"gui_fill_circle\(x \+ 24, y \+ 16, 7, (0x[0-9A-Fa-f]+)", body).group(1)
+    close = re.search(r"red = st == GUI_TL_BACK \? 0x[0-9A-Fa-f]+ : (0x[0-9A-Fa-f]+)", body).group(1)
     ink = re.search(r"gui_text\(name, .*?, (0x[0-9A-Fa-f]+)\);", body).group(1)
     return [hexval(body_col), int(radius), hexval(rule), hexval(close), hexval(ink)][i]
 

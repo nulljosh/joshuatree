@@ -287,3 +287,54 @@ void dock_activate(int slot) {   /* a dock tile, from a click, a dock key, Spotl
     uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
 }
 
+
+/* 6.6.0: the traffic lights as on a Mac. The window in front shows its three dots plain and the close X and minimize bar
+   only while the pointer is over them; every window behind it shows three grey dots. The frames are drawn in the right
+   state (tl_state), and this tick, on every pass of the main loop, redraws only the dots when the front window or the
+   hover changes. Where a window stacked higher overlaps a back window's dots, its pixels are put back after the redraw:
+   the front one is on top, the apps follow their z order, and the Console and the Calculator are below the apps (an app
+   and the Calculator are never open together). */
+static int tl_hover, tl_sig = -1;
+static int tl_front(void) { return calc_front ? 1 : app_front && app_top >= 0 ? 2 + app_top : 0; }   /* nothing else in front: the Console (it paints its frame before con_live is set) */
+static int tl_rect(int id, int *r) {   /* the window's frame, logical; 0 when it is not on the screen */
+    if (id == 0) { r[0] = win_lx; r[1] = win_ly; r[2] = win_lw; r[3] = win_lh; return con_live; }
+    if (id == 1) { r[0] = calc_lx; r[1] = calc_ly; r[2] = calc_lw; r[3] = calc_lh; return calc_live; }
+    struct app *a = &apps[id - 2];
+    r[0] = a->lx; r[1] = a->ly; r[2] = a->lw; r[3] = a->lh;
+    return a->cur && a->wbytes && !a->min;
+}
+static int tl_rank(int id, int f) {   /* 0 on top */
+    if (id == f) return 0;
+    if (id >= 2) { for (unsigned z = 0; z < app_zn; z++) if (app_z[z] == id - 2) return 1 + (int)z; return 90; }
+    return id == 0 ? 50 : 60;
+}
+int tl_state(int id) { return id != tl_front() ? GUI_TL_BACK : tl_hover ? GUI_TL_GLYPHS : GUI_TL_PLAIN; }
+static unsigned tl_under[64 * 4 * 21 * 4];   /* one dot band at up to scale 4, what was there before the redraw */
+void traffic_tick(void) {
+    if (!fb || login_live || spot_live || brick_live || clock_live || settings_live || browser_live) { tl_sig = -1; return; }
+    int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, f = tl_front(), r[4], o[4];
+    if (s > 4) return;
+    tl_hover = f >= 0 && tl_rect(f, r) && in_box(lx, ly, r[0] + 14, r[1] + 6, 64, 21);
+    int vis = 0;
+    for (int id = 0; id < 2 + APP_SLOTS; id++) if (tl_rect(id, r)) vis |= 1 << id;
+    int sig = (f + 1) * 2 + tl_hover + (vis << 8);
+    if (sig == tl_sig) return;
+    tl_sig = sig;
+    cur_hide();
+    for (int id = 0; id < 2 + APP_SLOTS; id++) {
+        if (!(vis & (1 << id))) continue;
+        tl_rect(id, r);
+        int bx = (r[0] + 14) * s, by = (r[1] + 6) * s, bw = 64 * s, bh = 21 * s, rk = tl_rank(id, f);
+        if (bx < 0 || by < 0 || bx + bw > (int)fb_w || by + bh > (int)fb_h) continue;
+        for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++) tl_under[y * bw + x] = fb[(unsigned)(by + y) * fb_pitch + (unsigned)(bx + x)];
+        gui_draw_traffic(r[0], r[1], tl_state(id));
+        for (int k = 0; k < 2 + APP_SLOTS; k++) {   /* a window stacked higher keeps its own pixels */
+            if (k == id || !(vis & (1 << k)) || tl_rank(k, f) >= rk || !tl_rect(k, o)) continue;
+            for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++)
+                if (in_box((bx + x) / s, (by + y) / s, o[0], o[1], o[2], o[3])) fb[(unsigned)(by + y) * fb_pitch + (unsigned)(bx + x)] = tl_under[y * bw + x];
+        }
+        fb_flush(bx, by, bw, bh);
+    }
+    con_quiet = 1; uart_puts("traffic front "); uart_dec((unsigned)(f + 1)); uart_puts(tl_hover ? " hover\n" : "\n");
+    cur_show();
+}

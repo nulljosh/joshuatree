@@ -196,7 +196,7 @@ try:
     click(*slot_centre(6)); wait_for("terminal open", 4)
     keys("f1"); wait_for("spotlight open", 4); keys("c", "a", "l", "c", "ret"); wait_for("calc open", 4)   # 4.1.2: the Apps tile is the Launchpad, the Calculator comes from Spotlight
     e = shot()
-    check("a Terminal and a Calculator are on screen first", px(e, wx + 19, wy + 16) == (0xff, 0x5f, 0x57), px(e, wx + 19, wy + 16))
+    check("a Terminal and a Calculator are on screen first", px(e, wx + 19, wy + 16) == (0xd9, 0xd3, 0xcb), px(e, wx + 19, wy + 16))   # 6.6.0: the Terminal is behind the Calculator, so its dots are grey
     step("treemenu open", lambda: keys("f10"))
     n = len(uart())
     keys("up", "ret")

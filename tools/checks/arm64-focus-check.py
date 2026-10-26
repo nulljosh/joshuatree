@@ -101,8 +101,8 @@ try:
         keys("c", "a", "l", "c", "ret"); return wait_for(has("calc open", n), 30)
     if click(*slot_centre(6), "terminal open") and spotlight_calc():
         a = shot()
-        if px(a, wx + 19, wy + 16) != (0xff, 0x5f, 0x57) or px(a, cx + 19, cy + 16) != (0xff, 0x5f, 0x57):
-            fails.append("the Terminal and the Calculator are not both on screen with their red dots")
+        if px(a, wx + 19, wy + 16) != (0xd9, 0xd3, 0xcb) or px(a, cx + 19, cy + 16) != (0xff, 0x5f, 0x57):   # 6.6.0: the one behind wears grey dots
+            fails.append("the Terminal (grey dots, behind) and the Calculator (red dot, in front) are not both on screen")
         else: print("  ok: the Terminal and the Calculator are both on screen, the Calculator over the Terminal's right")
         keys("9", "minus", "2", "ret")
         if not wait_for(lambda u: ("9-2", "7") in calc_lines(), 30): fails.append(f"typing 9-2 Enter into the Calculator printed no 'calc: 9-2 = 7', got {uart()[-300:]!r}")

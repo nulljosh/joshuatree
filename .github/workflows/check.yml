@@ -95,8 +95,10 @@ jobs:
     # room for the suite's one automatic retry of timing-sensitive checks
     # on top of the ~12 minutes the slowest shard takes. The ARM checks used to
     # share shard 6 alone and ran about 46 minutes, gating every merge; since
-    # 4.12.2 they are packed across shards 6, 8, 9 and 10.
-    timeout-minutes: 30
+    # 4.12.2 they are packed across shards 6, 8, 9 and 10. 45 since 6.6.0: on
+    # 2026-10-26 the apt and Playwright installs alone took 20 to 26 minutes,
+    # and every PR lost a shard to the clock with its checks still passing.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
