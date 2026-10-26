@@ -1,4 +1,4 @@
-# The Joshua tree mark, 3.0: the crayon tree, tightened. 4.0 and 5.0 each grew it one tuft.
+# The Joshua tree mark, 3.0: the crayon tree, tightened. 4.0, 5.0 and 6.0 each grew it one tuft.
 #
 # The 2.25 marker scribble drawn again with a surer hand: steadier, heavier lines for the trunk and the three arms,
 # a trunk that swells where the marker pressed, a dense knot of loops at the end of every arm with paper showing
