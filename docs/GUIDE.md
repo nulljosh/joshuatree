@@ -851,16 +851,21 @@ Want to try parts (an LED, a button, a speaker) before soldering anything? See t
 
 Rough Canadian estimates, not quotes.
 
-**For Nimbus (the printed computer, docs/hardware/nimbus/pack/bom.csv):**
-- The screen first: a 16:9 HDMI panel, 8 inch class, touch if you want it, outline about 194 x 110 mm ($60 to $100). Measure it with calipers before anything is printed; the case's numbers are stand-ins until then.
-- Digital calipers (about $15 to $25), if there are none in the house.
-- A right-angle micro-HDMI to HDMI cable, 20 to 30 cm (about $10 to $15).
-- Two USB-C panel-mount extension cables (about $10 to $15 for both).
-- A short microSD to SD extension cable for the front card slot (about $8 to $12).
-- A 3.5 mm panel-mount jack (about $5).
-- Self-tapping screws, four M2.5 x 6 and two M3 x 12 (about $5 to $10).
-- Double-sided foam tape, 2 mm thick (about $5).
-- The print: three parts (front shell, back cover, terracotta inlay) from the STLs in the pack, cream PLA or PETG; ask the store for a quote (roughly $40 to $80). Print the front shell alone first as a fit test.
+**For Nimbus (the printed computer, docs/hardware/nimbus/pack/bom.csv).** In buying order: what unblocks the build first, then the cheaper and easier to find. Vancouver stores first, Amazon.ca when a store is unlikely to stock it.
+
+| # | Item | About | Where |
+|---|---|---|---|
+| 1 | The screen: a 16:9 HDMI panel, 8 inch class, touch if you want it, outline about 194 x 110 mm (Waveshare and Elecrow make them) | $60 to $100 | PiShop.ca, Amazon.ca |
+| 2 | Digital calipers, to measure the screen before anything is printed (the case's numbers are stand-ins until then) | $15 to $25 | Canadian Tire, Princess Auto |
+| 3 | A right-angle micro-HDMI to HDMI cable, 20 to 30 cm | $10 to $15 | Canada Computers, Amazon.ca |
+| 4 | Double-sided foam tape, 2 mm thick | about $5 | Canadian Tire, Home Depot (3M) |
+| 5 | Self-tapping screws: four M2.5 x 6, two M3 x 12 | $5 to $10 | Lee's Electronics, Amazon.ca |
+| 6 | Two USB-C panel-mount extension cables | $10 to $15 for both | Amazon.ca |
+| 7 | A short microSD to SD extension cable, for the front card slot | $8 to $12 | Amazon.ca |
+| 8 | A 3.5 mm panel-mount jack (optional, for sound) | about $5 | Lee's Electronics |
+| 9 | The print: three parts from the pack's STLs (front shell, back cover, terracotta inlay), cream PLA or PETG. Print the front shell alone first as a fit test | $40 to $80 | the store where the Pi came from, Canada Computers |
+
+All in, about $160 to $270.
 
 **Earlier list:**
 - A USB-C to TTL serial cable, 3.3 V (about $10 to $15).
