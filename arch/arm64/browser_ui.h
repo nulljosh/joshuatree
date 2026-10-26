@@ -15,6 +15,7 @@ int fat_read_file(const char *name, void *buf, unsigned bufsize); int fat_chdir(
 const char *browser_link(unsigned n);
 unsigned browser_loads(void);
 int browser_field_secret(unsigned n);
+unsigned browser_tabs(unsigned *front);
 static unsigned br_field;   /* 6.15.0: the form field (its link number) the address bar is editing, 0 when it edits the address */
 const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h);   /* 6.14.0: image k's 0RGB pixels and kept size, 0 when it did not load */
 #define BR_ROW 16          /* a page line, logical pixels */
@@ -300,6 +301,10 @@ void browser_paint(int report) {
     for (; left[o] && o < BR_ADDR_MAX; o++) st[o] = left[o];
     st[o] = 0;
     char right[24]; unsigned rn = 0;
+    {   /* 6.16.0: "tab 2 of 3" ahead of the line count once there is more than one tab */
+        unsigned front, nt = browser_tabs(&front);
+        if (nt > 1) { const char *a = "tab "; for (; *a; a++) right[rn++] = *a; right[rn++] = (char)('0' + front); for (a = " of "; *a; a++) right[rn++] = *a; right[rn++] = (char)('0' + nt); if (len) { right[rn++] = ','; right[rn++] = ' '; } }
+    }
     if (!br_loading && !br_msg[0] && len) {
         const char *a = "line "; for (; *a; a++) right[rn++] = *a;
         unsigned v = (unsigned)br_top + 1; char d[10]; unsigned z = 0; do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) right[rn++] = d[--z];
@@ -338,7 +343,7 @@ static void br_run(const char *cmd) {   /* one browse_command line, with "loadin
     if (browser_loads() != before) {
         br_top = 0; br_sel = 0; br_wrap();
         if (browser_url()[0] && br_lines) hs_add(browser_url(), browser_title());   /* 6.7.0: Recent; 6.8.0: not a page with no words */
-        if (!br_lines) { con_quiet = 1; uart_puts("browser: needs javascript\n"); }
+        if (!br_lines && browser_url()[0]) { con_quiet = 1; uart_puts("browser: needs javascript\n"); }
         con_quiet = 1; uart_puts("browser: page "); uart_dec(br_lines); uart_puts(br_lines == 1 ? " line\n" : " lines\n");
         browser_paint(1);
         return;
@@ -496,6 +501,13 @@ int browser_key(unsigned code) {   /* a key down with the Browser in front and S
             br_addr[br_addr_n] = 0; browser_paint(0);
         }
         return 1;
+    }
+    {   /* 6.16.0: tabs, as a Mac browser: Cmd+T a new one, Cmd+W (desk.c hands it over) closes one, Ctrl+Tab the next, Cmd+1..4 */
+        unsigned front, n = browser_tabs(&front);
+        if (gui_held && code == 20) { br_run("tab new"); br_edit = 1; browser_paint(0); return 1; }
+        if (gui_held && code == 17) { br_run("tab close"); return 1; }
+        if (ctrl_held && code == 15) { char c[8] = "tab 1"; c[4] = (char)('0' + front % n + 1); br_run(c); return 1; }
+        if (gui_held && code >= 2 && code <= 1 + n) { char c[8] = "tab 1"; c[4] = (char)('0' + code - 1); br_run(c); return 1; }
     }
     if (ctrl_held || gui_held || alt_held) return 1;
     if (code == 15 && !(br_edit && br_addr_n)) { br_tab(); return 1; }
