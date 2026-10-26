@@ -348,7 +348,7 @@ static void br_run(const char *cmd) {   /* one browse_command line, with "loadin
         browser_paint(1);
         return;
     }
-    br_set(br_msg, br_has(br_err, "no network") ? "no network" : br_has(br_err, "bad url") ? "that is not a web address" :
+    br_set(br_msg, br_has(br_err, "saved ") || br_has(br_err, "not saved") || br_has(br_err, "could not save") ? br_err : br_has(br_err, "no network") ? "no network" : br_has(br_err, "bad url") ? "that is not a web address" :
                    br_has(br_err, "nothing behind") ? "nothing behind" : br_has(br_err, "nothing ahead") ? "nothing ahead" :
                    "the page did not load", sizeof br_msg);
     if (br_err[0] && br_has(br_msg, "did not load")) {   /* say why: the stage that stopped, from the last "browser: " line */
