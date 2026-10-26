@@ -32,6 +32,7 @@
 #define KEY_SUP        313
 #define KEY_SDOWN      314
 #define KEY_SELALL     315   /* Ctrl+A */
+#define KEY_NEW        316   /* Ctrl+N: a new document, in the app that has one */
 /* 2.11.0: the Terminal's multiplexer keys. A ring-3 window gets Ctrl+T/W/D/E/O, Ctrl+1..9, Ctrl+Left/Right
    and Ctrl+Tab as these codes instead of a bare letter, digit or tab (the app switcher still owns Ctrl+Tab
    while two windows are open). KEY_CTL_1 + n is Ctrl+(n+1). */

@@ -536,6 +536,7 @@ int gui_poll_event(int *a, int *b){
             if (code == 0x2F) { *a = KEY_PASTE; return 1; }
             if (code == 0x1F) { *a = KEY_SAVE; return 1; }
             if (code == 0x1E) { *a = KEY_SELALL; return 1; }
+            if (code == 0x31) { *a = KEY_NEW; return 1; }
         }
         char c = kbd_map(sc);
         if (c == '\n') { *a = KEY_ENTER; return 1; }

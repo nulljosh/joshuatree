@@ -60,6 +60,15 @@ try:
     else:
         print('Notes    : typed a line, Ctrl+C copied it, Ctrl+V pasted it back (serial-verified)')
 
+    # 1b: Ctrl+N in the editor saves this note and opens a fresh one
+    n = vm.count('notes: new=')
+    vm.key('ctrl-n')
+    if not vm.wait('notes: new=', 10, n + 1):
+        fails.append('Notes Ctrl+N: no second note opened from the editor')
+    else:
+        print('Notes    : Ctrl+N in the editor started a fresh note')
+    time.sleep(1.0)
+
     # 2: cut in Notes, paste into Terminal
     vm.key('ret')
     vm.type('echo cross-app-clip', gap=0.1)

@@ -32,7 +32,7 @@ static void app_key(unsigned code) {   /* a key down for the app in front, as th
                                              {105, 261}, {106, 262}, {102, 305}, {107, 306}, {111, 307} };
     int k = 0;
     for (unsigned i = 0; i < sizeof map / sizeof map[0]; i++) if (map[i][0] == code) k = map[i][1];
-    if (!k && (ctrl_held || gui_held)) k = code == 46 ? 302 : code == 45 ? 303 : code == 47 ? 304 : code == 31 ? 308 : code == 30 ? 315 : 0;   /* Ctrl or Cmd with C X V S A */
+    if (!k && (ctrl_held || gui_held)) k = code == 46 ? 302 : code == 45 ? 303 : code == 47 ? 304 : code == 31 ? 308 : code == 30 ? 315 : code == 49 ? 316 : 0;   /* Ctrl or Cmd with C X V S A N */
     else if (!k) k = ask_char(code);
     if (k) app_push(1, k, 0);
 }

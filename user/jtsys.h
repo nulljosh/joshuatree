@@ -131,6 +131,7 @@ struct jt_text { int x, y; unsigned int fg; const char *s; };
 #define JT_KEY_SRIGHT 312
 #define JT_KEY_SUP   313
 #define JT_KEY_SDOWN 314
+#define JT_KEY_NEW   316 /* Ctrl+N or Cmd+N: a new document (Notes: a new note) */
 #define JT_KEY_SELALL 315
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
 struct jt_event { unsigned int kind; int a, b; };
