@@ -115,10 +115,12 @@ void tree_hover(int lx, int ly) {
 }
 void tui_log(const char *s) { con_quiet = 1; uart_puts(s); }   /* ask.c: the chat view's "tui| ..." lines, UART only (one line, newline included) */
 int volume_key(unsigned code);   /* cmd.c: F11 and F12, Volume Down, Up and Mute */
+unsigned browser_tabs(unsigned *front);   /* browser.c */
 int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the desktop took it */
     int chord = ctrl_held || gui_held || alt_held;
     if (power_key(code)) return 1;
     if (volume_key(code)) return 1;   /* before Spotlight and every pane, like the Spotlight shortcut */
+    if (browser_live && ((gui_held && code == 17) || (ctrl_held && !gui_held && code == 15))) { unsigned f; if (browser_tabs(&f) > 1) return browser_key(code); }   /* 6.16.0: Cmd+W and Ctrl+Tab are Blackcomb's while it has more than one tab */
     if (gui_held && (code == 17 || code == 16)) return front_close();   /* Cmd+W closes the front window, Cmd+Q quits the front app: every window here is one app's, so both end it */
     if ((gui_held || ctrl_held) && code == 15) return app_cycle();   /* Cmd+Tab, or Ctrl+Tab on a keyboard with no Cmd */
     if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */

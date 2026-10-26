@@ -70,6 +70,11 @@ static char text[TEXT_MAX], title[64];    /* the page as lines of text */
 static unsigned tlen, nline, view;        /* text length, its line count, the first line of the view */
 static char hist[HIST_MAX][URL_MAX];
 static unsigned hn, hi;                   /* pages in history, and which one is on screen */
+/* 6.16.0: tabs, up to TAB_MAX. Each keeps its own history; a switch fetches that tab's page again, since one page is held
+   in memory at a time. A new tab starts empty, which Blackcomb shows as its start page. */
+#define TAB_MAX 4
+static struct { char hist[HIST_MAX][URL_MAX]; unsigned hn, hi; } tabs[TAB_MAX];
+static unsigned ntabs = 1, tab_cur;
 static unsigned loads;                    /* pages that arrived so far: the Browser window sees a change and re-reads the page */
 
 static unsigned slen(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }
@@ -616,6 +621,28 @@ static void load_images(char *raw) {
     scopy(cur, page, slen(page), URL_MAX);
 }
 
+/* 6.17.0: downloads. A reply that is not text (an image, a zip, a PDF) is saved where an app's files live, not shown,
+   and `fetch URL` saves any reply. The name is the address's last part as an 8.3 name, DOWNLOAD.BIN when nothing is left. */
+static int want_file;   /* the next show() saves its reply whatever it is */
+static void file_name(const char *url, char out[13]) {
+    const char *p = url, *seg = url;
+    for (; *p && *p != '?' && *p != '#'; p++) if (*p == '/') seg = p + 1;
+    const char *dot = 0; for (const char *q = seg; q < p; q++) if (*q == '.') dot = q;
+    unsigned o = 0;
+    for (const char *q = seg; q < (dot ? dot : p) && o < 8; q++) {
+        char c = *q; if (c >= 'a' && c <= 'z') c = (char)(c - 32);
+        if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-') out[o++] = c;
+    }
+    if (!o) for (const char *w = "DOWNLOAD"; *w; w++) out[o++] = *w;
+    unsigned e0 = o; out[o++] = '.';
+    for (const char *q = dot ? dot + 1 : p; q < p && o < e0 + 4; q++) {
+        char c = *q; if (c >= 'a' && c <= 'z') c = (char)(c - 32);
+        if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) out[o++] = c;
+    }
+    if (o == e0 + 1) for (const char *w = "BIN"; *w; w++) out[o++] = *w;
+    out[o] = 0;
+}
+
 static void show(const char *url, int push) {
     unsigned long mark = heap_mark();
     char vid[12];
@@ -631,6 +658,17 @@ static void show(const char *url, int push) {
     net_dns_wait_ticks = dns_was; net_connect_wait_ticks = connect_was;
     unsigned blen = 0;
     char *body = got > 0 ? page_body(raw, (unsigned)got, &blen) : 0;
+    int hb = got > 0 ? http_body_start(raw, (unsigned)got) : -1;
+    if (body && (want_file || (hb > 0 && header_has(raw, (unsigned)hb, "content-type:", "/") && !header_has(raw, (unsigned)hb, "content-type:", "text/") && !header_has(raw, (unsigned)hb, "content-type:", "html")))) {   /* xhtml is a page too */
+        char name[13]; file_name(cur, name);
+        int st = http_status_of(raw, (unsigned)got);
+        if (st != 200) { kputs("browser: not saved, the server said "); kdec((unsigned)st); kputs("\n"); }
+        else if (save_here(name, body, blen)) { kputs("browser: saved "); kputs(name); kputs(", "); kdec(blen); kputs(home_active() ? " bytes in your home folder\n" : " bytes in JT\n"); }
+        else kputs("browser: could not save the file\n");
+        scopy(cur, was, slen(was), URL_MAX);   /* the page on screen stays */
+        want_file = 0; heap_release(mark); return;
+    }
+    want_file = 0;
     if (body) {
         to_text(body, blen);
         load_images(raw);
@@ -685,8 +723,52 @@ static void submit(unsigned f) {
     show(url, 1);
 }
 
+static void tab_keep(void) {   /* the current tab's history, into its slot */
+    for (unsigned k = 0; k < hn; k++) scopy(tabs[tab_cur].hist[k], hist[k], slen(hist[k]), URL_MAX);
+    tabs[tab_cur].hn = hn; tabs[tab_cur].hi = hi;
+}
+static void tab_take(unsigned t) {   /* tab t in front: its history back, its page fetched again, or the empty page */
+    tab_cur = t; hn = tabs[t].hn; hi = tabs[t].hi;
+    for (unsigned k = 0; k < hn; k++) scopy(hist[k], tabs[t].hist[k], slen(tabs[t].hist[k]), URL_MAX);
+    cur[0] = 0; tlen = 0; nline = 0; view = 0; nlinks = 0; nimg = 0; nforms = nfields = 0; title[0] = 0; text[0] = 0;
+    kputs("browser: tab "); kdec(t + 1); kputs(" of "); kdec(ntabs); kputs("\n");
+    if (hn) { char url[URL_MAX]; scopy(url, hist[hi], slen(hist[hi]), URL_MAX); show(url, 0); }
+    else loads++;
+}
+static int tab_command(const char *q, unsigned n) {   /* tab new, tab N, tab close, tabs */
+    if (word(q, n, "tabs")) {
+        tab_keep();
+        for (unsigned t = 0; t < ntabs; t++) {
+            kputs(t == tab_cur ? "* " : "  "); kdec(t + 1); kputs(" ");
+            kputs(tabs[t].hn ? tabs[t].hist[tabs[t].hi] : "(empty)"); kputs("\n");
+        }
+        return 1;
+    }
+    if (word(q, n, "tab new")) {
+        if (ntabs == TAB_MAX) { kputs("browser: tabs full, close one first\n"); return 1; }
+        tab_keep(); tabs[ntabs].hn = tabs[ntabs].hi = 0; ntabs++;
+        tab_take(ntabs - 1);
+        return 1;
+    }
+    if (word(q, n, "tab close")) {
+        if (ntabs == 1) { hn = hi = 0; tab_keep(); tab_take(0); return 1; }   /* the last tab: emptied, not gone */
+        for (unsigned t = tab_cur; t + 1 < ntabs; t++) tabs[t] = tabs[t + 1];
+        ntabs--;
+        tab_take(tab_cur < ntabs ? tab_cur : ntabs - 1);
+        return 1;
+    }
+    if (n > 4 && starts(q, "tab ")) {
+        unsigned e, t = number(q, n, 4, &e);
+        if (e != n || !t || t > ntabs) { kputs("browser: no such tab\n"); return 1; }
+        if (t - 1 != tab_cur) { tab_keep(); tab_take(t - 1); }
+        return 1;
+    }
+    return 0;
+}
+
 /* One command line, after cmd.c trimmed it. 1 when it was a browser command. */
 int browse_command(const char *q, unsigned n) {
+    if (tab_command(q, n)) return 1;
     if (n > 7 && starts(q, "browse ")) {
         unsigned s = 7; while (s < n && q[s] == ' ') s++;
         if (n - s >= URL_MAX) { kputs("browser: url too long\n"); return 1; }
@@ -710,6 +792,13 @@ int browse_command(const char *q, unsigned n) {
         if (starts(links[k - 1], "submit:")) { submit((unsigned)(links[k - 1][7] - '0')); return 1; }
         char url[URL_MAX]; scopy(url, links[k - 1], slen(links[k - 1]), URL_MAX);
         show(url, 1);
+        return 1;
+    }
+    if (n > 6 && starts(q, "fetch ")) {   /* 6.17.0: fetch URL saves the reply as a file */
+        unsigned s = 6; while (s < n && q[s] == ' ') s++;
+        if (n - s >= URL_MAX) { kputs("browser: url too long\n"); return 1; }
+        char url[URL_MAX]; scopy(url, q + s, n - s, URL_MAX);
+        want_file = 1; show(url, 0); want_file = 0;
         return 1;
     }
     if (n > 5 && starts(q, "fill ")) {   /* 6.15.0: fill N TEXT, N a field's link number */
@@ -771,6 +860,7 @@ const char *browser_text(unsigned *len) { *len = tlen; return text; }   /* the p
 const char *browser_title(void) { return title; }                     /* its <title>, up to 60 characters, "" when it has none */
 const char *browser_url(void) { return cur; }                          /* the page on screen, "" before the first */
 const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h) { if (k >= nimg || !img_w[k]) return 0; *w = img_w[k]; *h = img_h[k]; return img_px[k]; }   /* 6.14.0 */
+unsigned browser_tabs(unsigned *front) { *front = tab_cur + 1; return ntabs; }   /* 6.16.0: how many tabs, and which is in front */
 int browser_field_secret(unsigned n) { return n && n <= nlinks && starts(links[n - 1], "field:") && fields[links[n - 1][6] - '0'].kind == 1; }   /* 6.15.0: a password field */
 const char *browser_link(unsigned n) { return n && n <= nlinks ? links[n - 1] : 0; }
 unsigned browser_loads(void) { return loads; }
