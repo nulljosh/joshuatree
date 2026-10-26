@@ -155,6 +155,17 @@ int tls_exchange(const void *request, unsigned request_len, char *out, unsigned 
     tcp_close();
     return total;
 }
+/* 6.18.0: a conversation (IMAP) over the open connection: send everything, read what arrives within ticks, close. */
+int tls_send(const void *buf, unsigned n) { return br_sslio_write_all(&ioc, buf, n) == 0 && br_sslio_flush(&ioc) == 0 ? 0 : failed(); }
+int tls_recv(char *buf, unsigned max, unsigned ticks) {   /* bytes read, 0 when the peer closed, -1 on an error or nothing within ticks */
+    read_ticks = ticks ? ticks : TLS_READ_TICKS;
+    int r = br_sslio_read(&ioc, buf, max);
+    read_ticks = TLS_READ_TICKS;
+    if (r > 0) return r;
+    int e = br_ssl_engine_last_error(&sc.eng);
+    return e == BR_ERR_OK || e == BR_ERR_IO ? 0 : failed();
+}
+void tls_close(void) { tcp_close(); }
 /* The three steps in one, after a DNS lookup of host (TLS_ERR_DNS when that fails). */
 int https_fetch_timeout(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max, unsigned reply_ticks) {
     unsigned ip;

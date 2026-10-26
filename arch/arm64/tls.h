@@ -14,5 +14,8 @@ int https_fetch(const char *host, unsigned short port, const void *request, unsi
 int https_fetch_timeout(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max, unsigned reply_ticks);
 int https_get(const char *host, unsigned short port, const char *path, char *body, unsigned max);
 int https_last_status(void);
+int tls_send(const void *buf, unsigned n);                      /* 6.18.0: a conversation over the open connection (IMAP) */
+int tls_recv(char *buf, unsigned max, unsigned ticks);
+void tls_close(void);
 int tls_last_error(void);   /* after a -1: a TLS_ERR_* above, or BearSSL's own code (62 = certificate not trusted) */
 #endif

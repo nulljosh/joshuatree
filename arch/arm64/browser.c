@@ -861,6 +861,16 @@ const char *browser_title(void) { return title; }                     /* its <ti
 const char *browser_url(void) { return cur; }                          /* the page on screen, "" before the first */
 const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h) { if (k >= nimg || !img_w[k]) return 0; *w = img_w[k]; *h = img_h[k]; return img_px[k]; }   /* 6.14.0 */
 unsigned browser_tabs(unsigned *front) { *front = tab_cur + 1; return ntabs; }   /* 6.16.0: how many tabs, and which is in front */
+/* 6.18.0: a page made somewhere else (mail.c's message): shown as a page named name, with no history and its images never
+   fetched (a remote image in a mail tells its sender it was opened). */
+void browser_render(const char *html, unsigned n, const char *name) {
+    scopy(cur, name, slen(name), URL_MAX);
+    to_text(html, n);
+    for (unsigned k = 0; k < IMG_MAX; k++) img_w[k] = img_h[k] = 0;
+    loads++;
+    say_wrapped("browser: ", title[0] ? title : cur, slen(title[0] ? title : cur));
+    show_lines(0, PAGE_LINES);
+}
 int browser_field_secret(unsigned n) { return n && n <= nlinks && starts(links[n - 1], "field:") && fields[links[n - 1][6] - '0'].kind == 1; }   /* 6.15.0: a password field */
 const char *browser_link(unsigned n) { return n && n <= nlinks ? links[n - 1] : 0; }
 unsigned browser_loads(void) { return loads; }
