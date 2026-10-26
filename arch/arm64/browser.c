@@ -4,10 +4,12 @@
    the numbered links and `open N` follows one. The last 8 pages are history for `back` and `forward`; `reload` fetches
    the page again. Every print ends with one status line: the URL and `line X of Y`. Every line fits the 53-column
    rule through ask.c's say_wrapped; everything goes out through cmd_out, so a Terminal app can own the output later.
-   Static buffers: one page at a time, the raw reply capped at 64 KiB, the text at 8 KiB. */
+   One page at a time: the raw reply up to 4 MiB on the heap (6.12.0, was a 64 KiB cap), chunked transfer undone and a
+   gzip body inflated, the text kept to 8 KiB. */
 #include "../../drivers/net.h"
 #include "../../drivers/http.h"
 #include "tls.h"
+#include "../../drivers/inflate.h"
 
 extern void (*cmd_out)(const char *s);         /* cmd.c */
 void cmd_dec(unsigned v);
@@ -20,7 +22,8 @@ void *kmalloc(unsigned int n);
 
 #define URL_MAX 256
 #define LINK_MAX 32
-#define RAW_MAX 65536       /* the reply, headers and all */
+#define RAW_MAX (4u << 20)  /* the reply as it came, headers and all */
+#define PAGE_MAX (8u << 20)  /* the most a gzip body may inflate to (its trailer names the size): with RAW_MAX, 12 of the 16 MiB heap */
 #define TEXT_MAX 8192       /* the readable text: half the Terminal's log, so a page never pushes itself out */
 #define HIST_MAX 8
 #define PAGE_LINES 16       /* ponytail: a fixed page; the Terminal's own rows if its height should set it */
@@ -150,9 +153,9 @@ static int fetch(const char *url, char *raw, unsigned max) {
         static char req[URL_MAX + 160]; unsigned n = 0;
         for (const char *p = "GET "; *p; p++) req[n++] = *p;
         for (unsigned i = 0; i < u.path_len; i++) req[n++] = u.path[i];
-        for (const char *p = " HTTP/1.0\r\nHost: "; *p; p++) req[n++] = *p;
+        for (const char *p = " HTTP/1.1\r\nHost: "; *p; p++) req[n++] = *p;
         for (const char *p = u.host; *p; p++) req[n++] = *p;
-        for (const char *p = "\r\nUser-Agent: JoshuaTree/1.0\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
+        for (const char *p = "\r\nUser-Agent: JoshuaTree/1.0\r\nAccept-Encoding: gzip\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
         /* Each stage prints one line when it passes, so a photo of the screen says where a failed fetch stopped. */
         unsigned ip; int got;
         if (!http_resolve_host(u.host, &ip)) { kputs(net_last_error() == NET_ERR_DNS_TIMEOUT ? "browser: dns timeout\n" : "browser: no such host\n"); return -1; }
@@ -179,7 +182,7 @@ static int fetch(const char *url, char *raw, unsigned max) {
         }
         if (!u.tls) kputs("browser: tcp ok\n");
         raw[got] = 0;
-        if ((unsigned)got >= max - 1) kputs("browser: page too big, showing the first 64 KiB\n");
+        if ((unsigned)got >= max - 1) kputs("browser: page too big, showing the first 4 MiB\n");
         int status = http_status_of(raw, (unsigned)got);
         kputs("browser: http "); kdec((unsigned)status); kputs(status >= 400 ? " (the server refused)\n" : status < 200 ? " (not a page)\n" : "\n");
         if (status >= 300 && status < 400) {
@@ -323,6 +326,73 @@ static void show_lines(unsigned from, unsigned count) {
     say_wrapped("browser: ", st, o);
 }
 
+/* 6.12.0: real pages. HTTP/1.1 replies may come chunked and gzipped (the request asks for gzip: most pages shrink four
+   to ten times). Keep-alive waits: net.c holds one connection, so there is nothing to keep it alive for yet. */
+static int header_has(const char *raw, unsigned h, const char *name, const char *val) {   /* name: ...val... in raw[0..h) */
+    for (unsigned i = 0; i < h; i++) {
+        if ((i && raw[i - 1] != '\n') || !starts(raw + i, name)) continue;
+        for (unsigned e = i + slen(name); e < h && raw[e] != '\r' && raw[e] != '\n'; e++) if (starts(raw + e, val)) return 1;
+    }
+    return 0;
+}
+/* Transfer-Encoding: chunked, undone in place: the hex size lines go and the chunks close up. The new length, or -1 when
+   a size line is not hex or a chunk runs past what arrived. */
+static int dechunk(char *b, unsigned n) {
+    unsigned r = 0, w = 0;
+    for (;;) {
+        unsigned size = 0, digits = 0;
+        for (; r < n; r++, digits++) {
+            char c = (char)(b[r] | 32);
+            unsigned d = c >= '0' && c <= '9' ? (unsigned)(c - '0') : c >= 'a' && c <= 'f' ? (unsigned)(c - 'a' + 10) : 16;
+            if (d == 16) break;
+            if (size >> 27) return -1;
+            size = size * 16 + d;
+        }
+        if (!digits) return -1;
+        while (r < n && b[r] != '\n') r++;   /* chunk extensions, then the line end */
+        if (r++ >= n) return -1;
+        if (!size) return (int)w;             /* the last chunk; trailers are not read */
+        if (size > n - r) return -1;
+        for (unsigned i = 0; i < size; i++) b[w++] = b[r++];
+        if (r < n && b[r] == '\r') r++;
+        if (r < n && b[r] == '\n') r++;
+    }
+}
+/* Content-Encoding: gzip (RFC 1952): past the header, the deflate stream inflates into a buffer the size the trailer
+   names. The page and its length in *n, or 0 with the reason printed. ponytail: the CRC-32 is not checked; inflate_raw
+   already refuses a stream that does not come out at exactly that size. */
+static char *gunzip(const unsigned char *g, unsigned *n) {
+    unsigned len = *n, p = 10, size;
+    char *out;
+    if (len < 18 || g[0] != 0x1f || g[1] != 0x8b || g[2] != 8) goto bad;
+    if (g[3] & 4) p += 2 + (g[10] | (unsigned)g[11] << 8);                 /* FEXTRA */
+    if (g[3] & 8) { while (p < len && g[p]) p++; p++; }                     /* FNAME */
+    if (g[3] & 16) { while (p < len && g[p]) p++; p++; }                    /* FCOMMENT */
+    if (g[3] & 2) p += 2;                                                   /* FHCRC */
+    if (p + 8 > len) goto bad;
+    size = g[len - 4] | (unsigned)g[len - 3] << 8 | (unsigned)g[len - 2] << 16 | (unsigned)g[len - 1] << 24;
+    if (size > PAGE_MAX) { kputs("browser: page too big\n"); return 0; }
+    if (!(out = kmalloc(size + 1))) { kputs("browser: out of memory\n"); return 0; }
+    if (inflate_raw(g + p, len - 8 - p, (unsigned char *)out, size) != 0) goto bad;
+    out[size] = 0; *n = size;
+    return out;
+bad:
+    kputs("browser: gzip reply is damaged\n");
+    return 0;
+}
+/* The page out of a raw reply: past the headers, chunks joined, gzip undone. 0 when it could not be read. */
+static char *page_body(char *raw, unsigned got, unsigned *n) {
+    int b = http_body_start(raw, got); if (b < 0) b = 0;
+    char *body = raw + b; int len = (int)got - b;
+    if (b && header_has(raw, (unsigned)b, "transfer-encoding:", "chunked") && (len = dechunk(body, (unsigned)len)) < 0) {
+        kputs("browser: chunked reply cut short\n"); return 0;
+    }
+    body[len] = 0; *n = (unsigned)len;
+    if (b && header_has(raw, (unsigned)b, "content-encoding:", "gzip")) body = gunzip((const unsigned char *)body, n);
+    if (body) { kputs("browser: body "); kdec(*n); kputs(" bytes\n"); }
+    return body;
+}
+
 static void show(const char *url, int push) {
     unsigned long mark = heap_mark();
     char vid[12];
@@ -336,9 +406,10 @@ static void show(const char *url, int push) {
     char was[URL_MAX]; scopy(was, cur, slen(cur), URL_MAX);
     int got = fetch(url, raw, RAW_MAX);
     net_dns_wait_ticks = dns_was; net_connect_wait_ticks = connect_was;
-    if (got > 0) {
-        int b = http_body_start(raw, (unsigned)got); if (b < 0) b = 0;
-        to_text(raw + b, (unsigned)got - (unsigned)b);
+    unsigned blen = 0;
+    char *body = got > 0 ? page_body(raw, (unsigned)got, &blen) : 0;
+    if (body) {
+        to_text(body, blen);
         if (push) {   /* a new page: it follows the one on screen, anything after that is forgotten */
             if (hn && hi + 1 < hn) hn = hi + 1;
             if (hn == HIST_MAX) { for (unsigned k = 1; k < HIST_MAX; k++) scopy(hist[k - 1], hist[k], slen(hist[k]), URL_MAX); hn--; }
