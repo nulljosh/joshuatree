@@ -137,7 +137,7 @@ p,li,.sub{text-wrap:pretty}
   .hero { position: relative; text-align: center; padding: 32px 20px 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   /* opacity/transform come from custom properties the scroll recede
      effect below sets via setProperty. */
-  .hero-copy { position: relative; opacity: var(--recede-o, 1); transform: translateY(var(--recede-y, 0)) scale(var(--recede-s, 1)); }
+  .hero-copy { position: relative; width: 100%; opacity: var(--recede-o, 1); transform: translateY(var(--recede-y, 0)) scale(var(--recede-s, 1)); }
   /* Was a fixed #ffffff back when the hero copy sat on top of the demo's
      own dark photo. It doesn't anymore (v0.76.52 moved it below the demo,
      onto the page background), so white-on-#faf8f6 was invisible for any
@@ -159,11 +159,13 @@ p,li,.sub{text-wrap:pretty}
   @media (max-width: 520px) { .eyebrow { height: 66px; -webkit-line-clamp: 3; line-clamp: 3; } }
   .kernel-version { font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
   .hero-mark { width: 56px; height: 43px; margin: 0 auto; --src: url(mark-tree.svg); }
-  .hero h1 .brand { display: block; white-space: nowrap; }
-  .hero h1 { font-size:var(--t64); margin: 14px 0 0; letter-spacing: -0.03em; line-height:var(--lh64); }
+  .hero h1 { font-size:var(--t17); font-weight: 600; margin: 0; letter-spacing:var(--tr17); line-height:var(--lh17); }
+  .hero-line { font-family: var(--font-display); font-size:var(--t64); font-weight: 700; letter-spacing: -0.03em; line-height:var(--lh64); margin: 12px 0 0; color: var(--fg); text-wrap: balance; }
+  .hero-sub { max-width: 46ch; margin: 16px auto 0; color: var(--sub); font-size:var(--t17); line-height:var(--lh17); letter-spacing:var(--tr17); }
+  .hero-cta { margin: 28px 0 0; }
   @media (max-width: 520px) {
     .hero { padding: 56px 20px 40px; }
-    .hero h1 { font-size:var(--t36);line-height:var(--lh36);letter-spacing:var(--tr36)}
+    .hero-line { font-size:var(--t36);line-height:var(--lh36);letter-spacing:var(--tr36)}
   }
 
   /* Sections are visible by default. They used to start at opacity 0 and
@@ -224,6 +226,13 @@ p,li,.sub{text-wrap:pretty}
   .tile img { width: 100%; height: auto; display: block; background: var(--bg); border-bottom: 1px solid var(--border); }
   .tile p { margin: 0; padding: 14px 16px; font-size:var(--t15); line-height:var(--lh15); color: var(--fg); ;letter-spacing:var(--tr15)}
   @media (max-width: 700px) { .tile-grid, .app-features .tile-grid { grid-template-columns: 1fr; } .meet-samantha h2, .app-features h2, .progress-section h2 { font-size:var(--t28);line-height:var(--lh28);letter-spacing:var(--tr28)} }
+  /* The app wall: CSS columns, each shot keeps its own height, 8px gaps, one small name badge per shot. */
+  .wall-grid { columns: 3; column-gap: 8px; }
+  .wall-item { position: relative; break-inside: avoid; margin: 0 0 8px; border-radius: 14px; overflow: hidden; }
+  .wall-item img { display: block; width: 100%; height: auto; }
+  .wall-name { position: absolute; left: 10px; bottom: 10px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 80%, transparent); color: var(--bg); font-size: 12px; font-weight: 600; line-height: 18px; letter-spacing: 0.01em; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  @media (max-width: 900px) { .wall-grid { columns: 2; } }
+  @media (max-width: 600px) { .wall-grid { columns: 1; } }
   .boot-line a:hover { text-decoration: underline; }
 
   /* Full-bleed at every width, no framed-window card: the demo is edge
@@ -531,11 +540,9 @@ p,li,.sub{text-wrap:pretty}
   @media (prefers-color-scheme: dark) { .hero-logo, .seal { filter: invert(0.93); } }
   .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   html:not(.demo) #demo-frame, html.demo .hero-shot { display: none; }
-  .hero-shot { padding: 14px 16px 0; text-align: center; }
-  .hero-shot img { display: block; width: 100%; max-width: 1100px; height: auto; margin: 0 auto; border-radius: 6px; }
-  .hero-shot p { margin: 14px 0 0; }
-  .try-demo { display: inline-block; padding: 12px 22px; border-radius: 999px; background: var(--accent2); color: var(--card); font-weight: 600; text-decoration: none; }
-  .try-demo:hover { filter: brightness(1.08); }
+  html.demo .hero-cta { display: none; }
+  .hero-shot { width: 100%; max-width: 1100px; margin: 48px auto 0; }
+  .hero-shot img { display: block; width: 100%; height: auto; border-radius: 14px; }
   .plate-cap a#desktop-boot-link { color: var(--accent2); text-decoration: none; font-weight: 600; }
   .plate-cap a#desktop-boot-link:hover { text-decoration: underline; }
   .plate-cap a#tour-link { color: var(--fg); text-decoration: none; }
@@ -622,11 +629,6 @@ p,li,.sub{text-wrap:pretty}
   <p class="plate-cap"><a href="?desktop" id="desktop-boot-link">See the desktop</a></p>
 </div>
 
-<div class="hero-shot">
-  <img src="shots/desktop-apps.webp" alt="The Joshua Tree desktop with the Terminal and live Weather open, and running-app dots in the dock" width="960" height="540">
-  <p><a class="try-demo" href="?demo">Try it in your browser</a></p>
-</div>
-
 <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Co.</span><span>Est. 2026</span></div>
 
 <header class="hero">
@@ -661,8 +663,14 @@ p,li,.sub{text-wrap:pretty}
      second later by the tour's own reset. The announcement now rides the
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
-<h1>Introducing <span class="brand">Joshua Tree.</span></h1>
+<h1>Introducing Joshua Tree.</h1>
     <p class="eyebrow" data-latest="4.0: Many windows. Run Calendar, Notes, Music and Books at once, each in its own space. If one crashes, the others never notice"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
+    <p class="hero-line"><span data-fact="apps">38</span> apps on a Raspberry Pi.</p>
+    <p class="hero-sub">Joshua Tree is a whole computer built from nothing. It is free, open source, and it runs on a Raspberry Pi 4.</p>
+    <p class="hero-cta"><a class="boot-btn" href="?demo">Try it in your browser</a></p>
+    <div class="hero-shot">
+      <img src="shots/desktop-apps.webp" alt="The Joshua Tree desktop with the Terminal and live Weather open, and running-app dots in the dock" width="960" height="540">
+    </div>
   </div>
 </header>
 
@@ -675,7 +683,7 @@ p,li,.sub{text-wrap:pretty}
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">38</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">6.5.1</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">6.5.2</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
@@ -696,86 +704,86 @@ p,li,.sub{text-wrap:pretty}
   <p class="sub" style="margin-top:16px">Samantha comes from Turing, a separate project. Joshua Tree is the machine she runs.</p>
 </section>
 
-<section class="app-features reveal" id="apps" aria-label="Apps built in">
+<section class="app-features wall reveal" id="apps" aria-label="Apps built in">
   <h2>Everything you need is already there.</h2>
   <p class="sub">A full set of apps, built from nothing but a screen and a keyboard.</p>
-  <div class="tile-grid">
-    <div class="tile">
+  <div class="wall-grid">
+    <figure class="wall-item">
       <img src="shots/app-notes.webp" alt="Notes app showing a short grocery list" loading="lazy" width="984" height="462">
-      <p>Notes. Six fonts, any size, sharp at every one.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Notes</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-calendar.webp" alt="Calendar app showing a month view" loading="lazy" width="984" height="462">
-      <p>Calendar. See your days and your plans at a glance.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Calendar</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-weather.webp" alt="Weather app showing live current conditions and the next 24 hours, a 7-day forecast and a few details" loading="lazy" width="984" height="462">
-      <p>Weather. Know what to wear before you walk out.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Weather</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-files.webp" alt="Burrow app showing a folder of files" loading="lazy" width="984" height="462">
-      <p>Burrow. Every file on the machine, right where you left it.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Burrow</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-terminal.webp" alt="Terminal app after uptime, mem and ls" loading="lazy" width="984" height="462">
-      <p>Terminal. Type a command and it answers back.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Terminal</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-stocks.webp" alt="Stocks app showing live quotes and an intraday chart" loading="lazy" width="984" height="462">
-      <p>Stocks. Keep an eye on a watchlist without leaving the desktop.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Stocks</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-bookrank.webp" alt="Bookrank app showing a ranked list of books with the author and a short summary of the selected one" loading="lazy" width="984" height="462">
-      <p>Bookrank. A ranked shelf with a short summary of each book.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Bookrank</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-tonchi.webp" alt="Patois app showing a Spanish word and four answers to pick from" loading="lazy" width="984" height="462">
-      <p>Patois. Pick a course, answer a question at a time, keep your streak.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Patois</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-curbfind.webp" alt="Curbfind app showing local listings with prices and a deal score for the selected one" loading="lazy" width="984" height="462">
-      <p>Curbfind. Local listings, each with a deal score.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Curbfind</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-epiphany.webp" alt="Epiphany app showing a watchlist, crypto and commodities, and a fear and greed gauge" loading="lazy" width="984" height="462">
-      <p>Epiphany. Markets, portfolio and a command bar in one window.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Epiphany</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-hamurapi.webp" alt="Hamurapi app showing a drawn city of houses and villagers around a ziggurat, with a button to start a new game" loading="lazy" width="984" height="462">
-      <p>Hamurapi. Be king for ten years, feed your people, keep your crown.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Hamurapi</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-windgate.webp" alt="Airwell app showing a blue circle growing inside a ring, with four breathing presets and a countdown" loading="lazy" width="984" height="462">
-      <p>Airwell. A circle to breathe with, four patterns, no account.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Airwell</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-panes.webp" alt="Panes app showing two shells side by side, with a rail of tabs on the left" loading="lazy" width="984" height="462">
-      <p>Panes. Tabs and split shells, beside the Terminal.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Panes</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-solitaire.webp" alt="Solitaire app showing seven columns of cards, the stock and four empty foundations" loading="lazy" width="984" height="462">
-      <p>Solitaire. Klondike, draw one, by key or click.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Solitaire</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-depths.webp" alt="Depths app showing a terracotta corridor in first person with a creature in the crosshair" loading="lazy" width="984" height="462">
-      <p>Depths. A first-person maze shooter, all our own code.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Depths</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-bricks.webp" alt="Bricks app showing six rows of clay-coloured bricks over a paddle and a ball" loading="lazy" width="984" height="462">
-      <p>Bricks. Break the wall, three balls.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Bricks</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-paddle.webp" alt="Paddle app showing two paddles, a ball and the score" loading="lazy" width="984" height="462">
-      <p>Paddle. A bounce game against the computer.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Paddle</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-snake.webp" alt="Snake app showing a snake on a checked grid and an apple" loading="lazy" width="984" height="462">
-      <p>Snake. Eat, grow, stay off the walls.</p>
-    </div>
-    <div class="tile">
+      <span class="wall-name" aria-hidden="true">Snake</span>
+    </figure>
+    <figure class="wall-item">
       <img src="shots/app-chess.webp" alt="Chess app showing the board at the start of a game" loading="lazy" width="984" height="462">
-      <p>Chess. You play White against the computer.</p>
-    </div>
+      <span class="wall-name" aria-hidden="true">Chess</span>
+    </figure>
   </div>
 </section>
 
@@ -965,7 +973,7 @@ p,li,.sub{text-wrap:pretty}
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">6.5.1</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">6.5.2</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"><canvas></canvas></div>
 </footer>
