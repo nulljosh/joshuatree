@@ -103,7 +103,7 @@ int lp_on_arm(int slot) {   /* the slot starts something here: a kernel-drawn wi
 static int lp_art(int slot) {   /* the ICON_ART slot of an entry: a dock tile's own art, else the app's APPS[] art (Brick has none of its own: the apps glyph; Settings: Activity's) */
     static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
     return slot < GUI_ICON_COUNT ? order[slot] : slot == GUI_ICON_COUNT ? 23 : slot == GUI_ICON_COUNT + 1 ? GUI_APPS_FOLDER : slot == SPOT_MUSIC ? 24 : slot == SPOT_BROWSER ? 19 : slot == SPOT_BOOKS ? 31
-         : slot == SPOT_FINDER ? 0 : slot == SPOT_SETTINGS ? 22 : slot == SPOT_GAME0 ? 30 : slot == SPOT_GAME0 + 1 ? 13 : slot == SPOT_GAME0 + 2 ? 26 : slot == SPOT_GAME0 + 3 ? 9 : slot >= SPOT_GAME0 + 4 ? 32 + (slot - SPOT_GAME0 - 4) : 17;   /* 4.24.0: Solitaire to Snake are APPS 32 to 36, Chess (4.25.0) 37 */
+         : slot == SPOT_FINDER ? 0 : slot == SPOT_SETTINGS ? 22 : slot == SPOT_GAME0 ? 30 : slot == SPOT_GAME0 + 1 ? 13 : slot == SPOT_GAME0 + 2 ? 26 : slot == SPOT_GAME0 + 3 ? 9 : slot == SPOT_GAME0 + 10 ? 25 : slot >= SPOT_GAME0 + 4 ? 32 + (slot - SPOT_GAME0 - 4) : 17;   /* 4.24.0: Solitaire to Snake are APPS 32 to 36, Chess (4.25.0) 37 */
 }
 static void lp_tile(int icon, int x, int y, int size, unsigned under, int grey) {   /* one icon, the dock tile's art on the card (or its selection plate); grey draws it washed out */
     int pw = size * (int)window_scale();

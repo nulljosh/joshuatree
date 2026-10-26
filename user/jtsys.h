@@ -91,6 +91,7 @@ struct jt_sysinfo {
     unsigned int data_stamp;
 };
 #define JT_SYS_READFILE    401 /* a whole file into one buffer, up to 6MB (open() stops at 8KB); see kernel/syscall.h */
+#define JT_SYS_READAT      403 /* 6.1.0, the Pi: len bytes of a file from byte off, for files too big to read whole; -ENOSYS on i386 */
 #define JT_SYS_TEXT        400 /* anti-aliased text for the window (389 is mkdir); see kernel/syscall.h */
 #define JT_SYS_TEXT2       402 /* ARM64 only (3.9.0): Tree Sans drawn into a hi-res window at device size; see user/libjt/hires.h. -ENOSYS on i386 */
 /* One JT_SYS_TEXT2 request, LP64 layout (the kernel reads the same offsets): x and y are device pixels (y the baseline),
@@ -256,6 +257,12 @@ static inline int jt_http_post_ex(struct jt_http_post *a, unsigned flags) { retu
 static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (jt_arg)path, (jt_arg)out, max); }
 /* Bytes read (at most cap), -ENOENT missing or empty, -EINVAL, -EFAULT. */
 static inline int jt_readfile(const char *path, void *buf, unsigned cap) { return jt_syscall(JT_SYS_READFILE, (jt_arg)path, (jt_arg)buf, cap); }
+struct jt_readat { unsigned long buf; unsigned int off, len; };
+/* Bytes read (0 at or past the end), or a negative errno. */
+static inline int jt_readat(const char *path, unsigned off, void *buf, unsigned len) {
+    struct jt_readat r = { (unsigned long)buf, off, len };
+    return jt_syscall(JT_SYS_READAT, (jt_arg)path, (jt_arg)&r, 0);
+}
 static inline int jt_mkdir(const char *path)                      { return jt_syscall(JT_SYS_MKDIR, (jt_arg)path, 0, 0); }
 static inline int jt_unlink(const char *path)                     { return jt_syscall(JT_SYS_UNLINK, (jt_arg)path, 0, 0); }
 static inline int jt_shell_run(const char *line, char *out, unsigned outlen) { return jt_syscall(JT_SYS_SHELL_RUN, (jt_arg)line, (jt_arg)out, outlen); }

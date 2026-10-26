@@ -14,6 +14,9 @@ int fat_mount(void);
    into buf. Returns the number of bytes read, or -1 if the file doesn't
    exist or is a directory. */
 int fat_read_file(const char *name_8_3, void *buf, unsigned int bufsize);
+/* Up to len bytes of the named file from byte off (6.1.0, for files too big to read whole). Returns the bytes read,
+   0 at or past the end, -1 if the file doesn't exist or is a directory. */
+int fat_read_at(const char *name_8_3, unsigned int off, void *buf, unsigned int len);
 
 /* Lists the current directory's entries by calling cb(name, size, is_dir)
    for each one ("." and ".." excluded). */

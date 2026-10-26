@@ -175,12 +175,12 @@ user.o: user.S
 # mp3.c (minimp3) does its sums in floating point, so it alone is built without -mgeneral-regs-only (UFPCC); EL0 may use
 # the FPU and vectors.S keeps an app's FP registers across every call and park. The kernel stays integer-only.
 # userapps.S bakes the images in with .incbin and lists them; a new app is a name in UAPPS and a row there.
-UAPPS = hello calendar notes music books finder mail weather stocks reminders mines toroid hamurabi keyrate solitaire paddle bricks depths snake chess
+UAPPS = hello calendar notes music books finder mail weather stocks reminders mines toroid hamurabi keyrate solitaire paddle bricks depths snake chess movies
 USEROBJ = user.o userapps.o
 UCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -mstrict-align -fPIE -fdirect-access-external-data -fno-builtin -fno-asynchronous-unwind-tables -Os -Wall -Wextra -I../../user
 UFPCC = $(filter-out -mgeneral-regs-only,$(UCC))
 UJT = ../../user/libjt
-UJTOBJ = ujt_string.o ujt_text.o ujt_osk.o ujt_stdlib.o ujt_wav.o ujt_mp3.o ujt_jpeg.o ujt_png.o
+UJTOBJ = ujt_string.o ujt_text.o ujt_osk.o ujt_stdlib.o ujt_wav.o ujt_mp3.o ujt_jpeg.o ujt_png.o ujt_avi.o
 ujt_string.o: $(UJT)/string.c $(UJT)/string.h
 	$(UCC) -c $< -o $@
 ujt_text.o: $(UJT)/text.c $(UJT)/text.h $(UJT)/aafont.h ../../user/jtsys.h
@@ -196,6 +196,8 @@ ujt_mp3.o: $(UJT)/mp3.c $(UJT)/mp3.h $(UJT)/stdlib.h $(UJT)/string.h ../../third
 ujt_png.o: $(UJT)/png.c ../../drivers/png.c ../../drivers/inflate.c ../../drivers/png.h ../../drivers/inflate.h $(UJT)/stdlib.h $(UJT)/string.h
 	$(UCC) -c $< -o $@
 ujt_jpeg.o: $(UJT)/jpeg.c ../../drivers/jpeg.c ../../drivers/jpeg.h $(UJT)/stdlib.h $(UJT)/string.h
+	$(UCC) -c $< -o $@
+ujt_avi.o: $(UJT)/avi.c $(UJT)/avi.h   # 6.1.0: Movies' AVI reader
 	$(UCC) -c $< -o $@
 # (the recipe line below was missing: make then built i386's weather.c through the pattern rule)
 uapp_weather.o: ../../user/weather_pi.c ../../user/jtsys.h $(UJT)/text.h $(UJT)/hires.h
