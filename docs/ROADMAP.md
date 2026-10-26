@@ -190,9 +190,8 @@ Worth doing, not yet re-checked, in the order the study ranked them:
   - The relay stays the default when the Mac answers. The local model answers when it does not.
   - Check: `tools/checks/arm64-llm-check.py` extended to the real model's tokenizer and a fixed prompt.
 
-- [ ] [Sonnet] Dock shading and magnification, like the Mac.
-  - The tray's shadow is a hard dark band under its bottom edge on the Pi (photo 2026-10-12). It should be a soft falloff that fades over 10 to 14 px. Each tile's drop shadow should do the same.
-  - Then Settings rows for dock size and hover magnification (off, small, large). The hovered tile and its two neighbours grow smoothly.
+- [ ] [Sonnet] Dock magnification, like the Mac. (The soft tray shadow is done: `gui_draw_dock_tray` in `kernel/gui_paint.c` fades it over `DOCK_SHADOW_REACH` on both desktops, `dockband-check.py`.)
+  - Settings rows for hover magnification (off, small, large); dock size already has a row. The hovered tile and its two neighbours grow smoothly.
   - Share `kernel/dock_draw.c` so both desktops match.
   - Check: `tools/checks/arm64-m1c-check.py` samples the shadow gradient, and a dock-magnify check reads the hovered tile's size.
 
@@ -679,7 +678,6 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Sonnet] Mobile Joshua Tree: the landing demo and the OS usable on a phone screen. Mobile first by 2026-10-04.
 - [ ] [Sonnet] Photos app: grid of the images on disk, click for full view, arrow keys to move. Built on `drivers/png.c`, plus baseline JPEG if the wallpaper decoder can be reused.
 - [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
-- [ ] [Sonnet] Load every typeface at boot (Joshua, 2026-10-07: "load the entire typeface on every boot, for concurrency and reliability"). At startup, parse and check all registered faces once and print one line, `fonts 14 of 14 ok`, so a broken or missing face shows at boot, not when an app first draws with it. A face that fails is dropped from the picker and the OS falls back to DejaVu Sans. Mind the ARM bump heap: it never frees, so measure the heap cost of all faces first and keep the glyph cache bounded. Check: boot headless, assert the line, and shrink the heap on purpose to prove the fallback.
 - [ ] [Sonnet] Keyboard shortcuts for the snap zones (halves, quarters, full), split out of the snapping item that shipped in #82.
 - [ ] [Sonnet] Music app: WAV playback from disk, playlist, play, pause, skip, volume. Unblocked: the Sound Blaster driver shipped in 1.6.9.
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
@@ -712,7 +710,6 @@ The Mac apps and menu bar pieces this OS still lacks, listed so they can be pick
 ## Tests and the loop
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck. See the Loop handoff section for what's merging right now.
 
-- [ ] [Sonnet] Notes repaints its whole buffer on every key. `tools/checks/editorflash-check.sh` still counts the old in-kernel `editorchrome` marker, which ring-3 Notes never writes. The work: repaint only the text area on plain keys, draw the chrome once, and assert the present counts. Not done in the 2.0.0 CI slice.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
 - [ ] [Sonnet] Boot splash shows the real engraved tree mark at full resolution, not the stick tree.
 - [ ] [Fable] Typography QA across Notes, the document app and the Terminal: spacing between letters, baselines, sizes and weights, every printable character, long lines, wrapping, selection. This kernel is a word processor from scratch, so text gets its own checks.
@@ -1034,6 +1031,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.27.0 (2026-10-26)**: Every typeface loads at boot (Joshua, 2026-10-07: "load the entire typeface on every boot"): i386 parses all 14 faces and draws one glyph from each before the desktop, keeps them (1,792 bytes of heap) and prints `fonts 14 of 14 ok`; a face that fails is named, stops being offered by name and draws as DejaVu Sans. The Pi prints the same line for its three. Check: `fonts-boot-check.py`.
 - **4.26.0 (2026-10-26)**: Running-app dots in the dock on both desktops (Joshua, 2026-10-07: "a little light below the icon, like macOS"): a small neutral dark dot under every tile whose app has a window open, drawn by the shared `gui_draw_dock_dot`. On the Pi the Console's window counts as the Terminal's. Check: `dockdots-check.py`.
 - **4.25.2 (2026-10-25)**: The EL0 boot self-tests leave the Pi's `main.c` for `arch/arm64/eltests.c` (1,073 lines to 965). The `app_len`, `app_code` and `app_img` macros live in `kmain.h` only: `main.c` also had dead globals of those names, which the new part would have read as 0. Check: `arm64-m3-check.py`, `arm64-m3c-check.py`, `godfile-check.sh`.
 - **4.25.1 (2026-10-25)**: `kmain` leaves `kernel/kernel.c` for `kernel/kmain.c` (1,260 lines to 982), so with `arch/arm64/main.c` at 1,073 then (965 after 4.25.2), both under the 1,000 Joshua asked for. Check: `check.sh`, `panic-symbols-check.py`, `usertest-check.sh`, `iso-boot-check.sh`.

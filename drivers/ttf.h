@@ -36,6 +36,10 @@ typedef enum {
 const char *ttf_face_name(ttf_face_t face);
 /* Returns the face for a registry name, or -1 when there is none. */
 int ttf_face_by_name(const char *name);
+/* 4.27.0: a face the boot preload could not use; ttf_face_by_name stops offering it and ttf_load_face gives DejaVu Sans. */
+void ttf_mark_broken(ttf_face_t face);
+int ttf_face_ok(ttf_face_t face);
+unsigned ttf_font_bytes(void);   /* the heap one loaded face holds */
 /* 1 for faces whose every glyph shares one advance (Terminal-safe). */
 int ttf_face_is_mono(ttf_face_t face);
 

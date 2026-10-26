@@ -88,7 +88,7 @@ static void run(char *line){
         /* 2.27.0 font registry: every embedded face, by name. */
         for (int i = 0; i < TTF_FACE_COUNT; i++) {
             puts(ttf_face_name((ttf_face_t)i));
-            puts(ttf_face_is_mono((ttf_face_t)i) ? "  (mono)\n" : "\n");
+            puts(!ttf_face_ok((ttf_face_t)i) ? "  (broken at boot, drawn as DejaVu Sans)\n" : ttf_face_is_mono((ttf_face_t)i) ? "  (mono)\n" : "\n");
         }
     }
     else if (!strcmp(line, "dmesg")) klog_dump();
