@@ -851,7 +851,18 @@ Want to try parts (an LED, a button, a speaker) before soldering anything? See t
 
 Rough Canadian estimates, not quotes.
 
-**This week:**
+**For Nimbus (the printed computer, docs/hardware/nimbus/pack/bom.csv):**
+- The screen first: a 16:9 HDMI panel, 8 inch class, touch if you want it, outline about 194 x 110 mm ($60 to $100). Measure it with calipers before anything is printed; the case's numbers are stand-ins until then.
+- Digital calipers (about $15 to $25), if there are none in the house.
+- A right-angle micro-HDMI to HDMI cable, 20 to 30 cm (about $10 to $15).
+- Two USB-C panel-mount extension cables (about $10 to $15 for both).
+- A short microSD to SD extension cable for the front card slot (about $8 to $12).
+- A 3.5 mm panel-mount jack (about $5).
+- Self-tapping screws, four M2.5 x 6 and two M3 x 12 (about $5 to $10).
+- Double-sided foam tape, 2 mm thick (about $5).
+- The print: three parts (front shell, back cover, terracotta inlay) from the STLs in the pack, cream PLA or PETG; ask the store for a quote (roughly $40 to $80). Print the front shell alone first as a fit test.
+
+**Earlier list:**
 - A USB-C to TTL serial cable, 3.3 V (about $10 to $15).
 - A smart plug so the Mac can power-cycle the Pi (about $15 to $20).
 - A second 32 GB microSD (about $10). One card for the last good build and one for experiments.
@@ -865,7 +876,6 @@ Rough Canadian estimates, not quotes.
 - A Pi camera module (about $25 to $35).
 
 **Later:**
-- A 7 inch touchscreen ($60 to $90).
 - A Raspberry Pi Pico ($5 to $8).
 - A USB gamepad ($20 to $30, for Doom).
 - A small USB speaker or sound card (about $15, for the Samantha box; the Yeti mic is here).
