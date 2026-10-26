@@ -53,6 +53,10 @@ const page = await context.newPage();
 // a boot-stall or a network flake can't hang this unlock-only check.
 await page.route('**/api/proxy**', (route) => route.fulfill({ status: 403, body: '' }));
 
+const pageLog = [];   // printed on a failure: a timeout alone says nothing about why the demo never came up
+page.on('pageerror', (e) => pageLog.push('pageerror: ' + e.message));
+page.on('console', (m) => { if (m.type() === 'error') pageLog.push('console: ' + m.text()); });
+page.on('requestfailed', (r) => pageLog.push('requestfailed: ' + r.url() + ' ' + (r.failure() || {}).errorText));
 await page.goto(url, { waitUntil: 'load' });
 
 try {
@@ -97,6 +101,8 @@ try {
   else ok(`unlock listener ran ${debugAfterTap.unlockAttempts} time(s), last event "${debugAfterTap.lastUnlockEvent}"`);
 } catch (e) {
   if (!fails.length) fail(String(e && e.message || e));
+  for (const l of pageLog.slice(-15)) console.log('  page ' + l);
+  console.log('  __jt: ' + await page.evaluate(() => JSON.stringify({ jt: !!window.__jt, emu: !!(window.__jt && window.__jt.emu) })).catch(() => '?'));
 } finally {
   await browser.close();
   server.close();
