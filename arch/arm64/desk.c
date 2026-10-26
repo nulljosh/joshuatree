@@ -120,6 +120,7 @@ int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the d
     if (power_key(code)) return 1;
     if (volume_key(code)) return 1;   /* before Spotlight and every pane, like the Spotlight shortcut */
     if (gui_held && (code == 17 || code == 16)) return front_close();   /* Cmd+W closes the front window, Cmd+Q quits the front app: every window here is one app's, so both end it */
+    if ((gui_held || ctrl_held) && code == 15) return app_cycle();   /* Cmd+Tab, or Ctrl+Tab on a keyboard with no Cmd */
     if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
     if (code == 68 || (ctrl_held && alt_held && code == 20)) { int was = spot_live && spot_tree; spot_close(); if (!was) tree_open(); return 1; }   /* F10 or Ctrl+Option+T: the tree menu, for a board with no mouse; again closes it */
     if (code == 60 || (ctrl_held && code == 20)) { spot_close(); settings_close(); brick_close(); clock_close(); browser_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */

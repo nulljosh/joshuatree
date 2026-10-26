@@ -173,6 +173,14 @@ void app_window_close(void) {
     cur_show();
 }
 /* A dock tile whose name is an app in the table (Calendar, and any later one): start it, or bring its window up. */
+int app_cycle(void) {   /* Cmd+Tab or Ctrl+Tab: the app window furthest back comes to the front, so each tap walks every open one */
+    if (!app_zn) return 1;
+    spot_close(); settings_close(); brick_close(); clock_close(); browser_close();
+    ap = &apps[app_z[app_front ? app_zn - 1 : 0]];   /* the Terminal or the Console in front: the last app used comes back first */
+    app_raise();   /* ponytail: no hold-and-pick panel as on i386; with three or more windows a tap goes to the oldest, not the last used */
+    con_quiet = 1; uart_puts("switch "); uart_puts(ap->cur->name); uart_putc('\n');
+    return 1;
+}
 int app_dock(const char *name) {
     for (const struct user_app *a = user_apps; a->name; a++) {
         unsigned i = 0;
