@@ -1980,27 +1980,34 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-26, overnight. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-26, 01:10 Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards. Open a loop PR ready, not as a draft: a push to a draft followed by `gh pr ready` lets the skipped draft run cancel the real one.
 
-**Where things stand.** Main is 5.0.x, Talk to it, cut 2026-10-26 on Joshua's word before his board pass. On the way: Cmd+Tab (4.28.0) and Cmd+N (4.29.0) on the Pi, `boottime` for the dead first seconds (4.28.1), and the README and landing opening on the desktop at work (4.29.1). Overnight 2026-10-25 to 26: the five games (4.23.0) went onto the Pi (4.24.0), Chess arrived on both builds (4.25.0), the dock shows a dot under every open app (4.26.0, Joshua's 2026-10-07 ask) and every typeface loads at boot (4.27.0). Both god files are under 1,000 lines: `kernel/kernel.c` 982 and `arch/arm64/main.c` 965, cut into wallpaint, uitext, menubar, appview, desktop and kmain on i386, and virtio, boot, desk, keys, windows, appwin, pointer, crash, console and eltests on the Pi. The card flashed on the evening of 2026-10-25 carries 4.27.0, so everything since needs a reflash.
+**Where things stand.** Main is 5.3.0. Since 5.0 it gained Nimble on the Pi, the Terminal and Samantha's plugin (5.1.0), a backup of the home folder to the Mac (5.2.0), and a restore from the Mac (5.3.0). The restore takes a snapshot first and never overwrites a file the snapshot missed. Open: #693, 6.0.0 "Yours", from the `logo-6` branch. It is in CI, and it merges on green, which reaches the loop goal of 0 open issues and 0 open PRs. 6.0 also adds a three-minute limit on each live Samantha CI step. 6.0 adds a sixth tuft to the logo, each person's own wallpaper, and the Nimbus Kit (renamed from Neo Kit) with its parts list in `docs/GUIDE.md`. The SD card for the board pass is flashed with the 6.0 build. The repo has 0 open GitHub issues.
+
+**Waiting on Joshua.** The board pass on the 6.0 card, tomorrow (2026-10-27), with the 10-step test list from chat. The 8-inch HDMI screen for the Nimbus case, which he plans to buy on 2026-10-27. Then the older asks: what `boottime` prints in the Terminal after a board boot, a yes to bring GPL code into the tree for the real Doom port, whether dock hover zoom comes back (removed on purpose in #46 on 2026-09-20), and a launch-with-file path for Preview.
+
+**Next, in order.**
+1. Let CI finish on #693. Merge it the moment it is green, alone, and only after the branch is up to date.
+2. Whatever the board pass shows is broken. Fix it on a new branch and merge that next.
+3. The items above that wait on his word.
+4. After any split, the Lessons entries under "Splitting a file", and a `make clean && make` before the push.
 
 **Splitting a file.** Five traps turned up, each now a Lessons entry in `docs/ARCHITECTURE.md`: a macro one part defines and another tests, a static copied into two parts, an `#ifndef` default copied without its guard, dead globals shadowed by a macro of the same name, and a generated header the Makefile only tied to the old object.
 
-**Waiting on Joshua.** The card ("card in" flashes main once), what `boottime` in the Terminal says after a board boot (for the dead first seconds), a yes to bring GPL code into the tree for the real Doom port, whether dock hover zoom comes back (removed on purpose in #46 on 2026-09-20), and Preview (his Mac gaps list): opening a file from the Finder in another app needs a launch-with-file path on both builds first.
+Restart prompt:
 
-**Next, in order.**
-1. Joshua's board pass on a fresh 5.0 card: hold Space and talk, the Samantha tile opens her full-screen chat, she answers out loud; the games and Chess from Spotlight; `boottime` in the Terminal.
-2. Whatever the board shows is broken.
-3. The items above that wait on his word.
-4. After any split, the Lessons entries under "Splitting a file", and a `make clean && make` before the push.
+```
+/loop to the next major (6.0), semver; goal: 0 GitHub issues, 0 stale branches, all PRs merged safely. Use roadmap and loop pickup
+```
 
 Rules kept:
 - No bare `git stash` (shared across worktrees).
 - Generated files (VERSION, landing/*) take main's side in a merge and are regenerated.
 - No keys on the public card. Flash only the dev card, and only when Joshua says it is in.
 - Every X.0.0 ships a refreshed logo and UI.
+- Leave the `logo-6` branch and its worktree alone until #693 is merged or closed.
 
 ## Samantha reset postmortem
 
