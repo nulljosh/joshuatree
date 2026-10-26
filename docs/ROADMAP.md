@@ -384,10 +384,8 @@ The road there is the queue below:
 Say honestly what is not here yet in every release note.
 
 Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance"). Software first. Items that need a part wait for the part.
-- [ ] [Fable] Admin and sudo (Joshua, 2026-10-06: "fix it soon").
-  - A second privilege tier on the accounts that already exist (login screen, PBKDF2 passwords, Settings "Add user").
-  - An admin flag per account, a password prompt before anything that installs, deletes a user or changes system settings, and a normal-user role that cannot.
-  - i386 build first. It touches `kernel/auth.h`, Settings and the syscall gate, not the ARM files, so it can run beside Wi-Fi.
+- [ ] [Fable] Admin and sudo (Joshua, 2026-10-06: "fix it soon"). Done on the Pi in 4.8.0 to 4.10.0: accounts, the login screen, an admin flag, `sudo`, `makeadmin` and `unadmin` (`tools/checks/arm64-sudo-check.py`). Left: the same tier on i386.
+  - An admin flag per account, a password prompt before anything that installs, deletes a user or changes system settings, and a normal-user role that cannot. On i386 it touches `kernel/auth.h`, Settings and the syscall gate.
   - Per-user home folders shipped in 4.11.0; file permissions follow (6.0).
 - [ ] [Fable] Sound over DMA.
   - Move the PWM FIFO feed to a DMA channel so long sounds do not hold the CPU, then HDMI audio. Then Movies plays a clip with sound on the Pi.
@@ -1998,19 +1996,21 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-25, afternoon. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-26, overnight. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards. Open a loop PR ready, not as a draft: a push to a draft followed by `gh pr ready` lets the skipped draft run cancel the real one.
 
-**Where things stand.** Main is 4.25.x, aiming at 5.0, Talk to it. 4.23.0 added five games played to the end (Solitaire, Paddle, Bricks, Depths, Snake); 4.24.0 put them on the Pi, and 4.25.0 added Chess. The card flashed on 2026-10-25 carries 4.20.19, so relay-free Samantha (4.21.0) and the games need a reflash. Both god files are under the 2,000-line limit: `arch/arm64/main.c` is 965 lines (4.23.2 to 4.25.2 cut it into virtio, boot, desk, keys, windows, appwin, pointer, crash, console and eltests) and `kernel/kernel.c` 982 (4.23.6 to 4.25.1 moved the wallpaper, UI text, menu bar, app viewport, `gui_run` and `kmain`). The god-file check covers `arch/`.
+**Where things stand.** Main is 4.27.x, aiming at 5.0, Talk to it. Overnight 2026-10-25 to 26: the five games (4.23.0) went onto the Pi (4.24.0), Chess arrived on both builds (4.25.0), the dock shows a dot under every open app (4.26.0, Joshua's 2026-10-07 ask) and every typeface loads at boot (4.27.0). Both god files are under 1,000 lines: `kernel/kernel.c` 982 and `arch/arm64/main.c` 965, cut into wallpaint, uitext, menubar, appview, desktop and kmain on i386, and virtio, boot, desk, keys, windows, appwin, pointer, crash, console and eltests on the Pi. The card flashed on 2026-10-25 carries 4.20.19, so everything since needs a reflash.
 
-**What is left in kernel.c.** The APPS table, the console and keyboard input, the boot chime, and the dock launch path. A split must keep each `#ifndef` default guarded, keep static state in one file, and move a macro two parts test into the shared header (Lessons, "Splitting a file").
+**Splitting a file.** Five traps turned up, each now a Lessons entry in `docs/ARCHITECTURE.md`: a macro one part defines and another tests, a static copied into two parts, an `#ifndef` default copied without its guard, dead globals shadowed by a macro of the same name, and a generated header the Makefile only tied to the old object.
+
+**Waiting on Joshua.** The card ("card in" flashes main once), a yes to bring GPL code into the tree for the real Doom port, whether dock hover zoom comes back (removed on purpose in #46 on 2026-09-20), and Preview (his Mac gaps list): opening a file from the Finder in another app needs a launch-with-file path on both builds first.
 
 **Next, in order.**
-1. Joshua's board pass on a fresh card: hold Space and talk, the Samantha tile opens her full-screen chat, she answers out loud.
+1. Joshua's board pass on a fresh card: hold Space and talk, the Samantha tile opens her full-screen chat, she answers out loud; the games and Chess from Spotlight.
 2. Whatever the board shows is broken.
-3. The real Doom port waits on Joshua's yes to bring GPL code into the tree (doomgeneric kept in its own folder, Freedoom loaded from disk).
-4. After a split, grep `tools/checks/` for regexes that read the old file for code that moved (`design-doc-check.py` reads many facts by path).
+3. The items above that wait on his word.
+4. After any split, the Lessons entries under "Splitting a file", and a `make clean && make` before the push.
 
 Rules kept:
 - No bare `git stash` (shared across worktrees).
