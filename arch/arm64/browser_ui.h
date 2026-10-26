@@ -4,13 +4,14 @@
    sink, and reads the page back through browser.c's accessors. Loading blocks, as it does at the Terminal; "loading..."
    is painted first. Every line it logs on the UART starts "browser: " (arm64-browser-app-check.py reads them). */
 #include "mascot_art.h"
+#include "home.h"
 extern void (*cmd_out)(const char *s);                       /* cmd.c */
 int browse_command(const char *q, unsigned n);               /* browser.c */
 const char *browser_text(unsigned *len);
 const char *browser_url(void);
 const char *browser_title(void);
 int sd_ready(void); int sd_write(const char *name, const void *data, unsigned len); int sd_enter_jt(int make);   /* emmc.c */
-int fat_read_file(const char *name, void *buf, unsigned bufsize); int fat_chdir(const char *name);          /* drivers/fat.c */
+int fat_read_file(const char *name, void *buf, unsigned bufsize); int fat_chdir(const char *name); void fat_cwd_set(unsigned int cluster);   /* drivers/fat.c */
 const char *browser_link(unsigned n);
 unsigned browser_loads(void);
 #define BR_ROW 16          /* a page line, logical pixels */
@@ -42,35 +43,74 @@ static unsigned br_slen(const char *s) { unsigned n = 0; while (s[n]) n++; retur
 static int br_has(const char *s, const char *w) { unsigned k = br_slen(w); for (; *s; s++) { unsigned i = 0; while (i < k && s[i] == w[i]) i++; if (i == k) return 1; } return 0; }
 static void br_set(char *d, const char *s, unsigned max) { unsigned n = 0; while (s[n] && n + 1 < max) { d[n] = s[n]; n++; } d[n] = 0; }
 static int bm_find(const char *u) { for (unsigned i = 0; i < bm_n; i++) { unsigned k = 0; while (bm_url[i][k] && bm_url[i][k] == u[k]) k++; if (bm_url[i][k] == u[k]) return (int)i; } return -1; }
-static void bm_load(void) {
-    static char buf[BM_MAX * (BM_URL + 66)];
-    bm_loaded = 1; bm_n = 0;
-    if (!sd_ready() || !sd_enter_jt(0)) return;
-    int got = fat_read_file(BM_FILE, buf, sizeof buf - 1);
+/* 6.7.0, Blackcomb: Recent, the last pages opened, newest first, in the same one-line-a-page form as the bookmarks. Both
+   lists are each person's own, in their home folder, read on every open (a sign-in may have changed who that is). With no
+   accounts, or before someone has a list of their own, they are the card's JT/ files. */
+#define HS_MAX 8
+#define HS_FILE "HISTORY.TXT"
+static char hs_url[HS_MAX][BM_URL + 1], hs_title[HS_MAX][64];
+static unsigned hs_n;
+static char br_list_buf[BM_MAX * (BM_URL + 66)];
+static int br_read(const char *name) {   /* the file into br_list_buf: ~/NAME first, else JT/NAME; its length, or <= 0 */
+    char dir[HOME_DIR_MAX + 1]; int got = -1;
+    if (!sd_ready() || !sd_enter_jt(0)) return -1;
+    if (home_active() && home_mine(dir) && home_in(dir, 0)) {
+        got = fat_read_file(name, br_list_buf, sizeof br_list_buf - 1);
+        fat_cwd_set(0);
+        if (got > 0 || !sd_enter_jt(0)) return got;
+    }
+    got = fat_read_file(name, br_list_buf, sizeof br_list_buf - 1);
     fat_chdir("..");
-    for (unsigned i = 0, n = got > 0 ? (unsigned)got : 0; i < n && bm_n < BM_MAX;) {
+    return got;
+}
+static unsigned br_list_parse(int got, char (*url)[BM_URL + 1], char (*title)[64], unsigned max) {
+    unsigned k = 0; const char *buf = br_list_buf;
+    for (unsigned i = 0, n = got > 0 ? (unsigned)got : 0; i < n && k < max;) {
         unsigned e = i; while (e < n && buf[e] != '\n') e++;
         unsigned u = i; while (u < e && buf[u] != ' ') u++;
         if (u - i > 7 && u - i <= BM_URL && buf[i] == 'h') {
-            for (unsigned k = i; k < u; k++) bm_url[bm_n][k - i] = buf[k];
-            bm_url[bm_n][u - i] = 0;
-            unsigned t = u < e ? u + 1 : e, m = 0; while (t < e && m < 63 && buf[t] != '\r') bm_title[bm_n][m++] = buf[t++];
-            bm_title[bm_n][m] = 0; bm_n++;
+            for (unsigned j = i; j < u; j++) url[k][j - i] = buf[j];
+            url[k][u - i] = 0;
+            unsigned t = u < e ? u + 1 : e, m = 0; while (t < e && m < 63 && buf[t] != '\r') title[k][m++] = buf[t++];
+            title[k][m] = 0; k++;
         }
         i = e + 1;
     }
-    con_quiet = 1; uart_puts("browser: bookmarks loaded "); uart_dec(bm_n); uart_putc('\n');
+    return k;
 }
-static int bm_save(void) {   /* the whole list back to the card; 1 when it is there */
-    static char buf[BM_MAX * (BM_URL + 66)]; unsigned n = 0;
-    for (unsigned i = 0; i < bm_n; i++) {
-        for (const char *p = bm_url[i]; *p; p++) buf[n++] = *p;
-        buf[n++] = ' ';
-        for (const char *p = bm_title[i]; *p; p++) buf[n++] = *p;
-        buf[n++] = '\n';
+static int br_list_save(const char *name, char (*url)[BM_URL + 1], char (*title)[64], unsigned cnt) {   /* 1 when it is on the card */
+    unsigned n = 0;
+    for (unsigned i = 0; i < cnt; i++) {
+        for (const char *p = url[i]; *p; p++) br_list_buf[n++] = *p;
+        br_list_buf[n++] = ' ';
+        for (const char *p = title[i]; *p; p++) br_list_buf[n++] = *p;
+        br_list_buf[n++] = '\n';
     }
-    return sd_ready() && sd_write(BM_FILE, buf, n) == 1;
+    if (!sd_ready()) return 0;
+    return home_active() ? home_save(name, br_list_buf, n) == 1 : sd_write(name, br_list_buf, n) == 1;
 }
+static void bm_load(void) {
+    bm_loaded = 1;
+    bm_n = br_list_parse(br_read(BM_FILE), bm_url, bm_title, BM_MAX);
+    hs_n = br_list_parse(br_read(HS_FILE), hs_url, hs_title, HS_MAX);
+    con_quiet = 1; uart_puts("browser: bookmarks loaded "); uart_dec(bm_n); uart_puts(", recent "); uart_dec(hs_n); uart_putc('\n');
+}
+static int bm_save(void) { return br_list_save(BM_FILE, bm_url, bm_title, bm_n); }
+static void hs_add(const char *u, const char *t) {   /* a page that loaded goes to the top of Recent, once */
+    unsigned at = 0; while (at < hs_n && !(br_slen(hs_url[at]) == br_slen(u) && br_has(hs_url[at], u))) at++;
+    if (at == hs_n && hs_n < HS_MAX) hs_n++;
+    if (at >= hs_n) at = hs_n - 1;
+    for (unsigned i = at; i > 0; i--) { br_set(hs_url[i], hs_url[i - 1], sizeof hs_url[0]); br_set(hs_title[i], hs_title[i - 1], sizeof hs_title[0]); }
+    br_set(hs_url[0], u, sizeof hs_url[0]); br_set(hs_title[0], t, sizeof hs_title[0]);
+    br_list_save(HS_FILE, hs_url, hs_title, hs_n);
+}
+/* The start page (6.7.0, Blackcomb's): Favorites, the bookmarks, then Recent under them, as many rows as the well holds.
+   Item k (1-based) runs through both; st_y is its row's top under the well, st_url its address. */
+static int br_h(void);
+static int st_y(unsigned k) { return k <= bm_n ? BM_Y0 + (int)(k - 1) * BM_ROW : (bm_n ? BM_Y0 + (int)bm_n * BM_ROW + 6 : 6) + 24 + (int)(k - 1 - bm_n) * BM_ROW; }
+static unsigned st_count(void) { unsigned k = 0; while (k < bm_n + hs_n && st_y(k + 1) + BM_ROW <= br_h()) k++; return k; }
+static const char *st_url(unsigned k) { return k <= bm_n ? bm_url[k - 1] : hs_url[k - 1 - bm_n]; }
+static const char *st_title(unsigned k) { return k <= bm_n ? bm_title[k - 1] : hs_title[k - 1 - bm_n]; }
 static int br_x(void) { return win_lx + 8; }
 static int br_w(void) { return win_lw - 16; }
 static int br_h(void) { return win_lh - BR_PAGE_Y - 26; }
@@ -144,7 +184,7 @@ void browser_paint(int report) {
     unsigned long h0 = off_screen_hash(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
 #endif
     int off = off_begin(win_lx * s, win_ly * s, win_lw * s, win_lh * s);   /* the whole window is drawn off screen, then copied over in one pass */
-    if (br_frame) { gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Browser"); br_frame = 0; }
+    if (br_frame) { gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Blackcomb"); br_frame = 0; }
     else window_rect(win_lx + 8, win_ly + 30, win_lw - 16, win_lh - 34, 0x00F5F0EB);   /* the frame's own body colour, down to 4 px off the edge so the status line's descenders clear too */
     static const char *const lbl[3] = { "<", ">", "R" };
     for (int i = 0; i < 3; i++) {
@@ -175,18 +215,28 @@ void browser_paint(int report) {
         gui_text(buf, x + 6, ly, num ? BR_ACCENT : 0x001C1C1E);
         if (report && num) { con_quiet = 1; uart_puts("browser: shows link "); uart_dec(num); uart_puts(" at "); uart_dec((unsigned)(x + 16) * (unsigned)s); uart_putc(','); uart_dec((unsigned)(ly + 8) * (unsigned)s); uart_putc('\n'); }
     }
-    if (!len) {   /* an empty well: the mascot, and the words under it */
+    if (!len && browser_url()[0]) {   /* 6.8.0: a page came back with no words: its text is built by script, which Blackcomb does not run */
+        const char *l1 = "This page is built by JavaScript,", *l2 = "which Blackcomb does not run yet.";
+        int top = y + (h - 40) / 2;
+        gui_text(l1, x + (w - gui_text_width(l1)) / 2, top, 0x0075726E);
+        gui_text(l2, x + (w - gui_text_width(l2)) / 2, top + 20, 0x0075726E);
+    } else if (!len) {   /* an empty well: the start page or the mascot */
         const char *none = "Nothing to show yet";
         int top = y + (h - 96 - 28) / 2;
-        if (bm_n) {   /* saved pages stand in for the mascot */
-            gui_text("Bookmarks", x + 8, y + 6, 0x0075726E);
-            for (unsigned i = 0; i < bm_n; i++) {
-                int ly = y + BM_Y0 + (int)i * BM_ROW;
-                if (bm_sel == i + 1) window_rect(x + 2, ly - 2, w - 4, BM_ROW, 0x00F3E2D8);
-                char nm[64]; br_set(nm, bm_title[i][0] ? bm_title[i] : bm_url[i], sizeof nm);
-                for (unsigned k = br_slen(nm); k && gui_text_width(nm) > w - 24; ) nm[--k] = 0;
+        unsigned items = st_count();
+        if (items) {   /* the start page: saved and recent pages stand in for the mascot */
+            if (bm_n) gui_text("Favorites", x + 8, y + 6, 0x0075726E);
+            if (items > bm_n) gui_text("Recent", x + 8, y + st_y(bm_n + 1) - 24, 0x0075726E);
+            for (unsigned k = 1; k <= items; k++) {
+                int ly = y + st_y(k);
+                if (bm_sel == k) window_rect(x + 2, ly - 2, w - 4, BM_ROW, 0x00F3E2D8);
+                char nm[64]; br_set(nm, st_title(k)[0] ? st_title(k) : st_url(k), sizeof nm);
+                for (unsigned c = br_slen(nm); c && gui_text_width(nm) > w - 24; ) nm[--c] = 0;
                 gui_text(nm, x + 8, ly, 0x001C1C1E);
-                if (report) { con_quiet = 1; uart_puts("browser: shows bookmark "); uart_dec(i + 1); uart_putc(' '); uart_puts(bm_url[i]); uart_putc('\n'); }
+                if (report) {
+                    con_quiet = 1; uart_puts(k <= bm_n ? "browser: shows bookmark " : "browser: shows recent ");
+                    uart_dec(k <= bm_n ? k : k - bm_n); uart_putc(' '); uart_puts(st_url(k)); uart_putc('\n');
+                }
             }
         } else {
             br_mascot_draw(x + w / 2, top);
@@ -235,6 +285,8 @@ static void br_run(const char *cmd) {   /* one browse_command line, with "loadin
     cmd_out = old; br_loading = 0;
     if (browser_loads() != before) {
         br_top = 0; br_sel = 0; br_wrap();
+        if (browser_url()[0] && br_lines) hs_add(browser_url(), browser_title());   /* 6.7.0: Recent; 6.8.0: not a page with no words */
+        if (!br_lines) { con_quiet = 1; uart_puts("browser: needs javascript\n"); }
         con_quiet = 1; uart_puts("browser: page "); uart_dec(br_lines); uart_puts(br_lines == 1 ? " line\n" : " lines\n");
         browser_paint(1);
         return;
@@ -248,13 +300,29 @@ static void br_run(const char *cmd) {   /* one browse_command line, with "loadin
     con_quiet = 1; uart_puts("browser: status "); uart_puts(br_msg); uart_putc('\n');
     browser_paint(0);
 }
+/* 6.7.0, as Blackcomb does: what is typed is an address when it has a scheme, a host when it has a dot and no space (https:// goes
+   in front), and otherwise a search, on DuckDuckGo's page that needs no JavaScript. */
+#define BR_SEARCH "https://html.duckduckgo.com/html/?q="
 static void br_load(void) {   /* Enter in the address bar */
     if (!br_addr_n) return;
-    char cmd[BR_ADDR_MAX + 8]; unsigned n = 0;
+    char cmd[260]; unsigned n = 0;
+    int scheme = br_has(br_addr, "://"), space = br_has(br_addr, " "), dot = br_has(br_addr, ".");
     for (const char *p = "browse "; *p; p++) cmd[n++] = *p;
-    for (unsigned i = 0; i < br_addr_n; i++) cmd[n++] = br_addr[i];
+    if (!scheme && dot && !space) for (const char *p = "https://"; *p; p++) cmd[n++] = *p;
+    if (scheme || (dot && !space)) for (unsigned i = 0; i < br_addr_n && n < sizeof cmd - 1; i++) cmd[n++] = br_addr[i];
+    else {
+        static const char hex[] = "0123456789ABCDEF";
+        for (const char *p = BR_SEARCH; *p; p++) cmd[n++] = *p;
+        for (unsigned i = 0; i < br_addr_n && n < sizeof cmd - 4; i++) {
+            unsigned char c = (unsigned char)br_addr[i];
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '~') cmd[n++] = (char)c;
+            else if (c == ' ') cmd[n++] = '+';
+            else { cmd[n++] = '%'; cmd[n++] = hex[c >> 4]; cmd[n++] = hex[c & 15]; }
+        }
+        con_quiet = 1; uart_puts("browser: search "); uart_puts(br_addr); uart_putc('\n');
+    }
     cmd[n] = 0;
-    con_quiet = 1; uart_puts("browser: load "); uart_puts(br_addr); uart_putc('\n');
+    con_quiet = 1; uart_puts("browser: load "); uart_puts(cmd + 7); uart_putc('\n');
     br_addr_n = 0; br_addr[0] = 0;
     br_run(cmd);
 }
@@ -289,20 +357,20 @@ static void br_star(void) {   /* the star: the open page joins the list, or leav
     }
     browser_paint(0);
 }
-static int br_empty(void) { unsigned len; browser_text(&len); return !len; }
+static int br_empty(void) { unsigned len; browser_text(&len); return !len && !browser_url()[0]; }   /* no page open: the start page */
 static void br_bookmark(unsigned n) {   /* bookmark n (1-based) opens as a typed address would */
-    if (!n || n > bm_n) return;
+    if (!n || n > st_count()) return;
     char cmd[BM_URL + 8]; unsigned o = 0;
     for (const char *p = "browse "; *p; p++) cmd[o++] = *p;
-    for (const char *p = bm_url[n - 1]; *p; p++) cmd[o++] = *p;
+    for (const char *p = st_url(n); *p; p++) cmd[o++] = *p;
     cmd[o] = 0; bm_sel = 0;
     con_quiet = 1; uart_puts("browser: bookmark "); uart_dec(n); uart_putc('\n');
     br_run(cmd);
 }
 static void br_tab(void) {
     if (br_empty()) {   /* no page: Tab walks the saved ones */
-        if (!bm_n) return;
-        bm_sel = bm_sel % bm_n + 1; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0;
+        if (!st_count()) return;
+        bm_sel = bm_sel % st_count() + 1; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0;
         con_quiet = 1; uart_puts("browser: selected bookmark "); uart_dec(bm_sel); uart_putc('\n');
         browser_paint(0); return;
     }   /* Tab: the next link, wrapping, scrolled into view */
@@ -327,7 +395,7 @@ void browser_open(void) {
     if (browser_live || !fb) return;
     settings_close(); clock_close(); brick_close(); calc_close(); app_kill("closed for the Browser"); console_close();
     browser_live = 1; br_frame = 1; br_sel = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; br_msg[0] = 0; br_top = 0;
-    br_wrap(); bm_sel = 0; if (!bm_loaded) bm_load();
+    br_wrap(); bm_sel = 0; bm_load();   /* 6.7.0: every open, so the lists are the signed-in person's */
     browser_paint(1); uart_puts("browser open\n");
 }
 void browser_close(void) {
@@ -386,10 +454,11 @@ void browser_click(int lx, int ly) {
         if (lx >= win_lx + 92 && lx < win_lx + win_lw - 10) { br_edit = 1; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); }
         return;
     }
-    if (br_empty() && bm_n && lx >= br_x() && lx < br_x() + br_w() && ly >= win_ly + BR_PAGE_Y + BM_Y0 - 2) {
-        unsigned i = (unsigned)(ly - (win_ly + BR_PAGE_Y + BM_Y0 - 2)) / BM_ROW;
-        if (i < bm_n) br_bookmark(i + 1);
-        return;
+    if (br_empty() && st_count() && lx >= br_x() && lx < br_x() + br_w()) {   /* a start-page row opens its page */
+        for (unsigned k = 1; k <= st_count(); k++) {
+            int top = win_ly + BR_PAGE_Y + st_y(k) - 2;
+            if (ly >= top && ly < top + BM_ROW) { br_bookmark(k); return; }
+        }
     }
     int y = win_ly + BR_PAGE_Y + 4;
     if (lx < br_x() || lx >= br_x() + br_w() || ly < y) return;

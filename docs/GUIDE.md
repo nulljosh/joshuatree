@@ -315,6 +315,8 @@ Start the relay from the repo root:
 python3 tools/claude-relay/relay.py --token-file ~/.claude-relay-token
 
 For speech, run the words service next to it with the same token: `python3 tools/claude-relay/stt.py --token-file ~/.claude-relay-token` (port 8766, whisper.cpp from Homebrew and its base English model, nothing leaves the Mac). The Pi posts what its microphone heard and gets the words back.
+
+For YouTube in Blackcomb, run the video service beside them with the same token: `python3 tools/claude-relay/yt.py --token-file ~/.claude-relay-token` (port 8767, `brew install yt-dlp`). A YouTube address then opens a page about the video: its title, channel, length and description. Its Play in Movies link makes the video into a clip for the Pi (it needs `ffmpeg` too) and Movies plays it.
 ```
 
 It listens on `127.0.0.1:8765`. QEMU's network reaches your Mac's loopback at `10.0.2.2`, so boot with a network card:
@@ -438,6 +440,7 @@ From the repository root, start the reviewed relay with TLS:
 ```sh
 python3 tools/claude-relay/relay.py --lan --turing --token-file ~/.claude-relay-token --tls-cert ~/.config/joshuatree/relay-tls/server.pem --tls-key ~/.config/joshuatree/relay-tls/server.key
 python3 tools/claude-relay/stt.py --lan --token-file ~/.claude-relay-token --tls-cert ~/.config/joshuatree/relay-tls/server.pem --tls-key ~/.config/joshuatree/relay-tls/server.key
+python3 tools/claude-relay/yt.py --lan --token-file ~/.claude-relay-token --tls-cert ~/.config/joshuatree/relay-tls/server.pem --tls-key ~/.config/joshuatree/relay-tls/server.key
 ```
 
 - `--turing` answers as Samantha from Turing's `app/serve.py`, so start that first. Leave it off to use `claude -p`.

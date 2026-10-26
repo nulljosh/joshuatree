@@ -88,9 +88,62 @@ static void resolve(const char *href, unsigned n, char *out) {
 
 /* GET url with up to 3 redirects. Returns the raw reply length in raw (headers included) and leaves cur at the final
    URL, or -1 after printing why. */
+/* 6.9.0: a YouTube address names a video (watch?v=, youtu.be/, shorts/): its 11 character id into vid, 1; else 0. */
+int yt_page(const char *vid, char *out, unsigned max, int *status);   /* ask.c */
+static int yt_id(const char *u, char vid[12]) {
+    if (starts(u, "https://")) u += 8; else if (starts(u, "http://")) u += 7; else return 0;
+    if (starts(u, "www.")) u += 4; else if (starts(u, "m.")) u += 2;
+    const char *p = 0;
+    if (starts(u, "youtu.be/")) p = u + 9;
+    else if (starts(u, "youtube.com/shorts/")) p = u + 19;
+    else if (starts(u, "youtube.com/watch?")) {
+        for (const char *q = u + 18; *q; q++) if ((q[-1] == '?' || q[-1] == '&') && q[0] == 'v' && q[1] == '=') { p = q + 2; break; }
+    }
+    if (!p) return 0;
+    for (int i = 0; i < 11; i++) {
+        char c = p[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_')) return 0;
+        vid[i] = c;
+    }
+    vid[11] = 0;
+    return !((p[11] >= 'a' && p[11] <= 'z') || (p[11] >= 'A' && p[11] <= 'Z') || (p[11] >= '0' && p[11] <= '9') || p[11] == '-' || p[11] == '_');
+}
+/* 6.10.0: Play. The page's "Play in Movies" link (&play=1) asks the video service for the clip made to fit what the heap
+   can hold, saves it as YT.AVI where an app's files live (the signed-in person's home folder, else JT/), leaves
+   PLAYNOW.TXT naming it, and starts Movies, which plays it. Everything here blocks, like a page load. */
+int yt_avi(const char *vid, unsigned cap, char *out, int *status);   /* ask.c */
+int home_active(void); int home_save(const char *name, const void *data, unsigned len);   /* home.c */
+int sd_write(const char *name, const void *data, unsigned len);   /* emmc.c */
+int app_dock(const char *name);   /* appwin.c */
+static int has(const char *s, const char *w) { for (; *s; s++) if (starts(s, w)) return 1; return 0; }
+static int save_here(const char *name, const void *d, unsigned n) { return home_active() ? home_save(name, d, n) == 1 : sd_write(name, d, n) == 1; }
+static void yt_play(const char *vid) {
+    static const unsigned try[] = { 12u << 20, 10u << 20, 8u << 20, 6u << 20 };
+    char *buf = 0; unsigned cap = 0;
+    for (unsigned i = 0; i < 4 && !buf; i++) { cap = try[i]; buf = kmalloc(cap + 1); }
+    if (!buf) { kputs("browser: out of memory for the video\n"); return; }
+    kputs("browser: making the video for Movies\n");
+    int status, got = yt_avi(vid, cap, buf, &status);
+    if (got <= 0 || status != 200) { kputs("browser: video service "); kputs(got < 0 ? "not reachable\n" : "refused\n"); return; }
+    if (!save_here("YT.AVI", buf, (unsigned)got)) { kputs("browser: could not save the video\n"); return; }
+    kputs("browser: saved YT.AVI, "); kdec((unsigned)got); kputs(" bytes\n");
+    save_here("PLAYNOW.TXT", "YT.AVI\n", 7);
+    app_dock("movies");
+}
 static int fetch(const char *url, char *raw, unsigned max) {
-    char next[URL_MAX];
+    char next[URL_MAX], vid[12];
     scopy(cur, url, slen(url), URL_MAX);
+    if (yt_id(url, vid)) {   /* the page about the video, from the Mac's video service, behind a header show() can skip */
+        static const char head[] = "HTTP/1.0 200 OK\r\n\r\n";
+        unsigned h = sizeof head - 1; int status;
+        kputs("browser: youtube "); kputs(vid); kputs("\n");
+        int got = yt_page(vid, raw + h, max - h, &status);
+        if (got <= 0 || status != 200) { kputs("browser: video service "); kputs(got < 0 ? "not reachable\n" : "refused\n"); return -1; }
+        for (unsigned i = 0; i < h; i++) raw[i] = head[i];
+        raw[h + (unsigned)got] = 0;
+        kputs("browser: http 200\n");
+        return (int)h + got;
+    }
     for (int hop = 0; hop <= 3; hop++) {
         struct url u;
         if (!parse_url(cur, &u)) { kputs("browser: bad url\n"); return -1; }
@@ -225,6 +278,15 @@ static void to_text(const char *h, unsigned n) {
         }
         if (c == '&') { char d; unsigned k = entity(h + i + 1, &d); if (k) { c = d; i += k; } }
         i++;
+        if ((unsigned char)c >= 0x80) {   /* 6.8.0: one UTF-8 character as one byte, its common punctuation in ASCII, anything else '?' */
+            unsigned b = (unsigned char)c, cp, len = b >= 0xF0 ? 3 : b >= 0xE0 ? 2 : 1;
+            if (b < 0xC0) continue;   /* a stray continuation byte */
+            cp = b & (0x3Fu >> len);
+            while (len-- && i < n && ((unsigned char)h[i] & 0xC0) == 0x80) cp = cp << 6 | ((unsigned char)h[i++] & 0x3F);
+            c = cp == 0x2018 || cp == 0x2019 || cp == 0x2032 ? '\'' : cp == 0x201C || cp == 0x201D || cp == 0x2033 ? '"'
+              : cp == 0x2010 || cp == 0x2011 || cp == 0x2013 || cp == 0x2014 || cp == 0x2212 ? '-' : cp == 0x2022 || cp == 0xB7 ? '*'
+              : cp == 0x2026 ? '.' : cp == 0xA0 || cp == 0x2009 || cp == 0x202F ? ' ' : '?';   /* ponytail: one byte out, so an ellipsis is one dot */
+        }
         int ws = c == ' ' || c == '\n' || c == '\r' || c == '\t';
         if (in_title) { if (ws) c = ' '; if (tl < 60 && !(ws && (!tl || title[tl - 1] == ' '))) { title[tl++] = c; title[tl] = 0; } continue; }
         if (ws) { if (!space) { o = put(text, o, ' '); space = 1; } continue; }
@@ -263,6 +325,8 @@ static void show_lines(unsigned from, unsigned count) {
 
 static void show(const char *url, int push) {
     unsigned long mark = heap_mark();
+    char vid[12];
+    if (yt_id(url, vid) && has(url, "play=1")) { yt_play(vid); heap_release(mark); return; }   /* 6.10.0: not a page, the clip */
     char *raw = kmalloc(RAW_MAX);
     if (!raw) { kputs("browser: out of memory\n"); heap_release(mark); return; }
     if (!net_get_gateway()) { kputs("browser: no network\n"); heap_release(mark); return; }

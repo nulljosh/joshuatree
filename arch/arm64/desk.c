@@ -761,6 +761,7 @@ int app_open_name(const char *name) {
         for (; w[i] && name[i] && (name[i] | 32) == w[i]; i++) ;
         if (!w[i] && !name[i]) { if (a == 0) calc_open(); else if (a == 2) clock_open(); else if (a == 3) brick_open(); else if (a == 4) browser_open(); else if (a == 5) settings_open(0); else if (a == 6) dock_activate(8); else if (a == 7) dock_activate(9); return 1; }
     }
+    if ((name[0] | 32) == 'b' && (name[1] | 32) == 'l' && (name[2] | 32) == 'a' && (name[3] | 32) == 'c' && (name[4] | 32) == 'k' && (name[5] | 32) == 'c' && (name[6] | 32) == 'o' && (name[7] | 32) == 'm' && (name[8] | 32) == 'b' && !name[9]) { browser_open(); return 1; }   /* 6.7.0: [[open Blackcomb]], and "browser" above */
     static const char *const finder[] = {"finder", "burrow", "files"};   /* 3.14.0: Samantha's [[open Finder]] starts user/finder.c, as the Burrow tile and Spotlight do */
     for (unsigned a = 0; a < 3; a++) {
         const char *w = finder[a]; unsigned i = 0;

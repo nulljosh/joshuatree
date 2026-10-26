@@ -718,6 +718,15 @@ void _start(int argc, char **argv) {
     {   struct ln l = {{0}, 0}; ln_s(&l, "movies: ring-3 window "); ln_u(&l, win.width); ln_s(&l, "x"); ln_u(&l, win.height); ln_out(&l); }
     load_dir();
     announce_sel();
+    {   /* 6.10.0: Blackcomb's Play leaves PLAYNOW.TXT naming a clip it just saved; read once, removed, and that clip plays */
+        char want[JT_DIRENT_NAME + 1]; int got = jt_readfile("PLAYNOW.TXT", want, JT_DIRENT_NAME);
+        if (got > 0) {
+            jt_unlink("PLAYNOW.TXT");
+            while (got && (want[got - 1] == '\n' || want[got - 1] == '\r' || want[got - 1] == ' ')) got--;
+            want[got] = 0;
+            for (int i = 0; i < count; i++) if (!strcmp(raw[order[i]].name, want)) { sel = i; announce_sel(); activate(); break; }
+        }
+    }
     draw_all(0);
     unsigned flags = JT_POLL_PRESENT;
     for (;;) {
