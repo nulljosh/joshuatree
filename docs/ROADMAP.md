@@ -161,19 +161,6 @@ Worth doing, not yet re-checked, in the order the study ranked them:
 
   Each step is its own PR with its own check against a local test page.
 
-- [ ] [Fable] Browser app on the Pi, its own dock tile and window (goal 2026-10-12, "browser working tonight").
-  - The text browser already lives behind the Terminal (`browse URL`, `arch/arm64/browser.c`): HTTPS through `tls.c`, redirects, readable text, numbered links, history.
-  - This is the window around it:
-    - an address bar you type into, and Enter loads
-    - the page as text in Tree Sans, with headings bigger and links in the accent colour
-    - a click on a link follows it
-    - scroll wheel and Page Up and Down
-    - Back, Forward and Reload buttons
-    - a status line
-    - the loading and error states in plain words
-  - No images, CSS layout or JavaScript yet. Say so on a page that needs them.
-  - A Safari-style compass tile from the icon composer.
-  - Check: an arm64 check against a stub HTTPS server (as `tools/checks/pi-actions-check.py` does) that types a URL, clicks a link and goes back, reading the window's serial lines.
 - [ ] [Sonnet] The dock grows to the default macOS set that exists on Joshua Tree.
   - Music, Books, Clock, Calculator and the Browser join the 11 tiles (Apps, Finder, Mail, Calendar, Notes, Reminders, Terminal, Samantha, Weather, Stocks, Trash).
   - One flat house-style icon each from the icon composer, in the Mac's order. The dock narrows its tiles to fit.
@@ -207,28 +194,8 @@ Worth doing, not yet re-checked, in the order the study ranked them:
   - Plus Ctrl for the same on a keyboard with no GUI key.
   - One table in the shell. Apps handle the actions.
   - Check: an arm64 key check that sends each chord through QMP and sees its serial line.
-- [ ] [Sonnet] Mail and Stocks say "not on ARM yet" on the Pi, so do Weather and Reminders.
-  - Port them one at a time, Weather and Reminders first, then Mail and Stocks (they need the live backends).
-  - Each one gets its own check.
-  - (Finder shipped in 3.14.0.)
-- [ ] [Sonnet] Pi boot polish (the splash itself shipped in 3.8.3):
-  - The mark on the brand fill with the thin progress bar, held until the desktop is up. The Console never flashes on the way. The log stays one dock click away, and a FAIL still raises it.
-  - Then a login screen.
-  - The first few seconds after the desktop appears take no keys. Find why and fix it.
-  - Check: extend `tools/checks/arm64-m1c-check.py` to screendump the splash before the desktop and see no Console frame pixels.
-- [ ] [Fable] User accounts on the Pi.
-  - A login screen with a name and password.
-  - Accounts stored on the card's `JT/` (salted hash, never the password).
-  - Notes and Music keyed to the signed-in user's folder.
-  - A `users` and `adduser` command in the Terminal.
-  - The i386 build already has Account (change password) and Add user rows in Settings. Reuse that store.
-  - Check: a new accounts check that adds a user, logs out and in, and sees a wrong password refused.
+- [ ] [Sonnet] The first few seconds after the Pi desktop appears take no keys. Find why and fix it. (The splash, its bar and the login screen shipped: `arm64-splash-check.py`, `arm64-splashbar-check.py`, `arm64-login-check.py`.)
 
-- [ ] [Sonnet] Books, a reader app for Joshua Tree (both kernels, ring 3 like Notes).
-  - A library of plain text and EPUB-as-text books in `JT/BOOKS/`.
-  - One page at a time with the arrow keys, a remembered place per book, Tree Sans at body size.
-  - Ships with one book in the card image: Make Something Wonderful, Steve Jobs in his own words (the Steve Jobs Archive, free to read), the book the tribute line ends on.
-  - Check: a new books check under tools/checks that opens the app, turns two pages and reopens on the saved page.
 
 - [ ] [Sonnet] A small voxel building game as a native Joshua Tree app, software-rendered: walk, place and break blocks.
   - Pick a name that is not Minecraft.
