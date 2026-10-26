@@ -64,6 +64,12 @@ Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Ma
 
 **First, the 6.x refinements** (Joshua, 2026-10-26, from the Snow Leopard and Mac OS X 2000 introductions): Movies on the Pi (6.1.0), then long movies streamed from the card with QuickTime-style controls and trim, a magnifying Dock and the genie effect into it, Dock Exposé (click and hold a tile for its windows), Stacks for Downloads and Documents, window buttons that react on hover and dim in back windows, Finder icon sizes with picture thumbnails, Top Sites and full-text history in the browser.
 
+**Also from posts.design** (Joshua, 2026-10-26: the work is the page, almost no chrome):
+- [ ] Landing hero: one hard number and one button ("38 apps on a Raspberry Pi.", the numbers from `tools/gen/inject-landing-facts.py`), the logo and the 6.0 desktop shot under it.
+- [ ] Landing wall: the app shots and short clips as a tight masonry grid, each at its own shape, an 8 px gap, the app's icon as a small badge in the corner and nothing else; clips play muted in place with a pause button. Check: `landing-shots-fresh-check.py` and a phone-width screenshot.
+- [ ] The Launchpad card fades in on `lib/ease.h`'s curve (it needs a card-sized buffer to blend from).
+- [ ] Minimize for the kernel-drawn windows (Settings, Browser, Clock, Brick, the Console) and Cmd+M; 6.5.0 covers the EL0 apps.
+
 **Now: 7.0, Online (Joshua, 2026-10-26: "let's focus on internet next").** 6.0, Yours, shipped (2026-10-26): accounts, login, sudo and home folders (4.8 to 4.11), snapshots (4.12), the crash-safe card (4.14), the Users pane (4.15), backups to the Mac and back (5.2.0, 5.3.0), and each person's own wallpaper. The gate for 7.0 is a normal day of web, mail and calendar on the board.
 
 What is there today: Wi-Fi joins from the card's config, DNS and the clock come from the network, and a text browser (`arch/arm64/browser.c`) fetches HTTPS through BearSSL (`tls.c`). Its limits: TLS 1.2 only, 37 baked-in root certificates, a 64 KB reply cap, text only (no images, no clicks on links, no forms, no cookies). Mail and Calendar read files on the card and sync nothing. There is no Ethernet driver for the Pi.
@@ -211,10 +217,8 @@ Gap study, 2026-10-26 (Joshua ran `/mobbin`). Our apps beside the App Store scre
   - The relay stays the default when the Mac answers. The local model answers when it does not.
   - Check: `tools/checks/arm64-llm-check.py` extended to the real model's tokenizer and a fixed prompt.
 
-- [ ] [Sonnet] Dock magnification, like the Mac. (The soft tray shadow is done: `gui_draw_dock_tray` in `kernel/gui_paint.c` fades it over `DOCK_SHADOW_REACH` on both desktops, `dockband-check.py`.)
-  - Settings rows for hover magnification (off, small, large); dock size already has a row. The hovered tile and its two neighbours grow smoothly.
-  - Share `kernel/dock_draw.c` so both desktops match.
-  - Check: `tools/checks/arm64-m1c-check.py` samples the shadow gradient, and a dock-magnify check reads the hovered tile's size.
+- [ ] [Sonnet] Dock magnification settings: a Settings row for off, small and large (6.3.0 ships one size, 160 percent), and the i386 desktop's dock to match through a shared `kernel/dock_draw.c`.
+  - Check: extend `tools/checks/arm64-dockmag-check.py` to each size.
 
 - [ ] [Sonnet] `sam "what is 5+5"` takes about a minute on the board while the relay answers in seconds.
   - Read 2026-10-12, not fixed. Relay discovery is already cached (`relay_ip` in `arch/arm64/ask.c`) and `ask_poll` adds no sleep, so the time is somewhere else.
@@ -1026,6 +1030,9 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **6.5.0 (2026-10-26)**: Minimize with the genie. The yellow dot on an app's window pours it into its dock tile over 0.4 s on `lib/ease.h`'s curve: the rows pinch toward the tile, the nearer the dock the narrower, then the top slides down after them. The app keeps running and its dot stays lit; its tile, Spotlight or the Launchpad bring it back the same way in reverse. Apps without a tile go to the slot before the Trash, as on a Mac. Check: `arm64-genie-check.py`.
+- **6.4.0 (2026-10-26)**: One motion curve. `lib/ease.h` holds `ease_out`, an ease-out quint close to the web's `cubic-bezier(.23,1,.32,1)` (borrowed from posts.design), and the PC's boot mark and the Movies bar fade move on it now (the splash bar stays linear: progress should glide evenly, `arm64-splashbar-check.py`). The magnifying dock grows in over 150 ms on it instead of snapping. Check: `arm64-dockmag-check.py` (the first size on arrival is below the last), `bootmark-check.py`, `arm64-movies-check.py`.
+- **6.3.0 (2026-10-26)**: The Pi's dock magnifies like the Mac's. The tile under the pointer grows to 160 percent into a strip of room above the tray, its neighbours grow less, and it follows the pointer along the dock; leaving puts the screen back exactly. It also fixes an older sliver: the hover label's soft edge left pixels on the line above the dock, because the saved band started at the tray's top. Check: `arm64-dockmag-check.py`.
 - **6.2.0 (2026-10-26)**: QuickTime-style controls in Movies. In fullscreen (`f`) the bar floats over the picture, a dark strip with play, progress and time, and fades out over 0.3 s, 3 s after the last key or click; any input brings it back and a click on it seeks. Paused or ended, it stays up. Trim waits for a way to write big files. Check: `arm64-movies-check.py`, `movie-check.py`.
 - **6.1.0 (2026-10-26)**: Movies on the Pi. The motion-JPEG player the PC has had since 2.2 (sound, pause, seek, fullscreen) runs unchanged at EL0, last in Spotlight and the Launchpad (29 entries, a fifth row). Clips of any length stream from the card: a new `SYS_READAT` and `fat_read_at` read each frame and stretch of sound as it plays, where the PC still loads up to 6 MB whole. Checks: `arm64-movies-check.py` (a clip with its second half past 6 MB), `movie-check.py`, `fat-crash-check.py`.
 - **6.0.0 (2026-10-26)**: Yours. One machine, many people, and it keeps your stuff safe: accounts and sudo, home folders, snapshots, the crash-safe card, and backups to the Mac and back (5.2.0, 5.3.0). The UI step for this major: each person's own wallpaper, saved in `~/WALL.TXT` by anyone, applied at sign-in, with the card's on the login screen. The mark grows a sixth tuft, low on the short right arm (`tools/gen/logo.py`), on the boot splash, the README and the landing. The launch film's spec is `docs/hardware/ad/yours.json` (the `opus-ad` generator). Cut on the loop's goal before Joshua's board pass; the card carries it. Checks: the full suite on this PR, `arm64-settings-check.py`, `arm64-login-check.py`, `logo-check.sh`, `bootmark-check.py`.

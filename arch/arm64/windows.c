@@ -193,11 +193,16 @@ void pointer_moved(void) {   /* one report done: the arrow to its new place, the
     if (brick_live) brick_mouse((int)mouse_x / s, (int)mouse_y / s);
     cur_wanted = 1;
     cur_hide();
-    if (slot != hover_slot) { hover_slot = slot; dock_hover(slot); }
+    if (dock_mag_zone((int)mouse_x / s, (int)mouse_y / s)) { hover_slot = slot; dock_magnify((int)mouse_x / s, slot); }   /* 6.3.0 */
+    else {
+        if (dock_mag_on()) { dock_unmagnify(); hover_slot = -1; }
+        if (slot != hover_slot) { hover_slot = slot; dock_hover(slot); }
+    }
     cur_show();
     fb_release();
 }
 int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx && x < bx + bw && y >= by && y < by + bh; }
+static int on_min_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 46), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* 6.5.0: the yellow dot */
 static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
 void dock_activate(int slot);
 void ask_prefill(const char *s);   /* ask.c: type s on the Terminal's empty line */
@@ -220,7 +225,7 @@ void pointer_click(void) {   /* the left button went down */
             if (w->wbytes && in_box(lx, ly, w->lx, w->ly, w->lw, w->lh)) { if ((int)w->slot != app_top) { ap = w; app_raise(); return; } break; }
         }
     }
-    int on_app = app_wbytes && in_box(lx, ly, app_lx, app_ly, app_lw, app_lh);
+    int on_app = app_wbytes && !ap->min && in_box(lx, ly, app_lx, app_ly, app_lw, app_lh);
     int wt = slot < 0 ? win_target() : -1, grab = wt >= 0 ? win_grab(wt, lx, ly) : 0;   /* the front window's title band or an edge takes hold of it */
     if (grab == GRAB_TITLE) { drag_on = 1; drag_t = wt; drag_dx = lx - *win_rc(wt, 0); drag_dy = ly - *win_rc(wt, 1); return; }
     if (grab) { rs_on = grab; drag_t = wt; rs_dx = lx - (*win_rc(wt, 0) + *win_rc(wt, 2)); rs_dy = ly - (*win_rc(wt, 1) + *win_rc(wt, 3)); if (grab & RS_L) rs_dx = lx - *win_rc(wt, 0); return; }
@@ -237,12 +242,16 @@ void pointer_click(void) {   /* the left button went down */
         if (spot_live) return;
         if (on_close_dot(lx, ly, win_lx, win_ly)) browser_close();
         else if (on_win) browser_click(lx, ly);
-    } else if (slot >= 0) dock_activate(slot);
+    } else if (slot >= 0) {
+        dock_activate(slot);   /* it unmagnifies first, so what opens saves the plain dock */
+        if (dock_mag_zone(lx, ly)) dock_magnify_now(lx, slot);   /* the pointer is still on the tile: magnified again at once, as on a Mac */
+    }
     else if (on_app && app_front) {   /* the front window takes the click: an app's red dot ends it, its content gets the click */
         if (on_close_dot(lx, ly, app_lx, app_ly)) {   /* i386's close: a click above the content (b < 0), which calendar.c answers by exiting */
             app_push(2, lx - (app_lx + 8), ly - (app_ly + 32));
             if (!app_close_at) app_close_at = cnt_now() + cnt_hz() / 4;   /* and an app that ignores it is ended in a quarter second */
         }
+        else if (on_min_dot(lx, ly, app_lx, app_ly)) app_minimize();   /* 6.5.0: into the dock with the genie */
         else if (in_box(lx, ly, app_lx + 8, app_ly + 32, (int)app_cw, (int)app_ch)) app_push(2, lx - (app_lx + 8), ly - (app_ly + 32));
     } else if (on_calc && calc_front) {
         if (on_close_dot(lx, ly, calc_lx, calc_ly)) { calc_close(); return; }
@@ -260,6 +269,7 @@ const char *dock_app_name(int slot) {   /* the EL0 app a slot starts, by its use
     return slot == SPOT_MUSIC ? "Music" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_FINDER || slot == 1 ? "Finder" : slot >= SPOT_GAME0 ? game_names[slot - SPOT_GAME0] : dock_names[slot];
 }
 void dock_activate(int slot) {   /* a dock tile, from a click, a dock key, Spotlight or the Launchpad; slot 0, Apps, is the Launchpad (it was the Calculator until 4.1.2: the first desktop slice had no Launchpad, so the Apps tile opened the one app there was) */
+    dock_unmagnify();   /* 6.3.0: whatever opens saves the plain dock under it, never the grown one */
     if (slot == 0) { lp_open(); return; }
     if (slot == SPOT_CALC) { calc_open(); return; }
     if (slot == GUI_ICON_COUNT) { clock_open(); return; }

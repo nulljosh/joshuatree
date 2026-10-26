@@ -10,6 +10,7 @@
 #include "gui_shapes.h"
 #include "desktop.h"
 #include "version.h"
+#include "ease.h"
 #include "boot_mark.h"
 #include "pmm.h"
 #include "mouse.h"
@@ -90,7 +91,7 @@ void gui_draw_boot_screen(void){
     for (;;) {
         unsigned int elapsed = ticks() - start;
         unsigned int p = elapsed >= BOOT_DRAW_TICKS ? 1000 : elapsed * 1000 / BOOT_DRAW_TICKS; /* 0..1000 */
-        int step = (int)((2 * p - p * p / 1000) * BOOT_MARK_STEPS / 1000); /* quadratic ease-out */
+        int step = ease_out((int)p) * BOOT_MARK_STEPS / 1000; /* 6.4.0: the shared curve (lib/ease.h) */
         if (step > drawn) { /* v1.6.20: the real landing/logo.svg mark, white ink on the plain black screen, its ground terracotta */
             gui_draw_boot_mark_steps(cx, cy - 10, 0x00FFFFFF, drawn, step); drawn = step;
         }

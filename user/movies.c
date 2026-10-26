@@ -26,6 +26,7 @@
 #include "libjt/stdlib.h"
 #include "libjt/string.h"
 #include "libjt/avi.h"
+#include "../lib/ease.h"
 
 /* decoder from drivers/jpeg.c, compiled into libjt (user/libjt/jpeg.c) */
 int jpeg_decode_scaled(const unsigned char *data, unsigned int len, unsigned short *dst,
@@ -460,7 +461,7 @@ static unsigned ov_want(void) {
     unsigned idle = (ticks() - ov_seen) * 10u;
     if (idle < OV_HOLD) return 8;
     if (idle >= OV_HOLD + OV_FADE) return 0;
-    return 8u - (idle - OV_HOLD) * 8u / OV_FADE;
+    return 8u - 8u * (unsigned)ease_out((int)((idle - OV_HOLD) * 1000u / OV_FADE)) / 1000u;   /* 6.4.0: the shared curve */
 }
 static void say(const char *s);
 static void ov_set(unsigned want) {   /* the bar's level; going to 0, and coming back up to 8 while playing, is said once whichever path got there */

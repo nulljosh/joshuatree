@@ -206,8 +206,10 @@ static int gui_isqrt_fast(int n){
 #define DOCK_SHADOW_DROP  5
 #define DOCK_SHADOW_PEAK  84
 
-void gui_draw_dock_tray(void){
-    int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD, dock_w = gui_dock_w(), dock_x = gui_dock_x0();
+void gui_draw_dock_tray(void){ gui_draw_dock_tray_at(gui_dock_x0(), gui_dock_w()); }
+/* 6.3.0: the tray at any x and width (the Pi's magnified dock widens it); the height and y are the dock's own. */
+void gui_draw_dock_tray_at(int dock_x, int dock_w){
+    int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD;
 
     /* A soft shadow around the tray, the floating-panel look of a real macOS
        dock, drawn before the tray so the tray's own pixels sit on top of it.
@@ -271,9 +273,10 @@ void gui_draw_dock_tray(void){
    the icon, like macOS"). It sits under the contact shadow, inside DOCK_PAD, where the tray is flat. It only draws:
    i386 takes it away by recomposing the dock band, the Pi by putting back the pixels it saved first.
    Both desktops call it: kernel/dock_draw.c and arch/arm64/crash.c. */
-void gui_draw_dock_dot(int slot){
+void gui_draw_dock_dot(int slot){ gui_draw_dock_dot_at(gui_slot_x(slot) + DOCK_ICON / 2); }
+void gui_draw_dock_dot_at(int lx){   /* 6.3.0: under a tile centred at logical x, wherever magnification put it */
     int sc = (int)window_scale(), r = DOCK_DOT_R * sc;
-    int cx = (gui_slot_x(slot) + DOCK_ICON / 2) * sc, cy = (gui_dock_y0() + DOCK_PAD + DOCK_ICON + DOCK_DOT_DY) * sc;
+    int cx = lx * sc, cy = (gui_dock_y0() + DOCK_PAD + DOCK_ICON + DOCK_DOT_DY) * sc;
     for (int dy = -r - 1; dy <= r + 1; dy++)
         for (int dx = -r - 1; dx <= r + 1; dx++){   /* per physical pixel: full inside, one pixel of coverage at the edge, the same at any scale */
             int a = (r * 16 + 8 - gui_isqrt_fast((dx * dx + dy * dy) * 256)) * 16;   /* the distance is in 1/16 pixels */

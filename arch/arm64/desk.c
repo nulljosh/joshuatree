@@ -396,8 +396,8 @@ void menubar_notify(const char *message) {
     uart_puts("notice: "); uart_puts(notice.text); uart_putc('\n');
 }
 static void cal_tick(void) {   /* the day has changed (or the clock just arrived): the Calendar tile again, the hover band's copy with it */
-    if (!fb || login_live || cal_today() == cal_shown) return;
-    int s = (int)window_scale(), h = hover_slot, top = gui_dock_band_top() * s, rows = (int)fb_h - top;
+    if (!fb || login_live || dock_mag_on() || cal_today() == cal_shown) return;
+    int s = (int)window_scale(), h = hover_slot, top = dock_band_y(), rows = (int)fb_h - top;
     if (dock_band) dock_hover(-1);   /* the plain band back first, so the copy below holds no label */
     cur_hide();
     dock_tile(3, 0);   /* slot 3, Calendar */
@@ -441,7 +441,7 @@ static void splash_draw(int pm) {   /* 3.9.8: the fill is any width, not one of 
 static void splash_ease(int to) {   /* glide to a new fill in small frames, so the bar never jumps a third */
     int from = splash_pm;
     for (int i = 1; i <= 12; i++) {
-        splash_draw(from + (to - from) * i / 12);
+        splash_draw(from + (to - from) * i / 12);   /* linear on purpose: progress glides evenly; lib/ease.h is for motion */
         uart_puts("splash bar "); uart_dec((unsigned)splash_pm); uart_putc('\n');
         splash_wait_ms(10);
     }
@@ -547,7 +547,7 @@ void fb_desktop(void) {
 #ifdef BR_TRACE
     uart_puts(off_buf ? "browser: offscreen buffer reserved at boot\n" : "browser: offscreen buffer NOT reserved\n");
 #endif
-    dock_mem = kmalloc((unsigned)(((int)fb_h - gui_dock_band_top() * s) * (int)fb_pitch) * 4);
+    dock_mem = kmalloc((unsigned)(((int)fb_h - dock_band_y()) * (int)fb_pitch) * 4);
     /* Slice 5: the Calculator's own frame, over the right of the Console's so both show, clear of the line above the dock */
     calc_lw = 280; calc_lx = lx + lw - 150; if (calc_lx + calc_lw > W / s - 8) calc_lx = W / s - 8 - calc_lw;
     calc_ly = ly + 40; calc_lh = gui_dock_band_top() - 22 - calc_ly; if (calc_lh > 300) calc_lh = 300;
@@ -660,7 +660,7 @@ void wall_repaint(void) {
     wall_paint(fb, fb_pitch, W, H, fb_swap);
     menubar_base();
     menubar_keep();
-    dock_band = 0; hover_slot = -1; dock_sel = -1;
+    dock_band = 0; hover_slot = -1; dock_sel = -1; dock_mag_forget();
     dock_paint();
     desktop_chrome(gui_dock_band_top() * s);
     fb_flush(0, 0, W, H);

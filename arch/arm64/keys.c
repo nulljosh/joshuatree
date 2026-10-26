@@ -185,4 +185,4 @@ int spot_key(unsigned code) {   /* a key down with the bar open: every key is Sp
     else { int ch = ask_char(code); if (ch >= ' ' && ch < 127 && spot_len + 1 < sizeof spot_text) { spot_text[spot_len++] = (char)ch; spot_text[spot_len] = 0; spot_sel = 0; spot_paint(); } }
     return 1;
 }
-void dock_select(int slot) { dock_sel = slot; hover_slot = slot; dock_hover(slot); }
+void dock_select(int slot) { dock_unmagnify(); dock_sel = slot; hover_slot = slot; dock_hover(slot); }

@@ -77,6 +77,7 @@ void crash(const struct frame *f) {
    linked into this build. They draw through five window.h calls, answered here over the framebuffer: a 1080p or
    taller screen is the i386 desktop's 960x540 grid at scale 2, anything smaller is scale 1. */
 #include "../../drivers/window.h"
+#include "../../lib/ease.h"
 #include "../../drivers/png.h"
 #include "../../kernel/dock_geom.h"
 #include "../../kernel/gui_paint.h"
@@ -265,6 +266,7 @@ int dock_tile(int slot, int shadow) {   /* one slot's art onto the dock; shadow 
     heap_release(mark);
     return drawn;
 }
+int dock_mag_on(void);   /* 6.3.0, below */
 static unsigned dots_shown;   /* 4.26.0: the slots whose running-app dot is on the screen now */
 void dock_paint(void) {
     dots_shown = 0;   /* a fresh dock has none: dock_dots_tick draws them again on the next pass */
@@ -282,8 +284,11 @@ unsigned *dock_band, *dock_mem;   /* dock_mem is the band copy's memory, taken a
 int cur_on;           /* slice 4: the pointer's arrow is on the screen */
 void cur_hide(void);
 void cur_show(void);
+/* The band copy starts DOCK_BAND_LIFT above band_top: the label's capsule sits right at band_top and its soft edge reaches
+   about five pixels higher, which a copy from band_top itself left behind over the line above the dock (6.3.0). */
+int dock_band_y(void) { return (gui_dock_band_top() - DOCK_BAND_LIFT) * (int)window_scale(); }
 void dock_hover(int slot) {
-    int s = (int)window_scale(), top = gui_dock_band_top() * s, rows = (int)fb_h - top;
+    int top = dock_band_y(), rows = (int)fb_h - top;
     int arrow = cur_on;
     cur_hide();   /* the band copy must never hold the arrow, or every later restore paints a ghost of it */
     if (!dock_band) {
@@ -319,6 +324,7 @@ static int slot_open(int slot) {
 #define DOT_BOX 41   /* the pixels a dot can touch, (DOCK_DOT_R + 3) * scale either side of its centre, up to scale 4 */
 static unsigned dot_under[GUI_ICON_COUNT][DOT_BOX * DOT_BOX];   /* what each dot covers: put back exactly when it goes */
 void dock_dots_tick(void) {
+    if (dock_mag_on()) { dock_mag_tick(); return; }   /* 6.3.0: no dots under a magnified dock (the next pass after it draws them); 6.4.0: its grow-in */
     if (!fb || login_live) return;
 #ifdef QUIET_BOOT
     if (splash_on) return;
@@ -326,7 +332,7 @@ void dock_dots_tick(void) {
     unsigned m = 0;
     for (int s = 0; s < GUI_ICON_COUNT; s++) if (slot_open(s)) m |= 1u << s;
     if (m == dots_shown) return;
-    int arrow = cur_on, sc = (int)window_scale(), top = gui_dock_band_top() * sc, r = (DOCK_DOT_R + 3) * sc;
+    int arrow = cur_on, sc = (int)window_scale(), top = dock_band_y(), r = (DOCK_DOT_R + 3) * sc;
     if (2 * r + 1 > DOT_BOX) return;
     cur_hide();
     for (int s = 0; s < GUI_ICON_COUNT; s++) {
@@ -349,4 +355,101 @@ void dock_dots_tick(void) {
     for (int k = 0; k < GUI_ICON_COUNT; k++) b[n++] = (char)('0' + (m >> k & 1));
     b[n++] = '\n'; b[n] = 0;
     con_quiet = 1; uart_puts(b);
+}
+
+/* 6.3.0: the magnifying dock (the Mac OS X 2000 introduction). With the pointer on the dock, the tiles within three slots of
+   it grow, up to 1.6 times at the pointer, on a smooth falloff; the tray widens to hold them, and the layout shifts so the
+   tile under the pointer stays under it. Tiles grow upward into the room between the tray and the lowest window (MAG_ROOM:
+   windows end at band_top - 22), with the hover label above the grown tile, so nothing a window draws is ever covered.
+   The rows from MAG_ROOM above the tray to the bottom of the screen are copied once when the pointer arrives and put back
+   exactly when it leaves. The decoded icon art is kept from the first hover, so a move redraws without a PNG decode. */
+#define MAG_PCT   160   /* at the pointer */
+#define MAG_REACH 300   /* hundredths of a slot either side that grow */
+#define MAG_ROOM  46    /* logical px above the tray: wallpaper only (the lowest window ends band_top - 22) */
+#define MAG_IN_MS 150   /* 6.4.0: the grow-in on arrival, on the shared ease_out */
+static unsigned char *mag_art[GUI_ICON_COUNT];
+static unsigned *mag_copy;
+static int mag_on, mag_slot = -2, mag_mx, mag_amt = 1000;   /* mag_amt: how far grown in, thousandths */
+static unsigned long mag_t0;
+static int mag_skip_in;   /* the next arrival is fully grown at once (dock_magnify_now) */
+static unsigned long mag_ms(void) { unsigned long f, c; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c)); return c / ((f ? f : 54000000) / 1000); }
+int dock_mag_on(void) { return mag_on; }
+void dock_mag_forget(void) { mag_on = 0; mag_slot = -2; }   /* the desktop was repainted: the copy is stale */
+static int mag_cache(void) {
+    static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
+    for (int s = 0; s < GUI_ICON_COUNT; s++) if (!mag_art[s]) {
+        unsigned char *art = 0; unsigned aw = 0, ah = 0, ach = 0;
+        if (png_decode(ICON_ART[order[s]], ICON_ART_LEN[order[s]], &art, &aw, &ah, &ach) || !art || aw != ICON_ART_SIZE || ah != ICON_ART_SIZE || ach != 4) return 0;
+        mag_art[s] = art;
+    }
+    return 1;
+}
+/* The pointer is on the dock: the tray's own rows, from a tile's width before the first to a tile's width after the last. */
+int dock_mag_zone(int lx, int ly) {
+    if (spot_live) return 0;   /* the Launchpad card and Spotlight reach into the room above the tray */
+    int y0 = gui_dock_y0(), x0 = gui_dock_x0();
+    return ly >= y0 && ly < y0 + DOCK_ICON + 2 * DOCK_PAD && lx >= x0 - DOCK_ICON && lx < x0 + gui_dock_w() + DOCK_ICON;
+}
+void dock_unmagnify(void) {
+    if (!mag_on) return;
+    int sc = (int)window_scale(), top = (gui_dock_y0() - MAG_ROOM) * sc, rows = (int)fb_h - top;
+    int arrow = cur_on; cur_hide();
+    for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) fb[(unsigned)top * fb_pitch + i] = mag_copy[i];
+    fb_flush(0, top, (int)fb_w, rows);
+    mag_on = 0; mag_slot = -2;
+    con_quiet = 1; uart_puts("dock magnify off\n");
+    if (arrow) cur_show();
+}
+void dock_magnify_now(int mx, int slot) { mag_skip_in = 1; dock_magnify(mx, slot); mag_skip_in = 0; }   /* after a click on a tile: no second grow-in */
+void dock_mag_tick(void) { if (mag_on && mag_amt < 1000) dock_magnify(mag_mx, mag_slot); }   /* 6.4.0: the grow-in, from the main loop */
+void dock_magnify(int mx, int slot) {
+    int sc = (int)window_scale(), size = DOCK_ICON, step = DOCK_ICON + DOCK_GAP, y0 = gui_dock_y0();
+    int top = (y0 - MAG_ROOM) * sc, rows = (int)fb_h - top, cy_bottom = y0 + DOCK_PAD + size;
+    if (top < 0 || !fb) return;
+    int arrow = cur_on; fb_hold(); cur_hide();   /* the band and the arrow reach the screen as one copy: no blink of the arrow on a grow-in frame */
+    if (!mag_on) {
+        if (!mag_cache()) { if (arrow) cur_show(); fb_release(); return; }
+        if (dock_band) dock_hover(-1);                      /* any label off first: the copy holds the plain dock */
+        if (!mag_copy) mag_copy = kmalloc((unsigned)rows * fb_pitch * 4);
+        if (!mag_copy) { if (arrow) cur_show(); fb_release(); uart_puts("oom dock magnify\n"); return; }
+        for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) mag_copy[i] = fb[(unsigned)top * fb_pitch + i];
+        mag_on = 1; mag_t0 = mag_skip_in ? 0 : mag_ms(); mag_skip_in = 0;
+    } else for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) fb[(unsigned)top * fb_pitch + i] = mag_copy[i];
+    unsigned long e = mag_ms() - mag_t0;
+    int was = mag_amt; mag_amt = ease_out(e >= MAG_IN_MS ? 1000 : (int)(e * 1000 / MAG_IN_MS)); mag_mx = mx;
+    int sz[GUI_ICON_COUNT], left[GUI_ICON_COUNT], cum = 0;
+    for (int i = 0; i < GUI_ICON_COUNT; i++) {                /* each tile's size from its distance to the pointer */
+        int c = gui_slot_x(i) + size / 2, d = (mx > c ? mx - c : c - mx) * 100 / step, w = d < MAG_REACH ? MAG_REACH - d : 0;
+        int s = size + size * (MAG_PCT - 100) / 100 * w * w / (MAG_REACH * MAG_REACH) * mag_amt / 1000;
+        if (s > size + MAG_ROOM - 26 + DOCK_PAD) s = size + MAG_ROOM - 26 + DOCK_PAD;   /* the grown tile and its label stay inside the room */
+        sz[i] = s; left[i] = cum; cum += s + DOCK_GAP;
+    }
+    int total = cum - DOCK_GAP, x0 = gui_slot_x(0), end = gui_slot_x(GUI_ICON_COUNT - 1) + size;
+    int ax = mx < x0 ? x0 : mx >= end ? end - 1 : mx, k = (ax - x0) / step, frac = (ax - x0) % step;   /* where the pointer sits, in slots */
+    int anchor = left[k] + (frac > size ? sz[k] + (frac - size) : frac * sz[k] / size);   /* the same place in the grown layout */
+    int shift = ax - anchor;
+    gui_draw_dock_tray_at(shift - DOCK_PAD, total + 2 * DOCK_PAD);
+    for (int i = 0; i < GUI_ICON_COUNT; i++) {
+        int lx = shift + left[i], cx = lx + sz[i] / 2, pw = sz[i] * sc;
+        gui_draw_icon_shadow(cx, cy_bottom, sz[i]);
+        unsigned long mark = heap_mark();
+        unsigned *tile = kmalloc((unsigned)(pw * pw) * 4);
+        if (tile) {
+            gui_icon_art_scale(mag_art[i], tile, pw, DOCK_TRAY_COLOR);
+            if (i == 3 && cal_shown >= 0) cal_overlay(tile, pw, cal_shown);   /* slot 3, the live Calendar */
+            gui_blit_tile(tile, lx, cy_bottom - sz[i], sz[i], DOCK_TRAY_COLOR);
+        }
+        heap_release(mark);
+        if (slot_open(i)) gui_draw_dock_dot_at(cx);
+    }
+    if (slot >= 0 && slot < GUI_ICON_COUNT) gui_draw_dock_label(shift + left[slot] + sz[slot] / 2, y0 + 8 * mag_amt / 1000 - (sz[slot] - size), dock_names[slot]);   /* frame zero of a grow-in is dock_hover's spot; grown, 2 above the tile, inside MAG_ROOM */
+    fb_flush(0, top, (int)fb_w, rows);
+    if (slot != mag_slot || (mag_amt == 1000 && was < 1000)) {   /* a new tile, or the grow-in done */
+        mag_slot = slot; con_quiet = 1;
+        uart_puts("dock magnify "); uart_dec((unsigned)(slot < 0 ? 99 : slot)); uart_puts(" size "); uart_dec((unsigned)(slot >= 0 ? sz[slot] : 0));
+        uart_puts(" of "); uart_dec((unsigned)size); uart_putc('\n');
+        if (slot >= 0) { con_quiet = 1; uart_puts("M1d hover "); uart_dec((unsigned)slot); uart_putc(' '); uart_puts(dock_names[slot]); uart_putc('\n'); }
+    }
+    if (arrow) cur_show();
+    fb_release();
 }

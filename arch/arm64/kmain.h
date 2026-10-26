@@ -161,6 +161,7 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
     int shown;                            /* the app has presented a frame since its window opened */
     unsigned long base;                   /* its arena: USER_BASE + slot * ARENA_SIZE (apps are position independent, so each loads where its arena is) */
     unsigned l3off, slot;                 /* its first l3 entry; its index in apps */
+    int min;                              /* 6.5.0: minimized into the dock (the yellow dot): alive, off screen, out of the z order */
 };
 #define APP_SLOTS 4      /* 4.0: apps that can run at once, one 16 MiB arena each, back to back above USER_BASE */
 extern struct app *ap;
@@ -353,7 +354,7 @@ void lp_open(void);
 #define app_q (ap->q)
 #define app_qh (ap->qh)
 #define app_qt (ap->qt)
-void app_raise(void);
+void app_raise(void); void app_minimize(void);
 extern int app_top;
 #define app_wbytes (ap->wbytes)
 extern unsigned char app_z[APP_SLOTS];
@@ -407,7 +408,10 @@ extern int off_on;
 extern int con_to_term;
 extern int face_mouth;
 extern const char *const dock_names[GUI_ICON_COUNT];   /* crash.c */
-extern const char *const game_names[11];               /* windows.c */
+extern const char *const game_names[11];
+#define DOCK_BAND_LIFT 6   /* logical px of the hover band copy above band_top (crash.c dock_band_y) */
+int dock_band_y(void);
+int dock_mag_on(void); int dock_mag_zone(int lx, int ly); void dock_magnify(int mx, int slot); void dock_unmagnify(void); void dock_mag_forget(void); void dock_mag_tick(void); void dock_magnify_now(int mx, int slot);   /* crash.c, 6.3.0 and 6.4.0 */               /* windows.c */
 #define VGAFONT_FIRST 32                              /* drivers/vgafont.h: the fallback 8x16 font, one copy, in console.c */
 #define VGAFONT_LAST 126
 extern const unsigned char *const vgafont;
