@@ -303,6 +303,7 @@ static void draw_hourly(int x, int y, int w, int h, int live, int stale) {
     int ix = x + 12, iw = w - 24, vis = vis_hours(w), cell = iw / vis;
     hoff = clamp(hoff, 0, imax(nh - vis, 0));
     int body = 16 + 6 + 36 + 6 + 16 + 2 + 14, top = y + 28 + (h - 28 - 16 - body) / 2;
+    if (top < y + 28) top = y + 28;   /* a short window: under the heading, never through it */
     for (int j = 0; j < vis; j++) {
         int i = hoff + j, cx = ix + j * cell + cell / 2;
         if (i == 0) center("Now", cx, top, TEXT, 1); else { hour_label(b, hstart + i); center(b, cx, top, MID, 0); }
