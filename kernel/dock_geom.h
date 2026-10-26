@@ -16,6 +16,9 @@
 #define DOCK_PAD        10
 #define DOCK_MARGIN_BOT 24
 #define DOCK_TRAY_COLOR 0x00EFEBE4 /* the one surface colour every dock tile is blended against */
+#define DOCK_DOT_R      2          /* 4.26.0: the running-app dot under a tile (Joshua 2026-10-07, macOS's light), its radius */
+#define DOCK_DOT_DY     7          /* ...and how far its centre sits under the tile, below the contact shadow, inside DOCK_PAD */
+#define DOCK_DOT_COLOR  0x004A4540 /* neutral dark, like macOS, not green */
 
 /* The user-adjustable Settings knob (5-25%), defined non-static in
    kernel.c so gui_dock_icon() here can read it. */

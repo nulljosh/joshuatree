@@ -435,4 +435,5 @@ unsigned long user_load(const struct user_app *a);
 int user_run(const struct user_app *a);
 extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[], user_entry_e[], user_entry_f[];
 extern unsigned long user_status;
+void dock_dots_tick(void);   /* crash.c, 4.26.0: the running-app dots under the dock, every main-loop pass */
 #endif /* KMAIN_H */

@@ -26,6 +26,8 @@ extern int dock_band_cache_top;
    painted. Set inside gui_redraw_dock_band; also reset by kernel.c's
    gui_run alongside dock_hover on session start. */
 extern int dock_presented_hover;
+extern unsigned dock_presented_open;   /* 4.26.0: the slots the screen shows a running-app dot under */
+unsigned gui_dock_open_mask(void);    /* ...and the ones that should: gui_run repaints the band when they differ */
 
 /* dock_hover / gui_order: owned by kernel.c (the gui_run event loop
    drives hover state and drag/drop reordering); read here to know what

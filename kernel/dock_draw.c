@@ -6,6 +6,7 @@
 #include "font.h"
 #include "app.h"
 #include "kheap.h"
+#include "multiwin.h"   /* gui_app_open: the running-app dots */
 
 /* Primitives that stay defined in kernel.c (used well beyond the dock:
    every flyout, icon glyph and window chrome leans on them too) but that
@@ -39,6 +40,21 @@ static unsigned int *dock_band_cache = 0;
 static unsigned int *dock_band_frame = 0;
 int dock_band_cache_top = -1;
 int dock_presented_hover = -1;
+static unsigned dock_drawn_open = 0;   /* 4.26.0: the slots gui_draw_dock_icons last drew a running-app dot under */
+unsigned dock_presented_open = 0;      /* ...and the ones the screen shows */
+#include "serial.h"
+static void dock_present_open(unsigned m){   /* the screen now shows these dots; one line when that changes, for tools/checks/dockdots-check.py */
+    if (m == dock_presented_open) return;
+    dock_presented_open = m;
+    char b[GUI_ICON_COUNT + 12] = "dock dots "; int n = 10;
+    for (int k = 0; k < GUI_ICON_COUNT; k++) b[n++] = (char)('0' + (m >> k & 1));
+    b[n++] = '\n'; b[n] = 0; serial_puts(b);
+}
+unsigned gui_dock_open_mask(void){   /* the slots that should show a dot now: gui_run repaints the band when this changes */
+    unsigned m = 0;
+    for (int slot = 0; slot < GUI_ICON_COUNT; slot++) if (gui_app_open(gui_order[slot])) m |= 1u << slot;
+    return m;
+}
 static void gui_dock_band_cache_build(void){
     int sc = (int)window_scale();
     int top = gui_dock_band_top(), h = (int)window_height() - top;
@@ -92,7 +108,7 @@ void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_m
            2 MB band on every hover step visibly exposed the half-drawn
            frame even though composition itself was offscreen. */
         for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
-            if ((slot == dock_presented_hover) == (slot == dock_hover)) continue;
+            if ((slot == dock_presented_hover) == (slot == dock_hover) && !((dock_presented_open ^ dock_drawn_open) >> slot & 1)) continue;
             int left = (gui_slot_x(slot) - DOCK_LABEL_SPAN) * sc;
             int right = (gui_slot_x(slot) + DOCK_ICON + DOCK_LABEL_SPAN) * sc;
             if (left < 0) left = 0;
@@ -111,7 +127,7 @@ void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_m
                dock hover present 1.96M pixels instead of ~86k. */
             window_damage(left, top * sc, right - left, ph);
             }
-        dock_presented_hover = dock_hover;
+        dock_presented_hover = dock_hover; dock_present_open(dock_drawn_open);
     } else {
         gui_draw_wallpaper_rows(top, (int)window_height());
         gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
@@ -120,6 +136,7 @@ void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_m
 
 static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
     int y0 = gui_dock_y0();
+    dock_drawn_open = 0;
 
     for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
         if (slot == drag_slot) continue; /* drawn last, floating at the cursor */
@@ -129,6 +146,7 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
         int cy_bottom = y0 + DOCK_PAD + DOCK_ICON;
         gui_draw_icon_shadow(cx_center, cy_bottom, size);
         gui_draw_one_icon(icon, cx_center, cy_bottom, size);
+        if (gui_app_open(icon)) { gui_draw_dock_dot(slot); dock_drawn_open |= 1u << slot; }   /* 4.26.0 */
         if (slot == dock_hover) gui_draw_dock_label(cx_center, y0, APPS[icon].name); /* gui_paint.c, shared with ARM; it stays inside DOCK_LABEL_SPAN */
     }
     if (drag_slot >= 0) {
@@ -141,4 +159,5 @@ void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     (void)hover_slot;
     gui_draw_dock_tray();
     gui_draw_dock_icons(drag_slot, drag_mx, drag_my);
+    dock_present_open(dock_drawn_open);
 }

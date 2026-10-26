@@ -21,6 +21,8 @@ int gui_multiwin_interactive(int icon);
 int gui_bleed_fits(void);
 int gui_window_bleed(int icon);
 int gui_bleed_open(void);
+extern int gui_blocking_icon;   /* 4.26.0: the blocking dock launch running now, -1 none */
+int gui_app_open(int icon);     /* 4.26.0: a window of it is open (the dock's running-app dot) */
 void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h);
 int gui_snap_area(int *top, int *bottom);
 int gui_snap_zone(int mx, int my);

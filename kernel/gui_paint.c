@@ -267,6 +267,21 @@ void gui_draw_dock_tray(void){
    other effect here, no alpha channel and no bitmap: darkest directly
    under the icon, blending out to the dock's own color at the edge,
    which is exactly what a soft shadow is. */
+/* 4.26.0: a small dark dot under a dock tile whose app has a window open (Joshua, 2026-10-07: "a little light below
+   the icon, like macOS"). It sits under the contact shadow, inside DOCK_PAD, where the tray is flat. It only draws:
+   i386 takes it away by recomposing the dock band, the Pi by putting back the pixels it saved first.
+   Both desktops call it: kernel/dock_draw.c and arch/arm64/crash.c. */
+void gui_draw_dock_dot(int slot){
+    int sc = (int)window_scale(), r = DOCK_DOT_R * sc;
+    int cx = (gui_slot_x(slot) + DOCK_ICON / 2) * sc, cy = (gui_dock_y0() + DOCK_PAD + DOCK_ICON + DOCK_DOT_DY) * sc;
+    for (int dy = -r - 1; dy <= r + 1; dy++)
+        for (int dx = -r - 1; dx <= r + 1; dx++){   /* per physical pixel: full inside, one pixel of coverage at the edge, the same at any scale */
+            int a = (r * 16 + 8 - gui_isqrt_fast((dx * dx + dy * dy) * 256)) * 16;   /* the distance is in 1/16 pixels */
+            if (a <= 0) continue;
+            window_pixel_phys(cx + dx, cy + dy, gui_lerp(DOCK_TRAY_COLOR, DOCK_DOT_COLOR, a > 256 ? 256 : a, 256));
+        }
+}
+
 void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
     /* v44.2: drawn at PHYSICAL resolution, same fix shape as v43's dock
        tray corners. Through the LOGICAL layer this was the one dock

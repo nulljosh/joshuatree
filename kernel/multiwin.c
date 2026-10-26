@@ -56,6 +56,12 @@ int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_APP_COUNT
    on top of each other. */
 int gui_bleed_fits(void){ return (unsigned)window_width() * (unsigned)window_height() * 4u <= JT_USER_FB_BYTES; } /* a ring-3 window buffer is 2.1 MB (960x540): a bigger screen gets her in an ordinary window instead of a refused open */
 int gui_window_bleed(int icon){ return !jt_phone_mode() && gui_bleed_fits() && icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open == samantha_ring3_open; } /* Samantha's window is her face, full bleed (portfolio mode: under the menu bar too); Esc closes it */
+int gui_blocking_icon = -1;   /* 4.26.0: the app a blocking dock launch is running (kernel.c gui_launch_from_dock), -1 none */
+int gui_app_open(int icon){   /* 4.26.0: has this app a window open? the dock's running-app dot */
+    if (icon == gui_blocking_icon) return 1;
+    for (int i = 0; i < gui_window_count; i++) if (gui_windows[i].icon == icon) return 1;
+    return 0;
+}
 int gui_bleed_open(void){ for (int i = 0; i < gui_window_count; i++) if (gui_window_bleed(gui_windows[i].icon)) return 1; return 0; }
 void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
     if (jt_phone_mode()) { *x = -8; *y = 8; *w = (int)window_width() + 16; *h = (int)window_height(); return; } /* 2.0 gate 5: one window, full screen under the back chevron strip (content rect 0,40,W,H-40) */
