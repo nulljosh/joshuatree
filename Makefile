@@ -9,7 +9,7 @@ LD := ld.lld
 
 KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c \
                kernel/paging.c kernel/kheap.c kernel/task.c kernel/exec.c kernel/ring3.c kernel/ring3app.c kernel/syscall.c kernel/brk.c kernel/shellsys.c kernel/r3stress.c \
-               kernel/gui_prims.c kernel/gui_paint.c kernel/dock_geom.c kernel/dock_draw.c kernel/app.c kernel/backtrace.c kernel/entropy.c kernel/auth_kdf.c kernel/picker.c kernel/weather.c kernel/wallmap.c kernel/settings.c kernel/selftest.c kernel/taskdemo.c kernel/shellfs.c kernel/shellnet.c kernel/wxtest.c kernel/multiwin.c kernel/progtest.c kernel/guitest.c kernel/panic.c kernel/gui_shapes.c kernel/klog.c kernel/icons.c kernel/appsfolder.c kernel/bootscreen.c kernel/menu.c kernel/clockicon.c kernel/hint.c kernel/stocks.c kernel/auth.c kernel/settings_ui.c kernel/phone_home.c kernel/shell.c kernel/bench.c kernel/wallpaint.c kernel/uitext.c kernel/menubar.c kernel/appview.c kernel/desktop.c kernel/kernel.c
+               kernel/gui_prims.c kernel/gui_paint.c kernel/dock_geom.c kernel/dock_draw.c kernel/app.c kernel/backtrace.c kernel/entropy.c kernel/auth_kdf.c kernel/picker.c kernel/weather.c kernel/wallmap.c kernel/settings.c kernel/selftest.c kernel/taskdemo.c kernel/shellfs.c kernel/shellnet.c kernel/wxtest.c kernel/multiwin.c kernel/progtest.c kernel/guitest.c kernel/panic.c kernel/gui_shapes.c kernel/klog.c kernel/icons.c kernel/appsfolder.c kernel/bootscreen.c kernel/menu.c kernel/clockicon.c kernel/hint.c kernel/stocks.c kernel/auth.c kernel/settings_ui.c kernel/phone_home.c kernel/shell.c kernel/bench.c kernel/wallpaint.c kernel/uitext.c kernel/menubar.c kernel/appview.c kernel/desktop.c kernel/kmain.c kernel/kernel.c
 KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/ring3_asm.S
 DRIVER_SRCS := drivers/ata.c drivers/blockdev.c drivers/ramdisk.c drivers/trash.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c drivers/vmmouse.c \
                drivers/window.c drivers/rtl8139.c drivers/ne2k.c drivers/net.c drivers/http.c drivers/html.c \
@@ -635,7 +635,8 @@ drivers/user_stocks.h: user/stocks.bin tools/gen/gen_user_bin.py
 drivers/user_activity.h: user/activity.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/activity.bin drivers/user_activity.h user_activity
 
-kernel/kernel.o: drivers/user_wc.h
+kernel/kmain.o: drivers/user_wc.h drivers/version.h   # 4.25.1: kmain.c holds the wc program and prints the version
+kernel/desktop.o: drivers/version.h
 kernel/progtest.o: drivers/user_hello.h drivers/user_note.h
 drivers/user_fbpoke.h: user/fbpoke.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/fbpoke.bin drivers/user_fbpoke.h user_fbpoke

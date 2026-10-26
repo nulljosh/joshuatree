@@ -315,14 +315,13 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_CLIP_GET 2
 #define JT_CLIP_MAX 4096
 extern const struct user_app user_apps[];
-static unsigned long user_status;
-static int user_faulted;    /* the last EL0 program ended on a fault, not an exit */
+unsigned long user_status;
+int user_faulted;    /* the last EL0 program ended on a fault, not an exit */
 #ifdef HANG_TEST
 static int hang_arm;       /* app_start sets it for slot 0, so the boot self-tests' own loads are left alone */
 #endif
 static int user_loud;       /* userrun: what the program writes reaches the screen too; the boot self-test keeps it on the UART */
 static unsigned user_pid;   /* programs started so far, what JT_SYS_GETPID answers */
-static unsigned long app_len, app_code, app_img;   /* the loaded app: bytes of window mapped, how many of those are code, and the image's own length */
 unsigned long cal_local(void);   /* cal_utc shifted to Vancouver wall time, what SYS_TIME returns (below) */
 unsigned long cal_utc(void);   /* the clock the Calendar tile reads, further down: 0 until the network has told us the time */
 /* M3c part 2, the scheduler's state: one app at a time, since the arena has one app window. app_cur is the app it holds,
@@ -330,35 +329,13 @@ unsigned long cal_utc(void);   /* the clock the Calendar tile reads, further dow
    app_wbytes at UP_WIN, 0 with no window, and app_q is the ring of events the desktop queued for it. */
 struct app apps[APP_SLOTS];
 struct app *ap = &apps[0];         /* the app whose state the code below means: the one resume_user is in, else the one in front */
-#define app_cur (ap->cur)
 #define app_frame (ap->frame)
 #define app_fp (ap->fp)
 #define app_sp (ap->sp)
 #define app_last (ap->last)
-#define app_wbytes (ap->wbytes)
-#define app_hi (ap->hi)
 #define app_brk (ap->brk)
-#define app_close_at (ap->close_at)
-#define app_running (ap->running)
 #define app_parked (ap->parked)
-#define app_kick (ap->kick)
 #define app_runs (ap->runs)
-#define app_q (ap->q)
-#define app_qh (ap->qh)
-#define app_qt (ap->qt)
-#define app_len (ap->len)
-#define app_code (ap->code)
-#define app_img (ap->img)
-#define app_lx (ap->lx)
-#define app_ly (ap->ly)
-#define app_lw (ap->lw)
-#define app_lh (ap->lh)
-#define app_cw (ap->cw)
-#define app_ch (ap->ch)
-#define app_bw (ap->bw)
-#define app_bh (ap->bh)
-#define app_rs_log (ap->rs_log)
-#define app_shown (ap->shown)
 #define UB (ap->base)
 unsigned long cnt_now(void) { unsigned long c; __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); return c; }
 unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f)); return f ? f : 54000000; }
@@ -379,7 +356,7 @@ int app_top = -1;
    Set before each switch into EL0. -1 until the first switch: the boot self-tests run in slot 0 with nothing else loaded.
    ponytail: one tlbi vmalle1 per switch; ASIDs, one per slot, when four busy apps make that show up in a profile. */
 static int el0_slot = -1;
-static void arena_only(int slot) {
+void arena_only(int slot) {
     if (slot == el0_slot) return;
     unsigned long *e = &l2[(USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21];
     for (int k = 0; k < APP_SLOTS * ARENA_BLOCKS; k++) e[k] = k / ARENA_BLOCKS == slot ? e[k] & ~(1UL << 61) : e[k] | (1UL << 61);
@@ -565,7 +542,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
 }
 /* Map the M3a arena and load the test program (user.S) into its code page. Done once; the C programs of M3b and M3c go
    through user_load into their own window and leave this page alone, so the test program is always there to probe them. */
-static void user_init(const char *img, unsigned long len) {
+void user_init(const char *img, unsigned long len) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);   /* valid page, normal memory, inner shareable, access flag */
     const unsigned long AP_EL0_RW = 1UL << 6, AP_RO = 3UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
     l3[UP_CODE >> 12] = (UB + UP_CODE) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable for now, so the kernel can copy the program in */
@@ -618,7 +595,7 @@ static long app_audio(unsigned long op, unsigned long arg, unsigned long size) {
     if (!user_in_range(pcm, len)) return -14;
     return audio_app_queue((const unsigned char *)pcm, len, rate, flags & 1);
 }
-static const struct user_app *user_find(const char *name, unsigned n) {
+const struct user_app *user_find(const char *name, unsigned n) {
     for (const struct user_app *a = user_apps; a->name; a++) {
         unsigned i = 0;
         while (i < n && a->name[i] == name[i]) i++;
@@ -631,7 +608,7 @@ static void app_unmap(void) {   /* its pages, its stack, its window buffer and (
     for (unsigned long i = UP_APP >> 12; i < ARENA_BLOCKS * 512; i++) l3[ap->l3off + i] = 0;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
 }
-static unsigned long user_load(const struct user_app *a) {
+unsigned long user_load(const struct user_app *a) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);
     const unsigned long AP_EL0_RW = 1UL << 6, AP_RO = 3UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
     unsigned long len = (unsigned long)(a->end - a->start);
@@ -673,7 +650,7 @@ static unsigned long user_load(const struct user_app *a) {
 #ifndef PI_BUILD
 /* Load an app and run it at EL0 until it exits or faults, for the boot self-test (QEMU builds only). 0: it ran (user_status
    is its exit code, user_faulted says it was a fault, not an exit); -1: it did not load. */
-static int user_run(const struct user_app *a) {
+int user_run(const struct user_app *a) {
     unsigned long entry = user_load(a);
     if (!entry) return -1;
     user_pid++; user_faulted = 0; ufile_owner = 0;
@@ -770,88 +747,6 @@ int userrun(const char *name, unsigned n, unsigned long *status, int *faulted) {
     if (me->cur == a) return me->wbytes ? 2 : 1;
     *status = user_status; *faulted = user_faulted;
     return 0;
-}
-#ifndef PI_BUILD
-/* Probe the pages of the app that is loaded, from EL0: user.S's entry D gets { bss word, data page, code base, window size }
-   in a block at the bottom of its own stack page and checks them (see user.S). It ends on a store to the code page, which must
-   fault; the kernel survives and says so. */
-static void user_probe(int pass) {
-    unsigned long base = UB + UP_APP, *args = (unsigned long *)(UB + UP_STACK);
-    args[0] = base + ((app_img + 15) & ~15UL); args[1] = base + app_code; args[2] = base; args[3] = UAPP_MAX;
-    uart_puts("M3c probe "); uart_dec((unsigned)pass); uart_puts(" starts\n");
-    user_faulted = 0;
-    enter_user(UB + UP_CODE + (unsigned long)(user_entry_d - user_start), UB + UP_STACK + 4096, (unsigned long)args, 0);
-    uart_puts(user_faulted ? "M3c probe survived the code write\n" : "M3c probe FAIL: the code write did not fault\n");
-}
-/* Branch to an address inside the loaded app that is not code: user.S's entry C does the `br`, which must be an instruction
-   abort (the pages are never executable), and the kernel carries on. */
-static void user_exec_probe(const char *what, unsigned long target) {
-    uart_puts("M3c exec "); uart_puts(what); uart_putc(' '); uart_hex(target); uart_putc('\n');
-    user_faulted = 0;
-    enter_user(UB + UP_CODE + (unsigned long)(user_entry_c - user_start), UB + UP_STACK + 4096, UB + UP_KERN, target);
-    uart_puts(user_faulted ? "M3c exec refused\n" : "M3c exec FAIL: it ran\n");
-}
-#endif
-void user_demo(void) {
-    /* 4.5: an APP_BOOT build has opened its apps by now (fb_desktop runs first). These tests load programs into slot 0 and its
-       low pages, so with apps live they would write over them, or, with `ap` on another slot, into pages that slot never mapped
-       (a kernel data abort at the third app's arena on QEMU). They run only on a machine with no app open. */
-    if (apps_live()) { uart_puts("M3 self-tests skipped: apps are open\n"); return; }
-    ap = &apps[0];
-    user_init(user_start, (unsigned long)(user_end - user_start));
-    unsigned long code = UB + UP_CODE, sp = UB + UP_STACK + 4096, kpage = UB + UP_KERN;
-    uart_puts("M3 EL0 task starts\n");
-    enter_user(code + (unsigned long)(user_entry_a - user_start), sp, kpage, 0);
-    uart_puts("M3 kernel survived the fault\n");
-    uart_puts("M3 EL0 jump task starts\n");   /* branch to kernel text: EL0 may not execute it */
-    enter_user(code + (unsigned long)(user_entry_c - user_start), sp, kpage, (unsigned long)_start);
-    uart_puts("M3 kernel survived the jump\n");
-    uart_puts("M3 EL0 second task starts\n");
-    user_status = enter_user(code + (unsigned long)(user_entry_b - user_start), sp, kpage, 0);
-    if (user_status == 7) uart_puts("M3 userland ok\n"); else uart_puts("M3 userland FAIL\n");
-    {   /* 4.4: slot 1 gets one page EL0 could use, and from slot 0 user.S's entry F loads from it, which must fault */
-        const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
-        unsigned long pg = apps[1].base + UP_STACK, *e = &l3[apps[1].l3off + (UP_STACK >> 12)];
-        *e = pg | PAGE | AP_EL0_RW | PXN | UXN;
-        arena_only(0);
-        uart_puts("M4 arena probe starts\n");
-        user_faulted = 0;
-        enter_user(code + (unsigned long)(user_entry_f - user_start), sp, pg, 0);
-        uart_puts(user_faulted ? "M4 arena isolation ok\n" : "M4 arena isolation FAIL: slot 1 was readable from slot 0\n");
-        *e = 0;
-        __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
-    }
-#ifndef PI_BUILD
-    /* M3b: user/hello.c itself, built for aarch64 and talking Joshua Tree syscall numbers over svc. This runs before any
-       card is mounted, so since M3d its open of HELLO.TXT is answered -ENOENT (-2), which hello.c reports and answers with
-       exit 1. The kernel takes that exit as the pass. With a card holding JT/HELLO.TXT, `userrun hello` goes all the way
-       to exit 9 (tools/checks/arm64-m3c-check.py). */
-    const struct user_app *hello = user_find("hello", 5), *cal = user_find("calendar", 8);
-    uart_puts("M3b EL0 C task starts\n");
-    if (hello && !user_run(hello) && !user_faulted && user_status == 1) uart_puts("M3b userland C ok\n"); else uart_puts("M3b userland C FAIL\n");
-    /* M3d: user.S's entry E abuses the file calls once each: a kernel pointer as a path, a read into the kernel-only page,
-       a path with "..", a 4 GB readfile, a readdir whose records run past its page. Each must come back an errno (the
-       checks run before any card is touched), then it exits 0 and the kernel carries on. */
-    uart_puts("M3d file call abuse starts\n");
-    user_faulted = 0;
-    user_status = enter_user(code + (unsigned long)(user_entry_e - user_start), sp, kpage, 0);
-    uart_puts(!user_faulted && user_status == 0 ? "M3d file call abuse ok\n" : "M3d file call abuse FAIL\n");
-    /* M3c: user/calendar.c, about 34 KB with relocated pointer tables, a data page and a zeroed pool. It opens its window
-       first; run here, outside the scheduler, there is none to give (-ENODEV, as i386 answers a program run from the text
-       shell), so it writes "calendar: no window" to fd 2 and exits 1, which is the pass. Then
-       user.S's probe runs against calendar's pages, twice with a reload between: the second time proves the loader zeroes
-       the pool again and puts the data back. */
-    uart_puts("M3c EL0 calendar starts\n");
-    if (cal && !user_run(cal) && !user_faulted && user_status == 1) uart_puts("M3c userland calendar ok\n"); else uart_puts("M3c userland calendar FAIL\n");
-    if (cal) {
-        user_probe(1);
-        if (user_load(cal)) user_probe(2); else uart_puts("M3c probe FAIL: calendar did not load again\n");
-        unsigned long base = UB + UP_APP;   /* never executable: a data page, the first whole page of the zeroed pool, the stack */
-        user_exec_probe("data", base + app_code);
-        user_exec_probe("pool", base + (app_img + 4095) / 4096 * 4096);
-        user_exec_probe("stack", UB + UP_ASTACK);
-    }
-#endif
 }
 
 /* ---- M1c: a framebuffer. QEMU's virt machine has no display unless one is asked for; ramfb is a plain RAM

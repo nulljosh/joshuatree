@@ -219,7 +219,7 @@ vectors.o: vectors.S
 # main.c is being split (4.23.2 on): MAINSRC is main.c and the files cut out of it. Every build that compiles main.c
 # compiles each of them with the same flags (a test build's -D, PI_BUILD, MAINFLAGS) and links them into the one
 # object (ld -r) the image links, so the split never changes what a test build turns on, nor any link line.
-MAINSRC = main.c virtio.c boot.c desk.c keys.c windows.c appwin.c pointer.c crash.c console.c
+MAINSRC = main.c virtio.c boot.c desk.c keys.c windows.c appwin.c pointer.c crash.c console.c eltests.c
 # Each rule sets MAINFLAGS_PART (a target-specific variable, so flags holding commas, like APP_NAME=a,b,c, survive)
 # and runs MAINLINK.
 MAINLINK = set -e; for f in $(MAINSRC); do $(CC) $(MAINFLAGS_PART) -c $$f -o $@.$${f%.c}.o; done; ld.lld -r -o $@ $(patsubst %.c,$@.%.o,$(MAINSRC))

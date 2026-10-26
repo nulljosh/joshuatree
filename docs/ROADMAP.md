@@ -69,7 +69,6 @@ Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Ma
 - Pi security on the board: verify the TLS relay and HTTPS clock, then drop the build-time clock bootstrap.
 - Self-update with a fallback kernel. Check: a fake release that boots once and falls back.
 - The local model with real weights read from the card (`tools/checks/arm64-llm-check.py` loading from a FAT image).
-- Split `kernel/kernel.c` (2,827 lines after 4.20.21, 9,606 on 2026-09-28) and `arch/arm64/main.c` (4,133), one behaviour-identical PR each. Next in kernel.c: `gui_run` and `kmain` (see the Loop handoff section).
 - A trademark search before any rename.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, and fewer get it onto a real board. Lean into that:
@@ -1036,6 +1035,8 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.25.2 (2026-10-25)**: The EL0 boot self-tests leave the Pi's `main.c` for `arch/arm64/eltests.c` (1,073 lines to 965). The `app_len`, `app_code` and `app_img` macros live in `kmain.h` only: `main.c` also had dead globals of those names, which the new part would have read as 0. Check: `arm64-m3-check.py`, `arm64-m3c-check.py`, `godfile-check.sh`.
+- **4.25.1 (2026-10-25)**: `kmain` leaves `kernel/kernel.c` for `kernel/kmain.c` (1,260 lines to 982), so with `arch/arm64/main.c` at 1,073 then (965 after 4.25.2), both under the 1,000 Joshua asked for. Check: `check.sh`, `panic-symbols-check.py`, `usertest-check.sh`, `iso-boot-check.sh`.
 - **4.25.0 (2026-10-25)**: Chess, you as White against the computer, on both builds (Apps folder, the Pi's Spotlight and Launchpad). The rules and the opponent are `user/chess_core.h`, which the host compiles and counts against the standard perft numbers; the board takes the cursor, clicks or typed moves. Check: `chess-core-check.py`, `ring3-chess-check.py`, `arm64-games-check.py`.
 - **4.24.0 (2026-10-25)**: The five 4.23 games run on the Pi: Spotlight and the Launchpad list Solitaire, Paddle, Bricks, Depths and Snake, the unchanged user/*.c at EL0. Solitaire moves its help under the cards in a narrow window and Paddle's scores sit at the bar's right end. The Launchpad is seven across and Spotlight shows its first 20 rows. Check: `arm64-games-check.py`, `arm64-launchpad-check.py`, `arm64-spotlight-check.py`.
 - **4.23.9 (2026-10-25)**: `gui_run`, the i386 desktop's event loop, and its lock screen and Apple-menu actions leave `kernel/kernel.c` for `kernel/desktop.c` (1,940 lines to 1,260). Check: `check.sh`, `esc-desktop-check.py`, `lockscreen-check.py`, `design-doc-check.py`.
@@ -2003,9 +2004,9 @@ Updated 2026-10-25, afternoon. The loop's working notes live in `~/.claude/loops
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time: only the next in line runs CI, and each merge is about 15 minutes across 11 shards. Open a loop PR ready, not as a draft: a push to a draft followed by `gh pr ready` lets the skipped draft run cancel the real one.
 
-**Where things stand.** Main is 4.23.x, aiming at 5.0, Talk to it. 4.23.0 added five games played to the end (Solitaire, Paddle, Bricks, Depths, Snake); 4.24.0 put them on the Pi. The card flashed on 2026-10-25 carries 4.20.19, so relay-free Samantha (4.21.0) and the games need a reflash. Both god files are under the 2,000-line limit: `arch/arm64/main.c` is 1,073 lines (4.23.2 to 4.23.5 cut it into virtio, boot, desk, keys, windows, appwin, pointer, crash and console) and `kernel/kernel.c` about 1,260 (4.23.6 to 4.23.9 moved the wallpaper, UI text, menu bar, app viewport and `gui_run`). The god-file check covers `arch/`.
+**Where things stand.** Main is 4.25.x, aiming at 5.0, Talk to it. 4.23.0 added five games played to the end (Solitaire, Paddle, Bricks, Depths, Snake); 4.24.0 put them on the Pi, and 4.25.0 added Chess. The card flashed on 2026-10-25 carries 4.20.19, so relay-free Samantha (4.21.0) and the games need a reflash. Both god files are under the 2,000-line limit: `arch/arm64/main.c` is 965 lines (4.23.2 to 4.25.2 cut it into virtio, boot, desk, keys, windows, appwin, pointer, crash, console and eltests) and `kernel/kernel.c` 982 (4.23.6 to 4.25.1 moved the wallpaper, UI text, menu bar, app viewport, `gui_run` and `kmain`). The god-file check covers `arch/`.
 
-**What is left in kernel.c.** `kmain`, the APPS table, the console and keyboard input, and the dock launch path. A split must keep each `#ifndef` default guarded, keep static state in one file, and move a macro two parts test into the shared header (Lessons, "Splitting a file").
+**What is left in kernel.c.** The APPS table, the console and keyboard input, the boot chime, and the dock launch path. A split must keep each `#ifndef` default guarded, keep static state in one file, and move a macro two parts test into the shared header (Lessons, "Splitting a file").
 
 **Next, in order.**
 1. Joshua's board pass on a fresh card: hold Space and talk, the Samantha tile opens her full-screen chat, she answers out loud.

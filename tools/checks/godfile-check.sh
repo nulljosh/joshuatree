@@ -44,8 +44,7 @@ EXEMPT=(
 ratchet_ceiling() {
     case "$1" in
         # kernel/kernel.c left this list on 2026-10-25: 4.23.8 brought it under LIMIT (6,393 lines at its peak).
-        # 2026-10-25: 4.23.2 put arch/ under this check (it never scanned it) after the virtio drivers moved to arch/arm64/virtio.c.
-        arch/arm64/main.c) echo 1073 ;;
+        # arch/arm64/main.c left it the same day (4,133 lines at its peak; 965 after 4.25.2). arch/ is scanned since 4.23.2.
         *) echo "$LIMIT" ;;
     esac
 }
