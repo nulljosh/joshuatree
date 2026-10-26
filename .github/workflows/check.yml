@@ -115,6 +115,20 @@ jobs:
           fetch-depth: 0
       - name: Landing roadmap summary regression checks
         run: python3 tools/checks/landing-roadmap-check.py
+      # 6.14.0: the .deb files every run fetches, kept between runs. On 2026-10-26 the Azure mirror ran near 30 KB/s and one
+      # WebKit install took 29 minutes. apt on the runner deletes what it downloads, so it is told to keep it, and the
+      # cache is saved right after the installs (not at the job's end, which a timed-out job never reaches).
+      - name: Restore downloaded packages
+        id: debs
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-debs
+          key: apt-debs-suite-${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-v1
+      - name: Keep apt's downloads and put the cached ones back
+        run: |
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true"; APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/01keep-debs >/dev/null
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          if ls ~/apt-debs/*.deb >/dev/null 2>&1; then sudo cp ~/apt-debs/*.deb /var/cache/apt/archives/; fi
       - name: Install clang, lld, qemu, FAT disk tools, ISO tools
         run: |
           # a stalled mirror connection gives up after 20 s and retries, and the update is tried up to three times, so a
@@ -168,6 +182,15 @@ jobs:
       # mid --with-deps left its apt-get holding the dpkg lock, so the retry failed at once (6.5.2).
       - name: Install Chromium for Playwright
         run: npx playwright install-deps chromium && for i in 1 2; do timeout 7m npx playwright install chromium && exit 0; done; exit 1   # apt once, a stalled download tries once more
+      - name: Copy the downloaded packages for the cache
+        if: always() && steps.debs.outputs.cache-hit != 'true'
+        run: mkdir -p ~/apt-debs && cp /var/cache/apt/archives/*.deb ~/apt-debs/ 2>/dev/null || true
+      - name: Save downloaded packages
+        if: always() && steps.debs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-debs
+          key: apt-debs-suite-${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-v1
       # One step, the whole suite. tools/checks/ci-suite.sh holds the
       # manifest and the per-check comments that used to live here as ~40
       # separate workflow steps. That shape stopped the job at the first
@@ -210,6 +233,20 @@ jobs:
     timeout-minutes: 45   # the WebKit install alone took 12 minutes on a slow mirror, 16 and more on 2026-10-26
     steps:
       - uses: actions/checkout@v5
+      # 6.14.0: the .deb files every run fetches, kept between runs. On 2026-10-26 the Azure mirror ran near 30 KB/s and one
+      # WebKit install took 29 minutes. apt on the runner deletes what it downloads, so it is told to keep it, and the
+      # cache is saved right after the installs (not at the job's end, which a timed-out job never reaches).
+      - name: Restore downloaded packages
+        id: debs
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-debs
+          key: apt-debs-demo-24.04-v1
+      - name: Keep apt's downloads and put the cached ones back
+        run: |
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true"; APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/01keep-debs >/dev/null
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          if ls ~/apt-debs/*.deb >/dev/null 2>&1; then sudo cp ~/apt-debs/*.deb /var/cache/apt/archives/; fi
       - name: Install clang, lld, qemu
         run: |
           # a stalled mirror connection gives up after 20 s and retries, and the update is tried up to three times, so a
@@ -225,6 +262,15 @@ jobs:
         run: npx playwright install-deps chromium && for i in 1 2; do timeout 7m npx playwright install chromium && exit 0; done; exit 1   # apt once, a stalled download tries once more
       - name: Install a real WebKit for Playwright
         run: npx playwright install-deps webkit && for i in 1 2; do timeout 7m npx playwright install webkit && exit 0; done; exit 1   # apt once, a stalled download tries once more
+      - name: Copy the downloaded packages for the cache
+        if: always() && steps.debs.outputs.cache-hit != 'true'
+        run: mkdir -p ~/apt-debs && cp /var/cache/apt/archives/*.deb ~/apt-debs/ 2>/dev/null || true
+      - name: Save downloaded packages
+        if: always() && steps.debs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-debs
+          key: apt-debs-demo-24.04-v1
       - name: Landing specs and footer in Chromium and WebKit (moved from the suite, which installs no WebKit)
         run: node tools/checks/landing-specs-footer-check.mjs
       - name: Landing demo Chat check (retries once on a timing flake)
