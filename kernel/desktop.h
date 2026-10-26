@@ -42,4 +42,7 @@ void gui_order_init(void);   /* the dock's slot order, the portfolio build's or 
 extern const char SC[128];   /* PS/2 set 1 scancode to ASCII */
 void r3stress_desktop_round(void);   /* kernel/r3stress.c */
 void pdestress_desktop_round(void);
+void boot_chime(void);   /* kernel.c: the PC speaker's boot notes (4.25.1: kmain.c plays them) */
+char getch(void);        /* kernel.c: the next key off the IRQ ring, halting between ticks */
+void r3stress_arm(const char *cl);   /* kernel/r3stress.c: reads its boot-line flag */
 #endif
