@@ -162,9 +162,10 @@ jobs:
         run: npm install --no-audit --no-fund
       # Chromium only: WebKit's media libraries are most of the apt download, and on a slow mirror they took 12 minutes
       # and more. The one WebKit check (landing-specs-footer) runs in the demo job, which installs WebKit anyway. One
-      # timed attempt, no retry: killing npx leaves its apt-get holding the dpkg lock, so a retry fails at once.
+      # untimed apt step for the system libraries, then the browser download alone is timed and retried: killing npx
+      # mid --with-deps left its apt-get holding the dpkg lock, so the retry failed at once (6.5.2).
       - name: Install Chromium for Playwright
-        run: for i in 1 2; do timeout 7m npx playwright install --with-deps chromium && exit 0; done; exit 1   # a stalled download tries once more
+        run: npx playwright install-deps chromium && for i in 1 2; do timeout 7m npx playwright install chromium && exit 0; done; exit 1   # apt once, a stalled download tries once more
       # One step, the whole suite. tools/checks/ci-suite.sh holds the
       # manifest and the per-check comments that used to live here as ~40
       # separate workflow steps. That shape stopped the job at the first
@@ -219,9 +220,9 @@ jobs:
       - name: Install Node dependencies
         run: npm install --no-audit --no-fund
       - name: Install a real Chromium for Playwright
-        run: for i in 1 2; do timeout 7m npx playwright install --with-deps chromium && exit 0; done; exit 1   # a stalled download tries once more
+        run: npx playwright install-deps chromium && for i in 1 2; do timeout 7m npx playwright install chromium && exit 0; done; exit 1   # apt once, a stalled download tries once more
       - name: Install a real WebKit for Playwright
-        run: for i in 1 2; do timeout 7m npx playwright install --with-deps webkit && exit 0; done; exit 1   # a stalled download tries once more
+        run: npx playwright install-deps webkit && for i in 1 2; do timeout 7m npx playwright install webkit && exit 0; done; exit 1   # apt once, a stalled download tries once more
       - name: Landing specs and footer in Chromium and WebKit (moved from the suite, which installs no WebKit)
         run: node tools/checks/landing-specs-footer-check.mjs
       - name: Landing demo Chat check (retries once on a timing flake)
