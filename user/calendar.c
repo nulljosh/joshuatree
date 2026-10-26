@@ -110,7 +110,7 @@ static void cal_ymd_from_epoch(unsigned t, int *y, int *m, int *d){
 #define EVENTS_MAX     64
 #define EVENT_TEXT_MAX 40
 
-struct event { char date[CAL_DATE_LEN + 2]; char text[EVENT_TEXT_MAX]; };
+struct event { char date[CAL_DATE_LEN + 2]; char text[EVENT_TEXT_MAX]; char sub; };   /* sub: from SUBS.TXT (6.19.0), read only, never saved */
 extern char _user_end[];
 
 static const char *MONTHS[12] = {"January", "February", "March", "April", "May", "June",
@@ -213,9 +213,12 @@ static int find(const char *ds){
     return -1;
 }
 
+static int taking_sub JT_DATA = 0;   /* load() is reading SUBS.TXT: a date the person already has keeps theirs */
 static void take_line(const char *line, int n){
     if (n < CAL_DATE_LEN || count >= EVENTS_MAX) return;
+    if (taking_sub) { char d[CAL_DATE_LEN + 1]; int k = 0; for (; k < CAL_DATE_LEN; k++) d[k] = line[k]; d[k] = 0; if (find(d) >= 0) return; }
     struct event *e = &events[count];
+    e->sub = (char)taking_sub;
     int i = 0, j = 0;
     while (i < n && line[i] != '|' && j < CAL_DATE_LEN) e->date[j++] = line[i++];
     e->date[j] = 0;
@@ -226,9 +229,8 @@ static void take_line(const char *line, int n){
     count++;
 }
 
-static void load(void) {
-    count = 0;
-    int fd = jt_open("EVENTS.TXT", JT_O_RDONLY);
+static void load_file(const char *name) {
+    int fd = jt_open(name, JT_O_RDONLY);
     if (fd < 0) return;
     char chunk[128], line[CAL_DATE_LEN + EVENT_TEXT_MAX + 4];
     int p = 0, n;
@@ -243,12 +245,22 @@ static void load(void) {
     if (p) take_line(line, p); /* last line had no newline */
     jt_close(fd);
 }
+static void load(void) {
+    count = 0;
+    load_file("EVENTS.TXT");
+    int mine = count;
+    taking_sub = 1; load_file("SUBS.TXT"); taking_sub = 0;   /* 6.19.0: a subscribed calendar, written by the kernel's `calendar subscribe URL` */
+    if (count > mine) say_num("calendar: subscribed events ", count - mine);
+}
 
 static int save(void) {
     int fd = jt_open("EVENTS.TXT", JT_O_WRONLY | JT_O_CREAT | JT_O_TRUNC);
     if (fd < 0) { jt_write(1, "calendar: save failed\n", 22); return 0; }
     char line[CAL_DATE_LEN + EVENT_TEXT_MAX + 4];
+    int kept = 0;
     for (int i = 0; i < count; i++) {
+        if (events[i].sub) continue;   /* a subscribed event belongs to its feed */
+        kept++;
         int l = cal_put(line, 0, events[i].date);
         line[l++] = '|';
         l = cal_put(line, l, events[i].text);
@@ -256,7 +268,7 @@ static int save(void) {
         jt_write(fd, line, (unsigned)l);
     }
     if (jt_close(fd) < 0) { jt_write(1, "calendar: save failed\n", 22); return 0; }
-    say_num("calendar: saved ", count);
+    say_num("calendar: saved ", kept);
     return 1;
 }
 
@@ -268,6 +280,7 @@ static void set_event(const char *ds, const char *txt){
         idx = count++;
         cal_put(events[idx].date, 0, ds);
     }
+    events[idx].sub = 0;   /* editing a subscribed day makes it the person's own */
     int c = 0;
     for (; txt[c] && c < EVENT_TEXT_MAX - 1; c++) events[idx].text[c] = txt[c];
     events[idx].text[c] = 0;
