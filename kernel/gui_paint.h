@@ -73,6 +73,11 @@ void gui_draw_dock_label(int cx_center, int y0, const char *name);
    wallpaper, content well from y + 30, a hairline under the title band,
    the three traffic lights and the centred name. */
 void gui_draw_window_frame(int x, int y, int w, int h, const char *name);
+#define GUI_TL_GLYPHS 0
+#define GUI_TL_PLAIN 1
+#define GUI_TL_BACK 2
+void gui_draw_traffic(int x, int y, int st);
+void gui_draw_window_frame_st(int x, int y, int w, int h, const char *name, int st);
 
 /* Provided by the platform: bold DejaVu Sans with its line box's top-left at logical (lx, ly), face 0..3 a 16, 20,
    24 or 28 physical pixel face, mul an integer upscale; and the width of that string in logical pixels, rounded up.

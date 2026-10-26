@@ -355,6 +355,7 @@ void lp_open(void);
 #define app_qh (ap->qh)
 #define app_qt (ap->qt)
 void app_raise(void); void app_minimize(void);
+int tl_state(int id); void traffic_tick(void);   /* windows.c, 6.6.0: 0 the Console, 1 the Calculator, 2 + slot an app */
 extern int app_top;
 #define app_wbytes (ap->wbytes)
 extern unsigned char app_z[APP_SLOTS];

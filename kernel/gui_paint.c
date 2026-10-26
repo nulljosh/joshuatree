@@ -667,18 +667,28 @@ void gui_close_glyph(int cx, int cy, unsigned int on){
     }
 }
 
+/* The three traffic lights of a frame at x, y (6.6.0, as on a Mac): GUI_TL_GLYPHS coloured with the close X and the
+   minimize bar (i386 always, the Pi under the pointer), GUI_TL_PLAIN coloured without them (the Pi's front window),
+   GUI_TL_BACK all three grey (a window behind another). The band behind them is cleared first, so a redraw is exact. */
+void gui_draw_traffic(int x, int y, int st){
+    unsigned int red = st == GUI_TL_BACK ? 0x00D9D3CB : 0x00FF5F57, yel = st == GUI_TL_BACK ? 0x00D9D3CB : 0x00FFD64A;
+    window_rect(x + 14, y + 6, 64, 21, 0x00F5F0EB);
+    gui_fill_circle(x + 24, y + 16, 7, red, 0x00F5F0EB);
+    gui_fill_circle(x + 46, y + 16, 7, yel, 0x00F5F0EB);
+    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
+    if (st != GUI_TL_GLYPHS) return;
+    gui_close_glyph(x + 24, y + 16, 0x00FF5F57);
+    gui_text("-", x + 43, y + 8, 0x00624A20);
+}
 /* One app window's frame: rounded body, content well, traffic lights, title. */
-void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
+void gui_draw_window_frame_st(int x, int y, int w, int h, const char *name, int st){
     gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
     window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
     gui_hairline_h(x + 8, y + 29, w - 16, 0x00D9D3CB); /* 2.0: one physical pixel rule under the title band */
-    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
-    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
-    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
-    gui_close_glyph(x + 24, y + 16, 0x00FF5F57);
-    gui_text("-", x + 43, y + 8, 0x00624A20);
+    gui_draw_traffic(x, y, st);
     gui_text(name, x + (w - gui_text_width(name)) / 2, y + 8, 0x001C1C1E); /* 2.0: centered, full ink */
 }
+void gui_draw_window_frame(int x, int y, int w, int h, const char *name){ gui_draw_window_frame_st(x, y, w, h, name, GUI_TL_GLYPHS); }
 
 /* v40: a real software cursor. Save the 13x13 patch it's about to cover,
    draw, and later put that patch back exactly. Moving the cursor then

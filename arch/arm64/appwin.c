@@ -53,7 +53,7 @@ void app_paint(void) {   /* the frame, then the last frame the app presented */
     int s = (int)window_scale();
     fb_hold();   /* the frame, the content and the arrow reach the screen as one copy */
     cur_hide();
-    gui_draw_window_frame(app_lx, app_ly, app_lw, app_lh, t);
+    gui_draw_window_frame_st(app_lx, app_ly, app_lw, app_lh, t, tl_state(2 + (int)ap->slot));
     if (app_shown) app_blit();
     fb_flush(app_lx * s, app_ly * s, app_lw * s, app_lh * s);
     cur_show();
