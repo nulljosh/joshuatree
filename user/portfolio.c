@@ -83,7 +83,7 @@ static const pf_row_t PF_ROWS[] = {
     {"Tripwire",  "API drift watcher",         "tripwire.jaybulb.com", PF_KIND_APP},
     {"Seamark",   "read values off charts",    "seamark.jaybulb.com", PF_KIND_APP},
     {"Mailbag",   "inbox triage",              "mailbag.jaybulb.com", PF_KIND_APP},
-    {"Curbfind",  "Craigslist browser",        "curbfind.jaybulb.com", PF_KIND_APP},
+    {"Scrounge",  "Craigslist browser",        "scrounge.jaybulb.com", PF_KIND_APP},
     {"Turing",    "local LLM",                 "", PF_KIND_APP},
     {"Conveyer",  "AI plays Factorio",         "", PF_KIND_APP},
     {"Madobe",    "small web browser",         "madobe.jaybulb.com", PF_KIND_APP},

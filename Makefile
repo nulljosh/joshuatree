@@ -85,7 +85,7 @@ drivers/app_weather.h:
 	./tools/gen/gen_app.sh
 
 drivers/app_curbfind.h:
-	./tools/gen/gen_app.sh "$$HOME/Documents/Code/curbfind/web/index.html" drivers/app_curbfind.h app_curbfind
+	./tools/gen/gen_app.sh "$$HOME/Documents/Code/scrounge/web/index.html" drivers/app_curbfind.h app_curbfind
 
 drivers/app_keyrate.h:
 	./tools/gen/gen_app.sh "$$HOME/Documents/Code/keyrate/index.html" drivers/app_keyrate.h app_keyrate
@@ -296,7 +296,7 @@ user/reminders.o: user/reminders.c user/jtsys.h drivers/vgafont.h
 user/reminders.bin: user/reminders.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/reminders.o user/libjt.a
 
-# 1.9.11: Curbfind, the sixteenth app out of the kernel, built the same way.
+# 1.9.11: Scrounge, the sixteenth app out of the kernel, built the same way.
 user/curbfind.o: user/curbfind.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
@@ -310,7 +310,7 @@ user/calendar.o: user/calendar.c user/jtsys.h drivers/vgafont.h
 user/calendar.bin: user/calendar.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/calendar.o user/libjt.a
 
-# 1.9.19: Epiphany, the nineteenth app out of the kernel, on SYS_HTTP_GET like Curbfind.
+# 1.9.19: Epiphany, the nineteenth app out of the kernel, on SYS_HTTP_GET like Scrounge.
 user/epiphany.o: user/epiphany.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 

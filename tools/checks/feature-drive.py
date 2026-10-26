@@ -21,7 +21,7 @@ Per-app actions:
 - Thinkpond: press u (upvote)
 - Toroid: press space (pause/unpause)
 - Keyrate: type "the"
-- Bookrank, Fieldbook, Curbfind, Portfolio, Activity: press down twice
+- Bookrank, Fieldbook, Scrounge, Portfolio, Activity: press down twice
 - Files, Mail, Weather, Trash: open only (already covered by gallery)
 
 Before/after pixel comparison with PIL ImageChops to detect screen changes.
@@ -51,7 +51,7 @@ PARK = (480, 200)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-25)
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
-        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Patois", "Toroid", "Thinkpond",
+        "Scrounge", "Keyrate", "Bookrank", "Quotes", "Plan", "Patois", "Toroid", "Thinkpond",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity", "Apps", "Trash"]
 
@@ -75,7 +75,7 @@ ACTIONS = [
     (9, "Keyrate", [("type", "the")]),
     (10, "Bookrank", ["down", "down"]),
     (15, "Fieldbook", ["down", "down"]),
-    (8, "Curbfind", ["down", "down"]),
+    (8, "Scrounge", ["down", "down"]),
     (21, "Portfolio", ["down", "down"]),
     (22, "Activity", ["down", "down"]),
     (0, "Burrow", []),  # open only

@@ -36,7 +36,7 @@
 
 #define SYS_TASKS       386  /* 1.9.6: ebx = struct jt_tasks* (user), ecx = slot to kill or -1; fills the snapshot, 0 or -errno */
 
-/* 1.9.11: SYS_HTTP_GET, the one call the Curbfind port needed. One HTTP
+/* 1.9.11: SYS_HTTP_GET, the one call the Scrounge port needed. One HTTP
    GET to the fixed host joshuatree.jaybulb.com, port 80: userland
    names only the path, never the host, so a ring-3 program cannot point
    the kernel's network stack anywhere else.
@@ -61,7 +61,7 @@
 #define JT_HTTP_BODY_MAX 2048
 #define JT_HTTP_BIG_MAX  65536
 /* 1.9.13: SYS_READDIR, the directory listing Search needs and Files will
-   reuse. 387 is SYS_HTTP_GET (Curbfind, 1.9.11), so this is 388.
+   reuse. 387 is SYS_HTTP_GET (Scrounge, 1.9.11), so this is 388.
      ebx = path (user, NUL-terminated, at most PATH_MAX = 63 bytes before
            the NUL; longer, or no NUL within 64 bytes, is -EINVAL)
      ecx = struct jt_dirent* (user), an array of edx records

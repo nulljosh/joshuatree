@@ -698,7 +698,7 @@ static void civil(unsigned days, int *y, int *m, int *d) {
 }
 
 static const char *const APPNAME[] = {
-    "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Curbfind", "Keyrate",
+    "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Scrounge", "Keyrate",
     "Bookrank", "Quotes", "Patois", "Toroid", "Thinkpond", "Fieldbook", "Contacts", "Calculator",
     "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Clock", "Music", "Movies", "Hamurapi", "Airwell", "Panes", "Claude",
 };
