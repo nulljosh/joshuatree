@@ -55,7 +55,7 @@ FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
          "chess": ("ches", "chess: ring-3 window", "chess: new game")}   # Windgate: offline by design; Space starts it and the shot lands mid in-breath
 FILE = {"bookrank": "app-bookrank", "tonchi": "app-tonchi", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
         "hamurabi": "app-hamurapi", "windgate": "app-windgate", "panes": "app-panes", "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
-        "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks", "desktop": "desktop",
+        "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks", "desktop": "desktop", "desktop-apps": "desktop-apps",
         "solitaire": "app-solitaire", "paddle": "app-paddle", "bricks": "app-bricks", "depths": "app-depths", "snake": "app-snake", "chess": "app-chess"}
 
 
@@ -133,6 +133,15 @@ def shoot(name):
                 time.sleep(1.0)
             if name == "windgate":
                 key("spc"); time.sleep(2.0)    # start the breath: the tile shows the circle growing
+        elif name == "desktop-apps":           # the README's hero: the same desktop at work, a few apps open at once
+            for app in ("terminal", "weather"):   # two windows: the most i386 keeps open at once
+                click(SLOT0_X + SLOT[app] * PITCH + ICON // 2, DOCK_Y); time.sleep(2.5)
+                move(700, 250); time.sleep(0.5)   # off the dock before the next window: no hover label under it
+                if app == "terminal":
+                    for line in ("uptime", "mem", "ls"): type_text(line); key("ret"); time.sleep(0.6)
+            for _ in range(8):
+                if "wxstate=ok" in serial(): break
+                time.sleep(4); key("r")
         elif name != "desktop":               # the desktop shot is the screen as it boots, no app open
             click(SLOT0_X + SLOT[name] * PITCH + ICON // 2, DOCK_Y)
             time.sleep(1.5)
@@ -145,11 +154,12 @@ def shoot(name):
             else:
                 sys.exit("FAIL notes: new note never opened")
             time.sleep(1.0)
-            type_text("Sharp at every size now.")
+            for line in ("Groceries for Sunday", "Oat milk, eggs, coffee beans, lemons", "Call the garage about the door"):
+                type_text(line); key("ret")
         elif name == "files":
             key("2")                           # Icons view
         elif name == "terminal":
-            type_text("help")
+            for line in ("uptime", "mem", "ls"): type_text(line); key("ret"); time.sleep(0.6)
         elif name == "weather":
             # Real fetch through QEMU's NAT; the free forecast API sometimes 503s, so retry until serial says ok.
             for _ in range(8):
@@ -159,11 +169,12 @@ def shoot(name):
                 sys.exit("FAIL weather: never got a live reading (wxstate=ok)")
         elif name == "stocks":
             time.sleep(4)
-        if name == "desktop": move(700, 250)   # the whole screen is the shot: the pointer sits on the wallpaper, whole
+        if name == "desktop": move(700, 250)
+        elif name == "desktop-apps": move(40, 470)   # on the wallpaper, left of the dock and below the windows   # the whole screen is the shot: the pointer sits on the wallpaper, whole
         else: move(LOGICAL_W - 2, 2)           # park the pointer outside the window crop
         time.sleep(1.0)
 
-        if name == "desktop":                  # the whole screen, half size: menu bar, wallpaper, dock
+        if name in ("desktop", "desktop-apps"):   # the whole screen, half size: menu bar, wallpaper, dock
             img = frame().resize((W // 2, H // 2), Image.LANCZOS)
         else:
             x, y, w, h = WIN_OF.get(name, WIN)

@@ -9,17 +9,17 @@
 ![release](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/release.yml?branch=main&label=release)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A small operating system with its own windows, dock, sound, internet and 32 apps. It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it. With a relay on your Mac she answers out loud and works the machine; on a Pi with no relay she still answers, from Turing's own site. On the Pi, talking to her through a USB mic is being tested on the real board.
+A small operating system with its own windows, dock, sound, internet and 38 apps, from Notes and a Terminal to live Weather and Stocks, plus a few games. It runs in your browser, in an emulator on a Mac, and on a Raspberry Pi 4. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it. With a relay on your Mac she answers out loud and works the machine; on a Pi with no relay she still answers, from Turing's own site. On the Pi, talking to her through a USB mic is being tested on the real board.
 
-<img src="landing/shots/desktop.webp" width="100%" alt="The Joshua Tree desktop: menu bar, wallpaper and dock">
+<img src="landing/shots/desktop-apps.webp" width="100%" alt="The Joshua Tree desktop with the Terminal and live Weather open, and running-app dots in the dock">
 
 <p>
   <img src="landing/shots/samantha-chat.webp" width="32%" alt="Samantha">
+  <img src="landing/shots/app-files.webp" width="32%" alt="Burrow, the file browser">
   <img src="landing/shots/app-notes.webp" width="32%" alt="Notes">
-  <img src="landing/shots/app-calendar.webp" width="32%" alt="Calendar">
-  <img src="landing/shots/app-terminal.webp" width="32%" alt="Terminal">
-  <img src="landing/shots/app-weather.webp" width="32%" alt="Weather">
-  <img src="landing/shots/app-hamurapi.webp" width="32%" alt="Hamurapi, a game">
+  <img src="landing/shots/app-terminal.webp" width="32%" alt="Terminal running uptime, mem and ls">
+  <img src="landing/shots/app-weather.webp" width="32%" alt="Weather, live">
+  <img src="landing/shots/app-stocks.webp" width="32%" alt="Stocks, live quotes and a chart">
 </p>
 
 ## Try it

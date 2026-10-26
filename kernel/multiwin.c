@@ -68,6 +68,7 @@ void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
     if (slot_index == 0) { *x = 70; *y = 40; *w = 820; *h = 385; }
     else { *x = 70 + 60; *y = 40 + 60; *w = 820; *h = 385; }
     gui_clamp_win_rect(x, y, w, h); /* Mail/Calendar/Reminders/Files/Weather open here, not gui_launch_from_dock -- phone screens need the same clamp */
+    if (*y + *h > gui_dock_band_top()) *h = gui_dock_band_top() - *y;   /* the second window stops above the dock band, as a drag does (appview.c): a hover label repaints that band from the wallpaper and would cut into it */
 }
 
 /* Magnet-style window snapping (title-bar drag to an edge/corner). All five
