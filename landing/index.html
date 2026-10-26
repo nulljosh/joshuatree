@@ -383,7 +383,7 @@ p,li,.sub{text-wrap:pretty}
   #pi .tile:nth-child(1) p strong, #pi .tile:nth-child(6) p strong { font-size: var(--t28); line-height: var(--lh28); letter-spacing: var(--tr28); }
   @media (max-width: 760px) { #pi .tile-grid { grid-template-columns: 1fr; } #pi .tile, #pi .tile:nth-child(n) { grid-column: auto; } }
   #pi a { color: var(--accent); font-weight: 600; text-decoration: none; }
-  .poster-skip { position: absolute; z-index: 5; right: 16px; top: 16px; padding: 8px 14px; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff; font-size:var(--t13); font-weight: 600; text-decoration: none;line-height:var(--lh13);letter-spacing:var(--tr13)}
+  .poster-skip { position: absolute; z-index: 5; right: 16px; top: 16px; padding: 8px 14px; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff; font-size:var(--t13); font-weight: 600; text-decoration: none; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);line-height:var(--lh13);letter-spacing:var(--tr13)}
   .poster-skip:hover { background: rgba(0,0,0,0.75); }
   .poster-skip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   #hero-poster[hidden] ~ .poster-skip, html.no-poster .poster-skip { display: none; }
