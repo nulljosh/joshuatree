@@ -78,6 +78,11 @@ static char fname[JT_DIRENT_NAME] JT_DATA = {0};
 
 /* playback */
 static int paused JT_DATA = 0, ended JT_DATA = 0, fs JT_DATA = 0;
+/* 6.2.0, QuickTime-style: in fullscreen the controls float over the picture and fade out 3 s after the last key or click */
+#define OV_HOLD 3000u
+#define OV_FADE 300u
+static unsigned ov_seen JT_DATA = 0;                      /* ticks of the last key or click */
+static unsigned ov_level JT_DATA = 0;                     /* what is on screen now, 0 (gone) to 8 (full) */
 static int have_audio JT_DATA = 0;     /* the clip has sound and the card took it */
 static int audio_clock JT_DATA = 0;    /* 1: the clock is base_samples + played, 0: ticks */
 static unsigned a_rate JT_DATA = 0;
@@ -448,6 +453,43 @@ static void draw_bar(unsigned pos_ms) {
     text(JT_FACE_BODY, t, bar_x1 + 12, bar_y - 8, INK);
 }
 
+/* How visible the floating controls should be now, 0 to 8: full while paused or ended or within OV_HOLD of the last
+   input, then down over OV_FADE. */
+static unsigned ov_want(void) {
+    if (paused || ended) return 8;
+    unsigned idle = (ticks() - ov_seen) * 10u;
+    if (idle < OV_HOLD) return 8;
+    if (idle >= OV_HOLD + OV_FADE) return 0;
+    return 8u - (idle - OV_HOLD) * 8u / OV_FADE;
+}
+/* The floating bar: the picture's bottom strip blended toward ink by level/8 * 3/4, the controls on it once it is half up. */
+static void draw_overlay(unsigned pos_ms, unsigned level) {
+    if (!level) return;
+    int W = (int)win.width, H = (int)win.height, y0 = H - BAR_H;
+    unsigned a = level * 24u;                                /* of 256: at most 192, three quarters */
+    for (int y = y0 < 0 ? 0 : y0; y < H; y++) {
+        unsigned *row = win.pixels + (unsigned)y * win.width;
+        for (int x = 0; x < W; x++) {
+            unsigned p = row[x], r = (p >> 16) & 255u, g = (p >> 8) & 255u, b = p & 255u;
+            r = (r * (256u - a) + 0x14u * a) >> 8; g = (g * (256u - a) + 0x13u * a) >> 8; b = (b * (256u - a) + 0x11u * a) >> 8;
+            row[x] = (r << 16) | (g << 8) | b;
+        }
+    }
+    if (level < 4) return;
+    int cy = H - BAR_H + 22;
+    if (paused || ended) { for (int i = 0; i < 12; i++) rect(18 + i, cy - 7 + i / 2, 1, 14 - i, PALE); }
+    else { rect(18, cy - 7, 4, 14, PALE); rect(26, cy - 7, 4, 14, PALE); }
+    rect(bar_x0, bar_y, bar_x1 - bar_x0, 6, 0x00504A44);
+    int fw = 0;
+    if (dur_ms) { unsigned w = (unsigned)(bar_x1 - bar_x0); if (pos_ms > dur_ms) pos_ms = dur_ms; fw = (int)((pos_ms / 16u) * w / (dur_ms / 16u + 1u)); }
+    if (fw > bar_x1 - bar_x0) fw = bar_x1 - bar_x0;
+    rect(bar_x0, bar_y, fw, 6, ACCENT);
+    char a1[12], b1[12], t[28]; mmss(pos_ms, a1); mmss(dur_ms, b1);
+    int n = 0; for (int i = 0; a1[i]; i++) t[n++] = a1[i];
+    t[n++] = ' '; t[n++] = '/'; t[n++] = ' '; for (int i = 0; b1[i]; i++) t[n++] = b1[i]; t[n] = 0;
+    text(JT_FACE_BODY, t, bar_x1 + 12, bar_y - 8, PALE);
+}
+
 static void draw_head(void) {
     int W = (int)win.width;
     rect(0, 0, W, HEAD_H, BG);
@@ -512,6 +554,7 @@ static void draw_all(unsigned pos_ms) {
     rect(vx, vy, vw, vh, STAGE);
     if (!fs) { draw_head(); draw_bar(pos_ms); }
     if (shown >= 0) draw_picture();
+    if (fs) { ov_level = ov_want(); draw_overlay(pos_ms, ov_level); }
 }
 
 /* ---- the player's heartbeat -------------------------------------------- */
@@ -541,6 +584,7 @@ static void tick(void) {
                 shown = (int)f; shown_n++;
                 if (!fs) { rect(vx, vy, vw, vh, STAGE); }
                 draw_picture();
+                if (fs) { ov_level = ov_want(); draw_overlay(ms, ov_level); }
                 dirty = 1;
             } else if (++bad_run >= 5) { fail("The movie is damaged and stopped playing", "corrupt"); return; }
             else shown = (int)f;      /* keep the last good picture, move on */
@@ -548,6 +592,12 @@ static void tick(void) {
     }
     unsigned sec = ms / 1000u;
     if (sec != last_sec) { last_sec = sec; dirty = 1; }
+    if (fs && ov_want() != ov_level) {                       /* the fade, between frames too */
+        unsigned want = ov_want();
+        if (!want) say("movie=controls 0");
+        rect(vx, vy, vw, vh, STAGE); if (shown >= 0) draw_picture();
+        ov_level = want; draw_overlay(ms, ov_level); dirty = 1;
+    }
 }
 
 static void seek_to(int delta_ms, int absolute, unsigned abs_ms) {
@@ -632,7 +682,15 @@ static void on_click(int x, int y) {
         }
         return;
     }
-    if (fs) { toggle_pause(); return; }
+    if (fs) {                                                /* the floating bar seeks while it is up; anywhere else pauses */
+        int H = (int)win.height;
+        if (ov_level >= 4 && y >= H - BAR_H && x >= bar_x0 - 4 && x <= bar_x1 + 4 && dur_ms) {
+            unsigned w = (unsigned)(bar_x1 - bar_x0), dx = x <= bar_x0 ? 0u : (unsigned)(x - bar_x0);
+            if (dx > w) dx = w;
+            seek_to(0, 1, dx * (dur_ms / w) + dx * (dur_ms % w) / w);
+        } else toggle_pause();
+        return;
+    }
     int H = (int)win.height;
     if (y >= H - BAR_H) {
         if (x < bar_x0 - 8) toggle_pause();
@@ -670,9 +728,12 @@ void _start(int argc, char **argv) {
             continue;
         }
         if (r != 1) break;
+        unsigned was = fs ? ov_level : 0;
+        if (ev.kind == JT_EV_KEY || ev.kind == JT_EV_CLICK) { ov_seen = ticks(); dirty = 1; }
         if (ev.kind == JT_EV_KEY) on_key(ev.a);
         else if (ev.kind == JT_EV_CLICK) on_click(ev.a, ev.b);
         if (dirty) { draw_all(clock_ms()); dirty = 0; }
+        if (fs && mode == M_PLAY && was < 8 && ov_level == 8) say("movie=controls 1");
         flags = JT_POLL_PRESENT;
     }
     say("movies: closed");
