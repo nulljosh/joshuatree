@@ -193,6 +193,7 @@ Worth doing, not yet re-checked, in the order the study ranked them:
   - The Command key (the GUI or Windows key on a PC keyboard) with A select all, C copy, X cut, V paste, Z undo, S save, W close the window, Q quit, N new, F find, Tab to switch windows.
   - Plus Ctrl for the same on a keyboard with no GUI key.
   - One table in the shell. Apps handle the actions.
+  - Done on the Pi: C X V A S W Q, Space and Tab (`arm64-cmdtab-check.py`). Left: Z undo, N new and F find, which each app has to handle.
   - Check: an arm64 key check that sends each chord through QMP and sees its serial line.
 - [ ] [Sonnet] The first few seconds after the Pi desktop appears take no keys. Find why and fix it. (The splash, its bar and the login screen shipped: `arm64-splash-check.py`, `arm64-splashbar-check.py`, `arm64-login-check.py`.)
 
@@ -981,6 +982,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.28.0 (2026-10-26)**: Cmd+Tab on the Pi, from the keyboard-shortcuts item. Cmd+Tab or Ctrl+Tab brings the app window furthest back to the front (`app_cycle` in `arch/arm64/appwin.c`), so taps walk every open window; i386 already had its switcher. Check: `arm64-cmdtab-check.py`.
 - **4.27.0 (2026-10-26)**: Every typeface loads at boot (Joshua, 2026-10-07: "load the entire typeface on every boot"): i386 parses all 14 faces and draws one glyph from each before the desktop, keeps them (1,792 bytes of heap) and prints `fonts 14 of 14 ok`; a face that fails is named, stops being offered by name and draws as DejaVu Sans. The Pi prints the same line for its three. Check: `fonts-boot-check.py`.
 - **4.26.0 (2026-10-26)**: Running-app dots in the dock on both desktops (Joshua, 2026-10-07: "a little light below the icon, like macOS"): a small neutral dark dot under every tile whose app has a window open, drawn by the shared `gui_draw_dock_dot`. On the Pi the Console's window counts as the Terminal's. Check: `dockdots-check.py`.
 - **4.25.2 (2026-10-25)**: The EL0 boot self-tests leave the Pi's `main.c` for `arch/arm64/eltests.c` (1,073 lines to 965). The `app_len`, `app_code` and `app_img` macros live in `kmain.h` only: `main.c` also had dead globals of those names, which the new part would have read as 0. Check: `arm64-m3-check.py`, `arm64-m3c-check.py`, `godfile-check.sh`.
