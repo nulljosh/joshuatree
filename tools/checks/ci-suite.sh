@@ -84,6 +84,7 @@ once |6|Genie on the Pi: the yellow dot minimizes Calendar's window into its doc
 once |5|Traffic lights on the Pi: the front window's dots are plain until the pointer is over them, a window behind another goes grey, and focus moves the colour, in headless QEMU|python3 ./tools/checks/arm64-traffic-check.py
 once |9|Pi keyboard shutdown and restart: confirmed HID chords halt or reboot raspi4b, Escape cancels, busy and hidden prompts refuse (host and QEMU)|python3 ./tools/checks/arm64-power-check.py
 once |6|ARM tree menu: click or F10 opens About, Restart, Shut Down and Log Out (pixels, keys, outside click), power rows confirm and refuse mid-answer, Log Out closes windows, raspi4b restarts and halts|python3 ./tools/checks/arm64-treemenu-check.py
+once |5|The whole web's roots: the Pi's trust anchors hold every root in Mozilla's list, each once, ISRG Root X1 among them, from a bundle under 18 months old (host only)|python3 ./tools/checks/tls-roots-check.py
 once |5|CI tooling packs ARM checks across the ARM shards only and rejects fixed test paths before builds (host only)|python3 ./tools/checks/ci-tooling-check.py
 once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
 once |7|No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
