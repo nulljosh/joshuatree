@@ -68,6 +68,7 @@ What is there today: Wi-Fi joins from the card's config, DNS and the clock come 
 
 The steps, one minor version each, cheapest unblock first:
 - [ ] [Sonnet] The whole web's certificates: the Mozilla root list (about 150 roots) through `tools/gen/tls-ta.py`, so any public HTTPS site verifies. Check: a QEMU fetch from a local TLS server signed by a test root, and a refusal for a root not in the list.
+- [ ] [Sonnet] Blackcomb on the Pi (Joshua, 2026-10-26: "port our browser app into Joshua Tree"): the Browser becomes Blackcomb, the Mac and iPhone browser, by its features rather than its code (it is SwiftUI over WebKit). First a start page with the reading list, favorites and recent pages, a search when the address is not a URL, and bookmarks and history in each person's home folder ("browser" stays an alias); then the reading list (a page's text saved to read offline); then tabs and private tabs. Check: `arm64-browser-app-check.py` extended.
 - [ ] [Fable] Real pages: stream the reply instead of the 64 KB cap, chunked transfer, gzip through the inflate the PNG decoder already has, and keep-alive. Check: a 2 MB chunked gzip page from a local server reads whole.
 - [ ] [Fable] The Browser draws the page: headings, paragraphs, lists, bold, links you click, and inline PNG and JPEG (both decoders are on the board). A reader-style subset of CSS; no JavaScript for 7.0 (a decision to revisit at 8.0). Check: a fixture page's pixels.
 - [ ] [Sonnet] Forms and cookies: GET and POST forms and a cookie jar per user, so search (html.duckduckgo.com) and simple logins work. Check: a local server that sets a cookie and reads it back.
@@ -259,7 +260,7 @@ A guess at the shape, in Joshua's words as far as they are known. Each version h
 | **4.0 Many windows** | Real multitasking. A window server (compositor), real processes, pipes, and a Terminal with tabs, splits and background sessions (the cmux idea). | Three apps run at once, one crashes, the other two do not notice. |
 | **5.0 Talk to it** | Samantha is the interface. Full-screen face with a coded mouth, speech in and out streamed, a small model that runs on the box, and "computer, build me a game" for real. | You hold a ten-minute spoken conversation and it opens and changes things on the machine. |
 | **6.0 Yours** | One machine, many people, and it keeps your stuff safe. Accounts, a locked disk, Time Machine snapshots, backups. | Delete a file, go back in time, get it back. Pull the plug mid-write, lose nothing. |
-| **7.0 Online** | The real internet. TLS 1.3, Wi-Fi, a real browser (Madobe on this OS), mail and calendar that sync. | You do a normal day of web, mail and calendar on it. |
+| **7.0 Online** | The real internet. TLS 1.3, Wi-Fi, a real browser (Blackcomb on this OS), mail and calendar that sync. | You do a normal day of web, mail and calendar on it. |
 | **8.0 Build things** | The machine builds its own apps. The Plank compiler on the box, an SDK, apps as signed bundles, a store for them. | Someone who is not Joshua writes and installs an app without touching the kernel source. |
 | **9.0 The kit** | The hardware is a product. Nimbus Kit revisions, two displays, GPU, USB audio, storage and camera. | A stranger builds a Nimbus from the guide and it boots first try. |
 | **10.0 Daily driver** | Boring and trusted. A security audit against the threat model, accessibility, languages, long-term support. | Joshua uses it as his only computer for a month. |
@@ -346,7 +347,7 @@ The goal: every app in the Portfolio catalog that fits this OS opens from the La
 - [ ] [Sonnet] Cadence and Tripwire: commit streak and API drift status.
 - [ ] [Sonnet] Plain and Block Frame: fold into Notes as modes instead of new apps, or skip.
 - [ ] [Sonnet] Plank: run one-file programs. Needs the compiler ported, the biggest of these.
-- [ ] [Sonnet] Madobe: needs HTTPS in the OS first (see the browser item).
+- [ ] [Sonnet] Blackcomb: the 7.0 browser steps under Next priorities.
 - Not planned: Talli (private case data), Swing (video chat), Notate (speech model), Seamark (vision model), NYC, Conveyer, Vancouver Vice. They need hardware or models this OS does not have. Turing is Samantha, already here.
 
 ### Voice chat, lag and sharing (Joshua, 2026-10-04)
@@ -436,7 +437,7 @@ The rest of the Linux gaps, tagged with the version that owns them (Joshua, 2026
 - [ ] [Fable] [4.0] A real shell and Terminal: a command line with pipes, redirects, job control, a PATH and scripts, so `ls | grep` works. Tabs and splits come after.
 - [ ] [Fable] [6.0] Users and permissions: accounts, file owners and modes, a login screen, an admin role that can install. Joshua's "admin privileges" idea starts here.
 - [ ] [Fable] [7.0] TLS 1.3 in the kernel or a ring-3 library: the gate for HTTPS, so websites, Plex and a real Claude API connection work without a relay.
-- [ ] [Fable] [7.0] A web browser on the Pi (Madobe on this OS; NetSurf is the reference port). Needs TLS, fonts and a JavaScript engine decision.
+- [ ] [Fable] [7.0] A web browser on the Pi (Blackcomb on this OS; NetSurf is the reference port). Needs TLS, fonts and a JavaScript engine decision.
 - [ ] [Fable] [8.0] A compiler and linker on the box (the Plank compiler first), so the OS can build its own apps. The last piece of "build Joshua Tree inside Joshua Tree".
 - [ ] [Sonnet] [8.0] App breadth: ports of Joshua's own apps to native Joshua Tree, in the order they are most used (Bookrank, Tonchi, Curvely), each a ring-3 C rewrite.
 - [ ] [Sonnet] Driver breadth, by what Joshua owns: USB mass storage, USB audio, USB Ethernet, a USB serial adapter, a Bluetooth adapter. Each is a class driver on the xHCI code that already works.
