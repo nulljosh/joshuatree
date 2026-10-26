@@ -5,7 +5,9 @@
 
 Each certificate becomes one br_x509_trust_anchor: its subject DN (DER, as the engine compares it against the
 issuer of the next certificate down) and its public key (RSA n/e, or an EC curve and point). No network, no
-OpenSSL: a small DER walker is all it takes. The arm64 Makefile runs it over arch/arm64/certs/*.pem plus
+OpenSSL: a small DER walker is all it takes. The arm64 Makefile runs it over arch/arm64/certs/*.pem (Mozilla's
+root list as curl extracts it, mozilla-roots.pem, plus the older roots BearSSL still needs for chains that end in
+them; a root in both is kept once) plus
 whatever TLS_TA= names (the check script's throwaway server cert, or the relay's private CA) after --private.
 The anchors from --private on come last, and TAS_PRIVATE is the index of the first: the Pi relay (arch/arm64/ask.c)
 trusts only those, so no public root can vouch for it. Run with no arguments for a self-test.
@@ -104,7 +106,7 @@ if __name__ == "__main__":
         selftest(); sys.exit(0)
     args = sys.argv[2:]
     cut = args.index("--private") if "--private" in args else len(args)
-    certs = [anchor(der) for p in args[:cut] for der in pems(p)]
+    certs = list(dict.fromkeys(anchor(der) for p in args[:cut] for der in pems(p)))   # one anchor per subject and key
     private = len(certs)
     certs += [anchor(der) for p in args[cut + 1:] for der in pems(p)]
     if not certs: raise SystemExit("tls-ta: no certificates")

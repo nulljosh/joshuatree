@@ -207,7 +207,7 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30   # the WebKit install alone took 12 minutes on a slow mirror
+    timeout-minutes: 45   # the WebKit install alone took 12 minutes on a slow mirror, 16 and more on 2026-10-26
     steps:
       - uses: actions/checkout@v5
       - name: Install clang, lld, qemu
