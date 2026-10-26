@@ -219,6 +219,9 @@ void gui_run(void){
             gui_draw_menubar();
             if (gui_menubar_last_min != min_before && my < GUI_MENUBAR_H) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
         }
+        if (gui_dock_open_mask() != dock_presented_open && !gui_bleed_open()) {   /* 4.26.0: an app opened or closed, so its running-app dot */
+            gui_cursor_restore(); gui_redraw_dock_band(dock_hover, -1, 0, 0); gui_cursor_save(mx, my); gui_draw_cursor(mx, my);
+        }
         /* v43: weather, after the desktop is already on screen so the
            fetch never delays the first frame, then every ten minutes. */
         if (!weather_tried_once || ticks() - weather_last_tick > 100 * 600) {

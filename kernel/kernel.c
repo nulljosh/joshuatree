@@ -852,6 +852,7 @@ void gui_launch_from_dock(int icon){
 again:
     /* Keep the desktop visible around the app. The framebuffer viewport
        clips every app draw, including window_clear and physical AA text. */
+    gui_blocking_icon = icon == GUI_APPS_FOLDER || icon == GUI_TRASH ? -1 : icon;   /* 4.26.0: its tile shows the running-app dot */
     gui_draw_desktop(-1, -1, 0, 0);
     int apps = icon == GUI_APPS_FOLDER;
     int x = 70, y = 40, w = 820, h = 385;
@@ -881,6 +882,7 @@ again:
     app_win_w = app_win_h = 0; app_drag_on = 0;
     window_clear_viewport();
     gui_cursor_restore();
+    gui_blocking_icon = -1;   /* its dot goes with it on gui_run's next frame (gui_dock_open_mask) */
     /* v68 (0.63.0): the dock stays visible around every app window, so a
        click on another dock tile while an app is open reads, to anyone,
        as "open that one instead". Before this it only closed the current

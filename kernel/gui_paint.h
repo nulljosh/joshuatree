@@ -32,6 +32,7 @@ void gui_hairline_h(int x, int y, int w, unsigned int color);
 void gui_draw_dock_tray(void);
 /* The soft contact shadow under one dock icon. */
 void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size);
+void gui_draw_dock_dot(int slot);   /* 4.26.0: the running-app dot under a dock tile (taking it away is the caller's) */
 /* The authored icon artwork's edge in pixels: icon_art.h's ICON_ART_SIZE,
    which kernel.c checks against this at compile time. */
 #define GUI_ICON_ART_SIZE 148

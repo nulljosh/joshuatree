@@ -387,7 +387,7 @@ void main(void) {
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            usb_poll(); virtio_input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); audio_pump(); screen_tick(); login_tick();   /* only the display sleeps: USB stays polled */
+            usb_poll(); virtio_input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); dock_dots_tick(); audio_pump(); screen_tick(); login_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
@@ -403,7 +403,7 @@ void main(void) {
             if (usb_ok || brick_live || notice_up() || rep_code || bt_busy() || apps_live() || audio_busy() || ask_pending()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
-            usb_poll(); virtio_input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); login_tick();   /* an app parked on yield runs again here */
+            usb_poll(); virtio_input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); dock_dots_tick(); login_tick();   /* an app parked on yield runs again here */
 #ifdef HANG_TEST
             hang_tick();
 #endif

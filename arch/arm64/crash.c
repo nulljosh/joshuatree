@@ -265,7 +265,9 @@ int dock_tile(int slot, int shadow) {   /* one slot's art onto the dock; shadow 
     heap_release(mark);
     return drawn;
 }
+static unsigned dots_shown;   /* 4.26.0: the slots whose running-app dot is on the screen now */
 void dock_paint(void) {
+    dots_shown = 0;   /* a fresh dock has none: dock_dots_tick draws them again on the next pass */
     gui_draw_dock_tray();
     int drawn = 0;
     for (int slot = 0; slot < GUI_ICON_COUNT; slot++) drawn += dock_tile(slot, 1);
@@ -298,4 +300,53 @@ void dock_hover(int slot) {
     fb_flush(0, top, (int)fb_w, rows);
     if (arrow) cur_show();
 }
-
+/* 4.26.0: the running-app dots (Joshua, 2026-10-07: "a little light below the icon, like macOS, so if the Console is open
+   you can see it"). A tile is open when its EL0 app has a slot, and the Terminal's when the Console or Terminal window is
+   up (they share one window). The main loop calls this every pass; it draws only when the set changes, and writes the
+   same pixels into the hover band copy so a hover label's restore keeps them. */
+static int slot_open(int slot) {
+    if (slot == 6) return con_live;
+    if (slot == 0 || slot == 7 || slot == GUI_ICON_COUNT - 1) return 0;   /* Apps (the Launchpad), Samantha (the Terminal's sam), Trash */
+    const char *n = dock_app_name(slot);
+    for (unsigned k = 0; k < APP_SLOTS; k++) {
+        if (!apps[k].cur) continue;
+        const char *a = apps[k].cur->name; unsigned i = 0;
+        while (n[i] && (n[i] | 32) == a[i]) i++;
+        if (!n[i] && !a[i]) return 1;
+    }
+    return 0;
+}
+#define DOT_BOX 41   /* the pixels a dot can touch, (DOCK_DOT_R + 3) * scale either side of its centre, up to scale 4 */
+static unsigned dot_under[GUI_ICON_COUNT][DOT_BOX * DOT_BOX];   /* what each dot covers: put back exactly when it goes */
+void dock_dots_tick(void) {
+    if (!fb || login_live) return;
+#ifdef QUIET_BOOT
+    if (splash_on) return;
+#endif
+    unsigned m = 0;
+    for (int s = 0; s < GUI_ICON_COUNT; s++) if (slot_open(s)) m |= 1u << s;
+    if (m == dots_shown) return;
+    int arrow = cur_on, sc = (int)window_scale(), top = gui_dock_band_top() * sc, r = (DOCK_DOT_R + 3) * sc;
+    if (2 * r + 1 > DOT_BOX) return;
+    cur_hide();
+    for (int s = 0; s < GUI_ICON_COUNT; s++) {
+        if (!((m ^ dots_shown) >> s & 1)) continue;
+        int on = m >> s & 1, cx = (gui_slot_x(s) + DOCK_ICON / 2) * sc, cy = (gui_dock_y0() + DOCK_PAD + DOCK_ICON + DOCK_DOT_DY) * sc;
+        for (int y = -r; y <= r; y++) for (int x = -r; x <= r; x++) {   /* save under it before it is drawn, or put that back */
+            int px = cx + x, py = cy + y;
+            if (py < 0 || py >= (int)fb_h || px < 0 || px >= (int)fb_w) continue;
+            unsigned *u = &dot_under[s][(y + r) * DOT_BOX + (x + r)], *f = &fb[(unsigned)py * fb_pitch + (unsigned)px];
+            if (on) *u = *f; else *f = *u;
+        }
+        if (on) gui_draw_dock_dot(s);
+        if (dock_band) for (int y = cy - r; y <= cy + r; y++) for (int x = cx - r; x <= cx + r; x++)
+            if (y >= top && y < (int)fb_h && x >= 0 && x < (int)fb_w) dock_band[(unsigned)(y - top) * fb_pitch + (unsigned)x] = fb[(unsigned)y * fb_pitch + (unsigned)x];
+        fb_flush(cx - r, cy - r, 2 * r + 1, 2 * r + 1);   /* physical pixels, like dock_hover's */
+    }
+    if (arrow) cur_show();
+    dots_shown = m;
+    char b[GUI_ICON_COUNT + 12] = "dock dots "; int n = 10;   /* one 0 or 1 per slot, for tools/checks/dockdots-check.py */
+    for (int k = 0; k < GUI_ICON_COUNT; k++) b[n++] = (char)('0' + (m >> k & 1));
+    b[n++] = '\n'; b[n] = 0;
+    con_quiet = 1; uart_puts(b);
+}
