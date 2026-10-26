@@ -42,6 +42,8 @@ Files behind boot: `tools/pi-config.txt` (tells the firmware how to load), `arch
 
 **Spotlight.** F1 or Cmd+Space opens it (a Mac keyboard may need Fn for F1). Type an app name and press Enter. Up and Down choose another match, Escape closes. With nothing typed it lists every app.
 
+**Dock.** A small dark dot under a tile means that app has a window open, like the Mac. The Terminal's tile counts the Console too, since they share one window.
+
 **Calendar.** The dock tile shows the month and day. Views: 1 Day, 2 Week, 3 Month, 4 Year. Left, Right, Up and Down step by the view's unit, T jumps to today, the square brackets move the selected day by one. Enter edits the one event for the selected day. Events are lines in `JT/EVENTS.TXT`, one per day.
 
 **Clock.** Time, date and the Vancouver label, refreshed each minute. The timezone is fixed, permanent UTC-7 since March 8, 2026. Before the network clock is known it shows `--:--` and `Waiting for network time`. No alarms or timers yet.
@@ -142,6 +144,15 @@ HTTPS knows 37 root certificates. A site signed by anyone else fails with a TLS 
 **Notes.** Plain text files in `JT/NOTES/`. Folders on the left, notes on the right, each showing its first line. Up and Down pick, Enter opens, Tab swaps columns, N makes a note, F a folder, D then D deletes the selected note. In a note, Shift with the arrows selects, Ctrl+A selects all, copy, cut and paste work. It saves a second or two after you stop typing. Esc saves and goes back, Ctrl+S saves and stays.
 
 **Brick.** An original brick-breaker. Move the paddle with Left and Right, A and D, or the mouse. Space or a click launches the ball and also pauses and resumes. R starts a new game. Escape or the red button closes it. Clear all 32 bricks before losing three lives. Scores are not saved, it is silent, and play on the real board is still pending.
+
+**Games.** All of them open from Spotlight or the Launchpad on both the PC and the Pi, and Esc closes each one. The newer five wait for your first key, so they never start without you.
+- **Chess.** You play White against the computer. Pick a piece with the arrows and Enter (or a click), then its square the same way, or type the move, `e2e4`. A pawn that reaches the end becomes a queen. N starts a new game. The computer looks two to four moves ahead and answers in about a second.
+- **Solitaire.** Klondike, drawing one card. D or Space draws, W or 1 to 7 picks a pile, then 1 to 7 or F moves it, A sends every card it can to the foundations, R deals again.
+- **Paddle.** You against the computer, first to 7. Up and Down move your paddle, Space serves, P pauses.
+- **Bricks.** Clear the wall with three balls. Left and Right move, Space launches, P pauses.
+- **Depths.** A first-person maze in the spirit of Doom, all our own. Up and Down walk, Left and Right turn, Space fires. Find the pale door to get out.
+- **Snake.** An arrow starts it and steers; it grows with every apple and the walls end it. P pauses.
+- **Mines, Toroid, Hamurapi, Keyrate.** Minesweeper, the Game of Life on a torus, the 1968 city game with a drawn city, and a typing test.
 
 **Bluetooth.** The Pi can pair one Bluetooth mouse.
 1. Put the mouse in pairing mode.
@@ -510,23 +521,15 @@ Shortened on 2026-10-12: the per-version board test lists and the dated log of i
 
 ### Apps currently implemented on ARM
 
-The Pi does not have the i386 demo's full app collection.
+The Pi runs the same user programs as the PC, built for its processor. Each runs in user mode, in its own window, and cannot touch the kernel or another app.
 
-Its native windows are the Calculator, Calendar, Notes, Music, Finder, Terminal, Console, Clock and Brick.
-- Finder opens from the Burrow tile, or from Spotlight (type finder).
-- Calendar, Notes and Music run in user mode. The dock tile starts `user/calendar.c` or `user/notes.c`. Spotlight (type music) starts `user/music.c`. These are the same programs the PC runs, each in its own window, one at a time.
-- Music has no dock tile. That is a decision.
-- Their files are on the card in `JT/`.
+- From the dock: Finder (the Burrow tile), Mail, Calendar, Notes, Reminders, Terminal, Samantha (the Terminal with `sam ` typed), Weather and Stocks.
+- From Spotlight (F1) or the Launchpad (the Apps tile): all of those, plus Music, Books, the Browser, the Calculator, Settings, Clock, Brick and the ten games (Mines, Toroid, Hamurapi, Keyrate, Solitaire, Paddle, Bricks, Depths, Snake, Chess). With nothing typed, Spotlight shows its first 20; typing finds the rest.
+- The Launchpad is a cream card in the middle of the screen, seven across. Click one, or move with the arrow keys and press Enter. Esc or a click outside closes it.
+- F2 opens the Terminal. The Trash tile has no ARM app yet and says so.
+- Files live on the card in `JT/`.
 
-Opening and keys:
-- The Apps tile opens the Launchpad: a cream card in the middle of the screen with every app in a grid, icon over name. Click one, or move with the arrow keys and press Enter, to open it. Esc or a click outside closes it. An app the Pi cannot run yet (Trash) is greyed. Every name on the card is also found by Spotlight.
-- The Calculator is on the Launchpad and in Spotlight (type calc). It has no dock tile. It opens beside the Terminal or Console, and a click on either gives it the keys.
-- F2 opens Terminal.
-- The Trash tile does not open an ARM app. It returns to the Console and prints `not on ARM yet`.
-
-This is the dispatch in `arch/arm64/main.c` (`dock_activate` and `app_open_name`). It is not a claim that every feature passed a physical-board test.
-
-The x86 user programs use a different syscall and window layer. They still need ARM ports.
+The dock and Spotlight dispatch is in `arch/arm64/windows.c` (`dock_activate`) and `arch/arm64/keys.c` (Spotlight and the Launchpad). It is not a claim that every app passed a physical-board test.
 
 ### What works today
 
