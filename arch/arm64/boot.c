@@ -36,7 +36,21 @@ static void app_key(unsigned code) {   /* a key down for the app in front, as th
     else if (!k) k = ask_char(code);
     if (k) app_push(1, k, 0);
 }
+/* The Pi took no keys for its first few seconds on the desktop (roadmap). These stamps find out why on the board: the
+   Console names any step of the main loop that held the keys up for 100 ms or more, and when the first key arrived. */
+static unsigned long desk_ms;   /* key_ms() as the main loop starts */
+static void pass_note(const char *what, unsigned long t0) {
+    unsigned long ms = key_ms() - t0;
+    if (ms < 100 || !desk_ms || t0 - desk_ms > 30000) return;   /* the first half minute only: later, a `sam` or a heavy app is slow on purpose */
+    uart_puts("slow step "); uart_puts(what); uart_putc(' '); uart_dec((unsigned)ms); uart_puts(" ms, ");
+    uart_dec((unsigned)(t0 - desk_ms)); uart_puts(" ms after the desktop\n");
+}
+#define TIMED(f) do { unsigned long t_ = key_ms(); f; pass_note(#f, t_); } while (0)
 void input_event(struct input_event e) {
+    static int first_key;
+    if (e.type == 1 && e.value == 1 && desk_ms && !first_key) {
+        first_key = 1; uart_puts("first key "); uart_dec((unsigned)(key_ms() - desk_ms)); uart_puts(" ms after the desktop\n");
+    }
 #ifdef PI_BUILD
     if (e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) screen_activity();   /* any key or button or a move wakes the screen */
 #endif
@@ -384,10 +398,11 @@ void main(void) {
         *(volatile unsigned char *)(GICD_BASE + 0x400 + 27) = 0x80;
         GICD(0x100) = 1u << 27;
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
+        desk_ms = key_ms();
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            usb_poll(); virtio_input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); dock_dots_tick(); audio_pump(); screen_tick(); login_tick();   /* only the display sleeps: USB stays polled */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick());   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
@@ -403,7 +418,7 @@ void main(void) {
             if (usb_ok || brick_live || notice_up() || rep_code || bt_busy() || apps_live() || audio_busy() || ask_pending()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("wfi");
-            usb_poll(); virtio_input_poll(); key_repeat_tick(); ask_poll(); bt_poll(); brick_tick(); menubar_tick(); keydbg_tick(); app_tick(); dock_dots_tick(); login_tick();   /* an app parked on yield runs again here */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(login_tick());   /* an app parked on yield runs again here */
 #ifdef HANG_TEST
             hang_tick();
 #endif

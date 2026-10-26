@@ -194,7 +194,7 @@ Worth doing, not yet re-checked, in the order the study ranked them:
   - Plus Ctrl for the same on a keyboard with no GUI key.
   - One table in the shell. Apps handle the actions.
   - Check: an arm64 key check that sends each chord through QMP and sees its serial line.
-- [ ] [Sonnet] The first few seconds after the Pi desktop appears take no keys. Find why and fix it. (The splash, its bar and the login screen shipped: `arm64-splash-check.py`, `arm64-splashbar-check.py`, `arm64-login-check.py`.)
+- [ ] [Sonnet] The first few seconds after the Pi desktop appears take no keys. Find why and fix it. Since 4.28.1 the Console says `first key N ms after the desktop` and `slow step NAME N ms`; read those on the board, then fix the step it names. (The splash, its bar and the login screen shipped: `arm64-splash-check.py`, `arm64-splashbar-check.py`, `arm64-login-check.py`.)
 
 
 - [ ] [Sonnet] A small voxel building game as a native Joshua Tree app, software-rendered: walk, place and break blocks.
@@ -981,6 +981,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **4.28.1 (2026-10-26)**: Stamps for the Pi's dead first seconds. The Console now says when the first key arrived after the desktop and names any main-loop step that held the keys up 100 ms or more in the first half minute (`TIMED` in `arch/arm64/boot.c`). QEMU takes keys at once, so the cause is on the board; the next board test reads it. Check: `arm64-firstkey-check.py`.
 - **4.27.0 (2026-10-26)**: Every typeface loads at boot (Joshua, 2026-10-07: "load the entire typeface on every boot"): i386 parses all 14 faces and draws one glyph from each before the desktop, keeps them (1,792 bytes of heap) and prints `fonts 14 of 14 ok`; a face that fails is named, stops being offered by name and draws as DejaVu Sans. The Pi prints the same line for its three. Check: `fonts-boot-check.py`.
 - **4.26.0 (2026-10-26)**: Running-app dots in the dock on both desktops (Joshua, 2026-10-07: "a little light below the icon, like macOS"): a small neutral dark dot under every tile whose app has a window open, drawn by the shared `gui_draw_dock_dot`. On the Pi the Console's window counts as the Terminal's. Check: `dockdots-check.py`.
 - **4.25.2 (2026-10-25)**: The EL0 boot self-tests leave the Pi's `main.c` for `arch/arm64/eltests.c` (1,073 lines to 965). The `app_len`, `app_code` and `app_img` macros live in `kmain.h` only: `main.c` also had dead globals of those names, which the new part would have read as 0. Check: `arm64-m3-check.py`, `arm64-m3c-check.py`, `godfile-check.sh`.
@@ -1956,7 +1957,7 @@ Updated 2026-10-26, overnight. The loop's working notes live in `~/.claude/loops
 
 **Splitting a file.** Five traps turned up, each now a Lessons entry in `docs/ARCHITECTURE.md`: a macro one part defines and another tests, a static copied into two parts, an `#ifndef` default copied without its guard, dead globals shadowed by a macro of the same name, and a generated header the Makefile only tied to the old object.
 
-**Waiting on Joshua.** The card ("card in" flashes main once), a yes to bring GPL code into the tree for the real Doom port, whether dock hover zoom comes back (removed on purpose in #46 on 2026-09-20), and Preview (his Mac gaps list): opening a file from the Finder in another app needs a launch-with-file path on both builds first.
+**Waiting on Joshua.** The card ("card in" flashes main once), the Console lines after a board boot (`first key ...` and any `slow step ...`, for the dead first seconds), a yes to bring GPL code into the tree for the real Doom port, whether dock hover zoom comes back (removed on purpose in #46 on 2026-09-20), and Preview (his Mac gaps list): opening a file from the Finder in another app needs a launch-with-file path on both builds first.
 
 **Next, in order.**
 1. Joshua's board pass on a fresh card: hold Space and talk, the Samantha tile opens her full-screen chat, she answers out loud; the games and Chess from Spotlight.
