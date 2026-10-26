@@ -464,9 +464,13 @@ static int decode_image(unsigned k, const unsigned char *d, unsigned n) {   /* 1
     img_w[k] = dw; img_h[k] = dh;
     return 1;
 }
+unsigned int ticks(void);   /* ip.c, 100 a second */
+#define IMG_TICKS 500   /* every image a page has gets 5 s in all: the window blocks while they load, and a slow host must not hold it */
 static void load_images(char *raw) {
     char page[URL_MAX]; scopy(page, cur, slen(cur), URL_MAX);
+    unsigned t0 = ticks();
     for (unsigned k = 0; k < nimg; k++) {
+        if (ticks() - t0 > IMG_TICKS) { img_w[k] = img_h[k] = 0; kputs("browser: image "); kdec(k + 1); kputs(" skipped, too slow\n"); continue; }
         unsigned long mark = heap_mark();
         void (*was)(const char *) = cmd_out; cmd_out = sink;
         unsigned n = 0; char *body = 0;
