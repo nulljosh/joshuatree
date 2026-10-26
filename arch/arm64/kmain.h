@@ -169,6 +169,9 @@ unsigned long cnt_hz(void);
 unsigned long cnt_now(void);
 void key_selftest(void);
 #define app_cur (ap->cur)
+#define app_len (ap->len)
+#define app_code (ap->code)
+#define app_img (ap->img)
 #define app_lx (ap->lx)
 #define app_ly (ap->ly)
 #define app_shown (ap->shown)
@@ -416,4 +419,20 @@ void crash(const struct frame *f);
 #define ICON_ART_SIZE 148                             /* kernel/icon_art.h: the app art, one copy, in crash.c */
 extern const unsigned char *const *const icon_art;
 extern const unsigned int *const icon_art_len;
+extern char _start[];
+void arena_only(int slot);
+extern unsigned long enter_user(unsigned long entry, unsigned long sp, unsigned long arg, unsigned long arg2);
+#define UAPP_MAX 0x40000UL  /* the largest image user_load takes, and what user_c.ld asserts */
+#define UP_APP    0x10000UL /* M3c: the app window, where user_load puts a program from the app table: code pages, data pages, zeroed pages */
+#define UP_ASTACK 0x80000UL /* ...and the app's stack: 16 pages (M3e: minimp3 keeps about 16 KB of scratch there), nothing mapped below them */
+#define UP_CODE  0x0000UL   /* EL0 code, read-only and executable */
+#define UP_KERN  0x4000UL   /* a page in the same arena that only EL1 may touch */
+#define UP_STACK 0x2000UL   /* EL0 stack, one page; sp starts at its top */
+extern int user_faulted;
+const struct user_app *user_find(const char *name, unsigned n);
+void user_init(const char *img, unsigned long len);
+unsigned long user_load(const struct user_app *a);
+int user_run(const struct user_app *a);
+extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[], user_entry_e[], user_entry_f[];
+extern unsigned long user_status;
 #endif /* KMAIN_H */
