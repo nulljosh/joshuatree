@@ -26,6 +26,12 @@ void *kmalloc(unsigned int n);
 #define PAGE_MAX (8u << 20)  /* the most a gzip body may inflate to (its trailer names the size): with RAW_MAX, 12 of the 16 MiB heap */
 #define TEXT_MAX 8192       /* the readable text: half the Terminal's log, so a page never pushes itself out */
 #define HIST_MAX 8
+/* 6.13.0: style marks in the page text, for the Blackcomb window (browser_ui.h); the Terminal prints without them. A line
+   that starts with BR_BIG is an h1 or h2, BR_SMALL an h3 to h6; BR_BOLD and BR_PLAIN turn bold on and off inside a line. */
+#define BR_BIG '\x01'
+#define BR_SMALL '\x02'
+#define BR_BOLD '\x03'
+#define BR_PLAIN '\x04'
 #define PAGE_LINES 16       /* ponytail: a fixed page; the Terminal's own rows if its height should set it */
 /* Budgets in ticks (100 a second). A fetch answers or fails in about 10 s: 3 s for DNS, 4 s for the SYN-ACK, 8 s for
    each piece of the reply (tls.c's own read budget matches). The stack's defaults are 20 s each, which on a real LAN
@@ -269,11 +275,13 @@ static void to_text(const char *h, unsigned n) {
                         o = put(text, o, ']'); link = 0; space = 0;
                     }
                 }
+                else if (is_tag(tag, tn, "b") || is_tag(tag, tn, "strong")) { if (!in_title) o = put(text, o, close ? BR_PLAIN : BR_BOLD); }
                 else if (heading || is_tag(tag, tn, "p") || is_tag(tag, tn, "br") || is_tag(tag, tn, "div") || is_tag(tag, tn, "li") || is_tag(tag, tn, "tr")
                          || is_tag(tag, tn, "ul") || is_tag(tag, tn, "ol") || is_tag(tag, tn, "table") || is_tag(tag, tn, "blockquote") || is_tag(tag, tn, "pre") || is_tag(tag, tn, "hr")) {
                     if (o && text[o - 1] != '\n') o = put(text, o, '\n');
                     if (!close && (heading || is_tag(tag, tn, "p")) && o && text[o - 1] == '\n' && !(o > 1 && text[o - 2] == '\n')) o = put(text, o, '\n');   /* a blank line before */
                     if (!close && is_tag(tag, tn, "li")) { o = put(text, o, '-'); o = put(text, o, ' '); }
+                    if (!close && heading) o = put(text, o, tag[1] <= '2' ? BR_BIG : BR_SMALL);   /* 6.13.0: the window draws it as a heading */
                     space = 1;
                 }
             }
@@ -314,7 +322,9 @@ static void show_lines(unsigned from, unsigned count) {
     unsigned i = line_start(from), k = from;
     for (; k < from + count && i <= tlen && k < nline; k++) {
         unsigned e = i; while (e < tlen && text[e] != '\n') e++;
-        if (e == i) kputs("\n"); else say_wrapped("", text + i, e - i);
+        static char plain[TEXT_MAX]; unsigned m = 0;   /* the line without its style marks */
+        for (unsigned j = i; j < e; j++) if ((unsigned char)text[j] >= 0x20) plain[m++] = text[j];
+        if (!m) kputs("\n"); else say_wrapped("", plain, m);
         i = e + 1;
     }
     char st[URL_MAX + 40]; unsigned o = 0;

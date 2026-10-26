@@ -20,6 +20,12 @@ unsigned browser_loads(void);
 #define BR_ADDR_MAX 200
 #define BR_ACCENT 0x00b5502c
 static unsigned short br_off[BR_VL_MAX], br_len[BR_VL_MAX];   /* wrapped line i: an offset into the page text and a length */
+/* 6.13.0: each wrapped line's style. The low two bits: 0 body text, 1 an h1 or h2 (bold, 20 px, two rows tall), 2 an h3 to
+   h6 (bold, body size), 3 the second row under a big heading's line; BR_ST_BOLD when the line starts inside <b>. */
+static unsigned char br_sty[BR_VL_MAX];
+#define BR_ST_BOLD 4
+static int br_face(unsigned kind, int bold) { return kind == 1 || kind == 2 || bold ? 1 : 2; }   /* text.c: 1 sans bold, 2 sans */
+static int br_px(unsigned kind, int s) { return (kind == 1 ? 200 : 120) * s; }
 static unsigned br_n, br_lines;                              /* wrapped lines, and the page's own lines (the `page N lines` log) */
 static int br_top, br_edit, br_loading;
 int br_frame = 1;   /* the window frame needs drawing: set on open, cleared once drawn, so a scroll or a keystroke repaints the well and not the frame */
@@ -128,17 +134,22 @@ static void br_wrap(void) {   /* the page into lines that fit the well: break at
     for (unsigned i = 0; i < len; i++) if (t[i] == '\n') br_lines++;
     for (unsigned i = 0; len && br_n < BR_VL_MAX;) {
         unsigned e = i; while (e < len && t[e] != '\n') e++;
-        unsigned a = i;
-        if (a == e) { br_off[br_n] = (unsigned short)a; br_len[br_n++] = 0; }
+        unsigned a = i, kind = 0; int bold = 0;
+        if (a < e && (t[a] == '\x01' || t[a] == '\x02')) kind = (unsigned)t[a] == 1 ? 1 : 2;
+        if (a == e) { br_off[br_n] = (unsigned short)a; br_sty[br_n] = 0; br_len[br_n++] = 0; }
         while (a < e && br_n < BR_VL_MAX) {
-            unsigned b = a, sp = 0; int w = 0;
+            unsigned b = a, sp = 0; int w = 0, start_bold = bold, b_at_sp = bold;
             while (b < e && b - a < 127) {
-                char c[2] = { t[b], 0 }; int cw = text_ok ? text_width(2, c, 120 * s) : 0;
+                char c[2] = { t[b], 0 }; int cw = 0;
+                if (t[b] == '\x03') bold = 1; else if (t[b] == '\x04') bold = 0;
+                else if ((unsigned char)t[b] >= 0x20 && text_ok) cw = text_width(br_face(kind, bold), c, br_px(kind, s));
                 if (w + cw > maxw && b > a) break;
-                w += cw; if (t[b] == ' ') sp = b; b++;
+                w += cw; if (t[b] == ' ') { sp = b; b_at_sp = bold; } b++;
             }
             unsigned brk = b < e && sp > a ? sp : b;
-            br_off[br_n] = (unsigned short)a; br_len[br_n++] = (unsigned short)(brk - a);
+            if (brk == sp && b < e) bold = b_at_sp;   /* the next line starts where this one broke, in the bold state of that point */
+            br_off[br_n] = (unsigned short)a; br_sty[br_n] = (unsigned char)(kind | (start_bold ? BR_ST_BOLD : 0)); br_len[br_n++] = (unsigned short)(brk - a);
+            if (kind == 1 && br_n < BR_VL_MAX) { br_off[br_n] = (unsigned short)brk; br_sty[br_n] = 3; br_len[br_n++] = 0; }
             a = brk; while (a < e && t[a] == ' ') a++;
         }
         if (e >= len) break;
@@ -212,7 +223,24 @@ void browser_paint(int report) {
         unsigned num = br_mark(buf, n, 0, &e);
         int ly = y + 4 + r * BR_ROW;
         for (unsigned f = 0, fe, k; br_sel && (k = br_mark(buf, n, f, &fe)); f = fe) if (k == br_sel) { window_rect(x + 2, ly - 2, w - 4, BR_ROW, 0x00F3E2D8); break; }
-        gui_text(buf, x + 6, ly, num ? BR_ACCENT : 0x001C1C1E);
+        unsigned kind = br_sty[vi] & 3; int bold = (br_sty[vi] & BR_ST_BOLD) != 0;
+        if (kind == 3) continue;   /* the lower half of a big heading */
+        {   /* runs of one face: marks switch bold, the heading's own face and size cover the whole line */
+            unsigned fg = fb_color(num ? BR_ACCENT : 0x001C1C1E);
+            int px = (x + 6) * s, base = kind == 1 ? (ly + 24) * s : ly * s + 25 * s / 2;   /* gui_text's baseline; a big heading's sits 24 down its two rows */
+            char run[128]; unsigned rn = 0;
+            for (unsigned k = 0; k <= n; k++) {
+                unsigned char c = k < n ? (unsigned char)buf[k] : 0;
+                if (c >= 0x20) { run[rn++] = (char)c; continue; }
+                if (rn) {
+                    run[rn] = 0;
+                    if (text_ok) px = text_draw(br_face(kind, bold), run, px, base, br_px(kind, s), fg, fb, fb_pitch, (int)fb_w, (int)fb_h);
+                    if (report && (kind || bold)) { con_quiet = 1; uart_puts(kind == 1 ? "browser: shows heading big " : kind == 2 ? "browser: shows heading small " : "browser: shows bold "); uart_puts(run); uart_putc('\n'); }
+                    rn = 0;
+                }
+                if (c == 3) bold = 1; else if (c == 4) bold = 0;
+            }
+        }
         if (report && num) { con_quiet = 1; uart_puts("browser: shows link "); uart_dec(num); uart_puts(" at "); uart_dec((unsigned)(x + 16) * (unsigned)s); uart_putc(','); uart_dec((unsigned)(ly + 8) * (unsigned)s); uart_putc('\n'); }
     }
     if (!len && browser_url()[0]) {   /* 6.8.0: a page came back with no words: its text is built by script, which Blackcomb does not run */
