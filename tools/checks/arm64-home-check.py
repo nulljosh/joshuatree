@@ -74,6 +74,11 @@ int fat_read_file(const char *n, void *buf, unsigned size) {
     int c = find_child(cwd, n); if (c < 0 || nodes[c].dir) return -1;
     unsigned k = (unsigned)nodes[c].len < size ? (unsigned)nodes[c].len : size; memcpy(buf, nodes[c].data, k); return (int)k;
 }
+int fat_read_at(const char *n, unsigned off, void *buf, unsigned len) {   /* 6.1.0's SYS_READAT, over the same nodes */
+    int c = find_child(cwd, n); if (c < 0 || nodes[c].dir) return -1;
+    if (off >= (unsigned)nodes[c].len) return 0;
+    unsigned k = (unsigned)nodes[c].len - off < len ? (unsigned)nodes[c].len - off : len; memcpy(buf, nodes[c].data + off, k); return (int)k;
+}
 int fat_replace_file(const char *n, const void *d, unsigned len) {
     int c = find_child(cwd, n); if (c >= 0 && nodes[c].dir) return 0;
     if (c < 0) c = new_node(cwd, n, 0); if (c < 0 || len > 9000) return 0;
