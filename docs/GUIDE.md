@@ -137,6 +137,8 @@ While Samantha is answering, the network commands (`browse`, `open`, `back`, `fo
 
 HTTPS knows 126 root certificates: Mozilla's whole list, the one Firefox trusts, plus a few older roots some chains still end in. A site signed by anyone else fails with a TLS error, on purpose. There is no JavaScript, no images and no styled layout. It keeps up to 8 KB of text, 32 links and 8 pages of history, and the status line says plainly when a page did not load.
 
+**Mail.** At the Terminal, `mail login imap.mail.me.com you@icloud.com` (or `imap.gmail.com`) asks for an app password, made on your account's security page, never your real one. It stays in memory until `mail logout` or a sign-out and only ever goes over TLS. `mail` lists the ten newest, `mail N` opens one as a page; its pictures are never fetched, since a fetched picture tells the sender you opened it.
+
 **Books.** Reads plain text. Lists every `.TXT` in `JT/BOOKS/` (drop your own in from the Mac). Up and Down pick, Enter opens, Right or Space turns a page, Left goes back, Esc returns then closes. The page is saved next to the book as `NAME.POS`. A book over 3 MB is refused.
 
 **Music.** Plays `.WAV` and `.MP3` from `JT/` and `JT/MUSIC/`, showing title, artist, length and cover. Space plays and pauses, Left and Right seek 5 seconds, Up and Down change volume, N and P go next and previous, S shuffles, R cycles repeat (off, all, one). You can click songs and buttons, click or drag the seek and volume bars, and scroll with the wheel. A song over 3 MB is refused. Sound comes out of the headphone jack, which a real board has not yet confirmed.

@@ -41,7 +41,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
+                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, logout), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
                            "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
@@ -359,6 +359,7 @@ static void admin_command(const char *q, unsigned n, int make) {   /* makeadmin 
 #define PW_OLD 2      /* passwd: the current password of pw_target */
 #define PW_NEW1 3     /* passwd: the new password */
 #define PW_NEW2 4     /* passwd: the new password again */
+#define PW_MAIL 5     /* mail login: the app password, for mail.c */
 void ask_password(const char *label);   /* ask.c: the next line typed is a password: stars, no echo */
 static int pw_state;
 static char pw_cmd[256], pw_target[ACC_NAME_MAX + 2], pw_new[ACC_PASS_MAX + 2], pw_label[56];
@@ -374,7 +375,10 @@ static void pw_ask(int state, const char *a, const char *b) {   /* the label is 
     pw_state = state;
     ask_password(pw_label);
 }
-void cmd_password_cancel(void) { pw_clear(); }   /* ask.c: Esc at the prompt, or a sign-out */
+void cmd_password_cancel(void) { pw_clear(); }
+void ask_mail_password(const char *user) { pw_clear(); pw_ask(PW_MAIL, "App password for ", user); }   /* mail.c */
+void mail_password(const char *pass);   /* mail.c */
+int mail_command(const char *q, unsigned n);   /* ask.c: Esc at the prompt, or a sign-out */
 static void sudo_command(const char *q, unsigned n) {   /* q is the line after "sudo " */
     while (n && q[0] == ' ') { q++; n--; }
     if (!n) { cmd_out("sudo: use sudo COMMAND, or sudo -k to forget the password\n"); return; }
@@ -447,6 +451,9 @@ void cmd_password(const char *q, unsigned n, void (*out)(const char *)) {
         if (!ok) { cmd_out("passwd: the two passwords differ, nothing changed\n"); pw_clear(); return; }
         passwd_apply(pw_target, pw_new);
         pw_clear();
+    } else if (st == PW_MAIL) {
+        if (big || !pass[0]) cmd_out("mail: no app password, nothing changed\n"); else mail_password(pass);
+        accounts_wipe(pass, sizeof pass);
     } else accounts_wipe(pass, sizeof pass);
 }
 /* The Settings Users pane (settings_ui.h, 4.14.0) calls these. The pane has already settled who may do what with the same
@@ -581,6 +588,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     }
     if (ask_command(q, n)) return;
     if (browse_command(q, n)) return;
+    if (mail_command(q, n)) return;   /* 6.18.0 */
     if (nimble_command(q, n)) return;
     if (is(q, n, "llm")) { ask_claude(q, n); return; }
     not_found(q, n);
