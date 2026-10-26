@@ -25,12 +25,13 @@
  },
  "pool": [
   {
-   "image": "../nimbus-rear.jpg",
+   "video": "nimbus-rear-clip.mp4",
+   "start": 0.6,
    "focus": [
-    0.53,
-    0.6
+    0.5,
+    0.0
    ],
-   "zoom": 3.4,
+   "zoom": 1.6,
    "sky": "paper"
   },
   {
@@ -195,12 +196,13 @@
    "sky": "ink"
   },
   {
-   "image": "../nimbus-rear.jpg",
+   "video": "nimbus-rear-clip.mp4",
+   "start": 2.8,
    "focus": [
-    0.53,
-    0.6
+    0.5,
+    0.0
    ],
-   "zoom": 3.4,
+   "zoom": 1.6,
    "sky": "paper"
   },
   {
@@ -313,5 +315,6 @@
   "mark": "../../brand/mark-paper.png",
   "name": "Joshua Tree",
   "secs": 3.0
- }
+ },
+ "grain": 0.18
 }
