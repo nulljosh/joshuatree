@@ -338,10 +338,97 @@ static void dav_sync(void) {
     heap_release(mark);
 }
 /* cmd.c, once the app password is typed. */
+/* 6.42.0: discovery, so the account's address does (https://caldav.icloud.com/, say), not only the calendar's own. A
+   PROPFIND on what was typed: a calendar already is used as it is; otherwise its calendar-home-set, or its
+   current-user-principal's, and then the first calendar under the home that holds events. An href may name another
+   host (iCloud's p00-caldav.icloud.com): https only, and only under the same parent domain as the typed one, so the
+   password never goes to some other site. ponytail: the first event calendar wins; a choice of calendars can come later. */
+static const char *dav_tag(const char *x, unsigned n, const char *name, unsigned from) {   /* the opening <p:name> or <name> at or after from */
+    unsigned nl = slen(name);
+    for (unsigned i = from; i + nl + 1 < n; i++) if (x[i] == '<' && x[i + 1] != '/') {
+        unsigned k = i + 1; while (k < n && x[k] != ':' && x[k] != '>' && x[k] != ' ' && x[k] != '/') k++;
+        unsigned a = k < n && x[k] == ':' ? k + 1 : i + 1;
+        if (a + nl <= n && starts(x + a, name) && (x[a + nl] == '>' || x[a + nl] == ' ' || x[a + nl] == '/')) return x + i;
+    }
+    return 0;
+}
+static int dav_href(const char *x, unsigned n, const char *after, char *out, unsigned max) {   /* the first href inside the element named after */
+    const char *t = dav_tag(x, n, after, 0);
+    if (!t) return 0;
+    { const char *g = t; while (g < x + n && *g != '>') g++; if (g >= x + n || g[-1] == '/') return 0; }   /* <c:calendar-home-set/>: empty */
+    const char *h = dav_tag(x, n, "href", (unsigned)(t - x));
+    if (!h) return 0;
+    while (*h != '>') h++;
+    h++; unsigned i = 0; while (h + i < x + n && h[i] != '<' && i + 1 < max) { out[i] = h[i]; i++; }
+    out[i] = 0;
+    return i > 0;
+}
+static int same_parent(const char *a, const char *b) {   /* the last two labels of two hosts match */
+    unsigned an = slen(a), bn = slen(b), dots = 0, k = 0;
+    while (k < an && k < bn && a[an - 1 - k] == b[bn - 1 - k]) { if (a[an - 1 - k] == '.' && ++dots == 2) return 1; k++; }
+    return k == an && k == bn;
+}
+static int dav_move(const char *href) {   /* dav_url becomes href, absolute or a path on the same server: 1 when allowed */
+    char host[128], nh[128]; unsigned short port, np; const char *path, *npath; char next[200];
+    if (!dav_parts(dav_url, host, &port, &path)) return 0;
+    if (starts(href, "https://")) cp(next, href, slen(href), sizeof next);
+    else if (href[0] == '/') { unsigned o = 0; for (const char *p = dav_url; p < path && o < sizeof next - 1; p++) next[o++] = *p; cp(next + o, href, slen(href), sizeof next - o); }
+    else return 0;
+    if (!dav_parts(next, nh, &np, &npath) || !same_parent(host, nh)) return 0;
+    unsigned l = slen(next); if (l && next[l - 1] != '/' && l + 1 < sizeof next) { next[l] = '/'; next[l + 1] = 0; }
+    cp(dav_url, next, slen(next), sizeof dav_url);
+    return 1;
+}
+static int dav_find(const char *what, int depth, char **rb, unsigned *rn) {   /* one PROPFIND on dav_url */
+    char host[128]; unsigned short port; const char *path;
+    if (!dav_parts(dav_url, host, &port, &path)) return 0;
+    char p2[200]; cp(p2, path, slen(path), sizeof p2);
+    char body[400]; unsigned o = 0;
+    for (const char *p = "<?xml version=\"1.0\" encoding=\"utf-8\"?><d:propfind xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\"><d:prop>"; *p; p++) body[o++] = *p;
+    for (const char *p = what; *p; p++) body[o++] = *p;
+    for (const char *p = "</d:prop></d:propfind>"; *p; p++) body[o++] = *p;
+    return dav_req("PROPFIND", p2, 0, "application/xml; charset=utf-8", depth ? "Depth: 1\r\n" : "Depth: 0\r\n", body, o, rb, rn);
+}
+static int is_cal(const char *x, unsigned n) {   /* a resourcetype that says calendar */
+    const char *r = dav_tag(x, n, "resourcetype", 0);
+    return r && dav_tag(x, n, "calendar", (unsigned)(r - x)) != 0;
+}
+static void dav_discover(void) {
+    unsigned long mark = heap_mark();
+    char *rb; unsigned rn; char href[200], typed[200];
+    cp(typed, dav_url, slen(dav_url), sizeof typed);
+    int st = dav_find("<d:resourcetype/><d:current-user-principal/><c:calendar-home-set/>", 0, &rb, &rn);
+    if (st == 401 || st == 403) { cmd_out("calendar: the server refused the user or the app password\n"); heap_release(mark); return; }
+    if (st != 207 || !rb || is_cal(rb, rn)) { heap_release(mark); return; }   /* a calendar already, or no answer: as typed */
+    if (!dav_href(rb, rn, "calendar-home-set", href, sizeof href)) {
+        if (!dav_href(rb, rn, "current-user-principal", href, sizeof href) || !dav_move(href)) goto none;
+        st = dav_find("<c:calendar-home-set/>", 0, &rb, &rn);
+        if (st != 207 || !rb || !dav_href(rb, rn, "calendar-home-set", href, sizeof href)) goto none;
+    }
+    if (!dav_move(href)) goto none;
+    st = dav_find("<d:resourcetype/><c:supported-calendar-component-set/>", 1, &rb, &rn);
+    if (st != 207 || !rb) goto none;
+    for (const char *r = dav_tag(rb, rn, "response", 0); r; ) {   /* each response: its href, then whether it is an event calendar */
+        const char *next = dav_tag(rb, rn, "response", (unsigned)(r - rb) + 1);
+        unsigned seg = (unsigned)((next ? next : rb + rn) - r);
+        int events = 1; const char *comp = dav_tag(r, seg, "supported-calendar-component-set", 0);
+        if (comp) { events = 0; for (unsigned i = (unsigned)(comp - r); i + 6 < seg; i++) if (starts(r + i, "VEVENT")) events = 1; }
+        if (is_cal(r, seg) && events && dav_href(r, seg, "response", href, sizeof href) && dav_move(href)) {
+            cmd_out("calendar: found your calendar at "); cmd_out(dav_url); cmd_out("\n");
+            heap_release(mark); return;
+        }
+        r = next;
+    }
+none:
+    cp(dav_url, typed, slen(typed), sizeof dav_url);
+    cmd_out("calendar: no calendar found there, kept the address as typed\n");
+    heap_release(mark);
+}
 void ics_password(const char *pass) {
     cp(dav_pass, pass, slen(pass), sizeof dav_pass);
     cp(dav_owner, current_user, slen(current_user), sizeof dav_owner);
     dav_ready = 1;
+    dav_discover();
     char v[440]; unsigned o = 0;
     for (const char *p = dav_url; *p && o < 200; p++) v[o++] = *p;
     v[o++] = ' '; for (const char *p = dav_user; *p && o < 300; p++) v[o++] = *p;
