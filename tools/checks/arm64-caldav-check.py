@@ -16,6 +16,8 @@ principal, the principal names the calendar home by its full https address, and 
 (VTODO only) and the event calendar; the Pi says it found /cal/joshua/ and syncs there.
 6.43.0: once CalDAV is set, opening Calendar from Spotlight syncs first (the deletes above happen there) and the app
 shows what came down; a `calendar sync` after it, and a second open, do not sync again from the open.
+6.48.0: the home also holds a Work calendar; discovery lists Personal and Work and uses 1; `calendar use 2` and a sync
+there deletes nothing (CALSYNC.TXT names Personal) and sends Dentist to Work; `calendar use 1` and a sync come back.
 Discriminating: drop the &amp; unescape in ics.c's dav_feed and SUBS.TXT says "Q&amp;A"; skip the CALSYNC.TXT read in
 dav_sync and jt-d0.ics stays on the server while Gym goes back up.
 Skips (exit 0) when clang's aarch64 target, ld.lld, openssl, qemu-system-aarch64 or mtools is missing.
@@ -42,15 +44,14 @@ d1, d2, d3, d0, d5 = (today + datetime.timedelta(days=k) for k in (4, 9, 15, 6, 
 ymd = lambda d: d.strftime("%Y%m%d"); iso = lambda d: d.strftime("%Y-%m-%d")
 open(os.path.join(tmp, "EVENTS.TXT"), "w").write("%s|Dentist, 10am\n%s|Gym\n" % (iso(d1), iso(d5)))
 subprocess.run(["mcopy", "-i", f"{card}@@{PART * 512}", os.path.join(tmp, "EVENTS.TXT"), "::JT/EVENTS.TXT"], capture_output=True, env=MT, check=True)
-open(os.path.join(tmp, "CALSYNC.TXT"), "w").write("%s\n%s\n" % (ymd(d0), ymd(d5)))
-subprocess.run(["mcopy", "-i", f"{card}@@{PART * 512}", os.path.join(tmp, "CALSYNC.TXT"), "::JT/CALSYNC.TXT"], capture_output=True, env=MT, check=True)
 USER, PASS = "joshua@example.com", "dav-pass-555"
 AUTH = "Basic " + base64.b64encode(("%s:%s" % (USER, PASS)).encode()).decode()
 
-store = {   # name -> iCalendar text, the server's own two
-    "a.ics": "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART;VALUE=DATE:%s\r\nSUMMARY:Q&A with team\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % ymd(d2),
-    "b.ics": "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:b\r\nDTSTART:%sT170000Z\r\nSUMMARY:Design review\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % ymd(d3),
-    "jt-%s.ics" % ymd(d0): "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:jt-%s@joshuatree\r\nDTSTART;VALUE=DATE:%s\r\nSUMMARY:Old plan\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % (ymd(d0), ymd(d0)),
+store = {   # path -> iCalendar text: the Personal calendar's own two, and a day the Pi sent last time (6.48.0: by path, so
+             # each calendar holds its own; Work starts empty)
+    "/cal/joshua/a.ics": "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART;VALUE=DATE:%s\r\nSUMMARY:Q&A with team\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % ymd(d2),
+    "/cal/joshua/b.ics": "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:b\r\nDTSTART:%sT170000Z\r\nSUMMARY:Design review\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % ymd(d3),
+    "/cal/joshua/jt-%s.ics" % ymd(d0): "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:jt-%s@joshuatree\r\nDTSTART;VALUE=DATE:%s\r\nSUMMARY:Old plan\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % (ymd(d0), ymd(d0)),
 }
 puts, auths, deletes, finds = [], [], [], []
 def xml_escape(t): return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\r", "&#13;")
@@ -65,13 +66,13 @@ class Dav(http.server.BaseHTTPRequestHandler):
     def do_PUT(self):
         data = self.body()
         if not self.authed(): return
-        name = self.path.rsplit("/", 1)[-1]; created = name not in store
-        store[name] = data.decode(); puts.append((self.path, data.decode()))
+        created = self.path not in store
+        store[self.path] = data.decode(); puts.append((self.path, data.decode()))
         self.reply(201 if created else 204)
     def do_DELETE(self):
         if not self.authed(): return
-        name = self.path.rsplit("/", 1)[-1]; deletes.append(self.path)
-        self.reply(204 if store.pop(name, None) is not None else 404)
+        deletes.append(self.path)
+        self.reply(204 if store.pop(self.path, None) is not None else 404)
     def do_PROPFIND(self):
         self.body()
         if not self.authed(): return
@@ -85,8 +86,9 @@ class Dav(http.server.BaseHTTPRequestHandler):
             x = R(self.path, "<cal:calendar-home-set><d:href>https://10.0.2.2:%d/cal/</d:href></cal:calendar-home-set>" % port)
         elif self.path == "/cal/":
             x = R("/cal/", "<d:resourcetype><d:collection/></d:resourcetype>") + R("/cal/inbox/", "<d:resourcetype><d:collection/><cal:schedule-inbox/></d:resourcetype>") \
-                + R("/cal/tasks/", cal(["VTODO"])) + R("/cal/joshua/", cal(["VEVENT", "VTODO"]))
-        elif self.path == "/cal/joshua/":
+                + R("/cal/tasks/", cal(["VTODO"])) + R("/cal/joshua/", cal(["VEVENT", "VTODO"]) + "<d:displayname>Personal</d:displayname>") \
+                + R("/cal/work/", cal(["VEVENT"]) + "<d:displayname>Work</d:displayname>")
+        elif self.path in ("/cal/joshua/", "/cal/work/"):
             x = R(self.path, cal(["VEVENT"]))
         else: self.reply(404); return
         self.reply(207, ('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">%s</d:multistatus>' % x).encode(), "application/xml; charset=utf-8")
@@ -94,9 +96,10 @@ class Dav(http.server.BaseHTTPRequestHandler):
         self.body()
         if not self.authed(): return
         parts = []
-        for name, ics in sorted(store.items()):
-            cd = "<![CDATA[%s]]>" % ics if name == "b.ics" else xml_escape(ics)
-            parts.append("<d:response><d:href>/cal/joshua/%s</d:href><d:propstat><d:prop><cal:calendar-data>%s</cal:calendar-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>" % (name, cd))
+        for path, ics in sorted(store.items()):
+            if not path.startswith(self.path): continue
+            cd = "<![CDATA[%s]]>" % ics if path.endswith("b.ics") else xml_escape(ics)
+            parts.append("<d:response><d:href>%s</d:href><d:propstat><d:prop><cal:calendar-data>%s</cal:calendar-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>" % (path, cd))
         x = '<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">%s</d:multistatus>' % "".join(parts)
         self.reply(207, x.encode(), "application/xml; charset=utf-8")
     def log_message(self, *a): pass
@@ -104,6 +107,9 @@ ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(cert, key)
 server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Dav)
 server.socket = ctx.wrap_socket(server.socket, server_side=True)
 port = server.server_address[1]
+# 6.41.0's last-sync list, naming the calendar it belongs to (6.48.0): d0 and d5 were on both sides last time
+open(os.path.join(tmp, "CALSYNC.TXT"), "w").write("https://10.0.2.2:%d/cal/joshua/\n%s\n%s\n" % (port, ymd(d0), ymd(d5)))
+subprocess.run(["mcopy", "-i", f"{card}@@{PART * 512}", os.path.join(tmp, "CALSYNC.TXT"), "::JT/CALSYNC.TXT"], capture_output=True, env=MT, check=True)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 
 fails = []
@@ -151,7 +157,10 @@ try:
     n = len(uart()); line("calendar sync")
     check("a wrong password is refused by the server", wait_for("calendar: the server refused the user or the app password", 30, n) and not puts, (puts, uart()[n:][-300:]))
     n = len(uart()); line("calendar caldav https://10.0.2.2:%d/ %s" % (port, USER)); time.sleep(0.5); line(PASS); wait_for("calendar: CalDAV", 20, n)
-    check("given the server's root, discovery finds the event calendar (6.42.0)", "calendar: found your calendar at %s\n" % url in uart()[n:]
+    work = "https://10.0.2.2:%d/cal/work/" % port
+    check("given the server's root, discovery lists both event calendars by name and uses the first (6.42.0, 6.48.0)",
+          "calendar: 2 calendars hold events:\n" in uart()[n:] and "  1  Personal  %s\n" % url in uart()[n:] and "  2  Work  %s\n" % work in uart()[n:]
+          and "calendar: using 1; calendar use N picks another" in uart()[n:]
           and [p for p, _ in finds[-3:]] == ["/", "/principals/joshua/", "/cal/"] and finds[-1][1] == "1", (finds, uart()[n:][-300:]))
     key("esc"); time.sleep(0.5)
     n = na = len(uart()); key("f1"); [key(c) for c in "calendar"]; key("ret")
@@ -164,7 +173,7 @@ try:
     check("the day went up as jt-YYYYMMDD.ics with its UID and the comma escaped", sent[0] == "/cal/joshua/jt-%s.ics" % ymd(d1) and "UID:jt-%s@joshuatree" % ymd(d1) in sent[1]
           and "DTSTART;VALUE=DATE:%s" % ymd(d1) in sent[1] and "SUMMARY:Dentist\\, 10am" in sent[1], sent)
     check("with exactly the user and app password", auths[-1] == AUTH, auths[-1:])
-    check("a day deleted here is deleted on the server (6.41.0)", deletes == ["/cal/joshua/jt-%s.ics" % ymd(d0)] and "jt-%s.ics" % ymd(d0) not in store
+    check("a day deleted here is deleted on the server (6.41.0)", deletes == ["/cal/joshua/jt-%s.ics" % ymd(d0)] and "/cal/joshua/jt-%s.ics" % ymd(d0) not in store
           and "calendar: 1 day deleted here, taken off the server" in uart()[na:], (deletes, uart()[na:][-300:]))
     check("a day deleted on the server is taken off here, not sent back", "calendar: 1 day deleted on the server, taken off here" in uart()[na:]
           and not any(ymd(d5) in p for p, _ in puts), (puts, uart()[na:][-300:]))
@@ -172,6 +181,15 @@ try:
     n = len(uart()); key("f1"); [key(c) for c in "calendar"]; key("ret")
     check("Calendar shows the two days the person has no event on", wait_for("calendar: subscribed events 2", 20, n), uart()[n:][-300:])
     check("and does not sync again within 15 minutes", "syncing before Calendar opens" not in uart()[n:], uart()[n:][-300:])
+    key("esc"); time.sleep(0.5); key("f2"); wait_for("terminal open", 10, n)
+    n = len(uart()); line("calendar use 2")
+    check("calendar use 2 switches to Work", wait_for("calendar: using Work", 10, n), uart()[n:][-300:])
+    k = len(deletes); n = len(uart()); line("calendar sync")
+    ok = wait_for("calendar: 1 of your days sent", 30, n)
+    check("a sync with Work, whose last-sync list names Personal, deletes nothing and sends Dentist there (6.48.0)",
+          ok and len(deletes) == k and "/cal/work/jt-%s.ics" % ymd(d1) in store and "deleted on the server" not in uart()[n:], (deletes[k:], uart()[n:][-300:]))
+    n = len(uart()); line("calendar use 1"); wait_for("calendar: using Personal", 10, n)
+    n = len(uart()); line("calendar sync"); wait_for("calendar: 3 events read", 30, n)
     check("the app password never reaches the UART", PASS not in uart() and "wrong-pass-1" not in uart())
 finally:
     q.kill(); q.wait(); server.shutdown()
@@ -186,6 +204,6 @@ def card_file(name):
     subprocess.run(["mcopy", "-n", "-i", f"{card}@@{PART * 512}", "::JT/" + name, o], capture_output=True, env=MT)
     return open(o).read() if os.path.exists(o) else ""
 check("EVENTS.TXT keeps Dentist and lost Gym", card_file("EVENTS.TXT") == "%s|Dentist, 10am\n" % iso(d1), card_file("EVENTS.TXT"))
-check("CALSYNC.TXT lists the day both sides now have", card_file("CALSYNC.TXT") == "%s\n" % ymd(d1), card_file("CALSYNC.TXT"))
+check("CALSYNC.TXT names Personal and lists the day both sides now have", card_file("CALSYNC.TXT") == "https://10.0.2.2:%d/cal/joshua/\n%s\n" % (port, ymd(d1)), card_file("CALSYNC.TXT"))
 if fails: print("FAIL: " + ", ".join(fails)); sys.exit(1)
 print("PASS: CalDAV over https only, the app password with stars, the person's day sent as an iCalendar object and the calendar read back through REPORT, XML and CDATA undone")
