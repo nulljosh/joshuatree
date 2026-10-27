@@ -482,10 +482,14 @@ static void css_rules(const char *c, unsigned n) {
             unsigned e = b; while (e > a && is_ws(c[e - 1])) e--;
             int simple = e > a, gaps = 0; char one[48]; unsigned on = 0;
             for (unsigned k = a; k < e && simple; k++) {
-                if (c[k] == '>' || c[k] == '+' || c[k] == '~' || c[k] == '[' || c[k] == ':' || c[k] == '*') simple = 0;
-                else if (is_ws(c[k])) { if (!is_ws(c[k - 1])) { gaps++; if (on < sizeof one - 1) one[on++] = ' '; } }   /* one space between the two parts */
+                if (c[k] == '+' || c[k] == '~' || c[k] == '[' || c[k] == ':' || c[k] == '*') simple = 0;
+                else if (c[k] == '>') {   /* 6.49.0: the child combinator, kept as '>' between the two parts, spaces round it dropped */
+                    if (on && one[on - 1] == ' ') one[on - 1] = '>'; else if (on && one[on - 1] != '>' && on < sizeof one - 1) { one[on++] = '>'; gaps++; } else simple = 0;
+                }
+                else if (is_ws(c[k])) { if (!is_ws(c[k - 1]) && on && one[on - 1] != '>') { gaps++; if (on < sizeof one - 1) one[on++] = ' '; } }   /* one space between the two parts */
                 else if (on < sizeof one - 1) one[on++] = c[k]; else simple = 0;
             }
+            if (on && (one[on - 1] == ' ' || one[on - 1] == '>')) simple = 0;   /* a combinator with nothing after it */
             if (none && simple && gaps <= 1 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = 1; anc_d[nhide++] = 0; }
             for (int act = 2; act <= 4; act++)   /* 6.47.0: a descendant rule that bolds (2) or aligns (3 centre, 4 right) */
                 if (simple && gaps == 1 && nhide < HIDE_MAX && (act == 2 ? bold : mid == act - 2)) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = (unsigned char)act; anc_d[nhide++] = 0; }
@@ -512,7 +516,12 @@ static int sel_match(const char *sel, unsigned sl, const char *tag, unsigned tn,
     if (sel[t] == '.') return attr(tag, tn, "class=", &cs, &cz) && word_in(tag + cs, cz - cs, w, wn);
     return attr(tag, tn, "id=", &is, &iz) && iz - is == wn && starts(tag + is, w);
 }
-static unsigned gap_of(const char *sel) { unsigned g = 0; while (sel[g] && sel[g] != ' ') g++; return g; }   /* where a descendant rule's two parts meet */
+static unsigned gap_of(const char *sel) { unsigned g = 0; while (sel[g] && sel[g] != ' ' && sel[g] != '>') g++; return g; }   /* where a descendant (' ') or child ('>', 6.49.0) rule's two parts meet */
+/* 6.49.0: how many elements are open where the reader is (gdep), and for each child rule how many were open around its
+   first part (anc_g): the second part matches only one level below. Unclosed <p> or <li> inside can only make it miss,
+   never hide more than the rule says. */
+static unsigned gdep, anc_g[HIDE_MAX];
+static int rule_under(unsigned r, const char *sel, unsigned g) { return anc_d[r] && (sel[g] != '>' || gdep == anc_g[r] + 1); }
 static int hidden_tag(const char *tag, unsigned tn, unsigned nl) {   /* tag[0..nl) is its name */
     unsigned s, z;
     for (unsigned k = nl; k + 6 <= tn; k++)   /* the bare hidden attribute */
@@ -521,14 +530,14 @@ static int hidden_tag(const char *tag, unsigned tn, unsigned nl) {   /* tag[0..n
     for (unsigned r = 0; r < nhide; r++) {
         const char *sel = hide_sel[r]; unsigned sl = slen(sel), g = gap_of(sel);
         if (hide_act[r] != 1) continue;
-        if (g == sl ? sel_match(sel, sl, tag, tn, nl) : anc_d[r] && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
+        if (g == sl ? sel_match(sel, sl, tag, tn, nl) : rule_under(r, sel, g) && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
     }
     return 0;
 }
 static int desc_rule(int act, const char *tag, unsigned tn, unsigned nl) {   /* 6.47.0: a descendant rule of that action names this element */
     for (unsigned r = 0; r < nhide; r++) {
         const char *sel = hide_sel[r]; unsigned sl = slen(sel), g = gap_of(sel);
-        if (hide_act[r] == act && g < sl && anc_d[r] && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
+        if (hide_act[r] == act && g < sl && rule_under(r, sel, g) && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
     }
     return 0;
 }
@@ -540,7 +549,7 @@ static void anc_track(const char *tag, unsigned tn, unsigned nl, int close, int 
             if (nl == anc_n[r]) { unsigned m = 0; while (m < nl && (tag[m] | 32) == anc_tag[r][m]) m++; if (m == nl && !lone) anc_d[r] += close ? -1u : 1u; }
         } else if (!close && !lone && nl < sizeof anc_tag[r] && sel_match(sel, g, tag, tn, nl)) {
             for (unsigned m = 0; m < nl; m++) anc_tag[r][m] = (char)(tag[m] | 32);
-            anc_n[r] = nl; anc_d[r] = 1;
+            anc_n[r] = nl; anc_d[r] = 1; anc_g[r] = gdep;
         }
     }
 }
@@ -550,7 +559,7 @@ static void field_show(unsigned f);
 static void to_text(const char *h, unsigned n) {
     unsigned o = 0, i = 0, skip = 0, space = 1;
     char htag[16]; unsigned hn = 0, hdepth = 0;   /* inside a hidden element: its name, and how deep its own tag is nested */
-    nhide = 0; nbold = 0; ncenter = 0;
+    nhide = 0; nbold = 0; ncenter = 0; gdep = 0;
     char btag[16]; unsigned bn = 0, bdepth = 0;   /* 6.34.0: the open bold-by-rule element: its name, how deep */
     char ctag[16]; unsigned cn = 0, cdepth = 0;   /* 6.35.0: the open centred element, the same way */
     for (unsigned k = 0; k + 7 < n; k++) if (h[k] == '<' && starts(h + k + 1, "style")) {   /* every <style>'s rules, first */
@@ -564,7 +573,7 @@ static void to_text(const char *h, unsigned n) {
     while (i < n) {
         char c = h[i];
         if (skip) {   /* inside script or style: only the literal closing tag ends it; a '<' in code is not a tag */
-            if (c == '<' && i + 1 < n && h[i + 1] == '/' && has_at(h, n, i + 2, skip == 1 ? "script" : "style")) { skip = 0; while (i < n && h[i] != '>') i++; }
+            if (c == '<' && i + 1 < n && h[i + 1] == '/' && has_at(h, n, i + 2, skip == 1 ? "script" : "style")) { skip = 0; while (i < n && h[i] != '>') i++; if (!hdepth && gdep) gdep--; }   /* 6.49.0: its open counted */
             i++; continue;
         }
         if (c == '<') {
@@ -588,7 +597,7 @@ static void to_text(const char *h, unsigned n) {
                 if (!is_lone) { for (unsigned m = 0; m < nl; m++) htag[m] = (char)(tag[m] | 32); hn = nl; hdepth = 1; }
                 i = e + 1; continue;
             }
-            if (nl && tag[0] != '!') anc_track(tag, tn, nl, close, is_lone);
+            if (nl && tag[0] != '!') { anc_track(tag, tn, nl, close, is_lone); if (!is_lone) gdep += close ? (gdep ? -1u : 0) : 1u; }
             if (!close && (is_tag(tag, tn, "a") || is_tag(tag, tn, "span") || is_tag(tag, tn, "button")) && o && text[o - 1] != ' ' && text[o - 1] != '\n') { o = put(text, o, ' '); space = 1; }   /* nav bars space their links with CSS we do not read */
             if (!close && (is_tag(tag, tn, "script") || is_tag(tag, tn, "style"))) skip = is_tag(tag, tn, "script") ? 1 : 2;
             else {
