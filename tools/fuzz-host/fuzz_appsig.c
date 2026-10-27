@@ -50,6 +50,7 @@ int main(int argc, char **argv) {
     if (one(name, img, il, sig, (unsigned)sl)) { puts("FAIL: one flipped image byte still verified"); return 1; }
     img[il / 2] ^= 1;
     if (one("other", img, il, sig, (unsigned)sl)) { puts("FAIL: the signature verified for another name"); return 1; }
+    free(img); free(sig);   /* LeakSanitizer runs on Linux (CI), not on a Mac */
     fprintf(stderr, "appsig-fuzz: %ld cases\n", g_cases);
     puts("APPSIG FUZZ: PASS");
     return 0;
