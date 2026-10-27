@@ -74,7 +74,7 @@ What is there today: Wi-Fi joins from the card's config, DNS and the clock come 
 
 The steps, one minor version each, cheapest unblock first:
 - [ ] [Sonnet] Keep-alive, once there is something to reuse a connection for (tabs, inline images): `net.c` holds one connection, so 6.12.0 sends `Connection: close`.
-- [ ] [Sonnet] More of CSS for reading: text-align and font-weight from rules, and descendant selectors for display:none (6.25.0 takes simple selectors only); no JavaScript for 7.0 (a decision to revisit at 8.0). More than four images a page, and progressive JPEG. Check: a fixture page's pixels.
+- [ ] [Sonnet] More of CSS for reading: text-align and font-weight from rules, and display:none for selectors of three parts or with > + ~ (6.33.0 takes two-part descendants); no JavaScript for 7.0 (a decision to revisit at 8.0). More than four images a page, and progressive JPEG. Check: a fixture page's pixels.
 - [ ] [Sonnet] Top Sites on Blackcomb's start page and history search from its address bar (6.27.0 searches at the Terminal), and a tab strip drawn above the page instead of "tab N of M" in the status line.
 - [ ] [Sonnet] Message bodies longer than one line from the Reply field, and Wi-Fi passwords typed in Settings in the keychain too.
 - [ ] [Sonnet] CalDAV deletes both ways, finding the calendar from an account address (principal and calendar-home-set discovery), and a sync that runs itself; 6.24.0 needs the collection's own address and `calendar sync`. Board pass: iCloud's real CalDAV.
@@ -1023,6 +1023,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **6.33.0 (2026-10-26)**: display:none rules with a descendant selector of two parts ("header .menu", ".nav li") hide too, so more of a page's menus and drawers stay out of the text. Each rule counts its first part's own nesting, the way a hidden element does. Check: `arm64-csshide-check.py` (two-part rules hide, nested lists inside count, a three-part rule is left alone).
 - **6.32.0 (2026-10-26)**: Mail in the dock and Spotlight is your real inbox. Once mail is signed in, the Mail tile, Spotlight's Mail and Samantha's open mail all open Blackcomb on mail:; before that they open the Mail app on the card's MAIL.TXT, as before. Check: `arm64-mailpages-check.py` (Mail from Spotlight, signed in).
 - **6.31.0 (2026-10-26)**: A form shows its changes at once. Tick a box and the page reads [x], pick a radio and the others clear, step a select and its label changes, type in a field and the text (or its stars) is there, all without a reload, at the Terminal and in Blackcomb. Check: `arm64-formctl-check.py` (`top` after the changes).
 - **6.30.0 (2026-10-26)**: A cookie whose Expires date is behind us is deleted, the way sites sign you out ("Thu, 01 Jan 1970 00:00:00 GMT", or the dashed spelling). Max-Age beats Expires when both are there. Before the network sets the clock the build time stands in. Check: `arm64-cookiekeep-check.py` (/expire: both spellings deleted, Max-Age kept).

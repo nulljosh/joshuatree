@@ -411,9 +411,13 @@ static int pseudo_link(const char *kind, unsigned k) {   /* field:K or submit:F 
 /* 6.25.0: what the page hides stays hidden. A pass over every <style> block collects the simple selectors (tag, .class,
    #id, tag.class, tag#id) whose rules say display:none; @media and other @-blocks, and selectors with spaces, combinators
    or pseudo-classes, are left out. An element with one of them, with the hidden attribute, or with an inline
-   display:none is skipped whole, nested elements and all: the menus, drawers and cookie banners a page keeps out of view. */
+   display:none is skipped whole, nested elements and all: the menus, drawers and cookie banners a page keeps out of view.
+   6.33.0: a descendant selector of two parts ("header .menu", ".nav ul") too. Each such rule watches for its first part
+   opening and counts that tag's own nesting, as a hidden element does, so the second part inside it is hidden.
+   ponytail: two parts at most; "a b c" and the > + ~ combinators are still left out. */
 #define HIDE_MAX 32
-static char hide_sel[HIDE_MAX][32]; static unsigned nhide;
+static char hide_sel[HIDE_MAX][48]; static unsigned nhide;
+static char anc_tag[HIDE_MAX][16]; static unsigned anc_n[HIDE_MAX], anc_d[HIDE_MAX];   /* a descendant rule's open first part: its tag, how deep */
 static int is_ws(char c) { return c == ' ' || c == '\n' || c == '\t' || c == '\r'; }
 static int says_none(const char *d, unsigned n) {   /* "display" ":" "none" in a declaration block */
     for (unsigned i = 0; i + 7 <= n; i++) if (starts(d + i, "display")) {
@@ -435,9 +439,13 @@ static void css_rules(const char *c, unsigned n) {
             while (a < sel_end && is_ws(c[a])) a++;
             unsigned b = a; while (b < sel_end && c[b] != ',') b++;
             unsigned e = b; while (e > a && is_ws(c[e - 1])) e--;
-            int simple = e > a && e - a < 32;
-            for (unsigned k = a; k < e && simple; k++) if (is_ws(c[k]) || c[k] == '>' || c[k] == '+' || c[k] == '~' || c[k] == '[' || c[k] == ':' || c[k] == '*') simple = 0;
-            if (simple && nhide < HIDE_MAX) { for (unsigned k = a; k < e; k++) hide_sel[nhide][k - a] = c[k]; hide_sel[nhide++][e - a] = 0; }
+            int simple = e > a, gaps = 0; char one[48]; unsigned on = 0;
+            for (unsigned k = a; k < e && simple; k++) {
+                if (c[k] == '>' || c[k] == '+' || c[k] == '~' || c[k] == '[' || c[k] == ':' || c[k] == '*') simple = 0;
+                else if (is_ws(c[k])) { if (!is_ws(c[k - 1])) { gaps++; if (on < sizeof one - 1) one[on++] = ' '; } }   /* one space between the two parts */
+                else if (on < sizeof one - 1) one[on++] = c[k]; else simple = 0;
+            }
+            if (simple && gaps <= 1 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; anc_d[nhide++] = 0; }
             a = b + 1;
         }
     }
@@ -450,22 +458,38 @@ static int word_in(const char *list, unsigned n, const char *w, unsigned wn) {  
     }
     return 0;
 }
+static int sel_match(const char *sel, unsigned sl, const char *tag, unsigned tn, unsigned nl) {   /* one part: tag, .class, #id, tag.class, tag#id */
+    unsigned t = 0, cs = 0, cz = 0, is = 0, iz = 0;
+    while (t < sl && sel[t] != '.' && sel[t] != '#') t++;   /* the tag part */
+    if (t) { if (t != nl) return 0; unsigned m = 0; while (m < t && (tag[m] | 32) == (sel[m] | 32)) m++; if (m < t) return 0; }
+    if (t == sl) return 1;   /* a bare tag name */
+    const char *w = sel + t + 1; unsigned wn = sl - t - 1;
+    if (sel[t] == '.') return attr(tag, tn, "class=", &cs, &cz) && word_in(tag + cs, cz - cs, w, wn);
+    return attr(tag, tn, "id=", &is, &iz) && iz - is == wn && starts(tag + is, w);
+}
+static unsigned gap_of(const char *sel) { unsigned g = 0; while (sel[g] && sel[g] != ' ') g++; return g; }   /* where a descendant rule's two parts meet */
 static int hidden_tag(const char *tag, unsigned tn, unsigned nl) {   /* tag[0..nl) is its name */
-    unsigned s, z, cs = 0, cz = 0, is = 0, iz = 0;
+    unsigned s, z;
     for (unsigned k = nl; k + 6 <= tn; k++)   /* the bare hidden attribute */
         if (is_ws(tag[k - 1]) && starts(tag + k, "hidden") && (k + 6 == tn || is_ws(tag[k + 6]) || tag[k + 6] == '=' || tag[k + 6] == '/')) return 1;
     if (attr(tag, tn, "style=", &s, &z) && says_none(tag + s, z - s)) return 1;
-    int has_c = attr(tag, tn, "class=", &cs, &cz), has_i = attr(tag, tn, "id=", &is, &iz);
     for (unsigned r = 0; r < nhide; r++) {
-        const char *sel = hide_sel[r]; unsigned sl = slen(sel), t = 0;
-        while (t < sl && sel[t] != '.' && sel[t] != '#') t++;   /* the tag part */
-        if (t) { if (t != nl) continue; unsigned m = 0; while (m < t && (tag[m] | 32) == (sel[m] | 32)) m++; if (m < t) continue; }
-        if (t == sl) return 1;   /* a bare tag name */
-        const char *w = sel + t + 1; unsigned wn = sl - t - 1;
-        if (sel[t] == '.' && has_c && word_in(tag + cs, cz - cs, w, wn)) return 1;
-        if (sel[t] == '#' && has_i && iz - is == wn && starts(tag + is, w)) return 1;
+        const char *sel = hide_sel[r]; unsigned sl = slen(sel), g = gap_of(sel);
+        if (g == sl ? sel_match(sel, sl, tag, tn, nl) : anc_d[r] && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
     }
     return 0;
+}
+static void anc_track(const char *tag, unsigned tn, unsigned nl, int close, int lone) {   /* 6.33.0: each descendant rule's first part, open or not */
+    for (unsigned r = 0; r < nhide; r++) {
+        const char *sel = hide_sel[r]; unsigned g = gap_of(sel);
+        if (!sel[g]) continue;
+        if (anc_d[r]) {   /* inside it: only its own tag's nesting counts */
+            if (nl == anc_n[r]) { unsigned m = 0; while (m < nl && (tag[m] | 32) == anc_tag[r][m]) m++; if (m == nl && !lone) anc_d[r] += close ? -1u : 1u; }
+        } else if (!close && !lone && nl < sizeof anc_tag[r] && sel_match(sel, g, tag, tn, nl)) {
+            for (unsigned m = 0; m < nl; m++) anc_tag[r][m] = (char)(tag[m] | 32);
+            anc_n[r] = nl; anc_d[r] = 1;
+        }
+    }
 }
 
 static void to_text(const char *h, unsigned n) {
@@ -500,13 +524,14 @@ static void to_text(const char *h, unsigned n) {
                 if (!close && (is_tag(tag, tn, "script") || is_tag(tag, tn, "style"))) skip = is_tag(tag, tn, "script") ? 1 : 2;
                 i = e + 1; continue;
             }
+            static const char *const lone[] = { "img", "input", "br", "hr", "meta", "link", "source", "wbr" };   /* no closing tag to wait for */
+            int is_lone = tn && tag[tn - 1] == '/';
+            for (unsigned v = 0; v < sizeof lone / sizeof lone[0] && !is_lone; v++) if (is_tag(tag, tn, lone[v])) is_lone = 1;
             if (!close && nl && nl < sizeof htag && tag[0] != '!' && hidden_tag(tag, tn, nl)) {
-                static const char *const lone[] = { "img", "input", "br", "hr", "meta", "link", "source", "wbr" };   /* no closing tag to wait for */
-                int is_lone = tag[tn - 1] == '/';
-                for (unsigned v = 0; v < sizeof lone / sizeof lone[0] && !is_lone; v++) if (is_tag(tag, tn, lone[v])) is_lone = 1;
                 if (!is_lone) { for (unsigned m = 0; m < nl; m++) htag[m] = (char)(tag[m] | 32); hn = nl; hdepth = 1; }
                 i = e + 1; continue;
             }
+            if (nl && tag[0] != '!') anc_track(tag, tn, nl, close, is_lone);
             if (!close && (is_tag(tag, tn, "a") || is_tag(tag, tn, "span") || is_tag(tag, tn, "button")) && o && text[o - 1] != ' ' && text[o - 1] != '\n') { o = put(text, o, ' '); space = 1; }   /* nav bars space their links with CSS we do not read */
             if (!close && (is_tag(tag, tn, "script") || is_tag(tag, tn, "style"))) skip = is_tag(tag, tn, "script") ? 1 : 2;
             else {
