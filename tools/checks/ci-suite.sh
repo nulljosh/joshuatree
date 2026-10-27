@@ -213,6 +213,7 @@ retry|1|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 once |4|PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
 once |4|iCalendar and CalDAV parser fuzz (ASan/UBSan, truncation+mutation; 6.48.1)|./tools/checks/ics-fuzz-check.sh
 once |4|Blackcomb page and Set-Cookie parser fuzz (ASan/UBSan, truncation+mutation; 6.48.2)|./tools/checks/browser-fuzz-check.sh
+once |4|IMAP reply and MIME parser fuzz (ASan/UBSan, truncation+mutation; 6.48.3)|./tools/checks/mail-fuzz-check.sh
 once |1|HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/parser-fuzz-check.sh
 once |7|Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan)|./tools/checks/input-bounds-check.sh
 once |2|Password hashing, host harness: PBKDF2-HMAC-SHA256 vectors (RFC 7914, RFC 6070 for SHA-256), legacy record upgrade, USERS.TXT parse|./tools/checks/auth-check.sh
