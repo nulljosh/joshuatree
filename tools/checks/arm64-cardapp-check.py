@@ -5,13 +5,15 @@ Builds the virt kernel, puts three files in JT/APPS/ on the check card (sdcard.p
 virtio disk, and at the Terminal:
   1. `userrun hi` runs HI.APP, a copy of the Makefile's uapp_hello.bin that the kernel's own table does not list: the card
      app is read (`M3c card app JT/APPS/HI.APP`), loads and runs at EL0 (`jt-hello: start`) and exits.
+  1b. 6.52.0, the SDK: tools/mkapp.sh builds sun.c, a C file outside the tree that calls libjt's strlen, into SUN.APP;
+     `userrun sun` prints its line and exits 7. mkapp refuses a name over eight characters.
   2. `userrun bad` is refused: BAD.APP has a good trailer but a relocation that points 4 GB past its image. uimg_ok says no
      before a page is touched (`M3c load FAIL bad: not a user image`).
   2b. `userrun evil` is refused: each of EVIL.APP's relocations is in bounds, but the first rewrites the second.
   3. `userrun big` is refused: BIG.APP is over the 256 KiB an app may be.
   4. `userrun a.b` is no program at all: a card name is letters, digits, - and _, eight at most.
   5. `userrun hi` again: the kernel carried on, and no KERNEL CRASH.
-Discriminating: make card_find in main.c return 0 and step 1 fails; take the relocation test out of uimg_ok and step 2
+Discriminating: drop the uapp_sdk.o rule from the Makefile and step 1b fails; make card_find in main.c return 0 and step 1 fails; take the relocation test out of uimg_ok and step 2
 writes past the app's pages and the kernel crashes; take out its list rule and step 2b does.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-cardapp-check.py   (from the repo root)
@@ -50,8 +52,22 @@ evil = bytes(4096) + struct.pack("<QQQQQQ", 4096 + 24, 1027, 8, 0, 1027, 0) + st
 (tmp / "EVIL.APP").write_bytes(evil)
 (tmp / "BIG.APP").write_bytes(bytes(300 * 1024))
 shutil.copy(arch / "uapp_hello.bin", tmp / "HI.APP")
+# 6.52.0, the SDK: tools/mkapp.sh builds one C file of nobody's into SUN.APP (a libjt call, a write, exit 7)
+(tmp / "sun.c").write_text("""#include "jtsys.h"
+#include "libjt/string.h"
+__attribute__((section(".text.start"), used))
+void _start(void) {
+    static const char m[] = "sun: made with the sdk\\n";
+    jt_write(1, m, (unsigned)strlen(m));
+    jt_exit(7);
+}
+""")
+mk = subprocess.run([str(root / "tools/mkapp.sh"), str(tmp / "sun.c"), str(tmp / "SUN.APP")], capture_output=True, text=True, timeout=300)
+check("tools/mkapp.sh builds sun.c into SUN.APP", mk.returncode == 0 and (tmp / "SUN.APP").exists() and (tmp / "SUN.APP").read_bytes()[-16:-12] == b"JTU1", mk.stdout + mk.stderr)
+mk = subprocess.run([str(root / "tools/mkapp.sh"), str(tmp / "sun.c"), str(tmp / "TOOLONGNAME.APP")], capture_output=True, text=True, timeout=60)
+check("tools/mkapp.sh refuses a name the card cannot take", mk.returncode != 0 and "1 to 8" in mk.stdout, mk.stdout + mk.stderr)
 if mt("mmd", "::JT").returncode or mt("mmd", "::JT/APPS").returncode: print("FAIL: mtools could not make JT/APPS on the check card"); sys.exit(1)
-for f in ("HI.APP", "BAD.APP", "EVIL.APP", "BIG.APP"):
+for f in ("HI.APP", "SUN.APP", "BAD.APP", "EVIL.APP", "BIG.APP"):
     if mt("mcopy", "-o", str(tmp / f), "::JT/APPS/" + f).returncode: print("FAIL: mtools could not copy " + f); sys.exit(1)
 
 log, sock = tmp / "uart", tmp / "qmp"
@@ -91,6 +107,8 @@ try:
     check("userrun hi reads JT/APPS/HI.APP, loads it and runs it at EL0 to its exit",
           "M3c card app JT/APPS/HI.APP: %d bytes" % (arch / "uapp_hello.bin").stat().st_size in out and "M3c load hi: " in out
           and "jt-hello: start" in out and "M3c app hi exit" in out, out)
+    out = say("userrun sun", "M3c app sun exit")
+    check("userrun sun runs the SDK's app: its line, then exit 7", "sun: made with the sdk\n" in out and "M3c app sun exit 7" in out, out)
     out = say("userrun bad", "userrun bad: ")
     check("a bad relocation is refused before it loads", "M3c load FAIL bad: not a user image" in out and "userrun bad: would not load" in out, out)
     out = say("userrun evil", "userrun evil: ")

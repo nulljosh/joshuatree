@@ -224,6 +224,11 @@ uapp_mail.o: ../../user/mailpi.c ../../user/jtsys.h $(UJT)/text.h
 	$(UCC) -c $< -o $@
 # notes.c finds its arena with (unsigned)_user_end, a 32-bit cast that is still exact here: the app window sits below 4 GiB.
 uapp_notes.o: UCC += -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast
+# 6.52.0, the app SDK: anyone's one C file (user/jtsys.h for the calls, libjt to link from, _start in .text.start) built
+# the way the apps above are, into the image the card takes. tools/mkapp.sh is the way in: it passes SRC, an absolute path.
+uapp_sdk.o: FORCE
+	@test -n "$(SRC)" || { echo "usage: tools/mkapp.sh FILE.c"; exit 1; }
+	$(UCC) -c "$(SRC)" -o $@
 uapp_%.bin: uapp_%.o $(UJTOBJ) user_c.ld
 	ld.lld -pie --no-dynamic-linker -z norelro -T user_c.ld --oformat binary -o $@ $< --start-lib $(UJTOBJ) --end-lib
 	@test "$$(tail -c 16 $@ | head -c 4)" = JTU1 || { rm -f $@; echo "$@: the JTU1 trailer is not the last 16 bytes (this linker added sections after it)"; exit 1; }
