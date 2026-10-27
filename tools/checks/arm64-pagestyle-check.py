@@ -6,11 +6,13 @@ A stub server on the host serves one page: an h1, an h3, a paragraph with a <b> 
 the address bar loads it. Then:
   - the UART says the window drew "heading big Big title here", "heading small Small title here" and
     "bold bold words", and never "bold plain words" (the run ends where </b> does); "bold Lead line here" and
-    "bold marked run", and never the words after the span or a paragraph no rule names;
+    "bold marked run", and never the words after the span or a paragraph no rule names; "centred at X" for the four
+    centred lines and not the plain one, the short title further in than the long line, on a second page (6.35.0) of
+    <center>, a div with an inline text-align:center, one a .mid rule centres, one with align=center and a plain div;
   - on a screendump the big heading's ink stands at least 1.4 times as tall as the paragraph's, inside the page well;
   - the Terminal's `browse` of the same page prints the words with no style bytes in them.
 Discriminating: drop the BR_BIG mark in browser.c's to_text and the big heading is neither logged nor taller; make
-says_bold return 0 and the lead and the span are drawn plain.
+says_bold return 0 and the lead and the span are drawn plain; drop the BR_CENTER mark and nothing is centred.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or PIL is missing.
 Usage: tools/checks/arm64-pagestyle-check.py   (from the repo root)
 """
@@ -33,9 +35,13 @@ PAGE = ("<html><head><title>Styled</title><style>.lead { font-weight: 700 } span
         "</head><body><h1>Big title here</h1><h3>Small title here</h3>"
         "<p>plain words <b>bold words</b> after</p><p class=lead>Lead line here</p>"
         "<p>more <span class=hl>marked run</span> tail end</p><p class=x>Light para</p></body></html>").encode()
+CENTRED = ("<html><head><title>Centred</title><style>.mid { text-align: center }</style></head><body>"
+           "<center>Centred title</center><div style=\"color:red; text-align:center\">Inline centred line</div>"
+           "<div class=mid>Rule centred</div><div align=center>Attr centred words here</div><div>Left after</div></body></html>").encode()
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200); self.send_header("Content-Length", str(len(PAGE))); self.end_headers(); self.wfile.write(PAGE)
+        body = CENTRED if self.path == "/centred" else PAGE
+        self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
     def log_message(self, *a): pass
 server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
 port = server.server_address[1]
@@ -102,6 +108,20 @@ try:
         return (rows[-1] - rows[0] + 1) if rows else 0
     big, body = ink_height(166, 202), ink_height(246, 266)   # rows 0-1 (the big heading), row 5 (the paragraph)
     check("the big heading stands taller than the paragraph (%d px against %d)" % (big, body), body > 0 and big >= body * 1.4, (big, body))
+    key("ctrl", "l"); n = len(uart())
+    type_text("http://10.0.2.2:%d/centred" % port); key("ret")
+    check("the centred page loaded", wait_for("browser: page ", 20, n), uart()[n:][-400:])
+    time.sleep(1.0)
+    out = uart()[n:]
+    mid = {}
+    for l in out.splitlines():
+        if "browser: shows centred at " in l:
+            x, _, words = l.split("browser: shows centred at ", 1)[1].partition(" ")
+            mid["".join(ch for ch in words if ch >= " ").strip()] = int(x)
+    want = ("Centred title", "Inline centred line", "Rule centred", "Attr centred words here")
+    check("<center>, align=center, an inline text-align and a text-align rule centre their line, and only theirs",
+          all(w in mid for w in want) and not any("Left after" in k or "Light para" in k for k in mid)
+          and mid.get("Centred title", 0) > mid.get("Attr centred words here", 1 << 30), mid)
 
     key("esc"); time.sleep(0.5); key("f2")
     check("the Terminal opened", wait_for("terminal open", 10), uart()[-300:])

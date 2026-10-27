@@ -36,6 +36,10 @@ void *kmalloc(unsigned int n);
 #define BR_PLAIN '\x04'
 /* 6.14.0: an inline image is a line of its own, BR_IMG then 0x10 + its number. The window draws the picture there. */
 #define BR_IMG '\x05'
+/* 6.35.0: BR_CENTER and BR_LEFT turn centring on and off; the state runs on across lines until BR_LEFT, and the window
+   centres a line when it is on where the line's text starts. */
+#define BR_CENTER '\x06'
+#define BR_LEFT '\x07'
 #define IMG_MAX 4
 #define IMG_W 400           /* logical px: an image is kept at most this wide and tall, scaled down to fit, never up */
 #define IMG_H 300
@@ -424,6 +428,16 @@ static char anc_tag[HIDE_MAX][16]; static unsigned anc_n[HIDE_MAX], anc_d[HIDE_M
 static int is_ws(char c) { return c == ' ' || c == '\n' || c == '\t' || c == '\r'; }
 #define BOLD_MAX 16
 static char bold_sel[BOLD_MAX][48]; static unsigned nbold;
+static char center_sel[BOLD_MAX][48]; static unsigned ncenter;   /* 6.35.0: one-part selectors whose text-align is center */
+static int says_center(const char *d, unsigned n) {   /* "text-align" ":" center */
+    for (unsigned i = 0; i + 10 <= n; i++) if (starts(d + i, "text-align")) {
+        unsigned k = i + 10; while (k < n && is_ws(d[k])) k++;
+        if (k >= n || d[k] != ':') continue;
+        k++; while (k < n && is_ws(d[k])) k++;
+        if (k + 6 <= n && starts(d + k, "center")) return 1;
+    }
+    return 0;
+}
 static int says_bold(const char *d, unsigned n) {   /* "font-weight" ":" bold, bolder, or 600 to 900 */
     for (unsigned i = 0; i + 11 <= n; i++) if (starts(d + i, "font-weight")) {
         unsigned k = i + 11; while (k < n && is_ws(d[k])) k++;
@@ -449,8 +463,8 @@ static void css_rules(const char *c, unsigned n) {
         if (i >= n) return;
         unsigned sel_end = i++, depth = 1, body = i;
         while (i < n && depth) { if (c[i] == '{') depth++; else if (c[i] == '}') depth--; i++; }
-        int none = says_none(c + body, i - 1 - body), bold = says_bold(c + body, i - 1 - body);
-        if (c[sel] == '@' || (!none && !bold)) continue;   /* @media and friends, or a rule that hides and bolds nothing */
+        int none = says_none(c + body, i - 1 - body), bold = says_bold(c + body, i - 1 - body), mid = says_center(c + body, i - 1 - body);
+        if (c[sel] == '@' || (!none && !bold && !mid)) continue;   /* @media and friends, or a rule that hides, bolds and centres nothing */
         for (unsigned a = sel; a < sel_end;) {   /* each selector of a comma list */
             while (a < sel_end && is_ws(c[a])) a++;
             unsigned b = a; while (b < sel_end && c[b] != ',') b++;
@@ -463,6 +477,7 @@ static void css_rules(const char *c, unsigned n) {
             }
             if (none && simple && gaps <= 1 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; anc_d[nhide++] = 0; }
             if (bold && simple && !gaps && nbold < BOLD_MAX) { for (unsigned k = 0; k < on; k++) bold_sel[nbold][k] = one[k]; bold_sel[nbold++][on] = 0; }
+            if (mid && simple && !gaps && ncenter < BOLD_MAX) { for (unsigned k = 0; k < on; k++) center_sel[ncenter][k] = one[k]; center_sel[ncenter++][on] = 0; }
             a = b + 1;
         }
     }
@@ -512,8 +527,9 @@ static void anc_track(const char *tag, unsigned tn, unsigned nl, int close, int 
 static void to_text(const char *h, unsigned n) {
     unsigned o = 0, i = 0, skip = 0, space = 1;
     char htag[16]; unsigned hn = 0, hdepth = 0;   /* inside a hidden element: its name, and how deep its own tag is nested */
-    nhide = 0; nbold = 0;
+    nhide = 0; nbold = 0; ncenter = 0;
     char btag[16]; unsigned bn = 0, bdepth = 0;   /* 6.34.0: the open bold-by-rule element: its name, how deep */
+    char ctag[16]; unsigned cn = 0, cdepth = 0;   /* 6.35.0: the open centred element, the same way */
     for (unsigned k = 0; k + 7 < n; k++) if (h[k] == '<' && starts(h + k + 1, "style")) {   /* every <style>'s rules, first */
         unsigned a = k + 6; while (a < n && h[a] != '>') a++;
         unsigned b = ++a; while (b + 7 < n && !(h[b] == '<' && h[b + 1] == '/' && starts(h + b + 2, "style"))) b++;
@@ -676,7 +692,7 @@ static void to_text(const char *h, unsigned n) {
                 }
                 else if (is_tag(tag, tn, "b") || is_tag(tag, tn, "strong")) { if (!in_title) o = put(text, o, close ? BR_PLAIN : BR_BOLD); }
                 else if (heading || is_tag(tag, tn, "p") || is_tag(tag, tn, "br") || is_tag(tag, tn, "div") || is_tag(tag, tn, "li") || is_tag(tag, tn, "tr")
-                         || is_tag(tag, tn, "ul") || is_tag(tag, tn, "ol") || is_tag(tag, tn, "table") || is_tag(tag, tn, "blockquote") || is_tag(tag, tn, "pre") || is_tag(tag, tn, "hr")) {
+                         || is_tag(tag, tn, "ul") || is_tag(tag, tn, "ol") || is_tag(tag, tn, "table") || is_tag(tag, tn, "blockquote") || is_tag(tag, tn, "pre") || is_tag(tag, tn, "hr") || is_tag(tag, tn, "center")) {
                     if (o && text[o - 1] != '\n') o = put(text, o, '\n');
                     if (!close && (heading || is_tag(tag, tn, "p")) && o && text[o - 1] == '\n' && !(o > 1 && text[o - 2] == '\n')) o = put(text, o, '\n');   /* a blank line before */
                     if (!close && is_tag(tag, tn, "li")) { o = put(text, o, '-'); o = put(text, o, ' '); }
@@ -691,6 +707,14 @@ static void to_text(const char *h, unsigned n) {
                             for (unsigned m = 0; m < nl; m++) btag[m] = (char)(tag[m] | 32);
                             bn = nl; bdepth = 1; o = put(text, o, BR_BOLD); break;
                         }
+                    }
+                    if (cdepth) {   /* 6.35.0: centred until its own tag's nesting closes */
+                        if (nl == cn) { unsigned m = 0; while (m < nl && (tag[m] | 32) == ctag[m]) m++; if (m == nl && !(cdepth += close ? -1u : 1u)) o = put(text, o, BR_LEFT); }
+                    } else if (!close && nl < sizeof ctag) {
+                        unsigned s, z; int mid = is_tag(tag, tn, "center") || (attr(tag, tn, "align=", &s, &z) && z - s == 6 && starts(tag + s, "center"))
+                                            || (attr(tag, tn, "style=", &s, &z) && says_center(tag + s, z - s));
+                        for (unsigned r = 0; r < ncenter && !mid; r++) mid = sel_match(center_sel[r], slen(center_sel[r]), tag, tn, nl);
+                        if (mid) { for (unsigned m = 0; m < nl; m++) ctag[m] = (char)(tag[m] | 32); cn = nl; cdepth = 1; o = put(text, o, BR_CENTER); }
                     }
                 }
             }

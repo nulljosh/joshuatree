@@ -30,6 +30,7 @@ static unsigned short br_off[BR_VL_MAX], br_len[BR_VL_MAX];   /* wrapped line i:
    its number and slice in br_off (k * 32 + slice); BR_ST_BOLD when the line starts inside <b>. */
 static unsigned char br_sty[BR_VL_MAX];
 #define BR_ST_BOLD 8
+#define BR_ST_CENTER 16   /* 6.35.0: the line is centred in the well */
 static int br_face(unsigned kind, int bold) { return kind == 1 || kind == 2 || bold ? 1 : 2; }   /* text.c: 1 sans bold, 2 sans */
 static int br_px(unsigned kind, int s) { return (kind == 1 ? 200 : 120) * s; }
 static unsigned br_n, br_lines;                              /* wrapped lines, and the page's own lines (the `page N lines` log) */
@@ -138,6 +139,7 @@ static void br_wrap(void) {   /* the page into lines that fit the well: break at
 #endif
     br_n = 0; br_lines = len ? 1 : 0;
     for (unsigned i = 0; i < len; i++) if (t[i] == '\n') br_lines++;
+    int center = 0;   /* 6.35.0: runs on across lines, BR_CENTER to BR_LEFT */
     for (unsigned i = 0; len && br_n < BR_VL_MAX;) {
         unsigned e = i; while (e < len && t[e] != '\n') e++;
         unsigned a = i, kind = 0; int bold = 0;
@@ -150,8 +152,11 @@ static void br_wrap(void) {   /* the page into lines that fit the well: break at
         }
         while (a < e && br_n < BR_VL_MAX) {
             unsigned b = a, sp = 0; int w = 0, start_bold = bold, b_at_sp = bold;
+            for (unsigned k = a; k < e && (unsigned char)t[k] < 0x20; k++) { if (t[k] == '\x06') center = 1; else if (t[k] == '\x07') center = 0; }
+            int line_center = center;
             while (b < e && b - a < 127) {
                 char c[2] = { t[b], 0 }; int cw = 0;
+                if (t[b] == '\x06') center = 1; else if (t[b] == '\x07') center = 0;
                 if (t[b] == '\x03') bold = 1; else if (t[b] == '\x04') bold = 0;
                 else if ((unsigned char)t[b] >= 0x20 && text_ok) cw = text_width(br_face(kind, bold), c, br_px(kind, s));
                 if (w + cw > maxw && b > a) break;
@@ -159,7 +164,7 @@ static void br_wrap(void) {   /* the page into lines that fit the well: break at
             }
             unsigned brk = b < e && sp > a ? sp : b;
             if (brk == sp && b < e) bold = b_at_sp;   /* the next line starts where this one broke, in the bold state of that point */
-            br_off[br_n] = (unsigned short)a; br_sty[br_n] = (unsigned char)(kind | (start_bold ? BR_ST_BOLD : 0)); br_len[br_n++] = (unsigned short)(brk - a);
+            br_off[br_n] = (unsigned short)a; br_sty[br_n] = (unsigned char)(kind | (start_bold ? BR_ST_BOLD : 0) | (line_center ? BR_ST_CENTER : 0)); br_len[br_n++] = (unsigned short)(brk - a);
             if (kind == 1 && br_n < BR_VL_MAX) { br_off[br_n] = (unsigned short)brk; br_sty[br_n] = 3; br_len[br_n++] = 0; }
             a = brk; while (a < e && t[a] == ' ') a++;
         }
@@ -255,6 +260,18 @@ void browser_paint(int report) {
             unsigned fg = fb_color(num ? BR_ACCENT : 0x001C1C1E);
             int px = (x + 6) * s, base = kind == 1 ? (ly + 24) * s : ly * s + 25 * s / 2;   /* gui_text's baseline; a big heading's sits 24 down its two rows */
             char run[128]; unsigned rn = 0;
+            if ((br_sty[vi] & BR_ST_CENTER) && text_ok) {   /* 6.35.0: measure the runs first, then start half the room in */
+                int lw = 0, b2 = bold;
+                for (unsigned k = 0; k <= n; k++) {
+                    unsigned char c = k < n ? (unsigned char)buf[k] : 0;
+                    if (c >= 0x20) { run[rn++] = (char)c; continue; }
+                    if (rn) { run[rn] = 0; lw += text_width(br_face(kind, b2), run, br_px(kind, s)); rn = 0; }
+                    if (c == 3) b2 = 1; else if (c == 4) b2 = 0;
+                }
+                int room = (w - 12) * s - lw;
+                if (room > 0) px += room / 2;
+                if (report) { con_quiet = 1; uart_puts("browser: shows centred at "); uart_dec((unsigned)px); uart_putc(' '); uart_puts(buf[0] >= 0x20 ? buf : buf + 1); uart_putc('\n'); }
+            }
             for (unsigned k = 0; k <= n; k++) {
                 unsigned char c = k < n ? (unsigned char)buf[k] : 0;
                 if (c >= 0x20) { run[rn++] = (char)c; continue; }
