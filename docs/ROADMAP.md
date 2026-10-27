@@ -2047,18 +2047,18 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-26, evening Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-27, morning Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand.** Main is 6.24.x: 7.0 Online's software list is in (Mozilla roots, real pages, styles, images, forms and cookies, tabs, downloads, IMAP and SMTP mail, calendar subscriptions and two-way CalDAV, the keychain, Wi-Fi picked on the Pi and in Settings), plus 6.25.0 hiding what pages hide. CI caches its apt downloads since the Azure mirror crawled on 2026-10-26. None of 6.11 onward has run on the board.
+**Where things stand.** Main is 6.46.0. 7.0 Online's software list is in: Mozilla roots, real pages, styles (headings, bold, CSS hiding with two-part selectors, font-weight, centred and right-aligned text), up to eight images a page in PNG, baseline and progressive JPEG, forms with checkboxes, selects and text areas, cookies kept per person, tabs with a strip, downloads, history search at the Terminal and as you type in the address bar, Top Sites, TLS session resumption, IMAP and SMTP mail as pages in Blackcomb and in the dock, calendar subscriptions, CalDAV with discovery, deletes both ways and a sync on opening Calendar, the keychain, and Wi-Fi picked on the Pi and in Settings. None of 6.11 onward has run on the board. CI flakes seen this run: pdesync once, and the apt mirror stalling the network and demo jobs; a rerun of the failed jobs passed each time.
 
-**Waiting on Joshua.** The 7.0 board day: a normal day of web, mail and calendar on the Pi (real iCloud IMAP, SMTP and CalDAV, real sites), a card with only JT/WIFI.TXT joining his network (#713 reworked the join; 0b952b10 is the last main before it), and the sign-in time on the Pi now that the keychain stretches the password twice. Then 7.0.0 needs his refreshed logo and UI, as every X.0.0 does. Two stale remote branches, `genie` and `buttons`, wait on a yes to delete.
+**Waiting on Joshua.** The 7.0 board day: a normal day of web, mail and calendar on the Pi (real iCloud IMAP, SMTP and CalDAV with `calendar caldav https://caldav.icloud.com/ APPLE-ID`, real sites), a card with only JT/WIFI.TXT joining his network (#713 reworked the join; 0b952b10 is the last main before it), and the sign-in time on the Pi now that the keychain stretches the password twice. A decision: Wi-Fi passwords typed in Settings into the keychain means no network before someone signs in. Then 7.0.0 needs his refreshed logo and UI, as every X.0.0 does. Two stale remote branches, `genie` and `buttons`, wait on a yes to delete.
 
 **Next, in order.**
-1. Merge the open PR on green.
-2. The 7.x follow-ups under Next priorities, top down: keep-alive, more of CSS, cookies kept per user, Top Sites and history search, CalDAV deletes and discovery, a Mail window, Wi-Fi joining without a restart.
-3. Whatever the board day shows is broken; then 7.0.0 with Joshua's logo and UI.
+1. Whatever the board day shows is broken; then 7.0.0 with Joshua's logo and UI.
+2. The 7.x leftovers under Next priorities: keep-alive, CSS descendants for font-weight and text-align, more than eight images, a CalDAV calendar picker and background sync, Wi-Fi joining without a restart, TLS 1.3.
+3. 8.0, Build things: the Plank compiler on the box and an SDK.
 
 Restart prompt:
 
