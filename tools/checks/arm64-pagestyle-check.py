@@ -9,6 +9,7 @@ the address bar loads it. Then:
     "bold marked run", and never the words after the span or a paragraph no rule names; "centred at X" for the four
     centred lines and not the plain one, the short title further in than the long line, on a second page (6.35.0) of
     <center>, a div with an inline text-align:center, one a .mid rule centres, one with align=center and a plain div;
+    "right at X" (6.44.0) for a .price rule's text-align:right and an align=right div, each further in than centring;
   - on a screendump the big heading's ink stands at least 1.4 times as tall as the paragraph's, inside the page well;
   - the Terminal's `browse` of the same page prints the words with no style bytes in them.
 Discriminating: drop the BR_BIG mark in browser.c's to_text and the big heading is neither logged nor taller; make
@@ -35,9 +36,10 @@ PAGE = ("<html><head><title>Styled</title><style>.lead { font-weight: 700 } span
         "</head><body><h1>Big title here</h1><h3>Small title here</h3>"
         "<p>plain words <b>bold words</b> after</p><p class=lead>Lead line here</p>"
         "<p>more <span class=hl>marked run</span> tail end</p><p class=x>Light para</p></body></html>").encode()
-CENTRED = ("<html><head><title>Centred</title><style>.mid { text-align: center }</style></head><body>"
+CENTRED = ("<html><head><title>Centred</title><style>.mid { text-align: center } .price{text-align:right}</style></head><body>"
            "<center>Centred title</center><div style=\"color:red; text-align:center\">Inline centred line</div>"
-           "<div class=mid>Rule centred</div><div align=center>Attr centred words here</div><div>Left after</div></body></html>").encode()
+           "<div class=mid>Rule centred</div><div align=center>Attr centred words here</div><div>Left after</div>"
+           "<div class=price>Rule righted</div><div align=right>Attr right</div></body></html>").encode()
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         body = CENTRED if self.path == "/centred" else PAGE
@@ -113,6 +115,11 @@ try:
     check("the centred page loaded", wait_for("browser: page ", 20, n), uart()[n:][-400:])
     time.sleep(1.0)
     out = uart()[n:]
+    right = {}
+    for l in out.splitlines():
+        if "browser: shows right at " in l:
+            x, _, words = l.split("browser: shows right at ", 1)[1].partition(" ")
+            right["".join(ch for ch in words if ch >= " ").strip()] = int(x)
     mid = {}
     for l in out.splitlines():
         if "browser: shows centred at " in l:
@@ -122,6 +129,8 @@ try:
     check("<center>, align=center, an inline text-align and a text-align rule centre their line, and only theirs",
           all(w in mid for w in want) and not any("Left after" in k or "Light para" in k for k in mid)
           and mid.get("Centred title", 0) > mid.get("Attr centred words here", 1 << 30), mid)
+    check("text-align:right and align=right set their lines flush right, further in than centred ones (6.44.0)",
+          set(right) == {"Rule righted", "Attr right"} and right["Rule righted"] > mid.get("Rule centred", 1 << 30) and right["Attr right"] > right["Rule righted"], (right, mid))
 
     key("esc"); time.sleep(0.5); key("f2")
     check("the Terminal opened", wait_for("terminal open", 10), uart()[-300:])

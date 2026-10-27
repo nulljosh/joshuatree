@@ -40,6 +40,7 @@ void *kmalloc(unsigned int n);
    centres a line when it is on where the line's text starts. */
 #define BR_CENTER '\x06'
 #define BR_LEFT '\x07'
+#define BR_RIGHT '\x08'   /* 6.44.0: as BR_CENTER, flush right; BR_LEFT ends it too */
 #define IMG_MAX 8           /* 6.36.0: was 4. Each is kept at IMG_W x IMG_H, 480 KiB, so eight hold 3.75 MiB of BSS */
 #define IMG_W 400           /* logical px: an image is kept at most this wide and tall, scaled down to fit, never up */
 #define IMG_H 300
@@ -433,12 +434,14 @@ static int is_ws(char c) { return c == ' ' || c == '\n' || c == '\t' || c == '\r
 #define BOLD_MAX 16
 static char bold_sel[BOLD_MAX][48]; static unsigned nbold;
 static char center_sel[BOLD_MAX][48]; static unsigned ncenter;   /* 6.35.0: one-part selectors whose text-align is center */
-static int says_center(const char *d, unsigned n) {   /* "text-align" ":" center */
+static unsigned char center_mode[BOLD_MAX];                          /* 6.44.0: 1 center, 2 right */
+static int says_center(const char *d, unsigned n) {   /* "text-align" ":" center (1), or right or end (2, 6.44.0) */
     for (unsigned i = 0; i + 10 <= n; i++) if (starts(d + i, "text-align")) {
         unsigned k = i + 10; while (k < n && is_ws(d[k])) k++;
         if (k >= n || d[k] != ':') continue;
         k++; while (k < n && is_ws(d[k])) k++;
         if (k + 6 <= n && starts(d + k, "center")) return 1;
+        if ((k + 5 <= n && starts(d + k, "right")) || (k + 3 <= n && starts(d + k, "end"))) return 2;
     }
     return 0;
 }
@@ -481,7 +484,7 @@ static void css_rules(const char *c, unsigned n) {
             }
             if (none && simple && gaps <= 1 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; anc_d[nhide++] = 0; }
             if (bold && simple && !gaps && nbold < BOLD_MAX) { for (unsigned k = 0; k < on; k++) bold_sel[nbold][k] = one[k]; bold_sel[nbold++][on] = 0; }
-            if (mid && simple && !gaps && ncenter < BOLD_MAX) { for (unsigned k = 0; k < on; k++) center_sel[ncenter][k] = one[k]; center_sel[ncenter++][on] = 0; }
+            if (mid && simple && !gaps && ncenter < BOLD_MAX) { for (unsigned k = 0; k < on; k++) center_sel[ncenter][k] = one[k]; center_sel[ncenter][on] = 0; center_mode[ncenter++] = (unsigned char)mid; }
             a = b + 1;
         }
     }
@@ -741,10 +744,11 @@ static void to_text(const char *h, unsigned n) {
                     if (cdepth) {   /* 6.35.0: centred until its own tag's nesting closes */
                         if (nl == cn) { unsigned m = 0; while (m < nl && (tag[m] | 32) == ctag[m]) m++; if (m == nl && !(cdepth += close ? -1u : 1u)) o = put(text, o, BR_LEFT); }
                     } else if (!close && nl < sizeof ctag) {
-                        unsigned s, z; int mid = is_tag(tag, tn, "center") || (attr(tag, tn, "align=", &s, &z) && z - s == 6 && starts(tag + s, "center"))
-                                            || (attr(tag, tn, "style=", &s, &z) && says_center(tag + s, z - s));
-                        for (unsigned r = 0; r < ncenter && !mid; r++) mid = sel_match(center_sel[r], slen(center_sel[r]), tag, tn, nl);
-                        if (mid) { for (unsigned m = 0; m < nl; m++) ctag[m] = (char)(tag[m] | 32); cn = nl; cdepth = 1; o = put(text, o, BR_CENTER); }
+                        unsigned s, z; int mid = is_tag(tag, tn, "center") ? 1 : 0;
+                        if (!mid && attr(tag, tn, "align=", &s, &z)) mid = z - s == 6 && starts(tag + s, "center") ? 1 : z - s == 5 && starts(tag + s, "right") ? 2 : 0;
+                        if (!mid && attr(tag, tn, "style=", &s, &z)) mid = says_center(tag + s, z - s);
+                        for (unsigned r = 0; r < ncenter && !mid; r++) if (sel_match(center_sel[r], slen(center_sel[r]), tag, tn, nl)) mid = center_mode[r];
+                        if (mid) { for (unsigned m = 0; m < nl; m++) ctag[m] = (char)(tag[m] | 32); cn = nl; cdepth = 1; o = put(text, o, mid == 2 ? BR_RIGHT : BR_CENTER); }
                     }
                 }
             }
