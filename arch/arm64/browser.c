@@ -418,7 +418,22 @@ static int pseudo_link(const char *kind, unsigned k) {   /* field:K or submit:F 
 #define HIDE_MAX 32
 static char hide_sel[HIDE_MAX][48]; static unsigned nhide;
 static char anc_tag[HIDE_MAX][16]; static unsigned anc_n[HIDE_MAX], anc_d[HIDE_MAX];   /* a descendant rule's open first part: its tag, how deep */
+/* 6.34.0: a rule whose font-weight is bold (or 600 and up) makes its element bold, as <b> does: the BR_BOLD mark when it
+   opens, BR_PLAIN when its own tag's nesting closes. One part selectors only. ponytail: one bold element at a time,
+   and the window starts each line plain, so a bold block broken by <br> is bold on its first line only. */
 static int is_ws(char c) { return c == ' ' || c == '\n' || c == '\t' || c == '\r'; }
+#define BOLD_MAX 16
+static char bold_sel[BOLD_MAX][48]; static unsigned nbold;
+static int says_bold(const char *d, unsigned n) {   /* "font-weight" ":" bold, bolder, or 600 to 900 */
+    for (unsigned i = 0; i + 11 <= n; i++) if (starts(d + i, "font-weight")) {
+        unsigned k = i + 11; while (k < n && is_ws(d[k])) k++;
+        if (k >= n || d[k] != ':') continue;
+        k++; while (k < n && is_ws(d[k])) k++;
+        if (k + 4 <= n && starts(d + k, "bold")) return 1;
+        if (k + 3 <= n && d[k] >= '6' && d[k] <= '9' && d[k + 1] == '0' && d[k + 2] == '0') return 1;
+    }
+    return 0;
+}
 static int says_none(const char *d, unsigned n) {   /* "display" ":" "none" in a declaration block */
     for (unsigned i = 0; i + 7 <= n; i++) if (starts(d + i, "display")) {
         unsigned k = i + 7; while (k < n && is_ws(d[k])) k++;
@@ -434,7 +449,8 @@ static void css_rules(const char *c, unsigned n) {
         if (i >= n) return;
         unsigned sel_end = i++, depth = 1, body = i;
         while (i < n && depth) { if (c[i] == '{') depth++; else if (c[i] == '}') depth--; i++; }
-        if (c[sel] == '@' || !says_none(c + body, i - 1 - body)) continue;   /* @media and friends, or a rule that hides nothing */
+        int none = says_none(c + body, i - 1 - body), bold = says_bold(c + body, i - 1 - body);
+        if (c[sel] == '@' || (!none && !bold)) continue;   /* @media and friends, or a rule that hides and bolds nothing */
         for (unsigned a = sel; a < sel_end;) {   /* each selector of a comma list */
             while (a < sel_end && is_ws(c[a])) a++;
             unsigned b = a; while (b < sel_end && c[b] != ',') b++;
@@ -445,7 +461,8 @@ static void css_rules(const char *c, unsigned n) {
                 else if (is_ws(c[k])) { if (!is_ws(c[k - 1])) { gaps++; if (on < sizeof one - 1) one[on++] = ' '; } }   /* one space between the two parts */
                 else if (on < sizeof one - 1) one[on++] = c[k]; else simple = 0;
             }
-            if (simple && gaps <= 1 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; anc_d[nhide++] = 0; }
+            if (none && simple && gaps <= 1 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; anc_d[nhide++] = 0; }
+            if (bold && simple && !gaps && nbold < BOLD_MAX) { for (unsigned k = 0; k < on; k++) bold_sel[nbold][k] = one[k]; bold_sel[nbold++][on] = 0; }
             a = b + 1;
         }
     }
@@ -495,7 +512,8 @@ static void anc_track(const char *tag, unsigned tn, unsigned nl, int close, int 
 static void to_text(const char *h, unsigned n) {
     unsigned o = 0, i = 0, skip = 0, space = 1;
     char htag[16]; unsigned hn = 0, hdepth = 0;   /* inside a hidden element: its name, and how deep its own tag is nested */
-    nhide = 0;
+    nhide = 0; nbold = 0;
+    char btag[16]; unsigned bn = 0, bdepth = 0;   /* 6.34.0: the open bold-by-rule element: its name, how deep */
     for (unsigned k = 0; k + 7 < n; k++) if (h[k] == '<' && starts(h + k + 1, "style")) {   /* every <style>'s rules, first */
         unsigned a = k + 6; while (a < n && h[a] != '>') a++;
         unsigned b = ++a; while (b + 7 < n && !(h[b] == '<' && h[b + 1] == '/' && starts(h + b + 2, "style"))) b++;
@@ -664,6 +682,16 @@ static void to_text(const char *h, unsigned n) {
                     if (!close && is_tag(tag, tn, "li")) { o = put(text, o, '-'); o = put(text, o, ' '); }
                     if (!close && heading) o = put(text, o, tag[1] <= '2' ? BR_BIG : BR_SMALL);   /* 6.13.0: the window draws it as a heading */
                     space = 1;
+                }
+                if (!in_title && nl && tag[0] != '!' && !is_lone) {   /* 6.34.0: bold from a rule, after the tag's own line break */
+                    if (bdepth) {
+                        if (nl == bn) { unsigned m = 0; while (m < nl && (tag[m] | 32) == btag[m]) m++; if (m == nl && !(bdepth += close ? -1u : 1u)) o = put(text, o, BR_PLAIN); }
+                    } else if (!close && nl < sizeof btag) {
+                        for (unsigned r = 0; r < nbold; r++) if (sel_match(bold_sel[r], slen(bold_sel[r]), tag, tn, nl)) {
+                            for (unsigned m = 0; m < nl; m++) btag[m] = (char)(tag[m] | 32);
+                            bn = nl; bdepth = 1; o = put(text, o, BR_BOLD); break;
+                        }
+                    }
                 }
             }
             i = e + 1; continue;

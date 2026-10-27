@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Page styles in Blackcomb (6.13.0): headings and bold come through as drawn type, not flat text.
 
-A stub server on the host serves one page: an h1, an h3, and a paragraph with a <b> run. Spotlight opens Blackcomb and
+A stub server on the host serves one page: an h1, an h3, a paragraph with a <b> run, and (6.34.0) a <style> whose
+.lead (font-weight 700) and span.hl (bold) rules make a paragraph and a span bold. Spotlight opens Blackcomb and
 the address bar loads it. Then:
   - the UART says the window drew "heading big Big title here", "heading small Small title here" and
-    "bold bold words", and never "bold plain words" (the run ends where </b> does);
+    "bold bold words", and never "bold plain words" (the run ends where </b> does); "bold Lead line here" and
+    "bold marked run", and never the words after the span or a paragraph no rule names;
   - on a screendump the big heading's ink stands at least 1.4 times as tall as the paragraph's, inside the page well;
   - the Terminal's `browse` of the same page prints the words with no style bytes in them.
-Discriminating: drop the BR_BIG mark in browser.c's to_text and the big heading is neither logged nor taller.
+Discriminating: drop the BR_BIG mark in browser.c's to_text and the big heading is neither logged nor taller; make
+says_bold return 0 and the lead and the span are drawn plain.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or PIL is missing.
 Usage: tools/checks/arm64-pagestyle-check.py   (from the repo root)
 """
@@ -26,8 +29,10 @@ if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
     print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
 tmp = Path(scratch_dir("arm64-pagestyle"))
 
-PAGE = ("<html><head><title>Styled</title></head><body><h1>Big title here</h1><h3>Small title here</h3>"
-        "<p>plain words <b>bold words</b> after</p></body></html>").encode()
+PAGE = ("<html><head><title>Styled</title><style>.lead { font-weight: 700 } span.hl{font-weight:bold} .x{font-weight:400}</style>"
+        "</head><body><h1>Big title here</h1><h3>Small title here</h3>"
+        "<p>plain words <b>bold words</b> after</p><p class=lead>Lead line here</p>"
+        "<p>more <span class=hl>marked run</span> tail end</p><p class=x>Light para</p></body></html>").encode()
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200); self.send_header("Content-Length", str(len(PAGE))); self.end_headers(); self.wfile.write(PAGE)
@@ -86,6 +91,8 @@ try:
     check("the h1 is drawn as a big heading", "browser: shows heading big Big title here" in out, out[-600:])
     check("the h3 is drawn as a small heading", "browser: shows heading small Small title here" in out, out[-600:])
     check("the <b> run is drawn bold, and only it", "browser: shows bold bold words" in out and "shows bold plain" not in out and "shows bold  after" not in out, out[-600:])
+    check("a font-weight rule makes its element bold, and only it", "browser: shows bold Lead line here" in out and "browser: shows bold marked run" in out
+          and "tail end" not in "".join(l for l in out.splitlines() if "shows bold" in l) and "shows bold Light" not in out, out[-600:])
 
     command("screendump", {"filename": str(tmp / "page.ppm")})
     img = Image.open(tmp / "page.ppm").convert("RGB")
