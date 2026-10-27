@@ -63,6 +63,11 @@ static int bm_find(const char *u) { for (unsigned i = 0; i < bm_n; i++) { unsign
 #define HS_FILE "HISTORY.TXT"
 static char hs_url[HS_MAX][BM_URL + 1], hs_title[HS_MAX][64];
 static unsigned hs_n;
+#define TP_MAX 4   /* 6.37.0: Top Sites, the most visited pages from HISTWORD.TXT (browser.c), between Favorites and Recent */
+static char tp_url[TP_MAX][BM_URL + 1], tp_title[TP_MAX][64];
+static unsigned tp_n;
+int browser_top_site(unsigned r, char *url, unsigned um, char *ttl, unsigned tm);
+static void tp_load(void) { tp_n = 0; while (tp_n < TP_MAX && browser_top_site(tp_n, tp_url[tp_n], sizeof tp_url[0], tp_title[tp_n], sizeof tp_title[0])) tp_n++; }
 static char br_list_buf[BM_MAX * (BM_URL + 66)];
 static int br_read(const char *name) {   /* the file into br_list_buf: ~/NAME first, else JT/NAME; its length, or <= 0 */
     char dir[HOME_DIR_MAX + 1]; int got = -1;
@@ -106,7 +111,8 @@ static void bm_load(void) {
     bm_loaded = 1;
     bm_n = br_list_parse(br_read(BM_FILE), bm_url, bm_title, BM_MAX);
     hs_n = br_list_parse(br_read(HS_FILE), hs_url, hs_title, HS_MAX);
-    con_quiet = 1; uart_puts("browser: bookmarks loaded "); uart_dec(bm_n); uart_puts(", recent "); uart_dec(hs_n); uart_putc('\n');
+    tp_load();
+    con_quiet = 1; uart_puts("browser: bookmarks loaded "); uart_dec(bm_n); uart_puts(", top "); uart_dec(tp_n); uart_puts(", recent "); uart_dec(hs_n); uart_putc('\n');
 }
 static int bm_save(void) { return br_list_save(BM_FILE, bm_url, bm_title, bm_n); }
 static void hs_add(const char *u, const char *t) {   /* a page that loaded goes to the top of Recent, once */
@@ -116,14 +122,25 @@ static void hs_add(const char *u, const char *t) {   /* a page that loaded goes 
     for (unsigned i = at; i > 0; i--) { br_set(hs_url[i], hs_url[i - 1], sizeof hs_url[0]); br_set(hs_title[i], hs_title[i - 1], sizeof hs_title[0]); }
     br_set(hs_url[0], u, sizeof hs_url[0]); br_set(hs_title[0], t, sizeof hs_title[0]);
     br_list_save(HS_FILE, hs_url, hs_title, hs_n);
+    tp_load();   /* 6.37.0: a visit may move a page into Top Sites */
 }
-/* The start page (6.7.0, Blackcomb's): Favorites, the bookmarks, then Recent under them, as many rows as the well holds.
-   Item k (1-based) runs through both; st_y is its row's top under the well, st_url its address. */
+/* The start page (6.7.0, Blackcomb's): Favorites, the bookmarks, then (6.37.0) Top Sites, then Recent, as many rows as
+   the well holds; a section with nothing in it takes no room. Item k (1-based) runs through all three; st_y is its
+   row's top under the well, st_sec its section (0, 1, 2) and place in it, st_url its address. */
 static int br_h(void);
-static int st_y(unsigned k) { return k <= bm_n ? BM_Y0 + (int)(k - 1) * BM_ROW : (bm_n ? BM_Y0 + (int)bm_n * BM_ROW + 6 : 6) + 24 + (int)(k - 1 - bm_n) * BM_ROW; }
-static unsigned st_count(void) { unsigned k = 0; while (k < bm_n + hs_n && st_y(k + 1) + BM_ROW <= br_h()) k++; return k; }
-static const char *st_url(unsigned k) { return k <= bm_n ? bm_url[k - 1] : hs_url[k - 1 - bm_n]; }
-static const char *st_title(unsigned k) { return k <= bm_n ? bm_title[k - 1] : hs_title[k - 1 - bm_n]; }
+static unsigned st_sec(unsigned k, unsigned *at) {
+    unsigned n[3] = { bm_n, tp_n, hs_n };
+    for (unsigned s = 0; s < 2; s++) { if (k <= n[s]) { *at = k; return s; } k -= n[s]; }
+    *at = k; return 2;
+}
+static int st_y(unsigned k) {
+    unsigned n[3] = { bm_n, tp_n, hs_n }, at, s = st_sec(k, &at); int y = 6;
+    for (unsigned t = 0; t < s; t++) if (n[t]) y += 24 + (int)n[t] * BM_ROW + 6;
+    return y + 24 + (int)(at - 1) * BM_ROW;
+}
+static unsigned st_count(void) { unsigned k = 0; while (k < bm_n + tp_n + hs_n && st_y(k + 1) + BM_ROW <= br_h()) k++; return k; }
+static const char *st_url(unsigned k) { unsigned at, s = st_sec(k, &at); return s == 0 ? bm_url[at - 1] : s == 1 ? tp_url[at - 1] : hs_url[at - 1]; }
+static const char *st_title(unsigned k) { unsigned at, s = st_sec(k, &at); return s == 0 ? bm_title[at - 1] : s == 1 ? tp_title[at - 1] : hs_title[at - 1]; }
 static int br_x(void) { return win_lx + 8; }
 static int br_w(void) { return win_lw - 16; }
 static int br_h(void) { return win_lh - BR_PAGE_Y - 26; }
@@ -297,7 +314,8 @@ void browser_paint(int report) {
         unsigned items = st_count();
         if (items) {   /* the start page: saved and recent pages stand in for the mascot */
             if (bm_n) gui_text("Favorites", x + 8, y + 6, 0x0075726E);
-            if (items > bm_n) gui_text("Recent", x + 8, y + st_y(bm_n + 1) - 24, 0x0075726E);
+            if (tp_n && items > bm_n) gui_text("Top Sites", x + 8, y + st_y(bm_n + 1) - 24, 0x0075726E);
+            if (items > bm_n + tp_n) gui_text("Recent", x + 8, y + st_y(bm_n + tp_n + 1) - 24, 0x0075726E);
             for (unsigned k = 1; k <= items; k++) {
                 int ly = y + st_y(k);
                 if (bm_sel == k) window_rect(x + 2, ly - 2, w - 4, BM_ROW, 0x00F3E2D8);
@@ -305,8 +323,9 @@ void browser_paint(int report) {
                 for (unsigned c = br_slen(nm); c && gui_text_width(nm) > w - 24; ) nm[--c] = 0;
                 gui_text(nm, x + 8, ly, 0x001C1C1E);
                 if (report) {
-                    con_quiet = 1; uart_puts(k <= bm_n ? "browser: shows bookmark " : "browser: shows recent ");
-                    uart_dec(k <= bm_n ? k : k - bm_n); uart_putc(' '); uart_puts(st_url(k)); uart_putc('\n');
+                    unsigned at, sec = st_sec(k, &at);
+                    con_quiet = 1; uart_puts(sec == 0 ? "browser: shows bookmark " : sec == 1 ? "browser: shows top " : "browser: shows recent ");
+                    uart_dec(at); uart_putc(' '); uart_puts(st_url(k)); uart_putc('\n');
                 }
             }
         } else {

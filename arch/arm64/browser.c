@@ -1057,24 +1057,37 @@ static void hist_line(unsigned n, const char *l, unsigned ln) {   /* "N  title  
     for (unsigned i = 0; i < un && o < sizeof b - 1; i++) b[o++] = u[i];
     say_wrapped("", b, o);
 }
+static unsigned hw_count(unsigned i, unsigned e) { unsigned c = 0; while (i < e && hw_buf[i] >= '0' && hw_buf[i] <= '9') c = c * 10 + (unsigned)(hw_buf[i++] - '0'); return c; }
+static unsigned hw_nth_top(unsigned got, unsigned r, unsigned *bi, unsigned *be) {   /* the line ranked r by visits (ties: newest first); its count, 0 when none */
+    for (unsigned i = 0; i < got;) {
+        unsigned e = i; while (e < got && hw_buf[e] != '\n') e++;
+        unsigned c = hw_count(i, e), rank = 0;
+        for (unsigned j = 0; j < got && c;) {
+            unsigned f = j; while (f < got && hw_buf[f] != '\n') f++;
+            unsigned d = hw_count(j, f);
+            if (d > c || (d == c && j < i)) rank++;
+            j = f + 1;
+        }
+        if (c && rank == r) { *bi = i; *be = e; return c; }
+        i = e + 1;
+    }
+    return 0;
+}
+/* 6.37.0: Top Sites for Blackcomb's start page: the r-th most visited page that has been visited twice or more. */
+int browser_top_site(unsigned r, char *url, unsigned um, char *ttl, unsigned tm) {
+    unsigned bi, be, got = (unsigned)hw_read();
+    if (hw_nth_top(got, r, &bi, &be) < 2) return 0;
+    const char *u, *t; unsigned un = hw_field(hw_buf + bi, be - bi, 1, &u), tn = hw_field(hw_buf + bi, be - bi, 2, &t);
+    scopy(url, u, un, um); scopy(ttl, t, tn, tm);
+    return 1;
+}
 static void history_command(const char *q, unsigned n) {   /* q is what follows "history" */
     while (n && *q == ' ') { q++; n--; }
     if (n == 5 && starts(q, "clear")) { kputs(hw_save("", 0) ? "browser: history cleared\n" : "browser: no card to clear it on\n"); return; }
     int got = hw_read(); unsigned shown = 0;
     if (n == 3 && starts(q, "top")) {   /* the five most visited, most first */
-        unsigned done[HW_MAX]; unsigned nd = 0;
-        for (unsigned r = 0; r < 5; r++) {
-            unsigned best = 0, best_i = 0, best_e = 0, li = 0;
-            for (unsigned i = 0; i < (unsigned)got; li++) {
-                unsigned e = i; while (e < (unsigned)got && hw_buf[e] != '\n') e++;
-                unsigned c = 0, k = i; while (k < e && hw_buf[k] >= '0' && hw_buf[k] <= '9') c = c * 10 + (unsigned)(hw_buf[k++] - '0');
-                int used = 0; for (unsigned m = 0; m < nd; m++) if (done[m] == li) used = 1;
-                if (!used && c > best) { best = c; best_i = i; best_e = e; done[nd] = li; }
-                i = e + 1;
-            }
-            if (!best) break;
-            nd++; hist_line(++shown, hw_buf + best_i, best_e - best_i);
-        }
+        unsigned bi, be;
+        for (unsigned r = 0; r < 5 && hw_nth_top((unsigned)got, r, &bi, &be); r++) hist_line(++shown, hw_buf + bi, be - bi);
     } else {
         for (unsigned i = 0; i < (unsigned)got && shown < 10;) {
             unsigned e = i; while (e < (unsigned)got && hw_buf[e] != '\n') e++;

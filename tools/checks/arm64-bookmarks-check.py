@@ -11,6 +11,9 @@ Boots the virt build with a keyboard, a tablet, a network card and the check car
   3. 6.7.0, Blackcomb: the first boot leaves JT/HISTORY.TXT, the pages opened newest first; the second boot opens it from
      Spotlight by the name Blackcomb and lists them under Recent (`browser: shows recent N URL`). Typed words with a space
      search (`browser: load https://html.duckduckgo.com/html/?q=raspberry+pi`), and a bare host gets https:// in front.
+  4. 6.37.0, Top Sites: before the second boot the card's JT/HISTWORD.TXT gets a page visited three times and one
+     visited once; the start page lists the first between Favorites and Recent (`browser: shows top 1 URL`), not the
+     second. Discriminating: make browser_top_site in browser.c return 0 and no top row is shown.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-bookmarks-check.py   (from the repo root)
 """
@@ -140,6 +143,10 @@ try:
     hist = mt("mtype", "::JT/HISTORY.TXT").stdout.decode(errors="replace")
     check("HISTORY.TXT holds the pages opened, newest first", hist == TWO + " Two\n" + ONE + " One\n", hist)
 
+    THREE = "http://10.0.2.2:%d/three" % port
+    hw = os.path.join(str(tmp), "histword")
+    open(hw, "w").write("3\t%s\tThree\tthree words\n1\thttp://10.0.2.2:%d/once\tOnce\tonce\n" % (THREE, port))
+    mt("mcopy", "-o", hw, "::JT/HISTWORD.TXT")
     seen.clear()
     b = Session("second"); b.connect()
     if not b.wait_for("M2 input ready", 40): print("FAIL: did not boot", b.uart()[-600:]); sys.exit(1)
@@ -148,6 +155,7 @@ try:
     check("Spotlight opens it by the name Blackcomb (second boot)", b.open_browser("blackcomb"), b.uart()[-400:])
     check("the card's two bookmarks load", b.wait_for("browser: bookmarks loaded 2", 5), b.uart()[-300:])
     check("the empty Browser lists both pages", b.wait_for("browser: shows bookmark 1 " + ONE, 5) and b.wait_for("browser: shows bookmark 2 " + TWO, 5), b.uart()[-500:])
+    check("Top Sites lists the page visited three times, not the one visited once (6.37.0)", b.wait_for("browser: shows top 1 " + THREE, 5) and "shows top 2" not in b.uart() and "/once" not in b.uart(), b.uart()[-500:])
     check("and Recent under them, newest first", b.wait_for("browser: shows recent 1 " + TWO, 5) and b.wait_for("browser: shows recent 2 " + ONE, 5), b.uart()[-500:])
     b.key("tab")
     check("Tab picks the first saved page", b.wait_for("browser: selected bookmark 1", 10), b.uart()[-300:])
