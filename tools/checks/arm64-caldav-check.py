@@ -14,6 +14,8 @@ Gym off EVENTS.TXT and never PUTs it, and leaves CALSYNC.TXT listing d1 alone.
 6.42.0, discovery: the good password is given with the server's root, https://10.0.2.2:PORT/. PROPFIND there names a
 principal, the principal names the calendar home by its full https address, and the home holds an inbox, a tasks list
 (VTODO only) and the event calendar; the Pi says it found /cal/joshua/ and syncs there.
+6.43.0: once CalDAV is set, opening Calendar from Spotlight syncs first (the deletes above happen there) and the app
+shows what came down; a `calendar sync` after it, and a second open, do not sync again from the open.
 Discriminating: drop the &amp; unescape in ics.c's dav_feed and SUBS.TXT says "Q&amp;A"; skip the CALSYNC.TXT read in
 dav_sync and jt-d0.ics stays on the server while Gym goes back up.
 Skips (exit 0) when clang's aarch64 target, ld.lld, openssl, qemu-system-aarch64 or mtools is missing.
@@ -151,6 +153,11 @@ try:
     n = len(uart()); line("calendar caldav https://10.0.2.2:%d/ %s" % (port, USER)); time.sleep(0.5); line(PASS); wait_for("calendar: CalDAV", 20, n)
     check("given the server's root, discovery finds the event calendar (6.42.0)", "calendar: found your calendar at %s\n" % url in uart()[n:]
           and [p for p, _ in finds[-3:]] == ["/", "/principals/joshua/", "/cal/"] and finds[-1][1] == "1", (finds, uart()[n:][-300:]))
+    key("esc"); time.sleep(0.5)
+    n = na = len(uart()); key("f1"); [key(c) for c in "calendar"]; key("ret")
+    check("opening Calendar syncs first, and the app shows what came down (6.43.0)", wait_for("calendar: syncing before Calendar opens", 20, n)
+          and wait_for("calendar: 1 of your days sent", 30, n) and wait_for("calendar: subscribed events 2", 30, n), uart()[n:][-400:])
+    key("esc"); time.sleep(0.5); key("f2"); wait_for("terminal open", 10, n)
     n = len(uart()); line("calendar sync")
     check("sync sends the person's day and reads the calendar back", wait_for("calendar: 1 of your days sent", 30, n) and wait_for("calendar: 3 events read, 3 days kept in SUBS.TXT", 30, n), uart()[n:][-400:])
     sent = puts[-1] if puts else ("", "")
@@ -158,12 +165,13 @@ try:
           and "DTSTART;VALUE=DATE:%s" % ymd(d1) in sent[1] and "SUMMARY:Dentist\\, 10am" in sent[1], sent)
     check("with exactly the user and app password", auths[-1] == AUTH, auths[-1:])
     check("a day deleted here is deleted on the server (6.41.0)", deletes == ["/cal/joshua/jt-%s.ics" % ymd(d0)] and "jt-%s.ics" % ymd(d0) not in store
-          and "calendar: 1 day deleted here, taken off the server" in uart()[n:], (deletes, uart()[n:][-300:]))
-    check("a day deleted on the server is taken off here, not sent back", "calendar: 1 day deleted on the server, taken off here" in uart()[n:]
-          and not any(ymd(d5) in p for p, _ in puts), (puts, uart()[n:][-300:]))
+          and "calendar: 1 day deleted here, taken off the server" in uart()[na:], (deletes, uart()[na:][-300:]))
+    check("a day deleted on the server is taken off here, not sent back", "calendar: 1 day deleted on the server, taken off here" in uart()[na:]
+          and not any(ymd(d5) in p for p, _ in puts), (puts, uart()[na:][-300:]))
     key("esc"); time.sleep(0.5)
     n = len(uart()); key("f1"); [key(c) for c in "calendar"]; key("ret")
     check("Calendar shows the two days the person has no event on", wait_for("calendar: subscribed events 2", 20, n), uart()[n:][-300:])
+    check("and does not sync again within 15 minutes", "syncing before Calendar opens" not in uart()[n:], uart()[n:][-300:])
     check("the app password never reaches the UART", PASS not in uart() and "wrong-pass-1" not in uart())
 finally:
     q.kill(); q.wait(); server.shutdown()

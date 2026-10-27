@@ -281,6 +281,7 @@ void dock_activate(int slot) {   /* a dock tile, from a click, a dock key, Spotl
     brick_close();
     clock_close();
     browser_close();
+    if (slot == 3) ics_autosync();   /* 6.43.0: Calendar syncs CalDAV first (ics.c) */
     if (app_dock(dock_app_name(slot))) return;   /* slot 1 is the Burrow tile: the file window, called Finder on the Pi */   /* Calendar, Notes, Music and Books: user/NAME.c at EL0, in its own window */
     if (slot == 7) { ask_prefill("sam "); pane_open(&term_p); sam_fill(); ask_redraw(); con_quiet = 1; uart_puts("dock Samantha: sam ready\n"); return; }   /* 3.9.8: the Samantha tile is the Terminal with `sam ` already typed */
     if (slot == 6) { pane_open(&term_p); return; }   /* dock_names[6], Terminal: the command line, in front of an open Calculator */
