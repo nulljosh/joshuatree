@@ -206,7 +206,8 @@ int app_dock(const char *name) {
     return 0;
 }
 /* 6.53.0: an app in JT/APPS, from its Spotlight row only, so a card app can never stand in for a dock tile's own (TERMINAL.APP
-   is not the Terminal). Open already: its window comes up; card_find never takes a table app's name. */
+   is not the Terminal). Open already: its window comes up; card_find never takes a table app's name. 6.54.0: an unsigned one only
+   with no accounts or while sudo is live. */
 int app_dock_card(const char *name) {
     unsigned n = 0; while (name[n]) n++;
     for (unsigned k = 0; k < APP_SLOTS; k++) {
@@ -215,7 +216,7 @@ int app_dock_card(const char *name) {
         while (i < n && (name[i] | 32) == c->name[i]) i++;
         if (i == n && !c->name[n]) { ap = &apps[k]; app_raise(); return 1; }
     }
-    const struct user_app *a = card_find(name, n);
+    const struct user_app *a = card_find(name, n, card_unsigned_ok());
     return a ? app_go(a) : 0;
 }
 

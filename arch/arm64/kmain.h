@@ -444,9 +444,11 @@ extern int user_faulted;
 const struct user_app *user_find(const char *name, unsigned n);
 void user_init(const char *img, unsigned long len);
 unsigned long user_load(const struct user_app *a);
-const struct user_app *card_find(const char *name, unsigned n);   /* 6.51.0: JT/APPS/NAME.APP, read and ready for app_start; 0 when there is none */
-int card_list(char (*out)[9], int max);
-int card_row_is(const struct user_app *a);   /* 6.53.0: the names in JT/APPS that card_find takes, for Spotlight */
+const struct user_app *card_find(const char *name, unsigned n, int allow_unsigned);   /* 6.51.0: JT/APPS/NAME.APP, read, its signature checked (6.54.0), ready for app_start; 0 when there is none or it is refused (card_err) */
+int card_list(char (*out)[9], int max, int allow_unsigned);   /* 6.53.0: the names in JT/APPS that card_find takes, for Spotlight */
+int card_row_is(const struct user_app *a);
+int card_unsigned_ok(void);   /* 6.54.0: no accounts, or sudo is live: an unsigned app may run from Spotlight */
+extern int card_err;
 int user_run(const struct user_app *a);
 extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[], user_entry_e[], user_entry_f[];
 extern unsigned long user_status;

@@ -23,7 +23,7 @@ int ask_command(const char *q, unsigned n);                        /* ask.c: "st
 void ask_claude(const char *q, unsigned n);                        /* ask.c: `llm PROMPT` */
 void sam_command(const char *q, unsigned n);                       /* ask.c: `sam QUESTION`, queued and answered without blocking the prompt */
 int ask_busy(void);                                                /* ask.c: a `sam` request is waiting on the relay */
-int userrun(const char *name, unsigned n, unsigned long *status, int *faulted);   /* main.c: load an app from the table and run it at EL0 */
+int userrun(const char *name, unsigned n, int allow_unsigned, unsigned long *status, int *faulted);   /* main.c: load an app from the table and run it at EL0 */
 
 int audio_tone(int freq_hz, int ms);                               /* audio.c: the 3.5 mm jack, polled PWM */
 int audio_volume(void);                                            /* audio.c: the master volume, 0 to 100 */
@@ -169,11 +169,18 @@ int volume_key(unsigned code) {
 /* userrun NAME: load the user program NAME (hello, calendar, notes, music, loop) from the image table and run it at EL0, its first writes
    on the screen, then say how it ended, or that it is still running: an app that yields (one with a window does) carries on
    from the desktop's loop (M3c part 2), and its red dot or its own Esc ends it. One app at a time. */
+static int sudo_run;   /* (below) */
 static void userrun_command(const char *name, unsigned n) {
     unsigned long status = 0; int faulted = 0;
-    int r = userrun(name, n, &status, &faulted);
+    int r = userrun(name, n, !accounts_count() || sudo_run, &status, &faulted);   /* 6.54.0: an unsigned app on the card is an admin's, like any write to JT/ */
     if (r == -1) { cmd_out("userrun: no program called that, try hello, calendar, notes, music or loop, or put NAME.APP in JT/APPS\n"); return; }
     if (r == -3) { cmd_out("userrun: an app is already running, close it first\n"); return; }
+    if (r == -4 || r == -5) {
+        cmd_out("userrun ");
+        for (unsigned i = 0; i < n; i++) { char c[2] = { name[i], 0 }; cmd_out(c); }
+        cmd_out(r == -4 ? ": not signed, so only an admin runs it: sudo userrun NAME\n" : ": its signature does not match it, so it does not run (tools/signapp.sh signs it again)\n");
+        return;
+    }
     cmd_out("userrun ");
     for (unsigned i = 0; i < n; i++) { char c[2] = { name[i], 0 }; cmd_out(c); }
     if (r == 2) cmd_out(": running in its window\n");

@@ -77,7 +77,7 @@ void spot_open(void) {
     cur_hide();
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) spot_under[j * w + i] = fb[(unsigned)(spot_ly * s + j) * fb_pitch + (unsigned)(spot_lx * s + i)];
     spot_live = 1; spot_tree = 0; spot_len = 0; spot_text[0] = 0; spot_sel = 0;
-    card_n = card_list(card_disp, CARD_MAX);
+    card_n = card_list(card_disp, CARD_MAX, card_unsigned_ok());
     for (int c = 0; c < card_n; c++) if (card_disp[c][0] >= 'a' && card_disp[c][0] <= 'z') card_disp[c][0] -= 32;
     con_quiet = 1; uart_puts("spotlight open\n");
     spot_paint();

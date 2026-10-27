@@ -745,7 +745,9 @@ void _start(void) {
 }
 ```
 
-`tools/mkapp.sh sun.c` builds it into `SUN.APP` with the flags the built-in apps use. Copy that to `JT/APPS/` on the card and `userrun sun` runs it. The calls an app can make are the system calls in `docs/ARCHITECTURE.md`; the built-in apps in `user/` are the examples. An app with a window opens it with `jt_window_open` and loops on `jt_window_poll`, the way `user/calendar.c` does.
+`tools/mkapp.sh sun.c` builds it into `SUN.APP` with the flags the built-in apps use. `tools/signapp.sh SUN.APP` signs it as `SUN.SIG` (6.54.0). Copy that to `JT/APPS/` on the card and `userrun sun` runs it. The calls an app can make are the system calls in `docs/ARCHITECTURE.md`; the built-in apps in `user/` are the examples. An app with a window opens it with `jt_window_open` and loops on `jt_window_poll`, the way `user/calendar.c` does.
+
+Signed apps (6.54.0). Put `NAME.SIG` beside `NAME.APP` and anyone can run it. Without one, only an admin can: `sudo userrun NAME`, and for five minutes after that Spotlight lists it too. On a Pi with no accounts everything runs, as before. A signature that does not match (the app changed after it was signed, another key signed it, or it was copied to a new name) is refused every time, sudo or not. The kernel trusts one key, Joshua's: `tools/signapp.sh --new-key` made it, the private half lives in `~/.config/joshuatree/app-signing.pem` (keep a copy somewhere safe; a lost key means a new kernel and new signatures) and the public half is `arch/arm64/app_key.h`.
 
 ### Accounts
 
