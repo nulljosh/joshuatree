@@ -20,6 +20,8 @@ unsigned long heap_mark(void);
 void heap_release(unsigned long m);
 void ask_mail_password(const char *user);                            /* cmd.c: the stars prompt, then mail_password() */
 void browser_render(const char *html, unsigned n, const char *name);  /* browser.c */
+int keychain_get(const char *item, char *out, unsigned max);          /* keychain.c, 6.21.0 */
+int keychain_set(const char *item, const char *value);
 
 #define MAIL_PORT 993
 #define MAIL_LIST 10
@@ -38,7 +40,24 @@ static int starts(const char *s, const char *w) { for (; *w; s++, w++) if ((*s |
 static int same(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 static void copy(char *d, const char *s, unsigned n, unsigned max) { if (n >= max) n = max - 1; for (unsigned i = 0; i < n; i++) d[i] = s[i]; d[n] = 0; }
 static void forget(void) { accounts_wipe(m_pass, sizeof m_pass); m_ready = 0; m_n = 0; m_owner[0] = 0; }
-static int mine(void) { if (m_ready && !same(m_owner, current_user)) forget(); return m_ready; }   /* another account, or a sign-out: wiped */
+static int mine(void) {   /* another account, or a sign-out: wiped; then the signed-in person's keychain may sign mail in again */
+    if (m_ready && !same(m_owner, current_user)) forget();
+    if (m_ready) return 1;
+    char v[400]; int k = keychain_get("mail", v, sizeof v);   /* "host port user password" */
+    if (k < 0) cmd_out("mail: your keychain did not open (changed on the card, or sealed before a password reset)\n");
+    if (k == 1) {
+        unsigned i = 0, a = 0;
+        while (v[i] && v[i] != ' ') i++;
+        copy(m_host, v, i, sizeof m_host); a = ++i;
+        unsigned port = 0; while (v[i] >= '0' && v[i] <= '9') port = port * 10 + (unsigned)(v[i++] - '0');
+        m_port = (unsigned short)(port && port < 65536 ? port : MAIL_PORT); a = ++i;
+        while (v[i] && v[i] != ' ') i++;
+        copy(m_user, v + a, i - a, sizeof m_user);
+        if (v[i] == ' ') { copy(m_pass, v + i + 1, slen(v + i + 1), sizeof m_pass); copy(m_owner, current_user, slen(current_user), sizeof m_owner); m_ready = m_host[0] && m_user[0] && m_pass[0]; }
+    }
+    accounts_wipe(v, sizeof v);
+    return m_ready;
+}
 
 /* One tagged command, its whole reply into rb (literals {n} skipped as they come, so a message holding "a03 OK" cannot end
    it early). 1 on OK, 0 on NO or BAD, -1 when the connection failed or the reply would not fit. */
@@ -410,7 +429,18 @@ void mail_password(const char *pass) {
     m_ready = 1;
     unsigned long mark = heap_mark();
     int ok = open_session();
-    if (ok) { close_session(); cmd_out("mail: signed in as "); cmd_out(m_user); cmd_out(" at "); cmd_out(m_host); cmd_out("; mail lists the inbox\n"); }
+    if (ok) {
+        close_session(); cmd_out("mail: signed in as "); cmd_out(m_user); cmd_out(" at "); cmd_out(m_host); cmd_out("; mail lists the inbox\n");
+        char v[400]; unsigned o = 0;   /* 6.21.0: kept in the keychain, so a restart does not ask again */
+        for (const char *p = m_host; *p && o < 200; p++) v[o++] = *p;
+        v[o++] = ' '; char d[6]; unsigned z = 0, pv = m_port; do d[z++] = (char)('0' + pv % 10); while (pv /= 10); while (z) v[o++] = d[--z];
+        v[o++] = ' '; for (const char *p = m_user; *p && o < 300; p++) v[o++] = *p;
+        v[o++] = ' '; for (const char *p = m_pass; *p && o < sizeof v - 1; p++) v[o++] = *p;
+        v[o] = 0;
+        int k = keychain_set("mail", v);
+        accounts_wipe(v, sizeof v);
+        cmd_out(k == 1 ? "mail: kept in your keychain\n" : k == 0 ? "mail: nobody is signed in, so it stays in memory until a restart\n" : "mail: your keychain would not take it, so it stays in memory\n");
+    }
     else forget();
     heap_release(mark);
 }
@@ -420,7 +450,7 @@ int mail_command(const char *q, unsigned n) {   /* 1 when it was a mail command 
     if (n == 4) { if (!m_ready) cmd_out("mail: not signed in, use mail login HOST USER\n"); else list(); return 1; }
     const char *a = q + 5; unsigned an = n - 5;
     while (an && *a == ' ') { a++; an--; }
-    if (an == 6 && starts(a, "logout")) { forget(); cmd_out("mail: signed out, the app password forgotten\n"); return 1; }
+    if (an == 6 && starts(a, "logout")) { forget(); keychain_set("mail", 0); cmd_out("mail: signed out, the app password forgotten\n"); return 1; }
     if (an > 6 && starts(a, "login ")) {
         unsigned i = 6; while (i < an && a[i] == ' ') i++;
         unsigned h0 = i; while (i < an && a[i] != ' ') i++;
