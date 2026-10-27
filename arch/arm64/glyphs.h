@@ -1,7 +1,7 @@
 /* Small flat glyphs for the menu bar and Settings' sidebar: bold shapes, no text, one ink, drawn from a few circles, rounded
    boxes and capsules on a 256 unit square. Each pixel takes 4x4 samples, so the edges are anti-aliased at scale 1 and 2 and
    the glyph sits on any background. #included into main.c (it paints through fb, fb_pitch and fb_color). */
-enum { GL_ABOUT, GL_DISPLAY, GL_SOUND, GL_DOCK, GL_CLOCK, GL_POWER, GL_USER };
+enum { GL_ABOUT, GL_DISPLAY, GL_SOUND, GL_DOCK, GL_CLOCK, GL_POWER, GL_USER, GL_WIFI };
 
 static int g_circle(int x, int y, int cx, int cy, int r) { int dx = x - cx, dy = y - cy; return dx * dx + dy * dy <= r * r; }
 static int g_box(int x, int y, int x0, int y0, int x1, int y1, int r) {   /* a rounded box: [x0,x1) by [y0,y1), corner radius r */
@@ -40,6 +40,12 @@ static int glyph_in(int kind, int level, int x, int y) {
         return d2 <= 98 * 98 && d2 >= 66 * 66 && !(dy < 0 && dx > -34 && dx < 34); }
     case GL_USER:    /* a head over a pair of shoulders */
         return g_circle(x, y, 128, 84, 50) || g_box(x, y, 36, 150, 220, 226, 38);
+    case GL_WIFI: {  /* 6.23.0: a dot under three arcs, opening upward */
+        int dx = x - 128, dy = y - 206, d2 = dx * dx + dy * dy;
+        if (g_circle(x, y, 128, 206, 22)) return 1;
+        if (dy >= 0 || (dx < 0 ? -dx : dx) > -dy) return 0;
+        for (int k = 0; k < 3; k++) { int ri = 52 + 52 * k, ro = ri + 28; if (d2 >= ri * ri && d2 <= ro * ro) return 1; }
+        return 0; }
     }
     return 0;
 }

@@ -64,7 +64,7 @@ Content lays itself out again to fit: the Console and Terminal change columns an
 
 ### Wi-Fi: from switching on to asking a question
 
-The Pi needs a network name and password before it can join. Since 6.22.0 you can pick it on the Pi: at the Terminal, `wifi` lists the networks it heard at start, `wifi join NAME` asks for the password with stars, works out the network key on the Pi and saves it as `JT/WIFI.TXT` (the name and the key, never the password); the Pi joins it at its next start. A development card can also carry one built in, prepared on the Mac:
+The Pi needs a network name and password before it can join. Since 6.22.0 you can pick it on the Pi: in Settings, Wi-Fi lists the networks it heard (Enter, pick one, type its password, Enter), or at the Terminal, `wifi` lists the networks it heard at start, `wifi join NAME` asks for the password with stars, works out the network key on the Pi and saves it as `JT/WIFI.TXT` (the name and the key, never the password); the Pi joins it at its next start. A development card can also carry one built in, prepared on the Mac:
 
 **Prepare the card.**
 1. Create `~/.config/joshuatree/wifi.conf` with two lines: `ssid=YOUR_NETWORK_NAME` (up to 32 bytes) and `psk=YOUR_NETWORK_PASSWORD` (8 to 63 characters).
