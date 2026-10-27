@@ -370,10 +370,24 @@ jobs:
   network:
     runs-on: ubuntu-24.04
     continue-on-error: true
-    timeout-minutes: 15
+    # 2026-10-27: 15 minutes was not enough once the Azure mirror crawled (about 20 KB/s): the installs ate the time, the
+    # job was cancelled, and a cancelled job shows as a failure that blocks the PR even with continue-on-error. Its
+    # .deb files are now cached like the demo job's, and it gets 25 minutes.
+    timeout-minutes: 25
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     steps:
       - uses: actions/checkout@v5
+      - name: Restore downloaded packages
+        id: debs
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-debs
+          key: apt-debs-network-24.04-v1
+      - name: Keep apt's downloads and put the cached ones back
+        run: |
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true"; APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/01keep-debs >/dev/null
+          sudo rm -f /etc/apt/apt.conf.d/docker-clean
+          if ls ~/apt-debs/*.deb >/dev/null 2>&1; then sudo cp ~/apt-debs/*.deb /var/cache/apt/archives/; fi
       - name: Install clang, lld, qemu
         run: |
           # a stalled mirror connection gives up after 20 s and retries, and the update is tried up to three times, so a
@@ -381,6 +395,15 @@ jobs:
           echo 'Acquire::Retries "5"; Acquire::http::Timeout "20"; Acquire::https::Timeout "20";' | sudo tee /etc/apt/apt.conf.d/80-retries >/dev/null
           for i in 1 2 3; do timeout 4m sudo apt-get update && break; done
           sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 qemu-system-arm openssl python3-pil librsvg2-bin curl
+      - name: Copy the downloaded packages for the cache
+        if: always() && steps.debs.outputs.cache-hit != 'true'
+        run: mkdir -p ~/apt-debs && cp /var/cache/apt/archives/*.deb ~/apt-debs/ 2>/dev/null || true
+      - name: Save downloaded packages
+        if: always() && steps.debs.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-debs
+          key: apt-debs-network-24.04-v1
       - name: Build
         run: make kernel.elf
       # Real one-off transient failures (a ConnectionResetError from
