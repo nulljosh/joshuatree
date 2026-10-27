@@ -651,13 +651,7 @@ static u32 dns_build_query(u8 *buf, const char *hostname, u16 id) {
 
 /* Advances past one DNS name occurrence (a real label sequence or a 2-byte
    compression pointer), returns the position right after it. */
-static const u8 *dns_skip_name(const u8 *p) {
-    while (*p) {
-        if ((*p & 0xC0) == 0xC0) return p + 2;
-        p += *p + 1;
-    }
-    return p + 1;
-}
+#include "dns.h"   /* 6.48.5: the bounded reply reader */
 
 /* v0.76.58: real bug, found root-causing "Weather shows the city but every
    other field is missing" (owner report on the real running OS with real
@@ -712,33 +706,15 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
         struct ip_header *ip = (struct ip_header *)(rx + sizeof(*eth));
         if (ip->protocol != 17) continue; /* UDP */
         u32 ip_hlen = (u32)(ip->version_ihl & 0x0F) * 4;
+        if (ip_hlen < sizeof(struct ip_header) || sizeof(*eth) + ip_hlen + sizeof(struct udp_header) > n) continue;   /* 6.48.5: the headers fit the frame */
         struct udp_header *udp = (struct udp_header *)(rx + sizeof(*eth) + ip_hlen);
         if (udp->src_port != htons(DNS_PORT) || udp->dst_port != htons(DNS_SRC_PORT)) continue;
 
-        const u8 *dns = rx + sizeof(*eth) + ip_hlen + sizeof(*udp);
-        u16 resp_id = htons(*(const u16 *)dns);
-        if (resp_id != txid) continue; /* a stray/late answer to a DIFFERENT query, not this one: keep waiting */
-        u16 ancount = htons(*(u16 *)(dns + 6));
-        if (ancount == 0) { net_err = NET_ERR_DNS_NXDOMAIN; return 0; } /* NXDOMAIN or no A record, not a timeout */
-
-        const u8 *p = dns + 12;
-        p = dns_skip_name(p); /* question name */
-        p += 4; /* QTYPE + QCLASS */
-
-        for (u16 i = 0; i < ancount; i++) {
-            p = dns_skip_name(p);
-            u16 type = htons(*(u16 *)p); p += 2;
-            p += 2; /* class */
-            p += 4; /* ttl */
-            u16 rdlength = htons(*(u16 *)p); p += 2;
-            if (type == 1 && rdlength == 4) { /* A record */
-                *ip_out = ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | p[3];
-                return 1;
-            }
-            p += rdlength;
-        }
-        net_err = NET_ERR_DNS_NXDOMAIN;
-        return 0; /* answers present but none were an A record */
+        u32 off = sizeof(*eth) + ip_hlen + sizeof(*udp);
+        int r = dns_answer(rx + off, n - off, txid, ip_out);   /* 6.48.5: every read inside the n bytes that came */
+        if (r < 0) continue;   /* a stray or late answer to another query, or a broken one: keep waiting */
+        if (r == 0) { net_err = NET_ERR_DNS_NXDOMAIN; return 0; }   /* NXDOMAIN or no A record, not a timeout */
+        return 1;
     }
     net_err = NET_ERR_DNS_TIMEOUT;
     return 0;

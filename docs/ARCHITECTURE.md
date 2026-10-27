@@ -314,7 +314,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `drivers/pci.c` | Walks the PCI bus so the kernel can find its own network card. |
 | `drivers/rtl8139.c` | Driver for the RTL8139 card, QEMU's default. |
 | `drivers/ne2k.c` | Driver for the NE2000 card, which is what the browser emulator provides. The kernel probes for RTL8139 first and falls back to this. |
-| `drivers/net.c` | Ethernet, ARP, IPv4, UDP, DNS and TCP, built up from raw frames on top of whichever card was found (on ARM, the card behind `drivers/nic.h`). `net_init` leases a real address by DHCP (DISCOVER/OFFER/REQUEST/ACK) first, falling back to the old fixed config if nothing answers; `nodhcp` on the command line skips it. `udp_broadcast_ask` sends one UDP broadcast on DHCP's frame path and returns the first reply: how the Pi finds the Claude relay. |
+| `drivers/net.c`, `drivers/dns.h` | Ethernet, ARP, IPv4, UDP, DNS and TCP, built up from raw frames on top of whichever card was found (on ARM, the card behind `drivers/nic.h`). `net_init` leases a real address by DHCP (DISCOVER/OFFER/REQUEST/ACK) first, falling back to the old fixed config if nothing answers; `nodhcp` on the command line skips it. `udp_broadcast_ask` sends one UDP broadcast on DHCP's frame path and returns the first reply: how the Pi finds the Claude relay. Since 6.48.5 a DNS reply is read by `dns_answer` in `drivers/dns.h`, every step inside the bytes that came (the headers' lengths checked against the frame first). |
 | `drivers/http.c` | `http_get` and `http_post` over that TCP. Plain HTTP only. There is no TLS. |
 | `drivers/html.c` | A deliberately tiny HTML-to-text converter, enough to read a page or a ported app. |
 | `drivers/json.c` | A small JSON reader for the weather, geolocation and chat responses. |
@@ -686,6 +686,7 @@ None of this is kernel code. It builds and runs on the Mac.
 - `fuzz_parsers.c` covers HTTP, HTML and JSON. `kmalloc_host.c` is the one heap call `drivers/fat.c` makes, as malloc, for every host build of it.
 - `fuzz_decoders.c` covers PNG and JPEG.
 - `fuzz_browser.c` (6.48.2) covers `arch/arm64/browser.c`'s `to_text` (tags, entities, `<style>` rules, forms, then `fill` and `open` on every field) and `take_cookies`, the same way; `tools/checks/browser-fuzz-check.sh` runs it.
+- `fuzz_dns.c` (6.48.5) covers `drivers/dns.h`'s `dns_answer`, the DNS reply reader `drivers/net.c` calls in both kernels; `tools/checks/dns-fuzz-check.sh` runs it.
 - `fuzz_wifi.c` (6.48.4) covers `arch/arm64/wifi_proto.h`'s `escan_walk` (scan results, chosen by any access point in range), `sdpcm_parse` and `bcdc_reply`, with every short scan-entry length and a wrapping one by hand; `tools/checks/wifi-fuzz-check.sh` runs it.
 - `fuzz_mail.c` (6.48.3) covers `arch/arm64/mail.c`'s IMAP reply readers (`exists`, `next_fetch`, `field`) and the MIME ones (`pick_part`, `unqp`, `unb64`); `tools/checks/mail-fuzz-check.sh` runs it.
 - `fuzz_ics.c` (6.48.1) covers `arch/arm64/ics.c`: the iCalendar feed reader and the CalDAV REPORT and PROPFIND walks. It includes ics.c whole, so the static parsers are reachable, with the kernel calls it makes stubbed; `tools/checks/ics-fuzz-check.sh` runs it.
@@ -2451,7 +2452,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (335 checks)
+### The suite (336 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2606,6 +2607,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Blackcomb page and Set-Cookie parser fuzz (ASan/UBSan, truncation+mutation; 6.48.2) | `tools/checks/browser-fuzz-check.sh` | once |
 | IMAP reply and MIME parser fuzz (ASan/UBSan, truncation+mutation; 6.48.3) | `tools/checks/mail-fuzz-check.sh` | once |
 | Wi-Fi scan result and frame parser fuzz (ASan/UBSan; 6.48.4) | `tools/checks/wifi-fuzz-check.sh` | once |
+| DNS reply reader fuzz, both kernels (ASan/UBSan; 6.48.5) | `tools/checks/dns-fuzz-check.sh` | once |
 | HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties) | `tools/checks/parser-fuzz-check.sh` | once |
 | Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan) | `tools/checks/input-bounds-check.sh` | once |
 | Password hashing, host harness: PBKDF2-HMAC-SHA256 vectors (RFC 7914, RFC 6070 for SHA-256), legacy record upgrade, USERS.TXT parse | `tools/checks/auth-check.sh` | once |
