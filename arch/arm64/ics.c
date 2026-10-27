@@ -250,7 +250,10 @@ static unsigned jt_days(const char *x, unsigned n, unsigned *out) {   /* every "
     }
     return c;
 }
+static unsigned sync_last; static int sync_done;   /* 6.43.0: when this boot last synced, for the sync that runs itself */
+unsigned int ticks(void);   /* ip.c, 100 a second */
 static void dav_sync(void) {
+    sync_done = 1; sync_last = ticks();
     unsigned long mark = heap_mark();
     char host[128]; unsigned short port; const char *base;
     dav_parts(dav_url, host, &port, &base);
@@ -427,7 +430,7 @@ none:
 void ics_password(const char *pass) {
     cp(dav_pass, pass, slen(pass), sizeof dav_pass);
     cp(dav_owner, current_user, slen(current_user), sizeof dav_owner);
-    dav_ready = 1;
+    dav_ready = 1; sync_done = 0;   /* 6.43.0: new credentials, so the next Calendar open syncs */
     dav_discover();
     char v[440]; unsigned o = 0;
     for (const char *p = dav_url; *p && o < 200; p++) v[o++] = *p;
@@ -439,6 +442,19 @@ void ics_password(const char *pass) {
     cmd_out(k == 1 ? "calendar: CalDAV kept in your keychain; calendar sync sends and fetches\n" : "calendar: CalDAV set until a restart; calendar sync sends and fetches\n");
 }
 
+/* 6.43.0: the sync runs itself. Opening Calendar (the tile, Spotlight, the Launchpad or Samantha, all through windows.c's
+   dock_activate) syncs first when CalDAV is set and this boot has not synced in 15 minutes, so the app reads fresh days.
+   Its lines go to the UART only. ponytail: it blocks the open for the sync's few seconds; a background sync needs a
+   network that does not block. */
+void uart_puts(const char *s); extern int con_quiet;
+static void quiet_out(const char *s) { con_quiet = 1; uart_puts(s); }
+void ics_autosync(void) {
+    if (!dav_mine() || (sync_done && ticks() - sync_last < 15u * 60 * 100)) return;
+    void (*was)(const char *) = cmd_out; cmd_out = quiet_out;
+    cmd_out("calendar: syncing before Calendar opens\n");
+    dav_sync();
+    cmd_out = was;
+}
 int ics_command(const char *q, unsigned n) {   /* calendar subscribe URL, calendar unsubscribe; 1 when it was one */
     if (n == 20 && starts(q, "calendar unsubscribe")) {
         cmd_out(save("", 0) ? "calendar: unsubscribed, SUBS.TXT emptied\n" : "calendar: could not write SUBS.TXT\n");

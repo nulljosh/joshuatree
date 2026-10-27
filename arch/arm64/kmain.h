@@ -317,6 +317,7 @@ void brick_paint(void);
 void browser_click(int lx, int ly);
 void browser_open(void);
 void browser_go(const char *url);   /* 6.32.0 */
+void ics_autosync(void);            /* ics.c, 6.43.0 */
 int mail_signed_in(void);           /* mail.c */
 void browser_paint(int report);
 unsigned long civil_days(long y, unsigned m, unsigned d);
