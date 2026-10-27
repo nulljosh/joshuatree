@@ -3,7 +3,8 @@
 
 A stub server on the host serves one page: a <style> block hiding .menu and #cookie-banner (one comma list), div.drawer,
 an @media rule (left out), descendant selectors (6.33.0: "p .inner" and ".nav li" hide, "div p .deep" with three parts
-is left out), a comment holding a fake rule; then a nav with class
+is left out; 6.49.0: "nav.side > ul" hides the nav's own list and not a list a level deeper, with a script before it that holds
+"<nav>"), a comment holding a fake rule; then a nav with class
 "top menu" and a link in it, a cookie banner with nested divs, a drawer, a <p hidden>, a <p> with an inline display:none
 among other declarations, an <img hidden>, and visible text with a link. At the Terminal, `browse` must show the visible
 text, the @media one too, an .inner outside a p, the three-part one, the list after the .nav list closes (nested lists
@@ -31,6 +32,7 @@ div.drawer{color:red;display:none}
 p .inner { display:none }
 .nav  li { display:none }
 div p .deep { display:none }
+nav.side > ul { display:none }
 </style></head><body>
 <nav class="top menu"><a href=/x>Menu link</a> Menu words</nav>
 <div id="cookie-banner"><div>We use cookies</div><div>nested crumbs</div></div>
@@ -43,6 +45,7 @@ div p .deep { display:none }
 <div><p><span class="deep">Deep stays</span></p></div>
 <ul class="nav"><li>Nav item<ul><li>Sub item</li></ul></li><li>Nav two</li></ul>
 <ul><li>After nav stays</li></ul>
+<nav class=side><script>var x = "<nav>";</script><ul><li>Side menu</li></ul><div><ul><li>Deeper list stays</li></ul></div></nav>
 <img src=/a.png hidden>
 <p>Visible text <a href=/y>visible link</a> and the end.</p>
 </body></html>"""
@@ -93,9 +96,9 @@ try:
     check("the page loads", wait_for("and the end.", 20, n), uart()[n:][-500:])
     time.sleep(0.5)
     out = uart()[n:]
-    for w in ("Wide text stays", "Para stays", "Lone inner stays", "Deep stays", "After nav stays", "Visible text", "visible link [1]"):
+    for w in ("Wide text stays", "Para stays", "Lone inner stays", "Deep stays", "After nav stays", "Deeper list stays", "Visible text", "visible link [1]"):
         check("shows: %s" % w, w in out, out[-600:])
-    for w in ("Menu link", "Menu words", "cookies", "nested crumbs", "Drawer text", "Hidden paragraph", "Inline hidden", "Inner hidden", "Nav item", "Sub item", "Nav two"):
+    for w in ("Menu link", "Menu words", "cookies", "nested crumbs", "Drawer text", "Hidden paragraph", "Inline hidden", "Inner hidden", "Nav item", "Sub item", "Nav two", "Side menu"):
         check("hides: %s" % w, w not in out, out[-600:])
 finally:
     q.kill(); q.wait(); server.shutdown()
