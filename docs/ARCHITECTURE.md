@@ -2369,7 +2369,7 @@ Rule: read both sides of a Makefile conflict line by line and merge them by hand
 
 **Conflict markers got committed and pushed.**
 Problem: `<<<<<<<` lines were committed and pushed in `arch/arm64/Makefile` (6f4ce57e) and `docs/ROADMAP.md` (Loop handoff) (40a4140e).
-Rule: before every commit after a merge, `git diff --cached --check` must show no leftover conflict markers, and the build must pass.
+Rule: before every commit after a merge, `git diff --cached --check` must show no leftover conflict markers, and the build must pass. It happened once more on 2026-10-27, in `tools/checks/ci-suite.sh` during a rebase (`git add -A` swept it in; caught before the push): in a rebase, check every file the conflict touched, not only the ones you edited.
 
 **Two open PRs both bump the version.**
 Problem: whichever merges second conflicts on `VERSION` and needs another bump.
@@ -2392,6 +2392,10 @@ Rule: rerun `python3 tools/gen/testing-doc.py` whenever `ci-suite.sh` changes; `
 **Draft PRs never run CI.**
 Problem: the loop opens PRs as drafts so pushes do not burn runner time, which also means a draft shows no red even when it is broken.
 Rule: run `tools/ci-local.sh` (one at a time) on the branch, and only `gh pr ready` once it passes; GitHub CI then runs on the ready PR.
+
+**Readers of network bytes shipped without a fuzzer.**
+Problem: the calendar, page, cookie, mail, Wi-Fi scan and DNS readers all passed their QEMU checks with good input, and a first fuzz run on 2026-10-27 (6.48.1 to 6.48.5) found fifteen reads past the end of a buffer in them, some there since 4.x: a hostile site, mail server, access point or DNS answer could reach each one.
+Rule: any code that reads bytes from the network or the air gets a `tools/fuzz-host/` harness under ASan and UBSan in the same PR (every truncation, fixed-seed mutations, and by hand the shortest legal record and a length that wraps), listed in `ci-suite.sh`.
 
 ### The real Pi
 
