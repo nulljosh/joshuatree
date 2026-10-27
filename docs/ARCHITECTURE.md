@@ -685,6 +685,7 @@ None of this is kernel code. It builds and runs on the Mac.
 **Fuzzers** in `tools/fuzz-host/` hammer the code that reads untrusted bytes.
 - `fuzz_parsers.c` covers HTTP, HTML and JSON. `kmalloc_host.c` is the one heap call `drivers/fat.c` makes, as malloc, for every host build of it.
 - `fuzz_decoders.c` covers PNG and JPEG.
+- `fuzz_ics.c` (6.48.1) covers `arch/arm64/ics.c`: the iCalendar feed reader and the CalDAV REPORT and PROPFIND walks. It includes ics.c whole, so the static parsers are reachable, with the kernel calls it makes stubbed; `tools/checks/ics-fuzz-check.sh` runs it.
 - Both run under address and undefined-behaviour sanitizers, using the shims in `tools/parsers-host/`.
 
 **Generators** in `tools/gen/` produce the embedded data:
@@ -2447,7 +2448,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (331 checks)
+### The suite (332 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2598,6 +2599,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | HTML entities decode to ASCII, host harness | `tools/checks/html-host-check.sh` | once |
 | JPEG decoder, in-kernel | `tools/checks/jpeg-check.sh` | retry |
 | PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties) | `tools/checks/decoder-fuzz-check.sh` | once |
+| iCalendar and CalDAV parser fuzz (ASan/UBSan, truncation+mutation; 6.48.1) | `tools/checks/ics-fuzz-check.sh` | once |
 | HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties) | `tools/checks/parser-fuzz-check.sh` | once |
 | Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan) | `tools/checks/input-bounds-check.sh` | once |
 | Password hashing, host harness: PBKDF2-HMAC-SHA256 vectors (RFC 7914, RFC 6070 for SHA-256), legacy record upgrade, USERS.TXT parse | `tools/checks/auth-check.sh` | once |
@@ -2791,7 +2793,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 |---|---|
 | Burrow | `tools/checks/arm64-finder-check.py`, `tools/checks/burrow-labels-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/filesview-check.py`, `tools/checks/ring3burrow-check.py` |
 | Mail | `tools/checks/arm64-keychain-check.py`, `tools/checks/arm64-led-check.py`, `tools/checks/arm64-mail-check.py`, `tools/checks/arm64-mailpages-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/arm64-smtp-check.py`, `tools/checks/esc-desktop-check.py`, `tools/checks/mailsend-check.py`, `tools/checks/mailtools-check.py`, `tools/checks/read-long-files-check.py` |
-| Calendar | `tools/checks/apptop-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-caldav-check.py`, `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-closeglitch-check.py`, `tools/checks/arm64-cmdtab-check.py`, `tools/checks/arm64-dirtyrect-check.py`, `tools/checks/arm64-genie-check.py`, `tools/checks/arm64-ics-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-sharp2x-check.py`, `tools/checks/arm64-windows-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/dockdots-check.py`, `tools/checks/ring3calendar-check.py` |
+| Calendar | `tools/checks/apptop-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-caldav-check.py`, `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-closeglitch-check.py`, `tools/checks/arm64-cmdtab-check.py`, `tools/checks/arm64-dirtyrect-check.py`, `tools/checks/arm64-genie-check.py`, `tools/checks/arm64-ics-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-sharp2x-check.py`, `tools/checks/arm64-windows-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/dockdots-check.py`, `tools/checks/ics-fuzz-check.sh`, `tools/checks/ring3calendar-check.py` |
 | Notes | `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-clipboard-check.py`, `tools/checks/arm64-closeglitch-check.py`, `tools/checks/arm64-cmdtab-check.py`, `tools/checks/arm64-dirtyrect-check.py`, `tools/checks/arm64-notes-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-sharp2x-check.py`, `tools/checks/arm64-windows-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/dockdots-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notes-autosave-check.py`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3resize-check.py`, `tools/checks/ring3window-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/arm64-reminders-check.py`, `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py`, `tools/checks/ring3window-check.py` |
 | Terminal | `tools/checks/arm64-browser-check.py`, `tools/checks/arm64-calendar-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/arm64-clipboard-check.py`, `tools/checks/arm64-closeglitch-check.py`, `tools/checks/arm64-focus-check.py`, `tools/checks/arm64-keys-check.py`, `tools/checks/arm64-m3c-check.py`, `tools/checks/arm64-music-check.py`, `tools/checks/arm64-nimble-check.py`, `tools/checks/arm64-pagestyle-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-samtile-check.py`, `tools/checks/arm64-samtui-check.py`, `tools/checks/arm64-sharp2x-check.py`, `tools/checks/arm64-tabs-check.py`, `tools/checks/arm64-zsh-check.py`, `tools/checks/clipboard-check.py`, `tools/checks/dockdots-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
