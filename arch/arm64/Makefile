@@ -248,7 +248,7 @@ xhci.o: xhci.c
 	$(CC) -c $< -o $@
 pi-pci.o: pci.c
 	$(CC) -DPI_BUILD -c $< -o $@
-wifi.o: wifi.c wifi_proto.h
+wifi.o: wifi.c wifi_proto.h wpa.h
 	$(CC) -c -o $@ wifi.c
 pi-wifi.o: wifi.c wifi_proto.h wifi_cfg.h wpa.h
 	$(CC) -DPI_BUILD -c -o $@ wifi.c

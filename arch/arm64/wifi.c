@@ -7,6 +7,36 @@
 #ifdef PI_BUILD
 #include "wifi_cfg.h"
 #include "wifi_proto.h"
+/* 6.22.0: the network to join is chosen at run time. JT/WIFI.TXT, written by `wifi join SSID` (cmd.c) with the PMK the
+   Pi worked out itself, wins; with no file it is the dev card's built-in one from wifi_cfg.h; with neither it only scans.
+   The file holds the SSID and the 32 byte PMK as hex, never the passphrase. */
+void kputs(const char *s);
+static unsigned char net_ssid[33], net_pmk[32];
+static unsigned net_len;
+int sd_enter_jt(int make); int fat_read_file(const char *name, void *buf, unsigned bufsize); void fat_cwd_set(unsigned int cluster);
+static int hexn(char c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; }
+static unsigned unhex_line(const char *f, unsigned n, const char *key, unsigned char *out, unsigned max) {   /* key=HEX: bytes out */
+    unsigned k = 0; while (key[k]) k++;
+    for (unsigned i = 0; i + k < n; i++) if ((i == 0 || f[i - 1] == '\n') && !__builtin_memcmp(f + i, key, k)) {
+        unsigned o = 0, p = i + k;
+        while (p + 1 < n && o < max) { int a = hexn(f[p]), b = hexn(f[p + 1]); if (a < 0 || b < 0) break; out[o++] = (unsigned char)(a << 4 | b); p += 2; }
+        return o;
+    }
+    return 0;
+}
+static void net_load(void) {
+    char f[160]; int got = sd_enter_jt(0) ? fat_read_file("WIFI.TXT", f, sizeof f) : -1;
+    fat_cwd_set(0);
+    if (got > 0) {
+        unsigned char s[33], k[32]; unsigned sl = unhex_line(f, (unsigned)got, "ssid=", s, 32), kl = unhex_line(f, (unsigned)got, "pmk=", k, 32);
+        if (sl && kl == 32) { for (unsigned i = 0; i < sl; i++) net_ssid[i] = s[i]; net_ssid[sl] = 0; net_len = sl; for (int i = 0; i < 32; i++) net_pmk[i] = k[i]; return; }
+        kputs("Wi-Fi: JT/WIFI.TXT is not ssid= and pmk= lines, using the built-in network\n");
+    }
+    net_len = WIFI_SSID_LEN;
+    for (unsigned i = 0; i < WIFI_SSID_LEN && i < 32; i++) net_ssid[i] = wifi_ssid[i];
+    net_ssid[net_len] = 0;
+    for (int i = 0; i < 32; i++) net_pmk[i] = wifi_pmk[i];
+}
 #define R32(a) (*(volatile unsigned *)(unsigned long)(a))
 void kputs(const char *s); void kdec(unsigned v); void kx(unsigned v);
 static unsigned long now(void) { unsigned long t; __asm__ volatile ("isb\n mrs %0, cntpct_el0" : "=r"(t)); return t; }
@@ -314,14 +344,27 @@ static int wlc_ioctl(unsigned cmd, void *buf, unsigned len, unsigned *status) {
 }
 /* The scan prints one line: our own network, the first time it is heard. Every other network only adds to the count; the
    old line per result (the same routers again and again) filled the screen and pushed the answer off it. */
-#ifndef WIFI_SSID_LEN
-#include "wifi_cfg.h"
-#endif
 static int ap_shown, ap_rssi = -100;
 int wifi_signal_level(void) { return ap_rssi >= -60 ? 3 : ap_rssi >= -72 ? 2 : 1; }   /* bars from the scan, which is how loud our network was */
+/* 6.22.0: every network the scan heard, the loudest of each name kept, for `wifi` and Settings. */
+#define NETS_MAX 16
+static char nets[NETS_MAX][33]; static int nets_rssi[NETS_MAX]; static unsigned nets_n;
+static void wifi_heard(int rssi, const char *ssid, unsigned slen) {
+    if (!slen || slen > 32) return;   /* a hidden network has no name to pick */
+    unsigned i = 0;
+    for (; i < nets_n; i++) { unsigned k = 0; while (k < slen && nets[i][k] == ssid[k]) k++; if (k == slen && !nets[i][k]) break; }
+    if (i == nets_n) { if (nets_n == NETS_MAX) return; nets_n++; for (unsigned k = 0; k < slen; k++) nets[i][k] = ssid[k]; nets[i][slen] = 0; nets_rssi[i] = rssi; }
+    else if (rssi > nets_rssi[i]) nets_rssi[i] = rssi;
+}
+unsigned wifi_networks(const char **name, int *rssi, unsigned max) {   /* what the last scan heard */
+    unsigned n = 0; for (; n < nets_n && n < max; n++) { name[n] = nets[n]; rssi[n] = nets_rssi[n]; }
+    return n;
+}
+const char *wifi_network(void) { return (const char *)net_ssid; }   /* the one it joins, "" when none */
 static void ap_line(int rssi, unsigned chan, const char *ssid, unsigned slen) {   /* one plain-words line, no network name */
-    if (ap_shown || slen != WIFI_SSID_LEN) return;
-    for (unsigned i = 0; i < slen; i++) if ((unsigned char)ssid[i] != wifi_ssid[i]) return;
+    wifi_heard(rssi, ssid, slen);
+    if (ap_shown || !net_len || slen != net_len) return;
+    for (unsigned i = 0; i < slen; i++) if ((unsigned char)ssid[i] != net_ssid[i]) return;
     ap_shown = 1; ap_rssi = rssi;
     kputs("Wi-Fi: found our network, signal "); kputs(rssi >= -60 ? "strong" : rssi >= -72 ? "okay" : "weak"); kputs(" on channel "); kdec(chan); kputs("\n");
 }
@@ -382,7 +425,6 @@ static int scan(void) {
    infra, open auth, AES, WPA2-PSK, our RSN element, SET_SSID; message 1 in, message 2 out, message 3 in, message 4 out,
    then the keys. */
 static __attribute__((unused)) void put32(unsigned char *b, unsigned v) { b[0] = (unsigned char)v; b[1] = (unsigned char)(v >> 8); b[2] = (unsigned char)(v >> 16); b[3] = (unsigned char)(v >> 24); }
-#if WIFI_SSID_LEN > 0
 #include "wpa.h"
 static unsigned char mymac[6];
 /* RSN element: version 1, group CCMP, one pairwise CCMP, one AKM PSK, no capabilities. Sent in association and msg 2. */
@@ -452,6 +494,7 @@ static int eapol_reply(const unsigned char aa[6], unsigned ver, unsigned info, c
 }
 static int join(void) {
     unsigned st = 0; unsigned char b[80] = {0};
+    if (!net_len) { kputs("wifi: no network configured, scan only\n"); return 1; }
     if (!iovar("cur_etheraddr", 0, mymac, 6, &st) || st) { fail("mac"); return 0; }
     { unsigned z = 0, s2; iovar("sup_wpa", 1, &z, 4, &s2); }   /* the host does the handshake; first, because setting it later reset the WPA2 settings and the join found no network (status 3) */
     put32(b, 1); if (!wlc_ioctl(20, b, 4, &st) || st) { fail("infra"); return 0; }    /* WLC_SET_INFRA: infrastructure */
@@ -460,14 +503,14 @@ static int join(void) {
     put32(b, 0x80); if (!iovar("wpa_auth", 1, b, 4, &st) || st) { kputs("wifi wpa_auth status "); kx(st); kputs("\n"); fail("wpa_auth"); return 0; }   /* WPA2_AUTH_PSK */
     if (!iovar("wpaie", 1, (void *)rsn_ie, sizeof rsn_ie, &st) || st) { kputs("wifi wpaie status "); kx(st); kputs("\n"); }   /* best effort: the firmware can build its own */
     for (unsigned i = 0; i < 80; i++) b[i] = 0;
-    put32(b, WIFI_SSID_LEN); for (unsigned i = 0; i < WIFI_SSID_LEN; i++) b[4 + i] = wifi_ssid[i];
-    kputs("Wi-Fi: connecting to "); kputs((const char *)wifi_ssid); kputs("\n");
+    put32(b, net_len); for (unsigned i = 0; i < net_len; i++) b[4 + i] = net_ssid[i];
+    kputs("Wi-Fi: connecting to "); kputs((const char *)net_ssid); kputs("\n");
     if (!wlc_ioctl(26, b, 36, &st) || st) { kputs("wifi set ssid status "); kx(st); kputs("\n"); fail("set ssid"); return 0; }   /* WLC_SET_SSID */
     unsigned char aa[6], anonce[32], snonce[32], ptk[48]; int have_ptk = 0;
     {   /* our nonce: SHA-1 over the counter, our MAC and the SSID; fresh each boot because the counter is */
         unsigned long c; __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c));
         wpa_sha1 h; wpa_sha1_init(&h); wpa_sha1_add(&h, (unsigned char *)&c, sizeof c); wpa_sha1_add(&h, mymac, 6);
-        wpa_sha1_add(&h, wifi_ssid, WIFI_SSID_LEN); unsigned char d[20]; wpa_sha1_end(&h, d);
+        wpa_sha1_add(&h, net_ssid, net_len); unsigned char d[20]; wpa_sha1_end(&h, d);
         for (int i = 0; i < 32; i++) snonce[i] = d[i % 20] ^ (unsigned char)(c >> (8 * (i % 8)));
     }
     unsigned evt[8], evs[8], evr[8], shown = 0, ndata = 0, nread = 0, nbad = 0, tries = 0, m1count = 0, used_len = 0, rsn_ok = 0;
@@ -491,7 +534,7 @@ static int join(void) {
             if (type == 0 && stat == 3 && tries++ < 3) {   /* WLC_E_STATUS_NO_NETWORKS: its join scan missed Shaw, ask again */
                 kputs("wifi join: no network found, trying again\n"); mdelay(300);
                 for (unsigned i = 0; i < 80; i++) b[i] = 0;
-                put32(b, WIFI_SSID_LEN); for (unsigned i = 0; i < WIFI_SSID_LEN; i++) b[4 + i] = wifi_ssid[i];
+                put32(b, net_len); for (unsigned i = 0; i < net_len; i++) b[4 + i] = net_ssid[i];
                 wlc_ioctl(26, b, 36, &st); continue;
             }
             if (type == 0 && stat != 0) { kputs("wifi join refused\n"); break; }   /* SET_SSID failed */
@@ -506,7 +549,7 @@ static int join(void) {
             if ((info & 0x0080) && !(info & 0x0100)) {   /* message 1: ack, no MIC */
                 for (int i = 0; i < 6; i++) aa[i] = e[6 + i];
                 for (int i = 0; i < 32; i++) anonce[i] = k[17 + i];
-                wpa_ptk(wifi_pmk, aa, mymac, anonce, snonce, ptk); have_ptk = 1;
+                wpa_ptk(net_pmk, aa, mymac, anonce, snonce, ptk); have_ptk = 1;
                 if (!rsn_ok) { unsigned n = assoc_rsn(used, sizeof used); if (n) { used_len = n; rsn_ok = 1; } }
                 m1count++;
                 if (m1count == 1) { kputs("Wi-Fi: the router said hello (secure handshake 1 of 4)\n"); }
@@ -599,15 +642,6 @@ void wifi_release(void) {
     if (!wlc_ioctl(2, 0, 0, &st) || st) { kputs("wifi up again, status "); kdec(st); kputs("\n"); }
     if (join()) kputs("wifi back after Bluetooth\n"); else menubar_wifi(0);
 }
-#else
-int wifi_nic_up(void) { return 0; }
-void wifi_nic_mac(unsigned char mac[6]) { for (int i = 0; i < 6; i++) mac[i] = 0; }
-int wifi_nic_send(const void *fr, unsigned len) { (void)fr; (void)len; return 0; }
-unsigned wifi_nic_recv(void *buf, unsigned max) { (void)buf; (void)max; return 0; }
-static int join(void) { kputs("wifi: no network configured, scan only\n"); return 1; }
-void wifi_hold(void) {}
-void wifi_release(void) {}
-#endif
 
 /* WLAN power. On the Pi 4 the chip's WL_ON line is pin 1 of the firmware's GPIO expander (expander pins are numbered
    from 128), reached only through the mailbox. Tags from Linux's include/soc/bcm2835/raspberrypi-firmware.h:
@@ -689,6 +723,7 @@ int wifi_init(void) {
     for (unsigned n = 0;; n++) { unsigned v; if (cmd52(1, 0x1000e, 0, 0, &v) && (v & 0x40)) break; if (n > 100) { fail("alp"); return 0; } mdelay(5); }
     kputs("wifi alp clock up\n"); step(4);
     if (!fw_load()) return 0;
+    net_load();
     if (!scan()) return 0;
     return join();
 }
@@ -698,3 +733,30 @@ int wifi_signal_level(void) { return 1; }
 void wifi_hold(void) {}
 void wifi_release(void) {}
 #endif
+
+/* 6.22.0, both builds: what cmd.c's `wifi` and `wifi join SSID` need. The passphrase comes from the stars prompt, becomes
+   the PMK here (wpa.h's wpa_pmk, PBKDF2-HMAC-SHA1) and is wiped by the caller; JT/WIFI.TXT gets the SSID and the PMK as
+   hex, never the passphrase. The Pi joins it at its next start; the chip's running state is not touched from here. */
+#include "wpa.h"
+#ifndef PI_BUILD
+unsigned wifi_networks(const char **name, int *rssi, unsigned max) { (void)name; (void)rssi; (void)max; return 0; }
+const char *wifi_network(void) { return ""; }
+int wifi_nic_up(void) { return 0; }
+#endif
+int sd_write(const char *name, const void *data, unsigned len);
+void accounts_wipe(void *p, unsigned n);
+int wifi_save(const char *ssid, unsigned sl, const char *pass, unsigned pl) {   /* 1 written, 0 no card, -1 a bad name or passphrase */
+    if (!sl || sl > 32 || pl < 8 || pl > 63) return -1;
+    for (unsigned i = 0; i < pl; i++) if ((unsigned char)pass[i] < 0x20 || (unsigned char)pass[i] > 0x7e) return -1;
+    unsigned char pmk[32]; char f[160]; unsigned o = 0;
+    static const char hx[] = "0123456789abcdef";
+    wpa_pmk(pass, pl, (const unsigned char *)ssid, sl, pmk);
+    for (const char *p = "ssid="; *p; p++) f[o++] = *p;
+    for (unsigned i = 0; i < sl; i++) { f[o++] = hx[(unsigned char)ssid[i] >> 4]; f[o++] = hx[(unsigned char)ssid[i] & 15]; }
+    for (const char *p = "\npmk="; *p; p++) f[o++] = *p;
+    for (int i = 0; i < 32; i++) { f[o++] = hx[pmk[i] >> 4]; f[o++] = hx[pmk[i] & 15]; }
+    f[o++] = '\n';
+    int ok = sd_write("WIFI.TXT", f, o) == 1;
+    accounts_wipe(pmk, sizeof pmk); accounts_wipe(f, sizeof f);
+    return ok;
+}

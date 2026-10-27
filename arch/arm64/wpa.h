@@ -1,7 +1,8 @@
 /* WPA2-PSK, the host side. The Pi's Wi-Fi firmware has no supplicant of its own (sup_wpa answers -23, unsupported, on
    the real board), so we do the 4-way handshake: SHA-1, HMAC-SHA1, the 802.11 PRF that turns the PMK and both nonces
-   into the pairwise keys, and AES key unwrap (RFC 3394) for the group key. The PMK itself (PBKDF2 over the passphrase,
-   4096 rounds) is worked out at build time by wifi_cfg.sh, so the passphrase never reaches the kernel. Plain C, no
+   into the pairwise keys, and AES key unwrap (RFC 3394) for the group key. The PMK (PBKDF2 over the passphrase, 4096
+   rounds) is worked out at build time by wifi_cfg.sh for the built-in network, or since 6.22.0 by wpa_pmk on the Pi for
+   one picked with `wifi join` (the passphrase is wiped as soon as it is made). Plain C, no
    state, no allocation; tools/checks/wpa-test.c checks it against the RFC test vectors. */
 #ifndef WPA_H
 #define WPA_H
@@ -48,6 +49,20 @@ static void wpa_hmac(const unsigned char *key, unsigned klen, const unsigned cha
     wpa_sha1_init(&c); wpa_sha1_add(&c, pad, 64); wpa_sha1_add(&c, a, alen); if (b) wpa_sha1_add(&c, b, blen); wpa_sha1_end(&c, inner);
     for (int i = 0; i < 64; i++) pad[i] = k[i] ^ 0x5c;
     wpa_sha1_init(&c); wpa_sha1_add(&c, pad, 64); wpa_sha1_add(&c, inner, 20); wpa_sha1_end(&c, out);
+}
+
+/* 6.22.0: the PMK from a passphrase on the Pi itself, PBKDF2-HMAC-SHA1(passphrase, SSID, 4096 rounds, 32 bytes): two
+   20 byte blocks, the second cut to 12. wifi_cfg.sh did this on the Mac for the built-in network. */
+static void wpa_pmk(const char *pass, unsigned plen, const unsigned char *ssid, unsigned slen, unsigned char pmk[32]) {
+    for (unsigned blk = 1; blk <= 2; blk++) {
+        unsigned char salt[36], u[20], t[20];
+        for (unsigned i = 0; i < slen && i < 32; i++) salt[i] = ssid[i];
+        salt[slen] = 0; salt[slen + 1] = 0; salt[slen + 2] = 0; salt[slen + 3] = (unsigned char)blk;
+        wpa_hmac((const unsigned char *)pass, plen, salt, slen + 4, 0, 0, u);
+        for (int i = 0; i < 20; i++) t[i] = u[i];
+        for (int r = 1; r < 4096; r++) { wpa_hmac((const unsigned char *)pass, plen, u, 20, 0, 0, u); for (int i = 0; i < 20; i++) t[i] ^= u[i]; }
+        for (unsigned i = 0; i < 20 && (blk - 1) * 20 + i < 32; i++) pmk[(blk - 1) * 20 + i] = t[i];
+    }
 }
 
 /* PTK = PRF-384(PMK, "Pairwise key expansion", min(AA,SPA) | max(AA,SPA) | min(ANonce,SNonce) | max(ANonce,SNonce)).
