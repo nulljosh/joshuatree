@@ -10,6 +10,7 @@ the address bar loads it. Then:
     centred lines and not the plain one, the short title further in than the long line, on a second page (6.35.0) of
     <center>, a div with an inline text-align:center, one a .mid rule centres, one with align=center and a plain div;
     "right at X" (6.44.0) for a .price rule's text-align:right and an align=right div, each further in than centring;
+    6.47.0: ".box div" right-aligns the div inside .box and not the one after it, ".note span" bolds only the span inside;
   - on a screendump the big heading's ink stands at least 1.4 times as tall as the paragraph's, inside the page well;
   - the Terminal's `browse` of the same page prints the words with no style bytes in them.
 Discriminating: drop the BR_BIG mark in browser.c's to_text and the big heading is neither logged nor taller; make
@@ -36,10 +37,11 @@ PAGE = ("<html><head><title>Styled</title><style>.lead { font-weight: 700 } span
         "</head><body><h1>Big title here</h1><h3>Small title here</h3>"
         "<p>plain words <b>bold words</b> after</p><p class=lead>Lead line here</p>"
         "<p>more <span class=hl>marked run</span> tail end</p><p class=x>Light para</p></body></html>").encode()
-CENTRED = ("<html><head><title>Centred</title><style>.mid { text-align: center } .price{text-align:right}</style></head><body>"
+CENTRED = ("<html><head><title>Centred</title><style>.mid { text-align: center } .price{text-align:right} .box div { text-align: right } .note span{font-weight:bold}</style></head><body>"
            "<center>Centred title</center><div style=\"color:red; text-align:center\">Inline centred line</div>"
            "<div class=mid>Rule centred</div><div align=center>Attr centred words here</div><div>Left after</div>"
-           "<div class=price>Rule righted</div><div align=right>Attr right</div></body></html>").encode()
+           "<div class=price>Rule righted</div><div align=right>Attr right</div>"
+           "<div class=box><div>Boxed right</div></div><div>Unboxed</div><div class=note><span>Noted bold</span></div><div><span>Free span</span></div></body></html>").encode()
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         body = CENTRED if self.path == "/centred" else PAGE
@@ -129,6 +131,12 @@ try:
     check("<center>, align=center, an inline text-align and a text-align rule centre their line, and only theirs",
           all(w in mid for w in want) and not any("Left after" in k or "Light para" in k for k in mid)
           and mid.get("Centred title", 0) > mid.get("Attr centred words here", 1 << 30), mid)
+    check("descendant rules (6.47.0): .box div is right-aligned and .note span bold, and only inside them",
+          "Boxed right" in right and "Unboxed" not in right and "browser: shows bold Noted bold" in out and "shows bold Free span" not in out, (right, out[-500:]))
+    right.pop("Boxed right", None)
+    t0 = out.find("browser: Centred\n"); t1 = out.find("\nbrowser: http://", t0)
+    printed = out[t0:t1] if t0 >= 0 and t1 > t0 else ""
+    check("a style mark after a line break adds no blank line of its own (6.47.0)", "Attr right" in printed and "\n\n\n" not in printed, printed[-300:])
     check("text-align:right and align=right set their lines flush right, further in than centred ones (6.44.0)",
           set(right) == {"Rule righted", "Attr right"} and right["Rule righted"] > mid.get("Rule centred", 1 << 30) and right["Attr right"] > right["Rule righted"], (right, mid))
 

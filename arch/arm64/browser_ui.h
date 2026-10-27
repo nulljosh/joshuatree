@@ -320,7 +320,7 @@ void browser_paint(int report) {
                 }
                 int room = (w - 12) * s - lw;
                 if (room > 0) px += br_sty[vi] & BR_ST_RIGHT ? room : room / 2;
-                if (report) { con_quiet = 1; uart_puts(br_sty[vi] & BR_ST_RIGHT ? "browser: shows right at " : "browser: shows centred at "); uart_dec((unsigned)px); uart_putc(' '); uart_puts(buf[0] >= 0x20 ? buf : buf + 1); uart_putc('\n'); }
+                if (report && lw) { con_quiet = 1; uart_puts(br_sty[vi] & BR_ST_RIGHT ? "browser: shows right at " : "browser: shows centred at "); uart_dec((unsigned)px); uart_putc(' '); uart_puts(buf[0] >= 0x20 ? buf : buf + 1); uart_putc('\n'); }
             }
             for (unsigned k = 0; k <= n; k++) {
                 unsigned char c = k < n ? (unsigned char)buf[k] : 0;
