@@ -266,8 +266,13 @@ static void dav_sync(void) {
     char *rb; unsigned rn;
     {   /* 6.41.0: deletes, from the last sync's days (CALSYNC.TXT) against both sides now */
         static unsigned last[DAYS_MAX], there[DAYS_MAX]; unsigned nl = 0, nt = 0, gone_here = 0, gone_there = 0;
-        char sb[DAYS_MAX * 9 + 1]; int sn = dav_read("CALSYNC.TXT", sb, sizeof sb - 1);
-        for (int i = 0; sn > 0 && i + 8 <= sn && nl < DAYS_MAX; i += 9) { unsigned v = 0; for (int k = 0; k < 8; k++) v = v * 10 + (unsigned)(sb[i + k] - '0'); last[nl++] = v; }
+        char sb[sizeof dav_url + DAYS_MAX * 9 + 1]; int sn = dav_read("CALSYNC.TXT", sb, sizeof sb - 1);
+        /* 6.48.0: the first line names the calendar the days were synced with. Another calendar's list (or 6.41.0's,
+           which had no such line) is not this one's, so it deletes nothing either way. */
+        int h = 0; while (h < sn && sb[h] != '\n') h++;
+        unsigned ul = slen(dav_url); int mine = sn > 0 && h == (int)ul;
+        for (unsigned k = 0; mine && k < ul; k++) if (sb[k] != dav_url[k]) mine = 0;
+        for (int i = h + 1; mine && i + 8 <= sn && nl < DAYS_MAX; i += 9) { unsigned v = 0; for (int k = 0; k < 8; k++) v = v * 10 + (unsigned)(sb[i + k] - '0'); last[nl++] = v; }
         if (nl) {
             int st = dav_req("REPORT", base, 0, "application/xml; charset=utf-8", "Depth: 1\r\n", q, sizeof q - 1, &rb, &rn);
             if (st == 401 || st == 403) { cmd_out("calendar: the server refused the user or the app password\n"); heap_release(mark); return; }
@@ -325,7 +330,9 @@ static void dav_sync(void) {
         i = e + 1;
     }
     {   /* 6.41.0: what both sides now have (a day the server refused is not one), for the next sync's deletes */
-        char sb[DAYS_MAX * 9 + 1]; unsigned o = 0;
+        char sb[sizeof dav_url + DAYS_MAX * 9 + 1]; unsigned o = 0;
+        for (const char *p = dav_url; *p; p++) sb[o++] = *p;   /* 6.48.0: the calendar these days belong to */
+        sb[o++] = '\n';
         for (unsigned k = 0; k < sent && k < DAYS_MAX && o + 9 < sizeof sb; k++) {
             unsigned d = put_ok[k];
             if (!d || has_day(put_ok, k, d)) continue;
@@ -396,6 +403,9 @@ static int is_cal(const char *x, unsigned n) {   /* a resourcetype that says cal
     const char *r = dav_tag(x, n, "resourcetype", 0);
     return r && dav_tag(x, n, "calendar", (unsigned)(r - x)) != 0;
 }
+#define CAL_MAX 6
+static char cal_url[CAL_MAX][200], cal_name[CAL_MAX][48];   /* 6.48.0: the event calendars discovery found, for calendar use N */
+static unsigned ncal;
 static void dav_discover(void) {
     unsigned long mark = heap_mark();
     char *rb; unsigned rn; char href[200], typed[200];
@@ -409,29 +419,41 @@ static void dav_discover(void) {
         if (st != 207 || !rb || !dav_href(rb, rn, "calendar-home-set", href, sizeof href)) goto none;
     }
     if (!dav_move(href)) goto none;
-    st = dav_find("<d:resourcetype/><c:supported-calendar-component-set/>", 1, &rb, &rn);
+    st = dav_find("<d:resourcetype/><c:supported-calendar-component-set/><d:displayname/>", 1, &rb, &rn);
     if (st != 207 || !rb) goto none;
-    for (const char *r = dav_tag(rb, rn, "response", 0); r; ) {   /* each response: its href, then whether it is an event calendar */
+    char home[200]; cp(home, dav_url, slen(dav_url), sizeof home);
+    ncal = 0;
+    for (const char *r = dav_tag(rb, rn, "response", 0); r && ncal < CAL_MAX; ) {   /* 6.48.0: every event calendar, with its name */
         const char *next = dav_tag(rb, rn, "response", (unsigned)(r - rb) + 1);
         unsigned seg = (unsigned)((next ? next : rb + rn) - r);
         int events = 1; const char *comp = dav_tag(r, seg, "supported-calendar-component-set", 0);
         if (comp) { events = 0; for (unsigned i = (unsigned)(comp - r); i + 6 < seg; i++) if (starts(r + i, "VEVENT")) events = 1; }
+        cp(dav_url, home, slen(home), sizeof dav_url);
         if (is_cal(r, seg) && events && dav_href(r, seg, "response", href, sizeof href) && dav_move(href)) {
-            cmd_out("calendar: found your calendar at "); cmd_out(dav_url); cmd_out("\n");
-            heap_release(mark); return;
+            cp(cal_url[ncal], dav_url, slen(dav_url), sizeof cal_url[0]);
+            cal_name[ncal][0] = 0;
+            const char *dn = dav_tag(r, seg, "displayname", 0);
+            if (dn) { while (*dn != '>') dn++; if (dn[-1] != '/') { dn++; unsigned k = 0; while (dn + k < r + seg && dn[k] != '<' && k + 1 < sizeof cal_name[0]) { cal_name[ncal][k] = dn[k]; k++; } cal_name[ncal][k] = 0; } }
+            ncal++;
         }
         r = next;
+    }
+    if (ncal) {
+        cp(dav_url, cal_url[0], slen(cal_url[0]), sizeof dav_url);
+        if (ncal == 1) { cmd_out("calendar: found your calendar at "); cmd_out(dav_url); cmd_out("\n"); }
+        else {
+            cmd_out("calendar: "); cmd_dec(ncal); cmd_out(" calendars hold events:\n");
+            for (unsigned k = 0; k < ncal; k++) { cmd_out("  "); cmd_dec(k + 1); cmd_out("  "); cmd_out(cal_name[k][0] ? cal_name[k] : "(no name)"); cmd_out("  "); cmd_out(cal_url[k]); cmd_out("\n"); }
+            cmd_out("calendar: using 1; calendar use N picks another\n");
+        }
+        heap_release(mark); return;
     }
 none:
     cp(dav_url, typed, slen(typed), sizeof dav_url);
     cmd_out("calendar: no calendar found there, kept the address as typed\n");
     heap_release(mark);
 }
-void ics_password(const char *pass) {
-    cp(dav_pass, pass, slen(pass), sizeof dav_pass);
-    cp(dav_owner, current_user, slen(current_user), sizeof dav_owner);
-    dav_ready = 1; sync_done = 0;   /* 6.43.0: new credentials, so the next Calendar open syncs */
-    dav_discover();
+static int dav_keep(void) {   /* url, user and password into the keychain as "caldav" */
     char v[440]; unsigned o = 0;
     for (const char *p = dav_url; *p && o < 200; p++) v[o++] = *p;
     v[o++] = ' '; for (const char *p = dav_user; *p && o < 300; p++) v[o++] = *p;
@@ -439,7 +461,14 @@ void ics_password(const char *pass) {
     v[o] = 0;
     int k = keychain_set("caldav", v);
     accounts_wipe(v, sizeof v);
-    cmd_out(k == 1 ? "calendar: CalDAV kept in your keychain; calendar sync sends and fetches\n" : "calendar: CalDAV set until a restart; calendar sync sends and fetches\n");
+    return k;
+}
+void ics_password(const char *pass) {
+    cp(dav_pass, pass, slen(pass), sizeof dav_pass);
+    cp(dav_owner, current_user, slen(current_user), sizeof dav_owner);
+    dav_ready = 1; sync_done = 0;   /* 6.43.0: new credentials, so the next Calendar open syncs */
+    dav_discover();
+    cmd_out(dav_keep() == 1 ? "calendar: CalDAV kept in your keychain; calendar sync sends and fetches\n" : "calendar: CalDAV set until a restart; calendar sync sends and fetches\n");
 }
 
 /* 6.43.0: the sync runs itself. Opening Calendar (the tile, Spotlight, the Launchpad or Samantha, all through windows.c's
@@ -458,6 +487,16 @@ void ics_autosync(void) {
 int ics_command(const char *q, unsigned n) {   /* calendar subscribe URL, calendar unsubscribe; 1 when it was one */
     if (n == 20 && starts(q, "calendar unsubscribe")) {
         cmd_out(save("", 0) ? "calendar: unsubscribed, SUBS.TXT emptied\n" : "calendar: could not write SUBS.TXT\n");
+        return 1;
+    }
+    if (n > 13 && starts(q, "calendar use ")) {   /* 6.48.0: another of the calendars discovery listed */
+        unsigned v = 0, i = 13; while (i < n && q[i] >= '0' && q[i] <= '9' && v < 100) v = v * 10 + (unsigned)(q[i++] - '0');
+        dav_mine();
+        if (!dav_ready || !ncal) { cmd_out("calendar: no list of calendars; calendar caldav https://.../ USER finds them\n"); return 1; }
+        if (i != n || !v || v > ncal) { cmd_out("calendar: use a number from 1 to "); cmd_dec(ncal); cmd_out("\n"); return 1; }
+        cp(dav_url, cal_url[v - 1], slen(cal_url[v - 1]), sizeof dav_url);
+        dav_keep(); sync_done = 0;
+        cmd_out("calendar: using "); cmd_out(cal_name[v - 1][0] ? cal_name[v - 1] : dav_url); cmd_out("\n");
         return 1;
     }
     if (n == 13 && starts(q, "calendar sync")) {
