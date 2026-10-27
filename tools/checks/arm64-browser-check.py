@@ -24,6 +24,7 @@ if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64", "
     print("SKIP: clang, ld.lld, openssl or qemu-system-aarch64 not installed"); sys.exit(0)
 
 seen = []
+reused = []   # 6.45.0: per request, whether the TLS session was resumed
 PAGE = (b"<html><head><title>Joshua &amp; the Tree</title><style>body{color:red}</style></head><body>"
         b"<script>alert('nope')</script><h1>Desert news</h1>\n<p>The   tree   grows slowly.</p>"
         b"<p>Read <a href='/second'>the second page</a> or <a href=\"https://10.0.2.2:%d/third\">the third</a> "
@@ -36,7 +37,7 @@ FORMS = (b"<html><body><p>one <a href=/unquoted>bare</a> two <a href='single'>si
          b"three <a href=\"//10.0.2.2:%d/proto\">protocol relative</a> four <a href=\"/dq\">double</a>.</p></body></html>")
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        seen.append(self.path)
+        seen.append(self.path); reused.append(getattr(self.request, "session_reused", False))
         if self.path in ("/start", "/loop"):
             self.send_response(302); self.send_header("Location", "/dir/page" if self.path == "/start" else "/loop"); self.end_headers(); return
         body = PAGE % port if self.path == "/dir/page" else HEAVY if self.path == "/heavy" else FORMS % port if self.path == "/forms" else SECOND
@@ -120,6 +121,8 @@ try:
     seen.clear()
     b.type("open 3")
     check("open 3 fetched the relative link as /dir/sub/rel", b.wait_for("links: 0", 60) and seen == ["/dir/sub/rel"], (seen, b.uart()[-400:]))
+    check("the second connection to the same host resumed the TLS session (6.45.0)", reused[:1] == [False] and reused[-1] is True
+          and "tls: session resumed for 10.0.2.2" in b.uart(), (reused, b.uart()[-300:]))
     seen.clear()
     b.type("back")
     check("back refetched /dir/page", b.wait_for("links: 3", 60) and seen == ["/dir/page"], (seen, b.uart()[-400:]))
