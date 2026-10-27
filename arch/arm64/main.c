@@ -5,6 +5,7 @@
 #include "kmain.h"   /* the platform addresses, and what main.c shares with the parts cut out of it (boot.c, virtio.c): declared once, checked here */
 #include "bt.h"
 #include "apple_mask.h"
+#include "appsig.h"   /* 6.54.0: NAME.SIG */
 #include "uimg.h"   /* 6.51.0: the image check, shared with tools/fuzz-host/fuzz_uimg.c */
 #define UART_DR   (UART_BASE + 0x00)
 #define UART_FR   (UART_BASE + 0x18)
@@ -218,7 +219,7 @@ unsigned long l3[APP_SLOTS * ARENA_BLOCKS * 512] __attribute__((aligned(4096)));
 #define UP_ASTACK 0x80000UL /* ...and the app's stack: 16 pages (M3e: minimp3 keeps about 16 KB of scratch there), nothing mapped below them */
 #define APP_STACK_PAGES 16
 #define APP_ZERO_PAGES  8   /* zeroed pages after the image (and the rest of its last page): the pool user/calendar.c keeps its events in, and user/notes.c its 28 KB arena (M3d) */
-#define UAPP_MAX 0x40000UL  /* the largest image user_load takes, and what user_c.ld asserts */
+#define UAPP_MAX UIMG_MAX   /* the largest image user_load takes, and what user_c.ld asserts (uimg.h) */
 #define UP_WIN   0xD00000UL /* M3c part 2: the app's window buffer, read-write and never executable. 3.9.0: the last 3 MiB of the arena, so a device-size
                                buffer fits (504x328 at 2x is 2.6 MB); it was a page above the stack, with room for 560x360 four times over */
 #define UWIN_MAX (0x1000000UL - UP_WIN)   /* the arena's end, 16 MiB, less where the buffer starts */
@@ -732,11 +733,17 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
 /* 6.51.0: an app from the card. With no built-in app of that name, userrun reads JT/APPS/NAME.APP, the same image a built-in
    one is (the Makefile's uapp_NAME.bin), and user_load checks it with uimg_ok as it checks every image. The file is read into one
    buffer (user_load copies it into the app's own pages). A row and its name live as long as an app runs on them, so there is one
-   more row than slots (6.53.0: Spotlight's app_dock_card may load one while every slot is taken, then close the oldest for it). */
+   more row than slots (6.53.0: Spotlight's app_dock_card may load one while every slot is taken, then close the oldest for it).
+   6.54.0: NAME.SIG beside it is checked here, on the very bytes user_load will copy (appsig.c). A signed app runs for anyone; an
+   unsigned one only when the caller says an admin is behind it (no accounts, or sudo); a signature that does not match is
+   refused always. card_err says which refusal it was: 1 not signed, 2 the signature does not match. */
 int sd_ready(void); int sd_enter_jt(int make); void fat_list(void (*cb)(const char *name, unsigned size, int dir)); int fat_chdir(const char *name); int fat_read_file(const char *name, void *buf, unsigned bufsize); void fat_cwd_set(unsigned cluster);
 static char card_img[UAPP_MAX + 16], card_name[APP_SLOTS + 1][9];
 static struct user_app card_row[APP_SLOTS + 1];
-static int name_taken(const char *low, unsigned n) {   /* 6.53.0: a built-in app's name, or any name Spotlight lists (Terminal, Settings): never a card app's */
+static unsigned char card_sig[APPSIG_MAX + 1];
+int card_err;
+int card_unsigned_ok(void) { return !accounts_count() || sudo_active(); }   /* Spotlight's admin test; the Terminal's is cmd.c's priv */
+int card_name_taken(const char *low, unsigned n) {   /* 6.53.0 (6.55.0: store.c's install too): a built-in app's name, or any name Spotlight lists (Terminal, Settings): never a card app's */
     if (user_find(low, n)) return 1;
     for (int s = 1; s <= SPOT_LAST; s++) {
         const char *t = spot_name(s); unsigned i = 0;
@@ -746,8 +753,9 @@ static int name_taken(const char *low, unsigned n) {   /* 6.53.0: a built-in app
     return 0;
 }
 int card_row_is(const struct user_app *a) { return a >= card_row && a < card_row + APP_SLOTS + 1; }
-const struct user_app *card_find(const char *name, unsigned n) {
+const struct user_app *card_find(const char *name, unsigned n, int allow_unsigned) {
     char f[13]; unsigned sl = 0;
+    card_err = 0;
     if (!n || n > 8) return 0;
     for (unsigned i = 0; i < n; i++) {
         char c = name[i];
@@ -757,26 +765,42 @@ const struct user_app *card_find(const char *name, unsigned n) {
     }
     f[n] = '.'; f[n + 1] = 'A'; f[n + 2] = 'P'; f[n + 3] = 'P'; f[n + 4] = 0;
     char low[9]; for (unsigned i = 0; i < n; i++) low[i] = (char)(f[i] | 32);
-    if (name_taken(low, n)) return 0;   /* 6.53.0: a name means one app, and a card app never poses as the Terminal */
+    if (card_name_taken(low, n)) return 0;   /* 6.53.0: a name means one app, and a card app never poses as the Terminal */
     for (;; sl++) { unsigned k = 0; while (k < APP_SLOTS && apps[k].cur != &card_row[sl]) k++; if (k == APP_SLOTS) break; }   /* a row no app runs on */
     if (!sd_ready() || !sd_enter_jt(0)) return 0;
-    int got = fat_chdir("APPS") ? fat_read_file(f, card_img, UAPP_MAX + 1) : -1;
+    int got = -1, sl_sig = -1;
+    if (fat_chdir("APPS") && (got = fat_read_file(f, card_img, UAPP_MAX + 1)) > 0) {
+        f[n + 1] = 'S'; f[n + 2] = 'I'; f[n + 3] = 'G';
+        sl_sig = fat_read_file(f, card_sig, sizeof card_sig);
+        f[n + 1] = 'A'; f[n + 2] = 'P'; f[n + 3] = 'P';
+    }
     fat_cwd_set(0);
     if (got <= 0) return 0;
     if ((unsigned long)got > UAPP_MAX) { uart_puts("M3c load FAIL "); uart_puts(f); uart_puts(": too big\n"); got = 1; }   /* a byte, so uimg_ok refuses it and says so */
+    int signed_ok = sl_sig > 0 && appsig_ok(low, n, card_img, (unsigned long)got, card_sig, (unsigned)sl_sig);
+    if (sl_sig > 0 && !signed_ok) { card_err = 2; uart_puts("M3c card app JT/APPS/"); uart_puts(f); uart_puts(": its signature does not match\n"); return 0; }
+    if (!signed_ok && !allow_unsigned) { card_err = 1; uart_puts("M3c card app JT/APPS/"); uart_puts(f); uart_puts(": not signed\n"); return 0; }
     for (unsigned i = 0; i < n; i++) card_name[sl][i] = (char)(f[i] | 32);
     card_name[sl][n] = 0;
     card_row[sl].name = card_name[sl]; card_row[sl].start = card_img; card_row[sl].end = card_img + got;
-    uart_puts("M3c card app JT/APPS/"); uart_puts(f); uart_puts(": "); uart_dec((unsigned)got); uart_puts(" bytes\n");
+    uart_puts("M3c card app JT/APPS/"); uart_puts(f); uart_puts(": "); uart_dec((unsigned)got); uart_puts(signed_ok ? " bytes, signed\n" : " bytes, not signed, an admin's\n");
     return &card_row[sl];
 }
-/* 6.53.0: the apps in JT/APPS, for Spotlight: each NAME.APP whose NAME card_find would take, lower case, at most max. */
-static char (*cl_out)[9]; static int cl_n, cl_max;
+/* 6.53.0: the apps in JT/APPS, for Spotlight: each NAME.APP whose NAME card_find would take, lower case, at most max. 6.54.0:
+   with allow_unsigned 0, only those with a NAME.SIG (card_find still checks it when one is opened). */
+#define CL_SIGS 32
+static char (*cl_out)[9], cl_sig[CL_SIGS][9]; static int cl_n, cl_max, cl_ns;
 static void cl_one(const char *name, unsigned size, int dir) {
     unsigned k = 0;
     (void)size;
-    if (dir || cl_n >= cl_max) return;
+    if (dir) return;
     while (name[k] && name[k] != '.' && k < 9) k++;
+    if (k && k <= 8 && name[k] == '.' && (name[k + 1] | 32) == 's' && (name[k + 2] | 32) == 'i' && (name[k + 3] | 32) == 'g' && !name[k + 4] && cl_ns < CL_SIGS) {
+        for (unsigned i = 0; i < k; i++) cl_sig[cl_ns][i] = (char)(name[i] | 32);
+        cl_sig[cl_ns++][k] = 0;
+        return;
+    }
+    if (cl_n >= cl_max) return;
     if (!k || k > 8 || name[k] != '.' || (name[k + 1] | 32) != 'a' || (name[k + 2] | 32) != 'p' || (name[k + 3] | 32) != 'p' || name[k + 4]) return;
     for (unsigned i = 0; i < k; i++) {
         char c = (char)(name[i] | 32);
@@ -784,19 +808,25 @@ static void cl_one(const char *name, unsigned size, int dir) {
         cl_out[cl_n][i] = c;
     }
     cl_out[cl_n][k] = 0;
-    if (!name_taken(cl_out[cl_n], k)) cl_n++;   /* a name Spotlight already lists is that app's */
+    if (!card_name_taken(cl_out[cl_n], k)) cl_n++;   /* a name Spotlight already lists is that app's */
 }
-int card_list(char (*out)[9], int max) {
-    cl_out = out; cl_n = 0; cl_max = max;
+int card_list(char (*out)[9], int max, int allow_unsigned) {
+    cl_out = out; cl_n = 0; cl_max = max; cl_ns = 0;
     if (!sd_ready() || !sd_enter_jt(0)) return 0;
     if (fat_chdir("APPS")) fat_list(cl_one);
     fat_cwd_set(0);
-    return cl_n;
+    int k = 0;
+    for (int i = 0; i < cl_n; i++) {
+        int has = allow_unsigned;
+        for (int j = 0; j < cl_ns && !has; j++) { unsigned m = 0; while (out[i][m] && out[i][m] == cl_sig[j][m]) m++; has = !out[i][m] && !cl_sig[j][m]; }
+        if (has) { if (k != i) for (unsigned m = 0; m < 9; m++) out[k][m] = out[i][m]; k++; }
+    }
+    return k;
 }
-int userrun(const char *name, unsigned n, unsigned long *status, int *faulted) {
+int userrun(const char *name, unsigned n, int allow_unsigned, unsigned long *status, int *faulted) {   /* -4 not signed, -5 a signature that does not match (6.54.0) */
     const struct user_app *a = user_find(name, n);
-    if (!a) a = card_find(name, n);
-    if (!a) return -1;
+    if (!a) a = card_find(name, n, allow_unsigned);
+    if (!a) return card_err ? -3 - card_err : -1;
     int r = app_start(a);
     if (r) return r;
     struct app *me = ap;
