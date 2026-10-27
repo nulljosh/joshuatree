@@ -739,7 +739,15 @@ void wifi_release(void) {}
    hex, never the passphrase. The Pi joins it at its next start; the chip's running state is not touched from here. */
 #include "wpa.h"
 #ifndef PI_BUILD
+#ifdef WIFI_FAKE_SCAN   /* arm64-wifi-pane-check.py only (make WIFI_FAKE=1): three made-up networks, since QEMU has no radio */
+unsigned wifi_networks(const char **name, int *rssi, unsigned max) {
+    static const char *const n[3] = { "My Home 5G", "Shaw Open", "Cafe Guest" }; static const int r[3] = { -48, -66, -79 };
+    unsigned k = 0; for (; k < 3 && k < max; k++) { name[k] = n[k]; rssi[k] = r[k]; }
+    return k;
+}
+#else
 unsigned wifi_networks(const char **name, int *rssi, unsigned max) { (void)name; (void)rssi; (void)max; return 0; }
+#endif
 const char *wifi_network(void) { return ""; }
 int wifi_nic_up(void) { return 0; }
 #endif

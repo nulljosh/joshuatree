@@ -248,8 +248,11 @@ xhci.o: xhci.c
 	$(CC) -c $< -o $@
 pi-pci.o: pci.c
 	$(CC) -DPI_BUILD -c $< -o $@
-wifi.o: wifi.c wifi_proto.h wpa.h
-	$(CC) -c -o $@ wifi.c
+# WIFI_FAKE=1 gives the QEMU build three made-up networks for arm64-wifi-pane-check.py; FORCE rebuilds this object on every
+# make, so a fake list can never survive into a build made without it (as NIMBLE_BASE).
+WIFI_FAKE ?=
+wifi.o: wifi.c wifi_proto.h wpa.h FORCE
+	$(CC) $(if $(WIFI_FAKE),-DWIFI_FAKE_SCAN) -c -o $@ wifi.c
 pi-wifi.o: wifi.c wifi_proto.h wifi_cfg.h wpa.h
 	$(CC) -DPI_BUILD -c -o $@ wifi.c
 wifi-fw:
