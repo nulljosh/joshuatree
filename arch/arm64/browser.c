@@ -54,7 +54,7 @@ static struct { unsigned form; char name[32], value[64]; unsigned char kind, on,
 static unsigned nforms, nfields;
 static const char *post_body; static unsigned post_len;   /* the next fetch POSTs this, on its first hop only */
 /* The cookie jar: name=value per host, sent back to that host alone. A Secure cookie is taken and sent over https only.
-   ponytail: no Domain or Path matching and no expiry beyond Max-Age=0; it lives until the Pi restarts. */
+   ponytail: no Domain or Path matching; Max-Age=0 or an Expires date in the past deletes. */
 #define COOKIE_MAX 24
 static struct { char host[128], name[32], value[192]; int secure, keep; } jar[COOKIE_MAX];
 static unsigned njar;         /* 0RGB, img_w[k] to a row. ponytail: static, 1.9 MB; the heap is a bump that callers roll back */
@@ -172,7 +172,9 @@ static void yt_play(const char *vid) {
 }
 /* 6.26.0: the jar is the signed-in person's. A cookie its site marks persistent (Max-Age or Expires) is kept in their
    keychain, sealed, and comes back after a restart; a session cookie never leaves memory. Another sign-in, or nobody,
-   empties the jar and loads that person's. ponytail: an Expires date in the past is not acted on, only Max-Age=0. */
+   empties the jar and loads that person's. 6.30.0: an Expires date in the past deletes, like Max-Age=0. ponytail: a kept
+   cookie's own date is not stored, so one that runs out while the Pi is up stays until it is replaced or cleared. */
+int http_date_past(const char *d, unsigned n);   /* clock.c */
 extern char current_user[];   /* login.c */
 void accounts_wipe(void *p, unsigned n);
 int keychain_get(const char *item, char *out, unsigned max); int keychain_set(const char *item, const char *value);
@@ -223,13 +225,18 @@ static void take_cookies(const char *raw, unsigned got, const struct url *u) {  
         if (eq >= h || raw[eq] != '=' || eq == a || eq - a >= sizeof jar[0].name) continue;
         unsigned v = eq + 1, ve = v; while (ve < h && raw[ve] != ';' && raw[ve] != '\r' && raw[ve] != '\n') ve++;
         unsigned le = ve; while (le < h && raw[le] != '\r' && raw[le] != '\n') le++;
-        int secure = 0, gone = 0, keep = 0;
+        int secure = 0, gone = 0, keep = 0, expired = 0, maxage = 0;
         for (unsigned k = ve; k < le; k++) if (raw[k] == ';') {
             unsigned t = k + 1; while (t < le && raw[t] == ' ') t++;
             if (starts(raw + t, "secure") && (t + 6 == le || raw[t + 6] == ';' || raw[t + 6] == ' ')) secure = 1;
             if (starts(raw + t, "max-age=0") || starts(raw + t, "max-age=-")) gone = 1;
-            else if (starts(raw + t, "max-age=") || starts(raw + t, "expires=")) keep = 1;
+            else if (starts(raw + t, "expires=")) {   /* Max-Age wins over Expires when a line carries both */
+                unsigned e = t + 8, ee = e; while (ee < le && raw[ee] != ';') ee++;
+                while (ee > e && raw[ee - 1] == ' ') ee--;
+                if (http_date_past(raw + e, ee - e)) expired = 1; else keep = 1;
+            } else if (starts(raw + t, "max-age=")) { keep = 1; maxage = 1; }
         }
+        if (expired && !maxage) gone = 1;
         if (secure && !u->tls) continue;   /* a page over plain http may not set a Secure cookie */
         unsigned c = 0;
         for (; c < njar; c++) {   /* the same host and name: replaced */

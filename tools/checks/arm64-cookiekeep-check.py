@@ -5,11 +5,14 @@ does not, and nobody else gets either.
 A check card with ann and bob, and a stub server on the host: /set answers with Set-Cookie keep=abc123 (Max-Age, so
 persistent) and sess=xyz789 (a session cookie); /echo writes back the Cookie header it was sent. Four boots of one card:
   1. ann: browse /set -> the jar says keep is kept; `cookies` lists both by name, never a value; /echo gets both.
-  2. ann again: /echo gets keep=abc123 alone (the session cookie stayed in memory); `cookies clear`.
+     Then /expire (6.30.0) sends sess with an Expires date in 1970, tmp with the dashed 1970 spelling, and late with
+     Max-Age=60 and a 1970 Expires: /echo gets keep and late (Max-Age wins), not sess or tmp.
+  2. ann again: /echo gets keep=abc123 and late=z (the session cookie stayed in memory); `cookies clear`.
   3. bob: /echo gets no cookie, and `cookies` says 0.
   4. ann: /echo gets no cookie (the clear was kept).
 The card's JT/HOME/ann/KEYCHAIN.BIN never holds the value in plain text, and no value reaches the UART.
-Discriminating: drop jar_save from take_cookies in browser.c and boot 2's /echo gets nothing.
+Discriminating: drop jar_save from take_cookies in browser.c and boot 2's /echo gets nothing; make http_date_past in
+clock.c return 0 and boot 1's /echo still carries sess and tmp.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-cookiekeep-check.py   (from the repo root)
 """
@@ -29,6 +32,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path == "/set":
             body = b"<html><body><p>cookies set</p></body></html>"
             self.send_response(200); self.send_header("Set-Cookie", "keep=abc123; Path=/; Max-Age=3600"); self.send_header("Set-Cookie", "sess=xyz789; Path=/")
+        elif self.path == "/expire":
+            body = b"<html><body><p>cookies expired</p></body></html>"
+            self.send_response(200)
+            self.send_header("Set-Cookie", "sess=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
+            self.send_header("Set-Cookie", "tmp=t1; Path=/; Expires=Thu, 01-Jan-1970 00:00:01 GMT")
+            self.send_header("Set-Cookie", "late=z; Max-Age=60; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
         else:
             got = self.headers.get("Cookie", ""); seen.append(got)
             body = ("<html><body><p>echo done</p></body></html>").encode()
@@ -100,11 +109,15 @@ try:
     check("cookies lists both by name, never a value", ok and "10.0.2.2 keep kept" in out and "abc123" not in out and "xyz789" not in out, out[-300:])
     S.run("browse %s/echo" % base, "echo done", 30)
     check("the page gets both", seen[-1:] == ["keep=abc123; sess=xyz789"] or seen[-1:] == ["sess=xyz789; keep=abc123"], seen[-1:])
+    ok, out = S.run("browse %s/expire" % base, "cookies expired", 30)
+    check("a past Expires is not taken, Max-Age beats it", ok and "cookie tmp" not in out and "browser: cookie late (kept)" in out, out[-300:])
+    S.run("browse %s/echo" % base, "echo done", 30)
+    check("a past Expires deletes, in both spellings", sorted(seen[-1].split("; ")) == ["keep=abc123", "late=z"] if seen else False, seen[-1:])
     S.stop(); S = None
     S = Session("two")
     check("boot 2: ann again", S.boot("ann", "hunter22"), S.uart()[-300:])
     S.run("browse %s/echo" % base, "echo done", 30)
-    check("after a restart only the persistent cookie comes back", seen[-1:] == ["keep=abc123"], seen[-1:])
+    check("after a restart only the persistent cookies come back", sorted(seen[-1].split("; ")) == ["keep=abc123", "late=z"] if seen else False, seen[-1:])
     ok, out = S.run("cookies clear", "browser: cookies cleared", 10)
     check("cookies clear empties the jar", ok, out[-200:])
     S.stop(); S = None
