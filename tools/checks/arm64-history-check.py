@@ -7,8 +7,11 @@ coast, city, then desert again. Then:
   `history` lists Desert, City, Coast, newest first (desert's second visit moved it up, once);
   `history granite` finds Desert and Coast, `history granite kelp` Coast alone, `history GRANITE` the same as lower case;
   `history top` puts Desert, visited twice, first;
+  6.38.0, in Blackcomb: typing "granite" in the address bar finds the two matches (drawn over the well), Desert first; "granite
+  kelp" Coast alone; Tab picks the first, Tab again the second, and Enter opens it;
   `history clear` empties it, and `history` then lists nothing.
-Discriminating: drop hist_add from show() in browser.c and `history` finds nothing.
+Discriminating: drop hist_add from show() in browser.c and `history` finds nothing; drop the hq_update call after a
+typed letter in browser_ui.h and the address bar shows no matches.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-history-check.py   (from the repo root)
 """
@@ -44,7 +47,7 @@ subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 b = subprocess.run(["make", "-C", arch, "kernel8.elf"], capture_output=True, text=True, timeout=900)
 if b.returncode: print((b.stdout + b.stderr)[-1500:]); print("FAIL: arch/arm64 does not build"); sys.exit(1)
 log, sock = os.path.join(tmp, "uart"), os.path.join(tmp, "qmp")
-q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-global", "virtio-mmio.force-legacy=false",
+q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-global", "virtio-mmio.force-legacy=false", "-device", "ramfb",
                       "-netdev", "user,id=n", "-device", "virtio-net-device,netdev=n", "-device", "virtio-keyboard-device",
                       "-drive", "if=none,id=card,file=%s,format=raw" % card, "-device", "virtio-blk-device,drive=card",
                       "-display", "none", "-serial", "file:" + log, "-qmp", "unix:%s,server,nowait" % sock,
@@ -90,6 +93,29 @@ try:
     check("the search ignores case", sorted(listed(out)) == ["Coast", "Desert"], out[-400:])
     ok, out = run("history top", " pages\n")
     check("history top puts Desert, visited twice, first", listed(out)[:1] == ["Desert"], out[-400:])
+    key("esc"); time.sleep(0.5); key("f1")
+    for ch in "blackcomb": key(ch)
+    key("ret"); check("Spotlight opens Blackcomb", wait_for("browser open", 10), uart()[-300:])
+    n = len(uart())
+    for ch in "granite": key(ch)
+    ok = wait_for("browser: history 2 %s/coast" % base, 30, n); time.sleep(0.5)
+    out = uart()[n:]
+    last = out[out.rfind("browser: history matches"):]
+    check("typing granite in the address bar shows Desert, then Coast (6.38.0)", ok and last.startswith("browser: history matches 2") and "browser: history 1 %s/desert" % base in last, out[-500:])
+    n = len(uart())
+    for ch in " kelp": key(*QK.get(ch, (ch,)))
+    ok = wait_for("browser: history matches 1\nbrowser: history 1 %s/coast" % base, 30, n)
+    check("granite kelp narrows it to Coast", ok, uart()[n:][-400:])
+    n = len(uart())
+    for _ in range(5): key("backspace")
+    wait_for("browser: history matches 2", 30, n); time.sleep(0.5)
+    n = len(uart()); key("tab")
+    check("Tab picks the first match", wait_for("browser: picked history 1 %s/desert" % base, 10, n), uart()[n:][-300:])
+    n = len(uart()); key("tab")
+    check("Tab again picks the second", wait_for("browser: picked history 2 %s/coast" % base, 10, n), uart()[n:][-300:])
+    n = len(uart()); key("ret")
+    check("Enter opens the picked page", wait_for("browser: load %s/coast" % base, 10, n) and wait_for("browser: page ", 20, n), uart()[n:][-300:])
+    key("esc"); time.sleep(0.5); key("f2"); wait_for("terminal open", 10)
     ok, out = run("history clear", "browser: history cleared")
     check("history clear empties it", ok, out[-200:])
     ok, out = run("history", " pages\n")

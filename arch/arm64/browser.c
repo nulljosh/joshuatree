@@ -1081,6 +1081,32 @@ int browser_top_site(unsigned r, char *url, unsigned um, char *ttl, unsigned tm)
     scopy(url, u, un, um); scopy(ttl, t, tn, tm);
     return 1;
 }
+static int hw_words(const char *l, unsigned ln, const char *q, unsigned n) {   /* every word of q is in the line, any case */
+    for (unsigned a = 0; a < n;) {
+        while (a < n && q[a] == ' ') a++;
+        unsigned b = a; while (b < n && q[b] != ' ') b++;
+        if (b > a && !hw_has(l, ln, q + a, b - a)) return 0;
+        a = b;
+    }
+    return 1;
+}
+/* 6.38.0: Blackcomb's address bar searches history as you type: the r-th page, newest first, holding every typed word in
+   its title, address or words. r 0 reads the file afresh. ponytail: one card read a keystroke; cache it if the Pi lags. */
+int browser_history_match(const char *q, unsigned r, char *url, unsigned um, char *ttl, unsigned tm) {
+    static unsigned got;
+    if (!r) got = (unsigned)hw_read();
+    unsigned n = slen(q);
+    for (unsigned i = 0; i < got;) {
+        unsigned e = i; while (e < got && hw_buf[e] != '\n') e++;
+        if (e > i && hw_words(hw_buf + i, e - i, q, n) && !r--) {
+            const char *u, *t; unsigned un = hw_field(hw_buf + i, e - i, 1, &u), tn = hw_field(hw_buf + i, e - i, 2, &t);
+            scopy(url, u, un, um); scopy(ttl, t, tn, tm);
+            return 1;
+        }
+        i = e + 1;
+    }
+    return 0;
+}
 static void history_command(const char *q, unsigned n) {   /* q is what follows "history" */
     while (n && *q == ' ') { q++; n--; }
     if (n == 5 && starts(q, "clear")) { kputs(hw_save("", 0) ? "browser: history cleared\n" : "browser: no card to clear it on\n"); return; }
@@ -1091,14 +1117,7 @@ static void history_command(const char *q, unsigned n) {   /* q is what follows 
     } else {
         for (unsigned i = 0; i < (unsigned)got && shown < 10;) {
             unsigned e = i; while (e < (unsigned)got && hw_buf[e] != '\n') e++;
-            int all = 1;
-            for (unsigned a = 0; a < n && all;) {   /* every word must be in the line */
-                while (a < n && q[a] == ' ') a++;
-                unsigned b = a; while (b < n && q[b] != ' ') b++;
-                if (b > a && !hw_has(hw_buf + i, e - i, q + a, b - a)) all = 0;
-                a = b;
-            }
-            if (all && e > i) hist_line(++shown, hw_buf + i, e - i);
+            if (e > i && hw_words(hw_buf + i, e - i, q, n)) hist_line(++shown, hw_buf + i, e - i);
             i = e + 1;
         }
     }
