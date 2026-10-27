@@ -7,8 +7,10 @@ Fixtures for 10.0.2.2, one throwaway certificate built into the kernel's anchors
   "Sam: Lunch? [2]" (newest first) and a New message form; `open 2` shows Sam's message and a Reply form; filling its
   body and pressing Reply sends to sam@example.com with "Subject: Re: Lunch?"; on the inbox, filling to, subject and
   body and pressing Send sends to new@example.com; each send comes back to the inbox. In the Blackcomb window, typing
-  mail: loads the inbox (not a web search), and Tab then Enter opens the first message.
-Discriminating: drop the mail: branch in browser.c's fetch_once and `browse mail:` fails to load.
+  mail: loads the inbox (not a web search), and Tab then Enter opens the first message. Then Mail from Spotlight
+  (6.32.0), signed in, opens Blackcomb on the inbox and not the card's MAIL.TXT app.
+Discriminating: drop the mail: branch in browser.c's fetch_once and `browse mail:` fails to load; drop the slot 2 line
+in windows.c's dock_activate and Spotlight's Mail starts the offline app.
 Skips (exit 0) when clang's aarch64 target, ld.lld, openssl or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-mailpages-check.py   (from the repo root)
 """
@@ -132,6 +134,9 @@ try:
     check("typing mail: in Blackcomb loads the inbox, not a search", wait_for("browser: load mail:", 10, n) and wait_for("browser: page ", 30, n) and "duckduckgo" not in uart()[n:], uart()[n:][-300:])
     n = len(uart()); key("tab"); key("ret")
     check("Tab and Enter open the first message", wait_for("browser: link 1", 10, n) and wait_for("browser: page ", 30, n), uart()[n:][-300:])
+    key("esc"); time.sleep(0.5)
+    n = len(uart()); key("f1"); [key(c) for c in "mail"]; key("ret")
+    check("Mail from Spotlight, signed in, is the inbox in Blackcomb", wait_for("browser: load mail:", 15, n) and wait_for("browser: page ", 30, n) and "mail: ring-3 window" not in uart()[n:], uart()[n:][-300:])
 finally:
     q.kill(); q.wait()
     for srv in (imap, smtp): srv.shutdown()

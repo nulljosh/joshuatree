@@ -316,6 +316,8 @@ void brick_open(void);
 void brick_paint(void);
 void browser_click(int lx, int ly);
 void browser_open(void);
+void browser_go(const char *url);   /* 6.32.0 */
+int mail_signed_in(void);           /* mail.c */
 void browser_paint(int report);
 unsigned long civil_days(long y, unsigned m, unsigned d);
 void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day);

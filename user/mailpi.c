@@ -1,7 +1,7 @@
 /* mailpi: Mail for the ARM (Pi) build, three panes at the Mac Mail scale: mailboxes, the message list, the reading pane.
  *
  * Built only by arch/arm64/Makefile, as the app called "mail" (the Mail dock tile, Spotlight and Samantha's [[open mail]]
- * start it). i386 keeps user/mail.c. Read only: no network mail, no passwords, no address book, nothing written to the card.
+ * start it until mail is signed in; 6.32.0 then opens the real inbox in Blackcomb instead). i386 keeps user/mail.c. Read only: no network mail, no passwords, no address book, nothing written to the card.
  * The mail is MAIL.TXT in the card's JT/ folder when there is one, the very format user/mail.c keeps ("r|from|subject|body"
  * lines, a first character of u unread, r read, s sent, x unsent), else a handful of made-up sample messages, and the
  * window says so ("Sample messages" under the mailboxes). Up and Down move in the list, Left and Right change mailbox,

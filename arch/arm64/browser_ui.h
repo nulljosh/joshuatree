@@ -486,6 +486,15 @@ void browser_open(void) {
     br_wrap(); bm_sel = 0; bm_load();   /* 6.7.0: every open, so the lists are the signed-in person's */
     browser_paint(1); uart_puts("browser open\n");
 }
+void browser_go(const char *url) {   /* 6.32.0: open Blackcomb on a page, as typing it in the address bar would */
+    browser_open();
+    if (!browser_live) return;
+    char cmd[BR_ADDR_MAX + 8] = "browse "; unsigned n = 7;
+    for (const char *p = url; *p && n < sizeof cmd - 1; p++) cmd[n++] = *p;
+    cmd[n] = 0;
+    con_quiet = 1; uart_puts("browser: load "); uart_puts(url); uart_putc('\n');
+    br_run(cmd);
+}
 void browser_close(void) {
     if (!browser_live) return;
     browser_live = br_edit = 0;
