@@ -2116,6 +2116,7 @@ Condensed 2026-10-12. The line numbers and per-finding write-ups are in git hist
   - 6.31.0: each field keeps `at` and `len`, the span of the page text that shows it; `field_show` splices in its new state and moves the fields after it, and Blackcomb rewraps (`br_wk_w = -1`).
   - 6.30.0: an Expires date behind the clock (`http_date_past` in clock.c) deletes the cookie like Max-Age=0; Max-Age wins when a line has both.
   - 6.26.0: the cookie jar is the signed-in person's (`jar_switch` before every fetch); a cookie with Max-Age or Expires is `keep` and `jar_save` seals the kept ones in the keychain as "cookies"; `cookies` and `cookies clear` at the Terminal.
+  - 6.36.0: IMG_MAX is 8 (was 4); `img_px` is BSS, 480 KiB an image.
   - 6.35.0: BR_CENTER and BR_LEFT marks around a centred element (`<center>`, align=center, inline or `center_sel` text-align:center); browser_ui.h carries the state across lines, flags a line BR_ST_CENTER and starts it half the spare width in.
   - 6.34.0: `css_rules` also keeps one-part selectors whose block `says_bold` (`bold_sel`); to_text puts BR_BOLD when one opens and BR_PLAIN when its own tag's nesting closes, one at a time.
   - 6.33.0: a two-part descendant rule (`hide_sel` with one space) hides its second part (`sel_match`) while `anc_track` has its first part open, counting that tag's own nesting in `anc_d`.
