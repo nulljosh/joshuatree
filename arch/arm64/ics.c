@@ -62,12 +62,12 @@ static unsigned parse(char *f, unsigned n, unsigned from) {
         else if (in && ln >= 10 && starts(l, "END:VEVENT")) {
             in = 0; seen++;
             if (day && day >= from) add(day, sn ? sum : "(no title)", sn ? sn : 10);
-        } else if (in && starts(l, "DTSTART")) {
+        } else if (in && ln >= 7 && starts(l, "DTSTART")) {   /* 6.48.1: ln >= 7, a short last line is not read past */
             unsigned c = 7; while (c < ln && l[c] != ':') c++;
             unsigned v = 0, k = 0;
             for (c++; c < ln && k < 8 && l[c] >= '0' && l[c] <= '9'; c++, k++) v = v * 10 + (unsigned)(l[c] - '0');
             if (k == 8 && v / 100 % 100 >= 1 && v / 100 % 100 <= 12 && v % 100 >= 1 && v % 100 <= 31) day = v;
-        } else if (in && starts(l, "SUMMARY")) {
+        } else if (in && ln >= 7 && starts(l, "SUMMARY")) {
             unsigned c = 7; while (c < ln && l[c] != ':') c++;
             sn = 0;
             for (c++; c < ln && sn < TEXT_MAX; c++) {
@@ -196,6 +196,7 @@ static int dav_req(const char *method, const char *path, const char *name, const
     if (b >= 0) { *body = out + b; *bn = (unsigned)got - (unsigned)b; }
     return http_status_of(out, (unsigned)got);
 }
+static int has(const char *x, unsigned n, unsigned i, const char *w) { unsigned l = slen(w); return i + l <= n && starts(x + i, w); }   /* 6.48.1: w at i, inside n */
 /* Each calendar-data in a multistatus, XML escapes undone, run together into one feed in place. Its length. */
 static unsigned dav_feed(char *x, unsigned n) {
     unsigned w = 0;
@@ -206,13 +207,13 @@ static unsigned dav_feed(char *x, unsigned n) {
         unsigned g = i; while (g < n && x[g] != '>') g++;
         if (g >= n || x[g - 1] == '/') { i = g; continue; }         /* <calendar-data/>, empty */
         unsigned a = g + 1, e = a;
-        if (starts(x + a, "<![CDATA[")) { a += 9; e = a; while (e + 2 < n && !(x[e] == ']' && x[e + 1] == ']' && x[e + 2] == '>')) e++; }
+        if (has(x, n, a, "<![CDATA[")) { a += 9; e = a; while (e + 2 < n && !(x[e] == ']' && x[e + 1] == ']' && x[e + 2] == '>')) e++; }
         else while (e < n && x[e] != '<') e++;
         for (unsigned r = a; r < e;) {
             if (x[r] == '&') {
-                const char *t = x + r; char c = 0; unsigned l = 0;
-                if (starts(t, "&lt;")) { c = '<'; l = 4; } else if (starts(t, "&gt;")) { c = '>'; l = 4; } else if (starts(t, "&amp;")) { c = '&'; l = 5; }
-                else if (starts(t, "&quot;")) { c = '"'; l = 6; } else if (starts(t, "&apos;")) { c = '\''; l = 6; } else if (starts(t, "&#13;") || starts(t, "&#xd;")) { c = '\r'; l = 5; }
+                char c = 0; unsigned l = 0;
+                if (has(x, e, r, "&lt;")) { c = '<'; l = 4; } else if (has(x, e, r, "&gt;")) { c = '>'; l = 4; } else if (has(x, e, r, "&amp;")) { c = '&'; l = 5; }
+                else if (has(x, e, r, "&quot;")) { c = '"'; l = 6; } else if (has(x, e, r, "&apos;")) { c = '\''; l = 6; } else if (has(x, e, r, "&#13;") || has(x, e, r, "&#xd;")) { c = '\r'; l = 5; }
                 if (l) { x[w++] = c; r += l; continue; }
             }
             x[w++] = x[r++];
@@ -358,7 +359,7 @@ static const char *dav_tag(const char *x, unsigned n, const char *name, unsigned
     for (unsigned i = from; i + nl + 1 < n; i++) if (x[i] == '<' && x[i + 1] != '/') {
         unsigned k = i + 1; while (k < n && x[k] != ':' && x[k] != '>' && x[k] != ' ' && x[k] != '/') k++;
         unsigned a = k < n && x[k] == ':' ? k + 1 : i + 1;
-        if (a + nl <= n && starts(x + a, name) && (x[a + nl] == '>' || x[a + nl] == ' ' || x[a + nl] == '/')) return x + i;
+        if (a + nl < n && starts(x + a, name) && (x[a + nl] == '>' || x[a + nl] == ' ' || x[a + nl] == '/')) return x + i;   /* 6.48.1: < n, the byte after the name is read */
     }
     return 0;
 }
@@ -368,7 +369,8 @@ static int dav_href(const char *x, unsigned n, const char *after, char *out, uns
     { const char *g = t; while (g < x + n && *g != '>') g++; if (g >= x + n || g[-1] == '/') return 0; }   /* <c:calendar-home-set/>: empty */
     const char *h = dav_tag(x, n, "href", (unsigned)(t - x));
     if (!h) return 0;
-    while (*h != '>') h++;
+    while (h < x + n && *h != '>') h++;   /* 6.48.1: bounded, a server's XML may end mid-tag */
+    if (h >= x + n) return 0;
     h++; unsigned i = 0; while (h + i < x + n && h[i] != '<' && i + 1 < max) { out[i] = h[i]; i++; }
     out[i] = 0;
     return i > 0;
@@ -433,7 +435,7 @@ static void dav_discover(void) {
             cp(cal_url[ncal], dav_url, slen(dav_url), sizeof cal_url[0]);
             cal_name[ncal][0] = 0;
             const char *dn = dav_tag(r, seg, "displayname", 0);
-            if (dn) { while (*dn != '>') dn++; if (dn[-1] != '/') { dn++; unsigned k = 0; while (dn + k < r + seg && dn[k] != '<' && k + 1 < sizeof cal_name[0]) { cal_name[ncal][k] = dn[k]; k++; } cal_name[ncal][k] = 0; } }
+            if (dn) { while (dn < r + seg && *dn != '>') dn++; if (dn < r + seg && dn[-1] != '/') { dn++; unsigned k = 0; while (dn + k < r + seg && dn[k] != '<' && k + 1 < sizeof cal_name[0]) { cal_name[ncal][k] = dn[k]; k++; } cal_name[ncal][k] = 0; } }
             ncal++;
         }
         r = next;
