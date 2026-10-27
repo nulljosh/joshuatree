@@ -75,7 +75,6 @@ What is there today: Wi-Fi joins from the card's config, DNS and the clock come 
 The steps, one minor version each, cheapest unblock first:
 - [ ] [Sonnet] Keep-alive, once there is something to reuse a connection for (tabs, inline images): `net.c` holds one connection, so 6.12.0 sends `Connection: close`.
 - [ ] [Sonnet] More of CSS for reading: text-align right and justify, font-weight and text-align for descendant selectors, and display:none for selectors of three parts or with > + ~ (6.33.0 takes two-part descendants); no JavaScript for 7.0 (a decision to revisit at 8.0). More than eight images a page, and progressive JPEG. Check: a fixture page's pixels.
-- [ ] [Sonnet] A tab strip drawn above the page instead of "tab N of M" in the status line.
 - [ ] [Sonnet] Message bodies longer than one line from the Reply field, and Wi-Fi passwords typed in Settings in the keychain too.
 - [ ] [Sonnet] CalDAV deletes both ways, finding the calendar from an account address (principal and calendar-home-set discovery), and a sync that runs itself; 6.24.0 needs the collection's own address and `calendar sync`. Board pass: iCloud's real CalDAV.
 - [ ] [Sonnet] Wi-Fi joins without a restart, and a fresh scan from Settings (6.23.0 lists the start-up scan). Board pass: a card with only `JT/WIFI.TXT` (no built-in network), picked in Settings, joins a home network. Check: the board.
@@ -1023,6 +1022,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **6.39.0 (2026-10-27)**: A tab strip in Blackcomb. With two tabs or more a row of tabs sits between the toolbar and the page, each named by its page's title, the front one white; a click brings a tab to the front. It replaces "tab N of M" in the status line. Check: `arm64-tabs-check.py` (the strip's names, and a click on each tab).
 - **6.38.0 (2026-10-27)**: Blackcomb's address bar searches your history as you type. From two letters, up to six pages holding every typed word (in the title, address or words) cover the well, newest first; Tab picks one and Enter opens it, and Enter with none picked loads or searches as before. Check: `arm64-history-check.py` (granite finds two, granite kelp one, Tab, Tab, Enter).
 - **6.37.0 (2026-10-27)**: Top Sites on Blackcomb's start page, between Favorites and Recent: up to four pages you have visited twice or more, most visited first, read from the searchable history. Check: `arm64-bookmarks-check.py` (a page visited three times listed, one visited once not).
 - **6.36.0 (2026-10-27)**: Eight images a page, up from four, still inside the same five-second budget; each is kept at 400 by 300 at most, so eight take 3.75 MiB. Check: `arm64-images-check.py` (a page with ten PNGs loads eight and never asks for the ninth).

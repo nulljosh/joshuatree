@@ -80,7 +80,7 @@ static unsigned hn, hi;                   /* pages in history, and which one is 
 /* 6.16.0: tabs, up to TAB_MAX. Each keeps its own history; a switch fetches that tab's page again, since one page is held
    in memory at a time. A new tab starts empty, which Blackcomb shows as its start page. */
 #define TAB_MAX 4
-static struct { char hist[HIST_MAX][URL_MAX]; unsigned hn, hi; } tabs[TAB_MAX];
+static struct { char hist[HIST_MAX][URL_MAX]; unsigned hn, hi; char label[48]; } tabs[TAB_MAX];   /* label: 6.39.0, the title it had when it went behind */
 static unsigned ntabs = 1, tab_cur;
 static unsigned loads;                    /* pages that arrived so far: the Browser window sees a change and re-reads the page */
 
@@ -1224,6 +1224,7 @@ static void submit(unsigned f) {
 static void tab_keep(void) {   /* the current tab's history, into its slot */
     for (unsigned k = 0; k < hn; k++) scopy(tabs[tab_cur].hist[k], hist[k], slen(hist[k]), URL_MAX);
     tabs[tab_cur].hn = hn; tabs[tab_cur].hi = hi;
+    const char *l = title[0] ? title : cur; scopy(tabs[tab_cur].label, l, slen(l), sizeof tabs[0].label);
 }
 static void tab_take(unsigned t) {   /* tab t in front: its history back, its page fetched again, or the empty page */
     tab_cur = t; hn = tabs[t].hn; hi = tabs[t].hi;
@@ -1244,7 +1245,7 @@ static int tab_command(const char *q, unsigned n) {   /* tab new, tab N, tab clo
     }
     if (word(q, n, "tab new")) {
         if (ntabs == TAB_MAX) { kputs("browser: tabs full, close one first\n"); return 1; }
-        tab_keep(); tabs[ntabs].hn = tabs[ntabs].hi = 0; ntabs++;
+        tab_keep(); tabs[ntabs].hn = tabs[ntabs].hi = 0; tabs[ntabs].label[0] = 0; ntabs++;
         tab_take(ntabs - 1);
         return 1;
     }
@@ -1385,6 +1386,10 @@ const char *browser_title(void) { return title; }                     /* its <ti
 const char *browser_url(void) { return cur; }                          /* the page on screen, "" before the first */
 const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h) { if (k >= nimg || !img_w[k]) return 0; *w = img_w[k]; *h = img_h[k]; return img_px[k]; }   /* 6.14.0 */
 unsigned browser_tabs(unsigned *front) { *front = tab_cur + 1; return ntabs; }   /* 6.16.0: how many tabs, and which is in front */
+const char *browser_tab_label(unsigned t) {   /* 6.39.0: tab t (0-based) for Blackcomb's tab strip */
+    const char *l = t == tab_cur ? (title[0] ? title : cur) : t < ntabs ? tabs[t].label : "";
+    return l[0] ? l : "New Tab";
+}
 /* 6.18.0: a page made somewhere else (mail.c's message): shown as a page named name, with no history and its images never
    fetched (a remote image in a mail tells its sender it was opened). */
 void browser_render(const char *html, unsigned n, const char *name) {

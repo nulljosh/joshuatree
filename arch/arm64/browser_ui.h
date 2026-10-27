@@ -17,10 +17,12 @@ unsigned browser_loads(void);
 int browser_field_secret(unsigned n);
 int browser_field_kind(unsigned n);
 unsigned browser_tabs(unsigned *front);
+const char *browser_tab_label(unsigned t);
 static unsigned br_field;   /* 6.15.0: the form field (its link number) the address bar is editing, 0 when it edits the address */
 const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h);   /* 6.14.0: image k's 0RGB pixels and kept size, 0 when it did not load */
 #define BR_ROW 16          /* a page line, logical pixels */
 #define BR_PAGE_Y 64       /* the page well's top, under the toolbar */
+#define BR_STRIP 24        /* 6.39.0: the tab strip's height, between the toolbar and the well */
 #define BR_VL_MAX 1024     /* wrapped lines kept: 8 KiB of page never needs more than this */
 #define BR_ADDR_MAX 200
 #define BR_ACCENT 0x00b5502c
@@ -155,7 +157,8 @@ static void hq_update(void) {   /* after each keystroke in the address bar: two 
 }
 static int br_x(void) { return win_lx + 8; }
 static int br_w(void) { return win_lw - 16; }
-static int br_h(void) { return win_lh - BR_PAGE_Y - 26; }
+static int br_page_y(void) { unsigned f; return BR_PAGE_Y + (browser_tabs(&f) > 1 ? BR_STRIP : 0); }   /* 6.39.0: the tab strip, with two tabs or more, pushes the well down */
+static int br_h(void) { return win_lh - br_page_y() - 26; }
 static int br_rows(void) { return (br_h() - 8) / BR_ROW; }
 static const char *br_wk_t; static unsigned br_wk_len, br_wk_loads; static int br_wk_w = -1;   /* what the wrapped lines were made from: the page text, its length, the load count and the width */
 static void br_wrap(void) {   /* the page into lines that fit the well: break at the last space that fits, or inside a word that is too long. Unchanged text and width keep the lines already made: wrapping measures every character, the slow part on a Pi */
@@ -234,7 +237,7 @@ static void br_mascot_draw(int cx, int top) {   /* the mascot, 96 logical px squ
     }
 }
 void browser_paint(int report) {
-    int s = (int)window_scale(), x = br_x(), w = br_w(), y = win_ly + BR_PAGE_Y, h = br_h(), ty = win_ly + 34;
+    int s = (int)window_scale(), x = br_x(), w = br_w(), y = win_ly + br_page_y(), h = br_h(), ty = win_ly + 34;
     cur_hide();
 #ifdef BR_TRACE
     unsigned long h0 = off_screen_hash(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
@@ -262,6 +265,20 @@ void browser_paint(int report) {
     while (*shown && gui_text_width(shown) > fw - 36) shown++;   /* a long address shows its end */
     gui_text(*shown || (br_edit && !br_field) ? shown : br_field ? "Type the field's text" : "Type an address and press Enter", fx + 6, ty + 3, *shown || br_edit ? 0x001C1C1E : 0x0075726E);
     if (br_edit) window_rect(fx + 7 + gui_text_width(shown), ty + 4, 1, 14, BR_ACCENT);
+    {   /* 6.39.0: the tab strip, with two tabs or more: one cell each, the front one white like the well, the rest sand */
+        unsigned front, nt = browser_tabs(&front);
+        if (nt > 1) {
+            int sy = win_ly + BR_PAGE_Y - 2, cw = w / (int)nt;
+            for (unsigned t = 1; t <= nt; t++) {
+                int cx = x + (int)(t - 1) * cw;
+                window_rect(cx, sy, cw - 2, BR_STRIP - 4, t == front ? 0x00FFFFFF : 0x00EDE6DC);
+                char nm[48]; br_set(nm, browser_tab_label(t - 1), sizeof nm);
+                for (unsigned c = br_slen(nm); c && gui_text_width(nm) > cw - 16; ) nm[--c] = 0;
+                gui_text(nm, cx + (cw - 2 - gui_text_width(nm)) / 2, sy + 1, t == front ? 0x001C1C1E : 0x0075726E);
+                if (report) { con_quiet = 1; uart_puts(t == front ? "browser: shows tab front " : "browser: shows tab "); uart_dec(t); uart_puts(" at "); uart_dec((unsigned)(cx + cw / 2)); uart_putc(','); uart_dec((unsigned)(sy + 10)); uart_putc(' '); uart_puts(nm); uart_putc('\n'); }
+            }
+        }
+    }
     window_rect(x - 1, y - 1, w + 2, h + 2, 0x00DDD8CE); window_rect(x, y, w, h, 0x00faf8f4);
     unsigned len; const char *t = browser_text(&len);
     int rows = br_rows();
@@ -360,10 +377,6 @@ void browser_paint(int report) {
     for (; left[o] && o < BR_ADDR_MAX; o++) st[o] = left[o];
     st[o] = 0;
     char right[24]; unsigned rn = 0;
-    {   /* 6.16.0: "tab 2 of 3" ahead of the line count once there is more than one tab */
-        unsigned front, nt = browser_tabs(&front);
-        if (nt > 1) { const char *a = "tab "; for (; *a; a++) right[rn++] = *a; right[rn++] = (char)('0' + front); for (a = " of "; *a; a++) right[rn++] = *a; right[rn++] = (char)('0' + nt); if (len) { right[rn++] = ','; right[rn++] = ' '; } }
-    }
     if (!br_loading && !br_msg[0] && len) {
         const char *a = "line "; for (; *a; a++) right[rn++] = *a;
         unsigned v = (unsigned)br_top + 1; char d[10]; unsigned z = 0; do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) right[rn++] = d[--z];
@@ -624,11 +637,20 @@ void browser_click(int lx, int ly) {
     }
     if (br_empty() && st_count() && lx >= br_x() && lx < br_x() + br_w()) {   /* a start-page row opens its page */
         for (unsigned k = 1; k <= st_count(); k++) {
-            int top = win_ly + BR_PAGE_Y + st_y(k) - 2;
+            int top = win_ly + br_page_y() + st_y(k) - 2;
             if (ly >= top && ly < top + BM_ROW) { br_bookmark(k); return; }
         }
     }
-    int y = win_ly + BR_PAGE_Y + 4;
+    {   /* 6.39.0: a click on a tab in the strip brings it to the front */
+        unsigned front, nt = browser_tabs(&front);
+        int sy = win_ly + BR_PAGE_Y - 2, cw = nt > 1 ? br_w() / (int)nt : 0;
+        if (nt > 1 && ly >= sy && ly < sy + BR_STRIP - 4 && lx >= br_x() && lx < br_x() + cw * (int)nt) {
+            unsigned t = (unsigned)((lx - br_x()) / cw) + 1;
+            if (t != front) { char c[8] = "tab 1"; c[4] = (char)('0' + t); br_run(c); }
+            return;
+        }
+    }
+    int y = win_ly + br_page_y() + 4;
     if (lx < br_x() || lx >= br_x() + br_w() || ly < y) return;
     unsigned vi = (unsigned)br_top + (unsigned)((ly - y) / BR_ROW);
     if (vi >= br_n || (ly - y) / BR_ROW >= br_rows()) return;

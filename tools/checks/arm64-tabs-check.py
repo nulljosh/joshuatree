@@ -12,7 +12,7 @@ Discriminating: drop tab_keep() from tab_take's callers in browser.c and `tab 1`
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-tabs-check.py   (from the repo root)
 """
-import http.server, json, shutil, socket, subprocess, sys, threading, time
+import http.server, json, re, shutil, socket, subprocess, sys, threading, time
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]
@@ -111,8 +111,21 @@ try:
     check("Cmd+T opens an empty tab", wait_for("browser: tab 2 of 2", 10, n), uart()[n:][-300:])
     type_text("%s/three" % base); key("ret")
     check("the new tab loads page three", wait_for("browser: load %s/three" % base, 10, n) and wait_for("browser: page ", 20, n), uart()[n:][-300:])
+    time.sleep(0.5); out = uart()[n:]
+    strip = {int(m.group(2)): (m.group(1) == "front ", int(m.group(3)), int(m.group(4)), m.group(5)) for m in re.finditer(r"browser: shows tab (front )?(\d) at (\d+),(\d+) (\S+)", out)}
+    check("the tab strip shows One behind and Three in front (6.39.0)", strip.get(1, (0,))[0:1] == (False,) and strip.get(1, (0, 0, 0, ""))[3] == "One"
+          and strip.get(2, (0,))[0] is True and strip.get(2, (0, 0, 0, ""))[3] == "Three", strip)
+    command("screendump", {"filename": str(tmp / "strip.ppm")})   # the strip, for a look: tmp/strip.ppm
+    def click(x, y):
+        command("input-send-event", {"events": [{"type": "abs", "data": {"axis": "x", "value": int(x * 32767 / 800)}}, {"type": "abs", "data": {"axis": "y", "value": int(y * 32767 / 600)}}]}); time.sleep(0.2)
+        for down in (True, False): command("input-send-event", {"events": [{"type": "btn", "data": {"button": "left", "down": down}}]}); time.sleep(0.1)
     k = len(gets); n = len(uart()); key("ctrl", "tab")
     check("Ctrl+Tab brings tab 1 back, page one fetched again", wait_for("browser: tab 1 of 2", 10, n) and wait_for("browser: page ", 20, n) and "/one" in gets[k:], (gets[k:], uart()[n:][-300:]))
+    if 2 in strip:
+        k = len(gets); n = len(uart()); click(strip[2][1], strip[2][2])
+        check("a click on tab 2 in the strip brings Three to the front", wait_for("browser: tab 2 of 2", 10, n) and wait_for("browser: page ", 20, n) and "/three" in gets[k:], (gets[k:], uart()[n:][-300:]))
+        k = len(gets); n = len(uart()); click(strip[1][1], strip[1][2])
+        check("and a click on tab 1 brings One back", wait_for("browser: tab 1 of 2", 10, n) and wait_for("browser: page ", 20, n) and "/one" in gets[k:], (gets[k:], uart()[n:][-300:]))
     n = len(uart()); key("meta_l", "w")
     check("Cmd+W closes the tab, not the window", wait_for("browser: tab 1 of 1", 10, n) and "browser closed" not in uart()[n:] and "/three" in gets[-1], (gets[-3:], uart()[n:][-300:]))
     n = len(uart()); key("meta_l", "w")
