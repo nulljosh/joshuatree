@@ -17,7 +17,10 @@
    Huffman entropy coding only (not arithmetic), 4:4:4 or 4:2:0 chroma
    subsampling only, a single interleaved scan (one SOS covering every
    component, the universal shape for a baseline JPEG straight off a web
-   server). Progressive (SOF2), extended-sequential (SOF1), lossless
+   server). Since joshuatree 6.46.0 progressive (SOF2) too: any number of
+   scans, spectral selection and successive approximation, with the same
+   component and subsampling limits; its coefficients are held whole, so it
+   needs 128 bytes a block more. Extended-sequential (SOF1), lossless
    (SOF3), arithmetic coding (SOF9-15), 12-bit precision, CMYK/4-component
    frames, 4:2:2 or other odd subsampling ratios, restart markers (DRI
    present at all) and multi-scan (non-interleaved) baseline all return
@@ -46,7 +49,7 @@
 
 #define JPEG_E_SIGNATURE   (-1)  /* no FFD8 SOI marker: not a JPEG at all */
 #define JPEG_E_TRUNCATED   (-2)  /* ran off the end of the file/stream */
-#define JPEG_E_UNSUPPORTED (-3)  /* progressive/arithmetic/12-bit/CMYK/odd subsampling/restart/multi-scan */
+#define JPEG_E_UNSUPPORTED (-3)  /* arithmetic/12-bit/CMYK/odd subsampling/restart/multi-scan baseline */
 #define JPEG_E_NOMEM       (-4)  /* kmalloc failed */
 #define JPEG_E_FORMAT      (-5)  /* marker order/length/table inconsistent */
 #define JPEG_E_HUFFMAN     (-6)  /* corrupt entropy-coded segment */

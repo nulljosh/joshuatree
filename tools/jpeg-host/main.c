@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include "jpeg.h"
 #include "jpeg_testdata.h"
+#include "jpeg_progdata.h"   /* 6.46.0 */
 
 #define MAX_DIFF_TOL 24
 #define MEAN_DIFF_TOL 6
@@ -33,6 +34,7 @@ static unsigned fnv(const unsigned char *p, unsigned n) {
     return h;
 }
 
+static int quiet_hash;   /* 6.46.0: progressive images print "proghash", which jpeg-check.sh does not look for */
 static int check(const char *name, const unsigned char *jpg, unsigned len,
                  const unsigned char *ref, unsigned ew, unsigned eh, unsigned ech) {
     unsigned char *out; unsigned w, h, ch;
@@ -53,7 +55,7 @@ static int check(const char *name, const unsigned char *jpg, unsigned len,
     int ok = dims_ok && maxdiff <= MAX_DIFF_TOL && meandiff <= MEAN_DIFF_TOL;
     printf("%s: %ux%u ch=%u maxdiff=%u meandiff=%.2f fnv=%08x %s\n",
           name, w, h, ch, maxdiff, meandiff, f, ok ? "ok" : "FAIL");
-    printf("jpeghash %s %08x\n", name, f); /* parsed by jpeg-check.sh */
+    printf(quiet_hash ? "proghash %s %08x\n" : "jpeghash %s %08x\n", name, f); /* jpeghash: parsed by jpeg-check.sh */
     free(out);
     return !ok;
 }
@@ -70,6 +72,28 @@ int main(void) {
                  jpegt_photo_q95_444_pilref, JPEGT_PHOTO_Q95_444_W, JPEGT_PHOTO_Q95_444_H, JPEGT_PHOTO_Q95_444_CH);
     bad |= check("gray_q85_420", jpegt_gray_q85_420, sizeof jpegt_gray_q85_420,
                  jpegt_gray_q85_420_pilref, JPEGT_GRAY_Q85_420_W, JPEGT_GRAY_Q85_420_H, JPEGT_GRAY_Q85_420_CH);
+
+    /* 6.46.0: progressive (SOF2), the same tolerance against PIL's own decode */
+    quiet_hash = 1;
+    bad |= check("prog_q85_420", jpegt_prog_q85_420, sizeof jpegt_prog_q85_420, jpegt_prog_q85_420_pilref, JPEGT_PROG_Q85_420_W, JPEGT_PROG_Q85_420_H, JPEGT_PROG_Q85_420_CH);
+    bad |= check("prog_q75_444", jpegt_prog_q75_444, sizeof jpegt_prog_q75_444, jpegt_prog_q75_444_pilref, JPEGT_PROG_Q75_444_W, JPEGT_PROG_Q75_444_H, JPEGT_PROG_Q75_444_CH);
+    bad |= check("prog_q90_gray", jpegt_prog_q90_gray, sizeof jpegt_prog_q90_gray, jpegt_prog_q90_gray_pilref, JPEGT_PROG_Q90_GRAY_W, JPEGT_PROG_Q90_GRAY_H, JPEGT_PROG_Q90_GRAY_CH);
+    bad |= check("prog_odd_420", jpegt_prog_odd_420, sizeof jpegt_prog_odd_420, jpegt_prog_odd_420_pilref, JPEGT_PROG_ODD_420_W, JPEGT_PROG_ODD_420_H, JPEGT_PROG_ODD_420_CH);
+    {   /* the scaled path Blackcomb uses, on a progressive file: it decodes and is not blank */
+        static unsigned px[48 * 32]; unsigned w, h, lit = 0;
+        int r = jpeg_decode_scaled32(jpegt_prog_q85_420, sizeof jpegt_prog_q85_420, px, 48, 32, &w, &h);
+        for (unsigned i = 0; i < 48 * 32; i++) if (px[i]) lit++;
+        printf("progressive scaled32: r=%d %ux%u lit=%u %s\n", r, w, h, lit, r == 0 && w == 96 && lit > 1000 ? "ok" : "FAIL");
+        bad |= !(r == 0 && w == 96 && lit > 1000);
+    }
+    {   /* a progressive file cut short fails cleanly */
+        unsigned char *o; unsigned w, h, ch;
+        int r = jpeg_decode(jpegt_prog_q85_420, sizeof jpegt_prog_q85_420 / 2, &o, &w, &h, &ch);
+        printf("truncated progressive: r=%d %s\n", r, r ? "ok" : "FAIL");
+        bad |= r == 0;
+        if (!r) free(o);
+    }
+    quiet_hash = 0;
 
     /* fault injection 1: truncated file must fail cleanly, not read past the end */
     {

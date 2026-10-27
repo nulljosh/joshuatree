@@ -205,7 +205,7 @@ retry|2|Lock Screen: menu item locks, Esc cannot bypass, password unlocks|python
 retry|2|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh
 retry|7|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
 retry|3|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
-once |0|JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
+once |0|JPEG decoder, host harness (baseline and, since 6.46.0, progressive)|./tools/checks/jpeg-host-check.sh
 once |1|Media decoders (WAV, MP3), host harness under ASan and UBSan|./tools/checks/media-host-check.sh
 retry|7|Tasks keep their own x87 float state across switches|./tools/checks/fpu-check.sh
 once |7|HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh

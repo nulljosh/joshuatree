@@ -24,6 +24,7 @@
 #include "jpeg.h"
 #include "png_testdata.h"
 #include "jpeg_testdata.h"
+#include "jpeg_progdata.h"   /* 6.46.0: progressive samples, tools/jpeg-host */
 
 static sigjmp_buf g_jmp;
 static volatile sig_atomic_t g_timed_out = 0;
@@ -288,6 +289,8 @@ int main(void) {
     fuzz_sample(run_jpeg, jpegt_photo_q75_444, sizeof jpegt_photo_q75_444, "photo_q75_444", regress_dir);
     fuzz_sample(run_jpeg, jpegt_photo_q50_420, sizeof jpegt_photo_q50_420, "photo_q50_420", regress_dir);
     fuzz_sample(run_jpeg, jpegt_photo_q95_444, sizeof jpegt_photo_q95_444, "photo_q95_444", regress_dir);
+    fuzz_sample(run_jpeg, jpegt_prog_q85_420, sizeof jpegt_prog_q85_420, "prog_q85_420", regress_dir);   /* 6.46.0 */
+    fuzz_sample(run_jpeg, jpegt_prog_odd_420, sizeof jpegt_prog_odd_420, "prog_odd_420", regress_dir);
     fuzz_sample(run_jpeg, jpegt_gray_q85_420, sizeof jpegt_gray_q85_420, "gray_q85_420", regress_dir);
     jpeg_nasties(regress_dir);
 
