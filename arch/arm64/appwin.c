@@ -186,21 +186,37 @@ int app_cycle(void) {   /* Cmd+Tab or Ctrl+Tab: the app window furthest back com
     con_quiet = 1; uart_puts("switch "); uart_puts(ap->cur->name); uart_putc('\n');
     return 1;
 }
+static int app_go(const struct user_app *a) {
+    if (app_start(a) == -3 && app_zn) {   /* every slot is taken: the window furthest back closes for it, files written back */
+        ap = &apps[app_z[app_zn - 1]];
+        con_quiet = 1; uart_puts("M3c app swap: "); uart_puts(app_cur->name); uart_puts(" closed for "); uart_puts(a->name); uart_putc('\n');
+        app_kill_one("closed for another app");
+        app_start(a);
+    }
+    return 1;
+}
 int app_dock(const char *name) {
     for (const struct user_app *a = user_apps; a->name; a++) {
         unsigned i = 0;
         while (name[i] && (name[i] | 32) == a->name[i]) i++;
         if (name[i] || a->name[i]) continue;
         for (unsigned k = 0; k < APP_SLOTS; k++) if (apps[k].cur == a) { ap = &apps[k]; app_raise(); return 1; }   /* already open: its window comes to the front */
-        if (app_start(a) == -3 && app_zn) {   /* every slot is taken: the window furthest back closes for it, files written back */
-            ap = &apps[app_z[app_zn - 1]];
-            con_quiet = 1; uart_puts("M3c app swap: "); uart_puts(app_cur->name); uart_puts(" closed for "); uart_puts(a->name); uart_putc('\n');
-            app_kill_one("closed for another app");
-            app_start(a);
-        }
-        return 1;
+        return app_go(a);
     }
     return 0;
+}
+/* 6.53.0: an app in JT/APPS, from its Spotlight row only, so a card app can never stand in for a dock tile's own (TERMINAL.APP
+   is not the Terminal). Open already: its window comes up; card_find never takes a table app's name. */
+int app_dock_card(const char *name) {
+    unsigned n = 0; while (name[n]) n++;
+    for (unsigned k = 0; k < APP_SLOTS; k++) {
+        const struct user_app *c = apps[k].cur; unsigned i = 0;
+        if (!c || !card_row_is(c)) continue;
+        while (i < n && (name[i] | 32) == c->name[i]) i++;
+        if (i == n && !c->name[n]) { ap = &apps[k]; app_raise(); return 1; }
+    }
+    const struct user_app *a = card_find(name, n);
+    return a ? app_go(a) : 0;
 }
 
 /* 6.5.0: minimize into the dock with the genie (the Mac OS X 2000 introduction). The yellow dot takes the front app's window

@@ -184,6 +184,7 @@ extern char _heap_start[];
 #define app_ch (ap->ch)
 #define app_cw (ap->cw)
 int app_dock(const char *name);
+int app_dock_card(const char *name);   /* 6.53.0: an app in JT/APPS, from its Spotlight row */
 void app_kill(const char *how);
 #define app_lh (ap->lh)
 #define app_lw (ap->lw)
@@ -265,6 +266,8 @@ extern int settings_live;
 int spot_hmax(void);
 int spot_key(unsigned code);
 #define SPOT_LAST (GUI_ICON_COUNT + 18)   /* 4.24.0: the games end the list (game_names, windows.c); 4.25.0 added Chess, 6.1.0 Movies */
+#define SPOT_CARD0 (SPOT_LAST + 1)   /* 6.53.0: Spotlight's rows past the table are the apps in JT/APPS (keys.c card_disp), never the Launchpad's */
+#define CARD_MAX 8
 extern int spot_lx;
 extern int spot_ly;
 const char *spot_name(int slot);
@@ -441,6 +444,9 @@ extern int user_faulted;
 const struct user_app *user_find(const char *name, unsigned n);
 void user_init(const char *img, unsigned long len);
 unsigned long user_load(const struct user_app *a);
+const struct user_app *card_find(const char *name, unsigned n);   /* 6.51.0: JT/APPS/NAME.APP, read and ready for app_start; 0 when there is none */
+int card_list(char (*out)[9], int max);
+int card_row_is(const struct user_app *a);   /* 6.53.0: the names in JT/APPS that card_find takes, for Spotlight */
 int user_run(const struct user_app *a);
 extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[], user_entry_d[], user_entry_e[], user_entry_f[];
 extern unsigned long user_status;

@@ -731,11 +731,22 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
    (*status, *faulted), 1 it is running (parked), 2 running in its window, -1 no such app, -2 it would not load, -3 busy. */
 /* 6.51.0: an app from the card. With no built-in app of that name, userrun reads JT/APPS/NAME.APP, the same image a built-in
    one is (the Makefile's uapp_NAME.bin), and user_load checks it with uimg_ok as it checks every image. The file is read into one
-   buffer (user_load copies it into the app's own pages); the row and its name stay with the slot the app will run in. */
-int sd_ready(void); int sd_enter_jt(int make); int fat_chdir(const char *name); int fat_read_file(const char *name, void *buf, unsigned bufsize); void fat_cwd_set(unsigned cluster);
-static char card_img[UAPP_MAX + 16], card_name[APP_SLOTS][9];
-static struct user_app card_row[APP_SLOTS];
-static const struct user_app *card_find(const char *name, unsigned n) {
+   buffer (user_load copies it into the app's own pages). A row and its name live as long as an app runs on them, so there is one
+   more row than slots (6.53.0: Spotlight's app_dock_card may load one while every slot is taken, then close the oldest for it). */
+int sd_ready(void); int sd_enter_jt(int make); void fat_list(void (*cb)(const char *name, unsigned size, int dir)); int fat_chdir(const char *name); int fat_read_file(const char *name, void *buf, unsigned bufsize); void fat_cwd_set(unsigned cluster);
+static char card_img[UAPP_MAX + 16], card_name[APP_SLOTS + 1][9];
+static struct user_app card_row[APP_SLOTS + 1];
+static int name_taken(const char *low, unsigned n) {   /* 6.53.0: a built-in app's name, or any name Spotlight lists (Terminal, Settings): never a card app's */
+    if (user_find(low, n)) return 1;
+    for (int s = 1; s <= SPOT_LAST; s++) {
+        const char *t = spot_name(s); unsigned i = 0;
+        while (i < n && (t[i] | 32) == low[i]) i++;
+        if (i == n && !t[n]) return 1;
+    }
+    return 0;
+}
+int card_row_is(const struct user_app *a) { return a >= card_row && a < card_row + APP_SLOTS + 1; }
+const struct user_app *card_find(const char *name, unsigned n) {
     char f[13]; unsigned sl = 0;
     if (!n || n > 8) return 0;
     for (unsigned i = 0; i < n; i++) {
@@ -745,8 +756,10 @@ static const struct user_app *card_find(const char *name, unsigned n) {
         f[i] = c;
     }
     f[n] = '.'; f[n + 1] = 'A'; f[n + 2] = 'P'; f[n + 3] = 'P'; f[n + 4] = 0;
-    while (sl < APP_SLOTS && apps[sl].cur) sl++;
-    if (sl == APP_SLOTS || !sd_ready() || !sd_enter_jt(0)) return 0;
+    char low[9]; for (unsigned i = 0; i < n; i++) low[i] = (char)(f[i] | 32);
+    if (name_taken(low, n)) return 0;   /* 6.53.0: a name means one app, and a card app never poses as the Terminal */
+    for (;; sl++) { unsigned k = 0; while (k < APP_SLOTS && apps[k].cur != &card_row[sl]) k++; if (k == APP_SLOTS) break; }   /* a row no app runs on */
+    if (!sd_ready() || !sd_enter_jt(0)) return 0;
     int got = fat_chdir("APPS") ? fat_read_file(f, card_img, UAPP_MAX + 1) : -1;
     fat_cwd_set(0);
     if (got <= 0) return 0;
@@ -756,6 +769,29 @@ static const struct user_app *card_find(const char *name, unsigned n) {
     card_row[sl].name = card_name[sl]; card_row[sl].start = card_img; card_row[sl].end = card_img + got;
     uart_puts("M3c card app JT/APPS/"); uart_puts(f); uart_puts(": "); uart_dec((unsigned)got); uart_puts(" bytes\n");
     return &card_row[sl];
+}
+/* 6.53.0: the apps in JT/APPS, for Spotlight: each NAME.APP whose NAME card_find would take, lower case, at most max. */
+static char (*cl_out)[9]; static int cl_n, cl_max;
+static void cl_one(const char *name, unsigned size, int dir) {
+    unsigned k = 0;
+    (void)size;
+    if (dir || cl_n >= cl_max) return;
+    while (name[k] && name[k] != '.' && k < 9) k++;
+    if (!k || k > 8 || name[k] != '.' || (name[k + 1] | 32) != 'a' || (name[k + 2] | 32) != 'p' || (name[k + 3] | 32) != 'p' || name[k + 4]) return;
+    for (unsigned i = 0; i < k; i++) {
+        char c = (char)(name[i] | 32);
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) return;
+        cl_out[cl_n][i] = c;
+    }
+    cl_out[cl_n][k] = 0;
+    if (!name_taken(cl_out[cl_n], k)) cl_n++;   /* a name Spotlight already lists is that app's */
+}
+int card_list(char (*out)[9], int max) {
+    cl_out = out; cl_n = 0; cl_max = max;
+    if (!sd_ready() || !sd_enter_jt(0)) return 0;
+    if (fat_chdir("APPS")) fat_list(cl_one);
+    fat_cwd_set(0);
+    return cl_n;
 }
 int userrun(const char *name, unsigned n, unsigned long *status, int *faulted) {
     const struct user_app *a = user_find(name, n);
