@@ -337,8 +337,75 @@ static int pseudo_link(const char *kind, unsigned k) {   /* field:K or submit:F 
     links[nlinks][o++] = (char)('0' + k); links[nlinks][o] = 0;
     return (int)++nlinks;
 }
+/* 6.25.0: what the page hides stays hidden. A pass over every <style> block collects the simple selectors (tag, .class,
+   #id, tag.class, tag#id) whose rules say display:none; @media and other @-blocks, and selectors with spaces, combinators
+   or pseudo-classes, are left out. An element with one of them, with the hidden attribute, or with an inline
+   display:none is skipped whole, nested elements and all: the menus, drawers and cookie banners a page keeps out of view. */
+#define HIDE_MAX 32
+static char hide_sel[HIDE_MAX][32]; static unsigned nhide;
+static int is_ws(char c) { return c == ' ' || c == '\n' || c == '\t' || c == '\r'; }
+static int says_none(const char *d, unsigned n) {   /* "display" ":" "none" in a declaration block */
+    for (unsigned i = 0; i + 7 <= n; i++) if (starts(d + i, "display")) {
+        unsigned k = i + 7; while (k < n && is_ws(d[k])) k++;
+        if (k < n && d[k] == ':') { k++; while (k < n && is_ws(d[k])) k++; if (k + 4 <= n && starts(d + k, "none")) return 1; }
+    }
+    return 0;
+}
+static void css_rules(const char *c, unsigned n) {
+    for (unsigned i = 0; i < n;) {
+        while (i < n && is_ws(c[i])) i++;
+        if (i + 1 < n && c[i] == '/' && c[i + 1] == '*') { i += 2; while (i + 1 < n && !(c[i] == '*' && c[i + 1] == '/')) i++; i += 2; continue; }
+        unsigned sel = i; while (i < n && c[i] != '{') i++;
+        if (i >= n) return;
+        unsigned sel_end = i++, depth = 1, body = i;
+        while (i < n && depth) { if (c[i] == '{') depth++; else if (c[i] == '}') depth--; i++; }
+        if (c[sel] == '@' || !says_none(c + body, i - 1 - body)) continue;   /* @media and friends, or a rule that hides nothing */
+        for (unsigned a = sel; a < sel_end;) {   /* each selector of a comma list */
+            while (a < sel_end && is_ws(c[a])) a++;
+            unsigned b = a; while (b < sel_end && c[b] != ',') b++;
+            unsigned e = b; while (e > a && is_ws(c[e - 1])) e--;
+            int simple = e > a && e - a < 32;
+            for (unsigned k = a; k < e && simple; k++) if (is_ws(c[k]) || c[k] == '>' || c[k] == '+' || c[k] == '~' || c[k] == '[' || c[k] == ':' || c[k] == '*') simple = 0;
+            if (simple && nhide < HIDE_MAX) { for (unsigned k = a; k < e; k++) hide_sel[nhide][k - a] = c[k]; hide_sel[nhide++][e - a] = 0; }
+            a = b + 1;
+        }
+    }
+}
+static int word_in(const char *list, unsigned n, const char *w, unsigned wn) {   /* w is one of the space-separated words */
+    for (unsigned i = 0; i + wn <= n; i++) {
+        if (i && !is_ws(list[i - 1])) continue;
+        unsigned k = 0; while (k < wn && list[i + k] == w[k]) k++;
+        if (k == wn && (i + wn == n || is_ws(list[i + wn]))) return 1;
+    }
+    return 0;
+}
+static int hidden_tag(const char *tag, unsigned tn, unsigned nl) {   /* tag[0..nl) is its name */
+    unsigned s, z, cs = 0, cz = 0, is = 0, iz = 0;
+    for (unsigned k = nl; k + 6 <= tn; k++)   /* the bare hidden attribute */
+        if (is_ws(tag[k - 1]) && starts(tag + k, "hidden") && (k + 6 == tn || is_ws(tag[k + 6]) || tag[k + 6] == '=' || tag[k + 6] == '/')) return 1;
+    if (attr(tag, tn, "style=", &s, &z) && says_none(tag + s, z - s)) return 1;
+    int has_c = attr(tag, tn, "class=", &cs, &cz), has_i = attr(tag, tn, "id=", &is, &iz);
+    for (unsigned r = 0; r < nhide; r++) {
+        const char *sel = hide_sel[r]; unsigned sl = slen(sel), t = 0;
+        while (t < sl && sel[t] != '.' && sel[t] != '#') t++;   /* the tag part */
+        if (t) { if (t != nl) continue; unsigned m = 0; while (m < t && (tag[m] | 32) == (sel[m] | 32)) m++; if (m < t) continue; }
+        if (t == sl) return 1;   /* a bare tag name */
+        const char *w = sel + t + 1; unsigned wn = sl - t - 1;
+        if (sel[t] == '.' && has_c && word_in(tag + cs, cz - cs, w, wn)) return 1;
+        if (sel[t] == '#' && has_i && iz - is == wn && starts(tag + is, w)) return 1;
+    }
+    return 0;
+}
+
 static void to_text(const char *h, unsigned n) {
     unsigned o = 0, i = 0, skip = 0, space = 1;
+    char htag[16]; unsigned hn = 0, hdepth = 0;   /* inside a hidden element: its name, and how deep its own tag is nested */
+    nhide = 0;
+    for (unsigned k = 0; k + 7 < n; k++) if (h[k] == '<' && starts(h + k + 1, "style")) {   /* every <style>'s rules, first */
+        unsigned a = k + 6; while (a < n && h[a] != '>') a++;
+        unsigned b = ++a; while (b + 7 < n && !(h[b] == '<' && h[b + 1] == '/' && starts(h + b + 2, "style"))) b++;
+        css_rules(h + a, b - a); k = b;
+    }
     int in_title = 0, link = 0; unsigned tl = 0;
     nlinks = 0; nimg = 0; nforms = nfields = 0; title[0] = 0;
     int in_form = -1;
@@ -356,6 +423,19 @@ static void to_text(const char *h, unsigned n) {
                 i = e + 3; continue;
             }
             int close = tag[0] == '/'; if (close) { tag++; tn--; }
+            unsigned nl = 0; while (nl < tn && !is_ws(tag[nl]) && tag[nl] != '/' && tag[nl] != '>') nl++;
+            if (hdepth) {   /* inside a hidden element: only its own tag's nesting counts */
+                if (nl == hn) { unsigned m = 0; while (m < nl && (tag[m] | 32) == htag[m]) m++; if (m == nl) hdepth += close ? -1u : 1u; }
+                if (!close && (is_tag(tag, tn, "script") || is_tag(tag, tn, "style"))) skip = is_tag(tag, tn, "script") ? 1 : 2;
+                i = e + 1; continue;
+            }
+            if (!close && nl && nl < sizeof htag && tag[0] != '!' && hidden_tag(tag, tn, nl)) {
+                static const char *const lone[] = { "img", "input", "br", "hr", "meta", "link", "source", "wbr" };   /* no closing tag to wait for */
+                int is_lone = tag[tn - 1] == '/';
+                for (unsigned v = 0; v < sizeof lone / sizeof lone[0] && !is_lone; v++) if (is_tag(tag, tn, lone[v])) is_lone = 1;
+                if (!is_lone) { for (unsigned m = 0; m < nl; m++) htag[m] = (char)(tag[m] | 32); hn = nl; hdepth = 1; }
+                i = e + 1; continue;
+            }
             if (!close && (is_tag(tag, tn, "a") || is_tag(tag, tn, "span") || is_tag(tag, tn, "button")) && o && text[o - 1] != ' ' && text[o - 1] != '\n') { o = put(text, o, ' '); space = 1; }   /* nav bars space their links with CSS we do not read */
             if (!close && (is_tag(tag, tn, "script") || is_tag(tag, tn, "style"))) skip = is_tag(tag, tn, "script") ? 1 : 2;
             else {
@@ -444,6 +524,7 @@ static void to_text(const char *h, unsigned n) {
             }
             i = e + 1; continue;
         }
+        if (hdepth) { i++; continue; }   /* a hidden element's own text */
         if (c == '&') { char d; unsigned k = entity(h + i + 1, &d); if (k) { c = d; i += k; } }
         i++;
         if ((unsigned char)c >= 0x80) {   /* 6.8.0: one UTF-8 character as one byte, its common punctuation in ASCII, anything else '?' */

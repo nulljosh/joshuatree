@@ -74,7 +74,7 @@ What is there today: Wi-Fi joins from the card's config, DNS and the clock come 
 
 The steps, one minor version each, cheapest unblock first:
 - [ ] [Sonnet] Keep-alive, once there is something to reuse a connection for (tabs, inline images): `net.c` holds one connection, so 6.12.0 sends `Connection: close`.
-- [ ] [Sonnet] A reader-style subset of CSS (text-align, display:none, font-weight); no JavaScript for 7.0 (a decision to revisit at 8.0). More than four images a page, and progressive JPEG. Check: a fixture page's pixels.
+- [ ] [Sonnet] More of CSS for reading: text-align and font-weight from rules, and descendant selectors for display:none (6.25.0 takes simple selectors only); no JavaScript for 7.0 (a decision to revisit at 8.0). More than four images a page, and progressive JPEG. Check: a fixture page's pixels.
 - [ ] [Haiku] The cookie jar per user: cleared at Log Out and kept in the home folder across a restart (6.15.0 keeps it in memory). Checkboxes, radio buttons and select menus in forms.
 - [ ] [Sonnet] Top Sites and full-text history search (from the Snow Leopard list): the start page's Recent searched by the words of each page, and a tab strip drawn above the page instead of "tab N of M" in the status line. Check: a word from a visited page finds it.
 - [ ] [Sonnet] A Mail window beside Blackcomb (the inbox as a list, a message in the page well, Reply and Send buttons); the Terminal's mail commands stay. Wi-Fi passwords typed in Settings go in the keychain too.
@@ -1024,6 +1024,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **6.25.0 (2026-10-26)**: What the page hides stays hidden. A pass over every `<style>` takes the simple selectors (tag, .class, #id, tag.class) whose rules say display:none, @media and complex selectors left out, and the browser skips an element with one of them, the hidden attribute or an inline display:none, nested elements and all: menus, drawers and cookie banners no longer fill the page, and their links take no numbers. Check: `arm64-csshide-check.py` (seven hidden pieces gone, the @media and descendant ones kept, the visible link numbered [1]).
 - **6.24.0 (2026-10-26)**: Two-way calendar, step thirteen of 7.0 Online (the table's "calendar that syncs"). `calendar caldav https://.../ USER` takes an app password with stars (https only: Basic auth would otherwise be the password in the clear) and keeps it in the keychain; `calendar sync` PUTs each of the person's own days as `jt-YYYYMMDD.ics`, so a second sync replaces rather than doubles it, then REPORTs the calendar's events into SUBS.TXT, XML escapes and CDATA undone. Deletes are not synced yet. Check: `arm64-caldav-check.py` (a fixture CalDAV server over TLS: a wrong password refused, the PUT's UID and escaped comma, the REPORT read back).
 - **6.23.1 (2026-10-26)**: Downloads go in a DOWNLOAD folder and never over a file. Root cause: 6.17.0 saved a download beside the system's own files under its link's name, so a page could link `/wifi.txt` as a download and replace JT/WIFI.TXT (the Pi would join the page's network at its next start), or USERS.TXT, SUDOERS.TXT or a keychain. Now a download lands in `~/DOWNLOAD` (or `JT/DOWNLOAD`), a taken name becomes NAME~1 to NAME~9, and the system's files are never in reach. Check: `arm64-downloads-check.py` (a card with its own WIFI.TXT downloads a hostile /wifi.txt; the card's file stays, the download sits in DOWNLOAD; fails on the old save path).
 - **6.23.0 (2026-10-26)**: Wi-Fi in Settings, step twelve of 7.0 Online. A seventh section lists the networks the start-up scan heard, loudest first by name with Strong, Okay or Weak; Enter or a click picks one and opens a password field with stars, no key lines reach the UART while it is open, and Enter saves the name and the PMK the Pi works out for the next start. Its glyph is a dot under three arcs. Check: `arm64-wifi-pane-check.py` over three made-up networks (`make WIFI_FAKE=1`, never in a real build); the Settings check now counts seven sections.
@@ -2027,18 +2028,18 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-26, 03:00 Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-26, evening Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
-**What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time.
+**What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand.** Main is 6.0.0, Yours. #695 (6.1.0 and 6.2.0: Movies on the Pi, any length, with QuickTime-style controls) is in CI. Stacked on it, local and passing their checks: `genie` (6.3.0 the magnifying dock, 6.4.0 one motion curve in `lib/ease.h`, 6.5.0 minimize with the genie), `landing-wall` (6.5.1, the landing hero and app wall) and `buttons` (6.6.0, window buttons like a Mac's).
+**Where things stand.** Main is 6.24.x: 7.0 Online's software list is in (Mozilla roots, real pages, styles, images, forms and cookies, tabs, downloads, IMAP and SMTP mail, calendar subscriptions and two-way CalDAV, the keychain, Wi-Fi picked on the Pi and in Settings), plus 6.25.0 hiding what pages hide. CI caches its apt downloads since the Azure mirror crawled on 2026-10-26. None of 6.11 onward has run on the board.
 
-**Waiting on Joshua.** The board pass on the newest card (the test list: login and backup, Movies, the magnifying dock, the genie, grey back-window buttons). The 8 inch HDMI screen for the Nimbus case.
+**Waiting on Joshua.** The 7.0 board day: a normal day of web, mail and calendar on the Pi (real iCloud IMAP, SMTP and CalDAV, real sites), a card with only JT/WIFI.TXT joining his network (#713 reworked the join; 0b952b10 is the last main before it), and the sign-in time on the Pi now that the keychain stretches the password twice. Then 7.0.0 needs his refreshed logo and UI, as every X.0.0 does. Two stale remote branches, `genie` and `buttons`, wait on a yes to delete.
 
 **Next, in order.**
-1. Merge #695 on green, then this roadmap PR, then push `genie`, `landing-wall` and `buttons` one PR at a time, each rebased on main.
-2. 7.0, Online: the steps under Next priorities, top down, starting with the full root list.
-3. Whatever the board pass shows is broken.
+1. Merge the open PR on green.
+2. The 7.x follow-ups under Next priorities, top down: keep-alive, more of CSS, cookies kept per user, Top Sites and history search, CalDAV deletes and discovery, a Mail window, Wi-Fi joining without a restart.
+3. Whatever the board day shows is broken; then 7.0.0 with Joshua's logo and UI.
 
 Restart prompt:
 
