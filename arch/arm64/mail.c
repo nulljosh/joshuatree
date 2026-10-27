@@ -121,10 +121,11 @@ static int open_session(void) {
     return 1;
 }
 static void close_session(void) { imap("LOGOUT", 6); tls_close(); }
+static int rb_at(unsigned i, const char *w) { return i + slen(w) <= rlen && starts(rb + i, w); }   /* 6.48.3: w at rb[i], inside the reply */
 static unsigned exists(void) {   /* "* N EXISTS" off SELECT's reply */
     for (unsigned i = 0; i + 8 < rlen; i++) if ((i == 0 || rb[i - 1] == '\n') && rb[i] == '*') {
-        unsigned k = i + 2, v = 0; while (rb[k] >= '0' && rb[k] <= '9') v = v * 10 + (unsigned)(rb[k++] - '0');
-        if (starts(rb + k, " EXISTS")) return v;
+        unsigned k = i + 2, v = 0; while (k < rlen && rb[k] >= '0' && rb[k] <= '9' && v < 100000000) v = v * 10 + (unsigned)(rb[k++] - '0');
+        if (rb_at(k, " EXISTS")) return v;
     }
     return 0;
 }
@@ -140,13 +141,13 @@ static void field(const char *h, unsigned n, const char *name, char *out, unsign
 /* For each "* K FETCH (... {n}" in rb: K and the literal. 1 while there is another, from *at on. */
 static int next_fetch(unsigned *at, unsigned *seq, const char **lit, unsigned *litn) {
     for (unsigned i = *at; i + 2 < rlen; i++) if ((i == 0 || rb[i - 1] == '\n') && rb[i] == '*' && rb[i + 1] == ' ') {
-        unsigned k = i + 2, v = 0; while (rb[k] >= '0' && rb[k] <= '9') v = v * 10 + (unsigned)(rb[k++] - '0');
-        if (!starts(rb + k, " FETCH")) continue;
+        unsigned k = i + 2, v = 0; while (k < rlen && rb[k] >= '0' && rb[k] <= '9' && v < 100000000) v = v * 10 + (unsigned)(rb[k++] - '0');
+        if (!rb_at(k, " FETCH")) continue;
         unsigned e = k; while (e + 1 < rlen && !(rb[e] == '\r' && rb[e + 1] == '\n')) e++;
         if (e == k || rb[e - 1] != '}') continue;
         unsigned b = e - 1, len = 0; while (b > k && rb[b - 1] != '{') b--;
-        for (unsigned q = b; q < e - 1; q++) len = len * 10 + (unsigned)(rb[q] - '0');
-        if (e + 2 + len > rlen) return 0;
+        for (unsigned q = b; q < e - 1; q++) { if (rb[q] < '0' || rb[q] > '9' || len > rlen) return 0; len = len * 10 + (unsigned)(rb[q] - '0'); }   /* 6.48.3: digits only, and no wrap */
+        if (len > rlen || e + 2 + len > rlen) return 0;
         *seq = v; *lit = rb + e + 2; *litn = len; *at = e + 2 + len;
         return 1;
     }
@@ -174,7 +175,7 @@ static int fetch_inbox(void) {
         row[nr].seq = seq;
         char f[96]; field(lit, ln, "From:", f, sizeof f);
         unsigned lt = 0; while (f[lt] && f[lt] != '<') lt++;   /* the name before <address>, else the address */
-        if (lt) { while (lt && f[lt - 1] == ' ') lt--; copy(row[nr].from, f[0] == '"' ? f + 1 : f, f[0] == '"' ? lt - 2 : lt, sizeof row[nr].from); }
+        if (lt) { while (lt && f[lt - 1] == ' ') lt--; copy(row[nr].from, f[0] == '"' ? f + 1 : f, f[0] == '"' ? (lt >= 2 ? lt - 2 : 0) : lt, sizeof row[nr].from); }   /* 6.48.3: lt >= 2, "< alone was -1 */
         else copy(row[nr].from, f, slen(f), sizeof row[nr].from);
         {   /* the address: inside <...>, else the whole field */
             unsigned a0 = 0; while (f[a0] && f[a0] != '<') a0++;
@@ -247,8 +248,10 @@ static char *pick_part(const char *h, unsigned hn, char *b, unsigned *bn, int *h
         unsigned k = 0; while (k < bl && b[i + 2 + k] == bnd[k]) k++;
         if (k < bl) continue;
         unsigned ph = i + 2 + bl; while (ph < *bn && b[ph] != '\n') ph++;
+        if (ph >= *bn) break;   /* 6.48.3: a boundary line that never ends, or a part with no blank line, is the end */
         ph++;
         unsigned pe = ph; while (pe + 3 < *bn && !(b[pe] == '\n' && (b[pe + 1] == '\n' || (b[pe + 1] == '\r' && b[pe + 2] == '\n')))) pe++;   /* the part's own headers */
+        if (pe + 3 >= *bn) break;
         unsigned body = pe + (b[pe + 1] == '\r' ? 3 : 2), end = body;
         while (end + 2 < *bn && !(b[end] == '\n' && b[end + 1] == '-' && b[end + 2] == '-')) end++;
         char pct[120], pcte[40]; field(b + ph, pe - ph, "Content-Type:", pct, sizeof pct); field(b + ph, pe - ph, "Content-Transfer-Encoding:", pcte, sizeof pcte);
