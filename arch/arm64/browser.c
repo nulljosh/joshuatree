@@ -40,7 +40,7 @@ void *kmalloc(unsigned int n);
    centres a line when it is on where the line's text starts. */
 #define BR_CENTER '\x06'
 #define BR_LEFT '\x07'
-#define IMG_MAX 4
+#define IMG_MAX 8           /* 6.36.0: was 4. Each is kept at IMG_W x IMG_H, 480 KiB, so eight hold 3.75 MiB of BSS */
 #define IMG_W 400           /* logical px: an image is kept at most this wide and tall, scaled down to fit, never up */
 #define IMG_H 300
 static char img_url[IMG_MAX][URL_MAX];

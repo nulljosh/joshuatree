@@ -6,8 +6,10 @@ A stub server on the host serves a page with a line of text, a 120x80 PNG (red, 
   - the UART says "browser: image 1 120x80", "browser: image 2 400x300" (scaled down to fit, aspect kept) and
     "browser: image 3 failed";
   - the window logs where it drew each image, and a screendump there shows red with the blue band 40 px down, and green;
-  - the server saw all three image requests after the page.
-Discriminating: drop load_images() from show() in browser.c and nothing is logged or drawn.
+  - the server saw all three image requests after the page;
+  - a second page with ten small PNGs loads the first eight (6.36.0) and never asks for the ninth.
+Discriminating: drop load_images() from show() in browser.c and nothing is logged or drawn; set IMG_MAX back to 4 and
+the eighth image never loads.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or PIL is missing.
 Usage: tools/checks/arm64-images-check.py   (from the repo root)
 """
@@ -32,7 +34,10 @@ b = io.BytesIO(); png.save(b, "PNG"); PNG = b.getvalue()
 b = io.BytesIO(); Image.new("RGB", (800, 600), (40, 170, 60)).save(b, "JPEG", quality=90); JPG = b.getvalue()
 PAGE = (b"<html><head><title>Pictures</title></head><body><p>Pictures follow.</p>"
         b"<img src=/red.png alt=red><img src='pic.jpg'><img src=\"/missing.png\"><p>After the pictures.</p></body></html>")
-FILES = {"/pics": (PAGE, "text/html"), "/red.png": (PNG, "image/png"), "/pic.jpg": (JPG, "image/jpeg")}
+b = io.BytesIO(); Image.new("RGB", (24, 16), (200, 200, 40)).save(b, "PNG"); DOT = b.getvalue()
+MANY = b"<html><body><p>Ten small pictures.</p>" + b"".join(b"<img src=/d%d.png>" % k for k in range(1, 11)) + b"<p>After them.</p></body></html>"
+FILES = {"/pics": (PAGE, "text/html"), "/red.png": (PNG, "image/png"), "/pic.jpg": (JPG, "image/jpeg"), "/many": (MANY, "text/html")}
+FILES.update({"/d%d.png" % k: (DOT, "image/png") for k in range(1, 11)})
 seen = []
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -110,6 +115,10 @@ try:
         x, y = at[2]
         check("image 2 is green where it was drawn", near(img.getpixel((x + 20, y + 10)), (40, 170, 60)), img.getpixel((x + 20, y + 10)))
     else: check("image 2's place was logged", False, out[-400:])
+    key("ctrl", "l"); n = len(uart())
+    type_text("http://10.0.2.2:%d/many" % port); key("ret")
+    ok = wait_for("browser: image 8 24x16", 40, n); time.sleep(1.0)
+    check("a page's first eight images load (6.36.0), and no more", ok and "browser: image 9" not in uart()[n:] and "/d9.png" not in seen, uart()[n:][-500:])
 finally:
     if q: q.kill(); q.wait()
     server.shutdown()
