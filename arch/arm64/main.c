@@ -5,6 +5,7 @@
 #include "kmain.h"   /* the platform addresses, and what main.c shares with the parts cut out of it (boot.c, virtio.c): declared once, checked here */
 #include "bt.h"
 #include "apple_mask.h"
+#include "uimg.h"   /* 6.51.0: the image check, shared with tools/fuzz-host/fuzz_uimg.c */
 #define UART_DR   (UART_BASE + 0x00)
 #define UART_FR   (UART_BASE + 0x18)
 #define UART_IBRD (UART_BASE + 0x24)
@@ -612,9 +613,8 @@ unsigned long user_load(const struct user_app *a) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);
     const unsigned long AP_EL0_RW = 1UL << 6, AP_RO = 3UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
     unsigned long len = (unsigned long)(a->end - a->start);
-    unsigned magic = 0, code_end = 0, rela_s = 0, rela_e = 0;
-    if (len >= 32 && len <= UAPP_MAX && !(len & 3)) { magic = rd32(a->end - 16); code_end = rd32(a->end - 12); rela_s = rd32(a->end - 8); rela_e = rd32(a->end - 4); }
-    if (magic != 0x3155544a || !code_end || (code_end & 4095) || code_end > len - 16 || rela_s > rela_e || rela_e > len - 16 || (rela_s & 7) || (rela_e - rela_s) % 24) {
+    unsigned code_end = 0, rela_s = 0, rela_e = 0;
+    if (!uimg_ok(a->start, len, UAPP_MAX, APP_ZERO_PAGES, &code_end, &rela_s, &rela_e)) {   /* the trailer and every relocation, before a page is touched */
         uart_puts("M3c load FAIL "); uart_puts(a->name); uart_puts(": not a user image\n"); return 0;
     }
     unsigned long pages = (len + 4095) / 4096 + APP_ZERO_PAGES;
@@ -626,13 +626,7 @@ unsigned long user_load(const struct user_app *a) {
     for (unsigned long i = 0; i < pages * 512; i++) ((unsigned long *)base)[i] = 0;   /* a stale program's bytes never reach this one */
     for (unsigned long i = 0; i < APP_STACK_PAGES * 512; i++) ((unsigned long *)(UB + UP_ASTACK))[i] = 0;
     for (unsigned long i = 0; i < len; i++) base[i] = a->start[i];
-    for (unsigned long r = rela_s; r < rela_e; r += 24) {
-        unsigned long off = rd64(base + r), info = rd64(base + r + 8), add = rd64(base + r + 16);
-        if (info != 1027 /* R_AARCH64_RELATIVE */ || (off & 7) || off + 8 > len - 16 || add > pages * 4096) {
-            uart_puts("M3c load FAIL "); uart_puts(a->name); uart_puts(": bad relocation\n"); app_unmap(); return 0;
-        }
-        *(unsigned long *)(base + off) = (unsigned long)base + add;
-    }
+    for (unsigned long r = rela_s; r < rela_e; r += 24) *(unsigned long *)(base + rd64(base + r)) = (unsigned long)base + rd64(base + r + 16);   /* uimg_ok checked each one */
 #ifdef HANG_TEST   /* arm64-watchdog-check.py's build: the app in slot 0 spins on its first instruction, `b .`, no syscall ever */
     if (hang_arm) *(unsigned *)base = 0x14000000;
 #endif
@@ -735,8 +729,37 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
 }
 /* cmd.c's `userrun NAME`: start it and give it its first run here, so what it writes then lands in the Terminal. 0 it ended
    (*status, *faulted), 1 it is running (parked), 2 running in its window, -1 no such app, -2 it would not load, -3 busy. */
+/* 6.51.0: an app from the card. With no built-in app of that name, userrun reads JT/APPS/NAME.APP, the same image a built-in
+   one is (the Makefile's uapp_NAME.bin), and user_load checks it with uimg_ok as it checks every image. The file is read into one
+   buffer (user_load copies it into the app's own pages); the row and its name stay with the slot the app will run in. */
+int sd_ready(void); int sd_enter_jt(int make); int fat_chdir(const char *name); int fat_read_file(const char *name, void *buf, unsigned bufsize); void fat_cwd_set(unsigned cluster);
+static char card_img[UAPP_MAX + 16], card_name[APP_SLOTS][9];
+static struct user_app card_row[APP_SLOTS];
+static const struct user_app *card_find(const char *name, unsigned n) {
+    char f[13]; unsigned sl = 0;
+    if (!n || n > 8) return 0;
+    for (unsigned i = 0; i < n; i++) {
+        char c = name[i];
+        if (c >= 'a' && c <= 'z') c -= 32;
+        if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) return 0;
+        f[i] = c;
+    }
+    f[n] = '.'; f[n + 1] = 'A'; f[n + 2] = 'P'; f[n + 3] = 'P'; f[n + 4] = 0;
+    while (sl < APP_SLOTS && apps[sl].cur) sl++;
+    if (sl == APP_SLOTS || !sd_ready() || !sd_enter_jt(0)) return 0;
+    int got = fat_chdir("APPS") ? fat_read_file(f, card_img, UAPP_MAX + 1) : -1;
+    fat_cwd_set(0);
+    if (got <= 0) return 0;
+    if ((unsigned long)got > UAPP_MAX) { uart_puts("M3c load FAIL "); uart_puts(f); uart_puts(": too big\n"); got = 1; }   /* a byte, so uimg_ok refuses it and says so */
+    for (unsigned i = 0; i < n; i++) card_name[sl][i] = (char)(f[i] | 32);
+    card_name[sl][n] = 0;
+    card_row[sl].name = card_name[sl]; card_row[sl].start = card_img; card_row[sl].end = card_img + got;
+    uart_puts("M3c card app JT/APPS/"); uart_puts(f); uart_puts(": "); uart_dec((unsigned)got); uart_puts(" bytes\n");
+    return &card_row[sl];
+}
 int userrun(const char *name, unsigned n, unsigned long *status, int *faulted) {
     const struct user_app *a = user_find(name, n);
+    if (!a) a = card_find(name, n);
     if (!a) return -1;
     int r = app_start(a);
     if (r) return r;
