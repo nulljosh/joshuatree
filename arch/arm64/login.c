@@ -21,6 +21,7 @@ unsigned login_pass_len(void) { return pl; }
 int login_field(void) { return field; }
 int login_message(void) { return msg; }
 
+void keychain_unlock(const char *name, const char *pass);   /* keychain.c; the host test stubs it */
 int login_key(int ch) {
     int had = msg; msg = 0;
     if (ch == '\t') { field = !field; return LOGIN_REDRAW; }
@@ -35,9 +36,12 @@ int login_key(int ch) {
         if (!pl) return had ? LOGIN_REDRAW : LOGIN_NONE;
         pass[pl] = 0;
         int r = accounts_check(name, pass);
+        if (r == ACC_OK) {   /* signed in; then the keychain's key is made (6.21.0), before the password goes */
+            for (unsigned i = 0; i <= nl; i++) current_user[i] = name[i];
+            keychain_unlock(name, pass);
+        }
         accounts_wipe(pass, sizeof pass); pl = 0;           /* right or wrong, the typed password is gone */
         if (r == ACC_OK) {
-            for (unsigned i = 0; i <= nl; i++) current_user[i] = name[i];
             accounts_wipe(name, sizeof name); nl = 0; field = 0;
             return LOGIN_DONE;
         }

@@ -43,6 +43,8 @@ HOST = r'''
 #include "login.h"
 static int checks, waits; static unsigned last_wait; static char seen[80];
 int accounts_check(const char *n, const char *p) { checks++; strcpy(seen, p); return !strcmp(n, "ann") && !strcmp(p, "hunter22") ? ACC_OK : ACC_E_WRONG; }
+static int unlocks;
+void keychain_unlock(const char *n, const char *p) { unlocks++; assert(!strcmp(n, "ann") && !strcmp(p, "hunter22")); }   /* 6.21.0: handed the right password, once, before the wipe */
 void accounts_wipe(void *p, unsigned n) { volatile unsigned char *v = p; while (n--) *v++ = 0; }
 void login_wait_ms(unsigned ms) { waits++; last_wait = ms; }
 static void typ(const char *s) { for (; *s; s++) login_key(*s); }
@@ -67,7 +69,7 @@ int main(void) {
     assert(login_key('\n') == LOGIN_REDRAW && login_message() == 0 && checks == 2);   /* an empty password is not even checked */
     puts("ok wrong password: one wait, cleared, name kept, message");
     typ("hunter2"); assert(login_key('2') == LOGIN_REDRAW);
-    assert(login_key('\n') == LOGIN_DONE && checks == 3 && waits == 2 && !strcmp(current_user, "ann"));
+    assert(login_key('\n') == LOGIN_DONE && checks == 3 && waits == 2 && !strcmp(current_user, "ann") && unlocks == 1);   /* wrong ones unlocked nothing */
     assert(login_pass_len() == 0 && !login_name()[0] && login_field() == 0 && login_message() == 0);
     puts("ok right password signs in and clears the form");
     login_reset(); assert(!current_user[0]);

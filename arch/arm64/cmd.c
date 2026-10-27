@@ -410,9 +410,11 @@ static void passwd_command(const char *q, unsigned n) {   /* passwd, passwd NAME
     else pw_ask(PW_NEW1, "New password", "");
 }
 /* The work of passwd once both new passwords agree; the Settings Users pane (users_passwd below) runs this same code. */
+void keychain_rekey(const char *name, const char *pass);   /* keychain.c */
 static int passwd_apply(const char *target, const char *pass) {
     cmd_out("passwd: working, the password is being stretched\n");
     int r = accounts_passwd(target, pass);
+    if (!r) keychain_rekey(target, pass);   /* 6.21.0: the signed-in person's own keychain follows the new password */
     cmd_out("passwd "); cmd_out(target); cmd_out(r ? ": " : ": password changed");
     if (r) cmd_out(accounts_reason(r));
     cmd_out("\n");
