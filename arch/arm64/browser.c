@@ -624,6 +624,46 @@ static void load_images(char *raw) {
 /* 6.17.0: downloads. A reply that is not text (an image, a zip, a PDF) is saved where an app's files live, not shown,
    and `fetch URL` saves any reply. The name is the address's last part as an 8.3 name, DOWNLOAD.BIN when nothing is left. */
 static int want_file;   /* the next show() saves its reply whatever it is */
+/* 6.23.1: a download goes in a DOWNLOAD folder (~/DOWNLOAD, or JT/DOWNLOAD with no accounts) and never over a file
+   that is there. Saved beside the system's own files, a page could have written JT/WIFI.TXT (the Pi would join the
+   page's network at its next start), USERS.TXT, SUDOERS.TXT or a keychain by naming its link after one. A name that is
+   taken becomes NAME~1 to NAME~9; then it is refused. 1 with the name used in saved, -3 all taken, else 0 or less. */
+int home_expand(const char *in, char *out, unsigned cap); int home_op(int op, const char *path, const void *data, unsigned len);
+int home_walk(char *path, int keep, char **leaf); void home_back(void);
+int fat_read_at(const char *name, unsigned int off, void *buf, unsigned int len);
+static int dl_exists(const char *path) {
+    char walk[96], *leaf; unsigned n = slen(path);
+    if (n >= sizeof walk) return 1;
+    for (unsigned i = 0; i <= n; i++) walk[i] = path[i];
+    if (home_walk(walk, 1, &leaf) != 1) return 0;
+    char c; int r = fat_read_at(leaf, 0, &c, 1);
+    home_back();
+    return r >= 0;
+}
+static int dl_save(const char *name, const void *d, unsigned n, char saved[13]) {
+    char dir[96]; unsigned dn;
+    if (home_active()) { if (home_expand("~/DOWNLOAD", dir, sizeof dir) <= 0) return 0; }
+    else scopy(dir, "JT/DOWNLOAD", 11, sizeof dir);
+    home_op(2, dir, 0, 0);   /* the folder, made when missing (an error when it is there) */
+    dn = slen(dir);
+    unsigned dot = 0; while (name[dot] && name[dot] != '.') dot++;
+    for (unsigned k = 0; k < 10; k++) {
+        char nm[13]; unsigned o = 0;
+        if (!k) { scopy(nm, name, slen(name), sizeof nm); }
+        else {   /* the base cut to six, then ~k, then the extension */
+            for (unsigned i = 0; i < dot && i < 6; i++) nm[o++] = name[i];
+            nm[o++] = '~'; nm[o++] = (char)('0' + k);
+            for (unsigned i = dot; name[i] && o < 12; i++) nm[o++] = name[i];
+            nm[o] = 0;
+        }
+        char path[112]; scopy(path, dir, dn, sizeof path); path[dn] = '/'; scopy(path + dn + 1, nm, slen(nm), sizeof path - dn - 1);
+        if (dl_exists(path)) continue;
+        int r = home_op(0, path, d, n);
+        if (r == 1) scopy(saved, nm, slen(nm), 13);
+        return r;
+    }
+    return -3;
+}
 static void file_name(const char *url, char out[13]) {
     const char *p = url, *seg = url;
     for (; *p && *p != '?' && *p != '#'; p++) if (*p == '/') seg = p + 1;
@@ -663,8 +703,11 @@ static void show(const char *url, int push) {
         char name[13]; file_name(cur, name);
         int st = http_status_of(raw, (unsigned)got);
         if (st != 200) { kputs("browser: not saved, the server said "); kdec((unsigned)st); kputs("\n"); }
-        else if (save_here(name, body, blen)) { kputs("browser: saved "); kputs(name); kputs(", "); kdec(blen); kputs(home_active() ? " bytes in your home folder\n" : " bytes in JT\n"); }
-        else kputs("browser: could not save the file\n");
+        else {
+            char saved[13]; int r = dl_save(name, body, blen, saved);
+            if (r == 1) { kputs("browser: saved "); kputs(saved); kputs(", "); kdec(blen); kputs(home_active() ? " bytes in your DOWNLOAD folder\n" : " bytes in JT/DOWNLOAD\n"); }
+            else kputs(r == -3 ? "browser: not saved, ten files already have that name\n" : "browser: could not save the file\n");
+        }
         scopy(cur, was, slen(was), URL_MAX);   /* the page on screen stays */
         want_file = 0; heap_release(mark); return;
     }

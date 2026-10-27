@@ -3,11 +3,13 @@
 
 A stub server on the host: /page.html links to /files/Report-2026.pdf (application/pdf, 70,000 seeded bytes);
 /notes is text/plain. On a FAT card image with a JT folder, at the Terminal:
-  `fetch .../notes` -> "browser: saved NOTES.BIN, N bytes in JT" (no extension: .BIN);
-  `browse .../page.html`, `open 1` -> "browser: saved REPORT-2.PDF, 70000 bytes in JT" and the page stays (`reload`
+  `fetch .../notes` -> "browser: saved NOTES.BIN, N bytes in JT/DOWNLOAD" (no extension: .BIN);
+  `browse .../page.html`, `open 1` -> "browser: saved REPORT-2.PDF, 70000 bytes in JT/DOWNLOAD" and the page stays (`reload`
   fetches /page.html again, not the PDF); a 404 is "not saved".
-In Blackcomb, Tab and Enter on the same link put "saved REPORT-2.PDF, 70000 bytes in JT" in the status line.
-Off the card image afterwards (mtools), JT/REPORT-2.PDF and JT/NOTES.BIN hold exactly the bytes the server sent.
+In Blackcomb, Tab and Enter on the same link put "saved REPORT-2.PDF, 70000 bytes in JT/DOWNLOAD" in the status line.
+6.23.1: every download goes in JT/DOWNLOAD (a home's DOWNLOAD when someone is signed in) and never over a file: a link
+named /wifi.txt lands as JT/DOWNLOAD/WIFI.TXT and the card's own JT/WIFI.TXT stays, and the report again becomes REPORT~1.PDF.
+Off the card image afterwards (mtools), the DOWNLOAD files hold exactly the bytes the server sent.
 Discriminating: drop the content-type test in browser.c's show() and the PDF is shown as a page, not saved.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-downloads-check.py   (from the repo root)
@@ -26,15 +28,20 @@ tmp = Path(scratch_dir("arm64-downloads"))
 MT = dict(os.environ, MTOOLS_SKIP_CHECK="1")
 card = str(tmp / "card.img"); build_card(card, False)
 subprocess.run(["mmd", "-i", f"{card}@@{PART * 512}", "::JT"], capture_output=True, env=MT)
+WIFI = b"ssid=4f7572486f6d65\npmk=" + b"11" * 32 + b"\n"   # the card's own network, which no page may replace
+(tmp / "WIFI.TXT").write_bytes(WIFI)
+subprocess.run(["mcopy", "-i", f"{card}@@{PART * 512}", str(tmp / "WIFI.TXT"), "::JT/WIFI.TXT"], capture_output=True, env=MT, check=True)
 
 PDF = random.Random(11).randbytes(70000)
 NOTES = b"shopping: eggs, bread, coffee\n" * 40
-PAGE = b"<html><head><title>Files</title></head><body><p><a href=/files/Report-2026.pdf>the report</a> <a href=/gone.zip>gone</a></p></body></html>"
+PAGE = b"<html><head><title>Files</title></head><body><p><a href=/files/Report-2026.pdf>the report</a> <a href=/gone.zip>gone</a> <a href=/wifi.txt>free wifi</a></p></body></html>"
+EVIL = b"ssid=4576696c\npmk=" + b"ee" * 32 + b"\n"
 gets = []
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         gets.append(self.path)
-        body, kind = {"/page.html": (PAGE, "text/html"), "/files/Report-2026.pdf": (PDF, "application/pdf"), "/notes": (NOTES, "text/plain")}.get(self.path, (b"no", None))
+        body, kind = {"/page.html": (PAGE, "text/html"), "/files/Report-2026.pdf": (PDF, "application/pdf"), "/notes": (NOTES, "text/plain"),
+                      "/wifi.txt": (EVIL, "application/octet-stream")}.get(self.path, (b"no", None))
         self.send_response(200 if kind else 404); self.send_header("Content-Type", kind or "application/zip")
         self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
     def log_message(self, *a): pass
@@ -89,15 +96,19 @@ try:
     base = "http://10.0.2.2:%d" % port
 
     n = len(uart()); line("fetch %s/notes" % base)
-    check("fetch saves a text reply as a file", wait_for("browser: saved NOTES.BIN, %d bytes in JT" % len(NOTES), 20, n), uart()[n:][-300:])
+    check("fetch saves a text reply as a file", wait_for("browser: saved NOTES.BIN, %d bytes in JT/DOWNLOAD" % len(NOTES), 20, n), uart()[n:][-300:])
     n = len(uart()); line("browse %s/page.html" % base)
     check("the page with the link loads", wait_for("the report [1]", 20, n), uart()[n:][-300:])
     n = len(uart()); line("open 1")
-    check("a PDF link is saved, not shown", wait_for("browser: saved REPORT-2.PDF, 70000 bytes in JT", 30, n), uart()[n:][-300:])
+    check("a PDF link is saved, not shown", wait_for("browser: saved REPORT-2.PDF, 70000 bytes in JT/DOWNLOAD", 30, n), uart()[n:][-300:])
     k = len(gets); n = len(uart()); line("reload")
     check("and the page stays: reload fetches it, not the PDF", wait_for("the report [1]", 20, n) and gets[k:] == ["/page.html"], gets[k:])
     n = len(uart()); line("open 2")
     check("a 404 is not saved", wait_for("browser: not saved, the server said 404", 20, n), uart()[n:][-300:])
+    n = len(uart()); line("open 3")
+    check("a link named after a system file lands in DOWNLOAD, beside nothing of the system's", wait_for("browser: saved WIFI.TXT, %d bytes in JT/DOWNLOAD" % len(EVIL), 30, n), uart()[n:][-300:])
+    n = len(uart()); line("open 1")
+    check("the same name again is numbered, never written over", wait_for("browser: saved REPORT~1.PDF, 70000 bytes in JT/DOWNLOAD", 30, n), uart()[n:][-300:])
 
     key("esc"); time.sleep(0.5)
     key("f1"); type_text("blackcomb"); key("ret")
@@ -105,14 +116,15 @@ try:
     n = len(uart()); type_text("%s/page.html" % base); key("ret")
     check("the window loads the page", wait_for("browser: page ", 20, n), uart()[n:][-300:])
     n = len(uart()); key("tab"); key("ret")
-    check("Tab and Enter on the PDF link say where it went", wait_for("browser: status saved REPORT-2.PDF, 70000 bytes in JT", 30, n), uart()[n:][-300:])
+    check("Tab and Enter on the PDF link say where it went", wait_for("browser: status saved REPORT~2.PDF, 70000 bytes in JT/DOWNLOAD", 30, n), uart()[n:][-300:])
     q.kill(); q.wait(); q = None
     def card_file(name):
-        out = tmp / name
+        out = tmp / ("got-" + name.replace("/", "-"))
         subprocess.run(["mcopy", "-n", "-i", f"{card}@@{PART * 512}", "::JT/" + name, str(out)], capture_output=True, env=MT)
         return out.read_bytes() if out.exists() else b""
-    check("JT/REPORT-2.PDF on the card is the server's bytes", card_file("REPORT-2.PDF") == PDF, len(card_file("REPORT-2.PDF")))
-    check("JT/NOTES.BIN on the card is the server's bytes", card_file("NOTES.BIN") == NOTES, len(card_file("NOTES.BIN")))
+    check("JT/DOWNLOAD/REPORT-2.PDF and REPORT~1.PDF on the card are the server's bytes", card_file("DOWNLOAD/REPORT-2.PDF") == PDF and card_file("DOWNLOAD/REPORT~1.PDF") == PDF, len(card_file("DOWNLOAD/REPORT-2.PDF")))
+    check("JT/DOWNLOAD/NOTES.BIN on the card is the server's bytes", card_file("DOWNLOAD/NOTES.BIN") == NOTES, len(card_file("DOWNLOAD/NOTES.BIN")))
+    check("JT/WIFI.TXT, the card's own network, is untouched", card_file("WIFI.TXT") == WIFI and card_file("DOWNLOAD/WIFI.TXT") == EVIL, card_file("WIFI.TXT")[:40])
 finally:
     if q: q.kill(); q.wait()
     server.shutdown()
