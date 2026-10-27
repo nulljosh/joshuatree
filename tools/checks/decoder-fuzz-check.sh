@@ -18,7 +18,7 @@ rm -f tools/checks/decoder-fuzz-regress/*.bin
 
 clang -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined \
     -Wall -Wextra \
-    -Idrivers -Itools/png-host \
+    -Idrivers -Itools/png-host -Itools/jpeg-host \
     -o /tmp/jt-decoder-fuzz \
     tools/fuzz-host/fuzz_decoders.c drivers/png.c drivers/inflate.c drivers/jpeg.c
 

@@ -353,7 +353,7 @@ The browser landing page routes kernel HTTP requests to a Cloudflare Worker
 | `drivers/vbe.c` | Switches the screen into 1920x1080 graphics. |
 | `drivers/window.c` | The one drawing target everything renders through: pixels, rectangles, a viewport, and a partial-repaint band. |
 | `drivers/font.c` | Reads the real 8x16 IBM font out of VGA hardware at boot. Falls back to an embedded copy when the read comes back empty, as it does in the browser. |
-| `drivers/png.c` + `drivers/jpeg.c` | Small image decoders, 8-bit RGB and RGBA PNG and baseline JPEG. The wallpaper map tiles go through PNG; since 6.14.0 the Pi kernel links both for Blackcomb's inline images (`jpeg_decode_scaled32` straight to the kept size). |
+| `drivers/png.c` + `drivers/jpeg.c` | Small image decoders, 8-bit RGB and RGBA PNG and baseline JPEG (and progressive since 6.46.0: `prog_block` decodes each scan's DC, AC and refinement bits into per-component i16 coefficient arrays, which the MCU loop then dequantizes and IDCTs). The wallpaper map tiles go through PNG; since 6.14.0 the Pi kernel links both for Blackcomb's inline images (`jpeg_decode_scaled32` straight to the kept size). |
 | `drivers/inflate.c` + `drivers/inflate.h` | The kernel's one DEFLATE inflate (plus Adler-32). The PNG decoder and the app unpacker in `kernel/ring3app.c` both use it, so there is a single copy to trust. |
 | `tools/inflate-host/main.c` | Host harness for `drivers/inflate.c`. `tools/checks/user-compress-check.py` builds it with every app header and requires each embedded app to inflate to its exact binary and every damaged copy to be refused. |
 | `drivers/ttf.c` | A runtime TrueType rasterizer, so text scales to any size. Wraps `drivers/stb_truetype.h`, vendored unmodified from Sean Barrett's stb, with the heap and string shims it needs. |
@@ -2591,7 +2591,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Multi-window chrome doesn't redraw on plain keystrokes | `tools/checks/mwkeyflash-check.sh` | retry |
 | Drawing lands offscreen, window_present puts it on screen | `tools/checks/backbuffer-check.sh` | retry |
 | Multi-window apps draw exactly one toolbar, not two | `tools/checks/mwdupetoolbar-check.sh` | retry |
-| JPEG decoder, host harness | `tools/checks/jpeg-host-check.sh` | once |
+| JPEG decoder, host harness (baseline and, since 6.46.0, progressive) | `tools/checks/jpeg-host-check.sh` | once |
 | Media decoders (WAV, MP3), host harness under ASan and UBSan | `tools/checks/media-host-check.sh` | once |
 | Tasks keep their own x87 float state across switches | `tools/checks/fpu-check.sh` | retry |
 | HTML entities decode to ASCII, host harness | `tools/checks/html-host-check.sh` | once |

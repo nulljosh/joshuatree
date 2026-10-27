@@ -6,7 +6,8 @@ A stub server on the host serves a page with a line of text, a 120x80 PNG (red, 
   - the UART says "browser: image 1 120x80", "browser: image 2 400x300" (scaled down to fit, aspect kept) and
     "browser: image 3 failed";
   - the window logs where it drew each image, and a screendump there shows red with the blue band 40 px down, and green;
-  - the server saw all three image requests after the page;
+  - a progressive JPEG (6.46.0, 200x150) loads as "browser: image 4 200x150";
+  - the server saw all four image requests after the page;
   - a second page with ten small PNGs loads the first eight (6.36.0) and never asks for the ninth.
 Discriminating: drop load_images() from show() in browser.c and nothing is logged or drawn; set IMG_MAX back to 4 and
 the eighth image never loads.
@@ -32,11 +33,12 @@ png = Image.new("RGB", (120, 80), (220, 30, 30))
 png.paste((30, 60, 220), (0, 36, 120, 44))
 b = io.BytesIO(); png.save(b, "PNG"); PNG = b.getvalue()
 b = io.BytesIO(); Image.new("RGB", (800, 600), (40, 170, 60)).save(b, "JPEG", quality=90); JPG = b.getvalue()
+b = io.BytesIO(); Image.new("RGB", (200, 150), (200, 120, 40)).save(b, "JPEG", quality=85, progressive=True); PJPG = b.getvalue()   # 6.46.0
 PAGE = (b"<html><head><title>Pictures</title></head><body><p>Pictures follow.</p>"
-        b"<img src=/red.png alt=red><img src='pic.jpg'><img src=\"/missing.png\"><p>After the pictures.</p></body></html>")
+        b"<img src=/red.png alt=red><img src='pic.jpg'><img src=\"/missing.png\"><img src=/prog.jpg><p>After the pictures.</p></body></html>")
 b = io.BytesIO(); Image.new("RGB", (24, 16), (200, 200, 40)).save(b, "PNG"); DOT = b.getvalue()
 MANY = b"<html><body><p>Ten small pictures.</p>" + b"".join(b"<img src=/d%d.png>" % k for k in range(1, 11)) + b"<p>After them.</p></body></html>"
-FILES = {"/pics": (PAGE, "text/html"), "/red.png": (PNG, "image/png"), "/pic.jpg": (JPG, "image/jpeg"), "/many": (MANY, "text/html")}
+FILES = {"/pics": (PAGE, "text/html"), "/red.png": (PNG, "image/png"), "/pic.jpg": (JPG, "image/jpeg"), "/prog.jpg": (PJPG, "image/jpeg"), "/many": (MANY, "text/html")}
 FILES.update({"/d%d.png" % k: (DOT, "image/png") for k in range(1, 11)})
 seen = []
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -97,7 +99,8 @@ try:
     check("the PNG loads at its own size", wait_for("browser: image 1 120x80", 40, n), uart()[n:][-500:])
     check("the JPEG loads scaled down to fit, aspect kept", wait_for("browser: image 2 400x300", 30, n), uart()[n:][-500:])
     check("a missing image says it failed", wait_for("browser: image 3 failed", 30, n), uart()[n:][-500:])
-    check("the server saw the page, then each image", seen[-4:] == ["/pics", "/red.png", "/pic.jpg", "/missing.png"], seen)
+    check("a progressive JPEG loads too (6.46.0)", wait_for("browser: image 4 200x150", 30, n), uart()[n:][-500:])
+    check("the server saw the page, then each image", seen[-5:] == ["/pics", "/red.png", "/pic.jpg", "/missing.png", "/prog.jpg"], seen)
     check("the window drew both images", wait_for("browser: shows image 2 at", 10, n), uart()[n:][-500:])
     time.sleep(0.5)
     out = uart()[n:]
