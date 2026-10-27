@@ -30,8 +30,9 @@ static inline unsigned sdpcm_pack(unsigned char *f, unsigned seq, unsigned chan,
 }
 /* Checks a received frame; returns the channel, or -1 when the length or its complement is wrong. */
 static inline int sdpcm_parse(const unsigned char *f, unsigned got, unsigned *dataoff, unsigned *len) {
+    if (got < SDPCM_HDRLEN) return -1;   /* 6.48.4: the header is there before its length is read */
     unsigned n = rd16(f), c = rd16(f + 2);
-    if (got < SDPCM_HDRLEN || (n ^ c) != 0xffff || n > got || f[7] < SDPCM_HDRLEN || f[7] > n) return -1;
+    if ((n ^ c) != 0xffff || n > got || f[7] < SDPCM_HDRLEN || f[7] > n) return -1;
     *dataoff = f[7]; *len = n - f[7];
     return f[5] & 15;
 }
@@ -48,7 +49,7 @@ static inline unsigned escan_walk(const unsigned char *e, unsigned len,
     if (len < 12) return 0;
     unsigned count = rd16(e + 10), p = 12, n = 0;
     for (unsigned i = 0; i < count && p + 32 <= len; i++) {
-        unsigned bl = rd32(e + p); if (bl < 32 || p + bl > len) break;
+        unsigned bl = rd32(e + p); if (bl < 80 || bl > len - p) break;   /* 6.48.4: 80, the rssi at 78 is read; and no wrap */
         const unsigned char *b = e + p;
         unsigned slen = b[18] > 32 ? 32 : b[18];
         int rssi = (short)rd16(b + 78);
