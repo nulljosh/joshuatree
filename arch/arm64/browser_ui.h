@@ -67,6 +67,10 @@ static unsigned hs_n;
 static char tp_url[TP_MAX][BM_URL + 1], tp_title[TP_MAX][64];
 static unsigned tp_n;
 int browser_top_site(unsigned r, char *url, unsigned um, char *ttl, unsigned tm);
+#define HQ_MAX 6   /* 6.38.0: history pages matching what is typed in the address bar, shown over the well; Tab picks one */
+static char hq_url[HQ_MAX][BM_URL + 1], hq_title[HQ_MAX][64];
+static unsigned hq_n, hq_sel;
+int browser_history_match(const char *q, unsigned r, char *url, unsigned um, char *ttl, unsigned tm);
 static void tp_load(void) { tp_n = 0; while (tp_n < TP_MAX && browser_top_site(tp_n, tp_url[tp_n], sizeof tp_url[0], tp_title[tp_n], sizeof tp_title[0])) tp_n++; }
 static char br_list_buf[BM_MAX * (BM_URL + 66)];
 static int br_read(const char *name) {   /* the file into br_list_buf: ~/NAME first, else JT/NAME; its length, or <= 0 */
@@ -141,6 +145,14 @@ static int st_y(unsigned k) {
 static unsigned st_count(void) { unsigned k = 0; while (k < bm_n + tp_n + hs_n && st_y(k + 1) + BM_ROW <= br_h()) k++; return k; }
 static const char *st_url(unsigned k) { unsigned at, s = st_sec(k, &at); return s == 0 ? bm_url[at - 1] : s == 1 ? tp_url[at - 1] : hs_url[at - 1]; }
 static const char *st_title(unsigned k) { unsigned at, s = st_sec(k, &at); return s == 0 ? bm_title[at - 1] : s == 1 ? tp_title[at - 1] : hs_title[at - 1]; }
+static void hq_update(void) {   /* after each keystroke in the address bar: two letters or more search */
+    unsigned was = hq_n; hq_n = hq_sel = 0;
+    if (br_edit && !br_field && br_addr_n >= 2) while (hq_n < HQ_MAX && browser_history_match(br_addr, hq_n, hq_url[hq_n], sizeof hq_url[0], hq_title[hq_n], sizeof hq_title[0])) hq_n++;
+    if (hq_n || was) {
+        con_quiet = 1; uart_puts("browser: history matches "); uart_dec(hq_n); uart_putc('\n');
+        for (unsigned k = 0; k < hq_n; k++) { uart_puts("browser: history "); uart_dec(k + 1); uart_putc(' '); uart_puts(hq_url[k]); uart_putc('\n'); }
+    }
+}
 static int br_x(void) { return win_lx + 8; }
 static int br_w(void) { return win_lw - 16; }
 static int br_h(void) { return win_lh - BR_PAGE_Y - 26; }
@@ -253,7 +265,8 @@ void browser_paint(int report) {
     window_rect(x - 1, y - 1, w + 2, h + 2, 0x00DDD8CE); window_rect(x, y, w, h, 0x00faf8f4);
     unsigned len; const char *t = browser_text(&len);
     int rows = br_rows();
-    for (int r = 0; r < rows && br_top + r < (int)br_n; r++) {
+    int hq_show = br_edit && !br_field && hq_n;   /* 6.38.0: the matches cover the page while you type */
+    for (int r = 0; !hq_show && r < rows && br_top + r < (int)br_n; r++) {
         unsigned vi = (unsigned)(br_top + r), n = br_len[vi], e;
         char buf[128]; for (unsigned k = 0; k < n; k++) buf[k] = t[br_off[vi] + k]; buf[n] = 0;
         unsigned num = br_mark(buf, n, 0, &e);
@@ -303,7 +316,16 @@ void browser_paint(int report) {
         }
         if (report && num) { con_quiet = 1; uart_puts("browser: shows link "); uart_dec(num); uart_puts(" at "); uart_dec((unsigned)(x + 16) * (unsigned)s); uart_putc(','); uart_dec((unsigned)(ly + 8) * (unsigned)s); uart_putc('\n'); }
     }
-    if (!len && browser_url()[0]) {   /* 6.8.0: a page came back with no words: its text is built by script, which Blackcomb does not run */
+    if (hq_show) {   /* 6.38.0: "History", then each match as a start-page row */
+        gui_text("History", x + 8, y + 6, 0x0075726E);
+        for (unsigned k = 1; k <= hq_n && BM_Y0 + (int)k * BM_ROW <= h; k++) {
+            int ly = y + BM_Y0 + (int)(k - 1) * BM_ROW;
+            if (hq_sel == k) window_rect(x + 2, ly - 2, w - 4, BM_ROW, 0x00F3E2D8);
+            char nm[64]; br_set(nm, hq_title[k - 1][0] ? hq_title[k - 1] : hq_url[k - 1], sizeof nm);
+            for (unsigned c = br_slen(nm); c && gui_text_width(nm) > w - 24; ) nm[--c] = 0;
+            gui_text(nm, x + 8, ly, 0x001C1C1E);
+        }
+    } else if (!len && browser_url()[0]) {   /* 6.8.0: a page came back with no words: its text is built by script, which Blackcomb does not run */
         const char *l1 = "This page is built by JavaScript,", *l2 = "which Blackcomb does not run yet.";
         int top = y + (h - 40) / 2;
         gui_text(l1, x + (w - gui_text_width(l1)) / 2, top, 0x0075726E);
@@ -566,16 +588,22 @@ int browser_key(unsigned code) {   /* a key down with the Browser in front and S
         if (gui_held && code >= 2 && code <= 1 + n) { char c[8] = "tab 1"; c[4] = (char)('0' + code - 1); br_run(c); return 1; }
     }
     if (ctrl_held || gui_held || alt_held) return 1;
+    if (code == 15 && br_edit && br_addr_n && hq_n) {   /* 6.38.0: Tab steps through the history matches */
+        hq_sel = hq_sel % hq_n + 1;
+        con_quiet = 1; uart_puts("browser: picked history "); uart_dec(hq_sel); uart_putc(' '); uart_puts(hq_url[hq_sel - 1]); uart_putc('\n');
+        browser_paint(0); return 1;
+    }
     if (code == 15 && !(br_edit && br_addr_n)) { br_tab(); return 1; }
+    if (br_edit && hq_sel && (code == 28 || code == 96)) { char u[BM_URL + 1]; br_set(u, hq_url[hq_sel - 1], sizeof u); hq_n = hq_sel = 0; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; browser_go(u); return 1; }
     if (!br_edit && bm_sel && br_empty() && (code == 28 || code == 96)) { br_bookmark(bm_sel); return 1; }
     if (!br_edit && br_sel && (code == 28 || code == 96)) { br_follow(br_sel); return 1; }
     if (br_edit && (code == 28 || code == 96)) { br_load(); return 1; }
-    if (br_edit && code == 14) { if (br_addr_n) br_addr[--br_addr_n] = 0; browser_paint(0); return 1; }
+    if (br_edit && code == 14) { if (br_addr_n) br_addr[--br_addr_n] = 0; hq_update(); browser_paint(0); return 1; }
     int ch = ask_char(code);
     if (ch > ' ' || (br_edit && ch == ' ')) {   /* a letter with the page showing starts a new address, as in a Mac browser's Cmd+L */
         if (!br_edit) { br_edit = 1; br_addr_n = 0; bm_sel = 0; }
         if (ch < 127 && br_addr_n < BR_ADDR_MAX) { br_addr[br_addr_n++] = (char)ch; br_addr[br_addr_n] = 0; }
-        browser_paint(0);
+        hq_update(); browser_paint(0);
     }
     return 1;
 }
