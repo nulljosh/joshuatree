@@ -11,6 +11,7 @@ How to use it, put it on a Raspberry Pi, and build the hardware.
 - [Encrypted Pi relay](#encrypted-pi-relay)
 - [Raspberry Pi](#raspberry-pi)
 - [Board test](#board-test)
+- [7.0 board day](#70-board-day)
 - [Local model on the Pi](#local-model-on-the-pi)
 - [Hardware plan](#hardware-plan)
 - [Samantha box](#samantha-box)
@@ -972,6 +973,44 @@ If she says she can't reach the host: check the relay is running on the Mac, the
 ### What to send back
 
 Each failed step's line, and a photo for anything on screen. Say which numbers worked. When it all passes, that is version 3.
+
+## 7.0 board day
+
+7.0 Online's software (6.11.0 to 6.48.0) has only run in QEMU. This is the pass that decides 7.0.0: a normal hour of web, mail and calendar on the real Pi. Each step names the version that built it, so a failure points at one pull request. Stop at the first failure and send that step's number and the lines it printed.
+
+You need: the development card flashed from main (`tools/flash-pi.sh`), your Wi-Fi in `~/.config/joshuatree/wifi.conf`, an Apple ID app password (appleid.apple.com, Sign-In and Security, App-Specific Passwords), and a stopwatch.
+
+### 1. Sign in (6.21.0, the keychain)
+
+Time from pressing Enter at the login screen to the desktop. The keychain stretches the password twice now, so it is slower than before; say how many seconds.
+
+### 2. Wi-Fi (6.22.0, 6.23.0)
+
+In the Terminal, `wifi`. It should say `wifi: joins NAME, connected` and list the networks it heard. Then a second card with only `JT/WIFI.TXT` (no network built in) should join the same way. If it does not, the last main before the Wi-Fi rework is 0b952b10.
+
+### 3. Real web pages (6.11.0 to 6.47.0)
+
+`browse en.wikipedia.org/wiki/Raspberry_Pi` at the Terminal, then the same page in Blackcomb (Spotlight, `blackcomb`). It should print `http 200`, readable text with numbered links, its pictures in the window (up to eight, progressive JPEGs too), and `tls: session resumed for en.wikipedia.org` on the UART for the pictures and the next page. Try a news site and a page with a sign-in form (type in a field, tick a box). Note any page that comes back blank or with a TLS error.
+
+### 4. Mail (6.18.0, 6.20.0, 6.29.0, 6.32.0, 6.40.0)
+
+`mail login imap.mail.me.com YOUR-APPLE-ID` and the app password at the stars. `mail` lists the newest ten; `mail 1` opens one. Then the Mail tile in the dock: Blackcomb opens on your inbox. Reply to a message to yourself with two lines (Shift+Enter between them) and check it arrives on the Mac with both lines.
+
+### 5. Calendar (6.19.0, 6.24.0, 6.41.0 to 6.48.0)
+
+Deletes now go both ways on the real account, so use a scratch calendar: make one called "JT test" on the Mac first.
+1. `calendar caldav https://caldav.icloud.com/ YOUR-APPLE-ID` and the app password. It lists your event calendars by name.
+2. `calendar use N` with the number of "JT test".
+3. Add a day in the Pi's Calendar, then `calendar sync`: it should say `1 of your days sent`, and the day shows on the Mac.
+4. Delete that day on the Mac, open Calendar on the Pi (it syncs itself): the day is gone there too.
+
+### 6. History and tabs (6.27.0, 6.37.0 to 6.39.0)
+
+In Blackcomb, open a second tab (Cmd+T): a tab strip appears. Type two letters of a page you visited into the address bar: it should offer it. The start page shows Top Sites after a site is visited twice.
+
+### What to send back
+
+The sign-in seconds, each failed step's number with the lines it printed, and a photo for anything on screen. When every step passes, 7.0.0 waits only on the refreshed logo and UI.
 
 ## Local model on the Pi
 
