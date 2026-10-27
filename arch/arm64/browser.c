@@ -91,6 +91,7 @@ static unsigned loads;                    /* pages that arrived so far: the Brow
 
 static unsigned slen(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }
 static int starts(const char *s, const char *w) { for (; *w; s++, w++) if ((*s | 32) != (*w | 32)) return 0; return 1; }
+static int has_at(const char *h, unsigned n, unsigned i, const char *w) { unsigned l = slen(w); return i + l <= n && starts(h + i, w); }   /* 6.48.2: w at i, inside n */
 static void scopy(char *d, const char *s, unsigned n, unsigned max) { if (n >= max) n = max - 1; for (unsigned i = 0; i < n; i++) d[i] = s[i]; d[n] = 0; }
 
 /* scheme://host[:port]/path -> parts. 1 on a URL this browser can fetch. */
@@ -237,13 +238,13 @@ static void take_cookies(const char *raw, unsigned got, const struct url *u) {  
         int secure = 0, gone = 0, keep = 0, expired = 0, maxage = 0;
         for (unsigned k = ve; k < le; k++) if (raw[k] == ';') {
             unsigned t = k + 1; while (t < le && raw[t] == ' ') t++;
-            if (starts(raw + t, "secure") && (t + 6 == le || raw[t + 6] == ';' || raw[t + 6] == ' ')) secure = 1;
-            if (starts(raw + t, "max-age=0") || starts(raw + t, "max-age=-")) gone = 1;
-            else if (starts(raw + t, "expires=")) {   /* Max-Age wins over Expires when a line carries both */
+            if (has_at(raw, le, t, "secure") && (t + 6 == le || raw[t + 6] == ';' || raw[t + 6] == ' ')) secure = 1;   /* 6.48.2: bounded by the line */
+            if (has_at(raw, le, t, "max-age=0") || has_at(raw, le, t, "max-age=-")) gone = 1;
+            else if (has_at(raw, le, t, "expires=")) {   /* Max-Age wins over Expires when a line carries both */
                 unsigned e = t + 8, ee = e; while (ee < le && raw[ee] != ';') ee++;
                 while (ee > e && raw[ee - 1] == ' ') ee--;
                 if (http_date_past(raw + e, ee - e)) expired = 1; else keep = 1;
-            } else if (starts(raw + t, "max-age=")) { keep = 1; maxage = 1; }
+            } else if (has_at(raw, le, t, "max-age=")) { keep = 1; maxage = 1; }
         }
         if (expired && !maxage) gone = 1;
         if (secure && !u->tls) continue;   /* a page over plain http may not set a Secure cookie */
@@ -369,19 +370,19 @@ static int fetch_once(const char *url, char *raw, unsigned max) {
    and style bodies are skipped; the title is kept; common entities and &#NN; are decoded; runs of white space collapse
    to one space; a list item starts "- "; an <a href> ends in its link number, "text [3]". */
 static unsigned put(char *t, unsigned o, char c) { if (o < TEXT_MAX - 1) t[o++] = c; return o; }
-static unsigned entity(const char *s, char *c) {   /* bytes consumed after '&', 0 when it is not one we know */
+static unsigned entity(const char *s, unsigned n, char *c) {   /* bytes consumed after '&', 0 when it is not one we know; n bytes are there (6.48.2) */
     static const struct { const char *name; char ch; } ents[] = { {"amp;", '&'}, {"lt;", '<'}, {"gt;", '>'}, {"quot;", '"'}, {"apos;", '\''}, {"nbsp;", ' '} };
-    for (unsigned i = 0; i < sizeof ents / sizeof ents[0]; i++) if (starts(s, ents[i].name)) { *c = ents[i].ch; return slen(ents[i].name); }
-    if (s[0] == '#') {   /* &#NN; or &#xHH;: ASCII comes through, anything wider prints as '?' */
+    for (unsigned i = 0; i < sizeof ents / sizeof ents[0]; i++) if (slen(ents[i].name) <= n && starts(s, ents[i].name)) { *c = ents[i].ch; return slen(ents[i].name); }
+    if (n >= 2 && s[0] == '#') {   /* &#NN; or &#xHH;: ASCII comes through, anything wider prints as '?' */
         unsigned v = 0, i = 1, hex = (s[1] | 32) == 'x'; if (hex) i++;
         unsigned d = i;
-        for (; i < d + 7; i++) {
+        for (; i < d + 7 && i < n; i++) {
             char h = s[i];
             if (h >= '0' && h <= '9') v = v * (hex ? 16 : 10) + (unsigned)(h - '0');
             else if (hex && (h | 32) >= 'a' && (h | 32) <= 'f') v = v * 16 + (unsigned)((h | 32) - 'a' + 10);
             else break;
         }
-        if (i == d || s[i] != ';') return 0;
+        if (i == d || i >= n || s[i] != ';') return 0;
         *c = v >= 32 && v < 127 ? (char)v : v == 160 ? ' ' : '?';
         return i + 1;
     }
@@ -472,7 +473,8 @@ static void css_rules(const char *c, unsigned n) {
         if (i >= n) return;
         unsigned sel_end = i++, depth = 1, body = i;
         while (i < n && depth) { if (c[i] == '{') depth++; else if (c[i] == '}') depth--; i++; }
-        int none = says_none(c + body, i - 1 - body), bold = says_bold(c + body, i - 1 - body), mid = says_center(c + body, i - 1 - body);
+        unsigned bl = depth ? i - body : i - 1 - body;   /* 6.48.2: an unclosed last block runs to the end; "a{" at the very end was -1 */
+        int none = says_none(c + body, bl), bold = says_bold(c + body, bl), mid = says_center(c + body, bl);
         if (c[sel] == '@' || (!none && !bold && !mid)) continue;   /* @media and friends, or a rule that hides, bolds and centres nothing */
         for (unsigned a = sel; a < sel_end;) {   /* each selector of a comma list */
             while (a < sel_end && is_ws(c[a])) a++;
@@ -562,7 +564,7 @@ static void to_text(const char *h, unsigned n) {
     while (i < n) {
         char c = h[i];
         if (skip) {   /* inside script or style: only the literal closing tag ends it; a '<' in code is not a tag */
-            if (c == '<' && h[i + 1] == '/' && starts(h + i + 2, skip == 1 ? "script" : "style")) { skip = 0; while (i < n && h[i] != '>') i++; }
+            if (c == '<' && i + 1 < n && h[i + 1] == '/' && has_at(h, n, i + 2, skip == 1 ? "script" : "style")) { skip = 0; while (i < n && h[i] != '>') i++; }
             i++; continue;
         }
         if (c == '<') {
@@ -572,7 +574,7 @@ static void to_text(const char *h, unsigned n) {
                 e = i + 4; while (e + 2 < n && !(h[e] == '-' && h[e + 1] == '-' && h[e + 2] == '>')) e++;
                 i = e + 3; continue;
             }
-            int close = tag[0] == '/'; if (close) { tag++; tn--; }
+            int close = tn && tag[0] == '/'; if (close) { tag++; tn--; }   /* 6.48.2: tn, a page may end on its '<' */
             unsigned nl = 0; while (nl < tn && !is_ws(tag[nl]) && tag[nl] != '/' && tag[nl] != '>') nl++;
             if (hdepth) {   /* inside a hidden element: only its own tag's nesting counts */
                 if (nl == hn) { unsigned m = 0; while (m < nl && (tag[m] | 32) == htag[m]) m++; if (m == nl) hdepth += close ? -1u : 1u; }
@@ -651,7 +653,7 @@ static void to_text(const char *h, unsigned n) {
                     }
                 }
                 else if (!close && in_form >= 0 && is_tag(tag, tn, "textarea")) {   /* 6.40.0: "name: text [N]", its text up to </textarea> */
-                    unsigned s, z, a = e + 1, b = a;
+                    unsigned s, z, a = e < n ? e + 1 : n, b = a;   /* 6.48.2: a tag with no '>' ends the page here */
                     while (b + 10 < n && !(h[b] == '<' && h[b + 1] == '/' && starts(h + b + 2, "textarea"))) b++;
                     if (b + 10 >= n) b = n;
                     if (nfields < FIELD_MAX && attr(tag, tn, "name=", &s, &z) && z > s) {
@@ -775,12 +777,12 @@ static void to_text(const char *h, unsigned n) {
             if (opt_open) {
                 unsigned k = (unsigned)in_select, j = fields[k].nopt - 1, ln = slen(fields[k].opt_l[j]);
                 char ch = c == '\n' || c == '\t' || c == '\r' ? ' ' : c;
-                if (ch == '&') { char d; unsigned kk = entity(h + i + 1, &d); if (kk) { ch = d; i += kk; } }
+                if (ch == '&') { char d; unsigned kk = entity(h + i + 1, n - i - 1, &d); if (kk) { ch = d; i += kk; } }
                 if (ln + 1 < sizeof fields[k].opt_l[j] && !(ch == ' ' && (!ln || fields[k].opt_l[j][ln - 1] == ' '))) { fields[k].opt_l[j][ln] = ch; fields[k].opt_l[j][ln + 1] = 0; }
             }
             i++; continue;
         }
-        if (c == '&') { char d; unsigned k = entity(h + i + 1, &d); if (k) { c = d; i += k; } }
+        if (c == '&') { char d; unsigned k = entity(h + i + 1, n - i - 1, &d); if (k) { c = d; i += k; } }
         i++;
         if ((unsigned char)c >= 0x80) {   /* 6.8.0: one UTF-8 character as one byte, its common punctuation in ASCII, anything else '?' */
             unsigned b = (unsigned char)c, cp, len = b >= 0xF0 ? 3 : b >= 0xE0 ? 2 : 1;
