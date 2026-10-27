@@ -371,7 +371,7 @@ static void br_load(void) {   /* Enter in the address bar */
         void (*old)(const char *) = cmd_out; cmd_out = br_sink; browse_command(cmd, n); cmd_out = old;
         con_quiet = 1; uart_puts("browser: filled field "); uart_dec(br_field); uart_putc('\n');
         br_set(br_msg, "field set: Tab to the button and press Enter", sizeof br_msg);
-        br_field = 0; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; browser_paint(0);
+        br_field = 0; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; br_wk_w = -1; br_wrap(); browser_paint(0);   /* 6.31.0: the page shows it */
         return;
     }
     if (!br_addr_n) return;
@@ -409,6 +409,7 @@ static void br_follow(unsigned n) {   /* link n, as a click on it would */
         cmd[o] = 0;
         void (*old)(const char *) = cmd_out; cmd_out = br_sink; br_err[0] = 0; browse_command(cmd, o); cmd_out = old;
         br_set(br_msg, br_err, sizeof br_msg);
+        br_wk_w = -1; br_wrap();   /* 6.31.0: the page text changed in place: [x], (o) or the picked option */
         browser_paint(0);
         return;
     }

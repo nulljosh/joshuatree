@@ -48,7 +48,7 @@ static unsigned img_px[IMG_MAX][IMG_W * IMG_H];
 #define FIELD_MAX 16
 static struct { char action[URL_MAX]; int post; } forms[FORM_MAX];
 #define OPT_MAX 8
-static struct { unsigned form; char name[32], value[64]; unsigned char kind, on, nopt, sel; char opt_v[OPT_MAX][24], opt_l[OPT_MAX][24]; } fields[FIELD_MAX];
+static struct { unsigned form, at, len; char name[32], value[64]; unsigned char kind, on, nopt, sel; char opt_v[OPT_MAX][24], opt_l[OPT_MAX][24]; } fields[FIELD_MAX];   /* at, len: what the page text shows of it (6.31.0) */
 /* kind 0 text, 1 password, 2 hidden; 6.28.0: 3 checkbox, 4 radio (on: ticked or picked; value: what it sends), 5 select
    (its options' values and labels, sel the chosen one) */
 static unsigned nforms, nfields;
@@ -554,7 +554,9 @@ static void to_text(const char *h, unsigned n) {
                         if (o && text[o - 1] != ' ' && text[o - 1] != '\n') o = put(text, o, ' ');
                         for (const char *p = fields[k].name; *p; p++) o = put(text, o, *p);
                         o = put(text, o, ':'); o = put(text, o, ' ');
+                        fields[k].at = o;
                         if (fields[k].nopt) for (const char *p = fields[k].opt_l[fields[k].sel]; *p; p++) o = put(text, o, *p);
+                        fields[k].len = o - fields[k].at;
                         if (l) o = mark(o, l);
                         in_select = -1; space = 0;
                     }
@@ -582,7 +584,7 @@ static void to_text(const char *h, unsigned n) {
                         if (attr(tag, tn, "value=", &s, &z)) scopy(fields[k].value, tag + s, z - s, sizeof fields[k].value); else scopy(fields[k].value, "on", 2, sizeof fields[k].value);
                         int l = pseudo_link("field:", k);
                         if (o && text[o - 1] != ' ' && text[o - 1] != '\n') o = put(text, o, ' ');
-                        o = put(text, o, box ? '[' : '('); o = put(text, o, fields[k].on ? (box ? 'x' : 'o') : ' '); o = put(text, o, box ? ']' : ')');
+                        o = put(text, o, box ? '[' : '('); fields[k].at = o; fields[k].len = 1; o = put(text, o, fields[k].on ? (box ? 'x' : 'o') : ' '); o = put(text, o, box ? ']' : ')');
                         if (l) o = mark(o, l);
                         o = put(text, o, ' '); space = 1;
                     } else if (submit) {
@@ -603,8 +605,10 @@ static void to_text(const char *h, unsigned n) {
                             if (o && text[o - 1] != ' ' && text[o - 1] != '\n') o = put(text, o, ' ');
                             for (const char *p = fields[k].name; *p; p++) o = put(text, o, *p);
                             o = put(text, o, ':'); o = put(text, o, ' ');
+                            fields[k].at = o;
                             if (!fields[k].value[0]) for (int i = 0; i < 8; i++) o = put(text, o, '_');
                             for (const char *p = fields[k].value; *p; p++) o = put(text, o, pw ? '*' : *p);
+                            fields[k].len = o - fields[k].at;
                             if (l) o = mark(o, l);
                             space = 0;
                         }
@@ -675,6 +679,25 @@ static void to_text(const char *h, unsigned n) {
 static unsigned line_start(unsigned k) {   /* the offset of line k */
     unsigned i = 0; for (; k && i < tlen; i++) if (text[i] == '\n') k--;
     return i;
+}
+/* 6.31.0: a field's change shows on the page at once: what the page text shows of it is swapped for its new state
+   ([x], (o), the picked option, the typed text or its stars), and the fields after it move along. */
+static void field_show(unsigned f) {
+    char now[64]; unsigned n = 0;
+    if (fields[f].kind == 3) now[n++] = fields[f].on ? 'x' : ' ';
+    else if (fields[f].kind == 4) now[n++] = fields[f].on ? 'o' : ' ';
+    else if (fields[f].kind == 5) { if (fields[f].nopt) for (const char *p = fields[f].opt_l[fields[f].sel]; *p; p++) now[n++] = *p; }
+    else if (fields[f].kind == 2) return;
+    else if (!fields[f].value[0]) while (n < 8) now[n++] = '_';
+    else for (const char *p = fields[f].value; *p && n < sizeof now; p++) now[n++] = fields[f].kind == 1 ? '*' : *p;
+    unsigned at = fields[f].at, old = fields[f].len;
+    if (at + old > tlen || tlen - old + n >= TEXT_MAX) return;   /* a page cut short at TEXT_MAX: leave it */
+    unsigned tail = tlen - at - old;
+    __builtin_memmove(text + at + n, text + at + old, tail);
+    for (unsigned i = 0; i < n; i++) text[at + i] = now[i];
+    tlen = tlen - old + n; text[tlen] = 0;
+    for (unsigned g = 0; g < nfields; g++) if (g != f && fields[g].at > at) fields[g].at = fields[g].at - old + n;
+    fields[f].len = n;
 }
 /* Prints lines [from, from+count) and the status line, and leaves the view at from. */
 static void show_lines(unsigned from, unsigned count) {
@@ -1153,12 +1176,12 @@ int browse_command(const char *q, unsigned n) {
         if (e != n || !k || k > nlinks) { kputs("browser: no such link\n"); return 1; }
         if (starts(links[k - 1], "field:")) {
             unsigned f = (unsigned)(links[k - 1][6] - '0');
-            if (fields[f].kind == 3) { fields[f].on = !fields[f].on; kputs("browser: "); kputs(fields[f].name); kputs(fields[f].on ? " ticked\n" : " unticked\n"); return 1; }
+            if (fields[f].kind == 3) { fields[f].on = !fields[f].on; field_show(f); kputs("browser: "); kputs(fields[f].name); kputs(fields[f].on ? " ticked\n" : " unticked\n"); return 1; }
             if (fields[f].kind == 4) {   /* one radio of a name in a form is picked */
-                for (unsigned g = 0; g < nfields; g++) if (fields[g].kind == 4 && fields[g].form == fields[f].form && !__builtin_strcmp(fields[g].name, fields[f].name)) fields[g].on = 0;
-                fields[f].on = 1; kputs("browser: "); kputs(fields[f].name); kputs(" is "); kputs(fields[f].value); kputs("\n"); return 1;
+                for (unsigned g = 0; g < nfields; g++) if (fields[g].kind == 4 && fields[g].form == fields[f].form && !__builtin_strcmp(fields[g].name, fields[f].name) && fields[g].on) { fields[g].on = 0; field_show(g); }
+                fields[f].on = 1; field_show(f); kputs("browser: "); kputs(fields[f].name); kputs(" is "); kputs(fields[f].value); kputs("\n"); return 1;
             }
-            if (fields[f].kind == 5 && fields[f].nopt) { fields[f].sel = (unsigned char)((fields[f].sel + 1) % fields[f].nopt); kputs("browser: "); kputs(fields[f].name); kputs(" is "); kputs(fields[f].opt_l[fields[f].sel]); kputs("\n"); return 1; }
+            if (fields[f].kind == 5 && fields[f].nopt) { fields[f].sel = (unsigned char)((fields[f].sel + 1) % fields[f].nopt); field_show(f); kputs("browser: "); kputs(fields[f].name); kputs(" is "); kputs(fields[f].opt_l[fields[f].sel]); kputs("\n"); return 1; }
             kputs("browser: field "); kputs(fields[f].name); kputs(", fill "); kdec(k); kputs(" TEXT sets it\n");
             return 1;
         }
@@ -1192,12 +1215,12 @@ int browse_command(const char *q, unsigned n) {
         if (fields[f].kind == 5) {   /* 6.28.0: the option whose label or value is TEXT, any case */
             for (unsigned j = 0; j < fields[f].nopt; j++) {
                 const char *a = fields[f].opt_l[j], *b = fields[f].opt_v[j];
-                if ((slen(a) == n - t && starts(q + t, a)) || (slen(b) == n - t && starts(q + t, b))) { fields[f].sel = (unsigned char)j; kputs("browser: "); kputs(fields[f].name); kputs(" is "); kputs(a); kputs("\n"); return 1; }
+                if ((slen(a) == n - t && starts(q + t, a)) || (slen(b) == n - t && starts(q + t, b))) { fields[f].sel = (unsigned char)j; field_show(f); kputs("browser: "); kputs(fields[f].name); kputs(" is "); kputs(a); kputs("\n"); return 1; }
             }
             kputs("browser: "); kputs(fields[f].name); kputs(" has no such option\n"); return 1;
         }
         if (fields[f].kind == 3 || fields[f].kind == 4) { kputs("browser: open "); kdec(k); kputs(" ticks it\n"); return 1; }
-        scopy(fields[f].value, q + t, n - t, sizeof fields[f].value);
+        scopy(fields[f].value, q + t, n - t, sizeof fields[f].value); field_show(f);
         kputs("browser: field "); kputs(fields[f].name); kputs(" set\n");   /* never the value: it may be a password */
         return 1;
     }

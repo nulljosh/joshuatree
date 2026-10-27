@@ -7,9 +7,11 @@ submit button; /s echoes its query. At the Terminal:
   the form reads "[ ] [1]", "[x] [2]", "( ) [3]", "(o) [4]", "( ) [5]", "color: Green [6]", "q: ________ [7]", "Go [8]";
   open 1 ticks remember, open 2 unticks news, open 5 picks size l (and not m), fill 6 r picks Red by value, open 6 steps
   to Green, fill 6 blue&gold picks the third by its label in any case, fill 7 hello; open 8 sends exactly
-  remember=on&size=l&color=Blue%26Gold&q=hello (no news, no m, the option's value being its label).
+  remember=on&size=l&color=Blue%26Gold&q=hello (no news, no m, the option's value being its label). Before it, `top`
+  (6.31.0) shows the page redrawn: "[x] [1]", "[ ] [2]", "( ) [4]", "(o) [5]", "color: Blue&Gold [6]", "q: hello [7]".
 In the Blackcomb window, Tab and Enter on the first checkbox ticks it in place and the UART says so.
-Discriminating: drop the "unticked sends nothing" line in browser.c's submit and news=yes goes out.
+Discriminating: drop the "unticked sends nothing" line in browser.c's submit and news=yes goes out; make field_show
+return at once and `top` still shows the page as it came.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-formctl-check.py   (from the repo root)
 """
@@ -87,6 +89,9 @@ try:
     check("open 6 steps to Green", run("open 6", "browser: color is Green")[0])
     check("fill 6 blue&gold picks the third by its label, any case", run("fill 6 blue&gold", "browser: color is Blue&Gold")[0])
     run("fill 7 hello", "browser: field q set")
+    ok, out = run("top", "Go [8]")
+    flat = out.replace("\n", " ")
+    check("the page shows every change without a reload", ok and all(w in flat for w in ("[x] [1]", "[ ] [2]", "( ) [4]", "(o) [5]", "color: Blue&Gold [6]", "q: hello [7]")), out[-500:])
     ok, out = run("open 8", "sent", 20)
     check("the form sends exactly what a browser would", queries[-1:] == ["remember=on&size=l&color=Blue%26Gold&q=hello"], queries[-1:])
     key("esc"); time.sleep(0.5)
