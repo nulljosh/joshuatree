@@ -7,7 +7,10 @@ Fixtures for 10.0.2.2, one throwaway certificate built into the kernel's anchors
   "Sam: Lunch? [2]" (newest first) and a New message form; `open 2` shows Sam's message and a Reply form; filling its
   body and pressing Reply sends to sam@example.com with "Subject: Re: Lunch?"; on the inbox, filling to, subject and
   body and pressing Send sends to new@example.com; each send comes back to the inbox. In the Blackcomb window, typing
-  mail: loads the inbox (not a web search), and Tab then Enter opens the first message. Then Mail from Spotlight
+  mail: loads the inbox (not a web search), and Tab then Enter opens the first message; its Reply box (6.40.0, a
+  <textarea>) takes Shift+Enter as a line break, and the reply goes out with it. At the Terminal `fill 1 A\nB` puts a
+  break in the box too, `top` shows it as " / ", and a second line longer than a one-line field's 63 characters is sent
+  whole. Then Mail from Spotlight
   (6.32.0), signed in, opens Blackcomb on the inbox and not the card's MAIL.TXT app.
 Discriminating: drop the mail: branch in browser.c's fetch_once and `browse mail:` fails to load; drop the slot 2 line
 in windows.c's dock_activate and Spotlight's Mail starts the offline app.
@@ -102,7 +105,7 @@ try:
         while True:
             r = json.loads(f.readline())
             if "return" in r or "error" in r: return r
-    QK = {" ": ("spc",), ".": ("dot",), "/": ("slash",), ":": ("shift", "semicolon"), "@": ("shift", "2"), "-": ("minus",)}
+    QK = {" ": ("spc",), ".": ("dot",), "/": ("slash",), ":": ("shift", "semicolon"), "@": ("shift", "2"), "-": ("minus",), "\\": ("backslash",)}
     def key(*k): command("send-key", keys=[{"type": "qcode", "data": x} for x in k]); time.sleep(0.12)
     def typ(t):
         for ch in t: key(*(("shift", ch.lower()) if ch.isupper() else QK.get(ch, (ch,))))
@@ -121,10 +124,14 @@ try:
     check("the inbox page lists the newest first as links, and a New message form", ok and "Bea: Notes [1]" in flat and "Sam: Lunch? [2]" in flat and "to: ________ [3]" in flat, out[-500:])
     ok, out = run("open 2", "Reply [2]", 30)
     check("a message page: its text and a Reply form", ok and "Lunch at noon by the lake?" in out, out[-500:])
-    run("fill 1 Sounds good", "browser: field body set", 10)
+    LONG = "See you there at noon and I will bring the sandwiches and the blanket too"
+    ok, out = run("fill 1 Sounds good\\n" + LONG, "browser: field body set", 20)
+    ok, out = run("top", "Reply [2]", 10)
+    check("the Reply box shows both lines, the break as / (6.40.0)", ok and "Sounds good / See you" in out, out[-400:])
     k = len(sent); ok, out = run("open 2", "Send [6]", 40)
     check("Reply sends to the sender, Re: the subject, and comes back to the inbox", ok and len(sent) > k and sent[-1]["rcpt"] == ["sam@example.com"]
           and b"Subject: Re: Lunch?\r\n" in sent[-1]["data"] and b"Sounds good" in sent[-1]["data"], (sent[-1:], out[-300:]))
+    check("the reply body keeps its line break and all of its second line (6.40.0)", len(sent) > k and ("Sounds good\r\n" + LONG).encode() in sent[-1]["data"], sent[-1:])
     run("fill 3 new@example.com", "field to set", 10); run("fill 4 Hello there", "field subject set", 10); run("fill 5 First note", "field body set", 10)
     k = len(sent); ok, out = run("open 6", "Send [6]", 40)
     check("Send on the inbox sends a new message", ok and len(sent) > k and sent[-1]["rcpt"] == ["new@example.com"] and b"Subject: Hello there\r\n" in sent[-1]["data"] and b"First note" in sent[-1]["data"], sent[-1:])
@@ -134,6 +141,14 @@ try:
     check("typing mail: in Blackcomb loads the inbox, not a search", wait_for("browser: load mail:", 10, n) and wait_for("browser: page ", 30, n) and "duckduckgo" not in uart()[n:], uart()[n:][-300:])
     n = len(uart()); key("tab"); key("ret")
     check("Tab and Enter open the first message", wait_for("browser: link 1", 10, n) and wait_for("browser: page ", 30, n), uart()[n:][-300:])
+    time.sleep(0.5); n = len(uart()); key("tab"); key("ret")
+    ok = wait_for("browser: editing field 1", 10, n)
+    typ("Hi Bea"); key("shift", "ret"); ok = ok and wait_for("browser: new line in field", 10, n); typ("Talk soon"); key("ret")
+    ok = ok and wait_for("browser: filled field 1", 10, n); time.sleep(0.5)
+    k = len(sent); key("tab"); key("ret")
+    end = time.time() + 40
+    while len(sent) <= k and time.time() < end: time.sleep(0.2)
+    check("in Blackcomb, Shift+Enter in the Reply box sends a two-line reply (6.40.0)", ok and len(sent) > k and b"Hi Bea\r\nTalk soon" in sent[-1]["data"], (sent[-1:], uart()[n:][-300:]))
     key("esc"); time.sleep(0.5)
     n = len(uart()); key("f1"); [key(c) for c in "mail"]; key("ret")
     check("Mail from Spotlight, signed in, is the inbox in Blackcomb", wait_for("browser: load mail:", 15, n) and wait_for("browser: page ", 30, n) and "mail: ring-3 window" not in uart()[n:], uart()[n:][-300:])

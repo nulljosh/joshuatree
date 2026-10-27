@@ -176,6 +176,7 @@ static const char shifted[58] = {
 
 #define KEY_CAPSLOCK 58
 static int caps;   /* Caps Lock: letters only, and Shift inverts it. No keyboard LED yet. */
+int ask_shift(void) { return shift; }   /* 6.40.0: Blackcomb, Shift+Enter in a text area */
 int ask_char(unsigned code) {   /* main.c's Calculator and Spotlight: same map, same Shift, same Caps */
     if (code >= 58) return 0;
     int up = plain[code] >= 'a' && plain[code] <= 'z' ? shift != caps : shift;

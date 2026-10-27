@@ -476,7 +476,7 @@ int mail_page(const char *url, char *out, unsigned max) {   /* the page's length
             PO("<li><a href=\"mail:"); do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z && o < max - 1) out[o++] = d[--z];
             PO("\">"); o = put_esc(out, o, max, m_from[i][0] ? m_from[i] : "(no sender)"); PO(": "); o = put_esc(out, o, max, m_subj[i][0] ? m_subj[i] : "(no subject)"); PO("</a></li>");
         }
-        PO("<h3>New message</h3><form action=\"mail:send\"><input name=to> <input name=subject> <input name=body> <input type=submit value=Send></form></body></html>");
+        PO("<h3>New message</h3><form action=\"mail:send\"><input name=to> <input name=subject> <textarea name=body></textarea> <input type=submit value=Send></form></body></html>");
     } else {
         if (!m_n) fetch_inbox();   /* a message asked for before the list was */
         unsigned w; char *page = message_page(k, &w);
@@ -487,7 +487,7 @@ int mail_page(const char *url, char *out, unsigned max) {   /* the page's length
             for (unsigned i = 0; i < cut && o < max - 1; i++) out[o++] = page[i];
             char d[8]; unsigned z = 0, v = k;
             PO("<h3>Reply</h3><form action=\"mail:reply:"); do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z && o < max - 1) out[o++] = d[--z];
-            PO("\"><input name=body> <input type=submit value=Reply></form><p><a href=\"mail:\">Inbox</a></p></body></html>");
+            PO("\"><textarea name=body></textarea> <input type=submit value=Reply></form><p><a href=\"mail:\">Inbox</a></p></body></html>");
         }
     }
     #undef PO
