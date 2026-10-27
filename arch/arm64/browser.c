@@ -47,7 +47,10 @@ static unsigned img_px[IMG_MAX][IMG_W * IMG_H];
 #define FORM_MAX 4
 #define FIELD_MAX 16
 static struct { char action[URL_MAX]; int post; } forms[FORM_MAX];
-static struct { unsigned form; char name[32], value[64]; unsigned char kind; } fields[FIELD_MAX];   /* kind 0 text, 1 password, 2 hidden */
+#define OPT_MAX 8
+static struct { unsigned form; char name[32], value[64]; unsigned char kind, on, nopt, sel; char opt_v[OPT_MAX][24], opt_l[OPT_MAX][24]; } fields[FIELD_MAX];
+/* kind 0 text, 1 password, 2 hidden; 6.28.0: 3 checkbox, 4 radio (on: ticked or picked; value: what it sends), 5 select
+   (its options' values and labels, sel the chosen one) */
 static unsigned nforms, nfields;
 static const char *post_body; static unsigned post_len;   /* the next fetch POSTs this, on its first hop only */
 /* The cookie jar: name=value per host, sent back to that host alone. A Secure cookie is taken and sent over https only.
@@ -373,6 +376,11 @@ static int attr(const char *tag, unsigned tn, const char *name, unsigned *s, uns
     }
     return 0;
 }
+static int bare(const char *tag, unsigned tn, const char *w) {   /* a bare attribute (checked, selected), not part of a value */
+    unsigned k = slen(w);
+    for (unsigned i = 1; i + k <= tn; i++) if ((tag[i - 1] == ' ' || tag[i - 1] == '\n' || tag[i - 1] == '\t') && starts(tag + i, w) && (i + k == tn || tag[i + k] == ' ' || tag[i + k] == '=' || tag[i + k] == '/' || tag[i + k] == '\n')) return 1;
+    return 0;
+}
 static int is_val(const char *tag, unsigned s, unsigned z, const char *w) { return z - s == slen(w) && starts(tag + s, w); }
 static unsigned mark(unsigned o, int link) {   /* " [N]" after a link's text */
     o = put(text, o, ' '); o = put(text, o, '['); char d[4]; unsigned k = 0, v = (unsigned)link; do d[k++] = (char)('0' + v % 10); while (v /= 10); while (k) o = put(text, o, d[--k]);
@@ -455,7 +463,7 @@ static void to_text(const char *h, unsigned n) {
     }
     int in_title = 0, link = 0; unsigned tl = 0;
     nlinks = 0; nimg = 0; nforms = nfields = 0; title[0] = 0;
-    int in_form = -1;
+    int in_form = -1, in_select = -1, opt_open = 0;   /* 6.28.0: inside <select>, and an <option> whose label is being read */
     while (i < n) {
         char c = h[i];
         if (skip) {   /* inside script or style: only the literal closing tag ends it; a '<' in code is not a tag */
@@ -511,13 +519,57 @@ static void to_text(const char *h, unsigned n) {
                         in_form = (int)nforms++;
                     }
                 }
+                else if (in_select >= 0 && (is_tag(tag, tn, "option") || is_tag(tag, tn, "select"))) {   /* 6.28.0: the options of a select */
+                    unsigned k = (unsigned)in_select, s, z;
+                    if (opt_open) {   /* the label read so far is done: trim it, and it is the value too when there was none */
+                        unsigned j = fields[k].nopt - 1; char *l = fields[k].opt_l[j]; unsigned ln = slen(l);
+                        while (ln && l[ln - 1] == ' ') l[--ln] = 0;
+                        if (!fields[k].opt_v[j][0]) scopy(fields[k].opt_v[j], l, ln, sizeof fields[k].opt_v[j]);
+                        opt_open = 0;
+                    }
+                    if (!close && is_tag(tag, tn, "option") && fields[k].nopt < OPT_MAX) {
+                        unsigned j = fields[k].nopt++;
+                        fields[k].opt_l[j][0] = fields[k].opt_v[j][0] = 0;
+                        if (attr(tag, tn, "value=", &s, &z)) scopy(fields[k].opt_v[j], tag + s, z - s, sizeof fields[k].opt_v[j]);
+                        if (bare(tag, tn, "selected")) fields[k].sel = (unsigned char)j;
+                        opt_open = 1;
+                    } else if (close && is_tag(tag, tn, "select")) {   /* "name: Label [N]" */
+                        int l = pseudo_link("field:", k);
+                        if (o && text[o - 1] != ' ' && text[o - 1] != '\n') o = put(text, o, ' ');
+                        for (const char *p = fields[k].name; *p; p++) o = put(text, o, *p);
+                        o = put(text, o, ':'); o = put(text, o, ' ');
+                        if (fields[k].nopt) for (const char *p = fields[k].opt_l[fields[k].sel]; *p; p++) o = put(text, o, *p);
+                        if (l) o = mark(o, l);
+                        in_select = -1; space = 0;
+                    }
+                }
+                else if (!close && in_form >= 0 && is_tag(tag, tn, "select") && nfields < FIELD_MAX) {
+                    unsigned s, z;
+                    if (attr(tag, tn, "name=", &s, &z) && z > s) {
+                        unsigned k = nfields++;
+                        fields[k].form = (unsigned)in_form; fields[k].kind = 5; fields[k].nopt = fields[k].sel = 0; fields[k].value[0] = 0;
+                        scopy(fields[k].name, tag + s, z - s, sizeof fields[k].name);
+                        in_select = (int)k;
+                    }
+                }
                 else if (!close && in_form >= 0 && is_tag(tag, tn, "input")) {
                     unsigned s, z, ts = 0, tz = 0;
                     int typed = attr(tag, tn, "type=", &ts, &tz);
                     int submit = typed && (is_val(tag, ts, tz, "submit") || is_val(tag, ts, tz, "image"));
                     int hidden = typed && is_val(tag, ts, tz, "hidden"), pw = typed && is_val(tag, ts, tz, "password");
                     int texty = !typed || pw || is_val(tag, ts, tz, "text") || is_val(tag, ts, tz, "search") || is_val(tag, ts, tz, "email") || is_val(tag, ts, tz, "url") || is_val(tag, ts, tz, "tel");
-                    if (submit) {
+                    int box = typed && is_val(tag, ts, tz, "checkbox"), radio = typed && is_val(tag, ts, tz, "radio");
+                    if ((box || radio) && nfields < FIELD_MAX && attr(tag, tn, "name=", &s, &z) && z > s) {   /* 6.28.0: "[x] [N]" or "(o) [N]" */
+                        unsigned k = nfields++;
+                        fields[k].form = (unsigned)in_form; fields[k].kind = (unsigned char)(box ? 3 : 4); fields[k].on = (unsigned char)bare(tag, tn, "checked");
+                        scopy(fields[k].name, tag + s, z - s, sizeof fields[k].name);
+                        if (attr(tag, tn, "value=", &s, &z)) scopy(fields[k].value, tag + s, z - s, sizeof fields[k].value); else scopy(fields[k].value, "on", 2, sizeof fields[k].value);
+                        int l = pseudo_link("field:", k);
+                        if (o && text[o - 1] != ' ' && text[o - 1] != '\n') o = put(text, o, ' ');
+                        o = put(text, o, box ? '[' : '('); o = put(text, o, fields[k].on ? (box ? 'x' : 'o') : ' '); o = put(text, o, box ? ']' : ')');
+                        if (l) o = mark(o, l);
+                        o = put(text, o, ' '); space = 1;
+                    } else if (submit) {
                         int l = pseudo_link("submit:", (unsigned)in_form);
                         if (o && text[o - 1] != ' ' && text[o - 1] != '\n') o = put(text, o, ' ');
                         if (attr(tag, tn, "value=", &s, &z) && z > s) for (unsigned i = s; i < z; i++) o = put(text, o, tag[i]);
@@ -572,6 +624,15 @@ static void to_text(const char *h, unsigned n) {
             i = e + 1; continue;
         }
         if (hdepth) { i++; continue; }   /* a hidden element's own text */
+        if (in_select >= 0) {   /* 6.28.0: an option's label, not page text */
+            if (opt_open) {
+                unsigned k = (unsigned)in_select, j = fields[k].nopt - 1, ln = slen(fields[k].opt_l[j]);
+                char ch = c == '\n' || c == '\t' || c == '\r' ? ' ' : c;
+                if (ch == '&') { char d; unsigned kk = entity(h + i + 1, &d); if (kk) { ch = d; i += kk; } }
+                if (ln + 1 < sizeof fields[k].opt_l[j] && !(ch == ' ' && (!ln || fields[k].opt_l[j][ln - 1] == ' '))) { fields[k].opt_l[j][ln] = ch; fields[k].opt_l[j][ln + 1] = 0; }
+            }
+            i++; continue;
+        }
         if (c == '&') { char d; unsigned k = entity(h + i + 1, &d); if (k) { c = d; i += k; } }
         i++;
         if ((unsigned char)c >= 0x80) {   /* 6.8.0: one UTF-8 character as one byte, its common punctuation in ASCII, anything else '?' */
@@ -981,10 +1042,12 @@ static unsigned urlenc(char *out, unsigned o, unsigned max, const char *v) {
 static void submit(unsigned f) {
     static char query[1024]; unsigned o = 0;
     for (unsigned k = 0; k < nfields; k++) if (fields[k].form == f) {
+        if ((fields[k].kind == 3 || fields[k].kind == 4) && !fields[k].on) continue;   /* 6.28.0: an unticked box or unpicked radio sends nothing */
+        if (fields[k].kind == 5 && !fields[k].nopt) continue;
         if (o) query[o++] = '&';
         o = urlenc(query, o, sizeof query, fields[k].name);
         if (o < sizeof query - 1) query[o++] = '=';
-        o = urlenc(query, o, sizeof query, fields[k].value);
+        o = urlenc(query, o, sizeof query, fields[k].kind == 5 ? fields[k].opt_v[fields[k].sel] : fields[k].value);
     }
     query[o] = 0;
     char url[URL_MAX]; scopy(url, forms[f].action, slen(forms[f].action), URL_MAX);
@@ -1062,7 +1125,14 @@ int browse_command(const char *q, unsigned n) {
         unsigned e, k = number(q, n, 5, &e);
         if (e != n || !k || k > nlinks) { kputs("browser: no such link\n"); return 1; }
         if (starts(links[k - 1], "field:")) {
-            kputs("browser: field "); kputs(fields[links[k - 1][6] - '0'].name); kputs(", fill "); kdec(k); kputs(" TEXT sets it\n");
+            unsigned f = (unsigned)(links[k - 1][6] - '0');
+            if (fields[f].kind == 3) { fields[f].on = !fields[f].on; kputs("browser: "); kputs(fields[f].name); kputs(fields[f].on ? " ticked\n" : " unticked\n"); return 1; }
+            if (fields[f].kind == 4) {   /* one radio of a name in a form is picked */
+                for (unsigned g = 0; g < nfields; g++) if (fields[g].kind == 4 && fields[g].form == fields[f].form && !__builtin_strcmp(fields[g].name, fields[f].name)) fields[g].on = 0;
+                fields[f].on = 1; kputs("browser: "); kputs(fields[f].name); kputs(" is "); kputs(fields[f].value); kputs("\n"); return 1;
+            }
+            if (fields[f].kind == 5 && fields[f].nopt) { fields[f].sel = (unsigned char)((fields[f].sel + 1) % fields[f].nopt); kputs("browser: "); kputs(fields[f].name); kputs(" is "); kputs(fields[f].opt_l[fields[f].sel]); kputs("\n"); return 1; }
+            kputs("browser: field "); kputs(fields[f].name); kputs(", fill "); kdec(k); kputs(" TEXT sets it\n");
             return 1;
         }
         if (starts(links[k - 1], "submit:")) { submit((unsigned)(links[k - 1][7] - '0')); return 1; }
@@ -1092,6 +1162,14 @@ int browse_command(const char *q, unsigned n) {
         unsigned e, k = number(q, n, 5, &e);
         if (!k || k > nlinks || !starts(links[k - 1], "field:") || (e < n && q[e] != ' ')) { kputs("browser: no such field\n"); return 1; }
         unsigned f = (unsigned)(links[k - 1][6] - '0'), t = e < n ? e + 1 : n;
+        if (fields[f].kind == 5) {   /* 6.28.0: the option whose label or value is TEXT, any case */
+            for (unsigned j = 0; j < fields[f].nopt; j++) {
+                const char *a = fields[f].opt_l[j], *b = fields[f].opt_v[j];
+                if ((slen(a) == n - t && starts(q + t, a)) || (slen(b) == n - t && starts(q + t, b))) { fields[f].sel = (unsigned char)j; kputs("browser: "); kputs(fields[f].name); kputs(" is "); kputs(a); kputs("\n"); return 1; }
+            }
+            kputs("browser: "); kputs(fields[f].name); kputs(" has no such option\n"); return 1;
+        }
+        if (fields[f].kind == 3 || fields[f].kind == 4) { kputs("browser: open "); kdec(k); kputs(" ticks it\n"); return 1; }
         scopy(fields[f].value, q + t, n - t, sizeof fields[f].value);
         kputs("browser: field "); kputs(fields[f].name); kputs(" set\n");   /* never the value: it may be a password */
         return 1;
@@ -1172,6 +1250,7 @@ int browser_get(const char *url, char **body, unsigned *n) {
     scopy(cur, was, slen(was), URL_MAX);
     return *body ? st : -1;
 }
+int browser_field_kind(unsigned n) { return n && n <= nlinks && starts(links[n - 1], "field:") ? fields[links[n - 1][6] - '0'].kind : -1; }   /* 6.28.0 */
 int browser_field_secret(unsigned n) { return n && n <= nlinks && starts(links[n - 1], "field:") && fields[links[n - 1][6] - '0'].kind == 1; }   /* 6.15.0: a password field */
 const char *browser_link(unsigned n) { return n && n <= nlinks ? links[n - 1] : 0; }
 unsigned browser_loads(void) { return loads; }
