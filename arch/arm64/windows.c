@@ -276,6 +276,7 @@ void dock_activate(int slot) {   /* a dock tile, from a click, a dock key, Spotl
     if (slot == GUI_ICON_COUNT + 1) { brick_open(); return; }
     if (slot == SPOT_SETTINGS) { settings_open(0); return; }
     if (slot == SPOT_BROWSER) { browser_open(); return; }
+    if (slot == 2 && mail_signed_in()) { browser_go("mail:"); return; }   /* 6.32.0: Mail, signed in, is the real inbox in Blackcomb; before that the card's MAIL.TXT app */
     settings_close();
     brick_close();
     clock_close();

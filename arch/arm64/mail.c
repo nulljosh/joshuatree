@@ -455,6 +455,7 @@ static unsigned put_esc(char *out, unsigned o, unsigned max, const char *s) {
     }
     return o;
 }
+int mail_signed_in(void) { return mine(); }   /* 6.32.0: the Mail tile opens the real inbox once there is one */
 int mail_page(const char *url, char *out, unsigned max) {   /* the page's length, never more than max */
     unsigned o = 0;
     #define PO(str) for (const char *p_ = (str); *p_ && o < max - 1; p_++) out[o++] = *p_
