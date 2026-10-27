@@ -11,6 +11,9 @@ the person's own day, "Dentist, 10am". At the Terminal:
 6.41.0, deletes both ways: the card's JT/CALSYNC.TXT says the last sync had d0 and d5. EVENTS.TXT has no d0 (deleted
 here) and has "Gym" on d5; the server has jt-d0.ics but no d5 (deleted there). The good sync DELETEs jt-d0.ics, takes
 Gym off EVENTS.TXT and never PUTs it, and leaves CALSYNC.TXT listing d1 alone.
+6.42.0, discovery: the good password is given with the server's root, https://10.0.2.2:PORT/. PROPFIND there names a
+principal, the principal names the calendar home by its full https address, and the home holds an inbox, a tasks list
+(VTODO only) and the event calendar; the Pi says it found /cal/joshua/ and syncs there.
 Discriminating: drop the &amp; unescape in ics.c's dav_feed and SUBS.TXT says "Q&amp;A"; skip the CALSYNC.TXT read in
 dav_sync and jt-d0.ics stays on the server while Gym goes back up.
 Skips (exit 0) when clang's aarch64 target, ld.lld, openssl, qemu-system-aarch64 or mtools is missing.
@@ -47,7 +50,7 @@ store = {   # name -> iCalendar text, the server's own two
     "b.ics": "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:b\r\nDTSTART:%sT170000Z\r\nSUMMARY:Design review\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % ymd(d3),
     "jt-%s.ics" % ymd(d0): "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:jt-%s@joshuatree\r\nDTSTART;VALUE=DATE:%s\r\nSUMMARY:Old plan\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % (ymd(d0), ymd(d0)),
 }
-puts, auths, deletes = [], [], []
+puts, auths, deletes, finds = [], [], [], []
 def xml_escape(t): return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\r", "&#13;")
 class Dav(http.server.BaseHTTPRequestHandler):
     def body(self): return self.rfile.read(int(self.headers.get("Content-Length", 0)))
@@ -67,6 +70,24 @@ class Dav(http.server.BaseHTTPRequestHandler):
         if not self.authed(): return
         name = self.path.rsplit("/", 1)[-1]; deletes.append(self.path)
         self.reply(204 if store.pop(name, None) is not None else 404)
+    def do_PROPFIND(self):
+        self.body()
+        if not self.authed(): return
+        finds.append((self.path, self.headers.get("Depth")))
+        R = lambda href, props: "<d:response><d:href>%s</d:href><d:propstat><d:prop>%s</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>" % (href, props)
+        cal = lambda comps: "<d:resourcetype><d:collection/><cal:calendar/></d:resourcetype><cal:supported-calendar-component-set>%s</cal:supported-calendar-component-set>" % "".join('<cal:comp name="%s"/>' % c for c in comps)
+        if self.path == "/":
+            x = R("/", "<d:resourcetype><d:collection/></d:resourcetype><d:current-user-principal><d:href>/principals/joshua/</d:href></d:current-user-principal>") \
+                .replace("</d:propstat>", "</d:propstat><d:propstat><d:prop><cal:calendar-home-set/></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat>", 1)
+        elif self.path == "/principals/joshua/":
+            x = R(self.path, "<cal:calendar-home-set><d:href>https://10.0.2.2:%d/cal/</d:href></cal:calendar-home-set>" % port)
+        elif self.path == "/cal/":
+            x = R("/cal/", "<d:resourcetype><d:collection/></d:resourcetype>") + R("/cal/inbox/", "<d:resourcetype><d:collection/><cal:schedule-inbox/></d:resourcetype>") \
+                + R("/cal/tasks/", cal(["VTODO"])) + R("/cal/joshua/", cal(["VEVENT", "VTODO"]))
+        elif self.path == "/cal/joshua/":
+            x = R(self.path, cal(["VEVENT"]))
+        else: self.reply(404); return
+        self.reply(207, ('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">%s</d:multistatus>' % x).encode(), "application/xml; charset=utf-8")
     def do_REPORT(self):
         self.body()
         if not self.authed(): return
@@ -127,7 +148,9 @@ try:
     check("the app password is asked with stars", wait_for("Calendar app password for %s: \n" % USER, 10, n) and wait_for("calendar: CalDAV", 10, n), uart()[n:][-300:])
     n = len(uart()); line("calendar sync")
     check("a wrong password is refused by the server", wait_for("calendar: the server refused the user or the app password", 30, n) and not puts, (puts, uart()[n:][-300:]))
-    n = len(uart()); line("calendar caldav %s %s" % (url, USER)); time.sleep(0.5); line(PASS); wait_for("calendar: CalDAV", 10, n)
+    n = len(uart()); line("calendar caldav https://10.0.2.2:%d/ %s" % (port, USER)); time.sleep(0.5); line(PASS); wait_for("calendar: CalDAV", 20, n)
+    check("given the server's root, discovery finds the event calendar (6.42.0)", "calendar: found your calendar at %s\n" % url in uart()[n:]
+          and [p for p, _ in finds[-3:]] == ["/", "/principals/joshua/", "/cal/"] and finds[-1][1] == "1", (finds, uart()[n:][-300:]))
     n = len(uart()); line("calendar sync")
     check("sync sends the person's day and reads the calendar back", wait_for("calendar: 1 of your days sent", 30, n) and wait_for("calendar: 3 events read, 3 days kept in SUBS.TXT", 30, n), uart()[n:][-400:])
     sent = puts[-1] if puts else ("", "")
