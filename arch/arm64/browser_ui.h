@@ -15,6 +15,7 @@ int fat_read_file(const char *name, void *buf, unsigned bufsize); int fat_chdir(
 const char *browser_link(unsigned n);
 unsigned browser_loads(void);
 int browser_field_secret(unsigned n);
+int browser_field_kind(unsigned n);
 unsigned browser_tabs(unsigned *front);
 static unsigned br_field;   /* 6.15.0: the form field (its link number) the address bar is editing, 0 when it edits the address */
 const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h);   /* 6.14.0: image k's 0RGB pixels and kept size, 0 when it did not load */
@@ -402,6 +403,15 @@ static void br_nav(int what) {   /* 0 back, 1 forward, 2 reload */
 }
 static void br_follow(unsigned n) {   /* link n, as a click on it would */
     const char *l = browser_link(n);
+    if (browser_field_kind(n) >= 3) {   /* 6.28.0: a checkbox, radio or select changes in place; the status line says how */
+        char cmd[16] = "open "; unsigned o = 5; char d[5]; unsigned z = 0, v = n;
+        do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) cmd[o++] = d[--z];
+        cmd[o] = 0;
+        void (*old)(const char *) = cmd_out; cmd_out = br_sink; br_err[0] = 0; browse_command(cmd, o); cmd_out = old;
+        br_set(br_msg, br_err, sizeof br_msg);
+        browser_paint(0);
+        return;
+    }
     if (l && l[0] == 'f' && l[1] == 'i' && l[5] == ':') {   /* a form field: the address bar becomes its editor */
         br_field = n; br_edit = 1; br_addr_n = 0; br_addr[0] = 0;
         br_set(br_msg, "type, then press Enter", sizeof br_msg);

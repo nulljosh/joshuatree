@@ -2111,6 +2111,7 @@ Condensed 2026-10-12. The line numbers and per-finding write-ups are in git hist
 - Every HTTPS server certificate is checked against the embedded roots and the requested host name (`br_ssl_client_reset(&sc, host, 0)`). A name mismatch is error 56. An untrusted chain is error 62.
 - Response size is bounded.
   - The raw reply stops at `RAW_MAX` (4 MiB on the heap since 6.12.0, was 64 KiB), a gzip body at `PAGE_MAX` (8 MiB inflated), text at `TEXT_MAX`, links at `LINK_MAX`, and the title at 60 bytes.
+  - 6.28.0: form controls. A field's kind 3 (checkbox), 4 (radio) and 5 (select, with up to 8 options' values and labels read while the select's text is held back) are `field:K` links; `open N` toggles, picks or steps, `fill N TEXT` picks an option, and `submit` sends only what is ticked, picked or chosen. browser_ui.h's `br_follow` changes them in place.
   - 6.27.0: searchable history. `hist_add` (after each load in `show`) rewrites `HISTWORD.TXT` with this page on top (count, address, title, the first 300 characters of words, lower case) and the rest after it, 40 at most; `history_command` lists, searches every word, ranks by count, or clears.
   - 6.26.0: the cookie jar is the signed-in person's (`jar_switch` before every fetch); a cookie with Max-Age or Expires is `keep` and `jar_save` seals the kept ones in the keychain as "cookies"; `cookies` and `cookies clear` at the Terminal.
   - 6.25.0: what the page hides stays hidden. `css_rules` reads every `<style>` first and keeps the simple display:none selectors (`hide_sel`, 32 at most); `hidden_tag` matches them, the hidden attribute and an inline display:none, and `to_text` skips that element whole by counting its own tag's nesting.
@@ -2434,7 +2435,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (329 checks)
+### The suite (330 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2688,6 +2689,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Page styles in Blackcomb: h1 and h2 drawn as big bold headings, h3 to h6 bold, <b> runs bold and only them, taller ink for the big heading on a screendump, and the Terminal prints the page without style bytes, in headless QEMU | `tools/checks/arm64-pagestyle-check.py` | retry |
 | Inline images in Blackcomb: a page's PNG and baseline JPEG are fetched after its text, scaled to fit, drawn in place with their colours on a screendump, and a missing one says it failed, in headless QEMU | `tools/checks/arm64-images-check.py` | retry |
 | Forms and cookies on the Pi: a login form posts with its hidden token, the redirect comes back with the session cookie and not a Secure one over http, a GET form sends its query, fill never prints a value, and the Blackcomb window does it with Tab and Enter, in headless QEMU | `tools/checks/arm64-forms-check.py` | retry |
+| Form controls on the Pi: checkboxes tick, radios pick one of their name, a select steps or takes an option by value or label, the form sends exactly the ticked and picked values, and Blackcomb changes a control in place, in headless QEMU | `tools/checks/arm64-formctl-check.py` | retry |
 | What a page hides stays hidden: simple display:none rules from <style>, the hidden attribute and inline display:none skip an element whole, @media and descendant rules are left alone, and a hidden menu's link takes no number, in headless QEMU | `tools/checks/arm64-csshide-check.py` | retry |
 | Cookies kept per person: a persistent cookie survives a restart in its owner's keychain, a session cookie does not, another account gets none, cookies clear is kept, and no value is on the card in plain text or on the UART, over four boots of one card in headless QEMU | `tools/checks/arm64-cookiekeep-check.py` | retry |
 | History you can search: three pages visited (one twice) are listed newest first once each, found by every word in any case, ranked by visits, and cleared, in headless QEMU | `tools/checks/arm64-history-check.py` | retry |
