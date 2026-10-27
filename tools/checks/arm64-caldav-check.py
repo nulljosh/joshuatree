@@ -8,7 +8,11 @@ the person's own day, "Dentist, 10am". At the Terminal:
   the app password with stars; a wrong one makes `calendar sync` say the server refused it; the right one sends the
   person's day (PUT jt-YYYYMMDD.ics, UID jt-YYYYMMDD@joshuatree, the comma escaped, the right Authorization) and reads
   the three events back into SUBS.TXT; Calendar then shows the two days the person has no event on.
-Discriminating: drop the &amp; unescape in ics.c's dav_feed and SUBS.TXT says "Q&amp;A".
+6.41.0, deletes both ways: the card's JT/CALSYNC.TXT says the last sync had d0 and d5. EVENTS.TXT has no d0 (deleted
+here) and has "Gym" on d5; the server has jt-d0.ics but no d5 (deleted there). The good sync DELETEs jt-d0.ics, takes
+Gym off EVENTS.TXT and never PUTs it, and leaves CALSYNC.TXT listing d1 alone.
+Discriminating: drop the &amp; unescape in ics.c's dav_feed and SUBS.TXT says "Q&amp;A"; skip the CALSYNC.TXT read in
+dav_sync and jt-d0.ics stays on the server while Gym goes back up.
 Skips (exit 0) when clang's aarch64 target, ld.lld, openssl, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-caldav-check.py   (from the repo root)
 """
@@ -29,18 +33,21 @@ MT = dict(os.environ, MTOOLS_SKIP_CHECK="1")
 card = os.path.join(tmp, "card.img"); build_card(card, False)
 subprocess.run(["mmd", "-i", f"{card}@@{PART * 512}", "::JT"], capture_output=True, env=MT)
 today = datetime.date.today()
-d1, d2, d3 = (today + datetime.timedelta(days=k) for k in (4, 9, 15))
+d1, d2, d3, d0, d5 = (today + datetime.timedelta(days=k) for k in (4, 9, 15, 6, 12))
 ymd = lambda d: d.strftime("%Y%m%d"); iso = lambda d: d.strftime("%Y-%m-%d")
-open(os.path.join(tmp, "EVENTS.TXT"), "w").write("%s|Dentist, 10am\n" % iso(d1))
+open(os.path.join(tmp, "EVENTS.TXT"), "w").write("%s|Dentist, 10am\n%s|Gym\n" % (iso(d1), iso(d5)))
 subprocess.run(["mcopy", "-i", f"{card}@@{PART * 512}", os.path.join(tmp, "EVENTS.TXT"), "::JT/EVENTS.TXT"], capture_output=True, env=MT, check=True)
+open(os.path.join(tmp, "CALSYNC.TXT"), "w").write("%s\n%s\n" % (ymd(d0), ymd(d5)))
+subprocess.run(["mcopy", "-i", f"{card}@@{PART * 512}", os.path.join(tmp, "CALSYNC.TXT"), "::JT/CALSYNC.TXT"], capture_output=True, env=MT, check=True)
 USER, PASS = "joshua@example.com", "dav-pass-555"
 AUTH = "Basic " + base64.b64encode(("%s:%s" % (USER, PASS)).encode()).decode()
 
 store = {   # name -> iCalendar text, the server's own two
     "a.ics": "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART;VALUE=DATE:%s\r\nSUMMARY:Q&A with team\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % ymd(d2),
     "b.ics": "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:b\r\nDTSTART:%sT170000Z\r\nSUMMARY:Design review\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % ymd(d3),
+    "jt-%s.ics" % ymd(d0): "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:jt-%s@joshuatree\r\nDTSTART;VALUE=DATE:%s\r\nSUMMARY:Old plan\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n" % (ymd(d0), ymd(d0)),
 }
-puts, auths = [], []
+puts, auths, deletes = [], [], []
 def xml_escape(t): return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\r", "&#13;")
 class Dav(http.server.BaseHTTPRequestHandler):
     def body(self): return self.rfile.read(int(self.headers.get("Content-Length", 0)))
@@ -56,6 +63,10 @@ class Dav(http.server.BaseHTTPRequestHandler):
         name = self.path.rsplit("/", 1)[-1]; created = name not in store
         store[name] = data.decode(); puts.append((self.path, data.decode()))
         self.reply(201 if created else 204)
+    def do_DELETE(self):
+        if not self.authed(): return
+        name = self.path.rsplit("/", 1)[-1]; deletes.append(self.path)
+        self.reply(204 if store.pop(name, None) is not None else 404)
     def do_REPORT(self):
         self.body()
         if not self.authed(): return
@@ -123,6 +134,10 @@ try:
     check("the day went up as jt-YYYYMMDD.ics with its UID and the comma escaped", sent[0] == "/cal/joshua/jt-%s.ics" % ymd(d1) and "UID:jt-%s@joshuatree" % ymd(d1) in sent[1]
           and "DTSTART;VALUE=DATE:%s" % ymd(d1) in sent[1] and "SUMMARY:Dentist\\, 10am" in sent[1], sent)
     check("with exactly the user and app password", auths[-1] == AUTH, auths[-1:])
+    check("a day deleted here is deleted on the server (6.41.0)", deletes == ["/cal/joshua/jt-%s.ics" % ymd(d0)] and "jt-%s.ics" % ymd(d0) not in store
+          and "calendar: 1 day deleted here, taken off the server" in uart()[n:], (deletes, uart()[n:][-300:]))
+    check("a day deleted on the server is taken off here, not sent back", "calendar: 1 day deleted on the server, taken off here" in uart()[n:]
+          and not any(ymd(d5) in p for p, _ in puts), (puts, uart()[n:][-300:]))
     key("esc"); time.sleep(0.5)
     n = len(uart()); key("f1"); [key(c) for c in "calendar"]; key("ret")
     check("Calendar shows the two days the person has no event on", wait_for("calendar: subscribed events 2", 20, n), uart()[n:][-300:])
@@ -135,5 +150,11 @@ subprocess.run(["mcopy", "-n", "-i", f"{card}@@{PART * 512}", "::JT/SUBS.TXT", o
 got = open(out).read() if os.path.exists(out) else ""
 want = "%s|Dentist, 10am\n%s|Q&A with team\n%s|Design review\n" % (iso(d1), iso(d2), iso(d3))
 check("SUBS.TXT holds the three days, escapes undone (XML and iCalendar)", got == want, (got, want))
+def card_file(name):
+    o = os.path.join(tmp, name.lower() + ".out")
+    subprocess.run(["mcopy", "-n", "-i", f"{card}@@{PART * 512}", "::JT/" + name, o], capture_output=True, env=MT)
+    return open(o).read() if os.path.exists(o) else ""
+check("EVENTS.TXT keeps Dentist and lost Gym", card_file("EVENTS.TXT") == "%s|Dentist, 10am\n" % iso(d1), card_file("EVENTS.TXT"))
+check("CALSYNC.TXT lists the day both sides now have", card_file("CALSYNC.TXT") == "%s\n" % ymd(d1), card_file("CALSYNC.TXT"))
 if fails: print("FAIL: " + ", ".join(fails)); sys.exit(1)
 print("PASS: CalDAV over https only, the app password with stars, the person's day sent as an iCalendar object and the calendar read back through REPORT, XML and CDATA undone")
