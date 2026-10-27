@@ -426,6 +426,8 @@ static int pseudo_link(const char *kind, unsigned k) {   /* field:K or submit:F 
    ponytail: two parts at most; "a b c" and the > + ~ combinators are still left out. */
 #define HIDE_MAX 32
 static char hide_sel[HIDE_MAX][48]; static unsigned nhide;
+static unsigned char hide_act[HIDE_MAX];   /* 6.47.0: what a rule in this table does: 1 hides, 2 bolds, 3 centres, 4 right-aligns; the
+   two-part (descendant) bold and align rules share the hide rules' ancestor tracking, one-part ones keep their own tables */
 static char anc_tag[HIDE_MAX][16]; static unsigned anc_n[HIDE_MAX], anc_d[HIDE_MAX];   /* a descendant rule's open first part: its tag, how deep */
 /* 6.34.0: a rule whose font-weight is bold (or 600 and up) makes its element bold, as <b> does: the BR_BOLD mark when it
    opens, BR_PLAIN when its own tag's nesting closes. One part selectors only. ponytail: one bold element at a time,
@@ -482,7 +484,9 @@ static void css_rules(const char *c, unsigned n) {
                 else if (is_ws(c[k])) { if (!is_ws(c[k - 1])) { gaps++; if (on < sizeof one - 1) one[on++] = ' '; } }   /* one space between the two parts */
                 else if (on < sizeof one - 1) one[on++] = c[k]; else simple = 0;
             }
-            if (none && simple && gaps <= 1 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; anc_d[nhide++] = 0; }
+            if (none && simple && gaps <= 1 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = 1; anc_d[nhide++] = 0; }
+            for (int act = 2; act <= 4; act++)   /* 6.47.0: a descendant rule that bolds (2) or aligns (3 centre, 4 right) */
+                if (simple && gaps == 1 && nhide < HIDE_MAX && (act == 2 ? bold : mid == act - 2)) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = (unsigned char)act; anc_d[nhide++] = 0; }
             if (bold && simple && !gaps && nbold < BOLD_MAX) { for (unsigned k = 0; k < on; k++) bold_sel[nbold][k] = one[k]; bold_sel[nbold++][on] = 0; }
             if (mid && simple && !gaps && ncenter < BOLD_MAX) { for (unsigned k = 0; k < on; k++) center_sel[ncenter][k] = one[k]; center_sel[ncenter][on] = 0; center_mode[ncenter++] = (unsigned char)mid; }
             a = b + 1;
@@ -514,7 +518,15 @@ static int hidden_tag(const char *tag, unsigned tn, unsigned nl) {   /* tag[0..n
     if (attr(tag, tn, "style=", &s, &z) && says_none(tag + s, z - s)) return 1;
     for (unsigned r = 0; r < nhide; r++) {
         const char *sel = hide_sel[r]; unsigned sl = slen(sel), g = gap_of(sel);
+        if (hide_act[r] != 1) continue;
         if (g == sl ? sel_match(sel, sl, tag, tn, nl) : anc_d[r] && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
+    }
+    return 0;
+}
+static int desc_rule(int act, const char *tag, unsigned tn, unsigned nl) {   /* 6.47.0: a descendant rule of that action names this element */
+    for (unsigned r = 0; r < nhide; r++) {
+        const char *sel = hide_sel[r]; unsigned sl = slen(sel), g = gap_of(sel);
+        if (hide_act[r] == act && g < sl && anc_d[r] && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
     }
     return 0;
 }
@@ -726,7 +738,8 @@ static void to_text(const char *h, unsigned n) {
                 else if (is_tag(tag, tn, "b") || is_tag(tag, tn, "strong")) { if (!in_title) o = put(text, o, close ? BR_PLAIN : BR_BOLD); }
                 else if (heading || is_tag(tag, tn, "p") || is_tag(tag, tn, "br") || is_tag(tag, tn, "div") || is_tag(tag, tn, "li") || is_tag(tag, tn, "tr")
                          || is_tag(tag, tn, "ul") || is_tag(tag, tn, "ol") || is_tag(tag, tn, "table") || is_tag(tag, tn, "blockquote") || is_tag(tag, tn, "pre") || is_tag(tag, tn, "hr") || is_tag(tag, tn, "center")) {
-                    if (o && text[o - 1] != '\n') o = put(text, o, '\n');
+                    unsigned lr = o; while (lr && (text[lr - 1] == BR_BOLD || text[lr - 1] == BR_PLAIN || text[lr - 1] == BR_CENTER || text[lr - 1] == BR_LEFT || text[lr - 1] == BR_RIGHT)) lr--;
+                    if (lr && text[lr - 1] != '\n') o = put(text, o, '\n');   /* 6.47.0: style marks after a line break are not text, so no blank line for them */
                     if (!close && (heading || is_tag(tag, tn, "p")) && o && text[o - 1] == '\n' && !(o > 1 && text[o - 2] == '\n')) o = put(text, o, '\n');   /* a blank line before */
                     if (!close && is_tag(tag, tn, "li")) { o = put(text, o, '-'); o = put(text, o, ' '); }
                     if (!close && heading) o = put(text, o, tag[1] <= '2' ? BR_BIG : BR_SMALL);   /* 6.13.0: the window draws it as a heading */
@@ -736,9 +749,11 @@ static void to_text(const char *h, unsigned n) {
                     if (bdepth) {
                         if (nl == bn) { unsigned m = 0; while (m < nl && (tag[m] | 32) == btag[m]) m++; if (m == nl && !(bdepth += close ? -1u : 1u)) o = put(text, o, BR_PLAIN); }
                     } else if (!close && nl < sizeof btag) {
-                        for (unsigned r = 0; r < nbold; r++) if (sel_match(bold_sel[r], slen(bold_sel[r]), tag, tn, nl)) {
+                        int b = desc_rule(2, tag, tn, nl);
+                        for (unsigned r = 0; r < nbold && !b; r++) b = sel_match(bold_sel[r], slen(bold_sel[r]), tag, tn, nl);
+                        if (b) {
                             for (unsigned m = 0; m < nl; m++) btag[m] = (char)(tag[m] | 32);
-                            bn = nl; bdepth = 1; o = put(text, o, BR_BOLD); break;
+                            bn = nl; bdepth = 1; o = put(text, o, BR_BOLD);
                         }
                     }
                     if (cdepth) {   /* 6.35.0: centred until its own tag's nesting closes */
@@ -748,6 +763,7 @@ static void to_text(const char *h, unsigned n) {
                         if (!mid && attr(tag, tn, "align=", &s, &z)) mid = z - s == 6 && starts(tag + s, "center") ? 1 : z - s == 5 && starts(tag + s, "right") ? 2 : 0;
                         if (!mid && attr(tag, tn, "style=", &s, &z)) mid = says_center(tag + s, z - s);
                         for (unsigned r = 0; r < ncenter && !mid; r++) if (sel_match(center_sel[r], slen(center_sel[r]), tag, tn, nl)) mid = center_mode[r];
+                        if (!mid) mid = desc_rule(3, tag, tn, nl) ? 1 : desc_rule(4, tag, tn, nl) ? 2 : 0;
                         if (mid) { for (unsigned m = 0; m < nl; m++) ctag[m] = (char)(tag[m] | 32); cn = nl; cdepth = 1; o = put(text, o, mid == 2 ? BR_RIGHT : BR_CENTER); }
                     }
                 }
