@@ -81,7 +81,8 @@ static unsigned parse(char *f, unsigned n, unsigned from) {
     }
     return seen;
 }
-static int save(const char *d, unsigned n) { return home_active() ? home_save("SUBS.TXT", d, n) == 1 : sd_write("SUBS.TXT", d, n) == 1; }
+static int save_as(const char *name, const char *d, unsigned n) { return home_active() ? home_save(name, d, n) == 1 : sd_write(name, d, n) == 1; }
+static int save(const char *d, unsigned n) { return save_as("SUBS.TXT", d, n); }
 
 /* A feed's text (or CalDAV's events run together) into SUBS.TXT, with one line saying what was kept. Under a heap mark. */
 static void keep(char *body, unsigned bn) {
@@ -111,7 +112,10 @@ static void keep(char *body, unsigned bn) {
    `calendar sync` pushes, then pulls. Push: each of the person's own EVENTS.TXT days goes up as an all-day VEVENT, PUT at
    PATH/jt-YYYYMMDD.ics with the UID jt-YYYYMMDD@joshuatree, so a second sync replaces it instead of doubling it. Pull: one
    REPORT calendar-query for every VEVENT; each calendar-data, its XML escapes undone, is read like a feed into SUBS.TXT.
-   Deleting on either side is not synced yet. tools/checks/arm64-caldav-check.py runs it against a fixture server. */
+   6.41.0: deletes sync both ways. CALSYNC.TXT, beside EVENTS.TXT, lists the days both sides had after the last sync. A
+   REPORT before the push finds the server's jt- days; a listed day the server no longer has was deleted there and leaves
+   EVENTS.TXT, and a listed day EVENTS.TXT no longer has was deleted here and is DELETEd on the server. A day never
+   listed is new on whichever side has it. tools/checks/arm64-caldav-check.py runs it against a fixture server. */
 #include "tls.h"
 #include "../../drivers/http.h"
 extern char current_user[];
@@ -218,18 +222,33 @@ static unsigned dav_feed(char *x, unsigned n) {
     }
     return w;
 }
-static int dav_read_events(char *buf, unsigned max) {   /* the person's EVENTS.TXT, from where Calendar keeps it */
+static int dav_read(const char *name, char *buf, unsigned max) {   /* the person's file, from where Calendar keeps EVENTS.TXT */
     int got = -1;
     if (!sd_enter_jt(0)) return -1;
     if (home_active()) {
-        char path[96], *leaf;
-        if (home_expand("~/EVENTS.TXT", path, sizeof path) > 0 && home_walk(path, 1, &leaf) == 1) { got = fat_read_file(leaf, buf, max); home_back(); }
+        char path[96], *leaf, tilde[24] = "~/"; cp(tilde + 2, name, slen(name), sizeof tilde - 2);
+        if (home_expand(tilde, path, sizeof path) > 0 && home_walk(path, 1, &leaf) == 1) { got = fat_read_file(leaf, buf, max); home_back(); }
         fat_cwd_set(0);
         return got;
     }
-    got = fat_read_file("EVENTS.TXT", buf, max);
+    got = fat_read_file(name, buf, max);
     fat_chdir("..");
     return got;
+}
+#define DAYS_MAX 96
+static unsigned day_of(const char *l, unsigned ln) {   /* "YYYY-MM-DD|..." as YYYYMMDD, else 0 */
+    if (ln <= 11 || l[4] != '-' || l[7] != '-' || l[10] != '|') return 0;
+    unsigned v = 0; for (unsigned k = 0; k < 10; k++) if (k != 4 && k != 7) { if (l[k] < '0' || l[k] > '9') return 0; v = v * 10 + (unsigned)(l[k] - '0'); }
+    return v;
+}
+static int has_day(const unsigned *a, unsigned n, unsigned d) { for (unsigned i = 0; i < n; i++) if (a[i] == d) return 1; return 0; }
+static unsigned jt_days(const char *x, unsigned n, unsigned *out) {   /* every "jt-YYYYMMDD" in a multistatus: the server's days from the Pi */
+    unsigned c = 0;
+    for (unsigned i = 0; i + 11 <= n && c < DAYS_MAX; i++) if (x[i] == 'j' && x[i + 1] == 't' && x[i + 2] == '-') {
+        unsigned v = 0, k = 0; while (k < 8 && x[i + 3 + k] >= '0' && x[i + 3 + k] <= '9') v = v * 10 + (unsigned)(x[i + 3 + k++] - '0');
+        if (k == 8 && (i + 11 == n || x[i + 11] < '0' || x[i + 11] > '9') && !has_day(out, c, v)) out[c++] = v;
+    }
+    return c;
 }
 static void dav_sync(void) {
     unsigned long mark = heap_mark();
@@ -237,7 +256,43 @@ static void dav_sync(void) {
     dav_parts(dav_url, host, &port, &base);
     void *kmalloc(unsigned int);
     char *evs = kmalloc(8192); unsigned sent = 0;
-    int en = evs ? dav_read_events(evs, 8191) : -1;
+    static unsigned put_ok[DAYS_MAX];   /* 6.41.0: the days the server took this time: only they count as synced */
+    int en = evs ? dav_read("EVENTS.TXT", evs, 8191) : -1;
+    static const char q[] = "<?xml version=\"1.0\" encoding=\"utf-8\"?><c:calendar-query xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">"
+                            "<d:prop><c:calendar-data/></d:prop><c:filter><c:comp-filter name=\"VCALENDAR\"><c:comp-filter name=\"VEVENT\"/></c:comp-filter></c:filter></c:calendar-query>";
+    char *rb; unsigned rn;
+    {   /* 6.41.0: deletes, from the last sync's days (CALSYNC.TXT) against both sides now */
+        static unsigned last[DAYS_MAX], there[DAYS_MAX]; unsigned nl = 0, nt = 0, gone_here = 0, gone_there = 0;
+        char sb[DAYS_MAX * 9 + 1]; int sn = dav_read("CALSYNC.TXT", sb, sizeof sb - 1);
+        for (int i = 0; sn > 0 && i + 8 <= sn && nl < DAYS_MAX; i += 9) { unsigned v = 0; for (int k = 0; k < 8; k++) v = v * 10 + (unsigned)(sb[i + k] - '0'); last[nl++] = v; }
+        if (nl) {
+            int st = dav_req("REPORT", base, 0, "application/xml; charset=utf-8", "Depth: 1\r\n", q, sizeof q - 1, &rb, &rn);
+            if (st == 401 || st == 403) { cmd_out("calendar: the server refused the user or the app password\n"); heap_release(mark); return; }
+            if (st != 207 || !rb) nl = 0;   /* no answer: delete nothing either way */
+            else nt = jt_days(rb, rn, there);
+        }
+        unsigned here[DAYS_MAX], nh = 0;
+        for (unsigned i = 0; en > 0 && i < (unsigned)en && nh < DAYS_MAX;) { unsigned e = i; while (e < (unsigned)en && evs[e] != '\n') e++; unsigned d = day_of(evs + i, e - i); if (d) here[nh++] = d; i = e + 1; }
+        for (unsigned k = 0; k < nl; k++) {
+            int on_here = has_day(here, nh, last[k]), on_there = has_day(there, nt, last[k]);
+            if (on_here && !on_there) {   /* deleted on the server: out of EVENTS.TXT */
+                unsigned w = 0;
+                for (unsigned i = 0; i < (unsigned)en;) { unsigned e = i; while (e < (unsigned)en && evs[e] != '\n') e++; unsigned ee = e < (unsigned)en ? e + 1 : e; if (day_of(evs + i, e - i) != last[k]) for (unsigned c = i; c < ee; c++) evs[w++] = evs[c]; i = ee; }
+                en = (int)w; gone_here++;
+            } else if (!on_here && on_there) {   /* deleted here: DELETE on the server */
+                char name[24] = "jt-"; unsigned v = last[k];
+                for (int c = 10; c >= 3; c--) { name[c] = (char)('0' + v % 10); v /= 10; }
+                cp(name + 11, ".ics", 4, sizeof name - 11);
+                char *db; unsigned dn;
+                int st = dav_req("DELETE", base, name, 0, 0, "", 0, &db, &dn);
+                if (st == 200 || st == 204 || st == 404) gone_there++;
+                else { cmd_out("calendar: the server did not delete "); cmd_out(name); cmd_out("\n"); }
+            }
+        }
+        if (gone_here) save_as("EVENTS.TXT", evs, (unsigned)en);
+        if (gone_here) { cmd_out("calendar: "); cmd_dec(gone_here); cmd_out(gone_here == 1 ? " day deleted on the server, taken off here\n" : " days deleted on the server, taken off here\n"); }
+        if (gone_there) { cmd_out("calendar: "); cmd_dec(gone_there); cmd_out(gone_there == 1 ? " day deleted here, taken off the server\n" : " days deleted here, taken off the server\n"); }
+    }
     for (unsigned i = 0; en > 0 && i < (unsigned)en;) {   /* push: every "YYYY-MM-DD|text" line */
         unsigned e = i; while (e < (unsigned)en && evs[e] != '\n') e++;
         if (e - i > 11 && evs[i + 4] == '-' && evs[i + 7] == '-' && evs[i + 10] == '|') {
@@ -261,14 +316,20 @@ static void dav_sync(void) {
             char *rb; unsigned rn;
             int st = dav_req("PUT", base, name, "text/calendar; charset=utf-8", 0, ics, o, &rb, &rn);
             if (st == 401 || st == 403) { cmd_out("calendar: the server refused the user or the app password\n"); heap_release(mark); return; }
-            if (st == 201 || st == 204 || st == 200) sent++;
+            if (st == 201 || st == 204 || st == 200) { if (sent < DAYS_MAX) put_ok[sent] = day_of(evs + i, e - i); sent++; }
             else { cmd_out("calendar: the server did not take "); cmd_out(name); cmd_out("\n"); }
         }
         i = e + 1;
     }
-    static const char q[] = "<?xml version=\"1.0\" encoding=\"utf-8\"?><c:calendar-query xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">"
-                            "<d:prop><c:calendar-data/></d:prop><c:filter><c:comp-filter name=\"VCALENDAR\"><c:comp-filter name=\"VEVENT\"/></c:comp-filter></c:filter></c:calendar-query>";
-    char *rb; unsigned rn;
+    {   /* 6.41.0: what both sides now have (a day the server refused is not one), for the next sync's deletes */
+        char sb[DAYS_MAX * 9 + 1]; unsigned o = 0;
+        for (unsigned k = 0; k < sent && k < DAYS_MAX && o + 9 < sizeof sb; k++) {
+            unsigned d = put_ok[k];
+            if (!d || has_day(put_ok, k, d)) continue;
+            for (int c = 7; c >= 0; c--) { sb[o + (unsigned)c] = (char)('0' + d % 10); d /= 10; } sb[o + 8] = '\n'; o += 9;
+        }
+        save_as("CALSYNC.TXT", sb, o);
+    }
     int st = dav_req("REPORT", base, 0, "application/xml; charset=utf-8", "Depth: 1\r\n", q, sizeof q - 1, &rb, &rn);
     cmd_out("calendar: "); cmd_dec(sent); cmd_out(" of your days sent\n");
     if (st == 401 || st == 403) cmd_out("calendar: the server refused the user or the app password\n");
