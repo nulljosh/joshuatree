@@ -16,6 +16,7 @@ const char *browser_link(unsigned n);
 unsigned browser_loads(void);
 int browser_field_secret(unsigned n);
 int browser_field_kind(unsigned n);
+int ask_shift(void);   /* ask.c */
 unsigned browser_tabs(unsigned *front);
 const char *browser_tab_label(unsigned t);
 static unsigned br_field;   /* 6.15.0: the form field (its link number) the address bar is editing, 0 when it edits the address */
@@ -260,8 +261,9 @@ void browser_paint(int report) {
     }
     char stars[BR_ADDR_MAX + 1]; unsigned sn = 0;
     if (br_field && browser_field_secret(br_field)) { while (sn < br_addr_n) stars[sn++] = '*'; }
+    else if (br_field) { for (; sn < br_addr_n; sn++) stars[sn] = br_addr[sn] == '\n' ? '/' : br_addr[sn]; }   /* 6.40.0: a text area's breaks as / */
     stars[sn] = 0;
-    const char *shown = br_field && browser_field_secret(br_field) ? stars : br_edit ? br_addr : browser_url();
+    const char *shown = br_field ? stars : br_edit ? br_addr : browser_url();
     while (*shown && gui_text_width(shown) > fw - 36) shown++;   /* a long address shows its end */
     gui_text(*shown || (br_edit && !br_field) ? shown : br_field ? "Type the field's text" : "Type an address and press Enter", fx + 6, ty + 3, *shown || br_edit ? 0x001C1C1E : 0x0075726E);
     if (br_edit) window_rect(fx + 7 + gui_text_width(shown), ty + 4, 1, 14, BR_ACCENT);
@@ -474,7 +476,7 @@ static void br_nav(int what) {   /* 0 back, 1 forward, 2 reload */
 }
 static void br_follow(unsigned n) {   /* link n, as a click on it would */
     const char *l = browser_link(n);
-    if (browser_field_kind(n) >= 3) {   /* 6.28.0: a checkbox, radio or select changes in place; the status line says how */
+    if (browser_field_kind(n) >= 3 && browser_field_kind(n) <= 5) {   /* 6.28.0: a checkbox, radio or select changes in place; the status line says how */
         char cmd[16] = "open "; unsigned o = 5; char d[5]; unsigned z = 0, v = n;
         do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) cmd[o++] = d[--z];
         cmd[o] = 0;
@@ -610,6 +612,10 @@ int browser_key(unsigned code) {   /* a key down with the Browser in front and S
     if (br_edit && hq_sel && (code == 28 || code == 96)) { char u[BM_URL + 1]; br_set(u, hq_url[hq_sel - 1], sizeof u); hq_n = hq_sel = 0; br_edit = 0; br_addr_n = 0; br_addr[0] = 0; browser_go(u); return 1; }
     if (!br_edit && bm_sel && br_empty() && (code == 28 || code == 96)) { br_bookmark(bm_sel); return 1; }
     if (!br_edit && br_sel && (code == 28 || code == 96)) { br_follow(br_sel); return 1; }
+    if (br_edit && br_field && code == 28 && ask_shift() && browser_field_kind(br_field) == 6) {   /* 6.40.0: Shift+Enter, a new line in a text area */
+        if (br_addr_n < BR_ADDR_MAX) { br_addr[br_addr_n++] = '\n'; br_addr[br_addr_n] = 0; }
+        con_quiet = 1; uart_puts("browser: new line in field\n"); browser_paint(0); return 1;
+    }
     if (br_edit && (code == 28 || code == 96)) { br_load(); return 1; }
     if (br_edit && code == 14) { if (br_addr_n) br_addr[--br_addr_n] = 0; hq_update(); browser_paint(0); return 1; }
     int ch = ask_char(code);

@@ -52,6 +52,10 @@ static unsigned img_px[IMG_MAX][IMG_W * IMG_H];
 #define FIELD_MAX 16
 static struct { char action[URL_MAX]; int post; } forms[FORM_MAX];
 #define OPT_MAX 8
+/* 6.40.0: kind 6 is a <textarea>. The page's first one keeps its text in area, up to AREA_MAX, line breaks and all; the
+   window shows each break as " / ". Any later one on the page is a one-line field (kind 0). */
+#define AREA_MAX 1024
+static char area[AREA_MAX];
 static struct { unsigned form, at, len; char name[32], value[64]; unsigned char kind, on, nopt, sel; char opt_v[OPT_MAX][24], opt_l[OPT_MAX][24]; } fields[FIELD_MAX];   /* at, len: what the page text shows of it (6.31.0) */
 /* kind 0 text, 1 password, 2 hidden; 6.28.0: 3 checkbox, 4 radio (on: ticked or picked; value: what it sends), 5 select
    (its options' values and labels, sel the chosen one) */
@@ -524,6 +528,8 @@ static void anc_track(const char *tag, unsigned tn, unsigned nl, int close, int 
     }
 }
 
+static const char *fval(unsigned k) { return fields[k].kind == 6 ? area : fields[k].value; }   /* 6.40.0 */
+static void field_show(unsigned f);
 static void to_text(const char *h, unsigned n) {
     unsigned o = 0, i = 0, skip = 0, space = 1;
     char htag[16]; unsigned hn = 0, hdepth = 0;   /* inside a hidden element: its name, and how deep its own tag is nested */
@@ -628,6 +634,30 @@ static void to_text(const char *h, unsigned n) {
                         scopy(fields[k].name, tag + s, z - s, sizeof fields[k].name);
                         in_select = (int)k;
                     }
+                }
+                else if (!close && in_form >= 0 && is_tag(tag, tn, "textarea")) {   /* 6.40.0: "name: text [N]", its text up to </textarea> */
+                    unsigned s, z, a = e + 1, b = a;
+                    while (b + 10 < n && !(h[b] == '<' && h[b + 1] == '/' && starts(h + b + 2, "textarea"))) b++;
+                    if (b + 10 >= n) b = n;
+                    if (nfields < FIELD_MAX && attr(tag, tn, "name=", &s, &z) && z > s) {
+                        int first = 1; for (unsigned g = 0; g < nfields; g++) if (fields[g].kind == 6) first = 0;
+                        unsigned k = nfields++;
+                        fields[k].form = (unsigned)in_form; fields[k].kind = (unsigned char)(first ? 6 : 0);
+                        scopy(fields[k].name, tag + s, z - s, sizeof fields[k].name);
+                        while (a < b && (h[a] == '\r' || h[a] == '\n')) a++;   /* the break right after the tag is not text */
+                        if (first) scopy(area, h + a, b - a, sizeof area); else scopy(fields[k].value, h + a, b - a, sizeof fields[k].value);
+                        for (char *p = first ? area : fields[k].value; *p; p++) if (*p == '\r') *p = ' ';
+                        int l = pseudo_link("field:", k);
+                        if (o && text[o - 1] != ' ' && text[o - 1] != '\n') o = put(text, o, ' ');
+                        for (const char *p = fields[k].name; *p; p++) o = put(text, o, *p);
+                        o = put(text, o, ':'); o = put(text, o, ' ');
+                        fields[k].at = o; fields[k].len = 0;
+                        if (l) o = mark(o, l);
+                        unsigned before = tlen; tlen = o; field_show(k); o = tlen; tlen = before;   /* the text, breaks as " / " */
+                        space = 0;
+                    }
+                    while (b < n && h[b] != '>') b++;
+                    e = b;   /* past </textarea> */
                 }
                 else if (!close && in_form >= 0 && is_tag(tag, tn, "input")) {
                     unsigned s, z, ts = 0, tz = 0;
@@ -765,8 +795,11 @@ static void field_show(unsigned f) {
     else if (fields[f].kind == 4) now[n++] = fields[f].on ? 'o' : ' ';
     else if (fields[f].kind == 5) { if (fields[f].nopt) for (const char *p = fields[f].opt_l[fields[f].sel]; *p; p++) now[n++] = *p; }
     else if (fields[f].kind == 2) return;
-    else if (!fields[f].value[0]) while (n < 8) now[n++] = '_';
-    else for (const char *p = fields[f].value; *p && n < sizeof now; p++) now[n++] = fields[f].kind == 1 ? '*' : *p;
+    else if (!fval(f)[0]) while (n < 8) now[n++] = '_';
+    else for (const char *p = fval(f); *p && n + 3 < sizeof now; p++) {
+        if (*p != '\n') { now[n++] = fields[f].kind == 1 ? '*' : *p; continue; }
+        now[n++] = ' '; now[n++] = '/'; now[n++] = ' ';
+    }
     unsigned at = fields[f].at, old = fields[f].len;
     if (at + old > tlen || tlen - old + n >= TEXT_MAX) return;   /* a page cut short at TEXT_MAX: leave it */
     unsigned tail = tlen - at - old;
@@ -1192,9 +1225,9 @@ static void submit(unsigned f) {
     if (starts(forms[f].action, "mail:")) {   /* 6.29.0: Send and Reply on a mail page go to mail.c, not to a server */
         const char *to = "", *sj = "", *body = "";
         for (unsigned k = 0; k < nfields; k++) if (fields[k].form == f) {
-            if (!__builtin_strcmp(fields[k].name, "to")) to = fields[k].value;
-            else if (!__builtin_strcmp(fields[k].name, "subject")) sj = fields[k].value;
-            else if (!__builtin_strcmp(fields[k].name, "body")) body = fields[k].value;
+            if (!__builtin_strcmp(fields[k].name, "to")) to = fval(k);
+            else if (!__builtin_strcmp(fields[k].name, "subject")) sj = fval(k);
+            else if (!__builtin_strcmp(fields[k].name, "body")) body = fval(k);
         }
         mail_form(forms[f].action, to, sj, body);
         show("mail:", 1);
@@ -1206,7 +1239,7 @@ static void submit(unsigned f) {
         if (o) query[o++] = '&';
         o = urlenc(query, o, sizeof query, fields[k].name);
         if (o < sizeof query - 1) query[o++] = '=';
-        o = urlenc(query, o, sizeof query, fields[k].kind == 5 ? fields[k].opt_v[fields[k].sel] : fields[k].value);
+        o = urlenc(query, o, sizeof query, fields[k].kind == 5 ? fields[k].opt_v[fields[k].sel] : fval(k));
     }
     query[o] = 0;
     char url[URL_MAX]; scopy(url, forms[f].action, slen(forms[f].action), URL_MAX);
@@ -1330,7 +1363,14 @@ int browse_command(const char *q, unsigned n) {
             kputs("browser: "); kputs(fields[f].name); kputs(" has no such option\n"); return 1;
         }
         if (fields[f].kind == 3 || fields[f].kind == 4) { kputs("browser: open "); kdec(k); kputs(" ticks it\n"); return 1; }
-        scopy(fields[f].value, q + t, n - t, sizeof fields[f].value); field_show(f);
+        if (fields[f].kind == 6) {   /* 6.40.0: "\n" typed at the Terminal is a line break; the window sends real ones */
+            unsigned w = 0;
+            for (unsigned i = t; i < n && w < AREA_MAX - 1; i++) {
+                if (q[i] == '\\' && i + 1 < n && q[i + 1] == 'n') { area[w++] = '\n'; i++; } else area[w++] = q[i];
+            }
+            area[w] = 0;
+        } else scopy(fields[f].value, q + t, n - t, sizeof fields[f].value);
+        field_show(f);
         kputs("browser: field "); kputs(fields[f].name); kputs(" set\n");   /* never the value: it may be a password */
         return 1;
     }
