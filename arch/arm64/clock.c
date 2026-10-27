@@ -28,9 +28,10 @@ static unsigned number(const char *p, unsigned n) {
     }
     return v;
 }
-static unsigned long date_utc(const char *d, unsigned n) {
-    /* IMF-fixdate only, exactly "Fri, 09 Oct 2026 12:34:56 GMT". Bound every read before parsing. */
-    if (n != 29 || d[3] != ',' || d[4] != ' ' || d[7] != ' ' || d[11] != ' ' || d[16] != ' '
+static int date_parse(const char *d, unsigned n, unsigned min_year, char sep, unsigned long *out) {
+    /* IMF-fixdate only, exactly "Fri, 09 Oct 2026 12:34:56 GMT" (sep '-' also takes the cookie spelling
+       "Fri, 09-Oct-2026 12:34:56 GMT"). Bound every read before parsing. */
+    if (n != 29 || d[3] != ',' || d[4] != ' ' || (d[7] != ' ' && d[7] != sep) || (d[11] != ' ' && d[11] != sep) || d[16] != ' '
         || d[19] != ':' || d[22] != ':' || d[25] != ' ' || d[26] != 'G' || d[27] != 'M' || d[28] != 'T') return 0;
     static const char *const weekdays[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
     unsigned weekday = 0;
@@ -42,14 +43,24 @@ static unsigned long date_utc(const char *d, unsigned n) {
     for (unsigned i = 0; i < 12; i++)
         if (d[8] == months[i][0] && d[9] == months[i][1] && d[10] == months[i][2]) mon = i + 1;
     unsigned day = number(d + 5, 2), year = number(d + 12, 4), h = number(d + 17, 2), m = number(d + 20, 2), s = number(d + 23, 2);
-    if (!mon || year < 2024 || year > 9999 || h > 23 || m > 59 || s > 59) return 0;
+    if (!mon || year < min_year || year > 9999 || h > 23 || m > 59 || s > 59) return 0;
     static const unsigned mdays[] = {31,28,31,30,31,30,31,31,30,31,30,31};
     unsigned leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
     if (!day || day > mdays[mon - 1] + (mon == 2 && leap)) return 0;
     long y = (long)year - (mon <= 2), era = y / 400;
     unsigned yoe = (unsigned)(y - era * 400), doy = (153 * (mon > 2 ? mon - 3 : mon + 9) + 2) / 5 + day - 1;
     unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    return (unsigned long)(era * 146097 + (long)doe - 719468) * 86400UL + h * 3600UL + m * 60UL + s;
+    *out = (unsigned long)(era * 146097 + (long)doe - 719468) * 86400UL + h * 3600UL + m * 60UL + s;
+    return 1;
+}
+static unsigned long date_utc(const char *d, unsigned n) { unsigned long t; return date_parse(d, n, 2024, ' ', &t) ? t : 0; }
+/* 6.30.0: a cookie's Expires date is behind us. Before the network has set the clock the build time stands in, so
+   the usual "Thu, 01 Jan 1970 00:00:00 GMT" still deletes. ponytail: IMF-fixdate and its dashed form only; an
+   RFC 850 or asctime date is read as not past and the cookie is kept, as before. */
+int http_date_past(const char *d, unsigned n) {
+    unsigned long t, now = net_clock_utc();
+    if (!date_parse(d, n, 1970, '-', &t)) return 0;
+    return t < (now ? now : BUILD_UTC);
 }
 void net_clock_sync(void) {
     if (!net_get_gateway()) return;
