@@ -104,7 +104,7 @@ static int parse_url(const char *u, struct url *o) {
 static void resolve(const char *href, unsigned n, char *out) {
     out[0] = 0;
     if (!n || href[0] == '#' || starts(href, "mailto:") || starts(href, "javascript:")) return;
-    if (starts(href, "http://") || starts(href, "https://")) { scopy(out, href, n, URL_MAX); return; }
+    if (starts(href, "http://") || starts(href, "https://") || starts(href, "mail:")) { scopy(out, href, n, URL_MAX); return; }   /* 6.29.0: mail: pages too */
     struct url b; if (!parse_url(cur, &b)) return;
     unsigned o = 0;
     const char *pre = b.tls ? "https://" : "http://";
@@ -248,11 +248,20 @@ static void take_cookies(const char *raw, unsigned got, const struct url *u) {  
     }
     if (kept_changed) jar_save();
 }
+int mail_page(const char *url, char *out, unsigned max); int mail_form(const char *action, const char *to, const char *subj, const char *body);   /* mail.c, 6.29.0 */
 static int fetch_once(const char *url, char *raw, unsigned max);
 static int fetch(const char *url, char *raw, unsigned max) { jar_switch(); int r = fetch_once(url, raw, max); post_body = 0; post_len = 0; return r; }
 static int fetch_once(const char *url, char *raw, unsigned max) {
     char next[URL_MAX], vid[12];
     scopy(cur, url, slen(url), URL_MAX);
+    if (starts(url, "mail:")) {   /* 6.29.0: the inbox or a message, built by mail.c, behind a header show() can skip */
+        static const char head[] = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n";
+        unsigned h = sizeof head - 1;
+        int got = mail_page(url, raw + h, max - h - 1);
+        for (unsigned i = 0; i < h; i++) raw[i] = head[i];
+        raw[h + (unsigned)got] = 0;
+        return (int)h + got;
+    }
     if (yt_id(url, vid)) {   /* the page about the video, from the Mac's video service, behind a header show() can skip */
         static const char head[] = "HTTP/1.0 200 OK\r\n\r\n";
         unsigned h = sizeof head - 1; int status;
@@ -1041,6 +1050,17 @@ static unsigned urlenc(char *out, unsigned o, unsigned max, const char *v) {
 }
 static void submit(unsigned f) {
     static char query[1024]; unsigned o = 0;
+    if (starts(forms[f].action, "mail:")) {   /* 6.29.0: Send and Reply on a mail page go to mail.c, not to a server */
+        const char *to = "", *sj = "", *body = "";
+        for (unsigned k = 0; k < nfields; k++) if (fields[k].form == f) {
+            if (!__builtin_strcmp(fields[k].name, "to")) to = fields[k].value;
+            else if (!__builtin_strcmp(fields[k].name, "subject")) sj = fields[k].value;
+            else if (!__builtin_strcmp(fields[k].name, "body")) body = fields[k].value;
+        }
+        mail_form(forms[f].action, to, sj, body);
+        show("mail:", 1);
+        return;
+    }
     for (unsigned k = 0; k < nfields; k++) if (fields[k].form == f) {
         if ((fields[k].kind == 3 || fields[k].kind == 4) && !fields[k].on) continue;   /* 6.28.0: an unticked box or unpicked radio sends nothing */
         if (fields[k].kind == 5 && !fields[k].nopt) continue;
@@ -1112,7 +1132,7 @@ int browse_command(const char *q, unsigned n) {
         unsigned s = 7; while (s < n && q[s] == ' ') s++;
         if (n - s >= URL_MAX) { kputs("browser: url too long\n"); return 1; }
         char url[URL_MAX]; scopy(url, q + s, n - s, URL_MAX);
-        if (!starts(url, "http://") && !starts(url, "https://")) {   /* a bare host: https */
+        if (!starts(url, "http://") && !starts(url, "https://") && !starts(url, "mail:")) {   /* a bare host: https (6.29.0: mail: is its own) */
             char full[URL_MAX]; unsigned o = 0;
             for (const char *p = "https://"; *p; p++) full[o++] = *p;
             for (unsigned i = 0; url[i] && o < URL_MAX - 1; i++) full[o++] = url[i];

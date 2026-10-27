@@ -152,20 +152,22 @@ static int next_fetch(unsigned *at, unsigned *seq, const char **lit, unsigned *l
     }
     return 0;
 }
-static void list(void) {
-    unsigned long mark = heap_mark();
-    if (!open_session()) { heap_release(mark); return; }
-    if (imap("SELECT INBOX", 12) != 1) { cmd_out("mail: no inbox\n"); close_session(); heap_release(mark); return; }
+static char m_from[MAIL_LIST][40];   /* 6.29.0: each listed message's sender name, for the inbox page */
+static unsigned m_total;
+/* The newest ten into m_seq, m_from, m_subj and m_addr, newest first: 1, or 0 with the reason said. Under a heap mark. */
+static int fetch_inbox(void) {
+    if (!open_session()) return 0;
+    if (imap("SELECT INBOX", 12) != 1) { cmd_out("mail: no inbox\n"); close_session(); return 0; }
     unsigned total = exists();
-    m_n = 0;
-    if (!total) { cmd_out("mail: the inbox is empty\n"); close_session(); heap_release(mark); return; }
+    m_n = 0; m_total = total;
+    if (!total) { close_session(); return 1; }
     unsigned lo = total > MAIL_LIST ? total - MAIL_LIST + 1 : 1;
     char cmd[96]; unsigned o = 0;
     for (const char *p = "FETCH "; *p; p++) cmd[o++] = *p;
     char d[12]; unsigned z = 0, v = lo; do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) cmd[o++] = d[--z];
     cmd[o++] = ':'; v = total; do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) cmd[o++] = d[--z];
     for (const char *p = " (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])"; *p; p++) cmd[o++] = *p;
-    if (imap(cmd, o) != 1) { cmd_out("mail: the server would not list the inbox\n"); close_session(); heap_release(mark); return; }
+    if (imap(cmd, o) != 1) { cmd_out("mail: the server would not list the inbox\n"); close_session(); return 0; }
     struct { unsigned seq; char from[40], subj[72], addr[96]; } row[MAIL_LIST]; unsigned nr = 0;
     unsigned at = 0, seq, ln; const char *lit;
     while (nr < MAIL_LIST && next_fetch(&at, &seq, &lit, &ln)) {
@@ -183,13 +185,23 @@ static void list(void) {
         nr++;
     }
     close_session();
-    cmd_out("mail: "); cmd_dec(total); cmd_out(total == 1 ? " message, the newest first\n" : " messages, the newest first\n");
     for (unsigned i = nr; i-- > 0;) {   /* newest first */
         copy(m_addr[m_n], row[i].addr, slen(row[i].addr), sizeof m_addr[0]); copy(m_subj[m_n], row[i].subj, slen(row[i].subj), sizeof m_subj[0]);
+        copy(m_from[m_n], row[i].from, slen(row[i].from), sizeof m_from[0]);
         m_seq[m_n++] = row[i].seq;
-        cmd_dec(m_n); cmd_out("  "); cmd_out(row[i].from[0] ? row[i].from : "(no sender)"); cmd_out(": "); cmd_out(row[i].subj[0] ? row[i].subj : "(no subject)"); cmd_out("\n");
     }
-    cmd_out("mail N opens one\n");
+    return 1;
+}
+static void list(void) {
+    unsigned long mark = heap_mark();
+    if (fetch_inbox()) {
+        if (!m_total) cmd_out("mail: the inbox is empty\n");
+        else {
+            cmd_out("mail: "); cmd_dec(m_total); cmd_out(m_total == 1 ? " message, the newest first\n" : " messages, the newest first\n");
+            for (unsigned i = 0; i < m_n; i++) { cmd_dec(i + 1); cmd_out("  "); cmd_out(m_from[i][0] ? m_from[i] : "(no sender)"); cmd_out(": "); cmd_out(m_subj[i][0] ? m_subj[i] : "(no subject)"); cmd_out("\n"); }
+            cmd_out("mail N opens one\n");
+        }
+    }
     heap_release(mark);
 }
 
@@ -250,18 +262,18 @@ static char *pick_part(const char *h, unsigned hn, char *b, unsigned *bn, int *h
     if (!best) { *html = 0; return b; }
     *bn = best_n; *html = best_html; return best;
 }
-static void open_message(unsigned k) {
-    if (!k || k > m_n) { cmd_out(m_n ? "mail: no such message\n" : "mail: list the inbox first, with mail\n"); return; }
-    unsigned long mark = heap_mark();
-    if (!open_session()) { heap_release(mark); return; }
+/* Message k as an HTML page in the heap (the caller's mark covers it): its length in *w, or 0 with the reason said. */
+static char *message_page(unsigned k, unsigned *w_out) {
+    if (!k || k > m_n) { cmd_out(m_n ? "mail: no such message\n" : "mail: list the inbox first, with mail\n"); return 0; }
+    if (!open_session()) return 0;
     char cmd[96]; unsigned o = 0;
     for (const char *p = "SELECT INBOX"; *p; p++) cmd[o++] = *p;
-    if (imap(cmd, o) != 1) { cmd_out("mail: no inbox\n"); close_session(); heap_release(mark); return; }
+    if (imap(cmd, o) != 1) { cmd_out("mail: no inbox\n"); close_session(); return 0; }
     o = 0; for (const char *p = "FETCH "; *p; p++) cmd[o++] = *p;
     char d[12]; unsigned z = 0, v = m_seq[k - 1]; do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) cmd[o++] = d[--z];
     for (const char *p = " (BODY.PEEK[HEADER] BODY.PEEK[TEXT])"; *p; p++) cmd[o++] = *p;
     int got = imap(cmd, o);
-    if (got != 1) { cmd_out("mail: the server would not send that message\n"); close_session(); heap_release(mark); return; }
+    if (got != 1) { cmd_out("mail: the server would not send that message\n"); close_session(); return 0; }
     /* The reply holds two literals: the header, then the text. LOGOUT waits until they are read: its reply reuses rb. */
     const char *hdr = 0, *txt = 0; unsigned hn = 0, tn = 0;
     for (unsigned i = 0, seen = 0; i + 1 < rlen && seen < 2; i++) if (rb[i] == '}' && rb[i + 1] == '\r') {
@@ -272,13 +284,13 @@ static void open_message(unsigned k) {
         if (!seen++) { hdr = rb + i + 3; hn = len; } else { txt = rb + i + 3; tn = len; }
         i += 2 + len;
     }
-    if (!hdr || !txt) { cmd_out("mail: that message did not come back whole\n"); close_session(); heap_release(mark); return; }
+    if (!hdr || !txt) { cmd_out("mail: that message did not come back whole\n"); close_session(); return 0; }
     int html; unsigned bn = tn;
     char *body = pick_part(hdr, hn, (char *)txt, &bn, &html);
     char subj[120]; field(hdr, hn, "Subject:", subj, sizeof subj);
     char from[120]; field(hdr, hn, "From:", from, sizeof from);
-    char *page = kmalloc(bn * 5 + 512);   /* before LOGOUT reuses rb, which body points into */
-    if (!page) { cmd_out("mail: out of memory\n"); close_session(); heap_release(mark); return; }
+    char *page = kmalloc(bn * 5 + 1024);   /* before LOGOUT reuses rb, which body points into; room for the reply form too */
+    if (!page) { cmd_out("mail: out of memory\n"); close_session(); return 0; }
     /* Plain text goes in as escaped lines; the page's title is the subject, the first line who sent it. */
     unsigned w = 0;
     #define PUT(str) for (const char *p_ = (str); *p_; p_++) page[w++] = *p_
@@ -298,8 +310,17 @@ static void open_message(unsigned k) {
     PUT("</body></html>");
     #undef PUT
     close_session();
-    char name[16] = "mail:"; o = 5; z = 0; v = k; do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) name[o++] = d[--z]; name[o] = 0;
-    browser_render(page, w, name);
+    *w_out = w;
+    return page;
+}
+static void open_message(unsigned k) {
+    unsigned long mark = heap_mark(); unsigned w;
+    char *page = message_page(k, &w);
+    if (page) {
+        char name[16] = "mail:", d[12]; unsigned o = 5, z = 0, v = k;
+        do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) name[o++] = d[--z]; name[o] = 0;
+        browser_render(page, w, name);
+    }
     heap_release(mark);
 }
 
@@ -420,6 +441,71 @@ static void smtp_send(const char *to, const char *subj, const char *body, unsign
     if (why) { cmd_out("mail: not sent, "); cmd_out(why); cmd_out("\n"); }
     else { cmd_out("mail: sent to "); cmd_out(to); cmd_out("\n"); }
     heap_release(mark);
+}
+
+/* ---- 6.29.0: Mail as pages in Blackcomb ----
+   browser.c asks for `mail:` (the inbox: the newest ten as links, and a New message form) or `mail:N` (message N, a Reply
+   form and a link back). The forms' actions are mail:send and mail:reply:N, which browser.c hands to mail_form. */
+static unsigned put_esc(char *out, unsigned o, unsigned max, const char *s) {
+    for (; *s && o + 6 < max; s++) {
+        if (*s == '<') { out[o++] = '&'; out[o++] = 'l'; out[o++] = 't'; out[o++] = ';'; }
+        else if (*s == '>') { out[o++] = '&'; out[o++] = 'g'; out[o++] = 't'; out[o++] = ';'; }
+        else if (*s == '&') { out[o++] = '&'; out[o++] = 'a'; out[o++] = 'm'; out[o++] = 'p'; out[o++] = ';'; }
+        else out[o++] = *s;
+    }
+    return o;
+}
+int mail_page(const char *url, char *out, unsigned max) {   /* the page's length, never more than max */
+    unsigned o = 0;
+    #define PO(str) for (const char *p_ = (str); *p_ && o < max - 1; p_++) out[o++] = *p_
+    mine();
+    if (!m_ready) {
+        PO("<html><head><title>Mail</title></head><body><h1>Mail</h1><p>Mail is not set up. At the Terminal: mail login HOST USER, with an app password.</p></body></html>");
+        return (int)o;
+    }
+    unsigned long mark = heap_mark();
+    unsigned k = 0; for (const char *p = url + 5; *p >= '0' && *p <= '9'; p++) k = k * 10 + (unsigned)(*p - '0');
+    if (!k) {
+        int ok = fetch_inbox();
+        PO("<html><head><title>Inbox</title></head><body><h1>Inbox</h1>");
+        if (!ok) PO("<p>The inbox did not load.</p>");
+        else if (!m_n) PO("<p>The inbox is empty.</p>");
+        for (unsigned i = 0; ok && i < m_n; i++) {
+            char d[8]; unsigned z = 0, v = i + 1;
+            PO("<li><a href=\"mail:"); do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z && o < max - 1) out[o++] = d[--z];
+            PO("\">"); o = put_esc(out, o, max, m_from[i][0] ? m_from[i] : "(no sender)"); PO(": "); o = put_esc(out, o, max, m_subj[i][0] ? m_subj[i] : "(no subject)"); PO("</a></li>");
+        }
+        PO("<h3>New message</h3><form action=\"mail:send\"><input name=to> <input name=subject> <input name=body> <input type=submit value=Send></form></body></html>");
+    } else {
+        if (!m_n) fetch_inbox();   /* a message asked for before the list was */
+        unsigned w; char *page = message_page(k, &w);
+        if (!page) { PO("<html><head><title>Mail</title></head><body><p>That message did not load.</p><p><a href=\"mail:\">Inbox</a></p></body></html>"); }
+        else {
+            unsigned cut = w; while (cut > 14 && !(page[cut - 14] == '<' && page[cut - 13] == '/' && page[cut - 12] == 'b')) cut--;   /* before </body></html> */
+            if (cut <= 14) cut = w; else cut -= 14;
+            for (unsigned i = 0; i < cut && o < max - 1; i++) out[o++] = page[i];
+            char d[8]; unsigned z = 0, v = k;
+            PO("<h3>Reply</h3><form action=\"mail:reply:"); do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z && o < max - 1) out[o++] = d[--z];
+            PO("\"><input name=body> <input type=submit value=Reply></form><p><a href=\"mail:\">Inbox</a></p></body></html>");
+        }
+    }
+    #undef PO
+    heap_release(mark);
+    return (int)o;
+}
+int mail_form(const char *action, const char *to, const char *subj, const char *body) {   /* browser.c: a mail: form was sent */
+    mine();
+    if (!m_ready) { cmd_out("mail: not signed in, use mail login HOST USER\n"); return 0; }
+    if (starts(action, "mail:reply:")) {
+        unsigned k = 0; for (const char *p = action + 11; *p >= '0' && *p <= '9'; p++) k = k * 10 + (unsigned)(*p - '0');
+        if (!k || k > m_n) { cmd_out("mail: no such message to answer\n"); return 0; }
+        char sj[100]; unsigned o = 0; if (!starts(m_subj[k - 1], "re:")) { copy(sj, "Re: ", 4, sizeof sj); o = 4; }
+        copy(sj + o, m_subj[k - 1], slen(m_subj[k - 1]), sizeof sj - o);
+        smtp_send(m_addr[k - 1], sj, body, slen(body));
+        return 1;
+    }
+    smtp_send(to, subj, body, slen(body));
+    return 1;
 }
 
 /* cmd.c, once the app password is typed. Tried at once, so a wrong one is said now, not at the next `mail`. */
