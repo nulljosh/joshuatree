@@ -811,6 +811,110 @@ static void file_name(const char *url, char out[13]) {
     out[o] = 0;
 }
 
+/* 6.27.0: history you can search. Every page that loads goes to the top of HISTWORD.TXT where an app's files live (the
+   home folder, else JT/): one line each, "count\turl\ttitle\twords", the words being the page's first 300 characters of
+   text, lower case, in one line. The same address again moves up and counts one more; 40 pages at most. `history` lists
+   the newest, `history WORDS` the pages holding every word (in the title, address or words), `history top` the most
+   visited, `history clear` empties it. */
+#define HW_FILE "HISTWORD.TXT"
+#define HW_MAX 40
+#define HW_CAP (HW_MAX * 900)
+static char hw_buf[HW_CAP], hw_new[HW_CAP];
+int sd_ready(void); int sd_enter_jt(int make); int fat_read_file(const char *name, void *buf, unsigned bufsize); void fat_cwd_set(unsigned int cluster); int fat_chdir(const char *name);
+static int hw_read(void) {   /* the file into hw_buf: its length, 0 when there is none */
+    int got = -1; char path[96], *leaf;
+    if (!sd_ready() || !sd_enter_jt(0)) return 0;
+    if (home_active()) {
+        if (home_expand("~/" HW_FILE, path, sizeof path) > 0 && home_walk(path, 1, &leaf) == 1) { got = fat_read_file(leaf, hw_buf, HW_CAP - 1); home_back(); }
+        fat_cwd_set(0);
+    } else { got = fat_read_file(HW_FILE, hw_buf, HW_CAP - 1); fat_chdir(".."); }
+    if (got < 0) got = 0;
+    hw_buf[got] = 0;
+    return got;
+}
+static int hw_save(const char *d, unsigned n) { return save_here(HW_FILE, d, n); }
+static unsigned hw_field(const char *l, unsigned ln, unsigned k, const char **f) {   /* field k of a line: its length */
+    unsigned i = 0; for (unsigned t = 0; t < k; t++) { while (i < ln && l[i] != '\t') i++; if (i < ln) i++; }
+    unsigned e = i; while (e < ln && l[e] != '\t') e++;
+    *f = l + i; return e - i;
+}
+static void hist_add(void) {
+    if (!cur[0] || starts(cur, "mail:")) return;   /* a mail message is not a page you visited */
+    int got = hw_read(); unsigned o = 0, count = 1, kept = 1;
+    for (unsigned i = 0; i < (unsigned)got;) {   /* this address's old line: its count, and it is dropped */
+        unsigned e = i; while (e < (unsigned)got && hw_buf[e] != '\n') e++;
+        const char *u; unsigned un = hw_field(hw_buf + i, e - i, 1, &u);
+        if (un == slen(cur)) { unsigned m = 0; while (m < un && u[m] == cur[m]) m++; if (m == un) { unsigned c = 0; for (unsigned k = i; k < e && hw_buf[k] >= '0' && hw_buf[k] <= '9'; k++) c = c * 10 + (unsigned)(hw_buf[k] - '0'); count = c + 1; } }
+        i = e + 1;
+    }
+    char d[10]; unsigned z = 0, v = count; do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) hw_new[o++] = d[--z];
+    hw_new[o++] = '\t'; for (const char *p = cur; *p; p++) hw_new[o++] = *p;
+    hw_new[o++] = '\t'; for (const char *p = title; *p && o < 512; p++) hw_new[o++] = *p == '\t' ? ' ' : *p;
+    hw_new[o++] = '\t';
+    for (unsigned i = 0, w = 0, sp = 1; i < tlen && w < 300; i++) {   /* the words: printable, lower case, one space between */
+        unsigned char c = (unsigned char)text[i];
+        if (c < 0x20 || c == ' ') { if (!sp) { hw_new[o++] = ' '; w++; sp = 1; } continue; }
+        hw_new[o++] = (char)(c >= 'A' && c <= 'Z' ? c + 32 : c); w++; sp = 0;
+    }
+    hw_new[o++] = '\n';
+    for (unsigned i = 0; i < (unsigned)got && kept < HW_MAX;) {   /* the rest, newest first, without this address */
+        unsigned e = i; while (e < (unsigned)got && hw_buf[e] != '\n') e++;
+        const char *u; unsigned un = hw_field(hw_buf + i, e - i, 1, &u);
+        int same_url = un == slen(cur); for (unsigned m = 0; same_url && m < un; m++) if (u[m] != cur[m]) same_url = 0;
+        if (!same_url && e > i && o + (e - i) + 1 < HW_CAP) { for (unsigned k = i; k <= e && k < (unsigned)got; k++) hw_new[o++] = hw_buf[k]; if (hw_new[o - 1] != '\n') hw_new[o++] = '\n'; kept++; }
+        i = e + 1;
+    }
+    hw_save(hw_new, o);
+}
+static int hw_has(const char *l, unsigned ln, const char *w, unsigned wn) {   /* w, any case, anywhere in the line */
+    for (unsigned i = 0; i + wn <= ln; i++) { unsigned k = 0; while (k < wn && (l[i + k] | 32) == (w[k] | 32)) k++; if (k == wn) return 1; }
+    return 0;
+}
+static void hist_line(unsigned n, const char *l, unsigned ln) {   /* "N  title  url" */
+    const char *t, *u; unsigned tn = hw_field(l, ln, 2, &t), un = hw_field(l, ln, 1, &u);
+    char b[URL_MAX + 120]; unsigned o = 0; char d[4]; unsigned z = 0, v = n;
+    do d[z++] = (char)('0' + v % 10); while (v /= 10); while (z) b[o++] = d[--z];
+    b[o++] = ' '; b[o++] = ' ';
+    for (unsigned i = 0; i < tn && i < 80; i++) b[o++] = t[i];
+    if (tn) { b[o++] = ' '; b[o++] = ' '; }
+    for (unsigned i = 0; i < un && o < sizeof b - 1; i++) b[o++] = u[i];
+    say_wrapped("", b, o);
+}
+static void history_command(const char *q, unsigned n) {   /* q is what follows "history" */
+    while (n && *q == ' ') { q++; n--; }
+    if (n == 5 && starts(q, "clear")) { kputs(hw_save("", 0) ? "browser: history cleared\n" : "browser: no card to clear it on\n"); return; }
+    int got = hw_read(); unsigned shown = 0;
+    if (n == 3 && starts(q, "top")) {   /* the five most visited, most first */
+        unsigned done[HW_MAX]; unsigned nd = 0;
+        for (unsigned r = 0; r < 5; r++) {
+            unsigned best = 0, best_i = 0, best_e = 0, li = 0;
+            for (unsigned i = 0; i < (unsigned)got; li++) {
+                unsigned e = i; while (e < (unsigned)got && hw_buf[e] != '\n') e++;
+                unsigned c = 0, k = i; while (k < e && hw_buf[k] >= '0' && hw_buf[k] <= '9') c = c * 10 + (unsigned)(hw_buf[k++] - '0');
+                int used = 0; for (unsigned m = 0; m < nd; m++) if (done[m] == li) used = 1;
+                if (!used && c > best) { best = c; best_i = i; best_e = e; done[nd] = li; }
+                i = e + 1;
+            }
+            if (!best) break;
+            nd++; hist_line(++shown, hw_buf + best_i, best_e - best_i);
+        }
+    } else {
+        for (unsigned i = 0; i < (unsigned)got && shown < 10;) {
+            unsigned e = i; while (e < (unsigned)got && hw_buf[e] != '\n') e++;
+            int all = 1;
+            for (unsigned a = 0; a < n && all;) {   /* every word must be in the line */
+                while (a < n && q[a] == ' ') a++;
+                unsigned b = a; while (b < n && q[b] != ' ') b++;
+                if (b > a && !hw_has(hw_buf + i, e - i, q + a, b - a)) all = 0;
+                a = b;
+            }
+            if (all && e > i) hist_line(++shown, hw_buf + i, e - i);
+            i = e + 1;
+        }
+    }
+    kputs("browser: "); kdec(shown); kputs(shown == 1 ? " page\n" : " pages\n");
+}
+
 static void show(const char *url, int push) {
     unsigned long mark = heap_mark();
     char vid[12];
@@ -849,6 +953,7 @@ static void show(const char *url, int push) {
             scopy(hist[hn], cur, slen(cur), URL_MAX); hi = hn++;
         }
         loads++;
+        hist_add();   /* 6.27.0 */
         say_wrapped("browser: ", title[0] ? title : cur, slen(title[0] ? title : cur));
         show_lines(0, PAGE_LINES);
         kputs("links: "); kdec(nlinks); kputs(nlinks ? ", open N follows one\n" : "\n");
@@ -972,6 +1077,7 @@ int browse_command(const char *q, unsigned n) {
         want_file = 1; show(url, 0); want_file = 0;
         return 1;
     }
+    if (word(q, n, "history") || (n > 8 && starts(q, "history "))) { history_command(q + 7, n - 7); return 1; }   /* 6.27.0 */
     if (word(q, n, "cookies") || word(q, n, "cookies clear")) {   /* 6.26.0: names only, never a value */
         jar_switch();
         if (n > 7) {

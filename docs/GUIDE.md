@@ -137,6 +137,8 @@ While Samantha is answering, the network commands (`browse`, `open`, `back`, `fo
 
 HTTPS knows 126 root certificates: Mozilla's whole list, the one Firefox trusts, plus a few older roots some chains still end in. A site signed by anyone else fails with a TLS error, on purpose. There is no JavaScript, no images and no styled layout. It keeps up to 8 KB of text, 32 links and 8 pages of history, and the status line says plainly when a page did not load.
 
+**History.** At the Terminal, `history` lists the pages you opened lately, `history WORDS` finds the ones that held every word (in the title, the address or the start of the page), `history top` the ones you open most, and `history clear` forgets them.
+
 **Cookies.** A site that asks to remember you (a cookie with an expiry) is remembered in your keychain, so it still knows you after a restart; one that does not ask is forgotten at a restart. Nobody else who signs in to the Pi gets yours. `cookies` lists them by site and name, `cookies clear` forgets them all.
 
 **Downloads.** A link to something that is not a page (a PDF, a zip) is saved to your `DOWNLOAD` folder (`JT/DOWNLOAD` with no accounts), and `fetch URL` at the Terminal saves any address there. A name already taken gets `~1`, `~2` and so on; nothing is written over.
