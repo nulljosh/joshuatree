@@ -685,6 +685,7 @@ None of this is kernel code. It builds and runs on the Mac.
 **Fuzzers** in `tools/fuzz-host/` hammer the code that reads untrusted bytes.
 - `fuzz_parsers.c` covers HTTP, HTML and JSON. `kmalloc_host.c` is the one heap call `drivers/fat.c` makes, as malloc, for every host build of it.
 - `fuzz_decoders.c` covers PNG and JPEG.
+- `fuzz_browser.c` (6.48.2) covers `arch/arm64/browser.c`'s `to_text` (tags, entities, `<style>` rules, forms, then `fill` and `open` on every field) and `take_cookies`, the same way; `tools/checks/browser-fuzz-check.sh` runs it.
 - `fuzz_ics.c` (6.48.1) covers `arch/arm64/ics.c`: the iCalendar feed reader and the CalDAV REPORT and PROPFIND walks. It includes ics.c whole, so the static parsers are reachable, with the kernel calls it makes stubbed; `tools/checks/ics-fuzz-check.sh` runs it.
 - Both run under address and undefined-behaviour sanitizers, using the shims in `tools/parsers-host/`.
 
@@ -2448,7 +2449,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (332 checks)
+### The suite (333 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2600,6 +2601,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | JPEG decoder, in-kernel | `tools/checks/jpeg-check.sh` | retry |
 | PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties) | `tools/checks/decoder-fuzz-check.sh` | once |
 | iCalendar and CalDAV parser fuzz (ASan/UBSan, truncation+mutation; 6.48.1) | `tools/checks/ics-fuzz-check.sh` | once |
+| Blackcomb page and Set-Cookie parser fuzz (ASan/UBSan, truncation+mutation; 6.48.2) | `tools/checks/browser-fuzz-check.sh` | once |
 | HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties) | `tools/checks/parser-fuzz-check.sh` | once |
 | Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan) | `tools/checks/input-bounds-check.sh` | once |
 | Password hashing, host harness: PBKDF2-HMAC-SHA256 vectors (RFC 7914, RFC 6070 for SHA-256), legacy record upgrade, USERS.TXT parse | `tools/checks/auth-check.sh` | once |
