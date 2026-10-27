@@ -41,7 +41,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
+                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
                            "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
@@ -360,6 +360,7 @@ static void admin_command(const char *q, unsigned n, int make) {   /* makeadmin 
 #define PW_NEW1 3     /* passwd: the new password */
 #define PW_NEW2 4     /* passwd: the new password again */
 #define PW_MAIL 5     /* mail login: the app password, for mail.c */
+#define PW_WIFI 6     /* wifi join SSID: the network's passphrase; pw_cmd holds the SSID */
 void ask_password(const char *label);   /* ask.c: the next line typed is a password: stars, no echo */
 static int pw_state;
 static char pw_cmd[256], pw_target[ACC_NAME_MAX + 2], pw_new[ACC_PASS_MAX + 2], pw_label[56];
@@ -379,7 +380,9 @@ void cmd_password_cancel(void) { pw_clear(); }
 void ask_mail_password(const char *user) { pw_clear(); pw_ask(PW_MAIL, "App password for ", user); }   /* mail.c */
 void mail_password(const char *pass);   /* mail.c */
 int mail_command(const char *q, unsigned n);
-int ics_command(const char *q, unsigned n);   /* ics.c */   /* ask.c: Esc at the prompt, or a sign-out */
+int ics_command(const char *q, unsigned n);   /* ics.c */
+unsigned wifi_networks(const char **name, int *rssi, unsigned max); const char *wifi_network(void); int wifi_nic_up(void);   /* wifi.c */
+int wifi_save(const char *ssid, unsigned sl, const char *pass, unsigned pl);   /* ask.c: Esc at the prompt, or a sign-out */
 static void sudo_command(const char *q, unsigned n) {   /* q is the line after "sudo " */
     while (n && q[0] == ' ') { q++; n--; }
     if (!n) { cmd_out("sudo: use sudo COMMAND, or sudo -k to forget the password\n"); return; }
@@ -453,6 +456,13 @@ void cmd_password(const char *q, unsigned n, void (*out)(const char *)) {
         accounts_wipe(pass, sizeof pass);
         if (!ok) { cmd_out("passwd: the two passwords differ, nothing changed\n"); pw_clear(); return; }
         passwd_apply(pw_target, pw_new);
+        pw_clear();
+    } else if (st == PW_WIFI) {   /* 6.22.0 */
+        int r = big ? -1 : wifi_save(pw_cmd, slen_(pw_cmd), pass, slen_(pass));
+        accounts_wipe(pass, sizeof pass);
+        if (r < 0) cmd_out("wifi: a passphrase is 8 to 63 plain characters, nothing saved\n");
+        else if (!r) cmd_out("wifi: no card to save it on\n");
+        else { cmd_out("wifi: saved "); cmd_out(pw_cmd); cmd_out("; the Pi joins it at its next start\n"); }
         pw_clear();
     } else if (st == PW_MAIL) {
         if (big || !pass[0]) cmd_out("mail: no app password, nothing changed\n"); else mail_password(pass);
@@ -592,6 +602,24 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (ask_command(q, n)) return;
     if (browse_command(q, n)) return;
     if (mail_command(q, n)) return;   /* 6.18.0 */
+    if (n == 4 && q[0] == 'w' && q[1] == 'i' && q[2] == 'f' && q[3] == 'i') {   /* 6.22.0: wifi, what the Pi joins and hears */
+        const char *name[16]; int rssi[16]; unsigned k = wifi_networks(name, rssi, 16);
+        const char *net = wifi_network();
+        cmd_out("wifi: "); cmd_out(net[0] ? "joins " : "no network set"); if (net[0]) cmd_out(net); cmd_out(wifi_nic_up() ? ", connected\n" : "\n");
+        if (!k) cmd_out("wifi: no networks heard (none in range, or no Wi-Fi chip on this machine)\n");
+        for (unsigned i = 0; i < k; i++) { cmd_out("  "); cmd_out(name[i]); cmd_out(rssi[i] >= -60 ? "  strong\n" : rssi[i] >= -72 ? "  okay\n" : "  weak\n"); }
+        cmd_out("wifi join NAME picks one\n");
+        return;
+    }
+    if (n > 10 && q[0] == 'w' && q[1] == 'i' && q[2] == 'f' && q[3] == 'i' && q[4] == ' ' && q[5] == 'j' && q[6] == 'o' && q[7] == 'i' && q[8] == 'n' && q[9] == ' ') {
+        unsigned s = 10; while (s < n && q[s] == ' ') s++;
+        if (n - s > 32 || s == n) { cmd_out("wifi: a network name is 1 to 32 characters\n"); return; }
+        pw_clear();
+        for (unsigned i = s; i < n; i++) pw_cmd[i - s] = q[i];
+        pw_cmd[n - s] = 0;
+        pw_ask(PW_WIFI, "Wi-Fi password for ", pw_cmd);
+        return;
+    }
     if (ics_command(q, n)) return;    /* 6.19.0 */
     if (nimble_command(q, n)) return;
     if (is(q, n, "llm")) { ask_claude(q, n); return; }

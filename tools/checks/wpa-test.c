@@ -17,6 +17,10 @@ int main(void) {
     unsigned char k[20]; memset(k, 0x0b, 20);
     wpa_hmac(k, 20, (const unsigned char *)"Hi There", 8, 0, 0, out);
     ok &= hex_is(out, 20, "b617318655057264e28bc0b6fb378c8ef146be00", "HMAC-SHA1, RFC 2202 case 1");
+    {   /* 6.22.0: IEEE 802.11i annex H.4, passphrase "password", SSID "IEEE" */
+        unsigned char p[32]; wpa_pmk("password", 8, (const unsigned char *)"IEEE", 4, p);
+        ok &= hex_is(p, 32, "f42c6fc52df0ebef9ebb4b90b38a5f902e83fe1b135a70e23aed762e9710a12e", "PMK from a passphrase (PBKDF2-HMAC-SHA1, 802.11i H.4)");
+    }
     unsigned char pmk[32], aa[6] = {0, 1, 2, 3, 4, 5}, spa[6] = {0, 1, 2, 3, 4, 6}, an[32], sn[32];
     for (int i = 0; i < 32; i++) pmk[i] = (unsigned char)i;
     memset(an, 7, 32); memset(sn, 9, 32);
