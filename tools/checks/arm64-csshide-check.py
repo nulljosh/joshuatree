@@ -2,12 +2,15 @@
 """What the page hides stays hidden (6.25.0): the browser skips elements a page keeps out of view.
 
 A stub server on the host serves one page: a <style> block hiding .menu and #cookie-banner (one comma list), div.drawer,
-an @media rule (left out) and a descendant selector (left out), a comment holding a fake rule; then a nav with class
+an @media rule (left out), descendant selectors (6.33.0: "p .inner" and ".nav li" hide, "div p .deep" with three parts
+is left out), a comment holding a fake rule; then a nav with class
 "top menu" and a link in it, a cookie banner with nested divs, a drawer, a <p hidden>, a <p> with an inline display:none
 among other declarations, an <img hidden>, and visible text with a link. At the Terminal, `browse` must show the visible
-text, the @media and descendant ones too, number the visible link [1] (the hidden menu's link takes no number), and show
-none of the hidden words.
-Discriminating: make hidden_tag in browser.c always say no and every hidden word comes back.
+text, the @media one too, an .inner outside a p, the three-part one, the list after the .nav list closes (nested lists
+inside it count their own depth), number the visible link [1] (the hidden menu's link takes no number), and show none
+of the hidden words.
+Discriminating: make hidden_tag in browser.c always say no and every hidden word comes back; drop anc_track's call and
+the descendant words come back.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-csshide-check.py   (from the repo root)
 """
@@ -26,6 +29,8 @@ PAGE = b"""<html><head><title>Hide</title><style>
 @media (max-width: 600px) { .wide { display: none } }
 div.drawer{color:red;display:none}
 p .inner { display:none }
+.nav  li { display:none }
+div p .deep { display:none }
 </style></head><body>
 <nav class="top menu"><a href=/x>Menu link</a> Menu words</nav>
 <div id="cookie-banner"><div>We use cookies</div><div>nested crumbs</div></div>
@@ -33,7 +38,11 @@ p .inner { display:none }
 <p hidden>Hidden paragraph</p>
 <p style="color: red; display: none">Inline hidden</p>
 <p class="wide">Wide text stays</p>
-<p class="visible"><span class="inner">Inner stays</span></p>
+<p class="visible"><span class="inner">Inner hidden</span> Para stays</p>
+<div><span class="inner">Lone inner stays</span></div>
+<div><p><span class="deep">Deep stays</span></p></div>
+<ul class="nav"><li>Nav item<ul><li>Sub item</li></ul></li><li>Nav two</li></ul>
+<ul><li>After nav stays</li></ul>
 <img src=/a.png hidden>
 <p>Visible text <a href=/y>visible link</a> and the end.</p>
 </body></html>"""
@@ -84,9 +93,9 @@ try:
     check("the page loads", wait_for("and the end.", 20, n), uart()[n:][-500:])
     time.sleep(0.5)
     out = uart()[n:]
-    for w in ("Wide text stays", "Inner stays", "Visible text", "visible link [1]"):
+    for w in ("Wide text stays", "Para stays", "Lone inner stays", "Deep stays", "After nav stays", "Visible text", "visible link [1]"):
         check("shows: %s" % w, w in out, out[-600:])
-    for w in ("Menu link", "Menu words", "cookies", "nested crumbs", "Drawer text", "Hidden paragraph", "Inline hidden"):
+    for w in ("Menu link", "Menu words", "cookies", "nested crumbs", "Drawer text", "Hidden paragraph", "Inline hidden", "Inner hidden", "Nav item", "Sub item", "Nav two"):
         check("hides: %s" % w, w not in out, out[-600:])
 finally:
     q.kill(); q.wait(); server.shutdown()
