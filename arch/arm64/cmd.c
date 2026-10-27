@@ -172,7 +172,7 @@ int volume_key(unsigned code) {
 static void userrun_command(const char *name, unsigned n) {
     unsigned long status = 0; int faulted = 0;
     int r = userrun(name, n, &status, &faulted);
-    if (r == -1) { cmd_out("userrun: no program called that, try hello, calendar, notes, music or loop\n"); return; }
+    if (r == -1) { cmd_out("userrun: no program called that, try hello, calendar, notes, music or loop, or put NAME.APP in JT/APPS\n"); return; }
     if (r == -3) { cmd_out("userrun: an app is already running, close it first\n"); return; }
     cmd_out("userrun ");
     for (unsigned i = 0; i < n; i++) { char c[2] = { name[i], 0 }; cmd_out(c); }
