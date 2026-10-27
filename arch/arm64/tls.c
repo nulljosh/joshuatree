@@ -52,6 +52,39 @@ static int platform_seeder(const br_prng_class **ctx) {
 }
 br_prng_seeder br_prng_seeder_system(const char **name) { if (name) *name = "platform"; return platform_seeder; }
 
+/* 6.45.0: TLS session resumption. After a full handshake the session (its id and master secret) is kept for that host
+   name, four hosts at most, for an hour; the next connection to the same name offers it, and a server that agrees skips
+   the certificate and key exchange, the slow part on a Pi (a page's images, the next page on the same site). A session
+   is only offered to the exact name it was made for, with the same trust anchors, so it never vouches for anyone else. */
+#define SESS_MAX 4
+#define SESS_TICKS (60u * 60 * 100)
+unsigned int ticks(void);   /* ip.c, 100 a second */
+void kputs(const char *s);
+static struct { char host[128]; int private_only; unsigned at; br_ssl_session_parameters p; } sess[SESS_MAX];
+static int sess_slot(const char *host, int private_only) {   /* the slot that holds host's session, or -1 */
+    for (int i = 0; i < SESS_MAX; i++) {
+        unsigned k = 0; while (k < sizeof sess[i].host - 1 && host[k] && sess[i].host[k] == host[k]) k++;
+        if (sess[i].host[0] && !host[k] && !sess[i].host[k] && sess[i].private_only == private_only) return i;
+    }
+    return -1;
+}
+static char cur_host[128]; static int cur_private, cur_offered;
+static void sess_wipe(int i) { volatile unsigned char *b = (volatile unsigned char *)&sess[i]; for (unsigned k = 0; k < sizeof sess[i]; k++) b[k] = 0; }
+static void sess_keep(void) {   /* after a handshake: resumed (logged) or new (kept) */
+    br_ssl_session_parameters now;
+    br_ssl_engine_get_session_parameters(&sc.eng, &now);
+    int i = sess_slot(cur_host, cur_private);
+    if (cur_offered && i >= 0 && now.session_id_len && now.session_id_len == sess[i].p.session_id_len) {
+        unsigned k = 0; while (k < now.session_id_len && now.session_id[k] == sess[i].p.session_id[k]) k++;
+        if (k == now.session_id_len) { kputs("tls: session resumed for "); kputs(cur_host); kputs("\n"); return; }
+    }
+    if (!now.session_id_len) return;   /* the server keeps no sessions */
+    if (i < 0) { i = 0; for (int j = 1; j < SESS_MAX; j++) if (sess[j].at < sess[i].at || !sess[j].host[0]) i = j; }   /* a free slot, else the oldest */
+    sess_wipe(i);
+    for (unsigned k = 0; k < sizeof sess[i].host - 1 && cur_host[k]; k++) sess[i].host[k] = cur_host[k];
+    sess[i].private_only = cur_private; sess[i].at = ticks(); sess[i].p = now;
+    for (unsigned k = 0; k < sizeof now; k++) ((volatile unsigned char *)&now)[k] = 0;
+}
 static int setup(const char *host, int private_only) {
     static const uint16_t suites[] = {
         BR_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, BR_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -92,7 +125,12 @@ static int setup(const char *host, int private_only) {
     if (!tls_entropy(seed, sizeof seed)) { wipe_seed(seed, sizeof seed); return 0; }
     br_ssl_engine_inject_entropy(&sc.eng, seed, sizeof seed);
     wipe_seed(seed, sizeof seed);
-    if (!br_ssl_client_reset(&sc, host, 0)) return 0;
+    int i = sess_slot(host, private_only); cur_offered = 0;
+    if (i >= 0 && ticks() - sess[i].at > SESS_TICKS) { sess_wipe(i); i = -1; }   /* an hour old: a full handshake again */
+    if (i >= 0) { br_ssl_engine_set_session_parameters(&sc.eng, &sess[i].p); cur_offered = 1; }
+    unsigned k = 0; for (; k < sizeof cur_host - 1 && host[k]; k++) cur_host[k] = host[k];
+    cur_host[k] = 0; cur_private = private_only;
+    if (!br_ssl_client_reset(&sc, host, cur_offered)) return 0;
     br_sslio_init(&ioc, &sc.eng, sock_read, 0, sock_write, 0);
     return 1;
 }
@@ -120,7 +158,12 @@ int tls_connect(unsigned ip, unsigned short port, const char *host) { return con
    private CA alone. */
 int tls_connect_private(unsigned ip, unsigned short port, const char *name) { return connect_with(ip, port, name, 1); }
 int tls_handshake(void) {
-    return br_sslio_flush(&ioc) == 0 ? 0 : failed();   /* nothing to send yet, so flush runs the handshake and no more */
+    if (br_sslio_flush(&ioc) != 0) {   /* nothing to send yet, so flush runs the handshake and no more */
+        int i = sess_slot(cur_host, cur_private); if (cur_offered && i >= 0) sess_wipe(i);   /* a refused resumption is not offered again */
+        return failed();
+    }
+    sess_keep();
+    return 0;
 }
 /* 1 once out[0..n) holds a whole HTTP reply that carries Content-Length: the answer is complete, so there is no need to
    wait for the server to close the connection (a relay that lingers would cost the whole read timeout). */
