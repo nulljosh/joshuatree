@@ -22,7 +22,7 @@ void uart_puts(const char *s);
 #define KC_FILE "KEYCHAIN.BIN"
 #define KC_ITERS 100000u
 #define KC_HEAD (4 + 16 + 12 + 16)   /* magic, salt, nonce, tag */
-#define KC_MAX 2048                  /* the sealed lines */
+#define KC_MAX 8192                  /* the sealed lines (6.26.0: 8 KiB, room for a cookie jar) */
 static unsigned char kc_key[32], kc_salt[16];
 static char kc_owner[40];
 static int kc_ready;

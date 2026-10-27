@@ -137,6 +137,8 @@ While Samantha is answering, the network commands (`browse`, `open`, `back`, `fo
 
 HTTPS knows 126 root certificates: Mozilla's whole list, the one Firefox trusts, plus a few older roots some chains still end in. A site signed by anyone else fails with a TLS error, on purpose. There is no JavaScript, no images and no styled layout. It keeps up to 8 KB of text, 32 links and 8 pages of history, and the status line says plainly when a page did not load.
 
+**Cookies.** A site that asks to remember you (a cookie with an expiry) is remembered in your keychain, so it still knows you after a restart; one that does not ask is forgotten at a restart. Nobody else who signs in to the Pi gets yours. `cookies` lists them by site and name, `cookies clear` forgets them all.
+
 **Downloads.** A link to something that is not a page (a PDF, a zip) is saved to your `DOWNLOAD` folder (`JT/DOWNLOAD` with no accounts), and `fetch URL` at the Terminal saves any address there. A name already taken gets `~1`, `~2` and so on; nothing is written over.
 
 **Calendar subscriptions.** `calendar subscribe https://...` (or a `webcal://` link) copies a calendar feed's events into Calendar, beside your own; run it again to refresh, `calendar unsubscribe` to drop them. A day you already have an event on keeps yours. For a calendar you can also write to (iCloud, Fastmail, any CalDAV server), `calendar caldav https://.../ YOU` with the calendar's address and an app password, then `calendar sync`: your days go up, the calendar's come down. A deleted event is not synced yet.

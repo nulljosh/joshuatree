@@ -53,7 +53,7 @@ static const char *post_body; static unsigned post_len;   /* the next fetch POST
 /* The cookie jar: name=value per host, sent back to that host alone. A Secure cookie is taken and sent over https only.
    ponytail: no Domain or Path matching and no expiry beyond Max-Age=0; it lives until the Pi restarts. */
 #define COOKIE_MAX 24
-static struct { char host[128], name[32], value[192]; int secure; } jar[COOKIE_MAX];
+static struct { char host[128], name[32], value[192]; int secure, keep; } jar[COOKIE_MAX];
 static unsigned njar;         /* 0RGB, img_w[k] to a row. ponytail: static, 1.9 MB; the heap is a bump that callers roll back */
 #define PAGE_LINES 16       /* ponytail: a fixed page; the Terminal's own rows if its height should set it */
 /* Budgets in ticks (100 a second). A fetch answers or fails in about 10 s: 3 s for DNS, 4 s for the SYN-ACK, 8 s for
@@ -167,8 +167,52 @@ static void yt_play(const char *vid) {
     save_here("PLAYNOW.TXT", "YT.AVI\n", 7);
     app_dock("movies");
 }
+/* 6.26.0: the jar is the signed-in person's. A cookie its site marks persistent (Max-Age or Expires) is kept in their
+   keychain, sealed, and comes back after a restart; a session cookie never leaves memory. Another sign-in, or nobody,
+   empties the jar and loads that person's. ponytail: an Expires date in the past is not acted on, only Max-Age=0. */
+extern char current_user[];   /* login.c */
+void accounts_wipe(void *p, unsigned n);
+int keychain_get(const char *item, char *out, unsigned max); int keychain_set(const char *item, const char *value);
+static char jar_owner[40] = "\x01";   /* never a real name: the first fetch loads */
+static char jar_buf[8000];
+static void jar_save(void) {   /* the kept cookies into the keychain: host, name, value, secure, one record each */
+    unsigned o = 0;
+    for (unsigned c = 0; c < njar; c++) if (jar[c].keep) {
+        unsigned need = slen(jar[c].host) + slen(jar[c].name) + slen(jar[c].value) + 5;
+        if (o + need >= sizeof jar_buf) break;
+        for (const char *p = jar[c].host; *p; p++) jar_buf[o++] = *p;
+        jar_buf[o++] = '\x1f'; for (const char *p = jar[c].name; *p; p++) jar_buf[o++] = *p;
+        jar_buf[o++] = '\x1f'; for (const char *p = jar[c].value; *p; p++) jar_buf[o++] = *p;
+        jar_buf[o++] = '\x1f'; jar_buf[o++] = jar[c].secure ? '1' : '0';
+        jar_buf[o++] = '\x1e';
+    }
+    jar_buf[o] = 0;
+    keychain_set("cookies", o ? jar_buf : 0);
+    accounts_wipe(jar_buf, sizeof jar_buf);
+}
+static void jar_switch(void) {   /* the jar follows whoever is signed in */
+    unsigned m = 0; while (jar_owner[m] && jar_owner[m] == current_user[m]) m++;
+    if (!jar_owner[m] && !current_user[m]) return;
+    for (unsigned c = 0; c < njar; c++) accounts_wipe(jar[c].value, sizeof jar[c].value);
+    njar = 0;
+    scopy(jar_owner, current_user, slen(current_user), sizeof jar_owner);
+    if (keychain_get("cookies", jar_buf, sizeof jar_buf) == 1) {
+        for (unsigned i = 0; jar_buf[i] && njar < COOKIE_MAX;) {
+            unsigned f[4], fl[4], k = 0, p = i;
+            while (k < 4) { f[k] = p; while (jar_buf[p] && jar_buf[p] != '\x1f' && jar_buf[p] != '\x1e') p++; fl[k] = p - f[k]; k++; if (jar_buf[p] != '\x1f') break; p++; }
+            if (k == 4 && fl[0] && fl[1]) {
+                scopy(jar[njar].host, jar_buf + f[0], fl[0], sizeof jar[0].host); scopy(jar[njar].name, jar_buf + f[1], fl[1], sizeof jar[0].name);
+                scopy(jar[njar].value, jar_buf + f[2], fl[2], sizeof jar[0].value); jar[njar].secure = jar_buf[f[3]] == '1'; jar[njar].keep = 1; njar++;
+            }
+            while (jar_buf[p] && jar_buf[p] != '\x1e') p++;
+            i = jar_buf[p] ? p + 1 : p;
+        }
+    }
+    accounts_wipe(jar_buf, sizeof jar_buf);
+}
 static void take_cookies(const char *raw, unsigned got, const struct url *u) {   /* Set-Cookie lines of one reply into the jar */
     int hb = http_body_start(raw, got); unsigned h = hb < 0 ? got : (unsigned)hb;
+    int kept_changed = 0;
     for (unsigned i = 0; i + 11 < h; i++) {
         if ((i && raw[i - 1] != '\n') || !starts(raw + i, "set-cookie:")) continue;
         unsigned a = i + 11; while (a < h && raw[a] == ' ') a++;
@@ -176,11 +220,12 @@ static void take_cookies(const char *raw, unsigned got, const struct url *u) {  
         if (eq >= h || raw[eq] != '=' || eq == a || eq - a >= sizeof jar[0].name) continue;
         unsigned v = eq + 1, ve = v; while (ve < h && raw[ve] != ';' && raw[ve] != '\r' && raw[ve] != '\n') ve++;
         unsigned le = ve; while (le < h && raw[le] != '\r' && raw[le] != '\n') le++;
-        int secure = 0, gone = 0;
+        int secure = 0, gone = 0, keep = 0;
         for (unsigned k = ve; k < le; k++) if (raw[k] == ';') {
             unsigned t = k + 1; while (t < le && raw[t] == ' ') t++;
             if (starts(raw + t, "secure") && (t + 6 == le || raw[t + 6] == ';' || raw[t + 6] == ' ')) secure = 1;
             if (starts(raw + t, "max-age=0") || starts(raw + t, "max-age=-")) gone = 1;
+            else if (starts(raw + t, "max-age=") || starts(raw + t, "expires=")) keep = 1;
         }
         if (secure && !u->tls) continue;   /* a page over plain http may not set a Secure cookie */
         unsigned c = 0;
@@ -189,17 +234,19 @@ static void take_cookies(const char *raw, unsigned got, const struct url *u) {  
             unsigned q = 0; while (a + q < eq && jar[c].name[q] == raw[a + q]) q++;
             if (!jar[c].host[m] && !u->host[m] && a + q == eq && !jar[c].name[q]) break;
         }
-        if (gone) { if (c < njar) jar[c] = jar[--njar]; continue; }
+        if (gone) { if (c < njar) { kept_changed |= jar[c].keep; jar[c] = jar[--njar]; } continue; }
         if (c == njar) { if (njar == COOKIE_MAX) continue; njar++; }
         scopy(jar[c].host, u->host, slen(u->host), sizeof jar[c].host);
         scopy(jar[c].name, raw + a, eq - a, sizeof jar[c].name);
         scopy(jar[c].value, raw + v, ve - v, sizeof jar[c].value);
-        jar[c].secure = secure;
-        kputs("browser: cookie "); kputs(jar[c].name); kputs(secure ? " (secure)\n" : "\n");
+        kept_changed |= keep | jar[c].keep;
+        jar[c].secure = secure; jar[c].keep = keep;
+        kputs("browser: cookie "); kputs(jar[c].name); kputs(secure ? " (secure)" : ""); kputs(keep ? " (kept)\n" : "\n");
     }
+    if (kept_changed) jar_save();
 }
 static int fetch_once(const char *url, char *raw, unsigned max);
-static int fetch(const char *url, char *raw, unsigned max) { int r = fetch_once(url, raw, max); post_body = 0; post_len = 0; return r; }
+static int fetch(const char *url, char *raw, unsigned max) { jar_switch(); int r = fetch_once(url, raw, max); post_body = 0; post_len = 0; return r; }
 static int fetch_once(const char *url, char *raw, unsigned max) {
     char next[URL_MAX], vid[12];
     scopy(cur, url, slen(url), URL_MAX);
@@ -923,6 +970,16 @@ int browse_command(const char *q, unsigned n) {
         if (n - s >= URL_MAX) { kputs("browser: url too long\n"); return 1; }
         char url[URL_MAX]; scopy(url, q + s, n - s, URL_MAX);
         want_file = 1; show(url, 0); want_file = 0;
+        return 1;
+    }
+    if (word(q, n, "cookies") || word(q, n, "cookies clear")) {   /* 6.26.0: names only, never a value */
+        jar_switch();
+        if (n > 7) {
+            for (unsigned c = 0; c < njar; c++) accounts_wipe(jar[c].value, sizeof jar[c].value);
+            njar = 0; keychain_set("cookies", 0); kputs("browser: cookies cleared\n"); return 1;
+        }
+        for (unsigned c = 0; c < njar; c++) { kputs("  "); kputs(jar[c].host); kputs(" "); kputs(jar[c].name); kputs(jar[c].secure ? " secure" : ""); kputs(jar[c].keep ? " kept\n" : "\n"); }
+        kputs("browser: "); kdec(njar); kputs(njar == 1 ? " cookie\n" : " cookies\n");
         return 1;
     }
     if (n > 5 && starts(q, "fill ")) {   /* 6.15.0: fill N TEXT, N a field's link number */

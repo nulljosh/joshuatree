@@ -2111,6 +2111,7 @@ Condensed 2026-10-12. The line numbers and per-finding write-ups are in git hist
 - Every HTTPS server certificate is checked against the embedded roots and the requested host name (`br_ssl_client_reset(&sc, host, 0)`). A name mismatch is error 56. An untrusted chain is error 62.
 - Response size is bounded.
   - The raw reply stops at `RAW_MAX` (4 MiB on the heap since 6.12.0, was 64 KiB), a gzip body at `PAGE_MAX` (8 MiB inflated), text at `TEXT_MAX`, links at `LINK_MAX`, and the title at 60 bytes.
+  - 6.26.0: the cookie jar is the signed-in person's (`jar_switch` before every fetch); a cookie with Max-Age or Expires is `keep` and `jar_save` seals the kept ones in the keychain as "cookies"; `cookies` and `cookies clear` at the Terminal.
   - 6.25.0: what the page hides stays hidden. `css_rules` reads every `<style>` first and keeps the simple display:none selectors (`hide_sel`, 32 at most); `hidden_tag` matches them, the hidden attribute and an inline display:none, and `to_text` skips that element whole by counting its own tag's nesting.
   - 6.17.0: downloads. `show` saves a reply whose Content-Type is neither text nor html (and every reply after `fetch URL`), named by `file_name` (8.3, DOWNLOAD.BIN at worst), and leaves `cur` on the page. 6.23.1: `dl_save` puts it in a DOWNLOAD folder (`~/DOWNLOAD`, or `JT/DOWNLOAD` with no accounts) and never over a file there (NAME~1 to NAME~9, then refused): saved beside the system's files, a link named `/wifi.txt` or `/users.txt` could have replaced JT/WIFI.TXT, USERS.TXT, SUDOERS.TXT or a keychain.
   - 6.16.0: tabs. `tabs[TAB_MAX]` holds each tab's history; `tab_keep` stores the front one's, `tab_take` brings another back and fetches its page again. `desk.c` hands Cmd+W and Ctrl+Tab to Blackcomb while it has more than one tab.
@@ -2432,7 +2433,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (327 checks)
+### The suite (328 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2687,6 +2688,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Inline images in Blackcomb: a page's PNG and baseline JPEG are fetched after its text, scaled to fit, drawn in place with their colours on a screendump, and a missing one says it failed, in headless QEMU | `tools/checks/arm64-images-check.py` | retry |
 | Forms and cookies on the Pi: a login form posts with its hidden token, the redirect comes back with the session cookie and not a Secure one over http, a GET form sends its query, fill never prints a value, and the Blackcomb window does it with Tab and Enter, in headless QEMU | `tools/checks/arm64-forms-check.py` | retry |
 | What a page hides stays hidden: simple display:none rules from <style>, the hidden attribute and inline display:none skip an element whole, @media and descendant rules are left alone, and a hidden menu's link takes no number, in headless QEMU | `tools/checks/arm64-csshide-check.py` | retry |
+| Cookies kept per person: a persistent cookie survives a restart in its owner's keychain, a session cookie does not, another account gets none, cookies clear is kept, and no value is on the card in plain text or on the UART, over four boots of one card in headless QEMU | `tools/checks/arm64-cookiekeep-check.py` | retry |
 | Tabs on the Pi: four at most, each with its own page and history, from the Terminal's tab commands and Blackcomb's Cmd+T, Ctrl+Tab and Cmd+W (the last tab's Cmd+W closes the window), in headless QEMU | `tools/checks/arm64-tabs-check.py` | retry |
 | Downloads on the Pi: a link to a PDF is saved to JT/DOWNLOAD under an 8.3 name, never over a file (a hostile /wifi.txt leaves the card's own WIFI.TXT) with the page left in place, fetch URL saves any reply, a 404 is not saved, Blackcomb's status line says where, and the card image holds the exact bytes, in headless QEMU | `tools/checks/arm64-downloads-check.py` | retry |
 | Mail on the Pi: IMAP over TLS against a fixture server, the app password hidden and refused when wrong, the newest messages listed, plain, quoted-printable HTML and base64 bodies shown whole past a fake tagged ending, a mail's image never fetched, mail logout forgets, in headless QEMU | `tools/checks/arm64-mail-check.py` | retry |
