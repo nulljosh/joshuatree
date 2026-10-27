@@ -3,15 +3,16 @@
 
 A stub server on the host serves one page: a <style> block hiding .menu and #cookie-banner (one comma list), div.drawer,
 an @media rule (left out), descendant selectors (6.33.0: "p .inner" and ".nav li" hide, "div p .deep" with three parts
-is left out; 6.49.0: "nav.side > ul" hides the nav's own list and not a list a level deeper, with a script before it that holds
+hides only inside both, 6.50.0, and "section > div .pick" only under a direct div; 6.49.0: "nav.side > ul" hides the nav's own list and not a list a level deeper, with a script before it that holds
 "<nav>"), a comment holding a fake rule; then a nav with class
 "top menu" and a link in it, a cookie banner with nested divs, a drawer, a <p hidden>, a <p> with an inline display:none
 among other declarations, an <img hidden>, and visible text with a link. At the Terminal, `browse` must show the visible
-text, the @media one too, an .inner outside a p, the three-part one, the list after the .nav list closes (nested lists
+text, the @media one too, an .inner outside a p, a .deep in a p outside any div, a .pick
+under a div that is not the section's own child, the list after the .nav list closes (nested lists
 inside it count their own depth), number the visible link [1] (the hidden menu's link takes no number), and show none
 of the hidden words.
 Discriminating: make hidden_tag in browser.c always say no and every hidden word comes back; drop anc_track's call and
-the descendant words come back.
+the descendant words come back; drop the middle-part tracking in anc_track and the three-part words come back.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-csshide-check.py   (from the repo root)
 """
@@ -33,6 +34,7 @@ p .inner { display:none }
 .nav  li { display:none }
 div p .deep { display:none }
 nav.side > ul { display:none }
+section > div .pick { display:none }
 </style></head><body>
 <nav class="top menu"><a href=/x>Menu link</a> Menu words</nav>
 <div id="cookie-banner"><div>We use cookies</div><div>nested crumbs</div></div>
@@ -42,7 +44,9 @@ nav.side > ul { display:none }
 <p class="wide">Wide text stays</p>
 <p class="visible"><span class="inner">Inner hidden</span> Para stays</p>
 <div><span class="inner">Lone inner stays</span></div>
-<div><p><span class="deep">Deep stays</span></p></div>
+<div><p><span class="deep">Deep hidden</span></p></div>
+<p><span class="deep">Deep outside stays</span></p>
+<section><div><b class=pick>Pick hidden</b></div><article><div><b class=pick>Pick deeper stays</b></div></article></section>
 <ul class="nav"><li>Nav item<ul><li>Sub item</li></ul></li><li>Nav two</li></ul>
 <ul><li>After nav stays</li></ul>
 <nav class=side><script>var x = "<nav>";</script><ul><li>Side menu</li></ul><div><ul><li>Deeper list stays</li></ul></div></nav>
@@ -96,12 +100,12 @@ try:
     check("the page loads", wait_for("and the end.", 20, n), uart()[n:][-500:])
     time.sleep(0.5)
     out = uart()[n:]
-    for w in ("Wide text stays", "Para stays", "Lone inner stays", "Deep stays", "After nav stays", "Deeper list stays", "Visible text", "visible link [1]"):
+    for w in ("Wide text stays", "Para stays", "Lone inner stays", "Deep outside stays", "Pick deeper stays", "After nav stays", "Deeper list stays", "Visible text", "visible link [1]"):
         check("shows: %s" % w, w in out, out[-600:])
-    for w in ("Menu link", "Menu words", "cookies", "nested crumbs", "Drawer text", "Hidden paragraph", "Inline hidden", "Inner hidden", "Nav item", "Sub item", "Nav two", "Side menu"):
+    for w in ("Menu link", "Menu words", "cookies", "nested crumbs", "Drawer text", "Hidden paragraph", "Inline hidden", "Inner hidden", "Nav item", "Sub item", "Nav two", "Side menu", "Deep hidden", "Pick hidden"):
         check("hides: %s" % w, w not in out, out[-600:])
 finally:
     q.kill(); q.wait(); server.shutdown()
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 if fails: print("FAIL: " + ", ".join(fails)); sys.exit(1)
-print("PASS: the browser skips what a page hides (simple display:none rules from <style>, the hidden attribute, inline display:none) and keeps what @media and complex selectors would hide only sometimes")
+print("PASS: the browser skips what a page hides (simple display:none rules from <style>, the hidden attribute, inline display:none, three-part rules too) and keeps what @media and complex selectors would hide only sometimes")

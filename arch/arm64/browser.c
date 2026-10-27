@@ -430,6 +430,8 @@ static char hide_sel[HIDE_MAX][48]; static unsigned nhide;
 static unsigned char hide_act[HIDE_MAX];   /* 6.47.0: what a rule in this table does: 1 hides, 2 bolds, 3 centres, 4 right-aligns; the
    two-part (descendant) bold and align rules share the hide rules' ancestor tracking, one-part ones keep their own tables */
 static char anc_tag[HIDE_MAX][16]; static unsigned anc_n[HIDE_MAX], anc_d[HIDE_MAX];   /* a descendant rule's open first part: its tag, how deep */
+/* 6.50.0: a three-part hiding rule ("header nav .menu") keeps its middle part the same way, opened only inside the first */
+static char mid_tag[HIDE_MAX][16]; static unsigned mid_n[HIDE_MAX], mid_d[HIDE_MAX], mid_g[HIDE_MAX];
 /* 6.34.0: a rule whose font-weight is bold (or 600 and up) makes its element bold, as <b> does: the BR_BOLD mark when it
    opens, BR_PLAIN when its own tag's nesting closes. One part selectors only. ponytail: one bold element at a time,
    and the window starts each line plain, so a bold block broken by <br> is bold on its first line only. */
@@ -490,7 +492,7 @@ static void css_rules(const char *c, unsigned n) {
                 else if (on < sizeof one - 1) one[on++] = c[k]; else simple = 0;
             }
             if (on && (one[on - 1] == ' ' || one[on - 1] == '>')) simple = 0;   /* a combinator with nothing after it */
-            if (none && simple && gaps <= 1 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = 1; anc_d[nhide++] = 0; }
+            if (none && simple && gaps <= 2 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = 1; mid_d[nhide] = 0; anc_d[nhide++] = 0; }
             for (int act = 2; act <= 4; act++)   /* 6.47.0: a descendant rule that bolds (2) or aligns (3 centre, 4 right) */
                 if (simple && gaps == 1 && nhide < HIDE_MAX && (act == 2 ? bold : mid == act - 2)) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = (unsigned char)act; anc_d[nhide++] = 0; }
             if (bold && simple && !gaps && nbold < BOLD_MAX) { for (unsigned k = 0; k < on; k++) bold_sel[nbold][k] = one[k]; bold_sel[nbold++][on] = 0; }
@@ -522,6 +524,7 @@ static unsigned gap_of(const char *sel) { unsigned g = 0; while (sel[g] && sel[g
    never hide more than the rule says. */
 static unsigned gdep, anc_g[HIDE_MAX];
 static int rule_under(unsigned r, const char *sel, unsigned g) { return anc_d[r] && (sel[g] != '>' || gdep == anc_g[r] + 1); }
+static unsigned gap2_of(const char *sel, unsigned g) { return sel[g] ? g + 1 + gap_of(sel + g + 1) : g; }
 static int hidden_tag(const char *tag, unsigned tn, unsigned nl) {   /* tag[0..nl) is its name */
     unsigned s, z;
     for (unsigned k = nl; k + 6 <= tn; k++)   /* the bare hidden attribute */
@@ -530,6 +533,8 @@ static int hidden_tag(const char *tag, unsigned tn, unsigned nl) {   /* tag[0..n
     for (unsigned r = 0; r < nhide; r++) {
         const char *sel = hide_sel[r]; unsigned sl = slen(sel), g = gap_of(sel);
         if (hide_act[r] != 1) continue;
+        unsigned g2 = gap2_of(sel, g);
+        if (g2 < sl) { if (mid_d[r] && (sel[g2] != '>' || gdep == mid_g[r] + 1) && sel_match(sel + g2 + 1, sl - g2 - 1, tag, tn, nl)) return 1; continue; }
         if (g == sl ? sel_match(sel, sl, tag, tn, nl) : rule_under(r, sel, g) && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
     }
     return 0;
@@ -537,16 +542,24 @@ static int hidden_tag(const char *tag, unsigned tn, unsigned nl) {   /* tag[0..n
 static int desc_rule(int act, const char *tag, unsigned tn, unsigned nl) {   /* 6.47.0: a descendant rule of that action names this element */
     for (unsigned r = 0; r < nhide; r++) {
         const char *sel = hide_sel[r]; unsigned sl = slen(sel), g = gap_of(sel);
-        if (hide_act[r] == act && g < sl && rule_under(r, sel, g) && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
+        if (hide_act[r] == act && g < sl && gap2_of(sel, g) == sl && rule_under(r, sel, g) && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
     }
     return 0;
 }
 static void anc_track(const char *tag, unsigned tn, unsigned nl, int close, int lone) {   /* 6.33.0: each descendant rule's first part, open or not */
     for (unsigned r = 0; r < nhide; r++) {
-        const char *sel = hide_sel[r]; unsigned g = gap_of(sel);
+        const char *sel = hide_sel[r]; unsigned g = gap_of(sel), g2 = gap2_of(sel, g);
         if (!sel[g]) continue;
+        if (sel[g2] && anc_d[r]) {   /* 6.50.0: the middle part, the same way, only while the first is open */
+            if (mid_d[r]) { if (nl == mid_n[r]) { unsigned m = 0; while (m < nl && (tag[m] | 32) == mid_tag[r][m]) m++; if (m == nl && !lone) mid_d[r] += close ? -1u : 1u; } }
+            else if (!close && !lone && nl < sizeof mid_tag[r] && rule_under(r, sel, g) && sel_match(sel + g + 1, g2 - g - 1, tag, tn, nl)) {
+                for (unsigned m = 0; m < nl; m++) mid_tag[r][m] = (char)(tag[m] | 32);
+                mid_n[r] = nl; mid_d[r] = 1; mid_g[r] = gdep;
+            }
+        }
         if (anc_d[r]) {   /* inside it: only its own tag's nesting counts */
             if (nl == anc_n[r]) { unsigned m = 0; while (m < nl && (tag[m] | 32) == anc_tag[r][m]) m++; if (m == nl && !lone) anc_d[r] += close ? -1u : 1u; }
+            if (!anc_d[r]) mid_d[r] = 0;
         } else if (!close && !lone && nl < sizeof anc_tag[r] && sel_match(sel, g, tag, tn, nl)) {
             for (unsigned m = 0; m < nl; m++) anc_tag[r][m] = (char)(tag[m] | 32);
             anc_n[r] = nl; anc_d[r] = 1; anc_g[r] = gdep;
