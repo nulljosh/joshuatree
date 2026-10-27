@@ -36,8 +36,8 @@ NETPORT ?= 0
 # The IP stack is the i386 kernel's own drivers/net.c and drivers/http.c, built against drivers/nic.h (-DNET_NIC)
 # instead of the PC network cards. -mstrict-align: a real board's firmware may leave alignment checks on.
 NETCC = $(CC) -DNET_NIC -mstrict-align -I../../drivers -I../../kernel
-NETOBJ = rng.o net.o http.o ip.o clock.o tls.o appsig.o browser.o mail.o ics.o nimble.o $(BSSLOBJ)
-NETLD = rng.o net.o http.o ip.o clock.o tls.o appsig.o browser.o mail.o ics.o nimble.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
+NETOBJ = rng.o net.o http.o ip.o clock.o tls.o appsig.o store.o browser.o mail.o ics.o nimble.o $(BSSLOBJ)
+NETLD = rng.o net.o http.o ip.o clock.o tls.o appsig.o store.o browser.o mail.o ics.o nimble.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
 all: kernel8.elf
 rng.o: rng.c rng.h
 	$(CC) -c $< -o $@
@@ -85,6 +85,10 @@ tls.o: tls.c rng.h tls.h tls_ta.h ../../drivers/net.h ../../drivers/http.h
 APP_KEY ?= app_key.h
 appsig.o: appsig.c appsig.h $(APP_KEY) FORCE
 	$(NETCC) -I$(BSSL)/inc -I$(BSSL)/shim -I../../lib -DAPP_KEY_H='"$(abspath $(APP_KEY))"' -c appsig.c -o $@
+# 6.55.0: the app store (store.c). STORE_BASE= points install at a stub for tools/checks/arm64-store-check.py only; FORCE, as nimble.o.
+STORE_BASE ?=
+store.o: store.c appsig.h uimg.h FORCE
+	$(NETCC) $(if $(STORE_BASE),-DSTORE_BASE='"$(STORE_BASE)"') -c $< -o $@
 claude_cfg.h: claude_cfg.sh FORCE
 	@./claude_cfg.sh
 wifi_cfg.h: wifi_cfg.sh FORCE

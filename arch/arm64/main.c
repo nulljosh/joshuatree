@@ -219,7 +219,7 @@ unsigned long l3[APP_SLOTS * ARENA_BLOCKS * 512] __attribute__((aligned(4096)));
 #define UP_ASTACK 0x80000UL /* ...and the app's stack: 16 pages (M3e: minimp3 keeps about 16 KB of scratch there), nothing mapped below them */
 #define APP_STACK_PAGES 16
 #define APP_ZERO_PAGES  8   /* zeroed pages after the image (and the rest of its last page): the pool user/calendar.c keeps its events in, and user/notes.c its 28 KB arena (M3d) */
-#define UAPP_MAX 0x40000UL  /* the largest image user_load takes, and what user_c.ld asserts */
+#define UAPP_MAX UIMG_MAX   /* the largest image user_load takes, and what user_c.ld asserts (uimg.h) */
 #define UP_WIN   0xD00000UL /* M3c part 2: the app's window buffer, read-write and never executable. 3.9.0: the last 3 MiB of the arena, so a device-size
                                buffer fits (504x328 at 2x is 2.6 MB); it was a page above the stack, with room for 560x360 four times over */
 #define UWIN_MAX (0x1000000UL - UP_WIN)   /* the arena's end, 16 MiB, less where the buffer starts */
@@ -743,7 +743,7 @@ static struct user_app card_row[APP_SLOTS + 1];
 static unsigned char card_sig[APPSIG_MAX + 1];
 int card_err;
 int card_unsigned_ok(void) { return !accounts_count() || sudo_active(); }   /* Spotlight's admin test; the Terminal's is cmd.c's priv */
-static int name_taken(const char *low, unsigned n) {   /* 6.53.0: a built-in app's name, or any name Spotlight lists (Terminal, Settings): never a card app's */
+int card_name_taken(const char *low, unsigned n) {   /* 6.53.0 (6.55.0: store.c's install too): a built-in app's name, or any name Spotlight lists (Terminal, Settings): never a card app's */
     if (user_find(low, n)) return 1;
     for (int s = 1; s <= SPOT_LAST; s++) {
         const char *t = spot_name(s); unsigned i = 0;
@@ -765,7 +765,7 @@ const struct user_app *card_find(const char *name, unsigned n, int allow_unsigne
     }
     f[n] = '.'; f[n + 1] = 'A'; f[n + 2] = 'P'; f[n + 3] = 'P'; f[n + 4] = 0;
     char low[9]; for (unsigned i = 0; i < n; i++) low[i] = (char)(f[i] | 32);
-    if (name_taken(low, n)) return 0;   /* 6.53.0: a name means one app, and a card app never poses as the Terminal */
+    if (card_name_taken(low, n)) return 0;   /* 6.53.0: a name means one app, and a card app never poses as the Terminal */
     for (;; sl++) { unsigned k = 0; while (k < APP_SLOTS && apps[k].cur != &card_row[sl]) k++; if (k == APP_SLOTS) break; }   /* a row no app runs on */
     if (!sd_ready() || !sd_enter_jt(0)) return 0;
     int got = -1, sl_sig = -1;
@@ -808,7 +808,7 @@ static void cl_one(const char *name, unsigned size, int dir) {
         cl_out[cl_n][i] = c;
     }
     cl_out[cl_n][k] = 0;
-    if (!name_taken(cl_out[cl_n], k)) cl_n++;   /* a name Spotlight already lists is that app's */
+    if (!card_name_taken(cl_out[cl_n], k)) cl_n++;   /* a name Spotlight already lists is that app's */
 }
 int card_list(char (*out)[9], int max, int allow_unsigned) {
     cl_out = out; cl_n = 0; cl_max = max; cl_ns = 0;

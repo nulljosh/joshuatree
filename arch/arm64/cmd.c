@@ -23,7 +23,8 @@ int ask_command(const char *q, unsigned n);                        /* ask.c: "st
 void ask_claude(const char *q, unsigned n);                        /* ask.c: `llm PROMPT` */
 void sam_command(const char *q, unsigned n);                       /* ask.c: `sam QUESTION`, queued and answered without blocking the prompt */
 int ask_busy(void);                                                /* ask.c: a `sam` request is waiting on the relay */
-int userrun(const char *name, unsigned n, int allow_unsigned, unsigned long *status, int *faulted);   /* main.c: load an app from the table and run it at EL0 */
+int userrun(const char *name, unsigned n, int allow_unsigned, unsigned long *status, int *faulted);
+void store_install(const char *name, unsigned n);   /* store.c, 6.55.0 */   /* main.c: load an app from the table and run it at EL0 */
 
 int audio_tone(int freq_hz, int ms);                               /* audio.c: the 3.5 mm jack, polled PWM */
 int audio_volume(void);                                            /* audio.c: the master volume, 0 to 100 */
@@ -41,7 +42,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, "
+                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, install NAME (an app from the store), "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
                            "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
@@ -500,7 +501,7 @@ int users_passwd(const char *name, const char *pass, void (*out)(const char *)) 
     cmd_out = saved; return r;
 }
 static int blocked_while_sam(const char *q, unsigned n) {   /* the one TCP connection and the heap are in use: these would collide */
-    static const char *const names[] = {"browse", "open", "back", "forward", "reload", "nimble", "llm", "bt", "userrun"};
+    static const char *const names[] = {"browse", "open", "back", "forward", "reload", "nimble", "llm", "bt", "userrun", "install"};
     for (unsigned a = 0; a < sizeof names / sizeof *names; a++) {
         unsigned k = 0;
         while (names[a][k] && k < n && q[k] == names[a][k]) k++;
@@ -611,6 +612,13 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         const char *name = q + 8; unsigned m = n - 8;
         while (m && name[0] == ' ') { name++; m--; }
         if (m) { userrun_command(name, m); return; }
+    }
+    if (n > 8 && is(q, n, "install")) {   /* 6.55.0: an app from the store into JT/APPS, signed or not at all (store.c) */
+        const char *name = q + 8; unsigned m = n - 8;
+        while (m && name[0] == ' ') { name++; m--; }
+        while (m && name[m - 1] == ' ') m--;
+        if (priv("install")) store_install(name, m);
+        return;
     }
     if (ask_command(q, n)) return;
     if (browse_command(q, n)) return;
