@@ -1130,6 +1130,7 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   prog.kids = []
   runtime.kids = []
   g.structs = [:]
+  g.fn_nodes = [:]   # it holds every function's tree too
   while len(fns) > 0 { fns.pop() }
   # pklibc's _start calls main(argc, argv); the program's main takes nothing.
   g.out.append("")

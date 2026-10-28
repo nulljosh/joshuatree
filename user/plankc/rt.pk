@@ -579,6 +579,11 @@ fn rt_alloc(n: int) -> int {
   if p == 0 {
     rt_gc()
     p = rt_room(size)
+    if p == 0 and size < 65536 { p = rt_take_large(size) }   # either space before giving up: the other may hold the room
+    if p == 0 and size >= 65536 {
+      p = rt_take(size)
+      if p == 0 { p = rt_bump(size) }
+    }
     if p == 0 { rt_oom(size) }
   }
   poke(global(8), peek(global(8)) + size)
