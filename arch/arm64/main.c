@@ -193,16 +193,17 @@ void exc_bad(struct frame *f) {
 extern char _heap_start[];
 static unsigned long l1[512] __attribute__((aligned(4096)));   /* one table of 1 GiB blocks, enough for a flat map */
 static unsigned long l2[512] __attribute__((aligned(4096)));   /* M3a: the RAM GiB split into 2 MiB blocks... */
-#define ARENA_BLOCKS 8   /* M3e: the EL0 arena is 16 MiB, eight of those blocks... */
-unsigned long l3[APP_SLOTS * ARENA_BLOCKS * 512] __attribute__((aligned(4096)));   /* ...each one a table of 4 KiB pages, back to back, so l3[page] works across all eight */
+#define ARENA_BLOCKS 16   /* M3e: the EL0 arena is 32 MiB (16 MiB until 6.76.3), sixteen of those blocks... */
+unsigned long l3[APP_SLOTS * ARENA_BLOCKS * 512] __attribute__((aligned(4096)));   /* ...each one a table of 4 KiB pages, back to back, so l3[page] works across all sixteen */
 #ifdef PI_BUILD
 #define RAM_GIB 0
 #else
 #define RAM_GIB 1
 #endif
-/* The arena: 16 MiB (M3e; one 2 MiB block before), clear of the kernel image and the heap. 64 MiB into RAM unless the heap
+/* The arena: 32 MiB (6.76.3; 16 MiB from M3e, one 2 MiB block before), clear of the kernel image and the heap. 64 MiB into RAM unless the heap
    reaches that far (an image with a language model baked in, llm_model.S), then the first 2 MiB boundary after the heap. The
-   first block holds the M3a pages and the app's image, stack and window buffer; the other seven are the app's brk heap. */
+   first block holds the M3a pages and the app's image and stack; the heap runs from the second up to the window buffer, the
+   last 3 MiB. Four arenas end 192 MiB into RAM, inside the checks' 256 MiB QEMU and far inside a Pi's first GiB. */
 #define ARENA_LOW (((unsigned long)RAM_GIB << 30) + (64UL << 20))
 #define HEAP_END ((unsigned long)_heap_start + HEAP_SIZE)
 /* 4.3.0: the screen's RAM back buffer (fb points at it; fb_flush copies to the real scanout) and a scratch screen of the same
@@ -220,11 +221,13 @@ unsigned long l3[APP_SLOTS * ARENA_BLOCKS * 512] __attribute__((aligned(4096)));
 #define APP_STACK_PAGES 16
 #define APP_ZERO_PAGES  8   /* zeroed pages after the image (and the rest of its last page): the pool user/calendar.c keeps its events in, and user/notes.c its 28 KB arena (M3d) */
 #define UAPP_MAX UIMG_MAX   /* the largest image user_load takes, and what user_c.ld asserts (uimg.h) */
-#define UP_WIN   0xD00000UL /* M3c part 2: the app's window buffer, read-write and never executable. 3.9.0: the last 3 MiB of the arena, so a device-size
+#define UP_WIN   0x1D00000UL /* M3c part 2: the app's window buffer, read-write and never executable. 3.9.0: the last 3 MiB of the arena, so a device-size
                                buffer fits (504x328 at 2x is 2.6 MB); it was a page above the stack, with room for 560x360 four times over */
-#define UWIN_MAX (0x1000000UL - UP_WIN)   /* the arena's end, 16 MiB, less where the buffer starts */
-#define UP_HEAP  0x200000UL /* M3e: the app's brk heap, from the second block up to where the window buffer starts (11 MiB since 3.9.0), EL0 read-write, never executable */
+#define UWIN_MAX (0x2000000UL - UP_WIN)   /* the arena's end, 32 MiB, less where the buffer starts */
+#define UP_HEAP  0x200000UL /* M3e: the app's brk heap, from the second block up to where the window buffer starts (27 MiB since 6.76.3, 11 before;
+                               plankc compiling itself outgrew 11), EL0 read-write, never executable */
 #define ARENA_SIZE ((unsigned long)ARENA_BLOCKS << 21)
+_Static_assert(UP_WIN + UWIN_MAX == ARENA_SIZE, "the window buffer ends where the arena does");
 unsigned long heap_next;
 unsigned heap_oom;   /* allocations refused so far: fb_init tells an out-of-memory font failure from a bad font */
 void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects; 0 when the heap is full, and every caller checks */

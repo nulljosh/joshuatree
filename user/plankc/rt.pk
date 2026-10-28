@@ -593,7 +593,7 @@ fn rt_args() -> int {
   return out
 }
 
-# ---- the collector (6.70.0): conservative, non-moving mark and sweep, so a program can make far more than an app's 11 MiB
+# ---- the collector (6.70.0): conservative, non-moving mark and sweep, so a program can make far more than an app's 27 MiB
 # over its life as long as what it keeps fits. Every object starts with a header word, its size in bytes (header included,
 # a multiple of 16) with bit 0 for marked and bit 1 for free; rt_alloc hands out the word after it. A bitmap, one bit per
 # 16 bytes, marks where objects start, so a pointer into the middle of one (a string's bytes, xs[i]'s slot) still finds it.
@@ -609,16 +609,17 @@ fn rt_args() -> int {
 # Cells: global(5) the heap's first object, global(6) the bitmap, global(7) the small lists (65 words), global(8) bytes
 # handed out since the last collection, global(11) the powers of two the bitmap's arithmetic reads, global(12) the bytes
 # live at the last collection, global(16) the large list, global(17) where the large space starts, global(18) the heap's
-# end, global(19) bytes handed out since the last yield, global(20) to global(22) a number's digits on the way out.
+# end, global(19) bytes handed out since the last yield, global(20) to global(22) a number's digits on the way out,
+# global(23) collections in a row that found the heap nearly full (rt_starved).
 
 fn rt_large() -> int { return 2621440 }   # 2.5 MiB for large objects; calibrate against the biggest program's output
 
 fn rt_gc_init() {
   let base = syscall(397, 0, 0, 0)               # where the heap ends now
-  let bitmap_bytes = 131072                       # 16 MiB of heap, a bit per 16 bytes
+  let bitmap_bytes = 262144                       # 32 MiB of heap, a bit per 16 bytes: the most the kernel gives
   let lists = base + bitmap_bytes
   let first = (lists + 65 * 8 + 8 + 15) / 16 * 16   # the lists, then eight bytes of powers of two
-  var top = base + 16777216                       # all the kernel will give: ask big, step down to its limit
+  var top = base + 33554432                       # all the kernel will give (27 MiB): ask big, step down to its limit
   while top > first and syscall(397, top, 0, 0) < top { top -= 65536 }
   if top - first < rt_large() * 2 { rt_oom(rt_large() * 2) }
   var i = base
@@ -696,6 +697,7 @@ fn rt_alloc(n: int) -> int {
   if peek(global(9)) > 0 and peek(global(8)) > peek(global(9)) { rt_gc() }
   var p = rt_room(size)
   if p == 0 {
+    rt_starved(size)
     rt_gc()
     p = rt_room(size)
     if p == 0 and size < 65536 { p = rt_take_large(size) }   # either space before giving up: the other may hold the room
@@ -709,6 +711,19 @@ fn rt_alloc(n: int) -> int {
   poke(global(19), peek(global(19)) + size)
   if peek(global(19)) > 262144 { rt_yield() }
   return p + 8
+}
+
+# 6.76.3: a collection that follows less than a sixteenth of the heap handed out finds little to free. Eight of those in
+# a row and the program is thrashing on a full heap, so it stops with the out-of-memory line instead of crawling (plankc
+# compiling itself sat 30 minutes that way on 11 MiB). global(23) counts them. Not under --gc=N, which collects on purpose.
+fn rt_starved(size: int) {
+  if peek(global(9)) > 0 { return }
+  if peek(global(8)) * 16 < peek(global(18)) - peek(global(5)) {
+    poke(global(23), peek(global(23)) + 1)
+    if peek(global(23)) >= 8 { rt_oom(size) }
+  } else {
+    poke(global(23), 0)
+  }
 }
 
 # A long job lets the desktop run now and then (JT_SYS_SCHED_YIELD): every 256 KB it allocates and around each

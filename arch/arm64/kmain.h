@@ -163,7 +163,7 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
     unsigned l3off, slot;                 /* its first l3 entry; its index in apps */
     int min;                              /* 6.5.0: minimized into the dock (the yellow dot): alive, off screen, out of the z order */
 };
-#define APP_SLOTS 4      /* 4.0: apps that can run at once, one 16 MiB arena each, back to back above USER_BASE */
+#define APP_SLOTS 4      /* 4.0: apps that can run at once, one 32 MiB arena each, back to back above USER_BASE */
 extern struct app *ap;
 extern struct app apps[APP_SLOTS];
 unsigned long cnt_hz(void);
@@ -383,10 +383,10 @@ void fb_release(void);
 extern int fb_tag;
 void pane_draw(void);
 void tribute_paint(void);
-#define UWIN_MAX (0x1000000UL - UP_WIN)   /* the arena's end, 16 MiB, less where the buffer starts */
+#define UWIN_MAX (0x2000000UL - UP_WIN)   /* the arena's end, 32 MiB, less where the buffer starts */
 void wall_minus(int ox, int oy, int ow, int oh, int nx, int ny, int nw, int nh);
 void wall_vacate(int lx, int ly, int lw, int lh, int ring_only);
-#define UP_WIN   0xD00000UL
+#define UP_WIN   0x1D00000UL
 #define app_hi (ap->hi)
 void app_kill_one(const char *how);
 #define app_rs_log (ap->rs_log)
