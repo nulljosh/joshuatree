@@ -83,6 +83,122 @@ fn rt_int_str(n: int) -> str {
   return as_str(p)
 }
 
+# ---- floats (6.76.0): print's %.15g, ported line for line from pklibc.c's fmt_double, whose output already matches
+# plank.py's on Plank's examples. as_float(n) is n's 64 bits read as a float, a plankc built-in that writes no code.
+# 10^e as pklibc's p10 has it: powers up to 10^22 are exact, built by multiplying tens.
+fn rt_p10(e: int) -> float {
+  var r = 1.0
+  var k = e
+  if k < 0 {
+    while k < -22 {
+      r = r / rt_p10(22)
+      k += 22
+    }
+    return r / rt_p10(0 - k)
+  }
+  while k > 22 {
+    r = r * rt_p10(22)
+    k -= 22
+  }
+  var t = 1.0
+  for i in 0..k { t = t * 10.0 }
+  return r * t
+}
+
+# v > 0 and finite: its first sig significant digits, rounded to nearest (a tie to even, as printf), as an int, and the
+# power of ten of the first one. A guess at that power first, as pklibc's has it; then v * 10^k (or v / 10^k) with k up
+# to 22, where 10^k is exact, so fma gives the product's rounding error exactly and the rounding is decided on the true
+# value. Scaling and adding a half, as pklibc does, rounds 1.41421356237309492 * 10^14 up to ...309.5 and prints ...31.
+# ponytail: past 10^22 either way (below 1e-8, from 1e37) it falls back to scaling, which can miss the last digit;
+# exact digits there need a bignum.
+fn rt_digits(x: float, sig: int) -> (int, int) {
+  var v = x
+  var e = 0
+  while v >= 1e16 {
+    v = v / 1e16
+    e += 16
+  }
+  while v < 1.0 {
+    v = v * 1e16
+    e -= 16
+  }
+  while v >= 10.0 {
+    v = v / 10.0
+    e += 1
+  }
+  let top = int(rt_p10(sig))
+  for tries in 0..3 {
+    let k = sig - 1 - e
+    if k > 22 or k < -22 { break }
+    var hi = 0.0
+    var lo = 0.0   # only its sign is read: the true value is hi + something no bigger than half hi's last bit
+    if k >= 0 {
+      hi = x * rt_p10(k)
+      lo = fma(x, rt_p10(k), -hi)
+    } else {
+      hi = x / rt_p10(0 - k)
+      lo = fma(-hi, rt_p10(0 - k), x)
+    }
+    let whole = floor(hi)
+    let f = hi - whole
+    var n = int(whole)
+    if f > 0.5 or (f == 0.5 and (lo > 0.0 or (lo == 0.0 and n % 2 == 1))) { n += 1 }
+    if n >= top {
+      e += 1
+    } else if n < top / 10 {
+      e -= 1
+    } else {
+      return (n, e)
+    }
+  }
+  var m = int(v * rt_p10(sig - 1) + 0.5)
+  if m >= top {
+    m = m / 10
+    e += 1
+  }
+  return (m, e)
+}
+
+fn rt_float_str(x: float) -> str {
+  var v = x
+  if not (v == v) { return "nan" }
+  var out = ""
+  if v < 0.0 or (v == 0.0 and 1.0 / v < 0.0) {
+    out = "-"
+    v = -v
+  }
+  if v != 0.0 and v + v == v { return out + "inf" }
+  var d = "000000000000000"
+  var e = 0
+  if v != 0.0 {
+    let (n, ex) = rt_digits(v, 15)
+    d = rt_int_str(n)
+    e = ex
+  }
+  var last = 15
+  while last > 1 and d[last - 1] == "0" { last -= 1 }   # %g drops trailing zeros
+  if e >= -4 and e < 15 {
+    if e < 0 {
+      out = out + "0."
+      for i in 0..(-1 - e) { out = out + "0" }
+      return out + d[..last]
+    }
+    out = out + d[..e + 1]
+    if last > e + 1 { out = out + "." + d[e + 1..last] }
+    return out
+  }
+  out = out + d[0]
+  if last > 1 { out = out + "." + d[1..last] }
+  if e < 0 {
+    out = out + "e-"
+    e = 0 - e
+  } else {
+    out = out + "e+"
+  }
+  if e < 10 { out = out + "0" }
+  return out + rt_int_str(e)
+}
+
 fn rt_write(s: str) {
   syscall(4, 1, addr(s), len(s))   # JT_SYS_WRITE to the Terminal
 }
@@ -163,6 +279,7 @@ fn rt_show(v: int, ty: str, inner: bool) -> str {
     return rt_show(v, base, inner)
   }
   if ty == "int" { return rt_int_str(v) }
+  if ty == "float" { return rt_float_str(as_float(v)) }
   if ty == "bool" {
     if v != 0 { return "true" }
     return "false"

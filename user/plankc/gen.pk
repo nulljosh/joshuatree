@@ -110,7 +110,7 @@ fn slot(g: G, op: str, r: str, off: int) {
 }
 
 fn int_type(n: N, ty: str) -> str {
-  if ty == "int" or ty == "bool" or ty == "str" { return ty }
+  if ty == "int" or ty == "bool" or ty == "str" or ty == "float" { return ty }
   if ty.starts_with("fn(") { return ty }   # a closure: {code, env}
   if ty.starts_with("(") and ty.ends_with(")") {   # a tuple: each part a type of its own
     for part in tuple_parts(ty) { int_type(n, part) }
@@ -321,7 +321,7 @@ fn gen_expr(g: G, e: N) -> str {
     return f.ty
   }
   if e.kind == "Num" {
-    if e.kids[1].text != "int" { nope(e, "a float") }
+    if e.kids[1].text == "float" { return float_lit(g, e, e.kids[0].text) }
     emit(g, "ldr x0, =" + e.kids[0].text)
     return "int"
   }
@@ -341,6 +341,10 @@ fn gen_expr(g: G, e: N) -> str {
   }
   if e.kind == "Unary" {
     let t = gen_expr(g, e.kids[1])
+    if e.kids[0].text == "-" and t == "float" {
+      fop(g, "fneg d0, d0", false)
+      return t
+    }
     if e.kids[0].text == "-" {
       emit(g, "neg x0, x0")
       return "int"
@@ -410,6 +414,7 @@ fn gen_expr(g: G, e: N) -> str {
       if op == "!=" { emit(g, "eor x0, x0, #1") }
       return "bool"
     }
+    if lt == "float" { return float_op(g, e, op) }
     if lt != "str" and lt != "int" and lt != "bool" { nope(e, "\(op) on \(lt)") }
     if lt == "str" {
       if op == "+" {
@@ -524,6 +529,8 @@ fn print_(g: G, e: N, a: [N]) -> str {
 fn to_str(g: G, e: N, t: str) {
   if t == "int" {
     emit(g, "bl pk_rt_int_str")
+  } else if t == "float" {
+    emit(g, "bl pk_rt_float_str")
   } else if t == "bool" {
     let f = fresh(g)
     let done = fresh(g)
@@ -733,6 +740,91 @@ fn interp(g: G, e: N) -> str {
 }
 
 # The built-ins: len and str for programs, and the ones rt.pk is written with (plank.py does not have those).
+# ---------------------------------------------------------------- floats (6.76.0)
+# A float is its 64 bits in x0, like every other value; it moves to d0 and d1 only for an instruction that needs them.
+fn fop(g: G, ins: str, two: bool) {
+  emit(g, "fmov d0, x0")
+  if two { emit(g, "fmov d1, x1") }
+  emit(g, ins)
+  emit(g, "fmov x0, d0")
+}
+
+# x0 op x1, both floats. Compares are ordered, as plank.py's: anything with nan is false, != too.
+fn float_op(g: G, e: N, op: str) -> str {
+  let ins = ["+": "fadd", "-": "fsub", "*": "fmul", "/": "fdiv"]
+  if op in ins {
+    fop(g, ins[op] + " d0, d0, d1", true)
+    return "float"
+  }
+  let conds = ["<": "mi", "<=": "ls", ">": "gt", ">=": "ge", "==": "eq"]
+  emit(g, "fmov d0, x0")
+  emit(g, "fmov d1, x1")
+  emit(g, "fcmp d0, d1")
+  if op in conds {
+    emit(g, "cset x0, " + conds[op])
+    return "bool"
+  }
+  if op == "!=" {   # less or greater: an unordered pair is neither
+    emit(g, "cset x0, mi")
+    emit(g, "cset x1, gt")
+    emit(g, "add x0, x0, x1")
+    return "bool"
+  }
+  nope(e, "\(op) on floats")
+  return ""
+}
+
+# A float literal, exactly as IEEE rounds it: its digits as an int, scaled by one multiply or divide by an exact power
+# of ten (Clinger's fast path). Both are exact up to 15 digits and 10^22, so one rounding gives the nearest double, the
+# same in every build of plankc; anything past that stops here.
+fn float_lit(g: G, e: N, text: str) -> str {
+  if "_" in text { nope(e, "the float " + text) }
+  var mant = text
+  var exp = 0
+  let at = mant.find("e") ?? (mant.find("E") ?? -1)
+  if at >= 0 {
+    var es = mant[at + 1..]
+    if es.starts_with("+") { es = es[1..] }
+    exp = int(es)
+    mant = mant[..at]
+  }
+  let dot = mant.find(".") ?? -1
+  if dot >= 0 {
+    exp -= len(mant) - dot - 1
+    mant = mant[..dot] + mant[dot + 1..]
+  }
+  while len(mant) > 1 and mant.starts_with("0") { mant = mant[1..] }
+  while len(mant) > 1 and mant.ends_with("0") {
+    mant = mant[..len(mant) - 1]
+    exp += 1
+  }
+  if mant == "0" { exp = 0 }
+  if len(mant) > 15 or exp > 22 or exp < -22 { nope(e, "the float " + text) }
+  emit(g, "ldr x0, =" + mant)
+  emit(g, "scvtf d0, x0")
+  if exp != 0 {
+    var k = exp
+    if k < 0 { k = 0 - k }
+    var p = 1
+    var rest = 0
+    for i in 0..k {
+      if i < 18 { p = p * 10 } else { rest += 1 }
+    }
+    emit(g, "ldr x1, =" + str(p))
+    emit(g, "scvtf d1, x1")
+    if rest > 0 {   # 10^19 to 10^22 pass an int: 10^18 then 10^rest, still exact
+      var q = 1
+      for i in 0..rest { q = q * 10 }
+      emit(g, "ldr x2, =" + str(q))
+      emit(g, "scvtf d2, x2")
+      emit(g, "fmul d1, d1, d2")
+    }
+    if exp > 0 { emit(g, "fmul d0, d0, d1") } else { emit(g, "fdiv d0, d0, d1") }
+  }
+  emit(g, "fmov x0, d0")
+  return "float"
+}
+
 fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   if name == "len" and len(a) == 1 {
     let t = gen_expr(g, a[0])
@@ -754,8 +846,63 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   }
   if name == "int" and len(a) == 1 {
     let t = gen_expr(g, a[0])
-    if t == "str" { emit(g, "bl pk_rt_parse_int") } else if t != "int" { nope(e, "int() of a " + t) }
+    if t == "str" {
+      emit(g, "bl pk_rt_parse_int")
+    } else if t == "float" {
+      emit(g, "fmov d0, x0")
+      emit(g, "fcvtzs x0, d0")
+    } else if t != "int" {
+      nope(e, "int() of a " + t)
+    }
     return "int"
+  }
+  if name == "float" and len(a) == 1 {
+    let t = gen_expr(g, a[0])
+    if t == "int" {
+      emit(g, "scvtf d0, x0")
+      emit(g, "fmov x0, d0")
+    } else if t != "float" {
+      nope(e, "float() of a " + t)
+    }
+    return "float"
+  }
+  let fn1 = ["sqrt": 1, "floor": 1, "ceil": 1, "round": 1]
+  if name in fn1 and len(a) == 1 {
+    if gen_expr(g, a[0]) != "float" { nope(e, name + "() of anything but a float") }
+    let ops = ["sqrt": "fsqrt", "floor": "frintm", "ceil": "frintp", "round": "frinta"]   # round: half away from zero, as C's
+    fop(g, ops[name] + " d0, d0", false)
+    return "float"
+  }
+  if name == "abs" and len(a) == 1 {
+    let t = gen_expr(g, a[0])
+    if t == "float" {
+      fop(g, "fabs d0, d0", false)
+    } else if t == "int" {
+      emit(g, "cmp x0, #0")
+      emit(g, "cneg x0, x0, lt")
+    } else {
+      nope(e, "abs() of a " + t)
+    }
+    return t
+  }
+  if (name == "min" or name == "max") and len(a) == 2 {   # x < y ? x : y, as plank.py picks (a tie or a nan gives y)
+    let t = gen_expr(g, a[0])
+    push(g)
+    if gen_expr(g, a[1]) != t or (t != "int" and t != "float") { nope(e, name + "() of two that are not one number type") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    var c = "lt"
+    if name == "max" { c = "gt" }
+    if t == "float" {
+      emit(g, "fmov d0, x0")
+      emit(g, "fmov d1, x1")
+      emit(g, "fcmp d0, d1")
+      if name == "min" { c = "mi" }
+    } else {
+      emit(g, "cmp x0, x1")
+    }
+    emit(g, "csel x0, x0, x1, " + c)
+    return t
   }
   if name == "args" and len(a) == 0 {
     emit(g, "bl pk_rt_args")
@@ -818,6 +965,15 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   if name == "poke" { emit(g, "str x1, [x0]") }
   if name == "poke8" { emit(g, "strb w1, [x0]") }
   if name == "as_str" { return "str" }
+  if name == "as_float" { return "float" }
+  if name == "fma" {   # a * b + c, rounded once: rt.pk's exact digits read a product's rounding error from it
+    emit(g, "fmov d0, x0")
+    emit(g, "fmov d1, x1")
+    emit(g, "fmov d2, x2")
+    emit(g, "fmadd d0, d0, d1, d2")
+    emit(g, "fmov x0, d0")
+    return "float"
+  }
   return "int"
 }
 
@@ -1620,7 +1776,7 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
 
 # The program's assembly, a line a string: for asm's text, or enc.pk's image.
 fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
-  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:])
+  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:])
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
