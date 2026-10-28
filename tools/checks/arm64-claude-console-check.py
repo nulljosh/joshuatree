@@ -203,7 +203,7 @@ def bands(shot_):   # the kernel's layout: an 800x600 design scaled by height; 1
 
 def answer_after(out, marker_count):   # the lines printed after the n-th "samantha: thinking", up to the next prompt line
     chunk = out.split("samantha: thinking\n")[marker_count]
-    return [l for l in PROMPT_RE.split(chunk)[0].split("\n") if l and not re.match(r"key \d+ (down|up)$", l)]
+    return [l for l in PROMPT_RE.split(chunk)[0].split("\n") if l and not re.match(r"key \d+ (down|up)$", l) and not l.startswith("slow step ")]   # 6.78.1: the desktop's own timing note on a loaded machine
 
 try:
     print("arm64 claude console: build with a throwaway token, relay on 127.0.0.1:%d" % port)
@@ -291,7 +291,7 @@ try:
         check("... and End brings back the newest picture, pixel for pixel", region(e, body) == region(g, body))
         out = b.uart()
         check("the token never appears on the UART", TOKEN not in out and OTHER not in out)
-        long_lines = [l for l in out.split(DEFAULT + "sam " + QUESTION)[-1].splitlines() if len(l) > 53]
+        long_lines = [l for l in out.split(DEFAULT + "sam " + QUESTION)[-1].splitlines() if len(l) > 53 and not l.startswith("slow step ")]
         check("every line after the first question fits 53 columns", not long_lines, repr(long_lines))
     finally:
         b.close()
