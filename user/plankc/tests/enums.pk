@@ -1,0 +1,70 @@
+# plankc's enums and match (6.73.0): cases with and without fields, labels, enum methods, == and !=, match on cases, on
+# ints with several values an arm, on strings, else, and match as a value.
+enum Shape {
+  square(side: int)
+  rect(w: int, h: int)
+  dot
+
+  fn area() -> int {
+    match self {
+      .square(s) { return s * s }
+      .rect(w, h) { return w * h }
+      .dot { return 0 }
+    }
+  }
+}
+
+enum Light {
+  red, yellow, green
+}
+
+struct Lamp {
+  name: str
+  light: Light
+}
+
+fn next(l: Light) -> Light {
+  match l {
+    .red { return Light.green }
+    .green { return Light.yellow }
+    .yellow { return Light.red }
+  }
+}
+
+fn describe(n: int) -> str {
+  match n {
+    0 { return "none" }
+    1, 2, 3 { return "a few" }
+    else { return "lots" }
+  }
+}
+
+fn kind(s: Shape) -> str {
+  return match s {
+    .dot { "a point" }
+    .square(side) { "a square of \(side)" }
+    else { "a shape" }
+  }
+}
+
+fn main() {
+  let shapes = [Shape.square(3), Shape.rect(w: 2, h: 5), Shape.dot]
+  for s in shapes {
+    print(s, s.area(), kind(s))
+  }
+  var light = Light.red
+  for i in 0..4 {
+    print(light)
+    light = next(light)
+  }
+  print(light == Light.yellow, light != Light.red, Shape.square(2) == Shape.square(2), Shape.square(2) == Shape.square(3))
+  for n in [0, 2, 9] {
+    print(n, describe(n))
+  }
+  match "plank" {
+    "swift" { print("fast") }
+    "plank" { print("small") }
+    else { print("?") }
+  }
+  print(Lamp("hall", Light.green), shapes)
+}

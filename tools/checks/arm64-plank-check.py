@@ -12,7 +12,7 @@ serves it, opens its window, slides tiles on the arrows and closes on Esc.
 6.64.0: user/plankc/tests/lists.pk; 6.65.0: user/plankc/tests/structs.pk; 6.66.0: more.pk (optionals, string methods, slices); 6.67.0: dicts.pk; 6.68.0: errors.pk (try, throw, and leaving a try by return or break); 6.69.0: syscalls.pk, userrun's words and
 whole-file writes, with bad buffers, a bad path and a length past the cap (its answer key is syscalls.out); 6.70.0: gc.pk, many
 times 11 MiB of garbage around live data, and every plankc program again with the collector firing every 64 KB. 6.72.0:
-methods.pk (struct methods, defaults and labels, optionals, get, x!, string order).
+methods.pk (struct methods, defaults and labels, optionals, get, x!, string order); 6.73.0: enums.pk (enums and match); 6.74.0: tuples.pk.
 Discriminating: break user/pklibc's %.15g (fmt_double) and the float lines differ; make setjmp.S's longjmp return 0 and the
 caught errors are lost; give gen.pk's < the condition le and fib by plankc prints a different line.
 Skips (exit 0) without clang's aarch64 target, ld.lld, qemu-system-aarch64, mtools, uv or Plank (PLANK=path/to/plank.py,
@@ -51,7 +51,7 @@ if not built: print("FAIL: nothing built"); sys.exit(1)
 # 6.62.0: the same examples built by plankc, the compiler written in Plank (step 3 of the true bootstrap), as aarch64 it writes
 # itself, with no LLVM IR and no Plank runtime: tools/plankapp.sh --plankc.
 # 6.63.0: primes, and plankc's own string test, whose answer key is what plank.py prints for it on this Mac.
-PLANKC = [("pcfib", ex / "fib.pk"), ("pcfz", ex / "fizzbuzz.pk"), ("pcprime", ex / "primes.pk"), ("pcstr", root / "user/plankc/tests/strings.pk"), ("pclist", root / "user/plankc/tests/lists.pk"), ("pcst", root / "user/plankc/tests/structs.pk"), ("pcmore", root / "user/plankc/tests/more.pk"), ("pcdict", root / "user/plankc/tests/dicts.pk"), ("pcerr", root / "user/plankc/tests/errors.pk"), ("pcsys", root / "user/plankc/tests/syscalls.pk"), ("pcgc", root / "user/plankc/tests/gc.pk"), ("pcmeth", root / "user/plankc/tests/methods.pk")]
+PLANKC = [("pcfib", ex / "fib.pk"), ("pcfz", ex / "fizzbuzz.pk"), ("pcprime", ex / "primes.pk"), ("pcstr", root / "user/plankc/tests/strings.pk"), ("pclist", root / "user/plankc/tests/lists.pk"), ("pcst", root / "user/plankc/tests/structs.pk"), ("pcmore", root / "user/plankc/tests/more.pk"), ("pcdict", root / "user/plankc/tests/dicts.pk"), ("pcerr", root / "user/plankc/tests/errors.pk"), ("pcsys", root / "user/plankc/tests/syscalls.pk"), ("pcgc", root / "user/plankc/tests/gc.pk"), ("pcmeth", root / "user/plankc/tests/methods.pk"), ("pcenum", root / "user/plankc/tests/enums.pk"), ("pctup", root / "user/plankc/tests/tuples.pk"), ("pcclo", root / "user/plankc/tests/closures.pk"), ("pcflt", root / "user/plankc/tests/floats.pk"), ("pxenum", ex / "enums.pk"), ("pxlist", ex / "lists.pk"), ("pxsqrt", ex / "sqrt.pk"), ("pxstr", ex / "strings.pk"), ("pxstc", ex / "structs.pk")]
 # 6.70.0: each again with the collector firing every 64 KB (plankc --gc=65536), the way Plank tests its own; same answers.
 # (Every 4 KB is too slow for QEMU: the watchdog stops an app 3 s without a call, and a collection makes none.)
 PLANKC += [(a + "g", f, 65536) for a, f in PLANKC]

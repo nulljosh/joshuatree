@@ -83,7 +83,7 @@ fn word(a: Asm, w: int) {
 
 fn reg(r: str) -> int {
   if r == "sp" or r == "xzr" { return 31 }
-  if r.starts_with("x") or r.starts_with("w") { return int(r[1..]) }
+  if r.starts_with("x") or r.starts_with("w") or r.starts_with("d") { return int(r[1..]) }
   throw "plankc's encoder: not a register: " + r
 }
 
@@ -191,6 +191,7 @@ fn instr(a: Asm, op: str, args: [str]) {
   if op == "ret" { return word(a, 3596551104) }
   if op == "svc" { return word(a, 3556769793) }
   if op == "br" { return word(a, 3592355840 + reg(args[0]) * 32) }
+  if op == "blr" { return word(a, 3594452992 + reg(args[0]) * 32) }
   if op == "b" { return branch(a, 335544320, args[0], 26, 0, 0) }
   if op == "bl" { return branch(a, 2483027968, args[0], 26, 0, 0) }
   if op.starts_with("b.") { return branch(a, 1409286144, args[0], 19, 5, cond(op[2..])) }
@@ -244,6 +245,31 @@ fn instr(a: Asm, op: str, args: [str]) {
     return word(a, 2594113504 + inv * 4096 + reg(args[0]))
   }
   if op == "eor" and args[2] == "#1" { return word(a, 3527409664 + reg(args[1]) * 32 + reg(args[0])) }
+  if op == "csel" { return word(a, 2592079872 + reg(args[2]) * 65536 + cond(args[3]) * 4096 + reg(args[1]) * 32 + reg(args[0])) }
+  if op == "cneg" {   # csneg d, n, n with the condition inverted
+    let c = cond(args[2])
+    var inv = c + 1
+    if c % 2 == 1 { inv = c - 1 }
+    return word(a, 3665822720 + reg(args[1]) * 65536 + inv * 4096 + reg(args[1]) * 32 + reg(args[0]))
+  }
+  if op.starts_with("f") or op == "scvtf" { return float_instr(a, op, args) }
+  throw "plankc's encoder does not know: \(op) \(args.join(", "))"
+}
+
+# Floats (6.76.0): the moves between x and d registers, the conversions, and the double-precision forms gen.pk writes.
+fn float_instr(a: Asm, op: str, args: [str]) {
+  let d = reg(args[0])
+  let n = reg(args[1])
+  if op == "fmov" and args[0].starts_with("d") { return word(a, 2657550336 + n * 32 + d) }
+  if op == "fmov" { return word(a, 2657484800 + n * 32 + d) }
+  if op == "scvtf" { return word(a, 2657222656 + n * 32 + d) }
+  if op == "fcvtzs" { return word(a, 2658664448 + n * 32 + d) }
+  if op == "fcmp" { return word(a, 509616128 + n * 65536 + d * 32) }
+  let three = ["fadd": 509618176, "fsub": 509622272, "fmul": 509609984, "fdiv": 509614080]
+  if op in three { return word(a, three[op] + reg(args[2]) * 65536 + n * 32 + d) }
+  if op == "fmadd" { return word(a, 524288000 + reg(args[2]) * 65536 + reg(args[3]) * 1024 + n * 32 + d) }
+  let one = ["fneg": 509689856, "fabs": 509657088, "fsqrt": 509722624, "frintm": 509952000, "frintp": 509919232, "frinta": 510017536]
+  if op in one { return word(a, one[op] + n * 32 + d) }
   throw "plankc's encoder does not know: \(op) \(args.join(", "))"
 }
 

@@ -14,6 +14,7 @@ struct Local {
   name: str
   off: int
   ty: str
+  boxed: bool = false   # captured by a closure: the slot holds a heap cell, and the value lives in it (6.75.0)
 }
 
 struct G {
@@ -25,13 +26,19 @@ struct G {
   tries: [int]     # the open trys' records, as frame offsets
   fns: [str: str]  # function name: its return type
   structs: [str: N]  # struct name: its Struct node
+  enums: [str: N]    # enum name: its Enum node (6.73.0)
   rt: [str: int]   # the built-ins rt.pk is written with: syscall, peek, poke, global, addr, as_str, stack_pointer
   strs: [str]      # string literals, as .asciz bodies
   next_off: int
   ret: str         # the epilogue label of the function being written
   gc_every: int    # 0, or collect every this many bytes (plankc --gc=N asm, for testing the collector)
   fn_nodes: [str: N]  # function name (Struct.method for a method): its Fn node, for parameters and defaults
-  ret_type: str    # the return type of the function being written
+  ret_type: str    # the return type of the function being written ("" in a lambda: the first return says)
+  boxed_names: [str: int]  # names closures in this function capture: their locals live in cells
+  lambda_code: [str]       # the lambdas' and trampolines' code, written as they come, placed after the functions
+  lambda_n: int
+  expect: str              # the fn type a lambda about to be written should have, from where it goes, or ""
+  tramps: [str: int]       # functions already given a trampoline, so they can be values
 }
 
 fn emit(g: G, s: str) { g.out.append(s) }   # unindented: an indent would copy every line, and the assembler needs none
@@ -55,15 +62,40 @@ fn find(g: G, name: str) -> Local {
 }
 
 fn new_local(g: G, name: str, ty: str) -> Local {
+  let l = raw_local(g, name, ty)
+  if l.boxed {   # its cell, made now, so every later store is an assignment through it; x0 kept
+    push(g)
+    emit(g, "mov x0, #0")
+    emit(g, "bl pk_rt_box")
+    slot(g, "str", "x0", l.off)
+    pop(g, "x0")
+  }
+  return l
+}
+
+# A local's slot, boxed when a closure captures its name, with no cell made yet (a parameter's comes after the prologue).
+fn raw_local(g: G, name: str, ty: str) -> Local {
   g.next_off += 8
   if g.next_off > 4088 { throw "more than 511 locals in one function" }
-  let l = Local(name, g.next_off, ty)
+  let l = Local(name, g.next_off, ty, not name.starts_with(" ") and name in g.boxed_names)
   g.locals.append(l)
   return l
 }
 
-fn load(g: G, l: Local) { slot(g, "ldr", "x0", l.off) }
-fn store(g: G, l: Local) { slot(g, "str", "x0", l.off) }
+fn load(g: G, l: Local) {
+  slot(g, "ldr", "x0", l.off)
+  if l.boxed { emit(g, "ldr x0, [x0]") }
+}
+fn store(g: G, l: Local) {
+  if l.boxed {
+    emit(g, "mov x1, x0")
+    slot(g, "ldr", "x0", l.off)
+    emit(g, "str x1, [x0]")
+    emit(g, "mov x0, x1")
+  } else {
+    slot(g, "str", "x0", l.off)
+  }
+}
 
 # ldr or str of register r at x29 - off: ldur and stur reach 256 bytes down, past that through x9.
 fn slot(g: G, op: str, r: str, off: int) {
@@ -78,7 +110,12 @@ fn slot(g: G, op: str, r: str, off: int) {
 }
 
 fn int_type(n: N, ty: str) -> str {
-  if ty == "int" or ty == "bool" or ty == "str" { return ty }
+  if ty == "int" or ty == "bool" or ty == "str" or ty == "float" { return ty }
+  if ty.starts_with("fn(") { return ty }   # a closure: {code, env}
+  if ty.starts_with("(") and ty.ends_with(")") {   # a tuple: each part a type of its own
+    for part in tuple_parts(ty) { int_type(n, part) }
+    return ty
+  }
   if ty.ends_with("?") and not ty.ends_with("??") {   # may be missing: nil is 0, and an int or bool sits in a box
     int_type(n, ty[..len(ty) - 1])
     return ty
@@ -114,6 +151,24 @@ fn dict_parts(ty: str) -> [str] {
   return []
 }
 fn is_opt(ty: str) -> bool { return ty.ends_with("?") }
+
+# (int, (str, bool)) as ["int", "(str, bool)"]: split on the ", " at depth one.
+fn tuple_parts(ty: str) -> [str] {
+  let out: [str] = []
+  let cs = ty.chars()
+  var depth = 0
+  var at = 1
+  for i in 1..len(cs) - 1 {
+    if cs[i] == "(" or cs[i] == "[" { depth += 1 }
+    if cs[i] == ")" or cs[i] == "]" { depth -= 1 }
+    if cs[i] == "," and depth == 0 {
+      out.append(ty[at..i])
+      at = i + 2
+    }
+  }
+  out.append(ty[at..len(ty) - 1])
+  return out
+}
 fn boxed(ty: str) -> bool { return ty == "int?" or ty == "bool?" }
 
 # Can a value of type got go where want is written?
@@ -149,6 +204,20 @@ fn gen_expr(g: G, e: N) -> str {
     return "str"
   }
   if e.kind == "Interp" { return interp(g, e) }
+  if e.kind == "Tuple" {   # the address of its parts, 8 bytes each (6.74.0)
+    let items = e.kids[0].kids
+    emit(g, "mov x0, #" + str(len(items) * 8 + 8))
+    emit(g, "bl pk_rt_alloc")
+    push(g)
+    let parts: [str] = []
+    for i in 0..len(items) {
+      parts.append(gen_expr(g, items[i]))
+      emit(g, "ldr x1, [sp]")
+      emit(g, "str x0, [x1, #" + str(i * 8) + "]")
+    }
+    pop(g, "x0")
+    return "(" + parts.join(", ") + ")"
+  }
   if e.kind == "Nil" {
     emit(g, "mov x0, #0")
     return "nil"
@@ -232,14 +301,27 @@ fn gen_expr(g: G, e: N) -> str {
     return item
   }
   if e.kind == "Method" { return method(g, e) }
+  if e.kind == "Field" and enum_name(g, e.kids[0]) != "" {   # Light.red
+    return construct_case(g, e, enum_name(g, e.kids[0]), e.kids[1].text, [], [])
+  }
+  if e.kind == "CallValue" and e.kids[0].kind == "Lambda" and len(e.kids[0].kids[0].kids) == 0 and len(e.kids[0].kids[2].kids) == 1 and e.kids[0].kids[2].kids[0].kind == "Match" {
+    return gen_match(g, e.kids[0].kids[2].kids[0], true)   # match as a value: the parser's closure, written inline
+  }
   if e.kind == "Field" {
     let t = gen_expr(g, e.kids[0])
+    if t.starts_with("(") and e.kids[1].text.starts_with("_") {   # p.0
+      let i = int(e.kids[1].text[1..])
+      let parts = tuple_parts(t)
+      if i >= len(parts) { nope(e, "part \(i) of a \(t)") }
+      emit(g, "ldr x0, [x0, #" + str(i * 8) + "]")
+      return parts[i]
+    }
     let f = field(g, e, t, e.kids[1].text)
     emit(g, "ldr x0, [x0, #\(f.off)]")
     return f.ty
   }
   if e.kind == "Num" {
-    if e.kids[1].text != "int" { nope(e, "a float") }
+    if e.kids[1].text == "float" { return float_lit(g, e, e.kids[0].text) }
     emit(g, "ldr x0, =" + e.kids[0].text)
     return "int"
   }
@@ -248,12 +330,21 @@ fn gen_expr(g: G, e: N) -> str {
     return "bool"
   }
   if e.kind == "Name" {
+    if not has_local(g, e.kids[0].text) and e.kids[0].text in g.fns { return fn_value(g, e, e.kids[0].text) }
     let l = find(g, e.kids[0].text)
     load(g, l)
     return l.ty
   }
+  if e.kind == "Lambda" { return gen_lambda(g, e) }
+  if e.kind == "CallValue" and not (e.kids[0].kind == "Lambda" and len(e.kids[0].kids[0].kids) == 0 and len(e.kids[0].kids[2].kids) == 1 and e.kids[0].kids[2].kids[0].kind == "Match") {
+    return call_value(g, e, e.kids[0], e.kids[1].kids)
+  }
   if e.kind == "Unary" {
     let t = gen_expr(g, e.kids[1])
+    if e.kids[0].text == "-" and t == "float" {
+      fop(g, "fneg d0, d0", false)
+      return t
+    }
     if e.kids[0].text == "-" {
       emit(g, "neg x0, x0")
       return "int"
@@ -317,6 +408,13 @@ fn gen_expr(g: G, e: N) -> str {
       return "bool"
     }
     if lt != rt { nope(e, "\(op) between \(lt) and \(rt)") }
+    if (op == "==" or op == "!=") and lt in g.enums {   # the same case with the same fields
+      lit(g, "x2", lt)
+      emit(g, "bl pk_rt_enum_eq")
+      if op == "!=" { emit(g, "eor x0, x0, #1") }
+      return "bool"
+    }
+    if lt == "float" { return float_op(g, e, op) }
     if lt != "str" and lt != "int" and lt != "bool" { nope(e, "\(op) on \(lt)") }
     if lt == "str" {
       if op == "+" {
@@ -351,6 +449,7 @@ fn gen_expr(g: G, e: N) -> str {
   if e.kind == "Call" {
     let name = e.kids[0].text
     let a = e.kids[1].kids
+    if has_local(g, name) { return call_value(g, e, node("Name", e.line, [sv(name)]), a) }   # next(): a closure in a local
     if name in g.structs { return construct(g, e, g.structs[name]) }
     if name == "plankc_buf" and len(a) == 1 {   # enc.pk's stand-ins, swapped for the runtime's bytes (enc.pk says why)
       gen_expr(g, a[0])
@@ -430,6 +529,8 @@ fn print_(g: G, e: N, a: [N]) -> str {
 fn to_str(g: G, e: N, t: str) {
   if t == "int" {
     emit(g, "bl pk_rt_int_str")
+  } else if t == "float" {
+    emit(g, "bl pk_rt_float_str")
   } else if t == "bool" {
     let f = fresh(g)
     let done = fresh(g)
@@ -439,7 +540,7 @@ fn to_str(g: G, e: N, t: str) {
     place(g, f)
     lit(g, "x0", "false")
     place(g, done)
-  } else if is_list(t) or is_dict(t) or upper(t[0]) or is_opt(t) {
+  } else if is_list(t) or is_dict(t) or upper(t[0]) or is_opt(t) or t.starts_with("(") {
     lit(g, "x1", t)
     emit(g, "mov x2, #0")
     emit(g, "bl pk_rt_show")
@@ -493,6 +594,7 @@ fn str_method(g: G, e: N, name: str, a: [N]) -> str {
 
 # xs.append(v) and xs.pop(), so far.
 fn method(g: G, e: N) -> str {
+  if enum_name(g, e.kids[0]) != "" { return construct_case(g, e, enum_name(g, e.kids[0]), e.kids[1].text, e.kids[2].kids, e.kids[3].kids) }
   let t = gen_expr(g, e.kids[0])
   let name = e.kids[1].text
   let a = e.kids[2].kids
@@ -562,6 +664,59 @@ fn method(g: G, e: N) -> str {
     emit(g, "bl pk_rt_list_push")
     return "void"
   }
+  if (name == "map" or name == "filter") and len(a) == 1 {
+    let item = item_type(e, t)
+    push(g)
+    if name == "map" { g.expect = "fn(" + item + ") -> " } else { g.expect = "fn(" + item + ") -> bool" }
+    let ft = gen_expr(g, a[0])
+    g.expect = ""
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    if name == "filter" {
+      emit(g, "bl pk_rt_filter")
+      return t
+    }
+    emit(g, "bl pk_rt_map")
+    return "[" + fn_ret(ft) + "]"
+  }
+  if name == "reduce" and len(a) == 2 {
+    let item = item_type(e, t)
+    push(g)
+    let at = gen_expr(g, a[0])
+    push(g)
+    g.expect = "fn(" + at + ", " + item + ") -> " + at
+    gen_expr(g, a[1])
+    g.expect = ""
+    emit(g, "mov x2, x0")
+    pop(g, "x1")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_reduce")
+    return at
+  }
+  if (name == "sorted" or name == "sort") and len(a) <= 1 {
+    let item = item_type(e, t)
+    push(g)
+    if len(a) == 1 {
+      if e.kids[3].kids[0].kind != "S" or e.kids[3].kids[0].text != "by" { nope(e, name + " with anything but by:") }
+      g.expect = "fn(" + item + ", " + item + ") -> bool"
+      gen_expr(g, a[0])
+      g.expect = ""
+    } else if item == "int" {
+      emit(g, "bl pk_rt_int_before")   # the closure that orders ints, from rt.pk
+    } else if item == "str" {
+      emit(g, "bl pk_rt_str_before")
+    } else {
+      nope(e, name + "() of a [" + item + "] without by:")
+    }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    if name == "sort" {   # in place
+      emit(g, "bl pk_rt_sort")
+      return "void"
+    }
+    emit(g, "bl pk_rt_sorted")
+    return t
+  }
   if name == "pop" and len(a) == 0 {
     emit(g, "bl pk_rt_list_pop")
     return item_type(e, t)
@@ -585,6 +740,91 @@ fn interp(g: G, e: N) -> str {
 }
 
 # The built-ins: len and str for programs, and the ones rt.pk is written with (plank.py does not have those).
+# ---------------------------------------------------------------- floats (6.76.0)
+# A float is its 64 bits in x0, like every other value; it moves to d0 and d1 only for an instruction that needs them.
+fn fop(g: G, ins: str, two: bool) {
+  emit(g, "fmov d0, x0")
+  if two { emit(g, "fmov d1, x1") }
+  emit(g, ins)
+  emit(g, "fmov x0, d0")
+}
+
+# x0 op x1, both floats. Compares are ordered, as plank.py's: anything with nan is false, != too.
+fn float_op(g: G, e: N, op: str) -> str {
+  let ins = ["+": "fadd", "-": "fsub", "*": "fmul", "/": "fdiv"]
+  if op in ins {
+    fop(g, ins[op] + " d0, d0, d1", true)
+    return "float"
+  }
+  let conds = ["<": "mi", "<=": "ls", ">": "gt", ">=": "ge", "==": "eq"]
+  emit(g, "fmov d0, x0")
+  emit(g, "fmov d1, x1")
+  emit(g, "fcmp d0, d1")
+  if op in conds {
+    emit(g, "cset x0, " + conds[op])
+    return "bool"
+  }
+  if op == "!=" {   # less or greater: an unordered pair is neither
+    emit(g, "cset x0, mi")
+    emit(g, "cset x1, gt")
+    emit(g, "add x0, x0, x1")
+    return "bool"
+  }
+  nope(e, "\(op) on floats")
+  return ""
+}
+
+# A float literal, exactly as IEEE rounds it: its digits as an int, scaled by one multiply or divide by an exact power
+# of ten (Clinger's fast path). Both are exact up to 15 digits and 10^22, so one rounding gives the nearest double, the
+# same in every build of plankc; anything past that stops here.
+fn float_lit(g: G, e: N, text: str) -> str {
+  if "_" in text { nope(e, "the float " + text) }
+  var mant = text
+  var exp = 0
+  let at = mant.find("e") ?? (mant.find("E") ?? -1)
+  if at >= 0 {
+    var es = mant[at + 1..]
+    if es.starts_with("+") { es = es[1..] }
+    exp = int(es)
+    mant = mant[..at]
+  }
+  let dot = mant.find(".") ?? -1
+  if dot >= 0 {
+    exp -= len(mant) - dot - 1
+    mant = mant[..dot] + mant[dot + 1..]
+  }
+  while len(mant) > 1 and mant.starts_with("0") { mant = mant[1..] }
+  while len(mant) > 1 and mant.ends_with("0") {
+    mant = mant[..len(mant) - 1]
+    exp += 1
+  }
+  if mant == "0" { exp = 0 }
+  if len(mant) > 15 or exp > 22 or exp < -22 { nope(e, "the float " + text) }
+  emit(g, "ldr x0, =" + mant)
+  emit(g, "scvtf d0, x0")
+  if exp != 0 {
+    var k = exp
+    if k < 0 { k = 0 - k }
+    var p = 1
+    var rest = 0
+    for i in 0..k {
+      if i < 18 { p = p * 10 } else { rest += 1 }
+    }
+    emit(g, "ldr x1, =" + str(p))
+    emit(g, "scvtf d1, x1")
+    if rest > 0 {   # 10^19 to 10^22 pass an int: 10^18 then 10^rest, still exact
+      var q = 1
+      for i in 0..rest { q = q * 10 }
+      emit(g, "ldr x2, =" + str(q))
+      emit(g, "scvtf d2, x2")
+      emit(g, "fmul d1, d1, d2")
+    }
+    if exp > 0 { emit(g, "fmul d0, d0, d1") } else { emit(g, "fdiv d0, d0, d1") }
+  }
+  emit(g, "fmov x0, d0")
+  return "float"
+}
+
 fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   if name == "len" and len(a) == 1 {
     let t = gen_expr(g, a[0])
@@ -606,8 +846,63 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   }
   if name == "int" and len(a) == 1 {
     let t = gen_expr(g, a[0])
-    if t == "str" { emit(g, "bl pk_rt_parse_int") } else if t != "int" { nope(e, "int() of a " + t) }
+    if t == "str" {
+      emit(g, "bl pk_rt_parse_int")
+    } else if t == "float" {
+      emit(g, "fmov d0, x0")
+      emit(g, "fcvtzs x0, d0")
+    } else if t != "int" {
+      nope(e, "int() of a " + t)
+    }
     return "int"
+  }
+  if name == "float" and len(a) == 1 {
+    let t = gen_expr(g, a[0])
+    if t == "int" {
+      emit(g, "scvtf d0, x0")
+      emit(g, "fmov x0, d0")
+    } else if t != "float" {
+      nope(e, "float() of a " + t)
+    }
+    return "float"
+  }
+  let fn1 = ["sqrt": 1, "floor": 1, "ceil": 1, "round": 1]
+  if name in fn1 and len(a) == 1 {
+    if gen_expr(g, a[0]) != "float" { nope(e, name + "() of anything but a float") }
+    let ops = ["sqrt": "fsqrt", "floor": "frintm", "ceil": "frintp", "round": "frinta"]   # round: half away from zero, as C's
+    fop(g, ops[name] + " d0, d0", false)
+    return "float"
+  }
+  if name == "abs" and len(a) == 1 {
+    let t = gen_expr(g, a[0])
+    if t == "float" {
+      fop(g, "fabs d0, d0", false)
+    } else if t == "int" {
+      emit(g, "cmp x0, #0")
+      emit(g, "cneg x0, x0, lt")
+    } else {
+      nope(e, "abs() of a " + t)
+    }
+    return t
+  }
+  if (name == "min" or name == "max") and len(a) == 2 {   # x < y ? x : y, as plank.py picks (a tie or a nan gives y)
+    let t = gen_expr(g, a[0])
+    push(g)
+    if gen_expr(g, a[1]) != t or (t != "int" and t != "float") { nope(e, name + "() of two that are not one number type") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    var c = "lt"
+    if name == "max" { c = "gt" }
+    if t == "float" {
+      emit(g, "fmov d0, x0")
+      emit(g, "fmov d1, x1")
+      emit(g, "fcmp d0, d1")
+      if name == "min" { c = "mi" }
+    } else {
+      emit(g, "cmp x0, x1")
+    }
+    emit(g, "csel x0, x0, x1, " + c)
+    return t
   }
   if name == "args" and len(a) == 0 {
     emit(g, "bl pk_rt_args")
@@ -670,6 +965,15 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   if name == "poke" { emit(g, "str x1, [x0]") }
   if name == "poke8" { emit(g, "strb w1, [x0]") }
   if name == "as_str" { return "str" }
+  if name == "as_float" { return "float" }
+  if name == "fma" {   # a * b + c, rounded once: rt.pk's exact digits read a product's rounding error from it
+    emit(g, "fmov d0, x0")
+    emit(g, "fmov d1, x1")
+    emit(g, "fmov d2, x2")
+    emit(g, "fmadd d0, d0, d1, d2")
+    emit(g, "fmov x0, d0")
+    return "float"
+  }
   return "int"
 }
 
@@ -730,6 +1034,19 @@ fn gen_stmt(g: G, s: N) {
     gen_expr(g, s.kids[1])
     pop(g, "x1")
     emit(g, "str x0, [x1]")
+  } else if s.kind == "LetTuple" {   # let (q, r) = divmod(17, 5)
+    let t = gen_expr(g, s.kids[1])
+    if not t.starts_with("(") { nope(s, "taking apart a " + t) }
+    let parts = tuple_parts(t)
+    let names = s.kids[0].kids
+    if len(names) != len(parts) { nope(s, "\(len(names)) names for \(len(parts)) parts") }
+    let tmp = new_local(g, " tuple", t)
+    store(g, tmp)
+    for i in 0..len(names) {
+      load(g, tmp)
+      emit(g, "ldr x0, [x0, #" + str(i * 8) + "]")
+      store(g, new_local(g, names[i].text, parts[i]))
+    }
   } else if s.kind == "Assign" and s.kids[0].kind == "Field" {
     let target = s.kids[0]
     let f = field(g, s, gen_expr(g, target.kids[0]), target.kids[1].text)
@@ -746,6 +1063,7 @@ fn gen_stmt(g: G, s: N) {
   } else if s.kind == "Return" {
     if s.kids[0].kind != "_" {
       let t = gen_expr(g, s.kids[0])
+      if g.ret_type == "" { g.ret_type = t }   # a lambda with no -> takes its first return's type
       if g.ret_type != "void" and not fits(t, g.ret_type) { nope(s, "returning a \(t) from a function that gives \(g.ret_type)") }
       coerce(g, t, g.ret_type)
     }
@@ -761,6 +1079,8 @@ fn gen_stmt(g: G, s: N) {
     place(g, other)
     gen_block(g, s.kids[2])
     place(g, done)
+  } else if s.kind == "Match" {
+    gen_match(g, s, false)
   } else if s.kind == "IfLet" {
     let other = fresh(g)
     let done = fresh(g)
@@ -928,10 +1248,12 @@ fn gen_stmt(g: G, s: N) {
 fn count_locals(n: N) -> int {
   var c = 0
   if n.kind == "Let" { c = 1 }
+  if n.kind == "LetTuple" { c = 1 + len(n.kids[0].kids) }
   if n.kind == "For" { c = 2 }
   if n.kind == "ForIn" { c = 4 }
   if n.kind == "IfLet" { c = 1 }
   if n.kind == "Try" { c = 5 }
+  if n.kind == "Match" { c = 1 + 8 * len(n.kids[1].kids) }   # the subject and each arm's bindings, generously
   for k in n.kids { c += count_locals(k) }
   return c
 }
@@ -946,6 +1268,7 @@ fn function(g: G, f: N) {
   g.tries = []
   g.next_off = 0
   g.ret = fresh(g)
+  g.boxed_names = captured_names(f.kids[3])
   let frame = (len(params) + count_locals(f.kids[3])) * 8
   g.out.append("")
   g.out.append("  .globl pk_" + name)
@@ -954,10 +1277,13 @@ fn function(g: G, f: N) {
   emit(g, "stp x29, x30, [sp, #-16]!")
   emit(g, "mov x29, sp")
   emit(g, "sub sp, sp, #" + str((frame + 15) / 16 * 16))
+  let ps: [Local] = []
   for i in 0..len(params) {
-    let l = new_local(g, params[i].kids[0].text, int_type(f, params[i].kids[1].text))
+    let l = raw_local(g, params[i].kids[0].text, int_type(f, params[i].kids[1].text))
     slot(g, "str", "x" + str(i), l.off)
+    ps.append(l)
   }
+  box_params(g, ps)
   gen_block(g, f.kids[3])
   emit(g, "mov x0, #0")   # falling off the end returns 0, which is what main hands back
   place(g, g.ret)
@@ -972,6 +1298,349 @@ fn type_of(g: G, e: N) -> str {
   let mark = len(g.out)
   let t = gen_expr(g, e)
   while len(g.out) > mark { g.out.pop() }
+  return t
+}
+
+# ---------------------------------------------------------------- closures (6.75.0)
+# A closure is the address of {its code, its environment}; the environment holds the cells of the locals it captured.
+# A lambda is written as a function of its own, taking the environment first; a named function used as a value gets a
+# trampoline that drops the environment and jumps to it.
+
+fn fn_parts(ty: str) -> [str] {   # fn(int, str) -> bool as ["int", "str"], its parameters
+  let close = ty.find(") -> ") ?? (len(ty) - 1)
+  if close == 3 { return [] }
+  return tuple_parts(ty[2..close + 1])
+}
+
+fn fn_ret(ty: str) -> str {
+  let at = ty.find(") -> ") ?? 0
+  return ty[at + 5..]
+}
+
+# Every name a lambda in body refers to that it does not declare itself: those locals get cells.
+fn captured_names(body: N) -> [str: int] {
+  let out: [str: int] = [:]
+  find_lambdas(body, out)
+  return out
+}
+
+fn find_lambdas(n: N, out: [str: int]) {
+  if n.kind == "Lambda" {
+    let declared: [str: int] = [:]
+    for p in n.kids[0].kids { declared[p.kids[0].text] = 1 }
+    declarations(n.kids[2], declared)
+    let used: [str: int] = [:]
+    names_in(n.kids[2], used)
+    for k in used {
+      if not (k in declared) { out[k] = 1 }
+    }
+  }
+  for k in n.kids { find_lambdas(k, out) }
+}
+
+fn declarations(n: N, out: [str: int]) {
+  if n.kind == "Let" or n.kind == "For" or n.kind == "ForIn" or n.kind == "IfLet" or n.kind == "WhileLet" { out[n.kids[0].text] = 1 }
+  if n.kind == "ForIn" and n.kids[3].kind == "S" { out[n.kids[3].text] = 1 }
+  if n.kind == "Try" { out[n.kids[1].text] = 1 }
+  if n.kind == "LetTuple" {
+    for k in n.kids[0].kids { out[k.text] = 1 }
+  }
+  if n.kind == "Lambda" { return }   # a nested lambda's own names are its business
+  for k in n.kids { declarations(k, out) }
+}
+
+fn names_in(n: N, out: [str: int]) {
+  if n.kind == "Name" or n.kind == "Call" { out[n.kids[0].text] = 1 }
+  for k in n.kids { names_in(k, out) }
+}
+
+# Parameters a closure captures get their cells after the prologue has stored them.
+fn box_params(g: G, ps: [Local]) {
+  for l in ps {
+    if l.boxed {
+      slot(g, "ldr", "x0", l.off)
+      emit(g, "bl pk_rt_box")
+      slot(g, "str", "x0", l.off)
+    }
+  }
+}
+
+fn gen_lambda(g: G, e: N) -> str {
+  let expect = g.expect
+  g.expect = ""
+  let params = e.kids[0].kids
+  let want = fn_parts(expect)
+  let ptypes: [str] = []
+  for i in 0..len(params) {
+    if params[i].kids[1].kind == "S" {
+      ptypes.append(int_type(e, params[i].kids[1].text))
+    } else if i < len(want) {
+      ptypes.append(want[i])
+    } else {
+      nope(e, "a lambda parameter with no type and nowhere to learn it")
+    }
+  }
+  # what it captures: free names that are locals here (their cells go in the environment)
+  let declared: [str: int] = [:]
+  for p in params { declared[p.kids[0].text] = 1 }
+  declarations(e.kids[2], declared)
+  let used: [str: int] = [:]
+  names_in(e.kids[2], used)
+  let caps: [Local] = []
+  for k in used {
+    if not (k in declared) and has_local(g, k) {
+      let l = find(g, k)
+      if not l.boxed { nope(e, "capturing \(k), which has no cell") }
+      caps.append(l)
+    }
+  }
+  emit(g, "mov x0, #" + str(len(caps) * 8 + 8))
+  emit(g, "bl pk_rt_alloc")
+  push(g)
+  for i in 0..len(caps) {
+    slot(g, "ldr", "x0", caps[i].off)   # the cell itself, not what it holds
+    emit(g, "ldr x1, [sp]")
+    emit(g, "str x0, [x1, #" + str(i * 8) + "]")
+  }
+  # the lambda's own function, written now into its own buffer
+  g.lambda_n += 1
+  let label = "pk_lambda_" + str(g.lambda_n)
+  let saved_out = g.out
+  let saved_locals = g.locals
+  let saved_tries = g.tries
+  let saved_loops = g.loops
+  let saved_lt = g.loop_tries
+  let saved_off = g.next_off
+  let saved_ret = g.ret
+  let saved_rt = g.ret_type
+  let saved_boxed = g.boxed_names
+  g.out = []
+  g.locals = []
+  g.tries = []
+  g.loops = []
+  g.loop_tries = []
+  g.next_off = 0
+  g.ret = fresh(g)
+  g.ret_type = ""
+  if e.kids[1].kind == "S" { g.ret_type = int_type(e, e.kids[1].text) }
+  g.boxed_names = captured_names(e.kids[2])
+  let frame = (1 + len(params) + len(caps) + count_locals(e.kids[2])) * 8
+  g.out.append("")
+  g.out.append("  .p2align 2")
+  place(g, label)
+  emit(g, "stp x29, x30, [sp, #-16]!")
+  emit(g, "mov x29, sp")
+  emit(g, "sub sp, sp, #" + str((frame + 15) / 16 * 16))
+  let env = raw_local(g, " env", "int")
+  slot(g, "str", "x0", env.off)
+  let ps: [Local] = []
+  for i in 0..len(params) {
+    let l = raw_local(g, params[i].kids[0].text, ptypes[i])
+    slot(g, "str", "x" + str(i + 1), l.off)
+    ps.append(l)
+  }
+  box_params(g, ps)
+  for i in 0..len(caps) {   # the captured cells, from the environment into boxed locals of their own
+    g.next_off += 8
+    let l = Local(caps[i].name, g.next_off, caps[i].ty, true)
+    g.locals.append(l)
+    slot(g, "ldr", "x0", env.off)
+    emit(g, "ldr x0, [x0, #" + str(i * 8) + "]")
+    slot(g, "str", "x0", l.off)
+  }
+  gen_block(g, e.kids[2])
+  emit(g, "mov x0, #0")
+  place(g, g.ret)
+  emit(g, "mov sp, x29")
+  emit(g, "ldp x29, x30, [sp], #16")
+  emit(g, "ret")
+  var ret = g.ret_type
+  if ret == "" { ret = "void" }
+  for l in g.out { g.lambda_code.append(l) }
+  g.out = saved_out
+  g.locals = saved_locals
+  g.tries = saved_tries
+  g.loops = saved_loops
+  g.loop_tries = saved_lt
+  g.next_off = saved_off
+  g.ret = saved_ret
+  g.ret_type = saved_rt
+  g.boxed_names = saved_boxed
+  # the closure: {code, env}
+  emit(g, "mov x0, #24")
+  emit(g, "bl pk_rt_alloc")
+  pop(g, "x1")
+  emit(g, "str x1, [x0, #8]")
+  emit(g, "adr x1, " + label)
+  emit(g, "str x1, [x0]")
+  return "fn(" + ptypes.join(", ") + ") -> " + ret
+}
+
+# A named function as a value: a closure whose code is a trampoline that drops the environment and jumps to it.
+fn fn_value(g: G, e: N, name: str) -> str {
+  let f = g.fn_nodes[name]
+  let params = f.kids[1].kids
+  if not (name in g.tramps) {
+    g.tramps[name] = 1
+    g.lambda_code.append("")
+    g.lambda_code.append("  .p2align 2")
+    g.lambda_code.append("pk_" + name + "__fn:")
+    for i in 0..len(params) { g.lambda_code.append("mov x" + str(i) + ", x" + str(i + 1)) }
+    g.lambda_code.append("b pk_" + name)
+  }
+  let ps: [str] = []
+  for p in params { ps.append(int_type(e, p.kids[1].text)) }
+  emit(g, "mov x0, #24")
+  emit(g, "bl pk_rt_alloc")
+  emit(g, "adr x1, pk_" + name + "__fn")
+  emit(g, "str x1, [x0]")
+  emit(g, "str xzr, [x0, #8]")
+  return "fn(" + ps.join(", ") + ") -> " + f.kids[2].text
+}
+
+# Calling a closure: its environment first, then the arguments; blr to its code.
+fn call_value(g: G, e: N, target: N, a: [N]) -> str {
+  let t = gen_expr(g, target)
+  if not t.starts_with("fn(") { nope(e, "calling a " + t) }
+  let ps = fn_parts(t)
+  if len(a) != len(ps) { nope(e, "\(len(a)) arguments for \(len(ps))") }
+  if len(a) > 7 { nope(e, "more than seven arguments to a closure") }
+  push(g)
+  for i in 0..len(a) {
+    if ps[i].starts_with("fn(") { g.expect = ps[i] }
+    let at = gen_expr(g, a[i])
+    g.expect = ""
+    if not fits(at, ps[i]) { nope(e, "a \(at) for a \(ps[i])") }
+    coerce(g, at, ps[i])
+    push(g)
+  }
+  var i = len(a)
+  while i >= 1 {
+    pop(g, "x" + str(i))
+    i -= 1
+  }
+  pop(g, "x9")
+  emit(g, "ldr x0, [x9, #8]")
+  emit(g, "ldr x10, [x9]")
+  emit(g, "blr x10")
+  return fn_ret(t)
+}
+
+# ---------------------------------------------------------------- enums (6.73.0)
+# An enum value is the address of {its case's number, then that case's fields}, 8 bytes each.
+fn enum_name(g: G, e: N) -> str {
+  if e.kind == "Name" and e.kids[0].text in g.enums and not has_local(g, e.kids[0].text) { return e.kids[0].text }
+  return ""
+}
+
+fn has_local(g: G, name: str) -> bool {
+  for l in g.locals {
+    if l.name == name { return true }
+  }
+  return false
+}
+
+fn case_of(g: G, e: N, en: str, name: str) -> int {
+  let cases = g.enums[en].kids[1].kids
+  for i in 0..len(cases) {
+    if cases[i].kids[0].text == name { return i }
+  }
+  throw "\(e.line): \(en) has no case \(name)"
+}
+
+fn construct_case(g: G, e: N, en: str, name: str, a: [N], labels: [N]) -> str {
+  let i = case_of(g, e, en, name)
+  let fields = g.enums[en].kids[1].kids[i].kids[1].kids
+  if len(a) != len(fields) { nope(e, "\(en).\(name) with \(len(a)) values for \(len(fields)) fields") }
+  emit(g, "mov x0, #" + str(len(fields) * 8 + 8))
+  emit(g, "bl pk_rt_alloc")
+  emit(g, "mov x1, #" + str(i))
+  emit(g, "str x1, [x0]")
+  push(g)
+  for k in 0..len(fields) {
+    var v = a[k]
+    for j in 0..len(a) {
+      if labels[j].kind == "S" and labels[j].text == fields[k].kids[0].text { v = a[j] }
+    }
+    let t = gen_expr(g, v)
+    let want = int_type(e, fields[k].kids[1].text)
+    if not fits(t, want) { nope(e, "a \(t) for \(fields[k].kids[0].text), a \(want)") }
+    coerce(g, t, want)
+    emit(g, "ldr x1, [sp]")
+    emit(g, "str x0, [x1, #" + str(k * 8 + 8) + "]")
+  }
+  pop(g, "x0")
+  return en
+}
+
+# match, as a statement or (value) as the arms' one expression each. Patterns are an enum's cases, with names for their
+# fields, or values compared with ==. The first arm that fits runs; else runs when none does.
+fn gen_match(g: G, m: N, value: bool) -> str {
+  let t = gen_expr(g, m.kids[0])
+  let mark = len(g.locals)
+  let subj = new_local(g, " match", t)
+  store(g, subj)
+  let done = fresh(g)
+  var vt = ""
+  for arm in m.kids[1].kids {
+    let next = fresh(g)
+    let body = fresh(g)
+    var binds: [N] = []
+    var case_i = -1
+    for p in arm.kids[0].kids {
+      if p.kind == "T" {
+        if not (t in g.enums) { nope(m, "a case pattern on a \(t)") }
+        case_i = case_of(g, m, t, p.kids[0].text)
+        binds = p.kids[1].kids
+        load(g, subj)
+        emit(g, "ldr x0, [x0]")
+        emit(g, "cmp x0, #" + str(case_i))
+        emit(g, "b.eq " + body)
+      } else {
+        let pt = gen_expr(g, p)
+        if pt != t { nope(p, "a \(pt) pattern for a \(t)") }
+        emit(g, "mov x1, x0")
+        load(g, subj)
+        if t == "str" {
+          emit(g, "bl pk_rt_str_eq")
+          emit(g, "cbnz x0, " + body)
+        } else {
+          emit(g, "cmp x0, x1")
+          emit(g, "b.eq " + body)
+        }
+      }
+    }
+    emit(g, "b " + next)
+    place(g, body)
+    let inner = len(g.locals)
+    if len(binds) > 0 {
+      let fields = g.enums[t].kids[1].kids[case_i].kids[1].kids
+      for k in 0..len(binds) {
+        load(g, subj)
+        emit(g, "ldr x0, [x0, #" + str(k * 8 + 8) + "]")
+        store(g, new_local(g, binds[k].text, int_type(m, fields[k].kids[1].text)))
+      }
+    }
+    vt = arm_body(g, arm.kids[1], value, vt)
+    while len(g.locals) > inner { g.locals.pop() }
+    emit(g, "b " + done)
+    place(g, next)
+  }
+  if m.kids[2].kind != "_" { vt = arm_body(g, m.kids[2], value, vt) }
+  place(g, done)
+  while len(g.locals) > mark { g.locals.pop() }
+  if value { return vt }
+  return "void"
+}
+
+# An arm's body: a block, or (as a value) the parser's [return expr], whose value lands in x0.
+fn arm_body(g: G, b: N, value: bool, vt: str) -> str {
+  if not value {
+    gen_block(g, b)
+    return vt
+  }
+  let t = gen_expr(g, b.kids[0].kids[0])
+  if vt != "" and t != vt { nope(b.kids[0], "a match whose arms give a \(vt) and a \(t)") }
   return t
 }
 
@@ -1000,8 +1669,10 @@ fn call_fn(g: G, e: N, name: str, a: [N], labels: [N], method: bool) -> str {
       }
     }
     if v.kind == "_" { throw "\(e.line): \(name) needs \(pname)" }
-    let t = gen_expr(g, v)
     let want = int_type(e, params[i].kids[1].text)
+    if want.starts_with("fn(") { g.expect = want }
+    let t = gen_expr(g, v)
+    g.expect = ""
     if not fits(t, want) { nope(e, "a \(t) for \(pname), a \(want)") }
     coerce(g, t, want)
     push(g)
@@ -1085,6 +1756,16 @@ fn layout_fn(g: G) -> N {
     let test = node("Binary", 0, [sv("=="), node("Name", 0, [sv("name")]), node("Str", 0, [sv(name)])])
     body.append(node("If", 0, [test, lv([node("Return", 0, [node("Str", 0, [sv(parts.join(";"))])])]), lv([])]))
   }
+  for name in g.enums {   # #case|case(field:type;field:type)|...
+    let cases: [str] = []
+    for c in g.enums[name].kids[1].kids {
+      let fs: [str] = []
+      for f in c.kids[1].kids { fs.append(f.kids[0].text + ":" + f.kids[1].text) }
+      if len(fs) == 0 { cases.append(c.kids[0].text) } else { cases.append(c.kids[0].text + "(" + fs.join(";") + ")") }
+    }
+    let test = node("Binary", 0, [sv("=="), node("Name", 0, [sv("name")]), node("Str", 0, [sv(name)])])
+    body.append(node("If", 0, [test, lv([node("Return", 0, [node("Str", 0, [sv("#" + cases.join("|"))])])]), lv([])]))
+  }
   body.append(node("Return", 0, [node("Str", 0, [sv("")])]))
   return node("Fn", 0, [sv("rt_layout"), lv([tv([sv("name"), sv("str")])]), sv("str"), lv(body), N("D", 0, "", []), lv([]), bv(false), bv(false), sv("")])
 }
@@ -1095,11 +1776,19 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
 
 # The program's assembly, a line a string: for asm's text, or enc.pk's image.
 fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
-  let g = G([], 0, [], [], [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "")
+  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:])
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
-    if f.kind == "Struct" {
+    if f.kind == "Enum" {
+      if len(f.kids[3].kids) > 0 { nope(f, "an enum's type parameters") }
+      g.enums[f.kids[0].text] = f
+      for m in f.kids[2].kids {   # a method, as for structs: Enum.name with self first
+        let params = [tv([sv("self"), sv(f.kids[0].text)])]
+        for p in m.kids[1].kids { params.append(p) }
+        fns.append(node("Fn", m.line, [sv(f.kids[0].text + "." + m.kids[0].text), lv(params), m.kids[2], m.kids[3], m.kids[4], m.kids[5], m.kids[6], m.kids[7], m.kids[8]]))
+      }
+    } else if f.kind == "Struct" {
       if len(f.kids[4].kids) > 0 { nope(f, "a struct's type parameters") }
       g.structs[f.kids[0].text] = f
       for m in f.kids[3].kids {   # a method is a function named Struct.name whose first parameter is self
@@ -1125,12 +1814,14 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   if not ("main" in g.fns) { throw "no fn main" }
   g.out.append("  .text")
   for f in prog.kids { function(g, f) }
+  for l in g.lambda_code { g.out.append(l) }   # the lambdas and trampolines the functions made
   # The trees are done with. Letting go of them here lets the collector merge their room into the one block the join at
   # the end needs (half a megabyte for plankc's own source).
   prog.kids = []
   runtime.kids = []
   g.structs = [:]
   g.fn_nodes = [:]   # it holds every function's tree too
+  g.enums = [:]
   while len(fns) > 0 { fns.pop() }
   # pklibc's _start calls main(argc, argv); the program's main takes nothing.
   g.out.append("")
