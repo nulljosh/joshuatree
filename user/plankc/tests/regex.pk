@@ -1,0 +1,23 @@
+# plankc's regular expressions (6.85.0), against what plank.py gets from the C library.
+fn bad(p: str) -> bool {
+  try {
+    "x".matches(p)
+  } catch err {
+    return err.starts_with("bad pattern")
+  }
+  return false
+}
+
+fn main() {
+  print("cat".matches("^c.t$"), "cart".matches("^c.t$"), "a\nb".matches("a.b"))
+  print("abc123".find_all("[a-c]"), "x1y22z333".find_all("[0-9]+"), "Hi There".find_all("[[:upper:]]"))
+  print("one two  three".find_all("[^ ]+"), "a-b_c".find_all("[-_]"), "]x]".find_all("[]x]"))
+  print("color colour".find_all("colou?r"), "aaaa".find_all("a{2}"), "abbbbc".captures("ab{2,3}"))
+  print("2026-10-28".captures("([0-9]{4})-([0-9]{2})-([0-9]{2})"))
+  print("cat dog".find_all("cat|dog"), "x".captures("(a)|x"), "abab".captures("(ab)+"))
+  print("a.b".replace_all("\\.", "!"), "hello".replace_all("l+", "L"), "abc".replace_all("b?", "-"))
+  print("abc".replace_all("x*", "-"), "  trim  me ".replace_all("^ +| +$", ""), "".find_all("a*"))
+  print("tab\there".matches("[[:space:]]"), "deadBEEF".matches("^[[:xdigit:]]+$"), "a+b".find_all("[[:punct:]]"))
+  print("aaa".find_all("(a*)*"), "ab".captures("(x)?(a)(b)"))
+  print(bad("("), bad("a)"), bad("[a"), bad("*a"), bad("a{3,2}"), bad("[[:nope:]]"), bad(""), bad("a|"), bad("()"))
+}

@@ -686,15 +686,15 @@ fn str_method(g: G, e: N, name: str, a: [N]) -> str {
     emit(g, "bl pk_rt_case")
     return "str"
   }
-  if name == "replace" and len(a) == 2 {
+  if (name == "replace" or name == "replace_all") and len(a) == 2 {   # replace_all: a regular expression (6.85.0)
     push(g)
-    if gen_expr(g, a[0]) != "str" { nope(e, "replace of anything but strings") }
+    if gen_expr(g, a[0]) != "str" { nope(e, name + " of anything but strings") }
     push(g)
-    if gen_expr(g, a[1]) != "str" { nope(e, "replace of anything but strings") }
+    if gen_expr(g, a[1]) != "str" { nope(e, name + " of anything but strings") }
     emit(g, "mov x2, x0")
     pop(g, "x1")
     pop(g, "x0")
-    emit(g, "bl pk_rt_replace")
+    if name == "replace" { emit(g, "bl pk_rt_replace") } else { emit(g, "bl pk_rt_rx_replace") }
     return "str"
   }
   if name == "split" and len(a) == 0 {   # on runs of whitespace (6.77.0)
@@ -717,6 +717,11 @@ fn str_method(g: G, e: N, name: str, a: [N]) -> str {
   if name == "split" {
     emit(g, "bl pk_rt_split")
     return "[str]"
+  }
+  let rx = ["matches": "bool", "captures": "[str]?", "find_all": "[str]"]   # regular expressions, rt.pk's (6.85.0)
+  if name in rx {
+    emit(g, "bl pk_rt_rx_" + name)
+    return rx[name]
   }
   if name == "find" {   # where it is, or nil
     let none_ = fresh(g)
@@ -1128,6 +1133,21 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
       nope(e, "float() of a " + t)
     }
     return "float"
+  }
+  if name == "time" and len(a) == 0 {   # seconds, to a hundredth (6.85.0)
+    emit(g, "bl pk_rt_time")
+    return "float"
+  }
+  if name == "sleep" and len(a) == 1 {
+    let t = gen_expr(g, a[0])
+    if t == "int" {
+      emit(g, "scvtf d0, x0")
+      emit(g, "fmov x0, d0")
+    } else if t != "float" {
+      nope(e, "sleep() of a " + t)
+    }
+    emit(g, "bl pk_rt_sleep")
+    return "void"
   }
   if name == "pow" and len(a) == 2 {   # floats; an exponent that is a whole number (6.77.0)
     if gen_expr(g, a[0]) != "float" { nope(e, "pow() of anything but floats") }
