@@ -1,0 +1,58 @@
+# plankc (6.72.0): struct methods with self, default arguments and labels, optionals printed and boxed on the way in and
+# out, dict.get, x!, and strings ordered with < and >.
+struct Account {
+  owner: str
+  balance: int = 0
+  history: [int] = []
+
+  fn deposit(amount: int, note: str = "cash") {
+    self.balance += amount
+    self.history.append(amount)
+    print(self.owner, "+", amount, note)
+  }
+
+  fn total() -> int {
+    var t = 0
+    for h in self.history {
+      t += h
+    }
+    return t
+  }
+}
+
+struct Node {
+  val: int
+  next: Node? = nil
+}
+
+fn greet(name: str, greeting: str = "hello", times: int = 1) {
+  for i in 0..times {
+    print("\(greeting), \(name)")
+  }
+}
+
+fn find(xs: [str], want: str) -> int? {
+  for i in 0..len(xs) {
+    if xs[i] == want { return i }
+  }
+  return nil
+}
+
+fn main() {
+  let a = Account(owner: "josh")
+  a.deposit(10)
+  a.deposit(5, note: "gift")
+  a.deposit(note: "pay", amount: 100)
+  print(a.balance, a.total(), a)
+  greet("ada")
+  greet("bob", times: 2)
+  greet(greeting: "hey", name: "cy")
+  let langs = ["swift", "ruby", "python"]
+  let at = find(langs, "ruby")
+  print(at, find(langs, "go"), at!, find(langs, "go") ?? -1)
+  let ages = ["ada": 36]
+  print(ages.get("ada"), ages.get("bob"), ages.get("bob") ?? 0, ages.get("bob", 7), ages.get("ada", 7))
+  let n = Node(3, Node(4))
+  print(n, n.next!.val)
+  print("apple" < "banana", "b" > "a", "ab" < "a", "x" <= "x", "pear" >= "peach")
+}
