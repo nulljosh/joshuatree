@@ -142,7 +142,7 @@ function postReq(body, headers = {}) {
     const mail = deliveries[0];
     check("welcome email addresses the signup and includes HTML plus plain text", mail.to[0] === "welcome@example.com" && mail.html.includes("Welcome to") && mail.text.includes("dev kit waitlist"));
     check("welcome email has a preheader, branded mark and presentation tables", mail.html.includes("mso-hide:all") && mail.html.includes("/mark.png") && mail.html.includes('role="presentation"'));
-    check("welcome email links to the current film in both versions", [mail.html, mail.text].every(body => body.includes("1.9.32/joshua-tree-ad-v7.mp4") && !body.includes("ad-v6")));
+    check("welcome email links to the film on the landing in both versions, never to a file that a new film replaces", [mail.html, mail.text].every(body => body.includes("joshuatree.jaybulb.com/#film") && !body.includes(".mp4")));
   } finally { globalThis.fetch = originalFetch; }
 }
 

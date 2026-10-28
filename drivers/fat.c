@@ -59,9 +59,10 @@ static u32 rd32(u8 *p) { return rd16(p) | ((u32)rd16(p + 2) << 16); }
 /* Where the last ranged read stopped, so a file read front to back (a movie, 6.1.0) walks its cluster chain once
    instead of from the start on every call. ponytail: one remembered file; a second file read in turns walks again. Any write, delete or mount forgets it, so a reused cluster is never read as the old file's. */
 static u32 at_first, at_index, at_cluster;
+static u32 walk_dir, walk_skip, walk_cluster;   /* where the last dir_get_sector walk stopped (6.76.5); walk_dir 0 is none */
 
 int fat_mount(void) {
-    at_first = 0;
+    at_first = 0; walk_dir = 0;
     u8 boot[512];
     if (!blockdev_read_sector(0, boot)) return 0;
 
@@ -157,6 +158,7 @@ static void fsinfo_unknown(void) {
    entries are 28 bits: the top four belong to the volume and are kept. */
 static int fat_entry_write(u32 cluster, u32 value) {
     if (cluster < 2 || cluster >= total_clusters + 2) return 0;
+    walk_dir = 0;
     u32 w = fat32 ? 4 : 2, fat_byte_off = cluster * w, row = fat_byte_off / 512;
     u8 fatbuf[512];
     if (!blockdev_read_sector(fat_start + row, fatbuf)) return 0;
@@ -209,26 +211,15 @@ static void release_chain(u32 cluster) {
    next cluster" and "link the previous one to it" can leave behind) never
    produces that marker, so every one of those five callers spun forever
    re-reading the same clusters, a real denial-of-service hang on `ls`/`cd`/
-   any FAT op inside a corrupted subdirectory. MAX_DIR_CLUSTER_HOPS is a
-   sanity cap, not a real directory-size limit. This kernel's own fat_mkdir
-   never grows a directory past its first cluster (no chain-growth support,
-   see its own comment), so every directory this kernel has ever created
-   needs zero hops past its own head cluster; the cap only matters for a
-   directory some other real FAT16 tool created with a real multi-cluster
-   chain, or a corrupted one. dir_get_sector restarts its walk from the
-   directory's head on every call (see the callers' own
-   `for (u32 s = 0; ; s++)` loops), so total work across a full directory
-   scan is quadratic in the cap, not linear, a pre-existing inefficiency
-   this fix doesn't take on fixing; measured directly against this kernel's
-   own QEMU/ATA path (tools/checks/fatcyclehang-check.sh), a cap of 16 was
-   still visibly grinding after 45 real seconds on a cyclic chain, an
-   improvement over never finishing at all but not the fast, bounded
-   failure this guard is supposed to be. 4 clusters (up to ~250 entries at
-   sectors_per_cluster*16 each) is still generous for anything a real
-   external tool would put in one directory on this scope of kernel, and
-   keeps the quadratic cost small enough that a corrupted/cyclic chain
-   fails within a couple of seconds instead of tens. */
-#define MAX_DIR_CLUSTER_HOPS 4
+   any FAT op inside a corrupted subdirectory. MAX_DIR_SECTORS is a
+   sanity cap, not a real directory-size limit. 6.76.5: the cap counts
+   sectors, 256 of them (4096 entries), the same on every card. It counted 4
+   clusters, which was 4096 entries on the Pi's 32 KB clusters but 64 on a
+   card of one-sector clusters (the plank check's). The walk now picks up
+   where the last call left it (callers ask for sector 0, 1, 2 ... in turn),
+   so a full scan is linear, and a cyclic chain still ends at the cap within
+   a second (tools/checks/fatcyclehang-check.sh). Any FAT write forgets it. */
+#define MAX_DIR_SECTORS 256
 
 /* The lba of the index'th sector of a directory, root (fixed area, can't
    grow) or a real subdirectory (cluster chain, walked via the FAT). 0 means
@@ -241,13 +232,14 @@ static u32 dir_get_sector(u32 dir_cluster, u32 index) {
         if (index >= root_dir_sectors) return 0;
         return root_dir_start + index;
     }
-    u32 skip = index / sectors_per_cluster;
-    if (skip >= MAX_DIR_CLUSTER_HOPS) return 0;
-    u32 cluster = dir_cluster;
-    for (; skip > 0; skip--) {
+    if (index >= MAX_DIR_SECTORS) return 0;
+    u32 skip = index / sectors_per_cluster, at = 0, cluster = dir_cluster;
+    if (walk_dir == dir_cluster && walk_skip <= skip) { at = walk_skip; cluster = walk_cluster; }
+    for (; at < skip; at++) {
         cluster = fat_entry_read(cluster);
         if (cluster < 2 || cluster >= eoc) return 0;
     }
+    walk_dir = dir_cluster; walk_skip = skip; walk_cluster = cluster;
     return cluster_to_lba(cluster) + (index % sectors_per_cluster);
 }
 
