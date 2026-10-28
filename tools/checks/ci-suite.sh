@@ -211,6 +211,7 @@ once |0|JPEG decoder, host harness (baseline and, since 6.46.0, progressive)|./t
 once |1|Media decoders (WAV, MP3), host harness under ASan and UBSan|./tools/checks/media-host-check.sh
 retry|7|Tasks keep their own x87 float state across switches|./tools/checks/fpu-check.sh
 once |7|HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh
+once |7|The Pi Terminal folds UTF-8 to Latin-1 cells: é stays é, past Latin-1 is ?, host harness|./tools/checks/utf8fold-host-check.sh
 retry|1|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 once |4|PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
 once |4|iCalendar and CalDAV parser fuzz (ASan/UBSan, truncation+mutation; 6.48.1)|./tools/checks/ics-fuzz-check.sh

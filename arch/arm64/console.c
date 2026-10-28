@@ -8,6 +8,7 @@
    scrolls it: Page Up and Page Down by half a page, Home to the first line, End to the newest. The title bar says which
    lines are shown, and a pinned row under the text keeps the latest wifi and usb status in view wherever you are. ---- */
 #include "../../drivers/vgafont.h"
+#include "utf8.h"   /* 6.78.1: console_putc folds UTF-8 */
 const unsigned char *const vgafont = vgafont_glyphs;   /* crash.c draws the panel with it: one copy of the table */
 #define CON_FG 0x00202020
 #define CON_BG 0x00ffffff
@@ -219,7 +220,11 @@ static void pane_putc(struct pane *p, char c) {
     }
     cur_release(held);
 }
-void console_putc(char c) { pane_putc(con_to_term ? &term_p : &con_p, c); }
+void console_putc(char c) {   /* 6.78.1: UTF-8 folded to one Latin-1 cell a character (utf8.h) */
+    static unsigned st;
+    int b = utf8_fold(&st, (unsigned char)c);
+    if (b >= 0) pane_putc(con_to_term ? &term_p : &con_p, (char)b);
+}
 /* The console's type. DejaVu Sans Mono at the screen's scale, unless a quick test of the rasterizer says no: then the
    8x16 VGA font at a whole-number scale (2x on a 1080p screen), which needs nothing but integer stores. */
 void con_place(int win_x, int win_y, int win_w, int win_h) {   /* where the grid sits and how many columns and rows fit the window, for the font already chosen */
