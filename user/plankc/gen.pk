@@ -25,6 +25,7 @@ struct G {
   tries: [int]     # the open trys' records, as frame offsets
   fns: [str: str]  # function name: its return type
   structs: [str: N]  # struct name: its Struct node
+  enums: [str: N]    # enum name: its Enum node (6.73.0)
   rt: [str: int]   # the built-ins rt.pk is written with: syscall, peek, poke, global, addr, as_str, stack_pointer
   strs: [str]      # string literals, as .asciz bodies
   next_off: int
@@ -232,6 +233,12 @@ fn gen_expr(g: G, e: N) -> str {
     return item
   }
   if e.kind == "Method" { return method(g, e) }
+  if e.kind == "Field" and enum_name(g, e.kids[0]) != "" {   # Light.red
+    return construct_case(g, e, enum_name(g, e.kids[0]), e.kids[1].text, [], [])
+  }
+  if e.kind == "CallValue" and e.kids[0].kind == "Lambda" and len(e.kids[0].kids[0].kids) == 0 and len(e.kids[0].kids[2].kids) == 1 and e.kids[0].kids[2].kids[0].kind == "Match" {
+    return gen_match(g, e.kids[0].kids[2].kids[0], true)   # match as a value: the parser's closure, written inline
+  }
   if e.kind == "Field" {
     let t = gen_expr(g, e.kids[0])
     let f = field(g, e, t, e.kids[1].text)
@@ -317,6 +324,12 @@ fn gen_expr(g: G, e: N) -> str {
       return "bool"
     }
     if lt != rt { nope(e, "\(op) between \(lt) and \(rt)") }
+    if (op == "==" or op == "!=") and lt in g.enums {   # the same case with the same fields
+      lit(g, "x2", lt)
+      emit(g, "bl pk_rt_enum_eq")
+      if op == "!=" { emit(g, "eor x0, x0, #1") }
+      return "bool"
+    }
     if lt != "str" and lt != "int" and lt != "bool" { nope(e, "\(op) on \(lt)") }
     if lt == "str" {
       if op == "+" {
@@ -493,6 +506,7 @@ fn str_method(g: G, e: N, name: str, a: [N]) -> str {
 
 # xs.append(v) and xs.pop(), so far.
 fn method(g: G, e: N) -> str {
+  if enum_name(g, e.kids[0]) != "" { return construct_case(g, e, enum_name(g, e.kids[0]), e.kids[1].text, e.kids[2].kids, e.kids[3].kids) }
   let t = gen_expr(g, e.kids[0])
   let name = e.kids[1].text
   let a = e.kids[2].kids
@@ -761,6 +775,8 @@ fn gen_stmt(g: G, s: N) {
     place(g, other)
     gen_block(g, s.kids[2])
     place(g, done)
+  } else if s.kind == "Match" {
+    gen_match(g, s, false)
   } else if s.kind == "IfLet" {
     let other = fresh(g)
     let done = fresh(g)
@@ -932,6 +948,7 @@ fn count_locals(n: N) -> int {
   if n.kind == "ForIn" { c = 4 }
   if n.kind == "IfLet" { c = 1 }
   if n.kind == "Try" { c = 5 }
+  if n.kind == "Match" { c = 1 + 8 * len(n.kids[1].kids) }   # the subject and each arm's bindings, generously
   for k in n.kids { c += count_locals(k) }
   return c
 }
@@ -972,6 +989,124 @@ fn type_of(g: G, e: N) -> str {
   let mark = len(g.out)
   let t = gen_expr(g, e)
   while len(g.out) > mark { g.out.pop() }
+  return t
+}
+
+# ---------------------------------------------------------------- enums (6.73.0)
+# An enum value is the address of {its case's number, then that case's fields}, 8 bytes each.
+fn enum_name(g: G, e: N) -> str {
+  if e.kind == "Name" and e.kids[0].text in g.enums and not has_local(g, e.kids[0].text) { return e.kids[0].text }
+  return ""
+}
+
+fn has_local(g: G, name: str) -> bool {
+  for l in g.locals {
+    if l.name == name { return true }
+  }
+  return false
+}
+
+fn case_of(g: G, e: N, en: str, name: str) -> int {
+  let cases = g.enums[en].kids[1].kids
+  for i in 0..len(cases) {
+    if cases[i].kids[0].text == name { return i }
+  }
+  throw "\(e.line): \(en) has no case \(name)"
+}
+
+fn construct_case(g: G, e: N, en: str, name: str, a: [N], labels: [N]) -> str {
+  let i = case_of(g, e, en, name)
+  let fields = g.enums[en].kids[1].kids[i].kids[1].kids
+  if len(a) != len(fields) { nope(e, "\(en).\(name) with \(len(a)) values for \(len(fields)) fields") }
+  emit(g, "mov x0, #" + str(len(fields) * 8 + 8))
+  emit(g, "bl pk_rt_alloc")
+  emit(g, "mov x1, #" + str(i))
+  emit(g, "str x1, [x0]")
+  push(g)
+  for k in 0..len(fields) {
+    var v = a[k]
+    for j in 0..len(a) {
+      if labels[j].kind == "S" and labels[j].text == fields[k].kids[0].text { v = a[j] }
+    }
+    let t = gen_expr(g, v)
+    let want = int_type(e, fields[k].kids[1].text)
+    if not fits(t, want) { nope(e, "a \(t) for \(fields[k].kids[0].text), a \(want)") }
+    coerce(g, t, want)
+    emit(g, "ldr x1, [sp]")
+    emit(g, "str x0, [x1, #" + str(k * 8 + 8) + "]")
+  }
+  pop(g, "x0")
+  return en
+}
+
+# match, as a statement or (value) as the arms' one expression each. Patterns are an enum's cases, with names for their
+# fields, or values compared with ==. The first arm that fits runs; else runs when none does.
+fn gen_match(g: G, m: N, value: bool) -> str {
+  let t = gen_expr(g, m.kids[0])
+  let mark = len(g.locals)
+  let subj = new_local(g, " match", t)
+  store(g, subj)
+  let done = fresh(g)
+  var vt = ""
+  for arm in m.kids[1].kids {
+    let next = fresh(g)
+    let body = fresh(g)
+    var binds: [N] = []
+    var case_i = -1
+    for p in arm.kids[0].kids {
+      if p.kind == "T" {
+        if not (t in g.enums) { nope(m, "a case pattern on a \(t)") }
+        case_i = case_of(g, m, t, p.kids[0].text)
+        binds = p.kids[1].kids
+        load(g, subj)
+        emit(g, "ldr x0, [x0]")
+        emit(g, "cmp x0, #" + str(case_i))
+        emit(g, "b.eq " + body)
+      } else {
+        let pt = gen_expr(g, p)
+        if pt != t { nope(p, "a \(pt) pattern for a \(t)") }
+        emit(g, "mov x1, x0")
+        load(g, subj)
+        if t == "str" {
+          emit(g, "bl pk_rt_str_eq")
+          emit(g, "cbnz x0, " + body)
+        } else {
+          emit(g, "cmp x0, x1")
+          emit(g, "b.eq " + body)
+        }
+      }
+    }
+    emit(g, "b " + next)
+    place(g, body)
+    let inner = len(g.locals)
+    if len(binds) > 0 {
+      let fields = g.enums[t].kids[1].kids[case_i].kids[1].kids
+      for k in 0..len(binds) {
+        load(g, subj)
+        emit(g, "ldr x0, [x0, #" + str(k * 8 + 8) + "]")
+        store(g, new_local(g, binds[k].text, int_type(m, fields[k].kids[1].text)))
+      }
+    }
+    vt = arm_body(g, arm.kids[1], value, vt)
+    while len(g.locals) > inner { g.locals.pop() }
+    emit(g, "b " + done)
+    place(g, next)
+  }
+  if m.kids[2].kind != "_" { vt = arm_body(g, m.kids[2], value, vt) }
+  place(g, done)
+  while len(g.locals) > mark { g.locals.pop() }
+  if value { return vt }
+  return "void"
+}
+
+# An arm's body: a block, or (as a value) the parser's [return expr], whose value lands in x0.
+fn arm_body(g: G, b: N, value: bool, vt: str) -> str {
+  if not value {
+    gen_block(g, b)
+    return vt
+  }
+  let t = gen_expr(g, b.kids[0].kids[0])
+  if vt != "" and t != vt { nope(b.kids[0], "a match whose arms give a \(vt) and a \(t)") }
   return t
 }
 
@@ -1085,6 +1220,16 @@ fn layout_fn(g: G) -> N {
     let test = node("Binary", 0, [sv("=="), node("Name", 0, [sv("name")]), node("Str", 0, [sv(name)])])
     body.append(node("If", 0, [test, lv([node("Return", 0, [node("Str", 0, [sv(parts.join(";"))])])]), lv([])]))
   }
+  for name in g.enums {   # #case|case(field:type;field:type)|...
+    let cases: [str] = []
+    for c in g.enums[name].kids[1].kids {
+      let fs: [str] = []
+      for f in c.kids[1].kids { fs.append(f.kids[0].text + ":" + f.kids[1].text) }
+      if len(fs) == 0 { cases.append(c.kids[0].text) } else { cases.append(c.kids[0].text + "(" + fs.join(";") + ")") }
+    }
+    let test = node("Binary", 0, [sv("=="), node("Name", 0, [sv("name")]), node("Str", 0, [sv(name)])])
+    body.append(node("If", 0, [test, lv([node("Return", 0, [node("Str", 0, [sv("#" + cases.join("|"))])])]), lv([])]))
+  }
   body.append(node("Return", 0, [node("Str", 0, [sv("")])]))
   return node("Fn", 0, [sv("rt_layout"), lv([tv([sv("name"), sv("str")])]), sv("str"), lv(body), N("D", 0, "", []), lv([]), bv(false), bv(false), sv("")])
 }
@@ -1095,11 +1240,19 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
 
 # The program's assembly, a line a string: for asm's text, or enc.pk's image.
 fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
-  let g = G([], 0, [], [], [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "")
+  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "")
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
-    if f.kind == "Struct" {
+    if f.kind == "Enum" {
+      if len(f.kids[3].kids) > 0 { nope(f, "an enum's type parameters") }
+      g.enums[f.kids[0].text] = f
+      for m in f.kids[2].kids {   # a method, as for structs: Enum.name with self first
+        let params = [tv([sv("self"), sv(f.kids[0].text)])]
+        for p in m.kids[1].kids { params.append(p) }
+        fns.append(node("Fn", m.line, [sv(f.kids[0].text + "." + m.kids[0].text), lv(params), m.kids[2], m.kids[3], m.kids[4], m.kids[5], m.kids[6], m.kids[7], m.kids[8]]))
+      }
+    } else if f.kind == "Struct" {
       if len(f.kids[4].kids) > 0 { nope(f, "a struct's type parameters") }
       g.structs[f.kids[0].text] = f
       for m in f.kids[3].kids {   # a method is a function named Struct.name whose first parameter is self
@@ -1131,6 +1284,7 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   runtime.kids = []
   g.structs = [:]
   g.fn_nodes = [:]   # it holds every function's tree too
+  g.enums = [:]
   while len(fns) > 0 { fns.pop() }
   # pklibc's _start calls main(argc, argv); the program's main takes nothing.
   g.out.append("")

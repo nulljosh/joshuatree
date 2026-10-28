@@ -194,6 +194,7 @@ fn rt_find_byte(s: str, c: int, from: int) -> int {
 fn rt_show_struct(v: int, ty: str) -> str {
   let layout = rt_layout(ty)
   if len(layout) == 0 { rt_fail("plankc cannot show a " + ty) }
+  if peek8(addr(layout)) == 35 { return rt_show_enum(v, layout) }   # #: an enum
   var out = ty + "("
   var at = 0
   var i = 0
@@ -762,4 +763,40 @@ fn rt_sweep(from: int, end: int, large: bool) {
       s += run
     }
   }
+}
+
+# ---- enums (6.73.0): the address of {the case's number, its fields}. The layout is "#case|case(field:type;...)|...";
+# a value shows as its case, and its fields as a struct's do: circle(r: 1), dot.
+fn rt_show_enum(v: int, layout: str) -> str {
+  var at = 1
+  for i in 0..peek(v) {
+    at = rt_find_byte(layout, 124, at) + 1   # past the tag-th |
+  }
+  let end = rt_find_byte(layout, 124, at)
+  let open = rt_find_byte(layout, 40, at)
+  if open >= end { return rt_sub(layout, at, end) }
+  var out = rt_sub(layout, at, open) + "("
+  var f = open + 1
+  var i = 0
+  while f < end - 1 {
+    let stop = rt_min(rt_find_byte(layout, 59, f), end - 1)
+    let colon = rt_find_byte(layout, 58, f)
+    if i > 0 { out = out + ", " }
+    out = out + rt_sub(layout, f, colon) + ": " + rt_show(peek(v + 8 + i * 8), rt_sub(layout, colon + 1, stop), true)
+    f = stop + 1
+    i += 1
+  }
+  return out + ")"
+}
+
+fn rt_min(a: int, b: int) -> int {
+  if a < b { return a }
+  return b
+}
+
+# The same case with equal fields. ponytail: equal as printed, which is structural for every payload plankc has; compare
+# field by field if enums get big enough for the printing to cost.
+fn rt_enum_eq(a: int, b: int, ty: str) -> bool {
+  if peek(a) != peek(b) { return false }
+  return rt_str_eq(rt_show(a, ty, true), rt_show(b, ty, true))
 }
