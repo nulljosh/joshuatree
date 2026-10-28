@@ -1,4 +1,4 @@
-# Edge cases for plankc's tokenizer (tools/checks/plankc-lex-check.py): every one here has tripped a lexer somewhere.
+# Edge cases for plankc's tokenizer (tools/checks/plankc-check.py): every one here has tripped a lexer somewhere.
 fn main() {
   let poem = "two
 lines"

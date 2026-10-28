@@ -90,7 +90,7 @@ once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./t
 once |7|No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
 once |7|docs/ARCHITECTURE.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static)|python3 ./tools/checks/design-doc-check.py
 once |7|every source file the progress graph counts has a row in docs/ARCHITECTURE.md (docs at 100 percent, 6.59.1) (static)|python3 ./tools/checks/doc-coverage-check.py
-once |7|plankc's tokenizer, written in Plank (user/plankc/lex.pk), reads all of Plank's examples, itself and its edge cases exactly as plank.py's lex() does, step 1 of the true bootstrap (6.60.0) (skips without Plank and uv; CI pins Plank on this shard)|python3 ./tools/checks/plankc-lex-check.py
+once |7|plankc, the Plank compiler written in Plank (user/plankc), tokenizes (6.60.0) and parses (6.61.0) all of Plank's examples, its own files and its edge cases exactly as plank.py does, token for token and tree for tree, steps 1 and 2 of the true bootstrap (skips without Plank and uv; CI pins Plank on this shard)|python3 ./tools/checks/plankc-check.py
 once |7|Kernel memory keeps 16KB clear of the program window (toolchain drift guard)|python3 ./tools/checks/bss-margin-check.py
 once |7|Samantha's face loops wrap without a seam|python3 ./tools/checks/face-frames-check.py
 once |7|docs/ARCHITECTURE.md lists every check in this suite|./tools/checks/testing-doc-check.sh
