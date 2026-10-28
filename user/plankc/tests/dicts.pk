@@ -1,0 +1,27 @@
+# plankc's dicts (6.67.0): string keys in the order they arrived, get, set, in, len, for-in, printing.
+struct Fn {
+  name: str
+  args: int
+}
+
+fn main() {
+  let d = ["b": 2, "a": 1]
+  d["c"] = 3
+  d["b"] = 20
+  d["a"] += 5
+  print(d, len(d), "a" in d, "z" in d, d["b"])
+  let e: [str: str] = [:]
+  print(e, len(e))
+  e["k"] = "v"
+  print(e)
+  for k in d {
+    print(k, d[k])
+  }
+  let fns: [str: Fn] = [:]
+  fns["main"] = Fn("main", 0)
+  fns["add"] = Fn("add", 2)
+  print(fns["add"].args, fns)
+  let groups = ["odd": [1, 3], "even": [2]]
+  groups["even"].append(4)
+  print(groups, [e, e])
+}

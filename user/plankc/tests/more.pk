@@ -1,0 +1,23 @@
+# plankc's optionals, string methods and slices (6.66.0).
+fn first_dot(s: str) -> int? {
+  return s.find(".")
+}
+
+fn main() {
+  let s = "  plank.pk  "
+  let t = s.trim()
+  print(t, len(t), t.starts_with("pl"), t.ends_with(".pk"), t.ends_with(".py"))
+  print(t[0], t[-1], t[1..4], t[..5], t[6..], t[-2..])
+  print(t.find(".") ?? -1, t.find("zz") ?? -1, first_dot("a.b") ?? 0)
+  if let at = t.find("k") {
+    print("k at \(at)")
+  } else {
+    print("no k")
+  }
+  let nothing: str? = nil
+  print(nothing ?? "fallback", nothing == nil)
+  let maybe: str? = "here"
+  print(maybe ?? "fallback", maybe != nil)
+  print("lan" in "plank", "x" in "plank", t.chars(), "a,b,,c".split(","))
+  print(["x", "y", "z"].join("-"), [1, 2, 3, 4][1..3], int("42") + int(" -7 "))
+}

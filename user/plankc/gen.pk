@@ -18,6 +18,8 @@ struct G {
   label: int
   locals: [Local]
   loops: [str]     # break and continue labels, two a loop
+  loop_tries: [int]  # how many trys were open where each loop began
+  tries: [int]     # the open trys' records, as frame offsets
   fns: [str: str]  # function name: its return type
   structs: [str: N]  # struct name: its Struct node
   rt: [str: int]   # the built-ins rt.pk is written with: syscall, peek, poke, global, addr, as_str
@@ -48,18 +50,40 @@ fn find(g: G, name: str) -> Local {
 
 fn new_local(g: G, name: str, ty: str) -> Local {
   g.next_off += 8
-  if g.next_off > 248 { throw "more than 31 locals in one function" }   # ponytail: ldur reaches 256 bytes; spill wider when a program needs it
+  if g.next_off > 4088 { throw "more than 511 locals in one function" }
   let l = Local(name, g.next_off, ty)
   g.locals.append(l)
   return l
 }
 
-fn load(g: G, l: Local) { emit(g, "ldur x0, [x29, #-\(l.off)]") }
-fn store(g: G, l: Local) { emit(g, "stur x0, [x29, #-\(l.off)]") }
+fn load(g: G, l: Local) { slot(g, "ldr", "x0", l.off) }
+fn store(g: G, l: Local) { slot(g, "str", "x0", l.off) }
+
+# ldr or str of register r at x29 - off: ldur and stur reach 256 bytes down, past that through x9.
+fn slot(g: G, op: str, r: str, off: int) {
+  if off <= 256 {
+    var short = "stur"
+    if op == "ldr" { short = "ldur" }
+    emit(g, "\(short) \(r), [x29, #-\(off)]")
+  } else {
+    emit(g, "sub x9, x29, #\(off)")
+    emit(g, "\(op) \(r), [x9]")
+  }
+}
 
 fn int_type(n: N, ty: str) -> str {
   if ty == "int" or ty == "bool" or ty == "str" { return ty }
-  if ty.starts_with("[") and ty.ends_with("]") and not (":" in ty) and not ("?" in ty) {   # a list of any of these
+  if ty.ends_with("?") and not ty.ends_with("??") {   # may be missing: nil is 0, and an int or bool sits in a box
+    int_type(n, ty[..len(ty) - 1])
+    return ty
+  }
+  let kv = dict_parts(ty)
+  if len(kv) == 2 {   # a dict: string keys, any value
+    if kv[0] != "str" { nope(n, "a dict with \(kv[0]) keys") }
+    int_type(n, kv[1])
+    return ty
+  }
+  if ty.starts_with("[") and ty.ends_with("]") and not ("?" in ty) {   # a list of any of these
     int_type(n, ty[1..len(ty) - 1])
     return ty
   }
@@ -68,7 +92,33 @@ fn int_type(n: N, ty: str) -> str {
   return ""
 }
 
-fn is_list(ty: str) -> bool { return ty.starts_with("[") }
+fn is_list(ty: str) -> bool { return ty.starts_with("[") and len(dict_parts(ty)) == 0 and ty != "[:]" }
+fn is_dict(ty: str) -> bool { return ty == "[:]" or len(dict_parts(ty)) == 2 }
+
+# [K: V] as [K, V]; [] for anything else. The ": " has to sit at depth one, so [[str: int]] is a list.
+fn dict_parts(ty: str) -> [str] {
+  if not ty.starts_with("[") { return [] }
+  let cs = ty.chars()
+  var depth = 0
+  for i in 0..len(cs) - 1 {
+    if cs[i] == "[" or cs[i] == "(" { depth += 1 }
+    if cs[i] == "]" or cs[i] == ")" { depth -= 1 }
+    if cs[i] == ":" and depth == 1 and cs[i + 1] == " " { return [ty[1..i], ty[i + 2..len(ty) - 1]] }
+  }
+  return []
+}
+fn is_opt(ty: str) -> bool { return ty.ends_with("?") }
+fn boxed(ty: str) -> bool { return ty == "int?" or ty == "bool?" }
+
+# Can a value of type got go where want is written?
+fn fits(got: str, want: str) -> bool {
+  return got == want or (got == "[]" and is_list(want)) or (got == "[:]" and is_dict(want)) or (got == "nil" and is_opt(want)) or (is_opt(want) and got + "?" == want)
+}
+
+# x0 holds a value of type got going where want is: an int or bool into an int? or bool? gets its box.
+fn coerce(g: G, got: str, want: str) {
+  if boxed(want) and not is_opt(got) and got != "nil" { emit(g, "bl pk_rt_box") }
+}
 
 # The type a list holds.
 fn item_type(n: N, ty: str) -> str {
@@ -93,6 +143,23 @@ fn gen_expr(g: G, e: N) -> str {
     return "str"
   }
   if e.kind == "Interp" { return interp(g, e) }
+  if e.kind == "Nil" {
+    emit(g, "mov x0, #0")
+    return "nil"
+  }
+  if e.kind == "Slice" {
+    let t = gen_expr(g, e.kids[0])
+    if t != "str" and not is_list(t) { nope(e, "slicing a " + t) }
+    push(g)
+    if e.kids[1].kind == "_" { emit(g, "mov x0, #0") } else { gen_expr(g, e.kids[1]) }
+    push(g)
+    if e.kids[2].kind == "_" { emit(g, "ldr x0, =4611686018427387904") } else { gen_expr(g, e.kids[2]) }
+    emit(g, "mov x2, x0")
+    pop(g, "x1")
+    pop(g, "x0")
+    if t == "str" { emit(g, "bl pk_rt_str_slice") } else { emit(g, "bl pk_rt_list_slice") }
+    return t
+  }
   if e.kind == "List" {
     let items = e.kids[0].kids
     emit(g, "bl pk_rt_list_new")
@@ -110,8 +177,45 @@ fn gen_expr(g: G, e: N) -> str {
     }
     return "[" + ty + "]"
   }
+  if e.kind == "Dict" {
+    let keys = e.kids[0].kids
+    let vals = e.kids[1].kids
+    emit(g, "bl pk_rt_dict_new")
+    if len(keys) == 0 { return "[:]" }
+    push(g)
+    var vt = ""
+    for i in 0..len(keys) {
+      if gen_expr(g, keys[i]) != "str" { nope(keys[i], "a dict key that is not a string") }
+      push(g)
+      let t = gen_expr(g, vals[i])
+      if vt == "" { vt = t }
+      if t != vt { nope(vals[i], "a dict of mixed \(vt) and \(t)") }
+      emit(g, "mov x2, x0")
+      pop(g, "x1")
+      emit(g, "ldr x0, [sp]")
+      emit(g, "bl pk_rt_dict_set")
+    }
+    pop(g, "x0")
+    return "[str: " + vt + "]"
+  }
   if e.kind == "Index" {
     let t = gen_expr(g, e.kids[0])
+    if is_dict(t) {
+      push(g)
+      gen_expr(g, e.kids[1])
+      emit(g, "mov x1, x0")
+      pop(g, "x0")
+      emit(g, "bl pk_rt_dict_get")
+      return dict_parts(t)[1]
+    }
+    if t == "str" {
+      push(g)
+      gen_expr(g, e.kids[1])
+      emit(g, "mov x1, x0")
+      pop(g, "x0")
+      emit(g, "bl pk_rt_char_at")
+      return "str"
+    }
     let item = item_type(e, t)
     push(g)
     if gen_expr(g, e.kids[1]) != "int" { nope(e, "an index that is not an int") }
@@ -164,12 +268,48 @@ fn gen_expr(g: G, e: N) -> str {
       emit(g, "cset x0, ne")
       return "bool"
     }
-    if op == "in" or op == "??" { nope(e, op) }
+    if op == "??" {
+      let have = fresh(g)
+      let done = fresh(g)
+      let t = gen_expr(g, e.kids[1])
+      if not is_opt(t) { nope(e, "?? on a \(t), which is never nil") }
+      let base = t[..len(t) - 1]
+      emit(g, "cbnz x0, " + have)
+      let d = gen_expr(g, e.kids[2])
+      if d != base { nope(e, "?? with a \(d) for a \(t)") }
+      emit(g, "b " + done)
+      place(g, have)
+      if boxed(t) { emit(g, "ldr x0, [x0]") }
+      place(g, done)
+      return base
+    }
     let lt = gen_expr(g, e.kids[1])
     push(g)
     let rt = gen_expr(g, e.kids[2])
     emit(g, "mov x1, x0")
     pop(g, "x0")
+    if op == "in" and is_dict(rt) {
+      emit(g, "mov x2, x0")
+      emit(g, "mov x0, x1")
+      emit(g, "mov x1, x2")
+      emit(g, "bl pk_rt_dict_has")
+      return "bool"
+    }
+    if op == "in" {
+      if lt != "str" or rt != "str" { nope(e, "in on a \(rt)") }
+      emit(g, "mov x2, x0")
+      emit(g, "mov x0, x1")
+      emit(g, "mov x1, x2")
+      emit(g, "bl pk_rt_find")
+      emit(g, "cmp x0, #0")
+      emit(g, "cset x0, ge")
+      return "bool"
+    }
+    if (op == "==" or op == "!=") and (lt == "nil" or rt == "nil") {   # x == nil: the pointer, or the box
+      emit(g, "cmp x0, x1")
+      emit(g, "cset x0, " + cmp_cond(op))
+      return "bool"
+    }
     if lt != rt { nope(e, "\(op) between \(lt) and \(rt)") }
     if lt != "str" and lt != "int" and lt != "bool" { nope(e, "\(op) on \(lt)") }
     if lt == "str" {
@@ -257,7 +397,7 @@ fn to_str(g: G, e: N, t: str) {
     place(g, f)
     lit(g, "x0", "false")
     place(g, done)
-  } else if is_list(t) or upper(t[0]) {
+  } else if is_list(t) or is_dict(t) or upper(t[0]) {
     lit(g, "x1", t)
     emit(g, "mov x2, #0")
     emit(g, "bl pk_rt_show")
@@ -266,11 +406,63 @@ fn to_str(g: G, e: N, t: str) {
   }
 }
 
+fn str_method(g: G, e: N, name: str, a: [N]) -> str {
+  if name == "chars" or name == "trim" {
+    if len(a) != 0 { nope(e, name + " with arguments") }
+    if name == "chars" {
+      emit(g, "bl pk_rt_chars")
+      return "[str]"
+    }
+    emit(g, "bl pk_rt_trim")
+    return "str"
+  }
+  if len(a) != 1 { nope(e, "the string method " + name) }
+  push(g)
+  if gen_expr(g, a[0]) != "str" { nope(e, name + " of anything but a string") }
+  emit(g, "mov x1, x0")
+  pop(g, "x0")
+  if name == "starts_with" {
+    emit(g, "bl pk_rt_starts")
+    return "bool"
+  }
+  if name == "ends_with" {
+    emit(g, "bl pk_rt_ends")
+    return "bool"
+  }
+  if name == "split" {
+    emit(g, "bl pk_rt_split")
+    return "[str]"
+  }
+  if name == "find" {   # where it is, or nil
+    let none_ = fresh(g)
+    let done = fresh(g)
+    emit(g, "bl pk_rt_find")
+    emit(g, "tbnz x0, #63, " + none_)
+    emit(g, "bl pk_rt_box")
+    emit(g, "b " + done)
+    place(g, none_)
+    emit(g, "mov x0, #0")
+    place(g, done)
+    return "int?"
+  }
+  nope(e, "the string method " + name)
+  return ""
+}
+
 # xs.append(v) and xs.pop(), so far.
 fn method(g: G, e: N) -> str {
   let t = gen_expr(g, e.kids[0])
   let name = e.kids[1].text
   let a = e.kids[2].kids
+  if t == "str" { return str_method(g, e, name, a) }
+  if t == "[str]" and name == "join" and len(a) == 1 {
+    push(g)
+    gen_expr(g, a[0])
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_join")
+    return "str"
+  }
   if not is_list(t) { nope(e, "the method \(name) on \(t)") }
   if name == "append" and len(a) == 1 {
     push(g)
@@ -311,6 +503,9 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
       emit(g, "ldur x0, [x0, #-8]")
     } else if is_list(t) {
       emit(g, "ldr x0, [x0]")
+    } else if is_dict(t) {
+      emit(g, "ldr x0, [x0]")
+      emit(g, "ldr x0, [x0]")
     } else {
       nope(e, "len of a " + t)
     }
@@ -319,6 +514,20 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   if name == "str" and len(a) == 1 {
     to_str(g, e, gen_expr(g, a[0]))
     return "str"
+  }
+  if name == "int" and len(a) == 1 {
+    let t = gen_expr(g, a[0])
+    if t == "str" { emit(g, "bl pk_rt_parse_int") } else if t != "int" { nope(e, "int() of a " + t) }
+    return "int"
+  }
+  if name == "exit" and len(a) == 1 {
+    gen_expr(g, a[0])
+    emit(g, "mov x1, x0")
+    emit(g, "mov x0, #1")   # JT_SYS_EXIT
+    emit(g, "mov x8, x0")
+    emit(g, "mov x0, x1")
+    emit(g, "svc #0")
+    return "void"
   }
   if not (name in g.rt) { nope(e, "calling \(name)") }
   if name == "global" {
@@ -382,11 +591,23 @@ fn gen_stmt(g: G, s: N) {
     var t = gen_expr(g, s.kids[2])
     if s.kids[1].kind != "_" {
       let said = int_type(s, s.kids[1].text)
-      if t != said and not (t == "[]" and is_list(said)) { nope(s, "a \(t) where \(said) was written") }
+      if not fits(t, said) { nope(s, "a \(t) where \(said) was written") }
+      coerce(g, t, said)
       t = said
     }
-    if t == "[]" { nope(s, "an empty list with no type: write let xs: [int] = []") }
+    if t == "[]" or t == "nil" { nope(s, "a \(t) with no type: write let x: T = ...") }
     store(g, new_local(g, s.kids[0].text, int_type(s, t)))
+  } else if s.kind == "Assign" and s.kids[0].kind == "Index" and is_dict(type_of(g, s.kids[0].kids[0])) {
+    let target = s.kids[0]
+    gen_expr(g, target.kids[0])
+    push(g)
+    gen_expr(g, target.kids[1])
+    push(g)
+    gen_expr(g, s.kids[1])
+    emit(g, "mov x2, x0")
+    pop(g, "x1")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_dict_set")
   } else if s.kind == "Assign" and s.kids[0].kind == "Index" {
     let target = s.kids[0]
     gen_expr(g, target.kids[0])
@@ -414,6 +635,7 @@ fn gen_stmt(g: G, s: N) {
     gen_expr(g, s.kids[0])
   } else if s.kind == "Return" {
     if s.kids[0].kind != "_" { gen_expr(g, s.kids[0]) }
+    leave_tries(g, 0)
     emit(g, "b " + g.ret)
   } else if s.kind == "If" {
     let other = fresh(g)
@@ -425,6 +647,21 @@ fn gen_stmt(g: G, s: N) {
     place(g, other)
     gen_block(g, s.kids[2])
     place(g, done)
+  } else if s.kind == "IfLet" {
+    let other = fresh(g)
+    let done = fresh(g)
+    let t = gen_expr(g, s.kids[1])
+    if not is_opt(t) { nope(s, "if let on a \(t), which is never nil") }
+    emit(g, "cbz x0, " + other)
+    if boxed(t) { emit(g, "ldr x0, [x0]") }
+    let mark = len(g.locals)
+    store(g, new_local(g, s.kids[0].text, t[..len(t) - 1]))
+    gen_block(g, s.kids[2])
+    while len(g.locals) > mark { g.locals.pop() }
+    emit(g, "b " + done)
+    place(g, other)
+    gen_block(g, s.kids[3])
+    place(g, done)
   } else if s.kind == "While" {
     let top = fresh(g)
     let done = fresh(g)
@@ -433,9 +670,11 @@ fn gen_stmt(g: G, s: N) {
     emit(g, "cbz x0, " + done)
     g.loops.append(done)
     g.loops.append(top)
+    g.loop_tries.append(len(g.tries))
     gen_block(g, s.kids[1])
     g.loops.pop()
     g.loops.pop()
+    g.loop_tries.pop()
     emit(g, "b " + top)
     place(g, done)
   } else if s.kind == "For" {
@@ -451,14 +690,16 @@ fn gen_stmt(g: G, s: N) {
     let done = fresh(g)
     place(g, top)
     load(g, i)
-    emit(g, "ldur x1, [x29, #-\(stop.off)]")
+    slot(g, "ldr", "x1", stop.off)
     emit(g, "cmp x0, x1")
     emit(g, "b.ge " + done)
     g.loops.append(done)
     g.loops.append(step)
+    g.loop_tries.append(len(g.tries))
     gen_block(g, s.kids[3])
     g.loops.pop()
     g.loops.pop()
+    g.loop_tries.pop()
     place(g, step)
     load(g, i)
     emit(g, "add x0, x0, #1")
@@ -469,7 +710,11 @@ fn gen_stmt(g: G, s: N) {
   } else if s.kind == "ForIn" {
     # for x in xs, or for i, x in xs: the list and a count in hidden locals.
     let mark = len(g.locals)
-    let t = gen_expr(g, s.kids[1])
+    var t = gen_expr(g, s.kids[1])
+    if is_dict(t) {   # a dict's keys, in order
+      emit(g, "ldr x0, [x0]")
+      t = "[" + dict_parts(t)[0] + "]"
+    }
     let item = item_type(s, t)
     let xs = new_local(g, " xs", t)
     store(g, xs)
@@ -498,9 +743,11 @@ fn gen_stmt(g: G, s: N) {
     store(g, x)
     g.loops.append(done)
     g.loops.append(step)
+    g.loop_tries.append(len(g.tries))
     gen_block(g, s.kids[2])
     g.loops.pop()
     g.loops.pop()
+    g.loop_tries.pop()
     place(g, step)
     load(g, idx)
     emit(g, "add x0, x0, #1")
@@ -508,8 +755,52 @@ fn gen_stmt(g: G, s: N) {
     emit(g, "b " + top)
     place(g, done)
     while len(g.locals) > mark { g.locals.pop() }
+  } else if s.kind == "Try" {
+    let rec = [new_local(g, " try3", "int"), new_local(g, " try2", "int"), new_local(g, " try1", "int"), new_local(g, " try0", "int")]
+    let base = rec[3].off   # the record runs up from x29 - base: prev, x29, sp, catch
+    let landing = fresh(g)
+    let done = fresh(g)
+    emit(g, "adrp x1, pk_globals")
+    emit(g, "add x1, x1, :lo12:pk_globals")
+    emit(g, "ldr x2, [x1, #16]")
+    emit(g, "sub x3, x29, #\(base)")
+    emit(g, "str x2, [x3]")
+    emit(g, "str x29, [x3, #8]")
+    emit(g, "mov x2, sp")
+    emit(g, "str x2, [x3, #16]")
+    emit(g, "adr x2, " + landing)
+    emit(g, "str x2, [x3, #24]")
+    emit(g, "str x3, [x1, #16]")
+    g.tries.append(base)
+    gen_block(g, s.kids[0])
+    g.tries.pop()
+    pop_try(g, base)
+    emit(g, "b " + done)
+    place(g, landing)   # throw lands here with x29 and sp back, and the message in x0
+    pop_try(g, base)
+    let mark = len(g.locals)
+    store(g, new_local(g, s.kids[1].text, "str"))
+    gen_block(g, s.kids[2])
+    while len(g.locals) > mark { g.locals.pop() }
+    place(g, done)
+  } else if s.kind == "Throw" {
+    if gen_expr(g, s.kids[0]) != "str" { nope(s, "throwing anything but a string") }
+    let caught = fresh(g)
+    emit(g, "adrp x1, pk_globals")
+    emit(g, "add x1, x1, :lo12:pk_globals")
+    emit(g, "ldr x1, [x1, #16]")
+    emit(g, "cbnz x1, " + caught)
+    emit(g, "ldr x1, =\(s.line)")
+    emit(g, "bl pk_rt_uncaught")
+    place(g, caught)
+    emit(g, "ldr x29, [x1, #8]")
+    emit(g, "ldr x2, [x1, #16]")
+    emit(g, "mov sp, x2")
+    emit(g, "ldr x2, [x1, #24]")
+    emit(g, "br x2")
   } else if s.kind == "Break" or s.kind == "Continue" {
     if len(g.loops) == 0 { throw "\(s.line): \(s.kind) outside a loop" }
+    leave_tries(g, g.loop_tries[-1])
     if s.kind == "Break" { emit(g, "b " + g.loops[-2]) } else { emit(g, "b " + g.loops[-1]) }
   } else {
     nope(s, "the statement " + s.kind)
@@ -522,6 +813,8 @@ fn count_locals(n: N) -> int {
   if n.kind == "Let" { c = 1 }
   if n.kind == "For" { c = 2 }
   if n.kind == "ForIn" { c = 4 }
+  if n.kind == "IfLet" { c = 1 }
+  if n.kind == "Try" { c = 5 }
   for k in n.kids { c += count_locals(k) }
   return c
 }
@@ -532,6 +825,7 @@ fn function(g: G, f: N) {
   if len(params) > 8 { nope(f, "more than eight parameters") }
   if len(f.kids[5].kids) > 0 { nope(f, "type parameters") }
   g.locals = []
+  g.tries = []
   g.next_off = 0
   g.ret = fresh(g)
   let frame = (len(params) + count_locals(f.kids[3])) * 8
@@ -544,7 +838,7 @@ fn function(g: G, f: N) {
   emit(g, "sub sp, sp, #" + str((frame + 15) / 16 * 16))
   for i in 0..len(params) {
     let l = new_local(g, params[i].kids[0].text, int_type(f, params[i].kids[1].text))
-    emit(g, "stur x" + str(i) + ", [x29, #-\(l.off)]")
+    slot(g, "str", "x" + str(i), l.off)
   }
   gen_block(g, f.kids[3])
   emit(g, "mov x0, #0")   # falling off the end returns 0, which is what main hands back
@@ -553,6 +847,29 @@ fn function(g: G, f: N) {
   emit(g, "ldp x29, x30, [sp], #16")
   emit(g, "ret")
   emit(g, ".ltorg")
+}
+
+# The type of e, worked out by writing its code into a scratch buffer that is then dropped.
+fn type_of(g: G, e: N) -> str {
+  let mark = len(g.out)
+  let t = gen_expr(g, e)
+  while len(g.out) > mark { g.out.pop() }
+  return t
+}
+
+# ---------------------------------------------------------------- try
+# The try whose record sits at x29 - base is done: the one before it is innermost again.
+fn pop_try(g: G, base: int) {
+  emit(g, "sub x3, x29, #\(base)")
+  emit(g, "ldr x2, [x3]")
+  emit(g, "adrp x1, pk_globals")
+  emit(g, "add x1, x1, :lo12:pk_globals")
+  emit(g, "str x2, [x1, #16]")
+}
+
+# Leaving through return, break or continue: every try opened since the keep-th is closed on the way out.
+fn leave_tries(g: G, keep: int) {
+  if len(g.tries) > keep { pop_try(g, g.tries[keep]) }
 }
 
 # ---------------------------------------------------------------- structs
@@ -592,7 +909,8 @@ fn construct(g: G, e: N, st: N) -> str {
     if v.kind == "_" { throw "\(e.line): \(st.kids[0].text) needs \(fname)" }
     let t = gen_expr(g, v)
     let want = int_type(e, fields[i].kids[1].text)
-    if t != want and not (t == "[]" and is_list(want)) { nope(e, "a \(t) for \(fname), a \(want)") }
+    if not fits(t, want) { nope(e, "a \(t) for \(fname), a \(want)") }
+    coerce(g, t, want)
     emit(g, "ldr x1, [sp]")
     emit(g, "str x0, [x1, #" + str(i * 8) + "]")
   }
@@ -614,7 +932,7 @@ fn layout_fn(g: G) -> N {
 }
 
 fn asm(prog: N, runtime: N) -> str {
-  let g = G([], 0, [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1], [], 0, "")
+  let g = G([], 0, [], [], [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1], [], 0, "")
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
