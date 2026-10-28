@@ -44,6 +44,7 @@ struct G {
   instances: [str: str]    # first<int> and the like: the name its copy is written under
   pending: [N]             # copies made while writing a function, written after it
   gstructs: [str: N]       # a struct with type parameters: its Struct node; Stack<int> is a struct of its own (6.82.0)
+  modules: [str: int]      # the names modules were imported as: shapes.area_of is a name of its own (6.84.0)
 }
 
 fn emit(g: G, s: str) { g.out.append(s) }   # unindented: an indent would copy every line, and the assembler needs none
@@ -140,6 +141,8 @@ fn int_type(n: N, ty: str) -> str {
     return ty
   }
   if upper(ty[0]) and not ("<" in ty) and not ("?" in ty) and not ("." in ty) { return ty }   # a struct, checked where it is used
+  let dot = ty.find(".") ?? 0
+  if dot > 0 and dot + 1 < len(ty) and upper(ty[dot + 1]) and not ("<" in ty) and not ("?" in ty) and not ("[" in ty) { return ty }   # m.T, from a module (6.84.0)
   if upper(ty[0]) and ty.ends_with(">") and not ("?" in ty[..ty.find("<") ?? 0]) {   # Name<T, U>: a generic struct's copy (6.82.0)
     for a in type_arg_list(ty) { int_type(n, a) }
     return ty
@@ -371,6 +374,28 @@ fn gen_expr(g: G, e: N) -> str {
   }
   if e.kind == "CallValue" and e.kids[0].kind == "Lambda" and len(e.kids[0].kids[0].kids) == 0 and len(e.kids[0].kids[2].kids) == 1 and e.kids[0].kids[2].kids[0].kind == "Match" {
     return gen_match(g, e.kids[0].kids[2].kids[0], true)   # match as a value: the parser's closure, written inline
+  }
+  if e.kind == "Field" and module_name(g, e) != "" { return gen_expr(g, node("Name", e.line, [sv(module_name(g, e))])) }
+  if e.kind == "OptChain" {   # o?.f and o?.m(...): nil when o is, else the field or call, optional (6.84.0)
+    let t = gen_expr(g, e.kids[0])
+    if not is_opt(t) { nope(e, "?. on a \(t), which is never nil") }
+    let none_ = fresh(g)
+    let done = fresh(g)
+    emit(g, "cbz x0, " + none_)
+    if boxed(t) { emit(g, "ldr x0, [x0]") }
+    let mark = len(g.locals)
+    store(g, new_local(g, " optchain", t[..len(t) - 1]))
+    let it = node("Name", e.line, [sv(" optchain")])
+    var inner = node("Field", e.line, [it, e.kids[1]])
+    if e.kids[2].kind != "_" { inner = node("Method", e.line, [it, e.kids[1], e.kids[2], e.kids[3]]) }
+    let rt = gen_expr(g, inner)
+    while len(g.locals) > mark { g.locals.pop() }
+    coerce(g, rt, opt_type(rt))
+    emit(g, "b " + done)
+    place(g, none_)
+    emit(g, "mov x0, #0")
+    place(g, done)
+    return opt_type(rt)
   }
   if e.kind == "Field" {
     let t = gen_expr(g, e.kids[0])
@@ -637,7 +662,7 @@ fn to_str(g: G, e: N, t: str) {
     place(g, f)
     lit(g, "x0", "false")
     place(g, done)
-  } else if is_list(t) or is_dict(t) or upper(t[0]) or is_opt(t) or t.starts_with("(") {
+  } else if is_list(t) or is_dict(t) or upper(t[0]) or is_opt(t) or t.starts_with("(") or t in g.structs or t in g.enums {   # money.Ledger too (6.84.0)
     lit(g, "x1", t)
     emit(g, "mov x2, #0")
     emit(g, "bl pk_rt_show")
@@ -712,6 +737,9 @@ fn str_method(g: G, e: N, name: str, a: [N]) -> str {
 # xs.append(v) and xs.pop(), so far.
 fn method(g: G, e: N) -> str {
   let recv = e.kids[0]
+  if recv.kind == "Name" and recv.kids[0].text in g.modules and not has_local(g, recv.kids[0].text) {   # m.f(...), m.T(...)
+    return gen_expr(g, node("Call", e.line, [sv(recv.kids[0].text + "." + e.kids[1].text), e.kids[2], e.kids[3]]))
+  }
   if recv.kind == "Name" and (recv.kids[0].text == "Result" or recv.kids[0].text.starts_with("Result<")) and not has_local(g, recv.kids[0].text) {
     return construct_result(g, e)
   }
@@ -1565,7 +1593,7 @@ fn count_locals(n: N) -> int {
   if n.kind == "LetTuple" { c = 1 + len(n.kids[0].kids) }
   if n.kind == "For" { c = 2 }
   if n.kind == "ForIn" { c = 4 }
-  if n.kind == "IfLet" or n.kind == "WhileLet" or n.kind == "IfLetExpr" { c = 1 }
+  if n.kind == "IfLet" or n.kind == "WhileLet" or n.kind == "IfLetExpr" or n.kind == "OptChain" { c = 1 }
   if n.kind == "Try" { c = 5 }
   if n.kind == "Call" and n.kids[0].text == "attempt" { c = 5 }   # its try's record and its result (6.80.0)
   if n.kind == "Match" { c = 1 + 8 * len(n.kids[1].kids) }   # the subject and each arm's bindings, generously
@@ -1846,6 +1874,15 @@ fn call_value(g: G, e: N, target: N, a: [N]) -> str {
 # An enum value is the address of {its case's number, then that case's fields}, 8 bytes each.
 fn enum_name(g: G, e: N) -> str {
   if e.kind == "Name" and e.kids[0].text in g.enums and not has_local(g, e.kids[0].text) { return e.kids[0].text }
+  if module_name(g, e) in g.enums { return module_name(g, e) }
+  return ""
+}
+
+# m.name, when e is that and m is a module (6.84.0); "" otherwise.
+fn module_name(g: G, e: N) -> str {
+  if e.kind == "Field" and e.kids[0].kind == "Name" and e.kids[0].kids[0].text in g.modules and not has_local(g, e.kids[0].kids[0].text) {
+    return e.kids[0].kids[0].text + "." + e.kids[1].text
+  }
   return ""
 }
 
@@ -2467,7 +2504,7 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
 
 # The program's assembly, a line a string: for asm's text, or enc.pk's image.
 fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
-  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false, [:], [:], [], [:])
+  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false, [:], [:], [], [:], [:])
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
@@ -2494,6 +2531,10 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   }
   fns.append(layout_fn(g))
   prog.kids = fns
+  for f in prog.kids {
+    let dot = f.kids[0].text.find(".") ?? 0
+    if dot > 0 and not (f.kids[0].text[..dot] in g.structs) and not (f.kids[0].text[..dot] in g.enums) { g.modules[f.kids[0].text[..dot]] = 1 }
+  }
   for f in prog.kids {
     if f.kind != "Fn" { nope(f, "a top-level " + f.kind) }
     if f.kids[6].text == "true" or f.kids[7].text == "true" { nope(f, "extern and tool fns") }

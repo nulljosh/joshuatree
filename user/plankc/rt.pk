@@ -956,6 +956,7 @@ fn rt_gc() {
   }
   rt_mark(peek(global(3)))
   rt_mark(peek(global(10)))
+  rt_yield()   # 6.84.0: and between mark and sweep, so a full 27 MiB heap's collection never holds the core 3 s on a slow host
   # sweep both spaces: every dead or free run becomes one free block, the lists made anew; global(12) counts what lived
   poke(global(12), 0)
   let lists = peek(global(7))
