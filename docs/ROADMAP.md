@@ -1022,6 +1022,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **6.59.1 (2026-10-27)**: Two pictures. `architecture.svg` gains how an app gets onto the Pi (write, build, seal, store, install, run), and `docs/apps-for-humans.svg` (`tools/gen/humans.py`) tells the same story in plain words for someone who has never read the code: the store, Samantha or you, and what the seal means. Joshua asked for both.
 - **6.59.0 (2026-10-27)**: Samantha writes apps. Ask her for one ("sam make me an app that ...") and she writes it in Plank and ends with `[[app NAME]]`; the Pi sends the code to the relay, the Mac builds it, and the app comes back, lands in `JT/APPS` and opens. When her code does not build, the compiler's words go back to her and she fixes it herself. Her apps are never signed, so only an admin runs them. Checks: `arm64-samapp-check.py` (a broken first try, her fix, the app running), `pi-actions-check.py`.
 - **6.58.0 (2026-10-27)**: Plank apps get windows. `jtw`, a few calls in `user/pklibc` that Plank's `extern fn` can reach (open, fill, text, present, wait for a key or click), lets a Plank program draw and take input like a built-in app. Slide, the 15 puzzle, is the first, written in Plank, signed into the store: `install slide`. Check: `arm64-plank-check.py` opens it from the store's own file, slides tiles and closes it.
 - **6.57.0 (2026-10-27)**: Plank programs run on Joshua Tree. `tools/plankapp.sh FILE.pk` compiles a Plank program and Plank's runtime for the Pi and links them into an app for the card, over `user/pklibc`, a small C library written for it (printf with floats, strtod, setjmp for try and catch, files, time). Twelve of Plank's own examples print exactly what they print on a Mac. The first step of "the machine builds its own apps": the compiler still runs on the Mac. Check: `arm64-plank-check.py`.
@@ -2076,7 +2077,7 @@ Updated 2026-10-27, late afternoon Vancouver time. The loop's working notes live
 
 **Next, in order.**
 1. Whatever the board day shows is broken; then 7.0.0 with Joshua's logo and UI.
-2. Joshua asked: refresh the architecture SVG and draw one for humans (how apps, the store, Plank and Samantha fit). Then 8.0's last piece, the compiler on the box (Plank's IR to code on the Pi: an LLVM-free backend in Plank, or a small C compiler first).
+2. 8.0's last piece, the compiler on the box (Plank's IR to code on the Pi: an LLVM-free backend in Plank, or a small C compiler first).
 3. On the board's word: keep-alive, more than eight images, Wi-Fi joining without a restart. TLS 1.3 stays later.
 
 Restart prompt:

@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="676" viewBox="0 0 640 676" style="background:#faf8f4;font-family:Tree Sans,-apple-system,BlinkMacSystemFont,Helvetica,sans-serif">
+<defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="#ded9cd"/></marker></defs>
+<rect width="100%" height="100%" fill="#faf8f4"/>
+<text x="320.0" y="34" fill="#161513" font-size="20" font-weight="700" text-anchor="middle">How your Pi gets new apps</text>
+<text x="320.0" y="54" fill="#5c584f" font-size="11" font-weight="400" text-anchor="middle">Three ways in. Every one ends with the app open on your Pi, walled off from everything else.</text>
+<rect x="20" y="74" width="600" height="124" rx="14" fill="#ffffff" stroke="#ded9cd"/>
+<text x="36" y="100" fill="#161513" font-size="14" font-weight="700" text-anchor="start">From the store</text>
+<text x="604" y="100" fill="#5c584f" font-size="10" font-weight="400" text-anchor="end">for anyone</text>
+<circle cx="46" cy="126" r="9" fill="#161513"/>
+<text x="46" y="130" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">1</text>
+<text x="36" y="154" fill="#161513" font-size="11" font-weight="600" text-anchor="start">Type install dice</text>
+<text x="36" y="170" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">at the Terminal</text>
+<path d="M60 126H174" stroke="#ded9cd" stroke-width="1.5" marker-end="url(#a)"/>
+<circle cx="188" cy="126" r="9" fill="#161513"/>
+<text x="188" y="130" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">2</text>
+<text x="178" y="154" fill="#161513" font-size="11" font-weight="600" text-anchor="start">It asks the store</text>
+<text x="178" y="170" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">on Joshua's website</text>
+<path d="M202 126H316" stroke="#ded9cd" stroke-width="1.5" marker-end="url(#a)"/>
+<circle cx="330" cy="126" r="9" fill="#161513"/>
+<text x="330" y="130" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">3</text>
+<text x="320" y="154" fill="#161513" font-size="11" font-weight="600" text-anchor="start">It checks the seal</text>
+<text x="320" y="170" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">before it saves a</text>
+<text x="320" y="183" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">single byte</text>
+<path d="M344 126H458" stroke="#ded9cd" stroke-width="1.5" marker-end="url(#a)"/>
+<circle cx="472" cy="126" r="9" fill="#b5502c"/>
+<text x="472" y="130" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">4</text>
+<text x="462" y="154" fill="#161513" font-size="11" font-weight="600" text-anchor="start">Dice opens</text>
+<text x="462" y="170" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">in Spotlight too</text>
+<rect x="20" y="212" width="600" height="124" rx="14" fill="#ffffff" stroke="#ded9cd"/>
+<text x="36" y="238" fill="#161513" font-size="14" font-weight="700" text-anchor="start">From Samantha</text>
+<text x="604" y="238" fill="#5c584f" font-size="10" font-weight="400" text-anchor="end">for an admin</text>
+<circle cx="46" cy="264" r="9" fill="#161513"/>
+<text x="46" y="268" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">1</text>
+<text x="36" y="292" fill="#161513" font-size="11" font-weight="600" text-anchor="start">Ask her</text>
+<text x="36" y="308" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">"make me a tip</text>
+<text x="36" y="321" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">calculator app"</text>
+<path d="M60 264H174" stroke="#ded9cd" stroke-width="1.5" marker-end="url(#a)"/>
+<circle cx="188" cy="264" r="9" fill="#161513"/>
+<text x="188" y="268" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">2</text>
+<text x="178" y="292" fill="#161513" font-size="11" font-weight="600" text-anchor="start">She writes it</text>
+<text x="178" y="308" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">in Plank, Joshua's</text>
+<text x="178" y="321" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">own language</text>
+<path d="M202 264H316" stroke="#ded9cd" stroke-width="1.5" marker-end="url(#a)"/>
+<circle cx="330" cy="264" r="9" fill="#161513"/>
+<text x="330" y="268" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">3</text>
+<text x="320" y="292" fill="#161513" font-size="11" font-weight="600" text-anchor="start">The Mac builds it</text>
+<text x="320" y="308" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">an error goes back</text>
+<text x="320" y="321" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">and she fixes it</text>
+<path d="M344 264H458" stroke="#ded9cd" stroke-width="1.5" marker-end="url(#a)"/>
+<circle cx="472" cy="264" r="9" fill="#b5502c"/>
+<text x="472" y="268" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">4</text>
+<text x="462" y="292" fill="#161513" font-size="11" font-weight="600" text-anchor="start">It opens on your Pi</text>
+<text x="462" y="308" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">no seal: hers, so</text>
+<text x="462" y="321" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">an admin says yes</text>
+<rect x="20" y="350" width="600" height="124" rx="14" fill="#ffffff" stroke="#ded9cd"/>
+<text x="36" y="376" fill="#161513" font-size="14" font-weight="700" text-anchor="start">From you</text>
+<text x="604" y="376" fill="#5c584f" font-size="10" font-weight="400" text-anchor="end">for anyone who codes</text>
+<circle cx="46" cy="402" r="9" fill="#161513"/>
+<text x="46" y="406" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">1</text>
+<text x="36" y="430" fill="#161513" font-size="11" font-weight="600" text-anchor="start">Write a program</text>
+<text x="36" y="446" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">one file, in C</text>
+<text x="36" y="459" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">or in Plank</text>
+<path d="M60 402H174" stroke="#ded9cd" stroke-width="1.5" marker-end="url(#a)"/>
+<circle cx="188" cy="402" r="9" fill="#161513"/>
+<text x="188" y="406" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">2</text>
+<text x="178" y="430" fill="#161513" font-size="11" font-weight="600" text-anchor="start">Build it on a Mac</text>
+<text x="178" y="446" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">tools/mkapp.sh or</text>
+<text x="178" y="459" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">tools/plankapp.sh</text>
+<path d="M202 402H316" stroke="#ded9cd" stroke-width="1.5" marker-end="url(#a)"/>
+<circle cx="330" cy="402" r="9" fill="#161513"/>
+<text x="330" y="406" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">3</text>
+<text x="320" y="430" fill="#161513" font-size="11" font-weight="600" text-anchor="start">Put it on the card</text>
+<text x="320" y="446" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">in JT/APPS</text>
+<path d="M344 402H458" stroke="#ded9cd" stroke-width="1.5" marker-end="url(#a)"/>
+<circle cx="472" cy="402" r="9" fill="#b5502c"/>
+<text x="472" y="406" fill="#faf8f4" font-size="10" font-weight="700" text-anchor="middle">4</text>
+<text x="462" y="430" fill="#161513" font-size="11" font-weight="600" text-anchor="start">Open it</text>
+<text x="462" y="446" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">userrun, or find it</text>
+<text x="462" y="459" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">in Spotlight</text>
+<text x="36" y="498" fill="#161513" font-size="14" font-weight="700" text-anchor="start">The seal</text>
+<text x="36" y="516" fill="#5c584f" font-size="10" font-weight="400" text-anchor="start">Every app can carry Joshua's seal, a signature only his key can make. The Pi reads it before it runs anything.</text>
+<rect x="36" y="528" width="12" height="12" rx="3" fill="#b5502c"/>
+<text x="56" y="538" fill="#161513" font-size="11" font-weight="600" text-anchor="start">Sealed</text>
+<text x="140" y="538" fill="#5c584f" font-size="11" font-weight="400" text-anchor="start">anyone can run it.</text>
+<rect x="36" y="552" width="12" height="12" rx="3" fill="#161513"/>
+<text x="56" y="562" fill="#161513" font-size="11" font-weight="600" text-anchor="start">No seal</text>
+<text x="140" y="562" fill="#5c584f" font-size="11" font-weight="400" text-anchor="start">only the person in charge (an admin) can run it.</text>
+<rect x="36" y="576" width="12" height="12" rx="3" fill="#5c584f"/>
+<text x="56" y="586" fill="#161513" font-size="11" font-weight="600" text-anchor="start">Broken seal</text>
+<text x="140" y="586" fill="#5c584f" font-size="11" font-weight="400" text-anchor="start">never, not even the admin. Someone changed it after it was sealed.</text>
+<text x="320.0" y="636" fill="#b5502c" font-size="11" font-weight="600" text-anchor="middle">Next: the Pi builds its own apps, with no Mac in the middle.</text>
+<text x="320.0" y="656" fill="#5c584f" font-size="9" font-weight="400" text-anchor="middle">Drawn by tools/gen/humans.py. The full map is architecture.svg.</text>
+</svg>

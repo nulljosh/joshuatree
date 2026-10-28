@@ -59,6 +59,14 @@ sec(320, 'What happens when you talk to Samantha')
 chain(330, [('You type or say', '"call Mom at 5"'), ('Turing', 'picks the tool'), ('Joshua Tree', 'does it'), ('She answers', 'voice and face')],
       ['host', 'host', 'core', 'core'])
 
+# 8.0 (6.51.0 to 6.59.0): an app no longer has to be built into the kernel. Six steps, from whoever writes it to the Pi.
+sec(400, 'How an app gets onto the Pi (8.0)')
+chain(410, [('Write it', 'you or Samantha'), ('Build it', 'C or Plank'), ('Seal it', "Joshua's key"),
+            ('The store', 'on the website'), ('install', 'seal checked first'), ('It runs', 'walled off')],
+      ['host', 'host', 'new', 'host', 'core', 'core'])
+out.append(f'<text x="{W / 2}" y="470" fill="{MUT}" font-size="9" text-anchor="middle">Sealed apps run for anyone; unsealed ones (yours, or Samantha\'s) only for an admin; a broken seal never.</text>')
+out.append('<g transform="translate(0,100)">')
+
 # The Pi, on the real board. done = seen working on the board (docs/ROADMAP.md, docs/ROADMAP.md); the rest is proven in QEMU only.
 sec(400, 'The Pi, on the real board')
 pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi', 'WPA2, joined', 1),
@@ -112,7 +120,8 @@ out.append(f'<text x="{W / 2}" y="798" fill="{MUT}" font-size="10" text-anchor="
 out.append('</g>')
 out.append('</g>')
 out.append('</g>')
-H = 1062 + 130 + (rows * 54 + 30 - 220) - 40
+out.append('</g>')
+H = 1062 + 130 + 100 + (rows * 54 + 30 - 220) - 40
 open(os.path.join(ROOT, 'architecture.svg'), 'w').write(
     f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
     f'style="background:{PAPER};font-family:Tree Sans,-apple-system,BlinkMacSystemFont,Helvetica,sans-serif">\n'
