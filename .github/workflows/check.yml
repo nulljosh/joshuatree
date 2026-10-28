@@ -200,8 +200,9 @@ jobs:
       # pass/fail summary, and fails the job if any check failed.
       # 6.57.0: arm64-plank-check.py builds Plank's examples for the Pi with tools/plankapp.sh, which needs Plank itself
       # (one Python file, pinned here) and uv (plank.py fetches llvmlite through it). Only shard 8 runs that check.
-      - name: Plank, pinned, for arm64-plank-check (shard 8)
-        if: matrix.shard == 8
+      # 6.60.0: shard 7, a host shard, gets it too, for plankc-lex-check.py (plankc's tokenizer against plank.py's).
+      - name: Plank, pinned, for arm64-plank-check (shard 8) and plankc-lex-check (shard 7)
+        if: matrix.shard == 8 || matrix.shard == 7
         run: |
           curl -LsSf https://astral.sh/uv/0.8.15/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
