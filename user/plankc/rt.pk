@@ -171,6 +171,7 @@ fn rt_show(v: int, ty: str, inner: bool) -> str {
     if inner { return rt_quote(as_str(v)) }
     return as_str(v)
   }
+  if peek8(addr(ty)) == 40 { return rt_show_tuple(v, ty) }   # (
   if peek8(addr(ty)) != 91 { return rt_show_struct(v, ty) }   # not [: a struct
   if rt_dict_like(ty) { return rt_show_dict(v, ty) }
   let item = rt_sub(ty, 1, len(ty) - 1)
@@ -799,4 +800,24 @@ fn rt_min(a: int, b: int) -> int {
 fn rt_enum_eq(a: int, b: int, ty: str) -> bool {
   if peek(a) != peek(b) { return false }
   return rt_str_eq(rt_show(a, ty, true), rt_show(b, ty, true))
+}
+
+# ---- tuples (6.74.0): the address of their parts, 8 bytes each, shown as ("ada", 36).
+fn rt_show_tuple(v: int, ty: str) -> str {
+  var out = "("
+  var depth = 0
+  var at = 1
+  var i = 0
+  for k in 1..len(ty) {
+    let c = peek8(addr(ty) + k)
+    if c == 40 or c == 91 { depth += 1 }
+    if (c == 41 or c == 93) and depth > 0 { depth -= 1 }
+    if (c == 44 and depth == 0) or k == len(ty) - 1 {
+      if i > 0 { out = out + ", " }
+      out = out + rt_show(peek(v + i * 8), rt_sub(ty, at, k), true)
+      at = k + 2
+      i += 1
+    }
+  }
+  return out + ")"
 }

@@ -80,6 +80,10 @@ fn slot(g: G, op: str, r: str, off: int) {
 
 fn int_type(n: N, ty: str) -> str {
   if ty == "int" or ty == "bool" or ty == "str" { return ty }
+  if ty.starts_with("(") and ty.ends_with(")") {   # a tuple: each part a type of its own
+    for part in tuple_parts(ty) { int_type(n, part) }
+    return ty
+  }
   if ty.ends_with("?") and not ty.ends_with("??") {   # may be missing: nil is 0, and an int or bool sits in a box
     int_type(n, ty[..len(ty) - 1])
     return ty
@@ -115,6 +119,24 @@ fn dict_parts(ty: str) -> [str] {
   return []
 }
 fn is_opt(ty: str) -> bool { return ty.ends_with("?") }
+
+# (int, (str, bool)) as ["int", "(str, bool)"]: split on the ", " at depth one.
+fn tuple_parts(ty: str) -> [str] {
+  let out: [str] = []
+  let cs = ty.chars()
+  var depth = 0
+  var at = 1
+  for i in 1..len(cs) - 1 {
+    if cs[i] == "(" or cs[i] == "[" { depth += 1 }
+    if cs[i] == ")" or cs[i] == "]" { depth -= 1 }
+    if cs[i] == "," and depth == 0 {
+      out.append(ty[at..i])
+      at = i + 2
+    }
+  }
+  out.append(ty[at..len(ty) - 1])
+  return out
+}
 fn boxed(ty: str) -> bool { return ty == "int?" or ty == "bool?" }
 
 # Can a value of type got go where want is written?
@@ -150,6 +172,20 @@ fn gen_expr(g: G, e: N) -> str {
     return "str"
   }
   if e.kind == "Interp" { return interp(g, e) }
+  if e.kind == "Tuple" {   # the address of its parts, 8 bytes each (6.74.0)
+    let items = e.kids[0].kids
+    emit(g, "mov x0, #" + str(len(items) * 8 + 8))
+    emit(g, "bl pk_rt_alloc")
+    push(g)
+    let parts: [str] = []
+    for i in 0..len(items) {
+      parts.append(gen_expr(g, items[i]))
+      emit(g, "ldr x1, [sp]")
+      emit(g, "str x0, [x1, #" + str(i * 8) + "]")
+    }
+    pop(g, "x0")
+    return "(" + parts.join(", ") + ")"
+  }
   if e.kind == "Nil" {
     emit(g, "mov x0, #0")
     return "nil"
@@ -241,6 +277,13 @@ fn gen_expr(g: G, e: N) -> str {
   }
   if e.kind == "Field" {
     let t = gen_expr(g, e.kids[0])
+    if t.starts_with("(") and e.kids[1].text.starts_with("_") {   # p.0
+      let i = int(e.kids[1].text[1..])
+      let parts = tuple_parts(t)
+      if i >= len(parts) { nope(e, "part \(i) of a \(t)") }
+      emit(g, "ldr x0, [x0, #" + str(i * 8) + "]")
+      return parts[i]
+    }
     let f = field(g, e, t, e.kids[1].text)
     emit(g, "ldr x0, [x0, #\(f.off)]")
     return f.ty
@@ -452,7 +495,7 @@ fn to_str(g: G, e: N, t: str) {
     place(g, f)
     lit(g, "x0", "false")
     place(g, done)
-  } else if is_list(t) or is_dict(t) or upper(t[0]) or is_opt(t) {
+  } else if is_list(t) or is_dict(t) or upper(t[0]) or is_opt(t) or t.starts_with("(") {
     lit(g, "x1", t)
     emit(g, "mov x2, #0")
     emit(g, "bl pk_rt_show")
@@ -744,6 +787,19 @@ fn gen_stmt(g: G, s: N) {
     gen_expr(g, s.kids[1])
     pop(g, "x1")
     emit(g, "str x0, [x1]")
+  } else if s.kind == "LetTuple" {   # let (q, r) = divmod(17, 5)
+    let t = gen_expr(g, s.kids[1])
+    if not t.starts_with("(") { nope(s, "taking apart a " + t) }
+    let parts = tuple_parts(t)
+    let names = s.kids[0].kids
+    if len(names) != len(parts) { nope(s, "\(len(names)) names for \(len(parts)) parts") }
+    let tmp = new_local(g, " tuple", t)
+    store(g, tmp)
+    for i in 0..len(names) {
+      load(g, tmp)
+      emit(g, "ldr x0, [x0, #" + str(i * 8) + "]")
+      store(g, new_local(g, names[i].text, parts[i]))
+    }
   } else if s.kind == "Assign" and s.kids[0].kind == "Field" {
     let target = s.kids[0]
     let f = field(g, s, gen_expr(g, target.kids[0]), target.kids[1].text)
@@ -944,6 +1000,7 @@ fn gen_stmt(g: G, s: N) {
 fn count_locals(n: N) -> int {
   var c = 0
   if n.kind == "Let" { c = 1 }
+  if n.kind == "LetTuple" { c = 1 + len(n.kids[0].kids) }
   if n.kind == "For" { c = 2 }
   if n.kind == "ForIn" { c = 4 }
   if n.kind == "IfLet" { c = 1 }
