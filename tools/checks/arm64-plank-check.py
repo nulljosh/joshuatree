@@ -55,6 +55,7 @@ PLANKC = [("pcfib", ex / "fib.pk"), ("pcfz", ex / "fizzbuzz.pk"), ("pcprime", ex
 # 6.70.0: each again with the collector firing every 64 KB (plankc --gc=65536), the way Plank tests its own; same answers.
 # (Every 4 KB is too slow for QEMU: the watchdog stops an app 3 s without a call, and a collection makes none.)
 PLANKC += [(a + "g", f, 65536) for a, f in PLANKC]
+PLANKC.append(("pcoom", root / "user/plankc/tests/oom.pk"))   # 6.76.3: not collecting every 64 KB, which turns the give-up off
 PLANKC = [(t[0], t[1], t[2] if len(t) > 2 else 0) for t in PLANKC]
 WORDS = {"pcsys": " one two", "pcsysg": " one two"}   # 6.69.0: userrun NAME WORDS reaches the app (JT_SYS_ARGS)
 wants = {}
@@ -122,6 +123,9 @@ try:
         body = body[:body.find("M3c app %s exit" % app)] if "M3c app %s exit" % app in body else body
         got = [l for l in body.split("\n") if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ", "slow step ")) and "joshua@tree" not in l]   # slow step: the desktop's own log, written while the app yields
         want = [l for l in wants[app].split("\n") if l]
+        if app == "pcoom":   # 6.76.3: the line names sizes that move with the heap, and the app exits 1
+            check("oom.pk, a full heap that only churns, stops with the out-of-memory line", got[:1] and got[0].startswith(want[0]) and ("M3c app %s exit 1" % app) in seg, {"got": got[:3], "tail": seg[-300:]})
+            continue
         check("%s on the box prints its .out" % n, got == want and ("M3c app %s exit 0" % app) in seg,
               {"want": want[:6], "got": got[:6], "tail": seg[-300:]} if got != want else seg[-300:])
     start = len(uart())   # 6.58.0: the store's Slide, written in Plank, in a window drawn through jtw

@@ -1,4 +1,4 @@
-# plankc's collector (6.70.0): many times an app's 11 MiB of garbage made and dropped, while a tree, a list of strings
+# plankc's collector (6.70.0): many times an app's 27 MiB of garbage made and dropped, while a tree, a list of strings
 # and a list written through an index mid-allocation stay alive and come out exactly right.
 struct Node {
   name: str
@@ -30,7 +30,7 @@ fn main() {
     keep.append("k" + str(i))
   }
   var total = 0
-  for round in 0..300 {
+  for round in 0..700 {
     var s = ""
     for j in 0..400 {
       s = s + "x"
