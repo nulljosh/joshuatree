@@ -22,7 +22,7 @@ if not shutil.which("uv") or not plank.exists():
     print("SKIP: uv or Plank (%s) missing" % plank); sys.exit(0)
 tmp = Path(scratch_dir("plankc"))
 src = root / "user/plankc"
-files = sorted((plank.parent / "examples").glob("*.pk")) + [src / n for n in ("lex.pk", "parse.pk", "gen.pk", "rt.pk", "plankc.pk", "cases.pk", "tests/strings.pk")]
+files = sorted((plank.parent / "examples").glob("*.pk")) + [src / n for n in ("lex.pk", "parse.pk", "gen.pk", "rt.pk", "plankc.pk", "cases.pk", "tests/strings.pk", "tests/lists.pk")]
 
 REF = r'''
 import dataclasses, importlib.util, sys

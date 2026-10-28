@@ -58,8 +58,20 @@ fn store(g: G, l: Local) { emit(g, "stur x0, [x29, #-\(l.off)]") }
 
 fn int_type(n: N, ty: str) -> str {
   if ty == "int" or ty == "bool" or ty == "str" { return ty }
+  if ty.starts_with("[") and ty.ends_with("]") and not (":" in ty) and not ("?" in ty) {   # a list of any of these
+    int_type(n, ty[1..len(ty) - 1])
+    return ty
+  }
   nope(n, "the type \(ty)")
   return ""
+}
+
+fn is_list(ty: str) -> bool { return ty.starts_with("[") }
+
+# The type a list holds.
+fn item_type(n: N, ty: str) -> str {
+  if not is_list(ty) or ty == "[]" { nope(n, "indexing a " + ty) }
+  return ty[1..len(ty) - 1]
 }
 
 # ---------------------------------------------------------------- expressions
@@ -79,6 +91,35 @@ fn gen_expr(g: G, e: N) -> str {
     return "str"
   }
   if e.kind == "Interp" { return interp(g, e) }
+  if e.kind == "List" {
+    let items = e.kids[0].kids
+    emit(g, "bl pk_rt_list_new")
+    if len(items) == 0 { return "[]" }
+    var ty = ""
+    for x in items {
+      push(g)
+      let t = gen_expr(g, x)
+      if ty == "" { ty = t }
+      if t != ty { nope(x, "a list of mixed \(ty) and \(t)") }
+      emit(g, "mov x1, x0")
+      emit(g, "ldr x0, [sp]")
+      emit(g, "bl pk_rt_list_push")
+      pop(g, "x0")
+    }
+    return "[" + ty + "]"
+  }
+  if e.kind == "Index" {
+    let t = gen_expr(g, e.kids[0])
+    let item = item_type(e, t)
+    push(g)
+    if gen_expr(g, e.kids[1]) != "int" { nope(e, "an index that is not an int") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_list_at")
+    emit(g, "ldr x0, [x0]")
+    return item
+  }
+  if e.kind == "Method" { return method(g, e) }
   if e.kind == "Num" {
     if e.kids[1].text != "int" { nope(e, "a float") }
     emit(g, "ldr x0, =" + e.kids[0].text)
@@ -122,6 +163,7 @@ fn gen_expr(g: G, e: N) -> str {
     emit(g, "mov x1, x0")
     pop(g, "x0")
     if lt != rt { nope(e, "\(op) between \(lt) and \(rt)") }
+    if lt != "str" and lt != "int" and lt != "bool" { nope(e, "\(op) on \(lt)") }
     if lt == "str" {
       if op == "+" {
         emit(g, "bl pk_rt_concat")
@@ -206,9 +248,36 @@ fn to_str(g: G, e: N, t: str) {
     place(g, f)
     lit(g, "x0", "false")
     place(g, done)
+  } else if is_list(t) {
+    lit(g, "x1", t)
+    emit(g, "mov x2, #0")
+    emit(g, "bl pk_rt_show")
   } else if t != "str" {
     nope(e, "showing a " + t)
   }
+}
+
+# xs.append(v) and xs.pop(), so far.
+fn method(g: G, e: N) -> str {
+  let t = gen_expr(g, e.kids[0])
+  let name = e.kids[1].text
+  let a = e.kids[2].kids
+  if not is_list(t) { nope(e, "the method \(name) on \(t)") }
+  if name == "append" and len(a) == 1 {
+    push(g)
+    let v = gen_expr(g, a[0])
+    if t != "[]" and v != item_type(e, t) { nope(e, "appending a \(v) to a \(t)") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_list_push")
+    return "void"
+  }
+  if name == "pop" and len(a) == 0 {
+    emit(g, "bl pk_rt_list_pop")
+    return item_type(e, t)
+  }
+  nope(e, "the list method " + name)
+  return ""
 }
 
 # A string with \( ) in it: each part made a string and joined on, left to right.
@@ -228,8 +297,14 @@ fn interp(g: G, e: N) -> str {
 # The built-ins: len and str for programs, and the ones rt.pk is written with (plank.py does not have those).
 fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   if name == "len" and len(a) == 1 {
-    if gen_expr(g, a[0]) != "str" { nope(e, "len of anything but a string") }
-    emit(g, "ldur x0, [x0, #-8]")
+    let t = gen_expr(g, a[0])
+    if t == "str" {
+      emit(g, "ldur x0, [x0, #-8]")
+    } else if is_list(t) {
+      emit(g, "ldr x0, [x0]")
+    } else {
+      nope(e, "len of a " + t)
+    }
     return "int"
   }
   if name == "str" and len(a) == 1 {
@@ -296,8 +371,25 @@ fn gen_block(g: G, b: N) {
 fn gen_stmt(g: G, s: N) {
   if s.kind == "Let" {
     var t = gen_expr(g, s.kids[2])
-    if s.kids[1].kind != "_" { t = int_type(s, s.kids[1].text) }
+    if s.kids[1].kind != "_" {
+      let said = int_type(s, s.kids[1].text)
+      if t != said and not (t == "[]" and is_list(said)) { nope(s, "a \(t) where \(said) was written") }
+      t = said
+    }
+    if t == "[]" { nope(s, "an empty list with no type: write let xs: [int] = []") }
     store(g, new_local(g, s.kids[0].text, int_type(s, t)))
+  } else if s.kind == "Assign" and s.kids[0].kind == "Index" {
+    let target = s.kids[0]
+    gen_expr(g, target.kids[0])
+    push(g)
+    gen_expr(g, target.kids[1])
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_list_at")
+    push(g)
+    gen_expr(g, s.kids[1])
+    pop(g, "x1")
+    emit(g, "str x0, [x1]")
   } else if s.kind == "Assign" {
     if s.kids[0].kind != "Name" { nope(s, "assigning to " + s.kids[0].kind) }
     gen_expr(g, s.kids[1])
@@ -358,6 +450,48 @@ fn gen_stmt(g: G, s: N) {
     emit(g, "b " + top)
     place(g, done)
     while len(g.locals) > mark { g.locals.pop() }
+  } else if s.kind == "ForIn" {
+    # for x in xs, or for i, x in xs: the list and a count in hidden locals.
+    let mark = len(g.locals)
+    let t = gen_expr(g, s.kids[1])
+    let item = item_type(s, t)
+    let xs = new_local(g, " xs", t)
+    store(g, xs)
+    var idx = new_local(g, " i", "int")
+    var name = s.kids[0].text
+    if s.kids[3].kind != "_" {
+      idx = new_local(g, s.kids[0].text, "int")
+      name = s.kids[3].text
+    }
+    emit(g, "mov x0, #0")
+    store(g, idx)
+    let x = new_local(g, name, item)
+    let top = fresh(g)
+    let step = fresh(g)
+    let done = fresh(g)
+    place(g, top)
+    load(g, xs)
+    emit(g, "ldr x1, [x0]")
+    load(g, idx)
+    emit(g, "cmp x0, x1")
+    emit(g, "b.ge " + done)
+    load(g, xs)
+    emit(g, "ldr x1, [x0, #16]")
+    load(g, idx)
+    emit(g, "ldr x0, [x1, x0, lsl #3]")
+    store(g, x)
+    g.loops.append(done)
+    g.loops.append(step)
+    gen_block(g, s.kids[2])
+    g.loops.pop()
+    g.loops.pop()
+    place(g, step)
+    load(g, idx)
+    emit(g, "add x0, x0, #1")
+    store(g, idx)
+    emit(g, "b " + top)
+    place(g, done)
+    while len(g.locals) > mark { g.locals.pop() }
   } else if s.kind == "Break" or s.kind == "Continue" {
     if len(g.loops) == 0 { throw "\(s.line): \(s.kind) outside a loop" }
     if s.kind == "Break" { emit(g, "b " + g.loops[-2]) } else { emit(g, "b " + g.loops[-1]) }
@@ -371,6 +505,7 @@ fn count_locals(n: N) -> int {
   var c = 0
   if n.kind == "Let" { c = 1 }
   if n.kind == "For" { c = 2 }
+  if n.kind == "ForIn" { c = 4 }
   for k in n.kids { c += count_locals(k) }
   return c
 }

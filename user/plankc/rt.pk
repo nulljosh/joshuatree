@@ -88,3 +88,78 @@ fn rt_print_str(s: str) {
 fn rt_print_int(n: int) {
   rt_print_str(rt_int_str(n))
 }
+
+fn rt_fail(msg: str) {
+  rt_print_str(msg)
+  syscall(1, 1, 0, 0)
+}
+
+# ---- lists (6.64.0): the address of {length, room, the address of the items}, 8 bytes an item.
+fn rt_list_new() -> int {
+  let l = rt_alloc(24)
+  poke(l, 0)
+  poke(l + 8, 0)
+  poke(l + 16, 0)
+  return l
+}
+
+fn rt_list_push(l: int, v: int) {
+  let n = peek(l)
+  if n == peek(l + 8) {
+    var room = n * 2
+    if room < 4 { room = 4 }
+    let items = rt_alloc(room * 8)
+    rt_copy(items, peek(l + 16), n * 8)
+    poke(l + 16, items)
+    poke(l + 8, room)
+  }
+  poke(peek(l + 16) + n * 8, v)
+  poke(l, n + 1)
+}
+
+# Where item i lives; a negative i counts from the end, like Plank's.
+fn rt_list_at(l: int, i: int) -> int {
+  var j = i
+  if j < 0 { j += peek(l) }
+  if j < 0 or j >= peek(l) { rt_fail("index \(i) out of range for a list of \(peek(l))") }
+  return peek(l + 16) + j * 8
+}
+
+fn rt_list_pop(l: int) -> int {
+  let n = peek(l)
+  if n == 0 { rt_fail("pop from an empty list") }
+  poke(l, n - 1)
+  return peek(peek(l + 16) + (n - 1) * 8)
+}
+
+# s[a..b] in bytes.
+fn rt_sub(s: str, a: int, b: int) -> str {
+  let p = rt_str(b - a)
+  rt_copy(p, addr(s) + a, b - a)
+  return as_str(p)
+}
+
+# A string the way a list shows it: in quotes, nothing escaped (Plank's own print does the same).
+fn rt_quote(s: str) -> str {
+  return rt_concat(rt_concat("\"", s), "\"")
+}
+
+# Any value as print shows it, from its type written out ("int", "[str]", "[[int]]"); inside a list, strings get quotes.
+fn rt_show(v: int, ty: str, inner: bool) -> str {
+  if ty == "int" { return rt_int_str(v) }
+  if ty == "bool" {
+    if v != 0 { return "true" }
+    return "false"
+  }
+  if ty == "str" {
+    if inner { return rt_quote(as_str(v)) }
+    return as_str(v)
+  }
+  let item = rt_sub(ty, 1, len(ty) - 1)
+  var out = "["
+  for i in 0..peek(v) {
+    if i > 0 { out = out + ", " }
+    out = out + rt_show(peek(peek(v + 16) + i * 8), item, true)
+  }
+  return out + "]"
+}
