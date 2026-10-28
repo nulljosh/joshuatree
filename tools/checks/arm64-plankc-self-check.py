@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""plankc, built by itself, compiles on the box (6.69.0, the way to steps 5 and 6 of the true bootstrap in docs/ROADMAP.md).
+"""plankc, built by itself, rebuilds itself on the box (6.69.0, 6.70.0: steps 5 and 6 of the true bootstrap in docs/ROADMAP.md).
 
 On the Mac, plank.py builds plankc (stage 1), stage 1 writes plankc's own aarch64 assembly, and tools/plankapp.sh --plankc
 links it into JT/APPS/PLANKC.APP (stage 2, plankc built by plankc). The kernel boots in QEMU with plankc's sources on the
 card in JT/PC, and the Terminal runs stage 2 through userrun's words (JT_SYS_ARGS) and whole-file reads and writes
 (JT_SYS_READFILE, JT_SYS_WRITEFILE): userrun plankc asm PC/FIB.PK PC/RT.PK PC/FIB.S, and the assembly stage 2 writes on the
-box is byte for byte what stage 1 wrote on the Mac. Next (with a collector in rt.pk; plankc's self-compile does not fit an
-app's 11 MiB heap without one): the same for plankc's own source, the fixed point.
+box is byte for byte what stage 1 wrote on the Mac. 6.70.0: then userrun plankc asm PC/PLANKC.PK PC/RT.PK PC/SELF.S, plankc
+compiling its own source on the box, writes exactly what stage 1 wrote: the fixed point, the compiler built by itself making
+the same compiler. Without rt.pk's collector that run ends in out of memory.
 Discriminating: make rt_args drop its last word and stage 2 never finds its output name; make gen.pk's `<` emit `le` and
 stage 1, built by plank.py, and stage 2, built by that broken plankc, write different assembly for anything with a `<`.
 Skips (exit 0) without clang's aarch64 target, ld.lld, qemu-system-aarch64, mtools, uv or Plank (PLANK=, as plankapp.sh).
@@ -36,7 +37,7 @@ r = subprocess.run(["uv", "run", "-q", "--with", "llvmlite", "python3", str(plan
 if r.returncode: print(r.stderr[-1500:]); print("FAIL: plank.py does not build plankc"); sys.exit(1)
 fib = Path(plank).parent / "examples/fib.pk"
 want = {}
-for name, f in (("FIB.S", fib),):
+for name, f in (("FIB.S", fib), ("SELF.S", src / "plankc.pk")):
     r = subprocess.run([str(stage1), "asm", str(f), str(src / "rt.pk")], capture_output=True, text=True, timeout=600)
     check("stage 1 (plankc built by plank.py) writes %s's assembly on the Mac" % f.name, r.returncode == 0 and "error" not in r.stdout[:200], r.stdout[-400:])
     want[name] = r.stdout[:-1]   # print's newline
@@ -90,7 +91,7 @@ try:
     key("f2")
     if not wait_for("terminal open", 10): raise SystemExit("FAIL: F2 did not open the Terminal")
     time.sleep(0.5)
-    for out, prog, secs in (("FIB.S", "FIB.PK", 120),):
+    for out, prog, secs in (("FIB.S", "FIB.PK", 120), ("SELF.S", "PLANKC.PK", 1800)):
         n = len(uart()); t0 = time.time()
         typed("userrun plankc asm PC/%s PC/RT.PK PC/%s" % (prog, out))
         done = wait_for("M3c app plankc exit", secs, n) or wait_for("M3c app plankc stopped", 1, n)
@@ -98,7 +99,7 @@ try:
         check("stage 2 runs on the box and writes PC/%s (%d s)" % (out, time.time() - t0), done and ("plankc: wrote PC/%s" % out) in seg and "M3c app plankc exit 0" in seg, seg[-600:])
     check("no kernel crash", "KERNEL CRASH" not in uart(), uart()[-600:])
     q.kill(); q.wait(); q = None
-    for out in ("FIB.S",):
+    for out in ("FIB.S", "SELF.S"):
         got = mt("mtype", "::JT/PC/" + out).stdout.decode(errors="replace")
         same = got == want[out]
         if not same:
@@ -110,4 +111,4 @@ finally:
     if q: q.kill(); q.wait()
     subprocess.run(["make", "-C", str(arch), "clean"], capture_output=True)
 if fails: print("FAIL: " + ", ".join(fails)); sys.exit(1)
-print("PASS: plankc, built by itself, compiles on the box into exactly what plank.py's build of it writes on the Mac")
+print("PASS: plankc, built by itself, compiles itself on the box into exactly what plank.py's build of it writes on the Mac")

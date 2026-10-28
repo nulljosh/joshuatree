@@ -5,6 +5,9 @@
 # left side, locals live below x29, and sp moves 16 bytes at a time so it stays aligned. The output links like a Plank app
 # (tools/plankapp.sh --plankc): pklibc's _start calls main, main calls the program's main. The assembler is still clang's;
 # plankc's own encoder comes in step 6. A string is the address of its bytes, its length in the 8 bytes before them.
+# The collector in rt.pk finds the program's objects from the stack alone, so one rule holds everywhere below: no heap
+# address lives only in a register across a call. Values go to a local or a push before anything else runs, and every
+# function stores its arguments in its frame first. A register allocator must keep that rule or tell the collector.
 import "parse.pk"
 
 struct Local {
@@ -22,10 +25,11 @@ struct G {
   tries: [int]     # the open trys' records, as frame offsets
   fns: [str: str]  # function name: its return type
   structs: [str: N]  # struct name: its Struct node
-  rt: [str: int]   # the built-ins rt.pk is written with: syscall, peek, poke, global, addr, as_str
+  rt: [str: int]   # the built-ins rt.pk is written with: syscall, peek, poke, global, addr, as_str, stack_pointer
   strs: [str]      # string literals, as .asciz bodies
   next_off: int
   ret: str         # the epilogue label of the function being written
+  gc_every: int    # 0, or collect every this many bytes (plankc --gc=N asm, for testing the collector)
 }
 
 fn emit(g: G, s: str) { g.out.append(s) }   # unindented: an indent would copy every line, and the assembler needs none
@@ -564,6 +568,10 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
     pop(g, "x" + str(i))
     i -= 1
   }
+  if name == "stack_pointer" {
+    emit(g, "mov x0, sp")
+    return "int"
+  }
   if name == "syscall" {
     emit(g, "mov x8, x0")
     emit(g, "mov x0, x1")
@@ -771,6 +779,9 @@ fn gen_stmt(g: G, s: N) {
     store(g, idx)
     emit(g, "b " + top)
     place(g, done)
+    emit(g, "mov x0, #0")   # the loop is over: its hidden list and its item no longer hold anything for the collector
+    store(g, xs)
+    store(g, x)
     while len(g.locals) > mark { g.locals.pop() }
   } else if s.kind == "Try" {
     let rec = [new_local(g, " try3", "int"), new_local(g, " try2", "int"), new_local(g, " try1", "int"), new_local(g, " try0", "int")]
@@ -948,8 +959,8 @@ fn layout_fn(g: G) -> N {
   return node("Fn", 0, [sv("rt_layout"), lv([tv([sv("name"), sv("str")])]), sv("str"), lv(body), N("D", 0, "", []), lv([]), bv(false), bv(false), sv("")])
 }
 
-fn asm(prog: N, runtime: N) -> str {
-  let g = G([], 0, [], [], [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1], [], 0, "")
+fn asm(prog: N, runtime: N, gc_every: int) -> str {
+  let g = G([], 0, [], [], [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "stack_pointer": 1], [], 0, "", gc_every)
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
@@ -967,11 +978,18 @@ fn asm(prog: N, runtime: N) -> str {
     if f.kids[6].text == "true" or f.kids[7].text == "true" { nope(f, "extern and tool fns") }
     let ret = f.kids[2].text
     if ret != "void" { int_type(f, ret) }
+    if f.kids[0].text in g.fns { throw "\(f.line): function '\(f.kids[0].text)' defined twice" }
     g.fns[f.kids[0].text] = ret
   }
   if not ("main" in g.fns) { throw "no fn main" }
   g.out.append("  .text")
   for f in prog.kids { function(g, f) }
+  # The trees are done with. Letting go of them here lets the collector merge their room into the one block the join at
+  # the end needs (half a megabyte for plankc's own source).
+  prog.kids = []
+  runtime.kids = []
+  g.structs = [:]
+  while len(fns) > 0 { fns.pop() }
   # pklibc's _start calls main(argc, argv); the program's main takes nothing.
   g.out.append("")
   g.out.append("  .globl main")
@@ -979,6 +997,12 @@ fn asm(prog: N, runtime: N) -> str {
   place(g, "main")
   emit(g, "stp x29, x30, [sp, #-16]!")
   emit(g, "mov x29, sp")
+  emit(g, "adrp x10, pk_globals")
+  emit(g, "add x10, x10, :lo12:pk_globals")
+  emit(g, "mov x9, sp")
+  emit(g, "str x9, [x10, #32]")   # global(4): where the collector's stack scan stops
+  emit(g, "ldr x9, =" + str(gc_every))
+  emit(g, "str x9, [x10, #72]")   # global(9): collect every this many bytes, or 0
   emit(g, "bl pk_main")
   emit(g, "mov x0, #0")
   emit(g, "ldp x29, x30, [sp], #16")
@@ -987,7 +1011,7 @@ fn asm(prog: N, runtime: N) -> str {
   g.out.append("  .data")   # rt.pk's cells (global(i)); .data like libjt's JT_DATA
   g.out.append("  .p2align 4")
   place(g, "pk_globals")
-  emit(g, ".zero 128")
+  emit(g, ".zero 256")   # 32 cells
   g.out.append("  .section .rodata")
   for i in 0..len(g.strs) {   # each literal: its byte length, worked out by the assembler, then its bytes and a zero
     emit(g, ".p2align 3")

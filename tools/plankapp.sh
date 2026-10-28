@@ -27,7 +27,7 @@ sys.stdout.write(m.RUNTIME)' "$plank" > "$dir/runtime.c"
 else
 pc=${PLANKC_EXE:-$dir/plankc}   # PLANKC_EXE: a plankc already built, so a batch builds it once
 [ -x "$pc" ] || uv run --quiet --with llvmlite python3 "$plank" build "$root/user/plankc/plankc.pk" -o "$pc" >/dev/null
-"$pc" asm "$src" "$root/user/plankc/rt.pk" > "$dir/prog.S" || { cat "$dir/prog.S"; exit 1; }
+"$pc" ${PLANKC_GC:+--gc=$PLANKC_GC} asm "$src" "$root/user/plankc/rt.pk" > "$dir/prog.S"   # PLANKC_GC=N: collect every N bytes || { cat "$dir/prog.S"; exit 1; }
 fi
 CC=(clang -target aarch64-none-elf -ffreestanding -nostdlibinc -fno-stack-protector -mstrict-align -fPIE -fdirect-access-external-data
     -fno-builtin -fno-asynchronous-unwind-tables -Os -Wno-unused-command-line-argument -I"$root/user" -I"$root/user/pklibc/include")

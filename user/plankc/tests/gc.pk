@@ -1,0 +1,52 @@
+# plankc's collector (6.70.0): many times an app's 11 MiB of garbage made and dropped, while a tree, a list of strings
+# and a list written through an index mid-allocation stay alive and come out exactly right.
+struct Node {
+  name: str
+  kids: [Node]
+}
+
+fn build(depth: int, name: str) -> Node {
+  let n = Node(name, [])
+  if depth > 0 {
+    for i in 0..3 {
+      n.kids.append(build(depth - 1, name + str(i)))
+    }
+  }
+  return n
+}
+
+fn count(n: Node) -> int {
+  var c = 1
+  for k in n.kids {
+    c += count(k)
+  }
+  return c
+}
+
+fn main() {
+  let tree = build(6, "r")
+  let keep: [str] = []
+  for i in 0..2000 {
+    keep.append("k" + str(i))
+  }
+  var total = 0
+  for round in 0..300 {
+    var s = ""
+    for j in 0..400 {
+      s = s + "x"
+    }
+    total += len(s)
+    let tmp: [str] = []
+    for j in 0..50 {
+      tmp.append(str(j))
+    }
+    tmp[3] = str(round) + "!" + s[..5]
+    total += len(tmp[3]) + len(tmp[49])
+    if round % 50 == 0 { print("round", round, total) }   # progress, and a call now and then for the kernel's watchdog
+  }
+  var sum = 0
+  for k in keep {
+    sum += len(k)
+  }
+  print(total, sum, keep[0], keep[1999], count(tree), tree.kids[2].kids[1].kids[0].name)
+}
