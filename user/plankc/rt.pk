@@ -821,3 +821,89 @@ fn rt_show_tuple(v: int, ty: str) -> str {
   }
   return out + ")"
 }
+
+# ---- closures' list methods (6.75.0). A value is a word to the runtime, so one map, filter, reduce and sort serve every
+# element type; the closures that order ints and strings by default are made here too.
+fn rt_map(l: int, f: fn(int) -> int) -> int {
+  let out = rt_list_new()
+  for i in 0..peek(l) {
+    rt_list_push(out, f(peek(peek(l + 16) + i * 8)))
+  }
+  return out
+}
+
+fn rt_filter(l: int, f: fn(int) -> bool) -> int {
+  let out = rt_list_new()
+  for i in 0..peek(l) {
+    let v = peek(peek(l + 16) + i * 8)
+    if f(v) { rt_list_push(out, v) }
+  }
+  return out
+}
+
+fn rt_reduce(l: int, init: int, f: fn(int, int) -> int) -> int {
+  var acc = init
+  for i in 0..peek(l) {
+    acc = f(acc, peek(peek(l + 16) + i * 8))
+  }
+  return acc
+}
+
+fn rt_int_before() -> fn(int, int) -> bool {
+  return fn(a: int, b: int) => a < b
+}
+
+fn rt_str_before() -> fn(int, int) -> bool {
+  return fn(a: int, b: int) => rt_str_cmp(as_str(a), as_str(b)) < 0
+}
+
+# A sorted copy, stable: merge sort, taking from the right half only when it truly comes first.
+fn rt_sorted(l: int, before: fn(int, int) -> bool) -> int {
+  let n = peek(l)
+  let out = rt_list_slice(l, 0, n)
+  let tmp = rt_list_slice(l, 0, n)
+  rt_msort(out, tmp, 0, n, before)
+  return out
+}
+
+fn rt_sort(l: int, before: fn(int, int) -> bool) {
+  let s = rt_sorted(l, before)
+  for i in 0..peek(l) {
+    poke(peek(l + 16) + i * 8, peek(peek(s + 16) + i * 8))
+  }
+}
+
+fn rt_msort(a: int, t: int, lo: int, hi: int, before: fn(int, int) -> bool) {
+  if hi - lo < 2 { return }
+  let mid = (lo + hi) / 2
+  rt_msort(a, t, lo, mid, before)
+  rt_msort(a, t, mid, hi, before)
+  let ai = peek(a + 16)
+  let ti = peek(t + 16)
+  var i = lo
+  var j = mid
+  var k = lo
+  while i < mid and j < hi {
+    if before(peek(ai + j * 8), peek(ai + i * 8)) {
+      poke(ti + k * 8, peek(ai + j * 8))
+      j += 1
+    } else {
+      poke(ti + k * 8, peek(ai + i * 8))
+      i += 1
+    }
+    k += 1
+  }
+  while i < mid {
+    poke(ti + k * 8, peek(ai + i * 8))
+    i += 1
+    k += 1
+  }
+  while j < hi {
+    poke(ti + k * 8, peek(ai + j * 8))
+    j += 1
+    k += 1
+  }
+  for m in lo..hi {
+    poke(ai + m * 8, peek(ti + m * 8))
+  }
+}

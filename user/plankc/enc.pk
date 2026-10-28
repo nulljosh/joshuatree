@@ -191,6 +191,7 @@ fn instr(a: Asm, op: str, args: [str]) {
   if op == "ret" { return word(a, 3596551104) }
   if op == "svc" { return word(a, 3556769793) }
   if op == "br" { return word(a, 3592355840 + reg(args[0]) * 32) }
+  if op == "blr" { return word(a, 3594452992 + reg(args[0]) * 32) }
   if op == "b" { return branch(a, 335544320, args[0], 26, 0, 0) }
   if op == "bl" { return branch(a, 2483027968, args[0], 26, 0, 0) }
   if op.starts_with("b.") { return branch(a, 1409286144, args[0], 19, 5, cond(op[2..])) }
