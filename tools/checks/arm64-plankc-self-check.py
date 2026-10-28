@@ -8,6 +8,9 @@ card in JT/PC, and the Terminal runs stage 2 through userrun's words (JT_SYS_ARG
 box is byte for byte what stage 1 wrote on the Mac. 6.70.0: then userrun plankc asm PC/PLANKC.PK PC/RT.PK PC/SELF.S, plankc
 compiling its own source on the box, writes exactly what stage 1 wrote: the fixed point, the compiler built by itself making
 the same compiler. Without rt.pk's collector that run ends in out of memory.
+6.71.0, no clang and no linker: plankc img writes fib's app image on the box, and it runs; plankc img writes plankc itself as
+PLANKC2, which compiles plankc to the same assembly again and writes PLANKC3, byte for byte PLANKC2. Discriminating: a cset
+that does not invert its condition fails fib's image, the self-compile and the next image.
 Discriminating: make rt_args drop its last word and stage 2 never finds its output name; make gen.pk's `<` emit `le` and
 stage 1, built by plank.py, and stage 2, built by that broken plankc, write different assembly for anything with a `<`.
 Skips (exit 0) without clang's aarch64 target, ld.lld, qemu-system-aarch64, mtools, uv or Plank (PLANK=, as plankapp.sh).
@@ -57,7 +60,7 @@ try:
     def mt(*a): return subprocess.run([a[0], "-i", f"{card}@@{PART * 512}", *map(str, a[1:])], capture_output=True, env=MT)
     mt("mmd", "::JT"); mt("mmd", "::JT/APPS"); mt("mmd", "::JT/PC")
     mt("mcopy", "-o", tmp / "PLANKC.APP", "::JT/APPS/PLANKC.APP")
-    for n in ("plankc.pk", "gen.pk", "parse.pk", "lex.pk", "rt.pk"): mt("mcopy", "-o", src / n, "::JT/PC/" + n.upper())
+    for n in ("plankc.pk", "gen.pk", "enc.pk", "parse.pk", "lex.pk", "rt.pk"): mt("mcopy", "-o", src / n, "::JT/PC/" + n.upper())
     mt("mcopy", "-o", fib, "::JT/PC/FIB.PK")
     log, sock = tmp / "uart", tmp / "qmp"
     q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-global", "virtio-mmio.force-legacy=false",
@@ -69,6 +72,14 @@ try:
         end = time.time() + secs
         while time.time() < end:
             if text in uart()[after:]: return True
+            if q.poll() is not None: return False
+            time.sleep(0.2)
+        return False
+    def wait_any(texts, secs, after=0):   # an app's end, however it ends: a stopped one must not cost the whole timeout
+        end = time.time() + secs
+        while time.time() < end:
+            seg = uart()[after:]
+            if any(t in seg for t in texts): return True
             if q.poll() is not None: return False
             time.sleep(0.2)
         return False
@@ -97,9 +108,30 @@ try:
         done = wait_for("M3c app plankc exit", secs, n) or wait_for("M3c app plankc stopped", 1, n)
         seg = uart()[n:]
         check("stage 2 runs on the box and writes PC/%s (%d s)" % (out, time.time() - t0), done and ("plankc: wrote PC/%s" % out) in seg and "M3c app plankc exit 0" in seg, seg[-600:])
+    # 6.71.0: no clang, no linker. plankc writes app images itself (enc.pk); they run, and the compiler it writes makes itself.
+    def run(line, prog, secs):
+        n = len(uart()); t0 = time.time()
+        typed(line)
+        done = wait_any(["M3c app %s exit" % prog, "M3c app %s stopped" % prog], secs, n)
+        return uart()[n:], done, time.time() - t0
+    seg, done, secs = run("userrun plankc img PC/FIB.PK PC/RT.PK APPS/FIBX.APP", "plankc", 300)
+    check("stage 2 writes fib's app image on the box (%d s)" % secs, done and "plankc: wrote APPS/FIBX.APP" in seg and "M3c app plankc exit 0" in seg, seg[-500:])
+    seg, done, secs = run("userrun fibx", "fibx", 60)
+    body = seg[seg.find("M3c app fibx starts"):] if "M3c app fibx starts" in seg else ""
+    got = [l for l in body.split("\n")[1:] if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ")) and "joshua@tree" not in l]
+    check("that image, built with no clang and no linker, runs and prints fib.out", got == [l for l in fib.with_suffix(".out").read_text().split("\n") if l] and "M3c app fibx exit 0" in seg, {"got": got[:6], "tail": seg[-400:]})
+    seg, done, secs = run("userrun plankc img PC/PLANKC.PK PC/RT.PK APPS/PLANKC2.APP", "plankc", 1800)
+    check("stage 2 writes its own app image, PLANKC2 (%d s)" % secs, done and "plankc: wrote APPS/PLANKC2.APP" in seg and "M3c app plankc exit 0" in seg, seg[-500:])
+    seg, done, secs = run("userrun plankc2 asm PC/PLANKC.PK PC/RT.PK PC/SELF2.S", "plankc2", 1800)
+    check("PLANKC2, plankc encoded by plankc, compiles plankc (%d s)" % secs, done and "M3c app plankc2 exit 0" in seg, seg[-500:])
+    seg, done, secs = run("userrun plankc2 img PC/PLANKC.PK PC/RT.PK APPS/PLANKC3.APP", "plankc2", 1800)
+    check("PLANKC2 writes the next one, PLANKC3 (%d s)" % secs, done and "M3c app plankc2 exit 0" in seg, seg[-500:])
     check("no kernel crash", "KERNEL CRASH" not in uart(), uart()[-600:])
     q.kill(); q.wait(); q = None
-    for out in ("FIB.S", "SELF.S"):
+    want["SELF2.S"] = want["SELF.S"]
+    two, three = mt("mtype", "::JT/APPS/PLANKC2.APP").stdout, mt("mtype", "::JT/APPS/PLANKC3.APP").stdout
+    check("PLANKC3 is byte for byte PLANKC2 (%d bytes): the compiler, written by itself with nothing else, makes itself" % len(two), two == three and len(two) > 1000, (len(two), len(three)))
+    for out in ("FIB.S", "SELF.S", "SELF2.S"):
         got = mt("mtype", "::JT/PC/" + out).stdout.decode(errors="replace")
         same = got == want[out]
         if not same:
@@ -111,4 +143,4 @@ finally:
     if q: q.kill(); q.wait()
     subprocess.run(["make", "-C", str(arch), "clean"], capture_output=True)
 if fails: print("FAIL: " + ", ".join(fails)); sys.exit(1)
-print("PASS: plankc, built by itself, compiles itself on the box into exactly what plank.py's build of it writes on the Mac")
+print("PASS: plankc rebuilds itself on the box, to the same assembly and, with no clang or linker, to the same app image")

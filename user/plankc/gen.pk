@@ -344,6 +344,34 @@ fn gen_expr(g: G, e: N) -> str {
     let name = e.kids[0].text
     let a = e.kids[1].kids
     if name in g.structs { return construct(g, e, g.structs[name]) }
+    if name == "plankc_buf" and len(a) == 1 {   # enc.pk's stand-ins, swapped for the runtime's bytes (enc.pk says why)
+      gen_expr(g, a[0])
+      emit(g, "bl pk_rt_zstr")
+      return "str"
+    }
+    if name == "plankc_buf_set" and len(a) == 3 {
+      gen_expr(g, a[0])
+      push(g)
+      gen_expr(g, a[1])
+      push(g)
+      gen_expr(g, a[2])
+      emit(g, "mov x2, x0")
+      pop(g, "x1")
+      pop(g, "x0")
+      emit(g, "add x0, x0, x1")
+      emit(g, "strb w2, [x0]")
+      return "void"
+    }
+    if name == "plankc_byte_at" and len(a) == 2 {
+      gen_expr(g, a[0])
+      push(g)
+      gen_expr(g, a[1])
+      emit(g, "mov x1, x0")
+      pop(g, "x0")
+      emit(g, "add x0, x0, x1")
+      emit(g, "ldrb w0, [x0]")
+      return "int"
+    }
     for lab in e.kids[2].kids {
       if lab.kind != "_" { nope(e, "a labeled argument") }
     }
@@ -960,6 +988,11 @@ fn layout_fn(g: G) -> N {
 }
 
 fn asm(prog: N, runtime: N, gc_every: int) -> str {
+  return asm_lines(prog, runtime, gc_every).join("\n") + "\n"
+}
+
+# The program's assembly, a line a string: for asm's text, or enc.pk's image.
+fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   let g = G([], 0, [], [], [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "stack_pointer": 1], [], 0, "", gc_every)
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
@@ -1021,5 +1054,5 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
     g.out.append(".Le" + str(i) + ":")
     emit(g, ".byte 0")
   }
-  return g.out.join("\n") + "\n"
+  return g.out
 }

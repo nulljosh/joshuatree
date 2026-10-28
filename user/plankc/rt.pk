@@ -34,6 +34,17 @@ fn rt_byte_str(c: int) -> str {
   return as_str(peek(table + c * 8))
 }
 
+# n zero bytes as a string, for a buffer filled in place (plankc's encoder writes app images into one).
+fn rt_zstr(n: int) -> str {
+  let p = rt_str(n)
+  var i = 0
+  while i < n {
+    poke8(p + i, 0)
+    i += 1
+  }
+  return as_str(p)
+}
+
 fn rt_concat(a: str, b: str) -> str {
   let la = len(a)
   let lb = len(b)
@@ -458,7 +469,7 @@ fn rt_args() -> int {
 # Cells: global(5) the heap's first object, global(6) the bitmap, global(7) the small lists (65 words), global(8) bytes
 # handed out since the last collection, global(11) the powers of two the bitmap's arithmetic reads, global(12) the bytes
 # live at the last collection, global(16) the large list, global(17) where the large space starts, global(18) the heap's
-# end, global(20) to global(22) a number's digits on the way out.
+# end, global(19) bytes handed out since the last yield, global(20) to global(22) a number's digits on the way out.
 
 fn rt_large() -> int { return 2621440 }   # 2.5 MiB for large objects; calibrate against the biggest program's output
 
@@ -550,7 +561,16 @@ fn rt_alloc(n: int) -> int {
     if p == 0 { rt_oom(size) }
   }
   poke(global(8), peek(global(8)) + size)
+  poke(global(19), peek(global(19)) + size)
+  if peek(global(19)) > 262144 { rt_yield() }
   return p + 8
+}
+
+# A long job lets the desktop run now and then (JT_SYS_SCHED_YIELD): every 256 KB it allocates and around each
+# collection. An app that holds the processor for 3 s is taken for frozen and stopped, and the desktop would stall.
+fn rt_yield() {
+  poke(global(19), 0)
+  syscall(158, 0, 0, 0)
 }
 
 # Room for an object of size bytes, header included, or 0: a large one from the large space, a small one from its lists
@@ -668,6 +688,7 @@ fn rt_mark(v: int) {
 }
 
 fn rt_gc() {
+  rt_yield()
   # mark
   var w = stack_pointer()
   while w < peek(global(4)) {
@@ -686,6 +707,7 @@ fn rt_gc() {
   rt_sweep(peek(global(5)), peek(global(0)), false)
   rt_sweep(peek(global(17)), peek(global(18)), true)
   poke(global(8), 0)
+  rt_yield()
 }
 
 fn rt_sweep(from: int, end: int, large: bool) {
