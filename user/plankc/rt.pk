@@ -523,19 +523,25 @@ fn rt_box(v: int) -> int {
   return p
 }
 
-# ---- dicts (6.67.0): the address of {keys, values}, two lists in the order keys arrived. String keys only.
+# ---- dicts (6.67.0): the address of {keys, values, 1 if its keys are ints}, two lists in the order keys arrived.
+# 6.79.0: int keys too. The first int key in marks the dict (rt_dict_set_int); until a key is in there is nothing to
+# compare, so an empty dict needs no mark. An int key is stored as itself, a string key as its address.
 # ponytail: a lookup walks the keys; hash them when a program's dicts grow past a few hundred.
 fn rt_dict_new() -> int {
-  let d = rt_alloc(16)
+  let d = rt_alloc(24)
   poke(d, rt_list_new())
   poke(d + 8, rt_list_new())
+  poke(d + 16, 0)
   return d
 }
 
 fn rt_dict_find(d: int, k: str) -> int {
   let keys = peek(d)
+  let ints = peek(d + 16) == 1
   for i in 0..peek(keys) {
-    if rt_str_eq(as_str(peek(peek(keys + 16) + i * 8)), k) { return i }
+    let at = peek(peek(keys + 16) + i * 8)
+    if ints and at == addr(k) { return i }
+    if not ints and rt_str_eq(as_str(at), k) { return i }
   }
   return -1
 }
@@ -561,6 +567,7 @@ fn rt_dict_has(d: int, k: str) -> bool {
 
 fn rt_dict_get(d: int, k: str) -> int {
   let i = rt_dict_find(d, k)
+  if i < 0 and peek(d + 16) == 1 { rt_fail("no key \(addr(k)) in the dict") }
   if i < 0 { rt_fail("no key \"\(k)\" in the dict") }
   return peek(peek(peek(d + 8) + 16) + i * 8)
 }
@@ -573,6 +580,19 @@ fn rt_dict_set(d: int, k: str, v: int) {
     rt_list_push(peek(d), addr(k))
     rt_list_push(peek(d + 8), v)
   }
+}
+
+# x in xs (6.79.0): an item equal to x, as == compares items of type ty.
+fn rt_list_has(l: int, x: int, ty: str) -> bool {
+  for i in 0..peek(l) {
+    if rt_equal(peek(peek(l + 16) + i * 8), x, ty) { return true }
+  }
+  return false
+}
+
+fn rt_dict_set_int(d: int, k: str, v: int) {
+  poke(d + 16, 1)
+  rt_dict_set(d, k, v)
 }
 
 # Is ty a dict, [K: V], rather than a list of them? Its ": " sits at depth one.
