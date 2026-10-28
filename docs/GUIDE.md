@@ -731,7 +731,7 @@ For Notes: press n, type a line, Esc, Esc, pull the power, boot, open Notes. The
 
 ![How your Pi gets new apps](apps-for-humans.svg)
 
-Apps can live on the card too (6.51.0). Put an app image in `JT/APPS/` as `NAME.APP`, a name of up to eight letters, digits, `-` or `_`, and `userrun NAME` runs it when no built-in app has that name. An app image is what the Makefile builds for each built-in app (`arch/arm64/uapp_hello.bin`, say): copy one to `JT/APPS/HI.APP` and `userrun hi` runs it. The kernel checks every image before it loads one and refuses a bad one with `would not load`. An app is at most 256 KiB. Spotlight lists the apps in `JT/APPS/` too (6.53.0): type a few letters of the name and Enter opens it. A card app cannot take a name Spotlight already lists, so `TERMINAL.APP` is never the Terminal.
+Apps can live on the card too (6.51.0). Put an app image in `JT/APPS/` as `NAME.APP`, a name of up to eight letters, digits, `-` or `_`, and `userrun NAME` runs it when no built-in app has that name. An app image is what the Makefile builds for each built-in app (`arch/arm64/uapp_hello.bin`, say): copy one to `JT/APPS/HI.APP` and `userrun hi` runs it. The kernel checks every image before it loads one and refuses a bad one with `would not load`. An app is at most 384 KiB. Spotlight lists the apps in `JT/APPS/` too (6.53.0): type a few letters of the name and Enter opens it. A card app cannot take a name Spotlight already lists, so `TERMINAL.APP` is never the Terminal.
 
 ### Write an app
 

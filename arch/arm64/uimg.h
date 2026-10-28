@@ -6,7 +6,7 @@
 #ifndef UIMG_H
 #define UIMG_H
 #define UIMG_MAGIC 0x3155544a
-#define UIMG_MAX 0x40000UL   /* 256 KiB, the largest image (main.c's UAPP_MAX, user_c.ld's assert) */
+#define UIMG_MAX 0x60000UL   /* 384 KiB (256 until 6.81.1, when plankc outgrew it), the largest image (main.c's UAPP_MAX, user_c.ld's assert) */
 static inline unsigned uimg_rd32(const char *p) { const unsigned char *u = (const unsigned char *)p; return u[0] | u[1] << 8 | u[2] << 16 | (unsigned)u[3] << 24; }
 static inline unsigned long uimg_rd64(const char *p) { return uimg_rd32(p) | (unsigned long)uimg_rd32(p + 4) << 32; }
 static inline int uimg_ok(const char *img, unsigned long len, unsigned long max, unsigned long zero,
