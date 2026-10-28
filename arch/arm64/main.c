@@ -221,6 +221,7 @@ unsigned long l3[APP_SLOTS * ARENA_BLOCKS * 512] __attribute__((aligned(4096)));
 #define APP_STACK_PAGES 16
 #define APP_ZERO_PAGES  8   /* zeroed pages after the image (and the rest of its last page): the pool user/calendar.c keeps its events in, and user/notes.c its 28 KB arena (M3d) */
 #define UAPP_MAX UIMG_MAX   /* the largest image user_load takes, and what user_c.ld asserts (uimg.h) */
+_Static_assert(UP_APP + UAPP_MAX + APP_ZERO_PAGES * 4096 <= UP_ASTACK, "the biggest image and its zeroed pages end below the app stack");
 #define UP_WIN   0x1D00000UL /* M3c part 2: the app's window buffer, read-write and never executable. 3.9.0: the last 3 MiB of the arena, so a device-size
                                buffer fits (504x328 at 2x is 2.6 MB); it was a page above the stack, with room for 560x360 four times over */
 #define UWIN_MAX (0x2000000UL - UP_WIN)   /* the arena's end, 32 MiB, less where the buffer starts */

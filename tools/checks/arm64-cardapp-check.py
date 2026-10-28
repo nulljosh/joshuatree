@@ -10,7 +10,7 @@ virtio disk, and at the Terminal:
   2. `userrun bad` is refused: BAD.APP has a good trailer but a relocation that points 4 GB past its image. uimg_ok says no
      before a page is touched (`M3c load FAIL bad: not a user image`).
   2b. `userrun evil` is refused: each of EVIL.APP's relocations is in bounds, but the first rewrites the second.
-  3. `userrun big` is refused: BIG.APP is over the 256 KiB an app may be.
+  3. `userrun big` is refused: BIG.APP is over the 384 KiB an app may be (256 KiB until 6.81.1).
   4. `userrun a.b` is no program at all: a card name is letters, digits, - and _, eight at most.
   5. `userrun hi` again: the kernel carried on.
   6. 6.53.0, Spotlight: F1 and "su" lists the card's Sun (SUN.APP) and Enter runs it to exit 7. TERMINAL.APP and CALENDAR.APP,
@@ -56,7 +56,7 @@ bad = bytes(4096) + struct.pack("<QQQ", 0xFFFFFFF0, 1027, 0) + struct.pack("<III
 # address, not 0), so applying the second would write far outside the app (what uimg_ok's list rule stops; fuzz_uimg.c found it)
 evil = bytes(4096) + struct.pack("<QQQQQQ", 4096 + 24, 1027, 8, 0, 1027, 0) + struct.pack("<IIII", 0x3155544a, 4096, 4096, 4096 + 48)
 (tmp / "EVIL.APP").write_bytes(evil)
-(tmp / "BIG.APP").write_bytes(bytes(300 * 1024))
+(tmp / "BIG.APP").write_bytes(bytes(400 * 1024))
 shutil.copy(arch / "uapp_hello.bin", tmp / "HI.APP")
 for f in ("TERMINAL.APP", "CALENDAR.APP"): shutil.copy(arch / "uapp_hello.bin", tmp / f)   # 6.53.0: names that are taken
 STORE = [("FORTUNE", "fortune"), ("DICE", "dice")]   # 6.56.0: the store's apps, the very files landing/apps serves, signed by the shipped key
@@ -124,7 +124,7 @@ try:
     out = say("userrun evil", "userrun evil: ")
     check("a relocation that rewrites the next one is refused", "M3c load FAIL evil: not a user image" in out and "userrun evil: would not load" in out, out)
     out = say("userrun big", "userrun big: ")
-    check("an image over 256 KiB is refused", "BIG.APP: too big" in out and "userrun big: would not load" in out, out)
+    check("an image over 384 KiB is refused", "BIG.APP: too big" in out and "userrun big: would not load" in out, out)
     out = say("userrun a.b", "userrun: no program")
     check("a name that is not a card name is no program", "userrun: no program called that" in out and "M3c card app" not in out, out)
     out = say("userrun hi", "M3c app hi exit")
