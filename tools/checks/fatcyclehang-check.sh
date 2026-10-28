@@ -5,7 +5,7 @@
 # "allocate the next cluster" and "link the previous one to it" -- can
 # leave on disk) used to make ls/cd/any FAT walk into that directory spin
 # forever, a real denial-of-service hang, not a crash. See fat.c's
-# MAX_DIR_CLUSTER_HOPS comment for the fix.
+# MAX_DIR_SECTORS comment for the fix.
 #
 # This builds a real FAT16 disk image, creates a real subdirectory through
 # the kernel's own mkdir, then patches the raw image on the host (the
@@ -154,7 +154,7 @@ PYEOF
 
 # --- Phase 3: boot against the corrupted image, cd into cyc, ls it (the
 # operation that walks the cycling chain), then a marker command right
-# after. A bounded wait: the fix's MAX_DIR_CLUSTER_HOPS=16 cap means a
+# after. A bounded wait: the fix's MAX_DIR_SECTORS cap (6.76.5; 4 clusters before) means a
 # real fix finishes in well under this; the pre-fix bug never finishes at
 # all, so the marker never appears no matter how long the wait is. ---
 LOG2="$WORKDIR/log2"
