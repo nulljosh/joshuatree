@@ -15,7 +15,9 @@ virtio disk, and at the Terminal:
   5. `userrun hi` again: the kernel carried on.
   6. 6.53.0, Spotlight: F1 and "su" lists the card's Sun (SUN.APP) and Enter runs it to exit 7. TERMINAL.APP and CALENDAR.APP,
      on the card too, are neither listed beside the Terminal and Calendar nor run by `userrun terminal`: a name Spotlight
-     already lists is that app's. No KERNEL CRASH.
+     already lists is that app's.
+  7. 6.56.0, the store's apps as landing/apps serves them, signed by the shipped key: `userrun fortune` prints its line; `userrun dice`
+     opens its window, Space rolls ("dice: rolled"), Esc closes it. No KERNEL CRASH.
 Discriminating: drop the card loop in keys.c's spot_paint and step 6 finds no Sun; make main.c's name_taken return 0 and
 the Terminal is listed twice; drop the uapp_sdk.o rule from the Makefile and step 1b fails; make card_find in main.c return 0 and step 1 fails; take the relocation test out of uimg_ok and step 2
 writes past the app's pages and the kernel crashes; take out its list rule and step 2b does.
@@ -57,6 +59,9 @@ evil = bytes(4096) + struct.pack("<QQQQQQ", 4096 + 24, 1027, 8, 0, 1027, 0) + st
 (tmp / "BIG.APP").write_bytes(bytes(300 * 1024))
 shutil.copy(arch / "uapp_hello.bin", tmp / "HI.APP")
 for f in ("TERMINAL.APP", "CALENDAR.APP"): shutil.copy(arch / "uapp_hello.bin", tmp / f)   # 6.53.0: names that are taken
+STORE = [("FORTUNE", "fortune"), ("DICE", "dice")]   # 6.56.0: the store's apps, the very files landing/apps serves, signed by the shipped key
+for up, low in STORE:
+    for ext in ("app", "sig"): shutil.copy(root / "landing/apps" / (low + "." + ext), tmp / (up + "." + ext.upper()))
 # 6.52.0, the SDK: tools/mkapp.sh builds one C file of nobody's into SUN.APP (a libjt call, a write, exit 7)
 (tmp / "sun.c").write_text("""#include "jtsys.h"
 #include "libjt/string.h"
@@ -72,7 +77,7 @@ check("tools/mkapp.sh builds sun.c into SUN.APP", mk.returncode == 0 and (tmp / 
 mk = subprocess.run([str(root / "tools/mkapp.sh"), str(tmp / "sun.c"), str(tmp / "TOOLONGNAME.APP")], capture_output=True, text=True, timeout=60)
 check("tools/mkapp.sh refuses a name the card cannot take", mk.returncode != 0 and "1 to 8" in mk.stdout, mk.stdout + mk.stderr)
 if mt("mmd", "::JT").returncode or mt("mmd", "::JT/APPS").returncode: print("FAIL: mtools could not make JT/APPS on the check card"); sys.exit(1)
-for f in ("HI.APP", "SUN.APP", "BAD.APP", "EVIL.APP", "BIG.APP", "TERMINAL.APP", "CALENDAR.APP"):
+for f in ("HI.APP", "SUN.APP", "BAD.APP", "EVIL.APP", "BIG.APP", "TERMINAL.APP", "CALENDAR.APP", "FORTUNE.APP", "FORTUNE.SIG", "DICE.APP", "DICE.SIG"):
     if mt("mcopy", "-o", str(tmp / f), "::JT/APPS/" + f).returncode: print("FAIL: mtools could not copy " + f); sys.exit(1)
 
 log, sock = tmp / "uart", tmp / "qmp"
@@ -144,6 +149,16 @@ try:
     out = uart()[n:]
     check("Spotlight lists the card's Sun, and Enter runs it to exit 7", "spotlight: su " in hits and "M3c card app JT/APPS/SUN.APP" in out
           and "M3c app sun starts" in out and "M3c app sun exit 7" in out, out[-600:])
+    key("f2"); time.sleep(0.5)
+    out = say("userrun fortune", "M3c app fortune exit")
+    check("the store's fortune, as served, runs signed by the shipped key", "JT/APPS/FORTUNE.APP" in out and "bytes, signed" in out and "fortune: " in out and "M3c app fortune exit 0" in out, out)
+    out = say("userrun dice", "userrun dice: ")
+    check("the store's dice opens its window", "dice: ring-3 window" in out and "userrun dice: running in its window" in out and "bytes, signed" in out, out)
+    n = len(uart()); key("spc"); wait_for("dice: rolled", 10, n); time.sleep(0.5)
+    command("screendump", filename=str(tmp / "dice.ppm"))
+    check("Space rolls the dice", "dice: rolled " in uart()[n:], uart()[n:][-300:])
+    n = len(uart()); key("esc")
+    check("Esc closes dice", wait_for("dice: closed", 10, n) and wait_for("M3c app dice exit 0", 10, n), uart()[n:][-300:])
     check("no kernel crash", "KERNEL CRASH" not in uart(), uart()[-600:])
 finally:
     q.kill(); q.wait()

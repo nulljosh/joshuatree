@@ -1,1 +1,2 @@
+dice two dice in a window; Space, Enter or a click rolls them.
 fortune a line of desert wisdom, picked by the clock.
