@@ -1,0 +1,16 @@
+# Edge cases for plankc's tokenizer (tools/checks/plankc-check.py): every one here has tripped a lexer somewhere.
+fn main() {
+  let poem = "two
+lines"
+  let t = ((1, 2), 3)
+  print(t.0.1, 1e3, 1.5e-3, 2.0, 007)
+  print("tab\there, quote \" and slash \\ and \(len("a)b")) done")
+  let xs = [
+    1,  # a comment inside brackets keeps no newline
+    2,
+  ]
+  var n = 0
+  n += 1
+  n -= 1
+  print(poem, xs, n ?? 0, n != 0, n <= 1, n >= 1, n == 0)
+}

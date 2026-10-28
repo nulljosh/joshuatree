@@ -1,0 +1,27 @@
+# plankc, the Plank compiler written in Plank (the true bootstrap, docs/ROADMAP.md, 8.0).
+#   plankc lex FILE.pk     one token a line: line, kind, value
+#   plankc parse FILE.pk   the program's tree, one top-level item a line
+import "parse.pk"
+
+fn main() {
+  let a = args()
+  if len(a) < 2 or not (a[0] == "lex" or a[0] == "parse") {
+    print("usage: plankc lex|parse FILE.pk")
+    exit(2)
+  }
+  let src = read_file(a[1]) ?? ""
+  try {
+    if a[0] == "lex" {
+      for t in lex(src) {
+        var val = t.val
+        if t.kind == "str" { val = show_string(t.val) }
+        print("\(t.line) \(t.kind) \(val)")
+      }
+    } else {
+      for item in parse(src).kids { print(dump(item)) }
+    }
+  } catch e {
+    print("error: \(e)")
+    exit(1)
+  }
+}

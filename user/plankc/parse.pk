@@ -1,0 +1,843 @@
+# plankc's parser: Plank's grammar, written in Plank. Step 2 of the true bootstrap (docs/ROADMAP.md, 8.0).
+# parse(toks) gives the program as a tree of N, the same tree plank.py's Parser builds: a node is its class name, its line
+# and one kid a field, in plank.py's field order. Leaves: "_" nothing, "B" a bool, "I" an int, "F" a float as written,
+# "S" a string; "L" a list, "T" a tuple, "D" a dict (keys and values taking turns). dump(n) writes it out;
+# tools/checks/plankc-check.py holds that against plank.py's tree for the same file.
+import "lex.pk"
+
+struct N {
+  kind: str
+  line: int
+  text: str
+  kids: [N]
+}
+
+struct P {
+  toks: [Tok]
+  i: int
+  aliases: [str: int]
+}
+
+# ---------------------------------------------------------------- leaves
+fn none() -> N { return N("_", 0, "", []) }
+fn sv(s: str) -> N { return N("S", 0, s, []) }
+fn bv(b: bool) -> N {
+  if b { return N("B", 0, "true", []) }
+  return N("B", 0, "false", [])
+}
+fn lv(items: [N]) -> N { return N("L", 0, "", items) }
+fn tv(items: [N]) -> N { return N("T", 0, "", items) }
+fn node(kind: str, line: int, kids: [N]) -> N { return N(kind, line, "", kids) }
+fn opt(s: str) -> N {   # a type or name that may be missing
+  if s == "" { return none() }
+  return sv(s)
+}
+
+fn upper(c: str) -> bool { return c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" }
+
+# ---------------------------------------------------------------- tokens
+fn tok(p: P) -> Tok { return p.toks[p.i] }
+fn at(p: P, k: str) -> bool { return p.toks[p.i].kind == k }
+fn kind_at(p: P, j: int) -> str { return p.toks[j].kind }
+fn next(p: P) -> Tok {
+  let t = p.toks[p.i]
+  p.i += 1
+  return t
+}
+fn expect(p: P, k: str) -> Tok {
+  if not at(p, k) {
+    let t = tok(p)
+    throw "\(t.line): expected \(k), got \(t.kind)"
+  }
+  return next(p)
+}
+fn skip_nl(p: P) {
+  while at(p, "nl") { next(p) }
+}
+
+fn prec(k: str) -> int {
+  if k == "or" { return 10 }
+  if k == "and" { return 20 }
+  if k == "in" or k == "==" or k == "!=" or k == "<" or k == ">" or k == "<=" or k == ">=" { return 40 }
+  if k == "??" { return 45 }
+  if k == "+" or k == "-" { return 50 }
+  if k == "*" or k == "/" or k == "%" { return 60 }
+  return 0
+}
+
+# ---------------------------------------------------------------- program
+fn program(p: P) -> N {
+  let items: [N] = []
+  skip_nl(p)
+  while not at(p, "eof") {
+    if at(p, "import") {
+      let line = next(p).line
+      let path = expect(p, "str").val
+      var alias = ""
+      if at(p, "name") and tok(p).val == "as" {
+        next(p)
+        alias = expect(p, "name").val
+        p.aliases[alias] = 1
+      }
+      items.append(node("Import", line, [sv(unescape(path)), opt(alias)]))
+    } else if at(p, "extern") {
+      next(p)
+      items.append(fn_(p, true))
+    } else if at(p, "name") and tok(p).val == "tool" and kind_at(p, p.i + 1) == "fn" {
+      let doc = next(p).doc   # the comment lines above become the model's description
+      let f = fn_(p, false)
+      f.kids[7] = bv(true)
+      f.kids[8] = sv(doc)
+      items.append(f)
+    } else if at(p, "struct") {
+      items.append(struct_(p))
+    } else if at(p, "enum") {
+      items.append(enum_(p))
+    } else {
+      items.append(fn_(p, false))
+    }
+    skip_nl(p)
+  }
+  return lv(items)
+}
+
+fn type_name(p: P) -> str {
+  let t = expect(p, "name")
+  if not upper(t.val[0]) { throw "\(t.line): type names start with a capital letter" }
+  return t.val
+}
+
+fn type_params(p: P) -> N {
+  let out: [N] = []
+  if at(p, "<") {
+    next(p)
+    while not at(p, ">") {
+      out.append(sv(type_name(p)))
+      if not at(p, ">") { expect(p, ",") }
+    }
+    expect(p, ">")
+  }
+  return lv(out)
+}
+
+fn type_args(p: P) -> str {
+  expect(p, "<")
+  let args: [str] = []
+  while not at(p, ">") {
+    args.append(type_(p))
+    if not at(p, ">") { expect(p, ",") }
+  }
+  expect(p, ">")
+  return args.join(", ")
+}
+
+fn optional(p: P, ty: str) -> str {
+  var t = ty
+  while at(p, "?") or at(p, "??") { t = t + next(p).kind }
+  return t
+}
+
+fn type_(p: P) -> str {
+  if at(p, "(") {
+    let line = next(p).line
+    let parts = [type_(p)]
+    while at(p, ",") {
+      next(p)
+      parts.append(type_(p))
+    }
+    expect(p, ")")
+    if len(parts) < 2 { throw "\(line): a tuple type has at least two parts" }
+    return optional(p, "(" + parts.join(", ") + ")")
+  }
+  if at(p, "fn") {
+    next(p)
+    expect(p, "(")
+    let params: [str] = []
+    while not at(p, ")") {
+      params.append(type_(p))
+      if not at(p, ")") { expect(p, ",") }
+    }
+    expect(p, ")")
+    var ret = "void"
+    if at(p, "->") {
+      next(p)
+      ret = type_(p)
+    }
+    return optional(p, "fn(" + params.join(", ") + ") -> " + ret)
+  }
+  if at(p, "[") {
+    next(p)
+    var inner = type_(p)
+    if at(p, ":") {
+      next(p)
+      inner = inner + ": " + type_(p)
+    }
+    expect(p, "]")
+    return optional(p, "[" + inner + "]")
+  }
+  let t = expect(p, "name")
+  if t.val in p.aliases and at(p, ".") {
+    next(p)
+    let inner = expect(p, "name")
+    var full = t.val + "." + inner.val
+    if at(p, "<") { full = full + "<" + type_args(p) + ">" }
+    return optional(p, full)
+  }
+  var name = t.val
+  if not (name == "int" or name == "float" or name == "bool" or name == "str") and not upper(name[0]) {
+    throw "\(t.line): unknown type \(name)"
+  }
+  if upper(name[0]) and at(p, "<") { name = name + "<" + type_args(p) + ">" }
+  return optional(p, name)
+}
+
+fn pair(a: str, b: str) -> N { return tv([sv(a), sv(b)]) }
+
+fn fn_(p: P, is_extern: bool) -> N {
+  let line = expect(p, "fn").line
+  let name = expect(p, "name").val
+  let tparams = type_params(p)
+  expect(p, "(")
+  let params: [N] = []
+  let defaults: [N] = []
+  while not at(p, ")") {
+    let pname = expect(p, "name").val
+    expect(p, ":")
+    params.append(pair(pname, type_(p)))
+    if at(p, "=") {
+      next(p)
+      defaults.append(sv(pname))
+      defaults.append(expr(p, 0))
+    }
+    if not at(p, ")") { expect(p, ",") }
+  }
+  expect(p, ")")
+  var ret = "void"
+  if at(p, "->") {
+    next(p)
+    ret = type_(p)
+  }
+  if is_extern {
+    return node("Fn", line, [sv(name), lv(params), sv(ret), lv([]), N("D", 0, "", []), lv([]), bv(true), bv(false), sv("")])
+  }
+  return node("Fn", line, [sv(name), lv(params), sv(ret), block(p), N("D", 0, "", defaults), tparams, bv(false), bv(false), sv("")])
+}
+
+fn struct_(p: P) -> N {
+  let line = expect(p, "struct").line
+  let name = type_name(p)
+  let tparams = type_params(p)
+  expect(p, "{")
+  let fields: [N] = []
+  let defaults: [N] = []
+  let methods: [N] = []
+  skip_nl(p)
+  while not at(p, "}") {
+    if at(p, "fn") {
+      methods.append(fn_(p, false))
+    } else {
+      let fname = expect(p, "name").val
+      expect(p, ":")
+      fields.append(pair(fname, type_(p)))
+      if at(p, "=") {
+        next(p)
+        defaults.append(sv(fname))
+        defaults.append(expr(p, 0))
+      }
+      if at(p, ",") { next(p) }
+    }
+    skip_nl(p)
+  }
+  expect(p, "}")
+  return node("Struct", line, [sv(name), lv(fields), N("D", 0, "", defaults), lv(methods), tparams])
+}
+
+fn enum_(p: P) -> N {
+  let line = expect(p, "enum").line
+  let name = type_name(p)
+  let tparams = type_params(p)
+  expect(p, "{")
+  let cases: [N] = []
+  let methods: [N] = []
+  skip_nl(p)
+  while not at(p, "}") {
+    if at(p, "fn") {
+      methods.append(fn_(p, false))
+    } else {
+      let case = expect(p, "name").val
+      let fields: [N] = []
+      if at(p, "(") {
+        next(p)
+        while not at(p, ")") {
+          let fname = expect(p, "name").val
+          expect(p, ":")
+          fields.append(pair(fname, type_(p)))
+          if not at(p, ")") { expect(p, ",") }
+        }
+        expect(p, ")")
+      }
+      cases.append(tv([sv(case), lv(fields)]))
+      if at(p, ",") { next(p) }
+    }
+    skip_nl(p)
+  }
+  expect(p, "}")
+  return node("Enum", line, [sv(name), lv(cases), lv(methods), tparams])
+}
+
+# ---------------------------------------------------------------- statements
+fn block(p: P) -> N {
+  expect(p, "{")
+  let stmts: [N] = []
+  skip_nl(p)
+  while not at(p, "}") {
+    stmts.append(stmt(p))
+    if not at(p, "}") { expect(p, "nl") }
+    skip_nl(p)
+  }
+  expect(p, "}")
+  return lv(stmts)
+}
+
+fn stmt(p: P) -> N {
+  let t = tok(p)
+  if at(p, "let") or at(p, "var") {
+    next(p)
+    let mutable = bv(t.kind == "var")
+    if at(p, "(") {
+      next(p)
+      let names = [sv(expect(p, "name").val)]
+      while at(p, ",") {
+        next(p)
+        names.append(sv(expect(p, "name").val))
+      }
+      expect(p, ")")
+      expect(p, "=")
+      return node("LetTuple", t.line, [lv(names), expr(p, 0), mutable])
+    }
+    let name = expect(p, "name").val
+    var ty = ""
+    if at(p, ":") {
+      next(p)
+      ty = type_(p)
+    }
+    expect(p, "=")
+    return node("Let", t.line, [sv(name), opt(ty), expr(p, 0), mutable])
+  }
+  if at(p, "if") { return if_(p) }
+  if at(p, "match") { return match_(p) }
+  if at(p, "while") {
+    next(p)
+    if at(p, "let") {
+      next(p)
+      let name = expect(p, "name").val
+      expect(p, "=")
+      let e = expr(p, 0)
+      return node("WhileLet", t.line, [sv(name), e, block(p)])
+    }
+    let cond = expr(p, 0)
+    return node("While", t.line, [cond, block(p)])
+  }
+  if at(p, "for") {
+    next(p)
+    let name = expect(p, "name").val
+    var second = ""
+    if at(p, ",") {
+      next(p)
+      second = expect(p, "name").val
+    }
+    expect(p, "in")
+    let start = expr(p, 0)
+    if not at(p, "..") {
+      let body = block(p)
+      return node("ForIn", t.line, [sv(name), start, body, opt(second)])
+    }
+    if second != "" { throw "\(t.line): a range gives one number at a time" }
+    next(p)
+    let stop = expr(p, 0)
+    return node("For", t.line, [sv(name), start, stop, block(p)])
+  }
+  if at(p, "return") {
+    next(p)
+    if at(p, "nl") or at(p, "}") { return node("Return", t.line, [none()]) }
+    return node("Return", t.line, [expr(p, 0)])
+  }
+  if at(p, "try") {
+    next(p)
+    let body = block(p)
+    skip_nl(p)
+    expect(p, "catch")
+    let name = expect(p, "name").val
+    return node("Try", t.line, [body, sv(name), block(p)])
+  }
+  if at(p, "throw") {
+    next(p)
+    return node("Throw", t.line, [expr(p, 0)])
+  }
+  if at(p, "break") {
+    next(p)
+    return node("Break", t.line, [])
+  }
+  if at(p, "continue") {
+    next(p)
+    return node("Continue", t.line, [])
+  }
+  let e = expr(p, 0)
+  let k = tok(p).kind
+  if k == "=" or k == "+=" or k == "-=" or k == "*=" or k == "/=" or k == "%=" {
+    if not (e.kind == "Name" or e.kind == "Index" or e.kind == "Field") { throw "\(t.line): only a variable, xs[i] or p.x can go left of =" }
+    next(p)
+    let val = expr(p, 0)
+    if k == "=" { return node("Assign", t.line, [e, val]) }
+    return node("Assign", t.line, [e, node("Binary", t.line, [sv(k[0]), e, val])])
+  }
+  return node("ExprStmt", t.line, [e])
+}
+
+fn if_(p: P) -> N {
+  let line = expect(p, "if").line
+  if at(p, "let") {
+    next(p)
+    let name = expect(p, "name").val
+    expect(p, "=")
+    let cond = expr(p, 0)
+    let then = block(p)
+    return node("IfLet", line, [sv(name), cond, then, else_(p)])
+  }
+  let cond = expr(p, 0)
+  let then = block(p)
+  return node("If", line, [cond, then, else_(p)])
+}
+
+fn else_(p: P) -> N {
+  let mark = p.i
+  skip_nl(p)
+  if not at(p, "else") {
+    p.i = mark
+    return lv([])
+  }
+  next(p)
+  if at(p, "if") { return lv([if_(p)]) }
+  return block(p)
+}
+
+fn if_expr(p: P, line: int) -> N {
+  if at(p, "let") {
+    next(p)
+    let name = expect(p, "name").val
+    expect(p, "=")
+    let e = expr(p, 0)
+    let then = braced_expr(p)
+    skip_nl(p)
+    if not at(p, "else") { throw "\(line): an if used as a value needs an else" }
+    next(p)
+    var other = none()
+    if at(p, "if") { other = if_expr(p, next(p).line) } else { other = braced_expr(p) }
+    return node("IfLetExpr", line, [sv(name), e, then, other])
+  }
+  let cond = expr(p, 0)
+  let then = braced_expr(p)
+  skip_nl(p)
+  if not at(p, "else") { throw "\(line): an if used as a value needs an else" }
+  next(p)
+  var other = none()
+  if at(p, "if") { other = if_expr(p, next(p).line) } else { other = braced_expr(p) }
+  return node("IfExpr", line, [cond, then, other])
+}
+
+fn braced_expr(p: P) -> N {
+  expect(p, "{")
+  skip_nl(p)
+  let e = expr(p, 0)
+  skip_nl(p)
+  expect(p, "}")
+  return e
+}
+
+fn pattern(p: P) -> N {
+  if not at(p, ".") { return expr(p, 0) }
+  next(p)
+  let case = expect(p, "name").val
+  let names: [N] = []
+  if at(p, "(") {
+    next(p)
+    while not at(p, ")") {
+      names.append(sv(expect(p, "name").val))
+      if not at(p, ")") { expect(p, ",") }
+    }
+    expect(p, ")")
+  }
+  return tv([sv(case), lv(names)])
+}
+
+fn patterns(p: P) -> N {
+  let pats = [pattern(p)]
+  while at(p, ",") {
+    next(p)
+    pats.append(pattern(p))
+  }
+  return lv(pats)
+}
+
+fn match_(p: P) -> N {
+  let line = expect(p, "match").line
+  let subject = expr(p, 0)
+  expect(p, "{")
+  let arms: [N] = []
+  var other = none()
+  skip_nl(p)
+  while not at(p, "}") {
+    if at(p, "else") {
+      next(p)
+      other = block(p)
+    } else {
+      let pats = patterns(p)
+      arms.append(tv([pats, block(p)]))
+    }
+    skip_nl(p)
+  }
+  expect(p, "}")
+  return node("Match", line, [subject, lv(arms), other])
+}
+
+# match as a value: a closure around a match statement whose arms return their one expression.
+fn match_expr(p: P, line: int) -> N {
+  let subject = expr(p, 0)
+  expect(p, "{")
+  let arms: [N] = []
+  var other = none()
+  skip_nl(p)
+  while not at(p, "}") {
+    if at(p, "else") {
+      let else_line = next(p).line
+      other = lv([node("Return", else_line, [braced_expr(p)])])
+    } else {
+      let pats = patterns(p)
+      arms.append(tv([pats, lv([node("Return", line, [braced_expr(p)])])]))
+    }
+    skip_nl(p)
+  }
+  expect(p, "}")
+  let m = node("Match", line, [subject, lv(arms), other])
+  return node("CallValue", line, [node("Lambda", line, [lv([]), none(), lv([m])]), lv([])])
+}
+
+# ---------------------------------------------------------------- expressions
+fn expr(p: P, min: int) -> N {
+  var left = unary(p)
+  while prec(tok(p).kind) > min {
+    let op = next(p)
+    left = node("Binary", op.line, [sv(op.val), left, expr(p, prec(op.val))])
+  }
+  return left
+}
+
+fn unary(p: P) -> N {
+  let t = tok(p)
+  if at(p, "-") {
+    next(p)
+    return node("Unary", t.line, [sv("-"), unary(p)])
+  }
+  if at(p, "not") {
+    next(p)
+    return node("Unary", t.line, [sv("not"), expr(p, 30)])
+  }
+  return primary(p)
+}
+
+fn primary(p: P) -> N {
+  var e = atom(p)
+  while at(p, "[") or at(p, ".") or at(p, "!") or at(p, "(") or at(p, "?.") or at(p, "?") {
+    let t = next(p)
+    let line = t.line
+    if t.kind == "?" {
+      e = node("ResultTry", line, [e])
+    } else if t.kind == "?." {
+      let name = expect(p, "name").val
+      if at(p, "(") {
+        next(p)
+        let ca = call_args(p)
+        e = node("OptChain", line, [e, sv(name), ca.kids[0], ca.kids[1]])
+      } else {
+        e = node("OptChain", line, [e, sv(name), none(), none()])
+      }
+    } else if t.kind == "(" {
+      e = node("CallValue", line, [e, lv(items_to(p, ")"))])
+    } else if t.kind == "!" {
+      e = node("Unwrap", line, [e])
+    } else if t.kind == "[" {
+      var start = none()
+      if not at(p, "..") { start = expr(p, 0) }
+      if at(p, "..") {
+        next(p)
+        var stop = none()
+        if not at(p, "]") { stop = expr(p, 0) }
+        e = node("Slice", line, [e, start, stop])
+      } else {
+        e = node("Index", line, [e, start])
+      }
+      expect(p, "]")
+    } else {
+      let nt = next(p)
+      var name = ""
+      if nt.kind == "int" {
+        name = "_" + nt.val
+      } else if nt.kind == "name" {
+        name = nt.val
+      } else {
+        throw "\(nt.line): expected a field or method name after ."
+      }
+      if at(p, "(") {
+        next(p)
+        let ca = call_args(p)
+        e = node("Method", line, [e, sv(name), ca.kids[0], ca.kids[1]])
+      } else {
+        e = node("Field", line, [e, sv(name)])
+      }
+    }
+  }
+  return e
+}
+
+fn lambda_(p: P, line: int) -> N {
+  expect(p, "(")
+  let params: [N] = []
+  while not at(p, ")") {
+    let name = expect(p, "name").val
+    var ty = ""
+    if at(p, ":") {
+      next(p)
+      ty = type_(p)
+    }
+    params.append(tv([sv(name), opt(ty)]))
+    if not at(p, ")") { expect(p, ",") }
+  }
+  expect(p, ")")
+  if at(p, "=>") {
+    let arrow = next(p)
+    return node("Lambda", line, [lv(params), none(), lv([node("Return", arrow.line, [expr(p, 0)])])])
+  }
+  var ret = ""
+  if at(p, "->") {
+    next(p)
+    ret = type_(p)
+  }
+  return node("Lambda", line, [lv(params), opt(ret), block(p)])
+}
+
+# Arguments up to ), each optionally labeled: f(1, by: 2). Comes back as a tuple of the args and the labels.
+fn call_args(p: P) -> N {
+  let a: [N] = []
+  let labels: [N] = []
+  while not at(p, ")") {
+    var label = none()
+    if at(p, "name") and kind_at(p, p.i + 1) == ":" {
+      label = sv(next(p).val)
+      next(p)
+    }
+    a.append(expr(p, 0))
+    labels.append(label)
+    sep(p, ")")
+  }
+  expect(p, ")")
+  return tv([lv(a), lv(labels)])
+}
+
+fn items_to(p: P, close: str) -> [N] {
+  let out: [N] = []
+  while not at(p, close) {
+    out.append(expr(p, 0))
+    sep(p, close)
+  }
+  expect(p, close)
+  return out
+}
+
+fn sep(p: P, close: str) {
+  if at(p, ",") {
+    next(p)
+  } else if not at(p, close) {
+    let t = tok(p)
+    throw "\(t.line): expected , or \(close) here, got \(t.kind)"
+  }
+}
+
+fn atom(p: P) -> N {
+  let t = next(p)
+  if t.kind == "int" { return node("Num", t.line, [N("I", 0, t.val, []), sv("int")]) }
+  if t.kind == "float" { return node("Num", t.line, [N("F", 0, t.val, []), sv("float")]) }
+  if t.kind == "str" { return string_node(t.val, t.line) }
+  if t.kind == "nil" { return node("Nil", t.line, []) }
+  if t.kind == "fn" { return lambda_(p, t.line) }
+  if t.kind == "true" or t.kind == "false" { return node("Bool", t.line, [bv(t.kind == "true")]) }
+  if t.kind == "(" {
+    let e = expr(p, 0)
+    if at(p, ",") {
+      let items = [e]
+      while at(p, ",") {
+        next(p)
+        items.append(expr(p, 0))
+      }
+      expect(p, ")")
+      return node("Tuple", t.line, [lv(items)])
+    }
+    expect(p, ")")
+    return e
+  }
+  if t.kind == "if" { return if_expr(p, t.line) }
+  if t.kind == "match" { return match_expr(p, t.line) }
+  if t.kind == "[" {
+    if at(p, ":") {
+      next(p)
+      expect(p, "]")
+      return node("Dict", t.line, [lv([]), lv([])])
+    }
+    if at(p, "]") {
+      next(p)
+      return node("List", t.line, [lv([])])
+    }
+    let first = expr(p, 0)
+    if not at(p, ":") {
+      if not at(p, "]") { expect(p, ",") }
+      let items = [first]
+      for x in items_to(p, "]") { items.append(x) }
+      return node("List", t.line, [lv(items)])
+    }
+    let keys = [first]
+    let vals: [N] = []
+    while true {
+      expect(p, ":")
+      vals.append(expr(p, 0))
+      if at(p, "]") { break }
+      expect(p, ",")
+      if at(p, "]") { break }
+      keys.append(expr(p, 0))
+    }
+    expect(p, "]")
+    return node("Dict", t.line, [lv(keys), lv(vals)])
+  }
+  if t.kind == "name" {
+    var name = t.val
+    if upper(name[0]) and at(p, "<") {   # Stack<int>(...), as long as a ( follows the >
+      let mark = p.i
+      try {
+        let a = type_args(p)
+        if not (at(p, "(") or at(p, ".")) { throw "not a type" }
+        name = name + "<" + a + ">"
+        if at(p, ".") { return node("Name", t.line, [sv(name)]) }
+      } catch e {
+        p.i = mark
+      }
+    }
+    if at(p, "(") {
+      next(p)
+      let ca = call_args(p)
+      return node("Call", t.line, [sv(name), ca.kids[0], ca.kids[1]])
+    }
+    return node("Name", t.line, [sv(t.val)])
+  }
+  if t.kind == "nl" or t.kind == "eof" { throw "\(t.line): this line ends in the middle of an expression" }
+  throw "\(t.line): unexpected \(t.kind)"
+}
+
+# ---------------------------------------------------------------- strings
+# Plank's strings are C strings and cannot hold a zero byte, so \0 decodes to a stand-in that dump() writes as \0.
+# ponytail: a string holding backslash, tab, 0 reads as a zero byte too; real bytes when Plank has chr() (bootstrap step 3)
+fn nul() -> str { return "\\" + "\t" + "0" }
+
+fn esc(c: str) -> str {
+  if c == "n" { return "\n" }
+  if c == "t" { return "\t" }
+  if c == "0" { return nul() }
+  return c
+}
+
+# A string token's raw body with its escapes decoded (an import path or a plain string).
+fn unescape(body: str) -> str {
+  let cs = body.chars()
+  var out = ""
+  var i = 0
+  while i < len(cs) {
+    if cs[i] == "\\" {
+      i += 1
+      out = out + esc(cs[i])
+    } else {
+      out = out + cs[i]
+    }
+    i += 1
+  }
+  return out
+}
+
+# Str, or Interp for a string with \( ) in it: text and expressions taking turns, text first and last.
+fn string_node(body: str, line: int) -> N {
+  let cs = body.chars()
+  let parts: [N] = []
+  var out = ""
+  var i = 0
+  var interp = false
+  while i < len(cs) {
+    if cs[i] == "\\" and cs[i + 1] == "(" {
+      let j = close_paren(cs, i + 2)
+      parts.append(node("Str", line, [sv(out)]))
+      parts.append(interp_expr(cs[i + 2..j - 1].join(""), line))
+      out = ""
+      i = j
+      interp = true
+    } else if cs[i] == "\\" {
+      out = out + esc(cs[i + 1])
+      i += 2
+    } else {
+      out = out + cs[i]
+      i += 1
+    }
+  }
+  if not interp { return node("Str", line, [sv(out)]) }
+  parts.append(node("Str", line, [sv(out)]))
+  return node("Interp", line, [lv(parts)])
+}
+
+fn interp_expr(src: str, line: int) -> N {
+  let toks: [Tok] = []
+  for t in lex(src) { toks.append(Tok(line, t.kind, t.val)) }
+  let q = P(toks, 0, [:])
+  let e = expr(q, 0)
+  if not at(q, "nl") { throw "\(line): cannot read \\(\(src)) as one expression" }
+  return e
+}
+
+fn parse(src: str) -> N {
+  return program(P(lex(src), 0, [:]))
+}
+
+# ---------------------------------------------------------------- dump
+fn quote(s: str) -> str {
+  let parts: [str] = []
+  for part in s.split(nul()) { parts.append(quote_part(part)) }
+  return "\"" + parts.join("\\0") + "\""
+}
+
+fn quote_part(s: str) -> str {
+  var out = ""
+  for c in s.chars() {
+    if c == "\\" { out = out + "\\\\" } else if c == "\"" { out = out + "\\\"" } else if c == "\n" { out = out + "\\n" } else if c == "\t" { out = out + "\\t" } else if c == "\0" { out = out + "\\0" } else { out = out + c }
+  }
+  return out
+}
+
+fn dump_kids(n: N) -> str {
+  let parts: [str] = []
+  for k in n.kids { parts.append(dump(k)) }
+  return parts.join(" ")
+}
+
+fn dump(n: N) -> str {
+  if n.kind == "_" { return "_" }
+  if n.kind == "B" or n.kind == "I" or n.kind == "F" { return n.text }
+  if n.kind == "S" { return quote(n.text) }
+  if n.kind == "L" { return "[" + dump_kids(n) + "]" }
+  if n.kind == "T" { return "<" + dump_kids(n) + ">" }
+  if n.kind == "D" { return "{" + dump_kids(n) + "}" }
+  if len(n.kids) == 0 { return "(" + n.kind + " " + str(n.line) + ")" }
+  return "(" + n.kind + " " + str(n.line) + " " + dump_kids(n) + ")"
+}
