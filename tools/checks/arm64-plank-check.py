@@ -120,7 +120,7 @@ try:
         a = seg.find("M3c app %s starts\n" % app); b = seg.find("M3c app %s " % app, a + 1 if a >= 0 else 0)
         body = seg[a:].split("\n", 1)[1] if a >= 0 else ""
         body = body[:body.find("M3c app %s exit" % app)] if "M3c app %s exit" % app in body else body
-        got = [l for l in body.split("\n") if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ")) and "joshua@tree" not in l]
+        got = [l for l in body.split("\n") if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ", "slow step ")) and "joshua@tree" not in l]   # slow step: the desktop's own log, written while the app yields
         want = [l for l in wants[app].split("\n") if l]
         check("%s on the box prints its .out" % n, got == want and ("M3c app %s exit 0" % app) in seg,
               {"want": want[:6], "got": got[:6], "tail": seg[-300:]} if got != want else seg[-300:])
