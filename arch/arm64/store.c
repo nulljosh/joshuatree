@@ -25,6 +25,22 @@ static int get(const char *low, unsigned n, const char *ext, char **body, unsign
     url[o] = 0;
     return browser_get(url, body, bn);
 }
+int fat_delete(const char *name);
+/* 6.59.0: an unsigned app (Samantha's [[app NAME]]) into JT/APPS: NAME.APP, and a NAME.SIG left from before goes, since it
+   cannot match the new image. 1 written. */
+int store_put(const char *low, unsigned n, const char *img, unsigned il) {
+    char f[13];
+    for (unsigned i = 0; i < n; i++) f[i] = (char)(low[i] >= 'a' && low[i] <= 'z' ? low[i] - 32 : low[i]);
+    if (card_name_taken(low, n) || il > UIMG_MAX) return 0;
+    int ok = sd_ready() && sd_enter_jt(1);
+    if (ok) { fat_mkdir("APPS"); ok = fat_chdir("APPS"); }
+    f[n] = '.'; f[n + 1] = 'A'; f[n + 2] = 'P'; f[n + 3] = 'P'; f[n + 4] = 0;
+    if (ok) ok = fat_replace_file(f, img, il);
+    f[n + 1] = 'S'; f[n + 2] = 'I'; f[n + 3] = 'G';
+    if (ok) fat_delete(f);
+    fat_cwd_set(0);
+    return ok;
+}
 void store_install(const char *name, unsigned n) {
     char low[9], f[13];
     cmd_out("install: ");

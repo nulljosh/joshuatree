@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Plank programs run on Joshua Tree (6.57.0): Plank's own examples, built by tools/plankapp.sh, print what they print on a Mac.
+
+Each example in Plank's examples/ folder listed below is compiled by `plank emit` and built into an app for the card
+(JT/APPS/PKn.APP); the kernel boots in QEMU with no accounts, the Terminal runs each with `userrun pkN`, and what it writes
+must equal the example's .out file line for line. Together they cover printing, ints and floats, strings, lists, dicts,
+structs, enums with match, closures, optionals, and try and catch (setjmp and longjmp in user/pklibc).
+6.58.0: then the store's Slide (store/slide.pk, a Plank program calling jtw, user/pklibc's window calls), as landing/apps
+serves it, opens its window, slides tiles on the arrows and closes on Esc.
+Discriminating: break user/pklibc's %.15g (fmt_double) and the float lines differ; make setjmp.S's longjmp return 0 and the
+caught errors are lost.
+Skips (exit 0) without clang's aarch64 target, ld.lld, qemu-system-aarch64, mtools, uv or Plank (PLANK=path/to/plank.py,
+default ~/Documents/Code/plank/plank.py; CI fetches it).
+Usage: tools/checks/arm64-plank-check.py   (from the repo root)
+"""
+import json, os, shutil, socket, subprocess, sys, time
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from scratch import scratch_dir
+from sdcard import PART, build_card
+
+root = Path(__file__).resolve().parents[2]
+arch = root / "arch/arm64"
+plank = Path(os.environ.get("PLANK", Path.home() / "Documents/Code/plank/plank.py"))
+if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64", "mmd", "mcopy", "uv")) or not plank.exists():
+    print("SKIP: clang, ld.lld, qemu-system-aarch64, mtools, uv or Plank (%s) missing" % plank); sys.exit(0)
+EXAMPLES = ["hello", "fib", "fizzbuzz", "loops", "lists", "dicts", "structs", "enums", "closures", "optionals", "errors", "equality"]
+tmp = Path(scratch_dir("arm64-plank"))
+for p in tmp.iterdir(): p.unlink() if p.is_file() else shutil.rmtree(p)
+
+fails = []
+def check(name, ok, detail=""):
+    print(("  ok: " if ok else "  FAIL: ") + name + ("" if ok else "  " + repr(detail)[-900:]), flush=True)
+    if not ok: fails.append(name)
+
+ex = plank.parent / "examples"
+built = []
+for i, n in enumerate(EXAMPLES):
+    if not (ex / (n + ".pk")).exists(): print("  (no example %s, skipped)" % n); continue
+    r = subprocess.run([str(root / "tools/plankapp.sh"), str(ex / (n + ".pk")), str(tmp / ("PK%d.APP" % i))], capture_output=True, text=True, timeout=600)
+    check("%s.pk builds into an app" % n, r.returncode == 0, (r.stdout + r.stderr)[-800:])
+    if r.returncode == 0: built.append((i, n))
+if not built: print("FAIL: nothing built"); sys.exit(1)
+
+subprocess.run(["make", "-C", str(arch), "clean"], capture_output=True, timeout=60)
+q = None
+try:
+    r = subprocess.run(["make", "-C", str(arch), "kernel8.elf"], capture_output=True, text=True, timeout=900)
+    if r.returncode: print(r.stderr[-1500:]); print("FAIL: arch/arm64 does not build"); sys.exit(1)
+    card = str(tmp / "card.img")
+    build_card(card, False)
+    MT = dict(os.environ, MTOOLS_SKIP_CHECK="1")
+    def mt(*a): return subprocess.run([a[0], "-i", f"{card}@@{PART * 512}", *map(str, a[1:])], capture_output=True, env=MT)
+    mt("mmd", "::JT"); mt("mmd", "::JT/APPS")
+    for i, n in built: mt("mcopy", "-o", tmp / ("PK%d.APP" % i), "::JT/APPS/PK%d.APP" % i)
+    for e in ("app", "sig"): mt("mcopy", "-o", root / "landing/apps" / ("slide." + e), "::JT/APPS/SLIDE." + e.upper())   # 6.58.0
+    log, sock = tmp / "uart", tmp / "qmp"
+    q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-global", "virtio-mmio.force-legacy=false",
+                          "-device", "ramfb", "-device", "virtio-keyboard-device", "-drive", "if=none,id=card,file=%s,format=raw" % card, "-device", "virtio-blk-device,drive=card",
+                          "-display", "none", "-serial", "file:%s" % log, "-qmp", "unix:%s,server,nowait" % sock, "-kernel", str(arch / "kernel8.elf")],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    def uart(): return log.read_text(errors="replace") if log.exists() else ""
+    def wait_for(text, secs, after=0):
+        end = time.time() + secs
+        while time.time() < end:
+            if text in uart()[after:]: return True
+            if q.poll() is not None: return False
+            time.sleep(0.1)
+        return False
+    if not wait_for("M2 input ready", 60): raise SystemExit("FAIL: did not boot: %r" % uart()[-600:])
+    time.sleep(0.5)
+    s = socket.socket(socket.AF_UNIX); s.settimeout(30); s.connect(str(sock)); f = s.makefile("rw"); f.readline()
+    def command(name, **a):
+        f.write(json.dumps({"execute": name, "arguments": a}) + "\n"); f.flush()
+        while True:
+            rr = json.loads(f.readline())
+            if "return" in rr or "error" in rr: return rr
+    command("qmp_capabilities")
+    def key(*k): command("send-key", keys=[{"type": "qcode", "data": x} for x in k]); time.sleep(0.12)
+    key("f2")
+    if not wait_for("terminal open", 10): raise SystemExit("FAIL: F2 did not open the Terminal")
+    time.sleep(0.5)
+    for i, n in built:
+        app = "pk%d" % i
+        start = len(uart())
+        for ch in "userrun " + app: key({" ": "spc"}.get(ch, ch))
+        key("ret")
+        wait_for("M3c app %s exit" % app, 60, start) or wait_for("M3c app %s stopped" % app, 1, start)
+        time.sleep(0.3)
+        seg = uart()[start:]
+        a = seg.find("M3c app %s starts\n" % app); b = seg.find("M3c app %s " % app, a + 1 if a >= 0 else 0)
+        body = seg[a:].split("\n", 1)[1] if a >= 0 else ""
+        body = body[:body.find("M3c app %s exit" % app)] if "M3c app %s exit" % app in body else body
+        got = [l for l in body.split("\n") if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ")) and "joshua@tree" not in l]
+        want = [l for l in (ex / (n + ".out")).read_text().split("\n") if l]
+        check("%s on the box prints its .out" % n, got == want and ("M3c app %s exit 0" % app) in seg,
+              {"want": want[:6], "got": got[:6], "tail": seg[-300:]} if got != want else seg[-300:])
+    start = len(uart())   # 6.58.0: the store's Slide, written in Plank, in a window drawn through jtw
+    for ch in "userrun slide": key({" ": "spc"}.get(ch, ch))
+    key("ret")
+    check("the store's Slide (Plank, signed) opens its window", wait_for("slide: window", 20, start) and "bytes, signed" in uart()[start:]
+          and wait_for("userrun slide: running in its window", 10, start), uart()[start:][-400:])
+    n = len(uart())
+    for k in ("up", "left", "down", "right"): key(k); time.sleep(0.3)
+    check("the arrows slide tiles", wait_for("slide: moved", 10, n), uart()[n:][-300:])
+    n = len(uart()); key("esc")
+    check("Esc closes Slide", wait_for("slide: closed", 10, n) and wait_for("M3c app slide exit 0", 10, n), uart()[n:][-300:])
+    check("no kernel crash", "KERNEL CRASH" not in uart(), uart()[-600:])
+finally:
+    if q: q.kill(); q.wait()
+    subprocess.run(["make", "-C", str(arch), "clean"], capture_output=True)
+if fails: print("FAIL: " + ", ".join(fails)); sys.exit(1)
+print("PASS: Plank's examples, compiled for the Pi by tools/plankapp.sh, print exactly what their .out files say")

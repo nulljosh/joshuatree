@@ -82,7 +82,7 @@ Then in Joshua Tree: Settings > Assistant > Claude relay = 10.0.2.2:8765, Claude
 Python standard library only. tools/checks/claude-relay-check.py proves the rules above
 against a stub `claude`.
 """
-import argparse, hmac, http.server, json, os, re, signal, socket, ssl, stat, subprocess, sys, threading, time, urllib.request, urllib.error, urllib.parse, uuid
+import argparse, hmac, http.server, json, os, re, signal, socket, ssl, stat, subprocess, sys, tempfile, threading, time, urllib.request, urllib.error, urllib.parse, uuid
 
 DEFAULT_PORT = 8765
 DEFAULT_TIMEOUT = 150          # seconds; the kernel waits up to 240 s (JT_HTTP_POST_TICKS_CLAUDE), so the relay's 504 lands first
@@ -155,7 +155,16 @@ SAMANTHA = ("You are Samantha, the assistant inside Joshua Tree, a small operati
             "[[status]] reports the Pi's address, clock and Wi-Fi. "
             "[[list]] lists the files in JT/ on the Pi's SD card and [[read NAME]] reads one of them (an 8.3 name). "
             "[[save NAME]] saves the first ``` code block of your answer to JT/NAME on the Pi's SD card (an 8.3 name "
-            "like HELLO.C); it only runs when the person's own question named that file. These are the only actions; never invent others. "
+            "like HELLO.C); it only runs when the person's own question named that file. "
+            "[[app NAME]] builds the first ``` block, a program in Plank, into an app called NAME (1 to 8 of a-z, 0-9, - and _) "
+            "and opens it; only when the person asked for an app. Plank: fn main() { }, let and var, if and while, for i in 0..n, "
+            "lists [1, 2], \"text \\(x)\", print(x), and, or, not; no top-level let, no ?: (use if { } else { } as a value), no hex. "
+            "A window: declare what you use, e.g. extern fn jtw_open() -> int, jtw_width() -> int, jtw_height() -> int, "
+            "jtw_fill(x: int, y: int, w: int, h: int, rgb: int) -> int, jtw_text(x: int, y: int, s: str, rgb: int, bold: int) -> int, "
+            "jtw_present() -> int, jtw_wait() -> int (1 key, 2 click, 4 resized, -1 closed), jtw_key() -> int (Esc 259, arrows "
+            "256 up 257 down 261 left 262 right), jtw_x() -> int, jtw_y() -> int. Colours are decimal 0xRRGGBB, background "
+            "16447732. If it does not build, the error comes back to you: fix the code and send [[app NAME]] again. "
+            "These are the only actions; never invent others. "
             "After the Pi runs them it sends you what they printed as the next message; use that to finish the "
             "task, up to 5 rounds. Use an action only when it helps: browse when you need a live page, calc for "
             "arithmetic, status when asked about the Pi, save when asked to write code or a file under a name. "
@@ -484,12 +493,38 @@ def backup_latest(root, user):
     return bytes(out)
 
 
+APP_NAME_RE = re.compile(r"[a-z0-9_-]{1,8}")
+APP_SOURCE_MAX = 32 * 1024
+
+def build_app(name, source, plank="", timeout=240):
+    """6.59.0, [[app NAME]]: Samantha's Plank program into an app image with tools/plankapp.sh. (200, image bytes), or
+    (status, a short reason) that goes back to her as the next turn, so she can fix her own code. Only a single file is
+    built (no import line); the result is never signed, so on the Pi only an admin runs it."""
+    if not APP_NAME_RE.fullmatch(name): return 400, "An app name is 1 to 8 of a-z, 0-9, - and _."
+    if not source.strip(): return 400, "No Plank source."
+    if len(source.encode()) > APP_SOURCE_MAX: return 413, "That program is too long for one app."
+    if any(l.strip().startswith("import ") for l in source.splitlines()): return 422, "An app is one file: no import lines."
+    tool = os.path.join(ROOT, "tools", "plankapp.sh")
+    env = dict(os.environ, **({"PLANK": plank} if plank else {}))
+    with tempfile.TemporaryDirectory() as d:
+        src, out = os.path.join(d, name + ".pk"), os.path.join(d, name.upper() + ".APP")
+        with open(src, "w", encoding="utf-8") as f: f.write(source)
+        try: p = subprocess.run([tool, src, out], capture_output=True, text=True, timeout=timeout, env=env)
+        except subprocess.TimeoutExpired: return 504, "The build took too long."
+        if p.returncode or not os.path.exists(out):
+            why = (p.stderr + p.stdout).replace(d + "/", "").strip()
+            lines = [l for l in why.splitlines() if l.strip() and not l.startswith(("clang: warning", "warning:"))]
+            return 422, "It did not build: " + " | ".join(lines[-4:])[:500]
+        with open(out, "rb") as f: return 200, f.read()
+
+
 class Relay:
     def __init__(self, cfg, token):
         self.cfg = cfg
         self.token = token.encode()
         self.busy = threading.Lock()
         self.tts_busy = threading.Lock()
+        self.build_busy = threading.Lock()   # 6.59.0: one app build at a time
         self.tts_usage = TtsUsage(cfg.tts_usage_file)
         self.sessions = set()   # session ids this relay has handed out; --resume only accepts these
         self.api_history = {}   # --api-key-file mode: session id -> its messages, so an agent round can continue
@@ -567,6 +602,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.close_connection = True
         self.log_line(200, nin, len(data), t0)
 
+    def build(self, raw, query, n, t0):   # 6.59.0: [[app NAME]], the Pi sends Samantha's Plank source, an unsigned image comes back
+        r = self.relay
+        q = urllib.parse.parse_qs(query, keep_blank_values=True)
+        name = q.get("name", [""])[0]
+        if set(q) != {"name"} or len(q["name"]) != 1: return self.reply(400, "Say the app's name.", n, t0)
+        try: d = json.loads(raw.decode("utf-8"))
+        except ValueError: return self.reply(400, "Bad JSON.", n, t0)
+        src = d.get("source", "") if isinstance(d, dict) else ""
+        if not isinstance(src, str): return self.reply(400, "Bad JSON.", n, t0)
+        if not r.build_busy.acquire(blocking=False): return self.reply(429, "Another app is building.", n, t0)
+        try: status, out = build_app(name, src, getattr(r.cfg, "plank", ""))
+        finally: r.build_busy.release()
+        if status != 200: return self.reply(status, out, n, t0)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream"); self.send_header("Content-Length", str(len(out)))
+        self.send_header("Connection", "close"); self.end_headers(); self.wfile.write(out)
+        self.close_connection = True
+        self.log_line(200, n, len(out), t0)
+
     def backup(self, raw, query, n, t0):
         q = urllib.parse.parse_qs(query, keep_blank_values=True)
         user = q.get("user", [""])[0]
@@ -613,9 +667,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         r = self.relay
         route, _, query = self.path.partition("?")
         backups = route in ("/api/backup", "/api/backup/latest")
-        if route not in ("/api/claude", "/api/tts") and not backups: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
+        if route not in ("/api/claude", "/api/tts", "/api/build") and not backups: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
         if backups and not r.cfg.backup_dir: return self.reply(404, "This relay keeps no backups. Start it with --backup-dir FOLDER.", 0, t0)
-        if not backups and query: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
+        if not backups and route != "/api/build" and query: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
         auth = self.headers.get("Authorization", "")
         given = auth[7:].strip().encode() if auth.startswith("Bearer ") else b""
         if not hmac.compare_digest(given, r.token): return self.reply(401, "Wrong or missing relay token.", 0, t0)  # TOKEN-CHECK
@@ -629,6 +683,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if route == "/api/backup/latest": return self.backup_latest(query, n, t0)
         ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
         if route == "/api/tts": return self.tts(raw, ctype, n, t0)
+        if route == "/api/build": return self.build(raw, query, n, t0)
         session = ""
         model, effort = "auto", "medium"
         if ctype == "application/json":
@@ -712,6 +767,7 @@ def main(argv=None):
     ap.add_argument("--tts-daily-chars", type=int, default=5000, help="most characters per local day, kept across restarts")
     ap.add_argument("--tts-usage-file", default=TTS_DEFAULT_USAGE_FILE, help="where the day's character count is kept")
     ap.add_argument("--tts-base", default=TTS_DEFAULT_BASE, help="ElevenLabs base URL (tests point it at a loopback stub)")
+    ap.add_argument("--plank", default="", help="plank.py, for [[app NAME]] builds (tools/plankapp.sh's PLANK; default ~/Documents/Code/plank/plank.py)")
     ap.add_argument("--backup-dir", default="", help="keep the Pi's `backup` uploads here, one folder per person and time (off when unset)")
     ap.add_argument("--tools", default=",".join(READ_ONLY_TOOLS),
                     help="comma-separated built-in tools (default Read,Grep,Glob: read-only)")

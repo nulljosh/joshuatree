@@ -1,0 +1,106 @@
+# slide: the 15 puzzle in a window; the arrows slide a tile into the gap.
+# A store app written in Plank (6.58.0), drawn through jtw, user/pklibc's window calls.
+extern fn jtw_open() -> int
+extern fn jtw_width() -> int
+extern fn jtw_height() -> int
+extern fn jtw_fill(x: int, y: int, w: int, h: int, rgb: int) -> int
+extern fn jtw_text(x: int, y: int, s: str, rgb: int, bold: int) -> int
+extern fn jtw_present() -> int
+extern fn jtw_wait() -> int
+extern fn jtw_key() -> int
+extern fn time(t: int) -> int
+
+fn solved(tiles: [int]) -> bool {
+  for i in 0..15 {
+    if tiles[i] != i + 1 { return false }
+  }
+  return true
+}
+
+fn hole(tiles: [int]) -> int {
+  for i in 0..16 {
+    if tiles[i] == 0 { return i }
+  }
+  return 15
+}
+
+# The tile that slides into the gap for an arrow: the one on the far side of the gap, or -1 at an edge.
+fn mover(tiles: [int], key: int) -> int {
+  let h = hole(tiles)
+  let r = h / 4
+  let c = h % 4
+  if key == 256 and r < 3 { return h + 4 }
+  if key == 257 and r > 0 { return h - 4 }
+  if key == 261 and c < 3 { return h + 1 }
+  if key == 262 and c > 0 { return h - 1 }
+  return -1
+}
+
+fn draw(tiles: [int], moves: int) {
+  let w = jtw_width()
+  var side = (jtw_height() - 120) / 4 - 6   # the tiles fit the window's height, at most 64
+  if side > 64 { side = 64 }
+  let x0 = (w - (4 * side + 3 * 6)) / 2
+  let y0 = 50
+  jtw_fill(0, 0, w, 600, 16447732)
+  jtw_text(x0, 18, "Slide", 1842206, 1)
+  for i in 0..16 {
+    let x = x0 + (i % 4) * (side + 6)
+    let y = y0 + (i / 4) * (side + 6)
+    if tiles[i] == 0 {
+      jtw_fill(x, y, side, side, 15460061)
+    } else {
+      jtw_fill(x, y, side, side, 14538958)
+      jtw_fill(x + 2, y + 2, side - 4, side - 4, 16777215)
+      let n = "\(tiles[i])"
+      jtw_text(x + side / 2 - 5 * len(n), y + side / 2 - 10, n, 1842206, 1)
+    }
+  }
+  let done = solved(tiles) and moves > 0
+  let note = if done { "Solved in \(moves) moves." } else { "Arrows slide a tile. Esc closes. \(moves) moves" }
+  jtw_text(x0, y0 + 4 * (side + 6) + 14, note, if done { 11882540 } else { 7697006 }, 0)
+  jtw_present()
+}
+
+fn main() {
+  if jtw_open() != 0 {
+    print("slide: no window")
+    return
+  }
+  print("slide: window")
+  var tiles = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0]
+  var seed = time(0) % 2147483648
+  var shuffles = 0
+  while shuffles < 200 {
+    seed = (seed * 1103515245 + 12345) % 2147483648
+    let k = [256, 257, 261, 262][seed / 65536 % 4]
+    let m = mover(tiles, k)
+    if m >= 0 {
+      let h = hole(tiles)
+      tiles[h] = tiles[m]
+      tiles[m] = 0
+      shuffles = shuffles + 1
+    }
+  }
+  var moves = 0
+  draw(tiles, moves)
+  while true {
+    let e = jtw_wait()
+    if e == -1 { break }
+    if e == 1 {
+      let k = jtw_key()
+      if k == 259 { break }
+      let m = mover(tiles, k)
+      if m >= 0 {
+        let h = hole(tiles)
+        tiles[h] = tiles[m]
+        tiles[m] = 0
+        moves = moves + 1
+        print("slide: moved \(moves)")
+        if solved(tiles) { print("slide: solved") }
+      }
+    }
+    draw(tiles, moves)
+  }
+  print("slide: closed")
+}
