@@ -298,6 +298,7 @@ void say_wrapped(const char *prefix, const char *s, unsigned n) {   /* browser.c
 #define ACT_SAVE 8
 #define ACT_LIST 9
 #define ACT_READ 10
+#define ACT_APP 11                /* 6.59.0: [[app NAME]], Samantha's Plank program built on the Mac into JT/APPS/NAME.APP */
 /* Plugins: Samantha's extra actions, one row each. `[[NAME TEXT]]` on its own line runs run(TEXT) on the Pi, whatever it
    prints is the next turn's result like any other action, and the row's `help` is the one line the model is told (post()
    adds it to the Pi status it sends). ponytail: a compile-time table, no loading. A JT/PLUGINS/ manifest on the SD card
@@ -339,6 +340,7 @@ static unsigned take_actions(char *s, unsigned n) {
             else if (!(kind = act_word(p, m, "note", ACT_NOTE, &skip)) && !(kind = act_word(p, m, "say", ACT_SAY, &skip))
                      && !(kind = act_word(p, m, "open", ACT_OPEN, &skip)) && !(kind = act_word(p, m, "calc", ACT_CALC, &skip))
                      && !(kind = act_word(p, m, "save", ACT_SAVE, &skip)) && !(kind = act_word(p, m, "read", ACT_READ, &skip))
+                     && !(kind = act_word(p, m, "app", ACT_APP, &skip))
                      && (kind = act_word(p, m, "browse", ACT_BROWSE, &skip))
                      && !starts(p + skip, m - skip, "http://") && !starts(p + skip, m - skip, "https://")) kind = ACT_UNKNOWN;
             for (unsigned i = 0; kind == ACT_UNKNOWN && i < PLUGIN_N; i++) kind = act_word(p, m, plugins[i].name, ACT_PLUGIN + (int)i, &skip);
@@ -673,6 +675,7 @@ done:
     return (int)ret;
 }
 
+static unsigned relay_ticks = ASK_TICKS;   /* 6.59.0: an app build waits longer than an answer */
 static int relay_post_tls_to(const char *path, const char *body, unsigned body_len, const char *token, char *reply, unsigned reply_max, int *status) {
     static char req_s[2 * RESULT_MAX + 640 + sizeof(RELAY_NAME)];   /* +128 for the plugin rows in the pi field */
     char *req = req_s;   /* a backup's body is bigger: the caller's heap mark gives this back */
@@ -689,7 +692,7 @@ static int relay_post_tls_to(const char *path, const char *body, unsigned body_l
     for (unsigned i = 0; i < body_len; i++) req[n++] = body[i];
     char *raw = kmalloc(reply_max + 2048);
     request_sent = 1;
-    int got = raw ? tls_exchange_timeout(req, n, raw, reply_max + 2048, ASK_TICKS) : -1;
+    int got = raw ? tls_exchange_timeout(req, n, raw, reply_max + 2048, relay_ticks) : -1;
     if (!raw) tcp_close();
     for (unsigned i = 0; i < n; i++) ((volatile char *)req)[i] = 0;
     *status = got > 0 ? http_status_of(raw, (unsigned)got) : 0;
@@ -900,11 +903,79 @@ int browse_command(const char *q, unsigned n);   /* browser.c: the agent's [[bro
 int calc_eval_str(const char *src, int deg, char *out);   /* calc.c: 0 ok, out holds 32 bytes */
 void input_drain(void);                      /* main.c: the keys that queued during a request */
 
+/* 6.59.0, [[app NAME]]: the answer's first ``` block, a Plank program, goes to the relay's /api/build; the Mac builds it with
+   tools/plankapp.sh and sends the image back, or the compiler's words, which go back to Samantha as the next turn so she can
+   fix her own code. Only when the person asked for an app, and only an admin's (or a Pi with no accounts): it writes JT/APPS.
+   The app is never signed, so card_find runs it only for an admin; it opens at once when it may. */
+#define APP_BUILD_MAX 0x40000
+#define APP_BUILD_TICKS 18000      /* 3 minutes: the Mac compiles Plank, its runtime and the C library under it */
+int store_put(const char *low, unsigned n, const char *img, unsigned il);   /* store.c */
+int app_dock_card(const char *name);                                         /* appwin.c */
+static void app_build(const char *t, unsigned k) {
+    char name[9]; unsigned at = 0, len = code_block(said, said_n, &at);
+    int okname = k > 0 && k <= 8;
+    for (unsigned i = 0; i < k && okname; i++) { char c = (char)(t[i] | 32); okname = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-'; name[i] = c; }
+    if (!okname) { kputs("app: not an app name\n"); result_puts("not an app name (1 to 8 of a-z, 0-9, - and _)\n"); return; }
+    name[k] = 0;
+    if (!named_in(sam_q, sam_qn, "app")) { kputs("app: you did not ask for an app, not built\n"); result_puts("refused, the person did not ask for an app\n"); return; }
+    if (!sudo_may_write()) { kputs("app: only an admin adds an app\n"); result_puts("refused, not an admin\n"); return; }
+    if (!len) { kputs("app: no code block to build\n"); result_puts("no code block\n"); return; }
+    if (!CLAUDE_TOKEN_LEN || !net_get_gateway()) { kputs("app: no relay to build it\n"); result_puts("no relay\n"); return; }
+    unsigned long mark = heap_mark();
+    char *body = kmalloc(len * 2 + 32), *reply = kmalloc(APP_BUILD_MAX + 1);
+    if (!body || !reply) { kputs("app: out of memory\n"); result_puts("out of memory\n"); heap_release(mark); return; }
+    unsigned b = 0;
+    for (const char *p = "{\"source\":\""; *p; p++) body[b++] = *p;
+    for (unsigned i = 0; i < len; i++) {
+        char c = said[at + i];
+        if (c == '"' || c == '\\') { body[b++] = '\\'; body[b++] = c; }
+        else if (c == '\n') { body[b++] = '\\'; body[b++] = 'n'; }
+        else if (c == '\t') { body[b++] = '\\'; body[b++] = 't'; }
+        else body[b++] = (unsigned char)c < 32 ? ' ' : c;
+    }
+    body[b++] = '"'; body[b++] = '}';
+    char path[32]; unsigned o = 0;
+    for (const char *p = "/api/build?name="; *p; p++) path[o++] = *p;
+    for (unsigned i = 0; i < k; i++) path[o++] = name[i];
+    path[o] = 0;
+    static char token[64];
+    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
+    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    kputs("app: building "); kputs(name); kputs(" on the Mac\n");
+    int status = 0, got;
+#if defined(PI_BUILD) || CLAUDE_TLS
+    relay_ticks = APP_BUILD_TICKS;
+    got = relay_post_tls_to(path, body, b, token, reply, APP_BUILD_MAX, &status);
+    relay_ticks = ASK_TICKS;
+#else
+    http_post_set_bearer(token);
+    got = http_post_timeout(CLAUDE_HOST, path, CLAUDE_PORT, body, b, reply, APP_BUILD_MAX, APP_BUILD_TICKS);
+    http_post_set_bearer(0);
+    status = http_last_status();
+#endif
+    for (int i = 0; i < 64; i++) token[i] = 0;
+    if (status == 200 && got > 32) {
+        if (store_put(name, k, reply, (unsigned)got)) {
+            int opened = app_dock_card(name);
+            kputs("app: built "); kputs(name); kputs(opened ? ", opened it\n" : ", in JT/APPS: sudo userrun "); if (!opened) { kputs(name); kputs("\n"); }
+            result_puts(opened ? "built and opened\n" : "built; not signed, so an admin opens it with sudo userrun\n");
+        } else { kputs("app: the card did not take it\n"); result_puts("built, but the card did not take it\n"); }
+    } else {
+        if (got < 0) got = 0;
+        if (got > 500) got = 500;
+        reply[got] = 0;
+        kputs("app: it did not build ("); kdec((unsigned)status); kputs(")\n");
+        say_wrapped("app: ", reply, (unsigned)got);   /* the compiler's words, into the result for her next turn */
+        if (!got) result_puts("no answer from the relay\n");
+    }
+    heap_release(mark);
+}
+
 /* Runs the recorded actions, printing each outcome, and writes the same outcomes into `result` for the next turn. */
 static unsigned rlen_before; static void (*saved_out)(const char *);
 static void tee(const char *s) { real_puts(s); result_puts(s); }   /* a command's line to the Terminal and into the result */   /* the answer whose actions run, for [[save]] */
 static void run_actions(void) {
-    static const char *const names[] = {"", "note", "led blink", "say", "open", "browse", "calc", "status", "save", "list", "read"};
+    static const char *const names[] = {"", "note", "led blink", "say", "open", "browse", "calc", "status", "save", "list", "read", "app"};
     rlen = 0; capturing = 1;
     result_puts("The Pi ran your actions. Results:\n");
     for (unsigned a = 0; a < act_n; a++) {
@@ -949,6 +1020,7 @@ static void run_actions(void) {
             kputs(ok ? (homed ? "save: wrote ~/" : "save: wrote JT/") : "save: could not write "); kputs(t); kputs(ok ? (homed ? ", cat ~/" : ", cat JT/") : "\n"); if (ok) { kputs(t); kputs(" to read it\n"); }
             result_puts(ok ? "saved\n" : "not saved\n");
             break; }
+        case ACT_APP: app_build(t, k); break;
         case ACT_LIST: {                       /* what is in JT/: the same lines `ls JT` prints, sent back to her too */
             rlen_before = rlen; saved_out = cmd_out;
             if (home_active()) cmd_run("ls ~", 4, tee); else cmd_run("ls JT", 5, tee);

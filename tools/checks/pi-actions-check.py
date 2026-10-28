@@ -15,7 +15,7 @@ if not m:
     print("FAIL: no pi-actions block in arch/arm64/ask.c"); sys.exit(1)
 relay = open("tools/claude-relay/relay.py").read()
 prompt = re.search(r"SAMANTHA = \((.*?)\)\n", relay, re.S)
-ACTIONS = ["[[note TEXT]]", "[[say TEXT]]", "[[led blink]]", "[[open APP]]", "[[browse URL]]", "[[calc EXPR]]", "[[status]]", "[[save NAME]]", "[[list]]", "[[read NAME]]"]
+ACTIONS = ["[[note TEXT]]", "[[say TEXT]]", "[[led blink]]", "[[open APP]]", "[[browse URL]]", "[[calc EXPR]]", "[[status]]", "[[save NAME]]", "[[list]]", "[[read NAME]]", "[[app NAME]]"]
 missing = [a for a in ACTIONS if not prompt or a not in prompt.group(1)]
 if missing or "ask first" not in prompt.group(1):
     print("FAIL: the relay's SAMANTHA prompt lacks %s or the ask-first rule" % (missing or "nothing")); sys.exit(1)
@@ -38,6 +38,7 @@ CASES = [   # reply -> printed text, actions as "kind:text"
     ("Looking.\n[[list]]\n[[read HELLO.C]]", "Looking.", ["9:", "10:HELLO.C"]),
     ("No.\n[[listx]]\n[[read]]", "No.", ["0:listx", "0:read"]),
     ("Here.\n```c\nint main(void){}\n```\n[[save HELLO.C]]", "Here.\n```c\nint main(void){}\n```", ["8:HELLO.C"]),
+    ("Built.\n```plank\nfn main() {}\n```\n[[app sun]]", "Built.\n```plank\nfn main() {}\n```", ["11:sun"]),   # 6.59.0
 ]
 harness = m.group(0) + r"""
 #include <stdio.h>
@@ -77,5 +78,5 @@ for (reply, want_text, want_acts), got in zip(CASES, out.split("\x03")):
     if text != want_text or acts != want_acts:
         print("FAIL: %r -> %r %r, want %r %r" % (reply, text, acts, want_text, want_acts)); ok = False
 if ok:
-    print("PASS: %d replies: the ten actions are stripped and recorded, four per turn, unknown ones recorded to ignore, the rest stays as text" % len(CASES))
+    print("PASS: %d replies: the eleven actions are stripped and recorded, four per turn, unknown ones recorded to ignore, the rest stays as text" % len(CASES))
 sys.exit(0 if ok else 1)
