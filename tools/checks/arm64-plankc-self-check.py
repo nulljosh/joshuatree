@@ -122,13 +122,13 @@ try:
     check("stage 2 writes fib's app image on the box (%d s)" % secs, done and "plankc: wrote APPS/FIBX.APP" in seg and "M3c app plankc exit 0" in seg, seg[-500:])
     seg, done, secs = run("userrun fibx", "fibx", 60)
     body = seg[seg.find("M3c app fibx starts"):] if "M3c app fibx starts" in seg else ""
-    got = [l for l in body.split("\n")[1:] if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ")) and "joshua@tree" not in l]
+    got = [l for l in body.split("\n")[1:] if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ", "slow step ")) and "joshua@tree" not in l]
     check("that image, built with no clang and no linker, runs and prints fib.out", got == [l for l in fib.with_suffix(".out").read_text().split("\n") if l] and "M3c app fibx exit 0" in seg, {"got": got[:6], "tail": seg[-400:]})
     seg, done, secs = run("userrun plankc img PC/FLOATS.PK PC/RT.PK APPS/FLTX.APP", "plankc", 300)
     check("stage 2 writes floats.pk's app image on the box (%d s)" % secs, done and "plankc: wrote APPS/FLTX.APP" in seg and "M3c app plankc exit 0" in seg, seg[-500:])
     seg, done, secs = run("userrun fltx", "fltx", 60)
     body = seg[seg.find("M3c app fltx starts"):] if "M3c app fltx starts" in seg else ""
-    got = [l for l in body.split("\n")[1:] if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ")) and "joshua@tree" not in l]
+    got = [l for l in body.split("\n")[1:] if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ", "slow step ")) and "joshua@tree" not in l]
     check("its float instructions, encoded by plankc, print what plank.py's build prints", got == floats_want and len(got) > 5 and "M3c app fltx exit 0" in seg, {"got": got[:8], "want": floats_want[:8]})
     seg, done, secs = run("userrun plankc img PC/PLANKC.PK PC/RT.PK APPS/PLANKC2.APP", "plankc", 1800)
     check("stage 2 writes its own app image, PLANKC2 (%d s)" % secs, done and "plankc: wrote APPS/PLANKC2.APP" in seg and "M3c app plankc exit 0" in seg, seg[-500:])
