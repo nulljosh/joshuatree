@@ -1,10 +1,10 @@
 # plankc's code generator: aarch64 assembly for the Pi, written in Plank. Step 3 of the true bootstrap (docs/ROADMAP.md).
-# A first subset: functions over int and bool, let and var, =, +=, if and else, while, for over a range, break, continue,
-# return, calls, arithmetic, comparisons, and and or, not, and print of an int, a bool or a plain string. Anything else
-# stops with "not supported yet", never a guess. A simple stack machine: every value ends in x0, a binary op pushes its
+# The subset so far: functions over int, bool and str, let and var, =, +=, if and else, while, for over a range, break,
+# continue, return, calls, arithmetic, comparisons, and and or, not, print, and strings (6.63.0: +, ==, len, str(n) and
+# \( ) interpolation, through rt.pk, the runtime written in Plank). Anything else stops with "not supported yet". A simple stack machine: every value ends in x0, a binary op pushes its
 # left side, locals live below x29, and sp moves 16 bytes at a time so it stays aligned. The output links like a Plank app
 # (tools/plankapp.sh --plankc): pklibc's _start calls main, main calls the program's main. The assembler is still clang's;
-# plankc's own encoder comes in step 6.
+# plankc's own encoder comes in step 6. A string is the address of its bytes, its length in the 8 bytes before them.
 import "parse.pk"
 
 struct Local {
@@ -19,6 +19,7 @@ struct G {
   locals: [Local]
   loops: [str]     # break and continue labels, two a loop
   fns: [str: str]  # function name: its return type
+  rt: [str: int]   # the built-ins rt.pk is written with: syscall, peek, poke, global, addr, as_str
   strs: [str]      # string literals, as .asciz bodies
   next_off: int
   ret: str         # the epilogue label of the function being written
@@ -56,7 +57,7 @@ fn load(g: G, l: Local) { emit(g, "ldur x0, [x29, #-\(l.off)]") }
 fn store(g: G, l: Local) { emit(g, "stur x0, [x29, #-\(l.off)]") }
 
 fn int_type(n: N, ty: str) -> str {
-  if ty == "int" or ty == "bool" { return ty }
+  if ty == "int" or ty == "bool" or ty == "str" { return ty }
   nope(n, "the type \(ty)")
   return ""
 }
@@ -73,6 +74,11 @@ fn cmp_cond(op: str) -> str {
 
 # Writes code that leaves the value of e in x0, and gives its type.
 fn gen_expr(g: G, e: N) -> str {
+  if e.kind == "Str" {
+    lit(g, "x0", e.kids[0].text)
+    return "str"
+  }
+  if e.kind == "Interp" { return interp(g, e) }
   if e.kind == "Num" {
     if e.kids[1].text != "int" { nope(e, "a float") }
     emit(g, "ldr x0, =" + e.kids[0].text)
@@ -110,11 +116,22 @@ fn gen_expr(g: G, e: N) -> str {
       return "bool"
     }
     if op == "in" or op == "??" { nope(e, op) }
-    gen_expr(g, e.kids[1])
+    let lt = gen_expr(g, e.kids[1])
     push(g)
-    gen_expr(g, e.kids[2])
+    let rt = gen_expr(g, e.kids[2])
     emit(g, "mov x1, x0")
     pop(g, "x0")
+    if lt != rt { nope(e, "\(op) between \(lt) and \(rt)") }
+    if lt == "str" {
+      if op == "+" {
+        emit(g, "bl pk_rt_concat")
+        return "str"
+      }
+      if op != "==" and op != "!=" { nope(e, "\(op) on strings") }
+      emit(g, "bl pk_rt_str_eq")
+      if op == "!=" { emit(g, "eor x0, x0, #1") }
+      return "bool"
+    }
     if op == "+" { emit(g, "add x0, x0, x1") } else if op == "-" { emit(g, "sub x0, x0, x1") } else if op == "*" {
       emit(g, "mul x0, x0, x1")
     } else if op == "/" {
@@ -136,7 +153,7 @@ fn gen_expr(g: G, e: N) -> str {
       if lab.kind != "_" { nope(e, "a labeled argument") }
     }
     if name == "print" { return print_(g, e, a) }
-    if not (name in g.fns) { nope(e, "calling \(name)") }
+    if not (name in g.fns) { return builtin(g, e, name, a) }
     if len(a) > 8 { nope(e, "more than eight arguments") }
     for x in a {
       gen_expr(g, x)
@@ -154,33 +171,109 @@ fn gen_expr(g: G, e: N) -> str {
   return ""
 }
 
+# print(a, b, ...): each value as a string, a space between, then a newline.
 fn print_(g: G, e: N, a: [N]) -> str {
-  if len(a) != 1 { nope(e, "print with other than one value") }
-  if a[0].kind == "Str" {
-    emit(g, "adrp x0, " + str_label(g, a[0].kids[0].text))
-    emit(g, "add x0, x0, :lo12:" + str_label(g, a[0].kids[0].text))
-    emit(g, "bl puts")
-    return "void"
+  if len(a) == 0 { lit(g, "x0", "") }
+  for i in 0..len(a) {
+    if i > 0 {
+      push(g)
+      lit(g, "x1", " ")
+      pop(g, "x0")
+      emit(g, "bl pk_rt_concat")
+      push(g)
+    }
+    to_str(g, a[i], gen_expr(g, a[i]))
+    if i > 0 {
+      emit(g, "mov x1, x0")
+      pop(g, "x0")
+      emit(g, "bl pk_rt_concat")
+    }
   }
-  let t = gen_expr(g, a[0])
-  if t == "bool" {
+  emit(g, "bl pk_rt_print_str")
+  return "void"
+}
+
+# The value in x0, of type t, as a string, the way print shows it.
+fn to_str(g: G, e: N, t: str) {
+  if t == "int" {
+    emit(g, "bl pk_rt_int_str")
+  } else if t == "bool" {
     let f = fresh(g)
     let done = fresh(g)
     emit(g, "cbz x0, " + f)
-    emit(g, "adrp x0, " + str_label(g, "true"))
-    emit(g, "add x0, x0, :lo12:" + str_label(g, "true"))
+    lit(g, "x0", "true")
     emit(g, "b " + done)
     place(g, f)
-    emit(g, "adrp x0, " + str_label(g, "false"))
-    emit(g, "add x0, x0, :lo12:" + str_label(g, "false"))
+    lit(g, "x0", "false")
     place(g, done)
-    emit(g, "bl puts")
-    return "void"
+  } else if t != "str" {
+    nope(e, "showing a " + t)
   }
-  if t != "int" { nope(e, "printing a " + t) }
-  emit(g, "mov x1, x0")
-  emit(g, "bl pk_print_int")
-  return "void"
+}
+
+# A string with \( ) in it: each part made a string and joined on, left to right.
+fn interp(g: G, e: N) -> str {
+  let parts = e.kids[0].kids
+  gen_expr(g, parts[0])
+  for i in 1..len(parts) {
+    push(g)
+    to_str(g, parts[i], gen_expr(g, parts[i]))
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_concat")
+  }
+  return "str"
+}
+
+# The built-ins: len and str for programs, and the ones rt.pk is written with (plank.py does not have those).
+fn builtin(g: G, e: N, name: str, a: [N]) -> str {
+  if name == "len" and len(a) == 1 {
+    if gen_expr(g, a[0]) != "str" { nope(e, "len of anything but a string") }
+    emit(g, "ldur x0, [x0, #-8]")
+    return "int"
+  }
+  if name == "str" and len(a) == 1 {
+    to_str(g, e, gen_expr(g, a[0]))
+    return "str"
+  }
+  if not (name in g.rt) { nope(e, "calling \(name)") }
+  if name == "global" {
+    if len(a) != 1 or a[0].kind != "Num" { nope(e, "global() of anything but a number") }
+    emit(g, "adrp x0, pk_globals")
+    emit(g, "add x0, x0, :lo12:pk_globals")
+    emit(g, "add x0, x0, #" + str(int(a[0].kids[0].text) * 8))
+    return "int"
+  }
+  for x in a {
+    gen_expr(g, x)
+    push(g)
+  }
+  var i = len(a) - 1
+  while i >= 0 {
+    pop(g, "x" + str(i))
+    i -= 1
+  }
+  if name == "syscall" {
+    emit(g, "mov x8, x0")
+    emit(g, "mov x0, x1")
+    emit(g, "mov x1, x2")
+    emit(g, "mov x2, x3")
+    emit(g, "svc #0")
+    return "int"
+  }
+  if name == "peek" { emit(g, "ldr x0, [x0]") }
+  if name == "peek8" { emit(g, "ldrb w0, [x0]") }
+  if name == "poke" { emit(g, "str x1, [x0]") }
+  if name == "poke8" { emit(g, "strb w1, [x0]") }
+  if name == "as_str" { return "str" }
+  return "int"
+}
+
+# x0 (or r) gets the address of a string literal's bytes.
+fn lit(g: G, r: str, s: str) {
+  let l = str_label(g, s)
+  emit(g, "adrp \(r), " + l)
+  emit(g, "add \(r), \(r), :lo12:" + l)
 }
 
 # The label of a string literal, added to .rodata the first time it is used.
@@ -311,8 +404,9 @@ fn function(g: G, f: N) {
   emit(g, ".ltorg")
 }
 
-fn asm(prog: N) -> str {
-  let g = G([], 0, [], [], [:], [], 0, "")
+fn asm(prog: N, runtime: N) -> str {
+  let g = G([], 0, [], [], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1], [], 0, "")
+  for f in runtime.kids { prog.kids.append(f) }
   for f in prog.kids {
     if f.kind != "Fn" { nope(f, "a top-level " + f.kind) }
     if f.kids[6].text == "true" or f.kids[7].text == "true" { nope(f, "extern and tool fns") }
@@ -334,23 +428,19 @@ fn asm(prog: N) -> str {
   emit(g, "mov x0, #0")
   emit(g, "ldp x29, x30, [sp], #16")
   emit(g, "ret")
-  # print of an int: printf("%lld\n") without varargs in plankc's own calls, so printf's ABI is C's alone.
   g.out.append("")
-  place(g, "pk_print_int")
-  emit(g, "stp x29, x30, [sp, #-16]!")
-  emit(g, "mov x29, sp")
-  emit(g, "adrp x0, .Lfmt")
-  emit(g, "add x0, x0, :lo12:.Lfmt")
-  emit(g, "bl printf")
-  emit(g, "ldp x29, x30, [sp], #16")
-  emit(g, "ret")
-  g.out.append("")
+  g.out.append("  .data")   # rt.pk's cells (global(i)); .data like libjt's JT_DATA
+  g.out.append("  .p2align 4")
+  place(g, "pk_globals")
+  emit(g, ".zero 128")
   g.out.append("  .section .rodata")
-  g.out.append(".Lfmt:")
-  emit(g, ".asciz \"%lld\\n\"")
-  for i in 0..len(g.strs) {
+  for i in 0..len(g.strs) {   # each literal: its byte length, worked out by the assembler, then its bytes and a zero
+    emit(g, ".p2align 3")
+    emit(g, ".quad .Le" + str(i) + " - .Ls" + str(i))
     g.out.append(".Ls" + str(i) + ":")
-    emit(g, ".asciz " + quote(g.strs[i]))
+    emit(g, ".ascii " + quote(g.strs[i]))
+    g.out.append(".Le" + str(i) + ":")
+    emit(g, ".byte 0")
   }
   return g.out.join("\n") + "\n"
 }

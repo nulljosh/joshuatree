@@ -1,0 +1,90 @@
+# plankc's runtime, written in Plank and built only by plankc (step 4 of the true bootstrap). plankc compiles it with every
+# program, so an app needs nothing from LLVM or Plank's C runtime. It uses plankc's built-ins, which plank.py does not
+# have: syscall(n, a, b, c) is the kernel's svc #0; peek and poke read and write 8 bytes, peek8 and poke8 one;
+# global(i) is the address of the i-th 8-byte cell of plankc's data; addr(s) is a string's address and as_str(p) the
+# string at p. A string is the address of its bytes, which end in a zero, with its length in bytes in the 8 before them.
+# Cells: global(0) is the heap's next free byte, global(1) the heap's top.
+
+fn rt_alloc(n: int) -> int {
+  var top = peek(global(0))
+  if top == 0 {
+    top = syscall(397, 0, 0, 0)   # JT_SYS_BRK, 0: where the heap ends now
+    poke(global(1), top)
+  }
+  let next = top + (n + 15) / 16 * 16
+  if next > peek(global(1)) {
+    let want = (next + 65535) / 65536 * 65536
+    if syscall(397, want, 0, 0) < want {
+      rt_write("out of memory\n")
+      syscall(1, 1, 0, 0)          # JT_SYS_EXIT
+    }
+    poke(global(1), want)
+  }
+  poke(global(0), next)
+  return top
+}
+
+fn rt_copy(dst: int, src: int, n: int) {
+  for i in 0..n {
+    poke8(dst + i, peek8(src + i))
+  }
+}
+
+# A new string of n bytes, its length set and its zero placed; the caller fills the bytes.
+fn rt_str(n: int) -> int {
+  let p = rt_alloc(n + 9)
+  poke(p, n)
+  poke8(p + 8 + n, 0)
+  return p + 8
+}
+
+fn rt_concat(a: str, b: str) -> str {
+  let la = len(a)
+  let lb = len(b)
+  let p = rt_str(la + lb)
+  rt_copy(p, addr(a), la)
+  rt_copy(p + la, addr(b), lb)
+  return as_str(p)
+}
+
+fn rt_str_eq(a: str, b: str) -> bool {
+  if len(a) != len(b) { return false }
+  for i in 0..len(a) {
+    if peek8(addr(a) + i) != peek8(addr(b) + i) { return false }
+  }
+  return true
+}
+
+fn rt_int_str(n: int) -> str {
+  if n == 0 { return "0" }
+  let buf = rt_alloc(32)
+  var i = 32
+  var m = n
+  while m != 0 {
+    var d = m % 10
+    if d < 0 { d = 0 - d }   # % keeps the sign; working on the negative side reaches the smallest int too
+    i -= 1
+    poke8(buf + i, 48 + d)
+    m = m / 10
+  }
+  if n < 0 {
+    i -= 1
+    poke8(buf + i, 45)
+  }
+  let p = rt_str(32 - i)
+  rt_copy(p, buf + i, 32 - i)
+  return as_str(p)
+}
+
+fn rt_write(s: str) {
+  syscall(4, 1, addr(s), len(s))   # JT_SYS_WRITE to the Terminal
+}
+
+fn rt_print_str(s: str) {
+  rt_write(s)
+  rt_write("\n")
+}
+
+fn rt_print_int(n: int) {
+  rt_print_str(rt_int_str(n))
+}

@@ -25,8 +25,9 @@ uv run --quiet --with llvmlite python3 -c 'import importlib.util, sys
 s = importlib.util.spec_from_file_location("plank", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
 sys.stdout.write(m.RUNTIME)' "$plank" > "$dir/runtime.c"
 else
-uv run --quiet --with llvmlite python3 "$plank" build "$root/user/plankc/plankc.pk" -o "$dir/plankc" >/dev/null
-"$dir/plankc" asm "$src" > "$dir/prog.S" || { cat "$dir/prog.S"; exit 1; }
+pc=${PLANKC_EXE:-$dir/plankc}   # PLANKC_EXE: a plankc already built, so a batch builds it once
+[ -x "$pc" ] || uv run --quiet --with llvmlite python3 "$plank" build "$root/user/plankc/plankc.pk" -o "$pc" >/dev/null
+"$pc" asm "$src" "$root/user/plankc/rt.pk" > "$dir/prog.S" || { cat "$dir/prog.S"; exit 1; }
 fi
 CC=(clang -target aarch64-none-elf -ffreestanding -nostdlibinc -fno-stack-protector -mstrict-align -fPIE -fdirect-access-external-data
     -fno-builtin -fno-asynchronous-unwind-tables -Os -Wno-unused-command-line-argument -I"$root/user" -I"$root/user/pklibc/include")

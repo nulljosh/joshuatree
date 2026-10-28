@@ -1,0 +1,21 @@
+# plankc's strings (6.63.0): literals, +, ==, len, str(n) and \( ) interpolation. plank.py's output for this file is
+# the answer key (tools/checks/arm64-plank-check.py).
+fn shout(s: str) -> str {
+  return s + "!"
+}
+
+fn main() {
+  let name = "plank"
+  print(name)
+  print(shout("hello, " + name))
+  print(len(name), )
+  print(name == "plank", name != "plank", name == "plan")
+  print("\(name) has \(len(name)) letters, and 6 * 7 is \(6 * 7)")
+  print(str(-1234567) + str(0) + str(42))
+  print("tab\there, quote \" and slash \\")
+  var s = ""
+  for i in 0..5 {
+    s = s + str(i)
+  }
+  print(s, len(s) == 5)
+}
