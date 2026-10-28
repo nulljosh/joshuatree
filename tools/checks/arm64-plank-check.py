@@ -7,8 +7,9 @@ must equal the example's .out file line for line. Together they cover printing, 
 structs, enums with match, closures, optionals, and try and catch (setjmp and longjmp in user/pklibc).
 6.58.0: then the store's Slide (store/slide.pk, a Plank program calling jtw, user/pklibc's window calls), as landing/apps
 serves it, opens its window, slides tiles on the arrows and closes on Esc.
+6.62.0: fib and fizzbuzz again, built by plankc (user/plankc/gen.pk, the compiler written in Plank) with no LLVM IR.
 Discriminating: break user/pklibc's %.15g (fmt_double) and the float lines differ; make setjmp.S's longjmp return 0 and the
-caught errors are lost.
+caught errors are lost; give gen.pk's < the condition le and fib by plankc prints a different line.
 Skips (exit 0) without clang's aarch64 target, ld.lld, qemu-system-aarch64, mtools, uv or Plank (PLANK=path/to/plank.py,
 default ~/Documents/Code/plank/plank.py; CI fetches it).
 Usage: tools/checks/arm64-plank-check.py   (from the repo root)
@@ -42,6 +43,12 @@ for i, n in enumerate(EXAMPLES):
     check("%s.pk builds into an app" % n, r.returncode == 0, (r.stdout + r.stderr)[-800:])
     if r.returncode == 0: built.append((i, n))
 if not built: print("FAIL: nothing built"); sys.exit(1)
+# 6.62.0: the same examples built by plankc, the compiler written in Plank (step 3 of the true bootstrap), as aarch64 it writes
+# itself, with no LLVM IR and no Plank runtime: tools/plankapp.sh --plankc.
+PLANKC = [("pcfib", "fib"), ("pcfz", "fizzbuzz")]
+for app, n in PLANKC:
+    r = subprocess.run([str(root / "tools/plankapp.sh"), "--plankc", str(ex / (n + ".pk")), str(tmp / (app.upper() + ".APP"))], capture_output=True, text=True, timeout=600)
+    check("plankc builds %s.pk into an app" % n, r.returncode == 0, (r.stdout + r.stderr)[-800:])
 
 subprocess.run(["make", "-C", str(arch), "clean"], capture_output=True, timeout=60)
 q = None
@@ -54,6 +61,8 @@ try:
     def mt(*a): return subprocess.run([a[0], "-i", f"{card}@@{PART * 512}", *map(str, a[1:])], capture_output=True, env=MT)
     mt("mmd", "::JT"); mt("mmd", "::JT/APPS")
     for i, n in built: mt("mcopy", "-o", tmp / ("PK%d.APP" % i), "::JT/APPS/PK%d.APP" % i)
+    for app, n in PLANKC:
+        if (tmp / (app.upper() + ".APP")).exists(): mt("mcopy", "-o", tmp / (app.upper() + ".APP"), "::JT/APPS/%s.APP" % app.upper())
     for e in ("app", "sig"): mt("mcopy", "-o", root / "landing/apps" / ("slide." + e), "::JT/APPS/SLIDE." + e.upper())   # 6.58.0
     log, sock = tmp / "uart", tmp / "qmp"
     q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-global", "virtio-mmio.force-legacy=false",
@@ -81,8 +90,7 @@ try:
     key("f2")
     if not wait_for("terminal open", 10): raise SystemExit("FAIL: F2 did not open the Terminal")
     time.sleep(0.5)
-    for i, n in built:
-        app = "pk%d" % i
+    for app, n in [("pk%d" % i, n) for i, n in built] + [(a, n + " by plankc") for a, n in PLANKC if (tmp / (a.upper() + ".APP")).exists()]:
         start = len(uart())
         for ch in "userrun " + app: key({" ": "spc"}.get(ch, ch))
         key("ret")
@@ -93,7 +101,7 @@ try:
         body = seg[a:].split("\n", 1)[1] if a >= 0 else ""
         body = body[:body.find("M3c app %s exit" % app)] if "M3c app %s exit" % app in body else body
         got = [l for l in body.split("\n") if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ")) and "joshua@tree" not in l]
-        want = [l for l in (ex / (n + ".out")).read_text().split("\n") if l]
+        want = [l for l in (ex / (n.split(" ")[0] + ".out")).read_text().split("\n") if l]
         check("%s on the box prints its .out" % n, got == want and ("M3c app %s exit 0" % app) in seg,
               {"want": want[:6], "got": got[:6], "tail": seg[-300:]} if got != want else seg[-300:])
     start = len(uart())   # 6.58.0: the store's Slide, written in Plank, in a window drawn through jtw

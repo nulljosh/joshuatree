@@ -1,0 +1,356 @@
+# plankc's code generator: aarch64 assembly for the Pi, written in Plank. Step 3 of the true bootstrap (docs/ROADMAP.md).
+# A first subset: functions over int and bool, let and var, =, +=, if and else, while, for over a range, break, continue,
+# return, calls, arithmetic, comparisons, and and or, not, and print of an int, a bool or a plain string. Anything else
+# stops with "not supported yet", never a guess. A simple stack machine: every value ends in x0, a binary op pushes its
+# left side, locals live below x29, and sp moves 16 bytes at a time so it stays aligned. The output links like a Plank app
+# (tools/plankapp.sh --plankc): pklibc's _start calls main, main calls the program's main. The assembler is still clang's;
+# plankc's own encoder comes in step 6.
+import "parse.pk"
+
+struct Local {
+  name: str
+  off: int
+  ty: str
+}
+
+struct G {
+  out: [str]
+  label: int
+  locals: [Local]
+  loops: [str]     # break and continue labels, two a loop
+  fns: [str: str]  # function name: its return type
+  strs: [str]      # string literals, as .asciz bodies
+  next_off: int
+  ret: str         # the epilogue label of the function being written
+}
+
+fn emit(g: G, s: str) { g.out.append("  " + s) }
+fn place(g: G, l: str) { g.out.append(l + ":") }
+fn fresh(g: G) -> str {
+  g.label += 1
+  return ".L" + str(g.label)
+}
+fn nope(n: N, what: str) { throw "\(n.line): \(what) not supported yet" }
+
+fn push(g: G) { emit(g, "str x0, [sp, #-16]!") }
+fn pop(g: G, r: str) { emit(g, "ldr \(r), [sp], #16") }
+
+fn find(g: G, name: str) -> Local {
+  var i = len(g.locals) - 1
+  while i >= 0 {
+    if g.locals[i].name == name { return g.locals[i] }
+    i -= 1
+  }
+  throw "no variable \(name)"
+}
+
+fn new_local(g: G, name: str, ty: str) -> Local {
+  g.next_off += 8
+  if g.next_off > 248 { throw "more than 31 locals in one function" }   # ponytail: ldur reaches 256 bytes; spill wider when a program needs it
+  let l = Local(name, g.next_off, ty)
+  g.locals.append(l)
+  return l
+}
+
+fn load(g: G, l: Local) { emit(g, "ldur x0, [x29, #-\(l.off)]") }
+fn store(g: G, l: Local) { emit(g, "stur x0, [x29, #-\(l.off)]") }
+
+fn int_type(n: N, ty: str) -> str {
+  if ty == "int" or ty == "bool" { return ty }
+  nope(n, "the type \(ty)")
+  return ""
+}
+
+# ---------------------------------------------------------------- expressions
+fn cmp_cond(op: str) -> str {
+  if op == "<" { return "lt" }
+  if op == ">" { return "gt" }
+  if op == "<=" { return "le" }
+  if op == ">=" { return "ge" }
+  if op == "==" { return "eq" }
+  return "ne"
+}
+
+# Writes code that leaves the value of e in x0, and gives its type.
+fn gen_expr(g: G, e: N) -> str {
+  if e.kind == "Num" {
+    if e.kids[1].text != "int" { nope(e, "a float") }
+    emit(g, "ldr x0, =" + e.kids[0].text)
+    return "int"
+  }
+  if e.kind == "Bool" {
+    if e.kids[0].text == "true" { emit(g, "mov x0, #1") } else { emit(g, "mov x0, #0") }
+    return "bool"
+  }
+  if e.kind == "Name" {
+    let l = find(g, e.kids[0].text)
+    load(g, l)
+    return l.ty
+  }
+  if e.kind == "Unary" {
+    let t = gen_expr(g, e.kids[1])
+    if e.kids[0].text == "-" {
+      emit(g, "neg x0, x0")
+      return "int"
+    }
+    emit(g, "cmp x0, #0")
+    emit(g, "cset x0, eq")
+    return "bool"
+  }
+  if e.kind == "Binary" {
+    let op = e.kids[0].text
+    if op == "and" or op == "or" {
+      let done = fresh(g)
+      gen_expr(g, e.kids[1])
+      if op == "and" { emit(g, "cbz x0, " + done) } else { emit(g, "cbnz x0, " + done) }
+      gen_expr(g, e.kids[2])
+      place(g, done)
+      emit(g, "cmp x0, #0")
+      emit(g, "cset x0, ne")
+      return "bool"
+    }
+    if op == "in" or op == "??" { nope(e, op) }
+    gen_expr(g, e.kids[1])
+    push(g)
+    gen_expr(g, e.kids[2])
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    if op == "+" { emit(g, "add x0, x0, x1") } else if op == "-" { emit(g, "sub x0, x0, x1") } else if op == "*" {
+      emit(g, "mul x0, x0, x1")
+    } else if op == "/" {
+      emit(g, "sdiv x0, x0, x1")
+    } else if op == "%" {
+      emit(g, "sdiv x2, x0, x1")
+      emit(g, "msub x0, x2, x1, x0")
+    } else {
+      emit(g, "cmp x0, x1")
+      emit(g, "cset x0, " + cmp_cond(op))
+      return "bool"
+    }
+    return "int"
+  }
+  if e.kind == "Call" {
+    let name = e.kids[0].text
+    let a = e.kids[1].kids
+    for lab in e.kids[2].kids {
+      if lab.kind != "_" { nope(e, "a labeled argument") }
+    }
+    if name == "print" { return print_(g, e, a) }
+    if not (name in g.fns) { nope(e, "calling \(name)") }
+    if len(a) > 8 { nope(e, "more than eight arguments") }
+    for x in a {
+      gen_expr(g, x)
+      push(g)
+    }
+    var i = len(a) - 1
+    while i >= 0 {
+      pop(g, "x" + str(i))
+      i -= 1
+    }
+    emit(g, "bl pk_" + name)
+    return g.fns[name]
+  }
+  nope(e, "the expression " + e.kind)
+  return ""
+}
+
+fn print_(g: G, e: N, a: [N]) -> str {
+  if len(a) != 1 { nope(e, "print with other than one value") }
+  if a[0].kind == "Str" {
+    emit(g, "adrp x0, " + str_label(g, a[0].kids[0].text))
+    emit(g, "add x0, x0, :lo12:" + str_label(g, a[0].kids[0].text))
+    emit(g, "bl puts")
+    return "void"
+  }
+  let t = gen_expr(g, a[0])
+  if t == "bool" {
+    let f = fresh(g)
+    let done = fresh(g)
+    emit(g, "cbz x0, " + f)
+    emit(g, "adrp x0, " + str_label(g, "true"))
+    emit(g, "add x0, x0, :lo12:" + str_label(g, "true"))
+    emit(g, "b " + done)
+    place(g, f)
+    emit(g, "adrp x0, " + str_label(g, "false"))
+    emit(g, "add x0, x0, :lo12:" + str_label(g, "false"))
+    place(g, done)
+    emit(g, "bl puts")
+    return "void"
+  }
+  if t != "int" { nope(e, "printing a " + t) }
+  emit(g, "mov x1, x0")
+  emit(g, "bl pk_print_int")
+  return "void"
+}
+
+# The label of a string literal, added to .rodata the first time it is used.
+fn str_label(g: G, s: str) -> str {
+  for i in 0..len(g.strs) {
+    if g.strs[i] == s { return ".Ls" + str(i) }
+  }
+  if nul() in s { throw "a zero byte in a string not supported yet" }
+  g.strs.append(s)
+  return ".Ls" + str(len(g.strs) - 1)
+}
+
+# ---------------------------------------------------------------- statements
+fn gen_block(g: G, b: N) {
+  let mark = len(g.locals)
+  for s in b.kids { gen_stmt(g, s) }
+  while len(g.locals) > mark { g.locals.pop() }
+}
+
+fn gen_stmt(g: G, s: N) {
+  if s.kind == "Let" {
+    var t = gen_expr(g, s.kids[2])
+    if s.kids[1].kind != "_" { t = int_type(s, s.kids[1].text) }
+    store(g, new_local(g, s.kids[0].text, int_type(s, t)))
+  } else if s.kind == "Assign" {
+    if s.kids[0].kind != "Name" { nope(s, "assigning to " + s.kids[0].kind) }
+    gen_expr(g, s.kids[1])
+    store(g, find(g, s.kids[0].kids[0].text))
+  } else if s.kind == "ExprStmt" {
+    gen_expr(g, s.kids[0])
+  } else if s.kind == "Return" {
+    if s.kids[0].kind != "_" { gen_expr(g, s.kids[0]) }
+    emit(g, "b " + g.ret)
+  } else if s.kind == "If" {
+    let other = fresh(g)
+    let done = fresh(g)
+    gen_expr(g, s.kids[0])
+    emit(g, "cbz x0, " + other)
+    gen_block(g, s.kids[1])
+    emit(g, "b " + done)
+    place(g, other)
+    gen_block(g, s.kids[2])
+    place(g, done)
+  } else if s.kind == "While" {
+    let top = fresh(g)
+    let done = fresh(g)
+    place(g, top)
+    gen_expr(g, s.kids[0])
+    emit(g, "cbz x0, " + done)
+    g.loops.append(done)
+    g.loops.append(top)
+    gen_block(g, s.kids[1])
+    g.loops.pop()
+    g.loops.pop()
+    emit(g, "b " + top)
+    place(g, done)
+  } else if s.kind == "For" {
+    let mark = len(g.locals)
+    gen_expr(g, s.kids[1])
+    let i = new_local(g, s.kids[0].text, "int")
+    store(g, i)
+    gen_expr(g, s.kids[2])
+    let stop = new_local(g, " stop", "int")
+    store(g, stop)
+    let top = fresh(g)
+    let step = fresh(g)
+    let done = fresh(g)
+    place(g, top)
+    load(g, i)
+    emit(g, "ldur x1, [x29, #-\(stop.off)]")
+    emit(g, "cmp x0, x1")
+    emit(g, "b.ge " + done)
+    g.loops.append(done)
+    g.loops.append(step)
+    gen_block(g, s.kids[3])
+    g.loops.pop()
+    g.loops.pop()
+    place(g, step)
+    load(g, i)
+    emit(g, "add x0, x0, #1")
+    store(g, i)
+    emit(g, "b " + top)
+    place(g, done)
+    while len(g.locals) > mark { g.locals.pop() }
+  } else if s.kind == "Break" or s.kind == "Continue" {
+    if len(g.loops) == 0 { throw "\(s.line): \(s.kind) outside a loop" }
+    if s.kind == "Break" { emit(g, "b " + g.loops[-2]) } else { emit(g, "b " + g.loops[-1]) }
+  } else {
+    nope(s, "the statement " + s.kind)
+  }
+}
+
+# Every local a function makes, so its frame can be sized before its code is written.
+fn count_locals(n: N) -> int {
+  var c = 0
+  if n.kind == "Let" { c = 1 }
+  if n.kind == "For" { c = 2 }
+  for k in n.kids { c += count_locals(k) }
+  return c
+}
+
+fn function(g: G, f: N) {
+  let name = f.kids[0].text
+  let params = f.kids[1].kids
+  if len(params) > 8 { nope(f, "more than eight parameters") }
+  if len(f.kids[5].kids) > 0 { nope(f, "type parameters") }
+  g.locals = []
+  g.next_off = 0
+  g.ret = fresh(g)
+  let frame = (len(params) + count_locals(f.kids[3])) * 8
+  g.out.append("")
+  g.out.append("  .globl pk_" + name)
+  g.out.append("  .p2align 2")
+  place(g, "pk_" + name)
+  emit(g, "stp x29, x30, [sp, #-16]!")
+  emit(g, "mov x29, sp")
+  emit(g, "sub sp, sp, #" + str((frame + 15) / 16 * 16))
+  for i in 0..len(params) {
+    let l = new_local(g, params[i].kids[0].text, int_type(f, params[i].kids[1].text))
+    emit(g, "stur x" + str(i) + ", [x29, #-\(l.off)]")
+  }
+  gen_block(g, f.kids[3])
+  emit(g, "mov x0, #0")   # falling off the end returns 0, which is what main hands back
+  place(g, g.ret)
+  emit(g, "mov sp, x29")
+  emit(g, "ldp x29, x30, [sp], #16")
+  emit(g, "ret")
+  emit(g, ".ltorg")
+}
+
+fn asm(prog: N) -> str {
+  let g = G([], 0, [], [], [:], [], 0, "")
+  for f in prog.kids {
+    if f.kind != "Fn" { nope(f, "a top-level " + f.kind) }
+    if f.kids[6].text == "true" or f.kids[7].text == "true" { nope(f, "extern and tool fns") }
+    let ret = f.kids[2].text
+    if ret != "void" { int_type(f, ret) }
+    g.fns[f.kids[0].text] = ret
+  }
+  if not ("main" in g.fns) { throw "no fn main" }
+  g.out.append("  .text")
+  for f in prog.kids { function(g, f) }
+  # pklibc's _start calls main(argc, argv); the program's main takes nothing.
+  g.out.append("")
+  g.out.append("  .globl main")
+  g.out.append("  .p2align 2")
+  place(g, "main")
+  emit(g, "stp x29, x30, [sp, #-16]!")
+  emit(g, "mov x29, sp")
+  emit(g, "bl pk_main")
+  emit(g, "mov x0, #0")
+  emit(g, "ldp x29, x30, [sp], #16")
+  emit(g, "ret")
+  # print of an int: printf("%lld\n") without varargs in plankc's own calls, so printf's ABI is C's alone.
+  g.out.append("")
+  place(g, "pk_print_int")
+  emit(g, "stp x29, x30, [sp, #-16]!")
+  emit(g, "mov x29, sp")
+  emit(g, "adrp x0, .Lfmt")
+  emit(g, "add x0, x0, :lo12:.Lfmt")
+  emit(g, "bl printf")
+  emit(g, "ldp x29, x30, [sp], #16")
+  emit(g, "ret")
+  g.out.append("")
+  g.out.append("  .section .rodata")
+  g.out.append(".Lfmt:")
+  emit(g, ".asciz \"%lld\\n\"")
+  for i in 0..len(g.strs) {
+    g.out.append(".Ls" + str(i) + ":")
+    emit(g, ".asciz " + quote(g.strs[i]))
+  }
+  return g.out.join("\n") + "\n"
+}
