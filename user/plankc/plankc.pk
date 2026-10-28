@@ -1,11 +1,17 @@
 # plankc, the Plank compiler written in Plank (the true bootstrap, docs/ROADMAP.md, 8.0).
 #   plankc lex FILE.pk     one token a line: line, kind, value
 #   plankc parse FILE.pk   the program's tree, one top-level item a line
-#   plankc asm FILE.pk RT.pk [OUT.S]   aarch64 assembly for the Pi (gen.pk), with the runtime rt.pk built in, into OUT.S
+#   plankc [--gc=N] asm FILE.pk RT.pk [OUT.S]   aarch64 assembly for the Pi (gen.pk), with the runtime rt.pk built in, into OUT.S;
+#                    --gc=N makes the program collect every N bytes
 import "gen.pk"
 
 fn main() {
-  let a = args()
+  var a = args()
+  var gc_every = 0   # --gc=N: the program collects every N bytes, to test the collector
+  if len(a) > 0 and a[0].starts_with("--gc=") {
+    gc_every = int(a[0][5..])
+    a = a[1..]
+  }
   if len(a) < 2 or not (a[0] == "lex" or a[0] == "parse" or a[0] == "asm") {
     print("usage: plankc lex|parse FILE.pk, or plankc asm FILE.pk RT.pk [OUT.S]")
     exit(2)
@@ -23,7 +29,7 @@ fn main() {
     } else {
       if len(a) < 3 { throw "plankc asm needs rt.pk too: plankc asm FILE.pk RT.pk" }
       let seen: [str: int] = [:]
-      let out = asm(load_program(a[1], seen), parse(read_file(a[2]) ?? ""))
+      let out = asm(load_program(a[1], seen), parse(read_file(a[2]) ?? ""), gc_every)
       if len(a) > 3 {
         if not write_file(a[3], out) { throw "cannot write \(a[3])" }
         print("plankc: wrote \(a[3]), \(len(out)) bytes")

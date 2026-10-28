@@ -3,26 +3,7 @@
 # have: syscall(n, a, b, c) is the kernel's svc #0; peek and poke read and write 8 bytes, peek8 and poke8 one;
 # global(i) is the address of the i-th 8-byte cell of plankc's data; addr(s) is a string's address and as_str(p) the
 # string at p. A string is the address of its bytes, which end in a zero, with its length in bytes in the 8 before them.
-# Cells: global(0) is the heap's next free byte, global(1) the heap's top.
-
-fn rt_alloc(n: int) -> int {
-  var top = peek(global(0))
-  if top == 0 {
-    top = syscall(397, 0, 0, 0)   # JT_SYS_BRK, 0: where the heap ends now
-    poke(global(1), top)
-  }
-  let next = top + (n + 15) / 16 * 16
-  if next > peek(global(1)) {
-    let want = (next + 65535) / 65536 * 65536
-    if syscall(397, want, 0, 0) < want {
-      rt_write("out of memory\n")
-      syscall(1, 1, 0, 0)          # JT_SYS_EXIT
-    }
-    poke(global(1), want)
-  }
-  poke(global(0), next)
-  return top
-}
+# Cells: global(0) is the heap's next free byte, global(1) the heap's top; the collector's, below.
 
 fn rt_copy(dst: int, src: int, n: int) {
   for i in 0..n {
@@ -144,7 +125,9 @@ fn rt_list_pop(l: int) -> int {
   let n = peek(l)
   if n == 0 { rt_fail("pop from an empty list") }
   poke(l, n - 1)
-  return peek(peek(l + 16) + (n - 1) * 8)
+  let v = peek(peek(l + 16) + (n - 1) * 8)
+  poke(peek(l + 16) + (n - 1) * 8, 0)   # the collector scans a list's whole room, so nothing stale stays in it
+  return v
 }
 
 # s[a..b] in bytes. One byte comes from a table, made once, so chars() and s[i] cost no heap per character.
@@ -423,19 +406,16 @@ fn rt_uncaught(msg: str, line: int) {
 }
 
 # ---- files and arguments (6.69.0): JT_SYS_READFILE, JT_SYS_WRITEFILE and JT_SYS_ARGS.
-# A file is read straight into a string's place on the heap, and the room it did not use is given back.
+# A file is read into one buffer kept for every read (global(10), a root of the collector), then copied into a string
+# of its exact size.
 fn rt_read_file(path: str) -> int {
   let cap = 262144   # ponytail: 256 KB, past plankc's biggest source eight times over; READAT in chunks for bigger
-  let p = rt_alloc(cap + 9)
-  let n = syscall(401, addr(path), p + 8, cap)
-  if n < 0 {
-    poke(global(0), p)
-    return 0
-  }
-  poke(p, n)
-  poke8(p + 8 + n, 0)
-  poke(global(0), p + (n + 9 + 15) / 16 * 16)
-  return p + 8
+  if peek(global(10)) == 0 { poke(global(10), rt_alloc(cap)) }
+  let n = syscall(401, addr(path), peek(global(10)), cap)
+  if n < 0 { return 0 }
+  let p = rt_str(n)
+  rt_copy(p, peek(global(10)), n)
+  return p
 }
 
 fn rt_write_file(path: str, s: str) -> bool {
@@ -460,4 +440,278 @@ fn rt_args() -> int {
     }
   }
   return out
+}
+
+# ---- the collector (6.70.0): conservative, non-moving mark and sweep, so a program can make far more than an app's 11 MiB
+# over its life as long as what it keeps fits. Every object starts with a header word, its size in bytes (header included,
+# a multiple of 16) with bit 0 for marked and bit 1 for free; rt_alloc hands out the word after it. A bitmap, one bit per
+# 16 bytes, marks where objects start, so a pointer into the middle of one (a string's bytes, xs[i]'s slot) still finds it.
+# Roots: the stack from the collector's own frame up to where main started (global(4)), and the cells the runtime keeps
+# (global(3), the one-byte strings; global(10), the read buffer). That is enough only because plankc's code never keeps a
+# heap address in a register alone across a call: every callee stores its arguments in its frame first (gen.pk says so).
+# The heap is taken whole at the start and split in two. Objects of 64 KB and more (file buffers, big lists' items, a
+# program's whole output) live in the top LARGE bytes, on their own first-fit list, so the small objects that come and go
+# by the thousand can never break up the room a big one needs; that is what let plankc write its own half-megabyte output.
+# Small free blocks go on 64 lists by size (16 to 1024 bytes) and one for bigger. Every sweep rebuilds the lists from
+# scratch and merges neighbouring dead blocks. It collects when a request does not fit, or every global(9) bytes when a
+# program asks (plankc --gc=N asm, for testing).
+# Cells: global(5) the heap's first object, global(6) the bitmap, global(7) the small lists (65 words), global(8) bytes
+# handed out since the last collection, global(11) the powers of two the bitmap's arithmetic reads, global(12) the bytes
+# live at the last collection, global(16) the large list, global(17) where the large space starts, global(18) the heap's
+# end, global(20) to global(22) a number's digits on the way out.
+
+fn rt_large() -> int { return 2621440 }   # 2.5 MiB for large objects; calibrate against the biggest program's output
+
+fn rt_gc_init() {
+  let base = syscall(397, 0, 0, 0)               # where the heap ends now
+  let bitmap_bytes = 131072                       # 16 MiB of heap, a bit per 16 bytes
+  let lists = base + bitmap_bytes
+  let first = (lists + 65 * 8 + 8 + 15) / 16 * 16   # the lists, then eight bytes of powers of two
+  var top = base + 16777216                       # all the kernel will give: ask big, step down to its limit
+  while top > first and syscall(397, top, 0, 0) < top { top -= 65536 }
+  if top - first < rt_large() * 2 { rt_oom(rt_large() * 2) }
+  var i = base
+  while i < first {
+    poke(i, 0)
+    i += 8
+  }
+  var p = 1
+  for k in 0..8 {
+    poke8(lists + 65 * 8 + k, p)
+    p = p * 2
+  }
+  poke(global(11), lists + 65 * 8)
+  poke(global(6), base)
+  poke(global(7), lists)
+  poke(global(5), first)
+  poke(global(0), first)
+  poke(global(18), top)
+  let lo = top - rt_large()
+  poke(global(17), lo)
+  poke(global(16), 0)
+  rt_free_large(lo, top - lo)   # the large space starts as one free block
+}
+
+fn rt_oom(size: int) {
+  rt_write("out of memory for ")
+  rt_write_num(size)
+  rt_write(" bytes, ")   # literals and a buffer in the cells: nothing on this path may allocate
+  rt_write_num(peek(global(12)))
+  rt_write(" bytes live at the last collection\n")
+  syscall(1, 1, 0, 0)
+}
+
+# n in decimal, through global(20) to global(22) as a buffer, so it works when the heap is full.
+fn rt_write_num(n: int) {
+  let buf = global(20)
+  var i = 23
+  var m = n
+  poke8(buf + i, 48 + m % 10)
+  m = m / 10
+  while m > 0 {
+    i -= 1
+    poke8(buf + i, 48 + m % 10)
+    m = m / 10
+  }
+  syscall(4, 1, buf + i, 24 - i)
+}
+
+# Plank has no bitwise operators, so the bitmap's bits and the header's flags are plain arithmetic.
+fn rt_pow2(k: int) -> int { return peek8(peek(global(11)) + k) }   # from the table rt_gc_init makes: 1, 2, 4 ... 128
+fn rt_bit_get(start: int) -> bool {
+  let b = (start - peek(global(5))) / 16
+  return peek8(peek(global(6)) + b / 8) / rt_pow2(b % 8) % 2 == 1
+}
+fn rt_bit_set(start: int) {
+  let b = (start - peek(global(5))) / 16
+  let at = peek(global(6)) + b / 8
+  if not rt_bit_get(start) { poke8(at, peek8(at) + rt_pow2(b % 8)) }
+}
+fn rt_bit_clear(start: int) {
+  let b = (start - peek(global(5))) / 16
+  let at = peek(global(6)) + b / 8
+  if rt_bit_get(start) { poke8(at, peek8(at) - rt_pow2(b % 8)) }
+}
+fn rt_size(h: int) -> int { return h - h % 4 }   # a header's size, its two flag bits dropped
+
+fn rt_class(size: int) -> int {
+  if size <= 1024 { return size / 16 }
+  return 0
+}
+
+fn rt_alloc(n: int) -> int {
+  if peek(global(6)) == 0 { rt_gc_init() }
+  let size = (n + 8 + 15) / 16 * 16
+  if peek(global(9)) > 0 and peek(global(8)) > peek(global(9)) { rt_gc() }
+  var p = rt_room(size)
+  if p == 0 {
+    rt_gc()
+    p = rt_room(size)
+    if p == 0 { rt_oom(size) }
+  }
+  poke(global(8), peek(global(8)) + size)
+  return p + 8
+}
+
+# Room for an object of size bytes, header included, or 0: a large one from the large space, a small one from its lists
+# or the small space's end.
+fn rt_room(size: int) -> int {
+  if size >= 65536 { return rt_take_large(size) }
+  let p = rt_take(size)
+  if p != 0 { return p }
+  return rt_bump(size)
+}
+
+# A block from the small lists, or 0: its own size class first, then the smallest bigger class, then the first bigger
+# block that fits. Whatever is left over goes back on a list, so the runs the sweep merges feed small requests too.
+fn rt_take(size: int) -> int {
+  let lists = peek(global(7))
+  var c = rt_class(size)
+  if c > 0 {
+    let head = peek(lists + c * 8)
+    if head != 0 {
+      poke(lists + c * 8, peek(head + 8))
+      poke(head, size)
+      return head
+    }
+    c += 1
+    while c <= 64 {
+      let b = peek(lists + c * 8)
+      if b != 0 {
+        poke(lists + c * 8, peek(b + 8))
+        return rt_cut(b, c * 16, size, false)
+      }
+      c += 1
+    }
+  }
+  var prev = 0
+  var b = peek(lists)
+  while b != 0 {
+    let bs = rt_size(peek(b))
+    if bs >= size {
+      if prev == 0 { poke(lists, peek(b + 8)) } else { poke(prev + 8, peek(b + 8)) }
+      return rt_cut(b, bs, size, false)
+    }
+    prev = b
+    b = peek(b + 8)
+  }
+  return 0
+}
+
+# The first block in the large space that fits, or 0.
+fn rt_take_large(size: int) -> int {
+  var prev = 0
+  var b = peek(global(16))
+  while b != 0 {
+    let bs = rt_size(peek(b))
+    if bs >= size {
+      if prev == 0 { poke(global(16), peek(b + 8)) } else { poke(prev + 8, peek(b + 8)) }
+      return rt_cut(b, bs, size, true)
+    }
+    prev = b
+    b = peek(b + 8)
+  }
+  return 0
+}
+
+# Block b of bs bytes, off every list, cut to size; a tail of 16 bytes or more is freed again, in the space it is in.
+fn rt_cut(b: int, bs: int, size: int, large: bool) -> int {
+  if bs - size >= 16 {
+    if large { rt_free_large(b + size, bs - size) } else { rt_free_block(b + size, bs - size) }
+    poke(b, size)
+  } else {
+    poke(b, bs)   # the block keeps its whole size, so the sweep's walk stays on headers
+  }
+  return b
+}
+
+# Fresh room at the small space's end, or 0 where the large space begins.
+fn rt_bump(size: int) -> int {
+  let top = peek(global(0))
+  if top + size > peek(global(17)) { return 0 }
+  poke(global(0), top + size)
+  poke(top, size)
+  rt_bit_set(top)
+  return top
+}
+
+fn rt_free_block(b: int, size: int) {
+  poke(b, size + 2)
+  rt_bit_set(b)
+  let slot = peek(global(7)) + rt_class(size) * 8
+  poke(b + 8, peek(slot))
+  poke(slot, b)
+}
+
+fn rt_free_large(b: int, size: int) {
+  poke(b, size + 2)
+  rt_bit_set(b)
+  poke(b + 8, peek(global(16)))
+  poke(global(16), b)
+}
+
+# The object v points into, marked and scanned, if it is one.
+fn rt_mark(v: int) {
+  let base = peek(global(5))
+  if v < base or v >= peek(global(18)) or (v >= peek(global(0)) and v < peek(global(17))) { return }
+  var s = (v - base) / 16 * 16 + base
+  while s > base and not rt_bit_get(s) { s -= 16 }
+  if not rt_bit_get(s) { return }
+  let h = peek(s)
+  if h % 4 != 0 or v >= s + h { return }   # marked already, free, or past its end
+  poke(s, h + 1)
+  var w = s + 8
+  while w < s + h {
+    rt_mark(peek(w))
+    w += 8
+  }
+}
+
+fn rt_gc() {
+  # mark
+  var w = stack_pointer()
+  while w < peek(global(4)) {
+    rt_mark(peek(w))
+    w += 8
+  }
+  rt_mark(peek(global(3)))
+  rt_mark(peek(global(10)))
+  # sweep both spaces: every dead or free run becomes one free block, the lists made anew; global(12) counts what lived
+  poke(global(12), 0)
+  let lists = peek(global(7))
+  for i in 0..65 {
+    poke(lists + i * 8, 0)
+  }
+  poke(global(16), 0)
+  rt_sweep(peek(global(5)), peek(global(0)), false)
+  rt_sweep(peek(global(17)), peek(global(18)), true)
+  poke(global(8), 0)
+}
+
+fn rt_sweep(from: int, end: int, large: bool) {
+  var s = from
+  while s < end {
+    let h = peek(s)
+    let size = rt_size(h)
+    if h % 2 == 1 {
+      poke(s, size)
+      poke(global(12), peek(global(12)) + size)
+      s += size
+    } else {
+      var run = size
+      while s + run < end and peek(s + run) % 2 == 0 {
+        rt_bit_clear(s + run)
+        run += rt_size(peek(s + run))
+      }
+      if large {
+        rt_free_large(s, run)
+      } else if s + run == end {
+        rt_bit_clear(s)
+        poke(global(0), s)   # dead up to the small space's end: give it back to the bump
+      } else {
+        rt_free_block(s, run)
+      }
+      s += run
+    }
+  }
 }
