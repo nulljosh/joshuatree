@@ -34,6 +34,17 @@ fn rt_byte_str(c: int) -> str {
   return as_str(peek(table + c * 8))
 }
 
+# n zero bytes as a string, for a buffer filled in place (plankc's encoder writes app images into one).
+fn rt_zstr(n: int) -> str {
+  let p = rt_str(n)
+  var i = 0
+  while i < n {
+    poke8(p + i, 0)
+    i += 1
+  }
+  return as_str(p)
+}
+
 fn rt_concat(a: str, b: str) -> str {
   let la = len(a)
   let lb = len(b)
@@ -145,6 +156,12 @@ fn rt_quote(s: str) -> str {
 
 # Any value as print shows it, from its type written out ("int", "[str]", "[[int]]"); inside a list, strings get quotes.
 fn rt_show(v: int, ty: str, inner: bool) -> str {
+  if peek8(addr(ty) + len(ty) - 1) == 63 {   # T?: nil, or the value (an int or bool one out of its box)
+    if v == 0 { return "nil" }
+    let base = rt_sub(ty, 0, len(ty) - 1)
+    if rt_str_eq(base, "int") or rt_str_eq(base, "bool") { return rt_show(peek(v), base, inner) }
+    return rt_show(v, base, inner)
+  }
   if ty == "int" { return rt_int_str(v) }
   if ty == "bool" {
     if v != 0 { return "true" }
@@ -352,6 +369,21 @@ fn rt_dict_find(d: int, k: str) -> int {
   return -1
 }
 
+# -1, 0 or 1 as a sorts before, with or after b, byte by byte.
+fn rt_str_cmp(a: str, b: str) -> int {
+  var i = 0
+  while i < len(a) and i < len(b) {
+    let x = peek8(addr(a) + i)
+    let y = peek8(addr(b) + i)
+    if x < y { return -1 }
+    if x > y { return 1 }
+    i += 1
+  }
+  if len(a) < len(b) { return -1 }
+  if len(a) > len(b) { return 1 }
+  return 0
+}
+
 fn rt_dict_has(d: int, k: str) -> bool {
   return rt_dict_find(d, k) >= 0
 }
@@ -458,7 +490,7 @@ fn rt_args() -> int {
 # Cells: global(5) the heap's first object, global(6) the bitmap, global(7) the small lists (65 words), global(8) bytes
 # handed out since the last collection, global(11) the powers of two the bitmap's arithmetic reads, global(12) the bytes
 # live at the last collection, global(16) the large list, global(17) where the large space starts, global(18) the heap's
-# end, global(20) to global(22) a number's digits on the way out.
+# end, global(19) bytes handed out since the last yield, global(20) to global(22) a number's digits on the way out.
 
 fn rt_large() -> int { return 2621440 }   # 2.5 MiB for large objects; calibrate against the biggest program's output
 
@@ -547,10 +579,24 @@ fn rt_alloc(n: int) -> int {
   if p == 0 {
     rt_gc()
     p = rt_room(size)
+    if p == 0 and size < 65536 { p = rt_take_large(size) }   # either space before giving up: the other may hold the room
+    if p == 0 and size >= 65536 {
+      p = rt_take(size)
+      if p == 0 { p = rt_bump(size) }
+    }
     if p == 0 { rt_oom(size) }
   }
   poke(global(8), peek(global(8)) + size)
+  poke(global(19), peek(global(19)) + size)
+  if peek(global(19)) > 262144 { rt_yield() }
   return p + 8
+}
+
+# A long job lets the desktop run now and then (JT_SYS_SCHED_YIELD): every 256 KB it allocates and around each
+# collection. An app that holds the processor for 3 s is taken for frozen and stopped, and the desktop would stall.
+fn rt_yield() {
+  poke(global(19), 0)
+  syscall(158, 0, 0, 0)
 }
 
 # Room for an object of size bytes, header included, or 0: a large one from the large space, a small one from its lists
@@ -668,6 +714,7 @@ fn rt_mark(v: int) {
 }
 
 fn rt_gc() {
+  rt_yield()
   # mark
   var w = stack_pointer()
   while w < peek(global(4)) {
@@ -686,6 +733,7 @@ fn rt_gc() {
   rt_sweep(peek(global(5)), peek(global(0)), false)
   rt_sweep(peek(global(17)), peek(global(18)), true)
   poke(global(8), 0)
+  rt_yield()
 }
 
 fn rt_sweep(from: int, end: int, large: bool) {

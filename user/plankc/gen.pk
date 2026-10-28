@@ -30,6 +30,8 @@ struct G {
   next_off: int
   ret: str         # the epilogue label of the function being written
   gc_every: int    # 0, or collect every this many bytes (plankc --gc=N asm, for testing the collector)
+  fn_nodes: [str: N]  # function name (Struct.method for a method): its Fn node, for parameters and defaults
+  ret_type: str    # the return type of the function being written
 }
 
 fn emit(g: G, s: str) { g.out.append(s) }   # unindented: an indent would copy every line, and the assembler needs none
@@ -321,6 +323,12 @@ fn gen_expr(g: G, e: N) -> str {
         emit(g, "bl pk_rt_concat")
         return "str"
       }
+      if op == "<" or op == ">" or op == "<=" or op == ">=" {   # by bytes, as Plank compares
+        emit(g, "bl pk_rt_str_cmp")
+        emit(g, "cmp x0, #0")
+        emit(g, "cset x0, " + cmp_cond(op))
+        return "bool"
+      }
       if op != "==" and op != "!=" { nope(e, "\(op) on strings") }
       emit(g, "bl pk_rt_str_eq")
       if op == "!=" { emit(g, "eor x0, x0, #1") }
@@ -344,23 +352,53 @@ fn gen_expr(g: G, e: N) -> str {
     let name = e.kids[0].text
     let a = e.kids[1].kids
     if name in g.structs { return construct(g, e, g.structs[name]) }
-    for lab in e.kids[2].kids {
-      if lab.kind != "_" { nope(e, "a labeled argument") }
+    if name == "plankc_buf" and len(a) == 1 {   # enc.pk's stand-ins, swapped for the runtime's bytes (enc.pk says why)
+      gen_expr(g, a[0])
+      emit(g, "bl pk_rt_zstr")
+      return "str"
+    }
+    if name == "plankc_buf_set" and len(a) == 3 {
+      gen_expr(g, a[0])
+      push(g)
+      gen_expr(g, a[1])
+      push(g)
+      gen_expr(g, a[2])
+      emit(g, "mov x2, x0")
+      pop(g, "x1")
+      pop(g, "x0")
+      emit(g, "add x0, x0, x1")
+      emit(g, "strb w2, [x0]")
+      return "void"
+    }
+    if name == "plankc_byte_at" and len(a) == 2 {
+      gen_expr(g, a[0])
+      push(g)
+      gen_expr(g, a[1])
+      emit(g, "mov x1, x0")
+      pop(g, "x0")
+      emit(g, "add x0, x0, x1")
+      emit(g, "ldrb w0, [x0]")
+      return "int"
+    }
+    if not (name in g.fns) {
+      for lab in e.kids[2].kids {
+        if lab.kind != "_" { nope(e, "a labeled argument to " + name) }
+      }
     }
     if name == "print" { return print_(g, e, a) }
     if not (name in g.fns) { return builtin(g, e, name, a) }
-    if len(a) > 8 { nope(e, "more than eight arguments") }
-    for x in a {
-      gen_expr(g, x)
-      push(g)
-    }
-    var i = len(a) - 1
-    while i >= 0 {
-      pop(g, "x" + str(i))
-      i -= 1
-    }
-    emit(g, "bl pk_" + name)
-    return g.fns[name]
+    return call_fn(g, e, name, a, e.kids[2].kids, false)
+  }
+  if e.kind == "Unwrap" {   # x!: the value, or a stop with the line when it is nil
+    let t = gen_expr(g, e.kids[0])
+    if not is_opt(t) { nope(e, "! on a \(t), which is never nil") }
+    let ok = fresh(g)
+    emit(g, "cbnz x0, " + ok)
+    lit(g, "x0", "\(e.line): unwrapped nil")
+    emit(g, "bl pk_rt_fail")
+    place(g, ok)
+    if boxed(t) { emit(g, "ldr x0, [x0]") }
+    return t[..len(t) - 1]
   }
   nope(e, "the expression " + e.kind)
   return ""
@@ -401,7 +439,7 @@ fn to_str(g: G, e: N, t: str) {
     place(g, f)
     lit(g, "x0", "false")
     place(g, done)
-  } else if is_list(t) or is_dict(t) or upper(t[0]) {
+  } else if is_list(t) or is_dict(t) or upper(t[0]) or is_opt(t) {
     lit(g, "x1", t)
     emit(g, "mov x2, #0")
     emit(g, "bl pk_rt_show")
@@ -459,6 +497,53 @@ fn method(g: G, e: N) -> str {
   let name = e.kids[1].text
   let a = e.kids[2].kids
   if t == "str" { return str_method(g, e, name, a) }
+  if (t + "." + name) in g.fn_nodes {   # a struct's method: the value goes in first, as self
+    push(g)
+    return call_fn(g, e, t + "." + name, a, e.kids[3].kids, true)
+  }
+  if is_dict(t) and name == "get" and (len(a) == 1 or len(a) == 2) {
+    let vt = dict_parts(t)[1]
+    push(g)
+    gen_expr(g, a[0])
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    if len(a) == 2 {   # get(k, default): the value, or the default
+      push(g)
+      push(g)
+      emit(g, "bl pk_rt_dict_find")
+      let missing = fresh(g)
+      let done = fresh(g)
+      emit(g, "tbnz x0, #63, " + missing)
+      pop(g, "x1")
+      pop(g, "x1")
+      emit(g, "ldr x1, [x1, #8]")
+      emit(g, "ldr x1, [x1, #16]")
+      emit(g, "ldr x0, [x1, x0, lsl #3]")
+      emit(g, "b " + done)
+      place(g, missing)
+      pop(g, "x1")
+      pop(g, "x1")
+      if gen_expr(g, a[1]) != vt { nope(e, "a default of another type") }
+      place(g, done)
+      return vt
+    }
+    push(g)
+    emit(g, "bl pk_rt_dict_find")
+    let missing = fresh(g)
+    let done = fresh(g)
+    emit(g, "tbnz x0, #63, " + missing)
+    pop(g, "x1")
+    emit(g, "ldr x1, [x1, #8]")
+    emit(g, "ldr x1, [x1, #16]")
+    emit(g, "ldr x0, [x1, x0, lsl #3]")
+    if boxed(vt + "?") { emit(g, "bl pk_rt_box") }
+    emit(g, "b " + done)
+    place(g, missing)
+    pop(g, "x1")
+    emit(g, "mov x0, #0")
+    place(g, done)
+    return vt + "?"
+  }
   if t == "[str]" and name == "join" and len(a) == 1 {
     push(g)
     gen_expr(g, a[0])
@@ -659,7 +744,11 @@ fn gen_stmt(g: G, s: N) {
   } else if s.kind == "ExprStmt" {
     gen_expr(g, s.kids[0])
   } else if s.kind == "Return" {
-    if s.kids[0].kind != "_" { gen_expr(g, s.kids[0]) }
+    if s.kids[0].kind != "_" {
+      let t = gen_expr(g, s.kids[0])
+      if g.ret_type != "void" and not fits(t, g.ret_type) { nope(s, "returning a \(t) from a function that gives \(g.ret_type)") }
+      coerce(g, t, g.ret_type)
+    }
     leave_tries(g, 0)
     emit(g, "b " + g.ret)
   } else if s.kind == "If" {
@@ -850,6 +939,7 @@ fn count_locals(n: N) -> int {
 fn function(g: G, f: N) {
   let name = f.kids[0].text
   let params = f.kids[1].kids
+  g.ret_type = f.kids[2].text
   if len(params) > 8 { nope(f, "more than eight parameters") }
   if len(f.kids[5].kids) > 0 { nope(f, "type parameters") }
   g.locals = []
@@ -883,6 +973,46 @@ fn type_of(g: G, e: N) -> str {
   let t = gen_expr(g, e)
   while len(g.out) > mark { g.out.pop() }
   return t
+}
+
+# ---------------------------------------------------------------- calls
+# A call to a function of the program: each parameter from its argument, by place or by label, else its default, coerced
+# to the parameter's type (an int going where an int? is wants its box). For a method, self is already pushed.
+fn call_fn(g: G, e: N, name: str, a: [N], labels: [N], method: bool) -> str {
+  let f = g.fn_nodes[name]
+  let params = f.kids[1].kids
+  let defaults = f.kids[4].kids
+  var first = 0
+  if method { first = 1 }
+  if len(params) > 8 { nope(e, "more than eight parameters") }
+  if len(a) > len(params) - first { nope(e, "more arguments than \(name) takes") }
+  for i in first..len(params) {
+    let pname = params[i].kids[0].text
+    var v = none()
+    for j in 0..len(a) {
+      if (labels[j].kind == "_" and j + first == i) or (labels[j].kind == "S" and labels[j].text == pname) { v = a[j] }
+    }
+    if v.kind == "_" {
+      var k = 0
+      while k < len(defaults) {
+        if defaults[k].text == pname { v = defaults[k + 1] }
+        k += 2
+      }
+    }
+    if v.kind == "_" { throw "\(e.line): \(name) needs \(pname)" }
+    let t = gen_expr(g, v)
+    let want = int_type(e, params[i].kids[1].text)
+    if not fits(t, want) { nope(e, "a \(t) for \(pname), a \(want)") }
+    coerce(g, t, want)
+    push(g)
+  }
+  var i = len(params) - 1
+  while i >= 0 {
+    pop(g, "x" + str(i))
+    i -= 1
+  }
+  emit(g, "bl pk_" + name)
+  return g.fns[name]
 }
 
 # ---------------------------------------------------------------- try
@@ -960,13 +1090,23 @@ fn layout_fn(g: G) -> N {
 }
 
 fn asm(prog: N, runtime: N, gc_every: int) -> str {
-  let g = G([], 0, [], [], [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "stack_pointer": 1], [], 0, "", gc_every)
+  return asm_lines(prog, runtime, gc_every).join("\n") + "\n"
+}
+
+# The program's assembly, a line a string: for asm's text, or enc.pk's image.
+fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
+  let g = G([], 0, [], [], [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "")
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
     if f.kind == "Struct" {
-      if len(f.kids[3].kids) > 0 or len(f.kids[4].kids) > 0 { nope(f, "struct methods and type parameters") }
+      if len(f.kids[4].kids) > 0 { nope(f, "a struct's type parameters") }
       g.structs[f.kids[0].text] = f
+      for m in f.kids[3].kids {   # a method is a function named Struct.name whose first parameter is self
+        let params = [tv([sv("self"), sv(f.kids[0].text)])]
+        for p in m.kids[1].kids { params.append(p) }
+        fns.append(node("Fn", m.line, [sv(f.kids[0].text + "." + m.kids[0].text), lv(params), m.kids[2], m.kids[3], m.kids[4], m.kids[5], m.kids[6], m.kids[7], m.kids[8]]))
+      }
     } else {
       fns.append(f)
     }
@@ -980,6 +1120,7 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
     if ret != "void" { int_type(f, ret) }
     if f.kids[0].text in g.fns { throw "\(f.line): function '\(f.kids[0].text)' defined twice" }
     g.fns[f.kids[0].text] = ret
+    g.fn_nodes[f.kids[0].text] = f
   }
   if not ("main" in g.fns) { throw "no fn main" }
   g.out.append("  .text")
@@ -989,6 +1130,7 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
   prog.kids = []
   runtime.kids = []
   g.structs = [:]
+  g.fn_nodes = [:]   # it holds every function's tree too
   while len(fns) > 0 { fns.pop() }
   # pklibc's _start calls main(argc, argv); the program's main takes nothing.
   g.out.append("")
@@ -1021,5 +1163,5 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
     g.out.append(".Le" + str(i) + ":")
     emit(g, ".byte 0")
   }
-  return g.out.join("\n") + "\n"
+  return g.out
 }
