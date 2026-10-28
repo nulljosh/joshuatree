@@ -51,10 +51,13 @@ if not built: print("FAIL: nothing built"); sys.exit(1)
 # 6.62.0: the same examples built by plankc, the compiler written in Plank (step 3 of the true bootstrap), as aarch64 it writes
 # itself, with no LLVM IR and no Plank runtime: tools/plankapp.sh --plankc.
 # 6.63.0: primes, and plankc's own string test, whose answer key is what plank.py prints for it on this Mac.
-PLANKC = [("pcfib", ex / "fib.pk"), ("pcfz", ex / "fizzbuzz.pk"), ("pcprime", ex / "primes.pk"), ("pcstr", root / "user/plankc/tests/strings.pk"), ("pclist", root / "user/plankc/tests/lists.pk"), ("pcst", root / "user/plankc/tests/structs.pk"), ("pcmore", root / "user/plankc/tests/more.pk"), ("pcdict", root / "user/plankc/tests/dicts.pk"), ("pcerr", root / "user/plankc/tests/errors.pk"), ("pcsys", root / "user/plankc/tests/syscalls.pk"), ("pcgc", root / "user/plankc/tests/gc.pk"), ("pcmeth", root / "user/plankc/tests/methods.pk"), ("pcenum", root / "user/plankc/tests/enums.pk"), ("pctup", root / "user/plankc/tests/tuples.pk"), ("pcclo", root / "user/plankc/tests/closures.pk"), ("pcflt", root / "user/plankc/tests/floats.pk"), ("pxenum", ex / "enums.pk"), ("pxlist", ex / "lists.pk"), ("pxsqrt", ex / "sqrt.pk"), ("pxstr", ex / "strings.pk"), ("pxstc", ex / "structs.pk")]
+PLANKC = [("pcfib", ex / "fib.pk"), ("pcfz", ex / "fizzbuzz.pk"), ("pcprime", ex / "primes.pk"), ("pcstr", root / "user/plankc/tests/strings.pk"), ("pclist", root / "user/plankc/tests/lists.pk"), ("pcst", root / "user/plankc/tests/structs.pk"), ("pcmore", root / "user/plankc/tests/more.pk"), ("pcdict", root / "user/plankc/tests/dicts.pk"), ("pcerr", root / "user/plankc/tests/errors.pk"), ("pcsys", root / "user/plankc/tests/syscalls.pk"), ("pcgc", root / "user/plankc/tests/gc.pk"), ("pcmeth", root / "user/plankc/tests/methods.pk"), ("pcenum", root / "user/plankc/tests/enums.pk"), ("pctup", root / "user/plankc/tests/tuples.pk"), ("pcclo", root / "user/plankc/tests/closures.pk"), ("pcflt", root / "user/plankc/tests/floats.pk"), ("pxenum", ex / "enums.pk"), ("pxlist", ex / "lists.pk"), ("pxsqrt", ex / "sqrt.pk"), ("pxstr", ex / "strings.pk"), ("pxstc", ex / "structs.pk"), ("pcbi", root / "user/plankc/tests/builtins.pk"), ("pxcoll", ex / "collections.pk"), ("pxeq", ex / "equality.pk")]
 # 6.70.0: each again with the collector firing every 64 KB (plankc --gc=65536), the way Plank tests its own; same answers.
 # (Every 4 KB is too slow for QEMU: the watchdog stops an app 3 s without a call, and a collection makes none.)
-PLANKC += [(a + "g", f, 65536) for a, f in PLANKC]
+# ponytail: 6.77.0's programs run once each: the test card's JT/APPS holds 64 entries (one-sector clusters, and fat.c reads
+# a directory's first MAX_DIR_CLUSTER_HOPS = 4 clusters), and doubling them too would push SLIDE.SIG past the end.
+ONCE = ("pcbi", "pxcoll", "pxeq")
+PLANKC += [(a + "g", f, 65536) for a, f in PLANKC if a not in ONCE]
 PLANKC.append(("pcoom", root / "user/plankc/tests/oom.pk"))   # 6.76.3: not collecting every 64 KB, which turns the give-up off
 PLANKC = [(t[0], t[1], t[2] if len(t) > 2 else 0) for t in PLANKC]
 WORDS = {"pcsys": " one two", "pcsysg": " one two"}   # 6.69.0: userrun NAME WORDS reaches the app (JT_SYS_ARGS)
@@ -84,6 +87,8 @@ try:
     for app, _, _ in PLANKC:
         if (tmp / (app.upper() + ".APP")).exists(): mt("mcopy", "-o", tmp / (app.upper() + ".APP"), "::JT/APPS/%s.APP" % app.upper())
     for e in ("app", "sig"): mt("mcopy", "-o", root / "landing/apps" / ("slide." + e), "::JT/APPS/SLIDE." + e.upper())   # 6.58.0
+    on_card = len(built) + sum(1 for a, _, _ in PLANKC if (tmp / (a.upper() + ".APP")).exists()) + 2 + 2   # slide's two, . and ..
+    if on_card > 64: raise SystemExit("FAIL: %d entries in the test card's JT/APPS; it holds 64 (see ONCE above)" % on_card)
     log, sock = tmp / "uart", tmp / "qmp"
     q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-global", "virtio-mmio.force-legacy=false",
                           "-device", "ramfb", "-device", "virtio-keyboard-device", "-drive", "if=none,id=card,file=%s,format=raw" % card, "-device", "virtio-blk-device,drive=card",

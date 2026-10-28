@@ -39,11 +39,12 @@ else
 "${CC[@]}" -c "$dir/prog.S" -o "$dir/prog.o"
 runtime=
 fi
-"${CC[@]}" -Wall -c "$root/user/pklibc/pklibc.c" -o "$dir/pklibc.o"
+"${CC[@]}" -Wall -ffunction-sections -fdata-sections -c "$root/user/pklibc/pklibc.c" -o "$dir/pklibc.o"
 "${CC[@]}" -c "$root/user/pklibc/setjmp.S" -o "$dir/setjmp.o"
 "${CC[@]}" -mgeneral-regs-only -c "$root/user/pklibc/jtw.c" -o "$dir/jtw.o"   # 6.58.0: a window, linked only when the program calls jtw_*
 for f in string stdlib text; do "${CC[@]}" -mgeneral-regs-only -I"$root/user/libjt" -c "$root/user/libjt/$f.c" -o "$dir/jt_$f.o"; done
-ld.lld -pie --no-dynamic-linker -z norelro -T "$root/arch/arm64/user_c.ld" --oformat binary -o "$out" \
+gc=; [ $plankc = 1 ] && gc=--gc-sections   # 6.77.0: plankc's programs need only pklibc's _start; the rest would crowd 256 KB
+ld.lld -pie --no-dynamic-linker -z norelro $gc -T "$root/arch/arm64/user_c.ld" --oformat binary -o "$out" \
     "$dir/pklibc.o" "$dir/prog.o" $runtime "$dir/setjmp.o" --start-lib "$dir/jtw.o" "$dir/jt_string.o" "$dir/jt_stdlib.o" "$dir/jt_text.o" --end-lib
 [ "$(tail -c 16 "$out" | head -c 4)" = JTU1 ] || { rm -f "$out"; echo "plankapp: the JTU1 trailer is not last"; exit 1; }
 echo "plankapp: made $out, $(wc -c < "$out" | tr -d ' ') bytes; copy it to JT/APPS/ on the card, then: userrun $(echo "$name" | tr A-Z a-z)"

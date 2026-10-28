@@ -169,7 +169,7 @@ fn tuple_parts(ty: str) -> [str] {
   out.append(ty[at..len(ty) - 1])
   return out
 }
-fn boxed(ty: str) -> bool { return ty == "int?" or ty == "bool?" }
+fn boxed(ty: str) -> bool { return ty == "int?" or ty == "bool?" or ty == "float?" }
 
 # Can a value of type got go where want is written?
 fn fits(got: str, want: str) -> bool {
@@ -380,9 +380,9 @@ fn gen_expr(g: G, e: N) -> str {
       place(g, done)
       return base
     }
-    let lt = gen_expr(g, e.kids[1])
+    var lt = gen_expr(g, e.kids[1])
     push(g)
-    let rt = gen_expr(g, e.kids[2])
+    var rt = gen_expr(g, e.kids[2])
     emit(g, "mov x1, x0")
     pop(g, "x0")
     if op == "in" and is_dict(rt) {
@@ -407,6 +407,8 @@ fn gen_expr(g: G, e: N) -> str {
       emit(g, "cset x0, " + cmp_cond(op))
       return "bool"
     }
+    if (op == "==" or op == "!=") and (rt == "[]" or rt == "[:]") and fits(rt, lt) { rt = lt }   # xs == []
+    if (op == "==" or op == "!=") and (lt == "[]" or lt == "[:]") and fits(lt, rt) { lt = rt }
     if lt != rt { nope(e, "\(op) between \(lt) and \(rt)") }
     if (op == "==" or op == "!=") and lt in g.enums {   # the same case with the same fields
       lit(g, "x2", lt)
@@ -415,6 +417,12 @@ fn gen_expr(g: G, e: N) -> str {
       return "bool"
     }
     if lt == "float" { return float_op(g, e, op) }
+    if (op == "==" or op == "!=") and (is_list(lt) or is_dict(lt) or lt.starts_with("(") or lt in g.structs or is_opt(lt)) {
+      lit(g, "x2", lt)   # part by part, from the type written out (6.77.0)
+      emit(g, "bl pk_rt_equal")
+      if op == "!=" { emit(g, "eor x0, x0, #1") }
+      return "bool"
+    }
     if lt != "str" and lt != "int" and lt != "bool" { nope(e, "\(op) on \(lt)") }
     if lt == "str" {
       if op == "+" {
@@ -559,6 +567,26 @@ fn str_method(g: G, e: N, name: str, a: [N]) -> str {
     emit(g, "bl pk_rt_trim")
     return "str"
   }
+  if (name == "upper" or name == "lower") and len(a) == 0 {   # ASCII letters (6.77.0)
+    if name == "upper" { emit(g, "mov x1, #1") } else { emit(g, "mov x1, #0") }
+    emit(g, "bl pk_rt_case")
+    return "str"
+  }
+  if name == "replace" and len(a) == 2 {
+    push(g)
+    if gen_expr(g, a[0]) != "str" { nope(e, "replace of anything but strings") }
+    push(g)
+    if gen_expr(g, a[1]) != "str" { nope(e, "replace of anything but strings") }
+    emit(g, "mov x2, x0")
+    pop(g, "x1")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_replace")
+    return "str"
+  }
+  if name == "split" and len(a) == 0 {   # on runs of whitespace (6.77.0)
+    emit(g, "bl pk_rt_split_space")
+    return "[str]"
+  }
   if len(a) != 1 { nope(e, "the string method " + name) }
   push(g)
   if gen_expr(g, a[0]) != "str" { nope(e, name + " of anything but a string") }
@@ -645,6 +673,112 @@ fn method(g: G, e: N) -> str {
     emit(g, "mov x0, #0")
     place(g, done)
     return vt + "?"
+  }
+  if is_dict(t) and (name == "keys" or name == "values") and len(a) == 0 {   # a copy, in the order keys arrived
+    if name == "keys" { emit(g, "ldr x0, [x0]") } else { emit(g, "ldr x0, [x0, #8]") }
+    emit(g, "mov x1, #0")
+    emit(g, "ldr x2, =4611686018427387904")
+    emit(g, "bl pk_rt_list_slice")
+    if name == "keys" { return "[str]" }
+    return "[" + dict_parts(t)[1] + "]"
+  }
+  if name == "insert" and len(a) == 2 and is_list(t) and t != "[]" {   # before item i; a negative i counts from the end
+    push(g)
+    if gen_expr(g, a[0]) != "int" { nope(e, "insert() at anything but an int") }
+    push(g)
+    if not fits(gen_expr(g, a[1]), item_type(e, t)) { nope(e, "insert() of another type") }
+    emit(g, "mov x2, x0")
+    pop(g, "x1")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_list_insert")
+    return "void"
+  }
+  if name == "remove_at" and len(a) == 1 and is_list(t) and t != "[]" {   # takes item i out and gives it back
+    push(g)
+    if gen_expr(g, a[0]) != "int" { nope(e, "remove_at() of anything but an int") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_list_take")
+    return item_type(e, t)
+  }
+  if (name == "reverse" or name == "reversed") and len(a) == 0 and is_list(t) {
+    if name == "reversed" {
+      emit(g, "mov x1, #0")
+      emit(g, "ldr x2, =4611686018427387904")
+      emit(g, "bl pk_rt_list_slice")
+    }
+    push(g)
+    emit(g, "bl pk_rt_list_reverse")
+    pop(g, "x0")
+    if name == "reversed" { return t }
+    return "void"
+  }
+  if name == "sum" and len(a) == 0 and (t == "[int]" or t == "[float]") {   # left to right from zero, as plank.py adds
+    if t == "[int]" { emit(g, "bl pk_rt_list_sum_int") } else { emit(g, "bl pk_rt_list_sum_float") }
+    return item_type(e, t)
+  }
+  if name == "index_of" and len(a) == 1 and is_list(t) and t != "[]" {   # where the first equal item is, or nil
+    let item = item_type(e, t)
+    push(g)
+    if not fits(gen_expr(g, a[0]), item) { nope(e, "index_of() of another type") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    lit(g, "x2", item)
+    emit(g, "bl pk_rt_list_index")
+    let none_ = fresh(g)
+    let done = fresh(g)
+    emit(g, "tbnz x0, #63, " + none_)
+    emit(g, "bl pk_rt_box")
+    emit(g, "b " + done)
+    place(g, none_)
+    emit(g, "mov x0, #0")
+    place(g, done)
+    return "int?"
+  }
+  if (name == "first" or name == "last") and len(a) == 0 and is_list(t) and t != "[]" {   # the item, or nil when empty
+    let item = item_type(e, t)
+    let none_ = fresh(g)
+    let done = fresh(g)
+    emit(g, "ldr x1, [x0]")
+    emit(g, "cbz x1, " + none_)
+    if name == "last" { emit(g, "sub x1, x1, #1") } else { emit(g, "mov x1, #0") }
+    emit(g, "ldr x0, [x0, #16]")
+    emit(g, "ldr x0, [x0, x1, lsl #3]")
+    if boxed(item + "?") { emit(g, "bl pk_rt_box") }
+    emit(g, "b " + done)
+    place(g, none_)
+    emit(g, "mov x0, #0")
+    place(g, done)
+    return item + "?"
+  }
+  if is_dict(t) and name == "remove" and len(a) == 1 {
+    push(g)
+    if gen_expr(g, a[0]) != "str" { nope(e, "remove of anything but a string key") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_dict_remove")
+    return "void"
+  }
+  if (name == "min" or name == "max") and len(a) == 0 and is_list(t) and t != "[]" {   # the item, or nil when empty
+    let item = item_type(e, t)
+    var kind = 0
+    if item == "float" { kind = 1 } else if item == "str" { kind = 2 } else if item != "int" { nope(e, name + "() of a " + t) }
+    push(g)
+    emit(g, "mov x1, #" + str(kind))
+    if name == "max" { emit(g, "mov x2, #1") } else { emit(g, "mov x2, #0") }
+    emit(g, "bl pk_rt_list_pick")
+    let none_ = fresh(g)
+    let done = fresh(g)
+    pop(g, "x1")
+    emit(g, "tbnz x0, #63, " + none_)
+    emit(g, "ldr x1, [x1, #16]")
+    emit(g, "ldr x0, [x1, x0, lsl #3]")
+    if boxed(item + "?") { emit(g, "bl pk_rt_box") }
+    emit(g, "b " + done)
+    place(g, none_)
+    emit(g, "mov x0, #0")
+    place(g, done)
+    return item + "?"
   }
   if t == "[str]" and name == "join" and len(a) == 1 {
     push(g)
@@ -861,10 +995,30 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
     if t == "int" {
       emit(g, "scvtf d0, x0")
       emit(g, "fmov x0, d0")
+    } else if t == "str" {
+      emit(g, "bl pk_rt_parse_float")
     } else if t != "float" {
       nope(e, "float() of a " + t)
     }
     return "float"
+  }
+  if name == "pow" and len(a) == 2 {   # floats; an exponent that is a whole number (6.77.0)
+    if gen_expr(g, a[0]) != "float" { nope(e, "pow() of anything but floats") }
+    push(g)
+    if gen_expr(g, a[1]) != "float" { nope(e, "pow() of anything but floats") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_pow")
+    return "float"
+  }
+  if name == "fixed" and len(a) == 2 {   # x with exactly that many digits after the point (6.77.0)
+    if gen_expr(g, a[0]) != "float" { nope(e, "fixed() of anything but a float") }
+    push(g)
+    if gen_expr(g, a[1]) != "int" { nope(e, "fixed() with digits that are not an int") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_fixed")
+    return "str"
   }
   let fn1 = ["sqrt": 1, "floor": 1, "ceil": 1, "round": 1]
   if name in fn1 and len(a) == 1 {
@@ -1096,6 +1250,26 @@ fn gen_stmt(g: G, s: N) {
     place(g, other)
     gen_block(g, s.kids[3])
     place(g, done)
+  } else if s.kind == "WhileLet" {   # while let x = e: the body while e is not nil, x its value (6.77.0)
+    let top = fresh(g)
+    let done = fresh(g)
+    place(g, top)
+    let t = gen_expr(g, s.kids[1])
+    if not is_opt(t) { nope(s, "while let on a \(t), which is never nil") }
+    emit(g, "cbz x0, " + done)
+    if boxed(t) { emit(g, "ldr x0, [x0]") }
+    let mark = len(g.locals)
+    store(g, new_local(g, s.kids[0].text, t[..len(t) - 1]))
+    g.loops.append(done)
+    g.loops.append(top)
+    g.loop_tries.append(len(g.tries))
+    gen_block(g, s.kids[2])
+    g.loops.pop()
+    g.loops.pop()
+    g.loop_tries.pop()
+    while len(g.locals) > mark { g.locals.pop() }
+    emit(g, "b " + top)
+    place(g, done)
   } else if s.kind == "While" {
     let top = fresh(g)
     let done = fresh(g)
@@ -1145,6 +1319,56 @@ fn gen_stmt(g: G, s: N) {
     # for x in xs, or for i, x in xs: the list and a count in hidden locals.
     let mark = len(g.locals)
     var t = gen_expr(g, s.kids[1])
+    if t == "str" {   # a string's characters (6.77.0)
+      emit(g, "bl pk_rt_chars")
+      t = "[str]"
+    }
+    if is_dict(t) and s.kids[3].kind != "_" {   # for k, v in d: each key with its value, in order (6.77.0)
+      let d = new_local(g, " d", t)
+      store(g, d)
+      let i = new_local(g, " i", "int")
+      emit(g, "mov x0, #0")
+      store(g, i)
+      let k = new_local(g, s.kids[0].text, "str")
+      let v = new_local(g, s.kids[3].text, dict_parts(t)[1])
+      let top = fresh(g)
+      let step = fresh(g)
+      let done = fresh(g)
+      place(g, top)
+      load(g, d)
+      emit(g, "ldr x0, [x0]")
+      emit(g, "ldr x1, [x0]")
+      load(g, i)
+      emit(g, "cmp x0, x1")
+      emit(g, "b.ge " + done)
+      for pair in [(0, k), (8, v)] {
+        load(g, d)
+        emit(g, "ldr x0, [x0, #" + str(pair.0) + "]")
+        emit(g, "ldr x1, [x0, #16]")
+        load(g, i)
+        emit(g, "ldr x0, [x1, x0, lsl #3]")
+        store(g, pair.1)
+      }
+      g.loops.append(done)
+      g.loops.append(step)
+      g.loop_tries.append(len(g.tries))
+      gen_block(g, s.kids[2])
+      g.loops.pop()
+      g.loops.pop()
+      g.loop_tries.pop()
+      place(g, step)
+      load(g, i)
+      emit(g, "add x0, x0, #1")
+      store(g, i)
+      emit(g, "b " + top)
+      place(g, done)
+      emit(g, "mov x0, #0")
+      store(g, d)
+      store(g, k)
+      store(g, v)
+      while len(g.locals) > mark { g.locals.pop() }
+      return
+    }
     if is_dict(t) {   # a dict's keys, in order
       emit(g, "ldr x0, [x0]")
       t = "[" + dict_parts(t)[0] + "]"
@@ -1251,7 +1475,7 @@ fn count_locals(n: N) -> int {
   if n.kind == "LetTuple" { c = 1 + len(n.kids[0].kids) }
   if n.kind == "For" { c = 2 }
   if n.kind == "ForIn" { c = 4 }
-  if n.kind == "IfLet" { c = 1 }
+  if n.kind == "IfLet" or n.kind == "WhileLet" { c = 1 }
   if n.kind == "Try" { c = 5 }
   if n.kind == "Match" { c = 1 + 8 * len(n.kids[1].kids) }   # the subject and each arm's bindings, generously
   for k in n.kids { c += count_locals(k) }
