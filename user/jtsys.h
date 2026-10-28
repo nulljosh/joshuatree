@@ -92,6 +92,8 @@ struct jt_sysinfo {
 };
 #define JT_SYS_READFILE    401 /* a whole file into one buffer, up to 6MB (open() stops at 8KB); see kernel/syscall.h */
 #define JT_SYS_READAT      403 /* 6.1.0, the Pi: len bytes of a file from byte off, for files too big to read whole; -ENOSYS on i386 */
+#define JT_SYS_ARGS        404 /* 6.69.0, the Pi: the words after `userrun NAME`, into a buffer; returns how many bytes. -ENOSYS on i386 */
+#define JT_SYS_WRITEFILE   405 /* 6.69.0, the Pi: a whole file from one buffer, up to 6MB, open's path rules; -ENOSYS on i386 */
 #define JT_SYS_TEXT        400 /* anti-aliased text for the window (389 is mkdir); see kernel/syscall.h */
 #define JT_SYS_TEXT2       402 /* ARM64 only (3.9.0): Tree Sans drawn into a hi-res window at device size; see user/libjt/hires.h. -ENOSYS on i386 */
 /* One JT_SYS_TEXT2 request, LP64 layout (the kernel reads the same offsets): x and y are device pixels (y the baseline),

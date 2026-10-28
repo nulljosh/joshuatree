@@ -1,13 +1,13 @@
 # plankc, the Plank compiler written in Plank (the true bootstrap, docs/ROADMAP.md, 8.0).
 #   plankc lex FILE.pk     one token a line: line, kind, value
 #   plankc parse FILE.pk   the program's tree, one top-level item a line
-#   plankc asm FILE.pk RT.pk   aarch64 assembly for the Pi (gen.pk), with the runtime rt.pk built in
+#   plankc asm FILE.pk RT.pk [OUT.S]   aarch64 assembly for the Pi (gen.pk), with the runtime rt.pk built in, into OUT.S
 import "gen.pk"
 
 fn main() {
   let a = args()
   if len(a) < 2 or not (a[0] == "lex" or a[0] == "parse" or a[0] == "asm") {
-    print("usage: plankc lex|parse FILE.pk, or plankc asm FILE.pk RT.pk")
+    print("usage: plankc lex|parse FILE.pk, or plankc asm FILE.pk RT.pk [OUT.S]")
     exit(2)
   }
   let src = read_file(a[1]) ?? ""
@@ -22,10 +22,40 @@ fn main() {
       for item in parse(src).kids { print(dump(item)) }
     } else {
       if len(a) < 3 { throw "plankc asm needs rt.pk too: plankc asm FILE.pk RT.pk" }
-      print(asm(parse(src), parse(read_file(a[2]) ?? "")))
+      let seen: [str: int] = [:]
+      let out = asm(load_program(a[1], seen), parse(read_file(a[2]) ?? ""))
+      if len(a) > 3 {
+        if not write_file(a[3], out) { throw "cannot write \(a[3])" }
+        print("plankc: wrote \(a[3]), \(len(out)) bytes")
+      } else {
+        print(out)
+      }
     }
   } catch e {
     print("error: \(e)")
     exit(1)
   }
+}
+
+# A program and everything it imports, each file once, an import's path read from the importing file's folder.
+fn load_program(path: str, seen: [str: int]) -> N {
+  seen[path] = 1
+  let src = read_file(path) ?? ""
+  if src == "" { throw "cannot read \(path)" }
+  var dir = ""
+  let parts = path.split("/")
+  if len(parts) > 1 { dir = parts[..len(parts) - 1].join("/") + "/" }
+  let out: [N] = []
+  for item in parse(src).kids {
+    if item.kind == "Import" {
+      if item.kids[1].kind != "_" { throw "\(item.line): import ... as is not supported yet" }
+      let next = dir + item.kids[0].text
+      if not (next in seen) {
+        for x in load_program(next, seen).kids { out.append(x) }
+      }
+    } else {
+      out.append(item)
+    }
+  }
+  return N("L", 0, "", out)
 }
