@@ -42,6 +42,7 @@ fn main() {
     }
     tmp[3] = str(round) + "!" + s[..5]
     total += len(tmp[3]) + len(tmp[49])
+    if round % 50 == 0 { print("round", round, total) }   # progress, and a call now and then for the kernel's watchdog
   }
   var sum = 0
   for k in keep {
