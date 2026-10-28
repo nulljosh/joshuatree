@@ -1,10 +1,10 @@
 # plankc's code generator: aarch64 assembly for the Pi, written in Plank. Step 3 of the true bootstrap (docs/ROADMAP.md).
-# A first subset: functions over int and bool, let and var, =, +=, if and else, while, for over a range, break, continue,
-# return, calls, arithmetic, comparisons, and and or, not, and print of an int, a bool or a plain string. Anything else
-# stops with "not supported yet", never a guess. A simple stack machine: every value ends in x0, a binary op pushes its
+# The subset so far: functions over int, bool and str, let and var, =, +=, if and else, while, for over a range, break,
+# continue, return, calls, arithmetic, comparisons, and and or, not, print, and strings (6.63.0: +, ==, len, str(n) and
+# \( ) interpolation, through rt.pk, the runtime written in Plank). Anything else stops with "not supported yet". A simple stack machine: every value ends in x0, a binary op pushes its
 # left side, locals live below x29, and sp moves 16 bytes at a time so it stays aligned. The output links like a Plank app
 # (tools/plankapp.sh --plankc): pklibc's _start calls main, main calls the program's main. The assembler is still clang's;
-# plankc's own encoder comes in step 6.
+# plankc's own encoder comes in step 6. A string is the address of its bytes, its length in the 8 bytes before them.
 import "parse.pk"
 
 struct Local {
@@ -19,6 +19,8 @@ struct G {
   locals: [Local]
   loops: [str]     # break and continue labels, two a loop
   fns: [str: str]  # function name: its return type
+  structs: [str: N]  # struct name: its Struct node
+  rt: [str: int]   # the built-ins rt.pk is written with: syscall, peek, poke, global, addr, as_str
   strs: [str]      # string literals, as .asciz bodies
   next_off: int
   ret: str         # the epilogue label of the function being written
@@ -56,9 +58,22 @@ fn load(g: G, l: Local) { emit(g, "ldur x0, [x29, #-\(l.off)]") }
 fn store(g: G, l: Local) { emit(g, "stur x0, [x29, #-\(l.off)]") }
 
 fn int_type(n: N, ty: str) -> str {
-  if ty == "int" or ty == "bool" { return ty }
+  if ty == "int" or ty == "bool" or ty == "str" { return ty }
+  if ty.starts_with("[") and ty.ends_with("]") and not (":" in ty) and not ("?" in ty) {   # a list of any of these
+    int_type(n, ty[1..len(ty) - 1])
+    return ty
+  }
+  if upper(ty[0]) and not ("<" in ty) and not ("?" in ty) and not ("." in ty) { return ty }   # a struct, checked where it is used
   nope(n, "the type \(ty)")
   return ""
+}
+
+fn is_list(ty: str) -> bool { return ty.starts_with("[") }
+
+# The type a list holds.
+fn item_type(n: N, ty: str) -> str {
+  if not is_list(ty) or ty == "[]" { nope(n, "indexing a " + ty) }
+  return ty[1..len(ty) - 1]
 }
 
 # ---------------------------------------------------------------- expressions
@@ -73,6 +88,46 @@ fn cmp_cond(op: str) -> str {
 
 # Writes code that leaves the value of e in x0, and gives its type.
 fn gen_expr(g: G, e: N) -> str {
+  if e.kind == "Str" {
+    lit(g, "x0", e.kids[0].text)
+    return "str"
+  }
+  if e.kind == "Interp" { return interp(g, e) }
+  if e.kind == "List" {
+    let items = e.kids[0].kids
+    emit(g, "bl pk_rt_list_new")
+    if len(items) == 0 { return "[]" }
+    var ty = ""
+    for x in items {
+      push(g)
+      let t = gen_expr(g, x)
+      if ty == "" { ty = t }
+      if t != ty { nope(x, "a list of mixed \(ty) and \(t)") }
+      emit(g, "mov x1, x0")
+      emit(g, "ldr x0, [sp]")
+      emit(g, "bl pk_rt_list_push")
+      pop(g, "x0")
+    }
+    return "[" + ty + "]"
+  }
+  if e.kind == "Index" {
+    let t = gen_expr(g, e.kids[0])
+    let item = item_type(e, t)
+    push(g)
+    if gen_expr(g, e.kids[1]) != "int" { nope(e, "an index that is not an int") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_list_at")
+    emit(g, "ldr x0, [x0]")
+    return item
+  }
+  if e.kind == "Method" { return method(g, e) }
+  if e.kind == "Field" {
+    let t = gen_expr(g, e.kids[0])
+    let f = field(g, e, t, e.kids[1].text)
+    emit(g, "ldr x0, [x0, #\(f.off)]")
+    return f.ty
+  }
   if e.kind == "Num" {
     if e.kids[1].text != "int" { nope(e, "a float") }
     emit(g, "ldr x0, =" + e.kids[0].text)
@@ -110,11 +165,23 @@ fn gen_expr(g: G, e: N) -> str {
       return "bool"
     }
     if op == "in" or op == "??" { nope(e, op) }
-    gen_expr(g, e.kids[1])
+    let lt = gen_expr(g, e.kids[1])
     push(g)
-    gen_expr(g, e.kids[2])
+    let rt = gen_expr(g, e.kids[2])
     emit(g, "mov x1, x0")
     pop(g, "x0")
+    if lt != rt { nope(e, "\(op) between \(lt) and \(rt)") }
+    if lt != "str" and lt != "int" and lt != "bool" { nope(e, "\(op) on \(lt)") }
+    if lt == "str" {
+      if op == "+" {
+        emit(g, "bl pk_rt_concat")
+        return "str"
+      }
+      if op != "==" and op != "!=" { nope(e, "\(op) on strings") }
+      emit(g, "bl pk_rt_str_eq")
+      if op == "!=" { emit(g, "eor x0, x0, #1") }
+      return "bool"
+    }
     if op == "+" { emit(g, "add x0, x0, x1") } else if op == "-" { emit(g, "sub x0, x0, x1") } else if op == "*" {
       emit(g, "mul x0, x0, x1")
     } else if op == "/" {
@@ -132,11 +199,12 @@ fn gen_expr(g: G, e: N) -> str {
   if e.kind == "Call" {
     let name = e.kids[0].text
     let a = e.kids[1].kids
+    if name in g.structs { return construct(g, e, g.structs[name]) }
     for lab in e.kids[2].kids {
       if lab.kind != "_" { nope(e, "a labeled argument") }
     }
     if name == "print" { return print_(g, e, a) }
-    if not (name in g.fns) { nope(e, "calling \(name)") }
+    if not (name in g.fns) { return builtin(g, e, name, a) }
     if len(a) > 8 { nope(e, "more than eight arguments") }
     for x in a {
       gen_expr(g, x)
@@ -154,33 +222,142 @@ fn gen_expr(g: G, e: N) -> str {
   return ""
 }
 
+# print(a, b, ...): each value as a string, a space between, then a newline.
 fn print_(g: G, e: N, a: [N]) -> str {
-  if len(a) != 1 { nope(e, "print with other than one value") }
-  if a[0].kind == "Str" {
-    emit(g, "adrp x0, " + str_label(g, a[0].kids[0].text))
-    emit(g, "add x0, x0, :lo12:" + str_label(g, a[0].kids[0].text))
-    emit(g, "bl puts")
-    return "void"
+  if len(a) == 0 { lit(g, "x0", "") }
+  for i in 0..len(a) {
+    if i > 0 {
+      push(g)
+      lit(g, "x1", " ")
+      pop(g, "x0")
+      emit(g, "bl pk_rt_concat")
+      push(g)
+    }
+    to_str(g, a[i], gen_expr(g, a[i]))
+    if i > 0 {
+      emit(g, "mov x1, x0")
+      pop(g, "x0")
+      emit(g, "bl pk_rt_concat")
+    }
   }
-  let t = gen_expr(g, a[0])
-  if t == "bool" {
+  emit(g, "bl pk_rt_print_str")
+  return "void"
+}
+
+# The value in x0, of type t, as a string, the way print shows it.
+fn to_str(g: G, e: N, t: str) {
+  if t == "int" {
+    emit(g, "bl pk_rt_int_str")
+  } else if t == "bool" {
     let f = fresh(g)
     let done = fresh(g)
     emit(g, "cbz x0, " + f)
-    emit(g, "adrp x0, " + str_label(g, "true"))
-    emit(g, "add x0, x0, :lo12:" + str_label(g, "true"))
+    lit(g, "x0", "true")
     emit(g, "b " + done)
     place(g, f)
-    emit(g, "adrp x0, " + str_label(g, "false"))
-    emit(g, "add x0, x0, :lo12:" + str_label(g, "false"))
+    lit(g, "x0", "false")
     place(g, done)
-    emit(g, "bl puts")
+  } else if is_list(t) or upper(t[0]) {
+    lit(g, "x1", t)
+    emit(g, "mov x2, #0")
+    emit(g, "bl pk_rt_show")
+  } else if t != "str" {
+    nope(e, "showing a " + t)
+  }
+}
+
+# xs.append(v) and xs.pop(), so far.
+fn method(g: G, e: N) -> str {
+  let t = gen_expr(g, e.kids[0])
+  let name = e.kids[1].text
+  let a = e.kids[2].kids
+  if not is_list(t) { nope(e, "the method \(name) on \(t)") }
+  if name == "append" and len(a) == 1 {
+    push(g)
+    let v = gen_expr(g, a[0])
+    if t != "[]" and v != item_type(e, t) { nope(e, "appending a \(v) to a \(t)") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_list_push")
     return "void"
   }
-  if t != "int" { nope(e, "printing a " + t) }
-  emit(g, "mov x1, x0")
-  emit(g, "bl pk_print_int")
-  return "void"
+  if name == "pop" and len(a) == 0 {
+    emit(g, "bl pk_rt_list_pop")
+    return item_type(e, t)
+  }
+  nope(e, "the list method " + name)
+  return ""
+}
+
+# A string with \( ) in it: each part made a string and joined on, left to right.
+fn interp(g: G, e: N) -> str {
+  let parts = e.kids[0].kids
+  gen_expr(g, parts[0])
+  for i in 1..len(parts) {
+    push(g)
+    to_str(g, parts[i], gen_expr(g, parts[i]))
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_concat")
+  }
+  return "str"
+}
+
+# The built-ins: len and str for programs, and the ones rt.pk is written with (plank.py does not have those).
+fn builtin(g: G, e: N, name: str, a: [N]) -> str {
+  if name == "len" and len(a) == 1 {
+    let t = gen_expr(g, a[0])
+    if t == "str" {
+      emit(g, "ldur x0, [x0, #-8]")
+    } else if is_list(t) {
+      emit(g, "ldr x0, [x0]")
+    } else {
+      nope(e, "len of a " + t)
+    }
+    return "int"
+  }
+  if name == "str" and len(a) == 1 {
+    to_str(g, e, gen_expr(g, a[0]))
+    return "str"
+  }
+  if not (name in g.rt) { nope(e, "calling \(name)") }
+  if name == "global" {
+    if len(a) != 1 or a[0].kind != "Num" { nope(e, "global() of anything but a number") }
+    emit(g, "adrp x0, pk_globals")
+    emit(g, "add x0, x0, :lo12:pk_globals")
+    emit(g, "add x0, x0, #" + str(int(a[0].kids[0].text) * 8))
+    return "int"
+  }
+  for x in a {
+    gen_expr(g, x)
+    push(g)
+  }
+  var i = len(a) - 1
+  while i >= 0 {
+    pop(g, "x" + str(i))
+    i -= 1
+  }
+  if name == "syscall" {
+    emit(g, "mov x8, x0")
+    emit(g, "mov x0, x1")
+    emit(g, "mov x1, x2")
+    emit(g, "mov x2, x3")
+    emit(g, "svc #0")
+    return "int"
+  }
+  if name == "peek" { emit(g, "ldr x0, [x0]") }
+  if name == "peek8" { emit(g, "ldrb w0, [x0]") }
+  if name == "poke" { emit(g, "str x1, [x0]") }
+  if name == "poke8" { emit(g, "strb w1, [x0]") }
+  if name == "as_str" { return "str" }
+  return "int"
+}
+
+# x0 (or r) gets the address of a string literal's bytes.
+fn lit(g: G, r: str, s: str) {
+  let l = str_label(g, s)
+  emit(g, "adrp \(r), " + l)
+  emit(g, "add \(r), \(r), :lo12:" + l)
 }
 
 # The label of a string literal, added to .rodata the first time it is used.
@@ -203,8 +380,32 @@ fn gen_block(g: G, b: N) {
 fn gen_stmt(g: G, s: N) {
   if s.kind == "Let" {
     var t = gen_expr(g, s.kids[2])
-    if s.kids[1].kind != "_" { t = int_type(s, s.kids[1].text) }
+    if s.kids[1].kind != "_" {
+      let said = int_type(s, s.kids[1].text)
+      if t != said and not (t == "[]" and is_list(said)) { nope(s, "a \(t) where \(said) was written") }
+      t = said
+    }
+    if t == "[]" { nope(s, "an empty list with no type: write let xs: [int] = []") }
     store(g, new_local(g, s.kids[0].text, int_type(s, t)))
+  } else if s.kind == "Assign" and s.kids[0].kind == "Index" {
+    let target = s.kids[0]
+    gen_expr(g, target.kids[0])
+    push(g)
+    gen_expr(g, target.kids[1])
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_list_at")
+    push(g)
+    gen_expr(g, s.kids[1])
+    pop(g, "x1")
+    emit(g, "str x0, [x1]")
+  } else if s.kind == "Assign" and s.kids[0].kind == "Field" {
+    let target = s.kids[0]
+    let f = field(g, s, gen_expr(g, target.kids[0]), target.kids[1].text)
+    push(g)
+    gen_expr(g, s.kids[1])
+    pop(g, "x1")
+    emit(g, "str x0, [x1, #\(f.off)]")
   } else if s.kind == "Assign" {
     if s.kids[0].kind != "Name" { nope(s, "assigning to " + s.kids[0].kind) }
     gen_expr(g, s.kids[1])
@@ -265,6 +466,48 @@ fn gen_stmt(g: G, s: N) {
     emit(g, "b " + top)
     place(g, done)
     while len(g.locals) > mark { g.locals.pop() }
+  } else if s.kind == "ForIn" {
+    # for x in xs, or for i, x in xs: the list and a count in hidden locals.
+    let mark = len(g.locals)
+    let t = gen_expr(g, s.kids[1])
+    let item = item_type(s, t)
+    let xs = new_local(g, " xs", t)
+    store(g, xs)
+    var idx = new_local(g, " i", "int")
+    var name = s.kids[0].text
+    if s.kids[3].kind != "_" {
+      idx = new_local(g, s.kids[0].text, "int")
+      name = s.kids[3].text
+    }
+    emit(g, "mov x0, #0")
+    store(g, idx)
+    let x = new_local(g, name, item)
+    let top = fresh(g)
+    let step = fresh(g)
+    let done = fresh(g)
+    place(g, top)
+    load(g, xs)
+    emit(g, "ldr x1, [x0]")
+    load(g, idx)
+    emit(g, "cmp x0, x1")
+    emit(g, "b.ge " + done)
+    load(g, xs)
+    emit(g, "ldr x1, [x0, #16]")
+    load(g, idx)
+    emit(g, "ldr x0, [x1, x0, lsl #3]")
+    store(g, x)
+    g.loops.append(done)
+    g.loops.append(step)
+    gen_block(g, s.kids[2])
+    g.loops.pop()
+    g.loops.pop()
+    place(g, step)
+    load(g, idx)
+    emit(g, "add x0, x0, #1")
+    store(g, idx)
+    emit(g, "b " + top)
+    place(g, done)
+    while len(g.locals) > mark { g.locals.pop() }
   } else if s.kind == "Break" or s.kind == "Continue" {
     if len(g.loops) == 0 { throw "\(s.line): \(s.kind) outside a loop" }
     if s.kind == "Break" { emit(g, "b " + g.loops[-2]) } else { emit(g, "b " + g.loops[-1]) }
@@ -278,6 +521,7 @@ fn count_locals(n: N) -> int {
   var c = 0
   if n.kind == "Let" { c = 1 }
   if n.kind == "For" { c = 2 }
+  if n.kind == "ForIn" { c = 4 }
   for k in n.kids { c += count_locals(k) }
   return c
 }
@@ -311,8 +555,78 @@ fn function(g: G, f: N) {
   emit(g, ".ltorg")
 }
 
-fn asm(prog: N) -> str {
-  let g = G([], 0, [], [], [:], [], 0, "")
+# ---------------------------------------------------------------- structs
+# A struct is the address of its fields, 8 bytes each, in the order written.
+fn field(g: G, e: N, t: str, name: str) -> Local {
+  if not (t in g.structs) { nope(e, "a field of a " + t) }
+  let fields = g.structs[t].kids[1].kids
+  for i in 0..len(fields) {
+    if fields[i].kids[0].text == name { return Local(name, i * 8, int_type(e, fields[i].kids[1].text)) }
+  }
+  throw "\(e.line): \(t) has no field \(name)"
+}
+
+# Name(a, b) or Name(b: 2, a: 1): each field from its argument, by place or by label, else from its default.
+fn construct(g: G, e: N, st: N) -> str {
+  let fields = st.kids[1].kids
+  let defaults = st.kids[2].kids
+  let a = e.kids[1].kids
+  let labels = e.kids[2].kids
+  if len(a) > len(fields) { nope(e, "more arguments than \(st.kids[0].text) has fields") }
+  emit(g, "mov x0, #" + str(len(fields) * 8 + 8))
+  emit(g, "bl pk_rt_alloc")
+  push(g)
+  for i in 0..len(fields) {
+    let fname = fields[i].kids[0].text
+    var v = none()
+    for j in 0..len(a) {
+      if (labels[j].kind == "_" and j == i) or (labels[j].kind == "S" and labels[j].text == fname) { v = a[j] }
+    }
+    if v.kind == "_" {
+      var k = 0
+      while k < len(defaults) {
+        if defaults[k].text == fname { v = defaults[k + 1] }
+        k += 2
+      }
+    }
+    if v.kind == "_" { throw "\(e.line): \(st.kids[0].text) needs \(fname)" }
+    let t = gen_expr(g, v)
+    let want = int_type(e, fields[i].kids[1].text)
+    if t != want and not (t == "[]" and is_list(want)) { nope(e, "a \(t) for \(fname), a \(want)") }
+    emit(g, "ldr x1, [sp]")
+    emit(g, "str x0, [x1, #" + str(i * 8) + "]")
+  }
+  pop(g, "x0")
+  return st.kids[0].text
+}
+
+# rt_layout(name), written as a tree like any parsed function: each struct's "field:type;field:type", for rt_show.
+fn layout_fn(g: G) -> N {
+  let body: [N] = []
+  for name in g.structs {
+    let parts: [str] = []
+    for f in g.structs[name].kids[1].kids { parts.append(f.kids[0].text + ":" + f.kids[1].text) }
+    let test = node("Binary", 0, [sv("=="), node("Name", 0, [sv("name")]), node("Str", 0, [sv(name)])])
+    body.append(node("If", 0, [test, lv([node("Return", 0, [node("Str", 0, [sv(parts.join(";"))])])]), lv([])]))
+  }
+  body.append(node("Return", 0, [node("Str", 0, [sv("")])]))
+  return node("Fn", 0, [sv("rt_layout"), lv([tv([sv("name"), sv("str")])]), sv("str"), lv(body), N("D", 0, "", []), lv([]), bv(false), bv(false), sv("")])
+}
+
+fn asm(prog: N, runtime: N) -> str {
+  let g = G([], 0, [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1], [], 0, "")
+  for f in runtime.kids { prog.kids.append(f) }
+  let fns: [N] = []
+  for f in prog.kids {
+    if f.kind == "Struct" {
+      if len(f.kids[3].kids) > 0 or len(f.kids[4].kids) > 0 { nope(f, "struct methods and type parameters") }
+      g.structs[f.kids[0].text] = f
+    } else {
+      fns.append(f)
+    }
+  }
+  fns.append(layout_fn(g))
+  prog.kids = fns
   for f in prog.kids {
     if f.kind != "Fn" { nope(f, "a top-level " + f.kind) }
     if f.kids[6].text == "true" or f.kids[7].text == "true" { nope(f, "extern and tool fns") }
@@ -334,23 +648,19 @@ fn asm(prog: N) -> str {
   emit(g, "mov x0, #0")
   emit(g, "ldp x29, x30, [sp], #16")
   emit(g, "ret")
-  # print of an int: printf("%lld\n") without varargs in plankc's own calls, so printf's ABI is C's alone.
   g.out.append("")
-  place(g, "pk_print_int")
-  emit(g, "stp x29, x30, [sp, #-16]!")
-  emit(g, "mov x29, sp")
-  emit(g, "adrp x0, .Lfmt")
-  emit(g, "add x0, x0, :lo12:.Lfmt")
-  emit(g, "bl printf")
-  emit(g, "ldp x29, x30, [sp], #16")
-  emit(g, "ret")
-  g.out.append("")
+  g.out.append("  .data")   # rt.pk's cells (global(i)); .data like libjt's JT_DATA
+  g.out.append("  .p2align 4")
+  place(g, "pk_globals")
+  emit(g, ".zero 128")
   g.out.append("  .section .rodata")
-  g.out.append(".Lfmt:")
-  emit(g, ".asciz \"%lld\\n\"")
-  for i in 0..len(g.strs) {
+  for i in 0..len(g.strs) {   # each literal: its byte length, worked out by the assembler, then its bytes and a zero
+    emit(g, ".p2align 3")
+    emit(g, ".quad .Le" + str(i) + " - .Ls" + str(i))
     g.out.append(".Ls" + str(i) + ":")
-    emit(g, ".asciz " + quote(g.strs[i]))
+    emit(g, ".ascii " + quote(g.strs[i]))
+    g.out.append(".Le" + str(i) + ":")
+    emit(g, ".byte 0")
   }
   return g.out.join("\n") + "\n"
 }
