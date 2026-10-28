@@ -121,6 +121,10 @@ fn int_type(n: N, ty: str) -> str {
     int_type(n, ty[..len(ty) - 1])
     return ty
   }
+  if ty.starts_with("Result<") and ty.ends_with(">") {   # 6.80.0: ok(value: T) or err(message: str), an enum per T (result_enum)
+    int_type(n, ty[7..len(ty) - 1])
+    return ty
+  }
   let kv = dict_parts(ty)
   if len(kv) == 2 {   # a dict: string or int keys (6.79.0), any value
     if kv[0] != "str" and kv[0] != "int" { nope(n, "a dict with \(kv[0]) keys") }
@@ -210,6 +214,19 @@ fn gen_expr(g: G, e: N) -> str {
     return "str"
   }
   if e.kind == "Interp" { return interp(g, e) }
+  if e.kind == "ResultTry" {   # 6.80.0: r? is r's value, or, when r is an err, returns r from here
+    let t = gen_expr(g, e.kids[0])
+    if not t.starts_with("Result<") { nope(e, "? on a " + t) }
+    if not g.ret_type.starts_with("Result<") { nope(e, "? in a function that does not give a Result") }
+    let okl = fresh(g)
+    emit(g, "ldr x1, [x0]")
+    emit(g, "cbz x1, " + okl)
+    leave_tries(g, 0)
+    emit(g, "b " + g.ret)
+    place(g, okl)
+    emit(g, "ldr x0, [x0, #8]")
+    return t[7..len(t) - 1]
+  }
   if e.kind == "Tuple" {   # the address of its parts, 8 bytes each (6.74.0)
     let items = e.kids[0].kids
     emit(g, "mov x0, #" + str(len(items) * 8 + 8))
@@ -477,6 +494,7 @@ fn gen_expr(g: G, e: N) -> str {
     let a = e.kids[1].kids
     if has_local(g, name) { return call_value(g, e, node("Name", e.line, [sv(name)]), a) }   # next(): a closure in a local
     if name in g.structs { return construct(g, e, g.structs[name]) }
+    if name == "attempt" and len(a) == 1 and not (name in g.fns) { return attempt_call(g, e, a[0]) }
     if name == "plankc_buf" and len(a) == 1 {   # enc.pk's stand-ins, swapped for the runtime's bytes (enc.pk says why)
       gen_expr(g, a[0])
       emit(g, "bl pk_rt_zstr")
@@ -645,11 +663,16 @@ fn str_method(g: G, e: N, name: str, a: [N]) -> str {
 
 # xs.append(v) and xs.pop(), so far.
 fn method(g: G, e: N) -> str {
+  let recv = e.kids[0]
+  if recv.kind == "Name" and (recv.kids[0].text == "Result" or recv.kids[0].text.starts_with("Result<")) and not has_local(g, recv.kids[0].text) {
+    return construct_result(g, e)
+  }
   if enum_name(g, e.kids[0]) != "" { return construct_case(g, e, enum_name(g, e.kids[0]), e.kids[1].text, e.kids[2].kids, e.kids[3].kids) }
   let t = gen_expr(g, e.kids[0])
   let name = e.kids[1].text
   let a = e.kids[2].kids
   if t == "str" { return str_method(g, e, name, a) }
+  if t.starts_with("Result<") { return result_method(g, e, t, name, a) }
   if (t + "." + name) in g.fn_nodes {   # a struct's method: the value goes in first, as self
     push(g)
     return call_fn(g, e, t + "." + name, a, e.kids[3].kids, true)
@@ -1442,21 +1465,9 @@ fn gen_stmt(g: G, s: N) {
     store(g, x)
     while len(g.locals) > mark { g.locals.pop() }
   } else if s.kind == "Try" {
-    let rec = [new_local(g, " try3", "int"), new_local(g, " try2", "int"), new_local(g, " try1", "int"), new_local(g, " try0", "int")]
-    let base = rec[3].off   # the record runs up from x29 - base: prev, x29, sp, catch
     let landing = fresh(g)
     let done = fresh(g)
-    emit(g, "adrp x1, pk_globals")
-    emit(g, "add x1, x1, :lo12:pk_globals")
-    emit(g, "ldr x2, [x1, #16]")
-    emit(g, "sub x3, x29, #\(base)")
-    emit(g, "str x2, [x3]")
-    emit(g, "str x29, [x3, #8]")
-    emit(g, "mov x2, sp")
-    emit(g, "str x2, [x3, #16]")
-    emit(g, "adr x2, " + landing)
-    emit(g, "str x2, [x3, #24]")
-    emit(g, "str x3, [x1, #16]")
+    let base = open_try(g, landing)
     g.tries.append(base)
     gen_block(g, s.kids[0])
     g.tries.pop()
@@ -1476,7 +1487,7 @@ fn gen_stmt(g: G, s: N) {
     emit(g, "add x1, x1, :lo12:pk_globals")
     emit(g, "ldr x1, [x1, #16]")
     emit(g, "cbnz x1, " + caught)
-    emit(g, "ldr x1, =\(s.line)")
+    if g.bytes { emit(g, "mov x1, #0") } else { emit(g, "ldr x1, =\(s.line)") }   # rt.pk's own: just the message (6.80.0)
     emit(g, "bl pk_rt_uncaught")
     place(g, caught)
     emit(g, "ldr x29, [x1, #8]")
@@ -1502,6 +1513,7 @@ fn count_locals(n: N) -> int {
   if n.kind == "ForIn" { c = 4 }
   if n.kind == "IfLet" or n.kind == "WhileLet" { c = 1 }
   if n.kind == "Try" { c = 5 }
+  if n.kind == "Call" and n.kids[0].text == "attempt" { c = 5 }   # its try's record and its result (6.80.0)
   if n.kind == "Match" { c = 1 + 8 * len(n.kids[1].kids) }   # the subject and each arm's bindings, generously
   for k in n.kids { c += count_locals(k) }
   return c
@@ -1839,6 +1851,7 @@ fn gen_match(g: G, m: N, value: bool) -> str {
     var case_i = -1
     for p in arm.kids[0].kids {
       if p.kind == "T" {
+        if t.starts_with("Result<") { result_enum(g, t) }
         if not (t in g.enums) { nope(m, "a case pattern on a \(t)") }
         case_i = case_of(g, m, t, p.kids[0].text)
         binds = p.kids[1].kids
@@ -1944,6 +1957,111 @@ fn pop_try(g: G, base: int) {
   emit(g, "adrp x1, pk_globals")
   emit(g, "add x1, x1, :lo12:pk_globals")
   emit(g, "str x2, [x1, #16]")
+}
+
+# A try's record in four new locals, made the innermost: a throw lands at landing. Gives where the record starts.
+fn open_try(g: G, landing: str) -> int {
+  let rec = [new_local(g, " try3", "int"), new_local(g, " try2", "int"), new_local(g, " try1", "int"), new_local(g, " try0", "int")]
+  let base = rec[3].off   # the record runs up from x29 - base: prev, x29, sp, catch
+  emit(g, "adrp x1, pk_globals")
+  emit(g, "add x1, x1, :lo12:pk_globals")
+  emit(g, "ldr x2, [x1, #16]")
+  emit(g, "sub x3, x29, #\(base)")
+  emit(g, "str x2, [x3]")
+  emit(g, "str x29, [x3, #8]")
+  emit(g, "mov x2, sp")
+  emit(g, "str x2, [x3, #16]")
+  emit(g, "adr x2, " + landing)
+  emit(g, "str x2, [x3, #24]")
+  emit(g, "str x3, [x1, #16]")
+  return base
+}
+
+# ---------------------------------------------------------------- Result<T> (6.80.0)
+# An enum gen.pk writes for each T the first time it meets Result<T>: ok(value: T) or err(message: str), so match, print
+# and == treat it as any enum. rt_layout is written after every function, so each one met has its layout.
+fn result_enum(g: G, ty: str) -> str {
+  if not (ty in g.enums) {
+    let ok = node("Case", 0, [sv("ok"), lv([tv([sv("value"), sv(ty[7..len(ty) - 1])])])])
+    let err = node("Case", 0, [sv("err"), lv([tv([sv("message"), sv("str")])])])
+    g.enums[ty] = node("Enum", 0, [sv(ty), lv([ok, err]), lv([]), lv([])])
+  }
+  return ty
+}
+
+# Result.ok(v) takes v's type; Result.err(m) the function's, unless written Result<T>.err(m).
+fn construct_result(g: G, e: N) -> str {
+  var ty = e.kids[0].kids[0].text
+  let name = e.kids[1].text
+  let a = e.kids[2].kids
+  if ty == "Result" {
+    if name == "ok" and len(a) == 1 {
+      ty = "Result<" + type_of(g, a[0]) + ">"
+    } else if g.ret_type.starts_with("Result<") {
+      ty = g.ret_type
+    } else {
+      nope(e, "Result.\(name) with no type to take: write Result<T>.\(name)")
+    }
+  }
+  int_type(e, ty)
+  return construct_case(g, e, result_enum(g, ty), name, a, e.kids[3].kids)
+}
+
+fn result_method(g: G, e: N, t: str, name: str, a: [N]) -> str {
+  let vt = t[7..len(t) - 1]
+  if name == "is_ok" and len(a) == 0 {
+    emit(g, "ldr x0, [x0]")
+    emit(g, "cmp x0, #0")
+    emit(g, "cset x0, eq")
+    return "bool"
+  }
+  if name == "value" and len(a) == 0 {   # an err's message is thrown
+    emit(g, "bl pk_rt_result_value")
+    return vt
+  }
+  if name == "error" and len(a) == 0 {
+    emit(g, "bl pk_rt_result_error")
+    return "str?"
+  }
+  if name == "or_else" and len(a) == 1 {
+    push(g)
+    let d = gen_expr(g, a[0])
+    if not fits(d, vt) { nope(e, "or_else with a \(d) on a \(t)") }
+    coerce(g, d, vt)
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_result_or")
+    return vt
+  }
+  nope(e, "the Result method " + name)
+  return ""
+}
+
+# attempt(f) calls f inside a try: ok with what f gives, or err with what it threw, a runtime error's message included.
+fn attempt_call(g: G, e: N, f: N) -> str {
+  let res = new_local(g, " attempt", "int")
+  let landing = fresh(g)
+  let done = fresh(g)
+  let base = open_try(g, landing)
+  g.tries.append(base)
+  let t = call_value(g, e, f, [])
+  g.tries.pop()
+  if t == "void" { nope(e, "attempt of a function that gives nothing") }
+  pop_try(g, base)
+  emit(g, "mov x1, x0")
+  emit(g, "mov x0, #0")
+  emit(g, "bl pk_rt_result_new")
+  store(g, res)
+  emit(g, "b " + done)
+  place(g, landing)   # x29 and sp back, the message in x0
+  pop_try(g, base)
+  emit(g, "mov x1, x0")
+  emit(g, "mov x0, #1")
+  emit(g, "bl pk_rt_result_new")
+  store(g, res)
+  place(g, done)
+  load(g, res)
+  return result_enum(g, "Result<" + t + ">")
 }
 
 # Leaving through return, break or continue: every try opened since the keep-th is closed on the way out.
@@ -2063,7 +2181,10 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   }
   if not ("main" in g.fns) { throw "no fn main" }
   g.out.append("  .text")
-  for f in prog.kids { function(g, f) }
+  for f in prog.kids {
+    if f.kids[0].text != "rt_layout" { function(g, f) }
+  }
+  function(g, layout_fn(g))   # last, so each Result<T> the functions met has its layout (6.80.0)
   for l in g.lambda_code { g.out.append(l) }   # the lambdas and trampolines the functions made
   # The trees are done with. Letting go of them here lets the collector merge their room into the one block the join at
   # the end needs (half a megabyte for plankc's own source).
