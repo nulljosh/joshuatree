@@ -42,15 +42,38 @@ static double p10(int e) {   /* 10^e, exact up to 22 */
     while (e > 22) { r *= 1e22; e -= 22; }
     return r * P10[e];
 }
+/* v * 10^k rounded to the nearest integer, a tie to even, decided on the exact value (6.76.1). 10^|k| up to 10^22 is
+   exact, so fma gives the product's rounding error exactly (or the quotient's remainder), and only its sign matters:
+   the true value is hi plus less than half of hi's last bit. Scaling and adding a half, as this did, rounds
+   1.41421356237309492 * 10^14 up to ...309.5 first and prints ...731 where printf prints ...7309.
+   ponytail: past 10^22, or a result past 2^53, it still scales; exact digits there need a bignum. */
+static double fmadd(double a, double b, double c) {   /* a * b + c, rounded once; the builtin becomes a call to fma */
+    double r; __asm__("fmadd %d0, %d1, %d2, %d3" : "=w"(r) : "w"(a), "w"(b), "w"(c)); return r;
+}
+static unsigned long long scaled(double v, int k) {
+    if (k >= -22 && k <= 22) {
+        double p = P10[k < 0 ? -k : k], hi, lo;
+        if (k >= 0) { hi = v * p; lo = fmadd(v, p, -hi); } else { hi = v / p; lo = fmadd(-hi, p, v); }
+        if (hi < 9007199254740992.0) {
+            double w = __builtin_floor(hi), f = hi - w; unsigned long long n = (unsigned long long)w;
+            if (f > 0.5 || (f == 0.5 && (lo > 0 || (lo == 0 && (n & 1))))) n++;
+            return n;
+        }
+    }
+    return (unsigned long long)(v * p10(k) + 0.5);
+}
 /* v > 0, finite: its first `sig` significant digits (rounded) into d, and the power of ten of the first one. */
 static int digits(double v, int sig, char *d) {
-    int e = 0;
+    int e = 0; double x = v;
     while (v >= 1e16) { v /= 1e16; e += 16; }
     while (v < 1) { v *= 1e16; e -= 16; }
-    while (v >= 10) { v /= 10; e++; }
-    double m = e >= 0 ? v : v;   /* m in [1, 10) */
-    unsigned long long n = (unsigned long long)(m * p10(sig - 1) + 0.5), top = (unsigned long long)p10(sig);
-    if (n >= top) { n /= 10; e++; }
+    while (v >= 10) { v /= 10; e++; }   /* a guess at the power, corrected below when the digits overflow or fall short */
+    unsigned long long n = 0, top = (unsigned long long)p10(sig); int e0 = e;
+    for (int tries = 0; tries < 3; tries++) {
+        n = scaled(x, sig - 1 - e);
+        if (n >= top) e++; else if (n < top / 10) e--; else break;
+    }
+    if (n >= top || n < top / 10) { e = e0; n = (unsigned long long)(v * p10(sig - 1) + 0.5); if (n >= top) { n /= 10; e++; } }
     for (int i = sig - 1; i >= 0; i--) { d[i] = (char)('0' + n % 10); n /= 10; }
     return e;
 }
@@ -65,7 +88,7 @@ static void fmt_double(struct out *o, double v, char conv, int prec, int width, 
         if (prec > 17) prec = 17;
         if (v >= 1e18) { conv = 'e'; goto exp_form; }
         double sc = v * p10(prec) + 0.5;
-        unsigned long long n = sc >= 1.8e19 ? 0 : (unsigned long long)sc, ip = n, fp = 0, f10 = (unsigned long long)p10(prec);
+        unsigned long long n = sc >= 1.8e19 ? 0 : scaled(v, prec), ip = n, fp = 0, f10 = (unsigned long long)p10(prec);
         if (prec) { ip = n / f10; fp = n % f10; }
         char t[24]; int tn = 0; do { t[tn++] = (char)('0' + ip % 10); ip /= 10; } while (ip);
         while (tn) s[k++] = t[--tn];

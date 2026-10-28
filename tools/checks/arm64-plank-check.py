@@ -31,7 +31,7 @@ arch = root / "arch/arm64"
 plank = Path(os.environ.get("PLANK", Path.home() / "Documents/Code/plank/plank.py"))
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64", "mmd", "mcopy", "uv")) or not plank.exists():
     print("SKIP: clang, ld.lld, qemu-system-aarch64, mtools, uv or Plank (%s) missing" % plank); sys.exit(0)
-EXAMPLES = ["hello", "fib", "fizzbuzz", "loops", "lists", "dicts", "structs", "enums", "closures", "optionals", "errors", "equality"]
+EXAMPLES = ["hello", "fib", "fizzbuzz", "loops", "lists", "dicts", "structs", "enums", "closures", "optionals", "errors", "equality", "sqrt"]
 tmp = Path(scratch_dir("arm64-plank"))
 for p in tmp.iterdir(): p.unlink() if p.is_file() else shutil.rmtree(p)
 
