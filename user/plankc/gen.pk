@@ -28,7 +28,7 @@ struct G {
   ret: str         # the epilogue label of the function being written
 }
 
-fn emit(g: G, s: str) { g.out.append("  " + s) }
+fn emit(g: G, s: str) { g.out.append(s) }   # unindented: an indent would copy every line, and the assembler needs none
 fn place(g: G, l: str) { g.out.append(l + ":") }
 fn fresh(g: G) -> str {
   g.label += 1
@@ -520,6 +520,24 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
     if t == "str" { emit(g, "bl pk_rt_parse_int") } else if t != "int" { nope(e, "int() of a " + t) }
     return "int"
   }
+  if name == "args" and len(a) == 0 {
+    emit(g, "bl pk_rt_args")
+    return "[str]"
+  }
+  if name == "read_file" and len(a) == 1 {
+    if gen_expr(g, a[0]) != "str" { nope(e, "read_file of anything but a path") }
+    emit(g, "bl pk_rt_read_file")
+    return "str?"
+  }
+  if name == "write_file" and len(a) == 2 {
+    gen_expr(g, a[0])
+    push(g)
+    if gen_expr(g, a[1]) != "str" { nope(e, "write_file of anything but a string") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_write_file")
+    return "bool"
+  }
   if name == "exit" and len(a) == 1 {
     gen_expr(g, a[0])
     emit(g, "mov x1, x0")
@@ -574,7 +592,6 @@ fn str_label(g: G, s: str) -> str {
   for i in 0..len(g.strs) {
     if g.strs[i] == s { return ".Ls" + str(i) }
   }
-  if nul() in s { throw "a zero byte in a string not supported yet" }
   g.strs.append(s)
   return ".Ls" + str(len(g.strs) - 1)
 }

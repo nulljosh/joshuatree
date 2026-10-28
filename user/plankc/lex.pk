@@ -2,14 +2,17 @@
 # lex(src) gives one Tok a token: its line, its kind and its value (a string's raw body, between the quotes).
 # `plankc lex FILE` prints them the way plank.py's lex() sees them (tools/checks/plankc-check.py holds the two side by side).
 
+# Plain comparisons, not a dict literal: a literal here would build a fresh dict for every name the file holds.
 fn is_keyword(w: str) -> bool {
-  return w in ["fn": 1, "extern": 1, "import": 1, "try": 1, "catch": 1, "throw": 1, "struct": 1, "enum": 1, "match": 1,
-    "nil": 1, "let": 1, "var": 1, "if": 1, "else": 1, "while": 1, "for": 1, "in": 1, "return": 1, "break": 1,
-    "continue": 1, "true": 1, "false": 1, "and": 1, "or": 1, "not": 1]
+  return (w == "fn" or w == "extern" or w == "import" or w == "try" or w == "catch" or w == "throw" or w == "struct" or
+    w == "enum" or w == "match" or w == "nil" or w == "let" or w == "var" or w == "if" or w == "else" or w == "while" or
+    w == "for" or w == "in" or w == "return" or w == "break" or w == "continue" or w == "true" or w == "false" or
+    w == "and" or w == "or" or w == "not")
 }
 
 fn is_two(op: str) -> bool {
-  return op in ["+=": 1, "-=": 1, "*=": 1, "/=": 1, "%=": 1, "->": 1, "=>": 1, "..": 1, "==": 1, "!=": 1, "<=": 1, ">=": 1, "??": 1, "?.": 1]
+  return (op == "+=" or op == "-=" or op == "*=" or op == "/=" or op == "%=" or op == "->" or op == "=>" or op == ".." or
+    op == "==" or op == "!=" or op == "<=" or op == ">=" or op == "??" or op == "?.")
 }
 
 fn is_digit(c: str) -> bool { return c in "0123456789" }

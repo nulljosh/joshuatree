@@ -1,0 +1,12 @@
+# The kernel calls plankc's apps use (6.69.0), with good input and bad: userrun's words (JT_SYS_ARGS) and whole-file writes
+# (JT_SYS_WRITEFILE). A bad buffer, a bad path or a length past the cap comes back negative, and the kernel carries on.
+# plankc only (syscall, addr and rt_alloc are its own), so syscalls.out beside it is the answer key; run as
+# `userrun pcsys one two`.
+fn main() {
+  print(args())
+  print(syscall(404, rt_alloc(16), 2, 0))
+  print(syscall(404, 0, 64, 0) < 0, syscall(404, 4096, 64, 0) < 0)
+  print(syscall(405, addr("PC/X.TXT"), addr("hi"), 999999999) < 0)
+  print(syscall(405, addr("PC/X.TXT"), 16, 64) < 0, syscall(405, 0, addr("hi"), 2) < 0)
+  print(write_file("PC/T.TXT", "hello, card"), read_file("PC/T.TXT") ?? "nothing", read_file("PC/NONE.TXT") ?? "nothing")
+}

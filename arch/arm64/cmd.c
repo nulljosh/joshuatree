@@ -24,6 +24,7 @@ void ask_claude(const char *q, unsigned n);                        /* ask.c: `ll
 void sam_command(const char *q, unsigned n);                       /* ask.c: `sam QUESTION`, queued and answered without blocking the prompt */
 int ask_busy(void);                                                /* ask.c: a `sam` request is waiting on the relay */
 int userrun(const char *name, unsigned n, int allow_unsigned, unsigned long *status, int *faulted);
+void ufile_args_next(const char *s, unsigned n);   /* ufile.c, 6.69.0: the words after userrun NAME */
 void store_install(const char *name, unsigned n);   /* store.c, 6.55.0 */   /* main.c: load an app from the table and run it at EL0 */
 
 int audio_tone(int freq_hz, int ms);                               /* audio.c: the 3.5 mm jack, polled PWM */
@@ -42,7 +43,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME, install NAME (an app from the store), "
+                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), install NAME (an app from the store), "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
                            "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
@@ -611,7 +612,14 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (n > 8 && q[0] == 'u' && q[1] == 's' && q[2] == 'e' && q[3] == 'r' && q[4] == 'r' && q[5] == 'u' && q[6] == 'n' && q[7] == ' ') {
         const char *name = q + 8; unsigned m = n - 8;
         while (m && name[0] == ' ') { name++; m--; }
-        if (m) { userrun_command(name, m); return; }
+        unsigned nm = 0;   /* 6.69.0: userrun NAME WORDS, the words for the app (JT_SYS_ARGS) */
+        while (nm < m && name[nm] != ' ') nm++;
+        unsigned at = nm;
+        while (at < m && name[at] == ' ') at++;
+        ufile_args_next(name + at, m - at);
+        if (nm) userrun_command(name, nm);
+        ufile_args_next("", 0);   /* taken by app_start, or never: a refused run leaves nothing for the next app */
+        if (nm) return;
     }
     if (n > 8 && is(q, n, "install")) {   /* 6.55.0: an app from the store into JT/APPS, signed or not at all (store.c) */
         const char *name = q + 8; unsigned m = n - 8;

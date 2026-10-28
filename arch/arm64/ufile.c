@@ -17,6 +17,7 @@
 #include "emmc.h"
 #include "accounts.h"
 #include "home.h"
+#include "kmain.h"   /* APP_SLOTS, for JT_SYS_ARGS */
 #include "../../drivers/fat.h"
 
 int user_in_range(unsigned long a, unsigned long n);   /* main.c: memory the app may have the kernel read */
@@ -267,6 +268,48 @@ static long u_readat(unsigned long upath, unsigned long uargs) {
     return n < 0 ? -ENOENT : n;
 }
 
+/* JT_SYS_WRITEFILE (405, 6.69.0): a whole file from one user buffer, READFILE's twin, for output past what one open holds
+   (plankc's assembly). The path rules are open's with O_CREAT, the bytes land in one fat_replace_file, so a cut leaves the
+   old file or the new one. */
+static long u_writefile(unsigned long upath, unsigned long buf, unsigned long len) {
+    if (len > READFILE_CAP_MAX) return -EFBIG;
+    if (len && !user_in_range(buf, len)) return -EFAULT;
+    char walk[PATH_MAX + 1], *leaf;
+    long err = copy_path(upath, walk);
+    if (err) return err;
+    char hb[HOME_DIR_MAX + 1];
+    if ((err = path_enter(walk, 1, &leaf, 1, cur_home(hb)))) return err;
+    int ok = fat_replace_file(leaf, (const void *)buf, (unsigned)len);
+    path_leave();
+    return ok ? (long)len : -ENOSPC;
+}
+
+/* JT_SYS_ARGS (404, 6.69.0): the words after `userrun NAME`, for the app that slot runs. cmd.c hands them over before the
+   start, app_start gives them to the slot it picks, so an app opened any other way (Spotlight, the dock) has none. */
+#define ARGS_MAX 255
+static char args_next[ARGS_MAX + 1];
+static unsigned args_next_n;
+static char args_of[APP_SLOTS + 1][ARGS_MAX + 1];
+static unsigned args_n[APP_SLOTS + 1];
+void ufile_args_next(const char *s, unsigned n) {
+    if (n > ARGS_MAX) n = ARGS_MAX;
+    for (unsigned i = 0; i < n; i++) args_next[i] = s[i];
+    args_next_n = n;
+}
+void ufile_args_start(unsigned slot) {
+    for (unsigned i = 0; i < args_next_n; i++) args_of[slot + 1][i] = args_next[i];
+    args_n[slot + 1] = args_next_n;
+    args_next_n = 0;
+}
+static long u_args(unsigned long buf, unsigned long cap) {
+    if (ufile_owner > APP_SLOTS) return -EINVAL;
+    unsigned n = args_n[ufile_owner];
+    if (cap < n) n = (unsigned)cap;
+    if (n && !user_writable(buf, n)) return -EFAULT;
+    for (unsigned i = 0; i < n; i++) ((char *)buf)[i] = args_of[ufile_owner][i];
+    return n;
+}
+
 /* main.c's exc_el0_sync: the file calls, by user/jtsys.h's numbers; -ENOSYS for anything else. */
 long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned long a2) {
     switch (n) {
@@ -280,6 +323,8 @@ long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned
     case 390: return u_unlink(a0);
     case 401: return u_readfile(a0, a1, a2);
     case 403: return u_readat(a0, a1);
+    case 404: return u_args(a0, a1);
+    case 405: return u_writefile(a0, a1, a2);
     }
     return -ENOSYS;
 }

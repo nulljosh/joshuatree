@@ -38,6 +38,21 @@ fn rt_str(n: int) -> int {
   return p + 8
 }
 
+# The one-byte string for byte c. global(3) holds the table of 256.
+fn rt_byte_str(c: int) -> str {
+  var table = peek(global(3))
+  if table == 0 {
+    table = rt_alloc(256 * 8)
+    for i in 0..256 {
+      let p = rt_str(1)
+      poke8(p, i)
+      poke(table + i * 8, p)
+    }
+    poke(global(3), table)
+  }
+  return as_str(peek(table + c * 8))
+}
+
 fn rt_concat(a: str, b: str) -> str {
   let la = len(a)
   let lb = len(b)
@@ -132,8 +147,9 @@ fn rt_list_pop(l: int) -> int {
   return peek(peek(l + 16) + (n - 1) * 8)
 }
 
-# s[a..b] in bytes.
+# s[a..b] in bytes. One byte comes from a table, made once, so chars() and s[i] cost no heap per character.
 fn rt_sub(s: str, a: int, b: int) -> str {
+  if b - a == 1 { return rt_byte_str(peek8(addr(s) + a)) }
   let p = rt_str(b - a)
   rt_copy(p, addr(s) + a, b - a)
   return as_str(p)
@@ -270,13 +286,26 @@ fn rt_chars(s: str) -> int {
   return out
 }
 
+# The whole length first, then one copy: joining plankc's own assembly, a megabyte of lines, stays linear.
 fn rt_join(l: int, sep: str) -> str {
-  var out = ""
-  for i in 0..peek(l) {
-    if i > 0 { out = out + sep }
-    out = out + as_str(peek(peek(l + 16) + i * 8))
+  let n = peek(l)
+  var total = 0
+  for i in 0..n {
+    total += len(as_str(peek(peek(l + 16) + i * 8)))
   }
-  return out
+  if n > 1 { total += (n - 1) * len(sep) }
+  let p = rt_str(total)
+  var at = 0
+  for i in 0..n {
+    if i > 0 {
+      rt_copy(p + at, addr(sep), len(sep))
+      at += len(sep)
+    }
+    let part = as_str(peek(peek(l + 16) + i * 8))
+    rt_copy(p + at, addr(part), len(part))
+    at += len(part)
+  }
+  return as_str(p)
 }
 
 fn rt_split(s: str, sep: str) -> int {
@@ -391,4 +420,44 @@ fn rt_show_dict(d: int, ty: str) -> str {
 fn rt_uncaught(msg: str, line: int) {
   rt_print_str("\(line): \(msg)")
   syscall(1, 1, 0, 0)
+}
+
+# ---- files and arguments (6.69.0): JT_SYS_READFILE, JT_SYS_WRITEFILE and JT_SYS_ARGS.
+# A file is read straight into a string's place on the heap, and the room it did not use is given back.
+fn rt_read_file(path: str) -> int {
+  let cap = 262144   # ponytail: 256 KB, past plankc's biggest source eight times over; READAT in chunks for bigger
+  let p = rt_alloc(cap + 9)
+  let n = syscall(401, addr(path), p + 8, cap)
+  if n < 0 {
+    poke(global(0), p)
+    return 0
+  }
+  poke(p, n)
+  poke8(p + 8 + n, 0)
+  poke(global(0), p + (n + 9 + 15) / 16 * 16)
+  return p + 8
+}
+
+fn rt_write_file(path: str, s: str) -> bool {
+  return syscall(405, addr(path), addr(s), len(s)) >= 0
+}
+
+# The words after userrun NAME, split on spaces.
+fn rt_args() -> int {
+  let buf = rt_alloc(256)
+  var n = syscall(404, buf, 256, 0)
+  if n < 0 { n = 0 }
+  let out = rt_list_new()
+  var at = 0
+  for i in 0..n + 1 {
+    if i == n or peek8(buf + i) == 32 {
+      if i > at {
+        let w = rt_str(i - at)
+        rt_copy(w, buf + at, i - at)
+        rt_list_push(out, w)
+      }
+      at = i + 1
+    }
+  }
+  return out
 }

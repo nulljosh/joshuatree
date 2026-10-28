@@ -387,6 +387,7 @@ static long app_audio(unsigned long op, unsigned long arg, unsigned long size); 
 static int span(unsigned long a, unsigned long n, unsigned long base, unsigned long len) {   /* [a, a+n) inside [base, base+len), written so a + n can never wrap */
     return n <= len && a >= base && a - base <= len - n;
 }
+void ufile_args_start(unsigned slot);   /* ufile.c, 6.69.0: the words after userrun NAME go to this slot's app */
 long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned long a2);   /* ufile.c, M3d: open, read, write (fd 3 and up), close, lseek, readdir, readfile, mkdir, unlink */
 void ufile_release(void);                 /* ...every descriptor the app left open, closed and written back */
 extern unsigned ufile_owner;              /* 4.0: whose descriptors the file calls mean: 0 the boot self-test, else app slot + 1 */
@@ -707,6 +708,7 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
     while (sl < APP_SLOTS && apps[sl].cur) sl++;
     if (sl == APP_SLOTS) return -3;
     ap = &apps[sl];
+    ufile_args_start(sl);   /* 6.69.0: userrun's words, or none */
 #ifdef HANG_TEST
     hang_arm = sl == 0;
 #endif
