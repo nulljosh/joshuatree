@@ -156,6 +156,7 @@ fn rt_show(v: int, ty: str, inner: bool) -> str {
     return as_str(v)
   }
   if peek8(addr(ty)) != 91 { return rt_show_struct(v, ty) }   # not [: a struct
+  if rt_dict_like(ty) { return rt_show_dict(v, ty) }
   let item = rt_sub(ty, 1, len(ty) - 1)
   var out = "["
   for i in 0..peek(v) {
@@ -189,4 +190,198 @@ fn rt_show_struct(v: int, ty: str) -> str {
     i += 1
   }
   return out + ")"
+}
+
+# ---- strings, more (6.66.0). Indexes are bytes. ponytail: Plank counts characters; the same for ASCII, which is all of
+# plankc's own source; count UTF-8 sequences here when a program needs it.
+fn rt_clamp(i: int, n: int) -> int {
+  var j = i
+  if j < 0 { j += n }
+  if j < 0 { j = 0 }
+  if j > n { j = n }
+  return j
+}
+
+fn rt_str_slice(s: str, a: int, b: int) -> str {
+  let i = rt_clamp(a, len(s))
+  let j = rt_clamp(b, len(s))
+  if j <= i { return "" }
+  return rt_sub(s, i, j)
+}
+
+fn rt_char_at(s: str, i: int) -> str {
+  var j = i
+  if j < 0 { j += len(s) }
+  if j < 0 or j >= len(s) { rt_fail("index \(i) out of range for a string of \(len(s))") }
+  return rt_sub(s, j, j + 1)
+}
+
+fn rt_list_slice(l: int, a: int, b: int) -> int {
+  let i = rt_clamp(a, peek(l))
+  let j = rt_clamp(b, peek(l))
+  let out = rt_list_new()
+  for k in i..j {
+    rt_list_push(out, peek(peek(l + 16) + k * 8))
+  }
+  return out
+}
+
+# Where p first is in s, or -1.
+fn rt_find(s: str, p: str) -> int {
+  for i in 0..len(s) - len(p) + 1 {
+    var k = 0
+    while k < len(p) and peek8(addr(s) + i + k) == peek8(addr(p) + k) { k += 1 }
+    if k == len(p) { return i }
+  }
+  return -1
+}
+
+fn rt_starts(s: str, p: str) -> bool {
+  return len(p) <= len(s) and rt_str_eq(rt_sub(s, 0, len(p)), p)
+}
+
+fn rt_ends(s: str, p: str) -> bool {
+  return len(p) <= len(s) and rt_str_eq(rt_sub(s, len(s) - len(p), len(s)), p)
+}
+
+fn rt_trim(s: str) -> str {
+  var a = 0
+  var b = len(s)
+  while a < b and rt_space(peek8(addr(s) + a)) { a += 1 }
+  while b > a and rt_space(peek8(addr(s) + b - 1)) { b -= 1 }
+  return rt_sub(s, a, b)
+}
+
+fn rt_space(c: int) -> bool {
+  return c == 32 or c == 9 or c == 10 or c == 13
+}
+
+# One string a character: a UTF-8 lead byte says how many bytes follow it.
+fn rt_chars(s: str) -> int {
+  let out = rt_list_new()
+  var i = 0
+  while i < len(s) {
+    let c = peek8(addr(s) + i)
+    var n = 1
+    if c >= 240 { n = 4 } else if c >= 224 { n = 3 } else if c >= 192 { n = 2 }
+    rt_list_push(out, addr(rt_sub(s, i, i + n)))
+    i += n
+  }
+  return out
+}
+
+fn rt_join(l: int, sep: str) -> str {
+  var out = ""
+  for i in 0..peek(l) {
+    if i > 0 { out = out + sep }
+    out = out + as_str(peek(peek(l + 16) + i * 8))
+  }
+  return out
+}
+
+fn rt_split(s: str, sep: str) -> int {
+  let out = rt_list_new()
+  var at = 0
+  var i = 0
+  while i + len(sep) <= len(s) and len(sep) > 0 {
+    if rt_str_eq(rt_sub(s, i, i + len(sep)), sep) {
+      rt_list_push(out, addr(rt_sub(s, at, i)))
+      i += len(sep)
+      at = i
+    } else {
+      i += 1
+    }
+  }
+  rt_list_push(out, addr(rt_sub(s, at, len(s))))
+  return out
+}
+
+fn rt_parse_int(s: str) -> int {
+  let t = rt_trim(s)
+  var i = 0
+  var neg = false
+  if len(t) > 0 and peek8(addr(t)) == 45 {
+    neg = true
+    i = 1
+  }
+  if i >= len(t) { rt_fail("int() of \"\(s)\"") }
+  var n = 0
+  while i < len(t) {
+    let c = peek8(addr(t) + i)
+    if c < 48 or c > 57 { rt_fail("int() of \"\(s)\"") }
+    n = n * 10 - (c - 48)   # on the negative side, so the smallest int parses too
+    i += 1
+  }
+  if neg { return n }
+  return 0 - n
+}
+
+# An int or bool that may be missing lives in a box of its own: 0 is nil.
+fn rt_box(v: int) -> int {
+  let p = rt_alloc(8)
+  poke(p, v)
+  return p
+}
+
+# ---- dicts (6.67.0): the address of {keys, values}, two lists in the order keys arrived. String keys only.
+# ponytail: a lookup walks the keys; hash them when a program's dicts grow past a few hundred.
+fn rt_dict_new() -> int {
+  let d = rt_alloc(16)
+  poke(d, rt_list_new())
+  poke(d + 8, rt_list_new())
+  return d
+}
+
+fn rt_dict_find(d: int, k: str) -> int {
+  let keys = peek(d)
+  for i in 0..peek(keys) {
+    if rt_str_eq(as_str(peek(peek(keys + 16) + i * 8)), k) { return i }
+  }
+  return -1
+}
+
+fn rt_dict_has(d: int, k: str) -> bool {
+  return rt_dict_find(d, k) >= 0
+}
+
+fn rt_dict_get(d: int, k: str) -> int {
+  let i = rt_dict_find(d, k)
+  if i < 0 { rt_fail("no key \"\(k)\" in the dict") }
+  return peek(peek(peek(d + 8) + 16) + i * 8)
+}
+
+fn rt_dict_set(d: int, k: str, v: int) {
+  let i = rt_dict_find(d, k)
+  if i >= 0 {
+    poke(peek(peek(d + 8) + 16) + i * 8, v)
+  } else {
+    rt_list_push(peek(d), addr(k))
+    rt_list_push(peek(d + 8), v)
+  }
+}
+
+# Is ty a dict, [K: V], rather than a list of them? Its ": " sits at depth one.
+fn rt_dict_like(ty: str) -> bool {
+  var depth = 0
+  for i in 0..len(ty) - 1 {
+    let c = peek8(addr(ty) + i)
+    if c == 91 or c == 40 { depth += 1 }
+    if c == 93 or c == 41 { depth -= 1 }
+    if c == 58 and depth == 1 { return true }
+  }
+  return false
+}
+
+fn rt_show_dict(d: int, ty: str) -> str {
+  let keys = peek(d)
+  if peek(keys) == 0 { return "[:]" }
+  let colon = rt_find(ty, ": ")
+  let kt = rt_sub(ty, 1, colon)
+  let vt = rt_sub(ty, colon + 2, len(ty) - 1)
+  var out = "["
+  for i in 0..peek(keys) {
+    if i > 0 { out = out + ", " }
+    out = out + rt_show(peek(peek(keys + 16) + i * 8), kt, true) + ": " + rt_show(peek(peek(peek(d + 8) + 16) + i * 8), vt, true)
+  }
+  return out + "]"
 }

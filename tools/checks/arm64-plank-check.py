@@ -9,7 +9,7 @@ structs, enums with match, closures, optionals, and try and catch (setjmp and lo
 serves it, opens its window, slides tiles on the arrows and closes on Esc.
 6.62.0: fib and fizzbuzz again, built by plankc (user/plankc/gen.pk, the compiler written in Plank) with no LLVM IR;
 6.63.0: primes, and user/plankc/tests/strings.pk on plankc's runtime written in Plank (rt.pk), against plank.py's own output;
-6.64.0: user/plankc/tests/lists.pk; 6.65.0: user/plankc/tests/structs.pk.
+6.64.0: user/plankc/tests/lists.pk; 6.65.0: user/plankc/tests/structs.pk; 6.66.0: more.pk (optionals, string methods, slices); 6.67.0: dicts.pk.
 Discriminating: break user/pklibc's %.15g (fmt_double) and the float lines differ; make setjmp.S's longjmp return 0 and the
 caught errors are lost; give gen.pk's < the condition le and fib by plankc prints a different line.
 Skips (exit 0) without clang's aarch64 target, ld.lld, qemu-system-aarch64, mtools, uv or Plank (PLANK=path/to/plank.py,
@@ -48,7 +48,7 @@ if not built: print("FAIL: nothing built"); sys.exit(1)
 # 6.62.0: the same examples built by plankc, the compiler written in Plank (step 3 of the true bootstrap), as aarch64 it writes
 # itself, with no LLVM IR and no Plank runtime: tools/plankapp.sh --plankc.
 # 6.63.0: primes, and plankc's own string test, whose answer key is what plank.py prints for it on this Mac.
-PLANKC = [("pcfib", ex / "fib.pk"), ("pcfz", ex / "fizzbuzz.pk"), ("pcprime", ex / "primes.pk"), ("pcstr", root / "user/plankc/tests/strings.pk"), ("pclist", root / "user/plankc/tests/lists.pk"), ("pcst", root / "user/plankc/tests/structs.pk")]
+PLANKC = [("pcfib", ex / "fib.pk"), ("pcfz", ex / "fizzbuzz.pk"), ("pcprime", ex / "primes.pk"), ("pcstr", root / "user/plankc/tests/strings.pk"), ("pclist", root / "user/plankc/tests/lists.pk"), ("pcst", root / "user/plankc/tests/structs.pk"), ("pcmore", root / "user/plankc/tests/more.pk"), ("pcdict", root / "user/plankc/tests/dicts.pk")]
 wants = {}
 pc_env = dict(os.environ, PLANKC_EXE=str(tmp / "plankc"))   # plankc built once, by plank.py, for all four
 subprocess.run(["uv", "run", "-q", "--with", "llvmlite", "python3", str(plank), "build", str(root / "user/plankc/plankc.pk"), "-o", str(tmp / "plankc")], capture_output=True, timeout=600)
