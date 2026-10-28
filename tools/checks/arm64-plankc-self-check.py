@@ -104,7 +104,7 @@ try:
             else: key(KEYS.get(ch, ch))
         key("ret")
     key("f2")
-    if not wait_for("terminal open", 10): raise SystemExit("FAIL: F2 did not open the Terminal")
+    if not wait_for("terminal open", 30): raise SystemExit("FAIL: F2 did not open the Terminal: %r" % uart()[-600:])   # 6.79.0: 30 s, a loaded Mac took more than 10
     time.sleep(0.5)
     for out, prog, secs in (("FIB.S", "FIB.PK", 120), ("SELF.S", "PLANKC.PK", 1800)):
         n = len(uart()); t0 = time.time()

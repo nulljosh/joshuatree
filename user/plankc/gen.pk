@@ -122,8 +122,8 @@ fn int_type(n: N, ty: str) -> str {
     return ty
   }
   let kv = dict_parts(ty)
-  if len(kv) == 2 {   # a dict: string keys, any value
-    if kv[0] != "str" { nope(n, "a dict with \(kv[0]) keys") }
+  if len(kv) == 2 {   # a dict: string or int keys (6.79.0), any value
+    if kv[0] != "str" and kv[0] != "int" { nope(n, "a dict with \(kv[0]) keys") }
     int_type(n, kv[1])
     return ty
   }
@@ -138,6 +138,11 @@ fn int_type(n: N, ty: str) -> str {
 
 fn is_list(ty: str) -> bool { return ty.starts_with("[") and len(dict_parts(ty)) == 0 and ty != "[:]" }
 fn is_dict(ty: str) -> bool { return ty == "[:]" or len(dict_parts(ty)) == 2 }
+# The runtime's setter for a dict with keys of type kt: an int key marks the dict as one compared by value (6.79.0).
+fn dict_setter(kt: str) -> str {
+  if kt == "int" { return "pk_rt_dict_set_int" }
+  return "pk_rt_dict_set"
+}
 
 # [K: V] as [K, V]; [] for anything else. The ": " has to sit at depth one, so [[str: int]] is a list.
 fn dict_parts(ty: str) -> [str] {
@@ -260,8 +265,11 @@ fn gen_expr(g: G, e: N) -> str {
     if len(keys) == 0 { return "[:]" }
     push(g)
     var vt = ""
+    var kt = ""
     for i in 0..len(keys) {
-      if gen_expr(g, keys[i]) != "str" { nope(keys[i], "a dict key that is not a string") }
+      let k = gen_expr(g, keys[i])
+      if kt == "" { kt = k }
+      if (k != "str" and k != "int") or k != kt { nope(keys[i], "a dict key that is a \(k) among \(kt)s") }
       push(g)
       let t = gen_expr(g, vals[i])
       if vt == "" { vt = t }
@@ -269,10 +277,10 @@ fn gen_expr(g: G, e: N) -> str {
       emit(g, "mov x2, x0")
       pop(g, "x1")
       emit(g, "ldr x0, [sp]")
-      emit(g, "bl pk_rt_dict_set")
+      emit(g, "bl " + dict_setter(kt))
     }
     pop(g, "x0")
-    return "[str: " + vt + "]"
+    return "[" + kt + ": " + vt + "]"
   }
   if e.kind == "Index" {
     let t = gen_expr(g, e.kids[0])
@@ -391,6 +399,15 @@ fn gen_expr(g: G, e: N) -> str {
       emit(g, "mov x0, x1")
       emit(g, "mov x1, x2")
       emit(g, "bl pk_rt_dict_has")
+      return "bool"
+    }
+    if op == "in" and is_list(rt) and rt != "[]" {   # 6.79.0: an item equal to it, as == compares
+      if not fits(lt, item_type(e, rt)) { nope(e, "a \(lt) in a \(rt)") }
+      emit(g, "mov x2, x0")
+      emit(g, "mov x0, x1")
+      emit(g, "mov x1, x2")
+      lit(g, "x2", item_type(e, rt))
+      emit(g, "bl pk_rt_list_has")
       return "bool"
     }
     if op == "in" {
@@ -685,7 +702,7 @@ fn method(g: G, e: N) -> str {
     emit(g, "mov x1, #0")
     emit(g, "ldr x2, =4611686018427387904")
     emit(g, "bl pk_rt_list_slice")
-    if name == "keys" { return "[str]" }
+    if name == "keys" { return "[" + dict_parts(t)[0] + "]" }
     return "[" + dict_parts(t)[1] + "]"
   }
   if name == "insert" and len(a) == 2 and is_list(t) and t != "[]" {   # before item i; a negative i counts from the end
@@ -759,7 +776,7 @@ fn method(g: G, e: N) -> str {
   }
   if is_dict(t) and name == "remove" and len(a) == 1 {
     push(g)
-    if gen_expr(g, a[0]) != "str" { nope(e, "remove of anything but a string key") }
+    if gen_expr(g, a[0]) != dict_parts(t)[0] { nope(e, "remove of a key of another type") }
     emit(g, "mov x1, x0")
     pop(g, "x0")
     emit(g, "bl pk_rt_dict_remove")
@@ -1183,7 +1200,7 @@ fn gen_stmt(g: G, s: N) {
     emit(g, "mov x2, x0")
     pop(g, "x1")
     pop(g, "x0")
-    emit(g, "bl pk_rt_dict_set")
+    emit(g, "bl " + dict_setter(dict_parts(type_of(g, target.kids[0]))[0]))
   } else if s.kind == "Assign" and s.kids[0].kind == "Index" {
     let target = s.kids[0]
     gen_expr(g, target.kids[0])
