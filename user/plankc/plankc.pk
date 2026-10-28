@@ -1,12 +1,13 @@
 # plankc, the Plank compiler written in Plank (the true bootstrap, docs/ROADMAP.md, 8.0).
 #   plankc lex FILE.pk     one token a line: line, kind, value
 #   plankc parse FILE.pk   the program's tree, one top-level item a line
-import "parse.pk"
+#   plankc asm FILE.pk     aarch64 assembly for the Pi (a first subset: gen.pk)
+import "gen.pk"
 
 fn main() {
   let a = args()
-  if len(a) < 2 or not (a[0] == "lex" or a[0] == "parse") {
-    print("usage: plankc lex|parse FILE.pk")
+  if len(a) < 2 or not (a[0] == "lex" or a[0] == "parse" or a[0] == "asm") {
+    print("usage: plankc lex|parse|asm FILE.pk")
     exit(2)
   }
   let src = read_file(a[1]) ?? ""
@@ -17,8 +18,10 @@ fn main() {
         if t.kind == "str" { val = show_string(t.val) }
         print("\(t.line) \(t.kind) \(val)")
       }
-    } else {
+    } else if a[0] == "parse" {
       for item in parse(src).kids { print(dump(item)) }
+    } else {
+      print(asm(parse(src)))
     }
   } catch e {
     print("error: \(e)")
