@@ -56,6 +56,53 @@ fn main() {
   }
 }
 
+# A module's items with each top-level name made alias.name, as plank.py's qualify does: a struct's or enum's name
+# wherever a type is written, a function's where it is called or named.
+fn qualify(items: [N], alias: str) -> [N] {
+  let fns: [str: int] = [:]
+  let types: [str] = []
+  for it in items {
+    if it.kind == "Fn" { fns[it.kids[0].text] = 1 }
+    if it.kind == "Struct" or it.kind == "Enum" { types.append(it.kids[0].text) }
+  }
+  let out: [N] = []
+  for it in items {
+    let q = qualified(it, alias, fns, types)
+    if not q.kids[0].text.starts_with(alias + ".") { q.kids[0] = sv(alias + "." + q.kids[0].text) }
+    out.append(q)
+  }
+  return out
+}
+
+fn qualified(n: N, alias: str, fns: [str: int], types: [str]) -> N {
+  if n.kind == "Str" { return n }
+  var text = n.text
+  if n.kind == "S" and len(types) > 0 { text = with_alias(text, alias, types) }
+  let kids: [N] = []
+  for k in n.kids { kids.append(qualified(k, alias, fns, types)) }
+  if (n.kind == "Call" or n.kind == "Name") and len(kids) > 0 and kids[0].text in fns { kids[0] = sv(alias + "." + kids[0].text) }
+  return N(n.kind, n.line, text, kids)
+}
+
+# Each word of s that is one of types, and not already after a dot, as alias.word.
+fn with_alias(s: str, alias: str, types: [str]) -> str {
+  var out = ""
+  var i = 0
+  while i < len(s) {
+    var j = i
+    while j < len(s) and word_char(s[j]) { j += 1 }
+    if j == i {
+      out = out + s[i]
+      i += 1
+    } else {
+      let w = s[i..j]
+      if w in types and (i == 0 or s[i - 1] != ".") { out = out + alias + "." + w } else { out = out + w }
+      i = j
+    }
+  }
+  return out
+}
+
 # A program and everything it imports, each file once, an import's path read from the importing file's folder.
 fn load_program(path: str, seen: [str: int]) -> N {
   seen[path] = 1
@@ -67,9 +114,11 @@ fn load_program(path: str, seen: [str: int]) -> N {
   let out: [N] = []
   for item in parse(src).kids {
     if item.kind == "Import" {
-      if item.kids[1].kind != "_" { throw "\(item.line): import ... as is not supported yet" }
       let next = dir + item.kids[0].text
-      if not (next in seen) {
+      if item.kids[1].kind != "_" {   # import "x.pk" as m: its names become m.name (6.84.0)
+        if next in seen { throw "\(item.line): \(item.kids[0].text) is already imported; use the name it has" }
+        for x in qualify(load_program(next, seen).kids, item.kids[1].text) { out.append(x) }
+      } else if not (next in seen) {
         for x in load_program(next, seen).kids { out.append(x) }
       }
     } else {
