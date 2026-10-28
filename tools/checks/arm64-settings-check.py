@@ -178,6 +178,12 @@ class Session:
             time.sleep(0.1)
         parts = open(path, "rb").read().split(b"\n", 3)
         return (int(parts[1].split()[0]), parts[3])
+    def settle(self, ok, secs=6):   # 6.76.4: the screen once ok(it) holds, or the last one; the UART line can beat the repaint
+        end = time.time() + secs
+        while True:
+            img = self.shot()
+            if ok(img) or time.time() > end: return img
+            time.sleep(0.2)
     def click(self, x, y, want, secs=8):
         n = len(self.uart())
         ax, ay = int((x + 0.5) * 32768 / W), int((y + 0.5) * 32768 / H)
@@ -247,20 +253,17 @@ try:
     check("Up, Up, Up: Sound, Display ... ", S.press("up", "settings section 3 Dock\n") and S.press("up", "settings section 2 Sound\n") and S.press("up", "settings section 1 Display\n"))
     # ---- wallpaper ----
     check("Right in Display: wallpaper 1, Terracotta (Grey is first and the default)", S.press("right", "settings wall 1 Terracotta\n"))
-    time.sleep(0.5)
-    t_ = S.shot()
+    t_ = S.settle(lambda i: all(px(i, x, y) == TERRA for x, y in [(30, 300), (770, 300), (60, 560), (100, 90)]))
     check("Terracotta everywhere the wallpaper shows", all(px(t_, x, y) == TERRA for x, y in [(30, 300), (770, 300), (60, 560), (100, 90)]), [px(t_, x, y) for x, y in [(30, 300), (770, 300), (60, 560), (100, 90)]])
     check("Right again: wallpaper 2, Clay", S.press("right", "settings wall 2 Clay\n"))
     check("... and it is saved", S.wait_for("settings saved\n", 6))
-    time.sleep(0.5)
-    c = S.shot()
     spots = [(30, 300), (770, 300), (60, 560), (100, 90)]
+    c = S.settle(lambda i: all(px(i, x, y) == CLAY for x, y in spots) and px(i, WX + 19, WY + 16) == RED)
     check("the whole desktop is Clay: wallpaper at four places", all(px(c, x, y) == CLAY for x, y in spots), [px(c, x, y) for x, y in spots])
     check("the menu bar was blended again over the new colour (half Clay, half white)", px(c, 300, 8) == bar(CLAY), (px(c, 300, 8), bar(CLAY)))
     check("the window is back on top of the new desktop and the dock is whole (its cream tray, not Clay)", px(c, WX + 19, WY + 16) == RED and px(c, W // 2, H - 60) not in (CLAY, TERRA), (px(c, WX + 19, WY + 16), px(c, W // 2, H - 60)))
     check("Right again: wallpaper 3, Ink", S.press("right", "settings wall 3 Ink\n"))
-    time.sleep(0.5)
-    d = S.shot()
+    d = S.settle(lambda i: all(px(i, x, y) == INK for x, y in spots))
     check("Ink everywhere the wallpaper shows", all(px(d, x, y) == INK for x, y in spots), [px(d, x, y) for x, y in spots])
     check("Left: back to Clay", S.press("left", "settings wall 2 Clay\n"))
     time.sleep(0.5)
