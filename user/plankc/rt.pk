@@ -2,7 +2,8 @@
 # program, so an app needs nothing from LLVM or Plank's C runtime. It uses plankc's built-ins, which plank.py does not
 # have: syscall(n, a, b, c) is the kernel's svc #0; peek and poke read and write 8 bytes, peek8 and poke8 one;
 # global(i) is the address of the i-th 8-byte cell of plankc's data; addr(s) is a string's address and as_str(p) the
-# string at p. A string is the address of its bytes, which end in a zero, with its length in bytes in the 8 before them.
+# string at p. A string is the address of its bytes, which end in a zero, with its length in bytes in the 8 before them
+# and, in the 8 before those, its length in characters, or -1 until rt_clen counts it (6.78.0).
 # Cells: global(0) is the heap's next free byte, global(1) the heap's top; the collector's, below.
 
 fn rt_copy(dst: int, src: int, n: int) {
@@ -13,10 +14,39 @@ fn rt_copy(dst: int, src: int, n: int) {
 
 # A new string of n bytes, its length set and its zero placed; the caller fills the bytes.
 fn rt_str(n: int) -> int {
-  let p = rt_alloc(n + 9)
-  poke(p, n)
-  poke8(p + 8 + n, 0)
-  return p + 8
+  let p = rt_alloc(n + 17)
+  poke(p, -1)
+  poke(p + 8, n)
+  poke8(p + 16 + n, 0)
+  return p + 16
+}
+
+# Plank counts a string in characters (6.78.0). In rt.pk's own functions len is bytes (gen.pk writes those with g.bytes).
+# The count is kept in the string, so asking twice costs nothing, and a string whose count is its bytes is all ASCII,
+# where a character's index is its byte's.
+fn rt_clen(s: str) -> int {
+  let at = addr(s) - 16
+  if peek(at) >= 0 { return peek(at) }
+  var n = 0
+  for i in 0..len(s) {
+    if peek8(addr(s) + i) / 64 != 2 { n += 1 }   # every byte but a UTF-8 continuation, 10xxxxxx, starts a character
+  }
+  poke(at, n)
+  return n
+}
+
+# The byte where character c starts (c up to rt_clen(s), which gives len(s)). ponytail: a walk from the start when the
+# string is not ASCII, so indexing such a string in a loop is quadratic; keep the last place per string if that bites.
+fn rt_coff(s: str, c: int) -> int {
+  if rt_clen(s) == len(s) { return c }
+  var i = 0
+  var k = 0
+  while k < c and i < len(s) {
+    i += 1
+    while i < len(s) and peek8(addr(s) + i) / 64 == 2 { i += 1 }
+    k += 1
+  }
+  return i
 }
 
 # The one-byte string for byte c. global(3) holds the table of 256.
@@ -336,8 +366,8 @@ fn rt_show_struct(v: int, ty: str) -> str {
   return out + ")"
 }
 
-# ---- strings, more (6.66.0). Indexes are bytes. ponytail: Plank counts characters; the same for ASCII, which is all of
-# plankc's own source; count UTF-8 sequences here when a program needs it.
+# ---- strings, more (6.66.0). The indexes a program sees count characters (6.78.0): rt_clen and rt_coff turn them into
+# bytes.
 fn rt_clamp(i: int, n: int) -> int {
   var j = i
   if j < 0 { j += n }
@@ -347,17 +377,19 @@ fn rt_clamp(i: int, n: int) -> int {
 }
 
 fn rt_str_slice(s: str, a: int, b: int) -> str {
-  let i = rt_clamp(a, len(s))
-  let j = rt_clamp(b, len(s))
+  let n = rt_clen(s)
+  let i = rt_clamp(a, n)
+  let j = rt_clamp(b, n)
   if j <= i { return "" }
-  return rt_sub(s, i, j)
+  return rt_sub(s, rt_coff(s, i), rt_coff(s, j))
 }
 
 fn rt_char_at(s: str, i: int) -> str {
+  let n = rt_clen(s)
   var j = i
-  if j < 0 { j += len(s) }
-  if j < 0 or j >= len(s) { rt_fail("index \(i) out of range for a string of \(len(s))") }
-  return rt_sub(s, j, j + 1)
+  if j < 0 { j += n }
+  if j < 0 or j >= n { rt_fail("index \(i) out of range for a string of \(n)") }
+  return rt_sub(s, rt_coff(s, j), rt_coff(s, j + 1))
 }
 
 fn rt_list_slice(l: int, a: int, b: int) -> int {
@@ -378,6 +410,17 @@ fn rt_find(s: str, p: str) -> int {
     if k == len(p) { return i }
   }
   return -1
+}
+
+# Where p first is in s, in characters, or -1: s.find(p).
+fn rt_cfind(s: str, p: str) -> int {
+  let b = rt_find(s, p)
+  if b < 0 or rt_clen(s) == len(s) { return b }
+  var n = 0
+  for i in 0..b {
+    if peek8(addr(s) + i) / 64 != 2 { n += 1 }
+  }
+  return n
 }
 
 fn rt_starts(s: str, p: str) -> bool {
