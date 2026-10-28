@@ -251,9 +251,9 @@ fn rt_print_int(n: int) {
   rt_print_str(rt_int_str(n))
 }
 
+# A runtime error is thrown (6.80.0), so try and attempt catch it as plank.py's do; uncaught, rt_uncaught prints it alone.
 fn rt_fail(msg: str) {
-  rt_print_str(msg)
-  syscall(1, 1, 0, 0)
+  throw msg
 }
 
 # ---- lists (6.64.0): the address of {length, room, the address of the items}, 8 bytes an item.
@@ -283,7 +283,7 @@ fn rt_list_push(l: int, v: int) {
 fn rt_list_at(l: int, i: int) -> int {
   var j = i
   if j < 0 { j += peek(l) }
-  if j < 0 or j >= peek(l) { rt_fail("index \(i) out of range for a list of \(peek(l))") }
+  if j < 0 or j >= peek(l) { rt_fail("index \(i) is out of range for a list of \(peek(l))") }
   return peek(l + 16) + j * 8
 }
 
@@ -388,7 +388,7 @@ fn rt_char_at(s: str, i: int) -> str {
   let n = rt_clen(s)
   var j = i
   if j < 0 { j += n }
-  if j < 0 or j >= n { rt_fail("index \(i) out of range for a string of \(n)") }
+  if j < 0 or j >= n { rt_fail("index \(i) is out of range for a string of \(n)") }
   return rt_sub(s, rt_coff(s, j), rt_coff(s, j + 1))
 }
 
@@ -504,11 +504,11 @@ fn rt_parse_int(s: str) -> int {
     neg = true
     i = 1
   }
-  if i >= len(t) { rt_fail("int() of \"\(s)\"") }
+  if i >= len(t) { rt_fail("int() got text that is not a whole number") }
   var n = 0
   while i < len(t) {
     let c = peek8(addr(t) + i)
-    if c < 48 or c > 57 { rt_fail("int() of \"\(s)\"") }
+    if c < 48 or c > 57 { rt_fail("int() got text that is not a whole number") }
     n = n * 10 - (c - 48)   # on the negative side, so the smallest int parses too
     i += 1
   }
@@ -521,6 +521,29 @@ fn rt_box(v: int) -> int {
   let p = rt_alloc(8)
   poke(p, v)
   return p
+}
+
+# ---- Result<T> (6.80.0): the address of {0 and the value, or 1 and the message}, the enum gen.pk writes for each T.
+fn rt_result_new(tag: int, v: int) -> int {
+  let r = rt_alloc(16)
+  poke(r, tag)
+  poke(r + 8, v)
+  return r
+}
+
+fn rt_result_value(r: int) -> int {
+  if peek(r) != 0 { rt_fail(as_str(peek(r + 8))) }
+  return peek(r + 8)
+}
+
+fn rt_result_error(r: int) -> int {
+  if peek(r) == 0 { return 0 }
+  return peek(r + 8)
+}
+
+fn rt_result_or(r: int, d: int) -> int {
+  if peek(r) == 0 { return peek(r + 8) }
+  return d
 }
 
 # ---- dicts (6.67.0): the address of {keys, values, 1 if its keys are ints}, two lists in the order keys arrived.
@@ -624,6 +647,10 @@ fn rt_show_dict(d: int, ty: str) -> str {
 # ---- try and throw (6.68.0). global(2) is the innermost try's record: {the try before it, x29, sp, the catch's address},
 # 8 bytes each, kept in its function's frame; plankc writes the code that fills it, throw restores x29 and sp and jumps.
 fn rt_uncaught(msg: str, line: int) {
+  if line == 0 {   # a runtime error (rt_fail): no line of the program to name
+    rt_print_str(msg)
+    syscall(1, 1, 0, 0)
+  }
   rt_print_str("\(line): \(msg)")
   syscall(1, 1, 0, 0)
 }
