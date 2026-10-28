@@ -385,3 +385,10 @@ fn rt_show_dict(d: int, ty: str) -> str {
   }
   return out + "]"
 }
+
+# ---- try and throw (6.68.0). global(2) is the innermost try's record: {the try before it, x29, sp, the catch's address},
+# 8 bytes each, kept in its function's frame; plankc writes the code that fills it, throw restores x29 and sp and jumps.
+fn rt_uncaught(msg: str, line: int) {
+  rt_print_str("\(line): \(msg)")
+  syscall(1, 1, 0, 0)
+}

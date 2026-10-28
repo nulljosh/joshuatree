@@ -18,6 +18,8 @@ struct G {
   label: int
   locals: [Local]
   loops: [str]     # break and continue labels, two a loop
+  loop_tries: [int]  # how many trys were open where each loop began
+  tries: [int]     # the open trys' records, as frame offsets
   fns: [str: str]  # function name: its return type
   structs: [str: N]  # struct name: its Struct node
   rt: [str: int]   # the built-ins rt.pk is written with: syscall, peek, poke, global, addr, as_str
@@ -48,14 +50,26 @@ fn find(g: G, name: str) -> Local {
 
 fn new_local(g: G, name: str, ty: str) -> Local {
   g.next_off += 8
-  if g.next_off > 248 { throw "more than 31 locals in one function" }   # ponytail: ldur reaches 256 bytes; spill wider when a program needs it
+  if g.next_off > 4088 { throw "more than 511 locals in one function" }
   let l = Local(name, g.next_off, ty)
   g.locals.append(l)
   return l
 }
 
-fn load(g: G, l: Local) { emit(g, "ldur x0, [x29, #-\(l.off)]") }
-fn store(g: G, l: Local) { emit(g, "stur x0, [x29, #-\(l.off)]") }
+fn load(g: G, l: Local) { slot(g, "ldr", "x0", l.off) }
+fn store(g: G, l: Local) { slot(g, "str", "x0", l.off) }
+
+# ldr or str of register r at x29 - off: ldur and stur reach 256 bytes down, past that through x9.
+fn slot(g: G, op: str, r: str, off: int) {
+  if off <= 256 {
+    var short = "stur"
+    if op == "ldr" { short = "ldur" }
+    emit(g, "\(short) \(r), [x29, #-\(off)]")
+  } else {
+    emit(g, "sub x9, x29, #\(off)")
+    emit(g, "\(op) \(r), [x9]")
+  }
+}
 
 fn int_type(n: N, ty: str) -> str {
   if ty == "int" or ty == "bool" or ty == "str" { return ty }
@@ -621,6 +635,7 @@ fn gen_stmt(g: G, s: N) {
     gen_expr(g, s.kids[0])
   } else if s.kind == "Return" {
     if s.kids[0].kind != "_" { gen_expr(g, s.kids[0]) }
+    leave_tries(g, 0)
     emit(g, "b " + g.ret)
   } else if s.kind == "If" {
     let other = fresh(g)
@@ -655,9 +670,11 @@ fn gen_stmt(g: G, s: N) {
     emit(g, "cbz x0, " + done)
     g.loops.append(done)
     g.loops.append(top)
+    g.loop_tries.append(len(g.tries))
     gen_block(g, s.kids[1])
     g.loops.pop()
     g.loops.pop()
+    g.loop_tries.pop()
     emit(g, "b " + top)
     place(g, done)
   } else if s.kind == "For" {
@@ -673,14 +690,16 @@ fn gen_stmt(g: G, s: N) {
     let done = fresh(g)
     place(g, top)
     load(g, i)
-    emit(g, "ldur x1, [x29, #-\(stop.off)]")
+    slot(g, "ldr", "x1", stop.off)
     emit(g, "cmp x0, x1")
     emit(g, "b.ge " + done)
     g.loops.append(done)
     g.loops.append(step)
+    g.loop_tries.append(len(g.tries))
     gen_block(g, s.kids[3])
     g.loops.pop()
     g.loops.pop()
+    g.loop_tries.pop()
     place(g, step)
     load(g, i)
     emit(g, "add x0, x0, #1")
@@ -724,9 +743,11 @@ fn gen_stmt(g: G, s: N) {
     store(g, x)
     g.loops.append(done)
     g.loops.append(step)
+    g.loop_tries.append(len(g.tries))
     gen_block(g, s.kids[2])
     g.loops.pop()
     g.loops.pop()
+    g.loop_tries.pop()
     place(g, step)
     load(g, idx)
     emit(g, "add x0, x0, #1")
@@ -734,8 +755,52 @@ fn gen_stmt(g: G, s: N) {
     emit(g, "b " + top)
     place(g, done)
     while len(g.locals) > mark { g.locals.pop() }
+  } else if s.kind == "Try" {
+    let rec = [new_local(g, " try3", "int"), new_local(g, " try2", "int"), new_local(g, " try1", "int"), new_local(g, " try0", "int")]
+    let base = rec[3].off   # the record runs up from x29 - base: prev, x29, sp, catch
+    let landing = fresh(g)
+    let done = fresh(g)
+    emit(g, "adrp x1, pk_globals")
+    emit(g, "add x1, x1, :lo12:pk_globals")
+    emit(g, "ldr x2, [x1, #16]")
+    emit(g, "sub x3, x29, #\(base)")
+    emit(g, "str x2, [x3]")
+    emit(g, "str x29, [x3, #8]")
+    emit(g, "mov x2, sp")
+    emit(g, "str x2, [x3, #16]")
+    emit(g, "adr x2, " + landing)
+    emit(g, "str x2, [x3, #24]")
+    emit(g, "str x3, [x1, #16]")
+    g.tries.append(base)
+    gen_block(g, s.kids[0])
+    g.tries.pop()
+    pop_try(g, base)
+    emit(g, "b " + done)
+    place(g, landing)   # throw lands here with x29 and sp back, and the message in x0
+    pop_try(g, base)
+    let mark = len(g.locals)
+    store(g, new_local(g, s.kids[1].text, "str"))
+    gen_block(g, s.kids[2])
+    while len(g.locals) > mark { g.locals.pop() }
+    place(g, done)
+  } else if s.kind == "Throw" {
+    if gen_expr(g, s.kids[0]) != "str" { nope(s, "throwing anything but a string") }
+    let caught = fresh(g)
+    emit(g, "adrp x1, pk_globals")
+    emit(g, "add x1, x1, :lo12:pk_globals")
+    emit(g, "ldr x1, [x1, #16]")
+    emit(g, "cbnz x1, " + caught)
+    emit(g, "ldr x1, =\(s.line)")
+    emit(g, "bl pk_rt_uncaught")
+    place(g, caught)
+    emit(g, "ldr x29, [x1, #8]")
+    emit(g, "ldr x2, [x1, #16]")
+    emit(g, "mov sp, x2")
+    emit(g, "ldr x2, [x1, #24]")
+    emit(g, "br x2")
   } else if s.kind == "Break" or s.kind == "Continue" {
     if len(g.loops) == 0 { throw "\(s.line): \(s.kind) outside a loop" }
+    leave_tries(g, g.loop_tries[-1])
     if s.kind == "Break" { emit(g, "b " + g.loops[-2]) } else { emit(g, "b " + g.loops[-1]) }
   } else {
     nope(s, "the statement " + s.kind)
@@ -749,6 +814,7 @@ fn count_locals(n: N) -> int {
   if n.kind == "For" { c = 2 }
   if n.kind == "ForIn" { c = 4 }
   if n.kind == "IfLet" { c = 1 }
+  if n.kind == "Try" { c = 5 }
   for k in n.kids { c += count_locals(k) }
   return c
 }
@@ -759,6 +825,7 @@ fn function(g: G, f: N) {
   if len(params) > 8 { nope(f, "more than eight parameters") }
   if len(f.kids[5].kids) > 0 { nope(f, "type parameters") }
   g.locals = []
+  g.tries = []
   g.next_off = 0
   g.ret = fresh(g)
   let frame = (len(params) + count_locals(f.kids[3])) * 8
@@ -771,7 +838,7 @@ fn function(g: G, f: N) {
   emit(g, "sub sp, sp, #" + str((frame + 15) / 16 * 16))
   for i in 0..len(params) {
     let l = new_local(g, params[i].kids[0].text, int_type(f, params[i].kids[1].text))
-    emit(g, "stur x" + str(i) + ", [x29, #-\(l.off)]")
+    slot(g, "str", "x" + str(i), l.off)
   }
   gen_block(g, f.kids[3])
   emit(g, "mov x0, #0")   # falling off the end returns 0, which is what main hands back
@@ -788,6 +855,21 @@ fn type_of(g: G, e: N) -> str {
   let t = gen_expr(g, e)
   while len(g.out) > mark { g.out.pop() }
   return t
+}
+
+# ---------------------------------------------------------------- try
+# The try whose record sits at x29 - base is done: the one before it is innermost again.
+fn pop_try(g: G, base: int) {
+  emit(g, "sub x3, x29, #\(base)")
+  emit(g, "ldr x2, [x3]")
+  emit(g, "adrp x1, pk_globals")
+  emit(g, "add x1, x1, :lo12:pk_globals")
+  emit(g, "str x2, [x1, #16]")
+}
+
+# Leaving through return, break or continue: every try opened since the keep-th is closed on the way out.
+fn leave_tries(g: G, keep: int) {
+  if len(g.tries) > keep { pop_try(g, g.tries[keep]) }
 }
 
 # ---------------------------------------------------------------- structs
@@ -850,7 +932,7 @@ fn layout_fn(g: G) -> N {
 }
 
 fn asm(prog: N, runtime: N) -> str {
-  let g = G([], 0, [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1], [], 0, "")
+  let g = G([], 0, [], [], [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1], [], 0, "")
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {

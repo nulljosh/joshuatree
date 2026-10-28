@@ -1,0 +1,80 @@
+# plankc's try and throw (6.68.0): a throw from a call deep down, nesting, rethrowing, and leaving a try by return,
+# break and continue, after which a throw must find the right catch.
+fn boom(n: int) -> int {
+  if n > 2 { throw "too big: \(n)" }
+  return n
+}
+
+fn deep(n: int) -> int {
+  if n == 0 { return boom(9) }
+  return deep(n - 1) + 1
+}
+
+fn early(n: int) -> int {
+  try {
+    if n == 0 { return 100 }
+    return boom(n)
+  } catch e {
+    return -1
+  }
+}
+
+fn main() {
+  try {
+    print(boom(1))
+    print(boom(5))
+    print("not here")
+  } catch e {
+    print("caught", e)
+  }
+  try {
+    print(deep(20))
+  } catch e {
+    print("from deep:", e)
+  }
+  try {
+    try {
+      boom(7)
+    } catch inner {
+      print("inner", inner)
+      throw "again: " + inner
+    }
+  } catch outer {
+    print("outer", outer)
+  }
+  print(early(0), early(1), early(3))
+  for i in 0..6 {
+    try {
+      if i == 1 { continue }
+      if i == 4 { break }
+      boom(i + 1)
+      print("ok", i)
+    } catch e {
+      print("caught in loop", e)
+    }
+  }
+  try {
+    boom(8)
+  } catch e {
+    print("after the loop", e)
+  }
+  # A return or break that leaves a try has to close it, or the next throw lands in a catch that is gone.
+  try {
+    print(early(0))
+    boom(6)
+  } catch e {
+    print("outer after a return", e)
+  }
+  try {
+    for i in 0..3 {
+      try {
+        if i == 1 { break }
+      } catch e {
+        print("never", e)
+      }
+    }
+    boom(10)
+  } catch e {
+    print("outer after a break", e)
+  }
+}
