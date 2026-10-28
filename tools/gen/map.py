@@ -1,74 +1,87 @@
 #!/usr/bin/env python3
-"""Draws architecture.svg: every Joshua Tree graph in one picture (where it runs, the stack, talking to Samantha, the Pi
-bring-up, how it gets built, memory, apps over time). The apps line is read from progress.svg, so rerun this after
-tools/gen/progress.sh. The memory numbers come from docs/memory-map.svg (rerun tools/gen/memory-map.py first). The Pi row is typed in: update it when the board moves."""
+"""Draws architecture.svg: every Joshua Tree graph in one picture (where it runs, the stack, talking to Samantha, how an
+app gets onto the Pi, the Pi bring-up, apps over time). The apps line is read from progress.svg, so
+rerun this after tools/gen/progress.sh. The Pi row is typed in: update it when the board moves. Colours, spacing, radii
+and type come from the brand kit's tokens (docs/brand/tokens.css) through tools/gen/svgkit.py, so the map cannot drift."""
 import re, os
-ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
-# Colours come from the brand kit's tokens (docs/brand/tokens.css, the light set), so the map and the kit cannot drift.
-TOK = dict(re.findall(r'--([a-z-]+):\s*(#[0-9a-f]{6})', open(os.path.join(ROOT, 'docs', 'brand', 'tokens.css')).read().split('@media')[0]))
-PAPER, INK, MUT, RULE, CARD, T = TOK['bg'], TOK['fg'], TOK['sub'], TOK['rule'], TOK['card'], TOK['accent']
-G = TOK['window-ink']
+from svgkit import Pic, ROOT, M, S, R, PAPER, INK, MUT, RULE, CARD, T, G
+
 W = 640
-out, lines = [], []
+p = Pic(W)
+IW = W - 2 * M                                    # inner width
 
 def box(x, y, w, h, a, b, kind='core'):
-    fill = {'core': f'fill="{G}" fill-opacity=".12" stroke="{G}"', 'host': f'fill="{CARD}" stroke="{RULE}"',
-            'new': f'fill="{T}" fill-opacity=".12" stroke="{T}"', 'svc': f'fill="{CARD}" stroke="{RULE}"',
-            'todo': f'fill="{CARD}" stroke="{MUT}" stroke-dasharray="3 3"'}[kind]
-    out.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="8" {fill}/>')
-    c, fs = (MUT, 9) if kind in ('svc', 'todo') else (INK, 11)
-    out.append(f'<text x="{x + w / 2}" y="{y + h / 2 - 2}" fill="{c}" font-size="{fs}" font-weight="600" text-anchor="middle">{a}</text>')
-    if b: out.append(f'<text x="{x + w / 2}" y="{y + h / 2 + 11}" fill="{c}" font-size="{fs - 1}" text-anchor="middle">{b}</text>')
+    fill = {'core': f'fill="{G}" fill-opacity=".08" stroke="{G}" stroke-opacity=".5"', 'host': f'fill="{CARD}" stroke="{RULE}"',
+            'new': f'fill="{T}" fill-opacity=".1" stroke="{T}"', 'todo': f'fill="{PAPER}" stroke="{MUT}" stroke-dasharray="3 3"'}[kind]
+    p.add(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{R[8]}" {fill}/>')
+    c = MUT if kind == 'todo' else INK
+    p.text(x + w / 2, y + h / 2 - 2 if b else y + h / 2 + 4, a, 11, c, 600, 'middle')
+    if b: p.text(x + w / 2, y + h / 2 + 12, b, 11, MUT, anchor='middle')
 
-def sec(y, t): out.append(f'<text x="20" y="{y}" fill="{MUT}" font-size="10" font-weight="600" letter-spacing="1">{t.upper()}</text>')
+def sec(y, icon, t):
+    """A section head: its pixel icon and its name. Returns where the section's body starts."""
+    p.icon(M, y, icon)
+    p.text(M + 24 + S[12], y + 17, t, 15, weight=700)
+    return y + 24 + S[16]
 
 def chain(y, steps, kinds, back=None):
-    n = len(steps); sw = 92 if n == 6 else (W - 40 - (n - 1) * 14) / n; gap = (W - 40 - n * sw) / (n - 1)
+    n = len(steps); gap = S[16]; sw = (IW - (n - 1) * gap) / n
     for i, ((a, b), k) in enumerate(zip(steps, kinds)):
-        x = 20 + i * (sw + gap); box(x, y, sw, 40, a, b, k)
-        if i < n - 1: out.append(f'<path d="M{x + sw + 2} {y + 20}h{gap - 6}" stroke="{T}" stroke-width="1.5" marker-end="url(#a)"/>')
-    if back: out.append(f'<path d="M{W - 20 - sw / 2} {y + 40}v10H{20 + sw / 2}v-6" fill="none" stroke="{T}" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/>'
-                        f'<text x="{W / 2}" y="{y + 62}" fill="{MUT}" font-size="9" text-anchor="middle">{back}</text>')
+        x = M + i * (sw + gap); box(x, y, sw, 48, a, b, k)
+        if i < n - 1: p.add(f'<path d="M{x + sw + 2} {y + 24}h{gap - 4}" stroke="{T}" stroke-width="1.5" marker-end="url(#a)"/>')
+    y += 48
+    if back:
+        p.add(f'<path d="M{W - M - sw / 2} {y}v{S[12]}H{M + sw / 2}v-{S[8]}" fill="none" stroke="{T}" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/>')
+        p.text(W / 2, y + S[12] + 16, back, 11, MUT, anchor='middle'); y += S[32]
+    return y
 
-APPS = re.findall(r'data-apps="(\d+)"', open(os.path.join(ROOT, 'progress.svg')).read())[-1]
-out.append(f'<text x="{W / 2}" y="30" fill="{INK}" font-size="18" font-weight="700" text-anchor="middle">Joshua Tree at a glance</text>')
-out.append(f'<text x="{W / 2}" y="48" fill="{MUT}" font-size="11" text-anchor="middle">A computer that knows what you want before you ask, and keeps it on your machine.</text>')
+def note(y, s): p.text(M, y + 12, s, 11, MUT); return y + 16
 
-sec(78, 'Where it runs')
-xs, bw = [20, 175, 330, 485], 135
-for x, (a, b, k) in zip(xs, [('Browser', 'the landing page', 'host'), ('QEMU', 'dev and CI', 'host'),
-                             ('Raspberry Pi 4', 'the real board', 'new'), ('Real PC', 'from a USB stick', 'host')]):
-    box(x, 86, bw, 42, a, b, k)
-out.append(f'<text x="{W / 2}" y="146" fill="{MUT}" font-size="10" text-anchor="middle">The same layers in all four places. Each one only talks to the one under it:</text>')
-# The stack, top to bottom, with what each layer does and how it asks the next one. Right column: the word for that hand-off.
-stack = [('Apps', f'{APPS} apps, each in its own walled-off memory, so one crash stays one crash', 'core', 'asks by system call'),
-         ('Desktop and Samantha', 'windows, dock and menu bar; Samantha runs what you type or say', 'core', 'draws off-screen, then shows it'),
-         ('Kernel', 'takes turns between apps, stops one frozen for 3 s, files, network', 'core', 'drives the parts'),
-         ('Drivers', 'screen, USB keyboard, mouse and mic, Wi-Fi, Bluetooth, SD card, sound', 'core', ''),
-         ('The machine', 'a Raspberry Pi 4, a PC, or QEMU pretending to be one', 'host', '')]
-for i, (a, b, k, hand) in enumerate(stack):
-    y = 154 + i * 50
-    box(20, y, 600, 38, a, b, k)
+svg = open(os.path.join(ROOT, 'progress.svg')).read()
+APPS = re.findall(r'data-apps="(\d+)"', svg)[-1]
+
+p.strip(0)
+p.text(M, 56, 'Joshua Tree at a glance', 22, weight=700, face='Tree Sans Display')
+p.text(M, 80, 'A computer that knows what you want before you ask, and keeps it on your machine.', 13, MUT)
+
+y = sec(112, 'screen', 'Where it runs')
+bw = (IW - 3 * S[16]) / 4
+for i, (a, b, k) in enumerate([('Browser', 'the landing page', 'host'), ('QEMU', 'dev and CI', 'host'),
+                               ('Raspberry Pi 4', 'the real board', 'new'), ('Real PC', 'from a USB stick', 'host')]):
+    box(M + i * (bw + S[16]), y, bw, 48, a, b, k)
+y += 48 + S[32]
+
+y = sec(y, 'stack', 'The layers')
+y = note(y, 'The same in all four places. Each layer only talks to the one under it.') + S[8]
+stack = [('Apps', f'{APPS} apps, each walled off, so one crash stays one crash', 'asks by system call'),
+         ('Desktop and Samantha', 'windows, dock, menu bar; Samantha runs what you type or say', 'draws off-screen, then shows it'),
+         ('Kernel', 'takes turns between apps, stops a frozen one, files, network', 'drives the parts'),
+         ('Drivers', 'screen, keyboard, mouse, mic, Wi-Fi, Bluetooth, SD card, sound', ''),
+         ('The machine', 'a Raspberry Pi 4, a PC, or QEMU pretending to be one', '')]
+for i, (a, b, hand) in enumerate(stack):
+    p.add(f'<rect x="{M}" y="{y}" width="{IW}" height="40" rx="{R[8]}" ' + (f'fill="{CARD}" stroke="{RULE}"/>' if i == 4 else f'fill="{G}" fill-opacity=".08" stroke="{G}" stroke-opacity=".5"/>'))
+    p.text(M + S[16], y + 25, a, 13, weight=600)
+    p.text(M + 184, y + 25, b, 11, MUT)
+    y += 40
     if hand:
-        out.append(f'<path d="M80 {y + 39}v9" stroke="{T}" stroke-width="1.5" marker-end="url(#a)"/>')
-        out.append(f'<text x="90" y="{y + 47}" fill="{MUT}" font-size="9">{hand}</text>')
-out.append(f'<text x="{W / 2}" y="420" fill="{MUT}" font-size="10" text-anchor="middle">Out on the internet: Turing (her brain), ElevenLabs (her voice), a Cloudflare Worker and Open-Meteo.</text>')
+        p.add(f'<path d="M{M + 40} {y + 1}v{S[12] - 2}" stroke="{T}" stroke-width="1.5" marker-end="url(#a)"/>')
+        p.text(M + 52, y + 12, hand, 11, MUT)
+    y += S[16]
+y = note(y, 'Out on the internet: Turing (her brain), ElevenLabs (her voice), a Cloudflare Worker and Open-Meteo.') + S[32]
 
-out.append('<g transform="translate(0,130)">')
-sec(320, 'What happens when you talk to Samantha')
-chain(330, [('You type or say', '"call Mom at 5"'), ('Turing', 'picks the tool'), ('Joshua Tree', 'does it'), ('She answers', 'voice and face')],
-      ['host', 'host', 'core', 'core'])
+y = sec(y, 'talk', 'Talking to Samantha')
+y = chain(y, [('You type or say', '"call Mom at 5"'), ('Turing', 'picks the tool'), ('Joshua Tree', 'does it'), ('She answers', 'voice and face')],
+          ['host', 'host', 'core', 'core']) + S[32]
 
 # 8.0 (6.51.0 to 6.59.0): an app no longer has to be built into the kernel. Six steps, from whoever writes it to the Pi.
-sec(400, 'How an app gets onto the Pi (8.0)')
-chain(410, [('Write it', 'you or Samantha'), ('Build it', 'C or Plank'), ('Seal it', "Joshua's key"),
-            ('The store', 'on the website'), ('install', 'seal checked first'), ('It runs', 'walled off')],
-      ['host', 'host', 'new', 'host', 'core', 'core'])
-out.append(f'<text x="{W / 2}" y="470" fill="{MUT}" font-size="9" text-anchor="middle">Sealed apps run for anyone; unsealed ones (yours, or Samantha\'s) only for an admin; a broken seal never.</text>')
-out.append('<g transform="translate(0,100)">')
+y = sec(y, 'box', 'How an app gets onto the Pi (8.0)')
+y = chain(y, [('Write it', 'you, or Sam'), ('Build it', 'C or Plank'), ('Seal it', "Joshua's key"),
+              ('The store', 'on the website'), ('install', 'seal checked'), ('It runs', 'walled off')],
+          ['host', 'host', 'new', 'host', 'core', 'core'])
+y = note(y + S[8], "Sealed apps run for anyone; unsealed ones (yours, or Samantha's) only for an admin; a broken seal never.") + S[32]
 
-# The Pi, on the real board. done = seen working on the board (docs/ROADMAP.md, docs/ROADMAP.md); the rest is proven in QEMU only.
-sec(400, 'The Pi, on the real board')
+# The Pi, on the real board. Solid = seen working on the board (docs/ROADMAP.md); dashed = proven in QEMU only.
+y = sec(y, 'chip', 'The Pi, on the real board')
 pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi', 'WPA2, joined', 1),
       ('Internet', 'DHCP and DNS', 1), ('Clock', 'from the net', 1), ('Terminal', 'zsh style, sam', 1),
       ('Samantha', 'chat on the Pi', 1), ('Pi actions', 'note, green light', 1), ('HTTPS', 'Browser, 37 roots', 1),
@@ -76,55 +89,28 @@ pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi'
       ('Notes', 'saved to the card', 1), ('Calendar', 'four views', 1), ('Bluetooth', 'mouse pairs', 1),
       ('Sound', 'headphone jack', 0), ('Many windows', 'apps side by side', 0),
       ('Walled memory', 'one app, one arena', 0), ('Watchdog', 'frozen app stopped', 0), ('Mic', 'Yeti, USB', 0)]
-pw = (W - 40 - 3 * 14) / 4
+pw = (IW - 3 * S[16]) / 4
 for i, (a, b, done) in enumerate(pi):
-    box(20 + (i % 4) * (pw + 14), 410 + (i // 4) * 54, pw, 40, a, b, 'new' if done else 'todo')
-rows = (len(pi) + 3) // 4
-out.append(f'<text x="20" y="{410 + rows * 54 + 8}" fill="{MUT}" font-size="9">Solid boxes are seen working on the real board (2026-10-12, v3); dashed are built and checked in QEMU, not yet seen there.</text>')
-out.append(f'<g transform="translate(0,{410 + rows * 54 + 30 - 486})">')   # everything below moves down past the Pi grid
+    box(M + (i % 4) * (pw + S[16]), y + (i // 4) * (48 + S[8]), pw, 48, a, b, 'new' if done else 'todo')
+y += ((len(pi) + 3) // 4) * (48 + S[8])
+y = note(y, 'Solid: seen working on the real board (2026-10-12, v3). Dashed: built and checked in QEMU, not yet seen there.') + S[32]
 
-sec(496, 'How it gets built')
-chain(506, [('Roadmap', 'the queue'), ('Build it', 'one agent, own branch'), ('Prove it', 'tests, real frames'), ('Ship it', 'merge on green')],
-      ['host', 'core', 'core', 'new'], back='next item')
-
-sec(594, 'Memory, PC build')
-# Read from docs/memory-map.svg, which tools/gen/memory-map.py draws from the built kernel.elf: never typed in.
-mm = open(os.path.join(ROOT, 'docs', 'memory-map.svg')).read()
-kb = {n: int(k.replace(',', '')) for n, k in re.findall(r'>([a-z ,()]+): ([0-9,]+) KB', mm)}
-mem = [('code', kb['code'], '#1c1c1e'), ('fonts, images, text', kb['fixed data (fonts, images, text)'], '#e3b7a4'),
-       ('starting values', kb['starting values'], '#b5502c'), ('working memory', kb['working memory'], '#f0d9ce'),
-       ('programs', kb['where programs load'], '#141413'), ('sound', kb['sound buffer'], '#d97757')]
-tot = sum(k for _, k, _ in mem); x = 20.0
-for n, k, c in mem:
-    w = max(2.0, (W - 40) * k / tot); out.append(f'<rect x="{x:.1f}" y="602" width="{w:.1f}" height="16" fill="{c}"/>'); x += w
-for i, (n, k, c) in enumerate(mem):   # three to a row, so the labels never run into each other
-    lx, ly = 20 + (i % 3) * 200, 626 + (i // 3) * 14
-    out.append(f'<rect x="{lx}" y="{ly}" width="8" height="8" fill="{c}"/><text x="{lx + 11}" y="{ly + 8}" fill="{MUT}" font-size="9">{n} {k:,} KB</text>')
-
-out.append('<g transform="translate(0,28)">')
-sec(664, 'Apps shipped')
-svg = open(os.path.join(ROOT, 'progress.svg')).read()
-pts = [tuple(map(int, p.split(','))) for p in re.search(r'<polyline points="([^"]+)"', svg).group(1).split()]
-apps = re.findall(r'data-apps="(\d+)"', svg)[-1]
+y = sec(y, 'bars', 'Apps shipped')
+pts = [tuple(map(int, q.split(','))) for q in re.search(r'<polyline points="([^"]+)"', svg).group(1).split()]
 dates = re.findall(r'data-version="([\d-]+)"', svg)
 x0, x1 = pts[0][0], pts[-1][0]
-sp = ' '.join(f'{20 + (x - x0) * 600 / (x1 - x0):.0f},{674 + (y - 10) * 80 / 140:.0f}' for x, y in pts)
-out.append(f'<path d="M20 674H620M20 714H620M20 754H620" stroke="{RULE}"/>')
-out.append(f'<polyline points="{sp}" fill="none" stroke="{INK}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>')
-ey = 674 + (pts[-1][1] - 10) * 80 / 140
-out.append(f'<circle cx="620" cy="{ey:.0f}" r="4" fill="{PAPER}" stroke="{T}" stroke-width="2"/>')
-out.append(f'<text x="612" y="{ey + 22:.0f}" fill="{INK}" font-size="12" font-weight="600" text-anchor="end">{apps} apps</text>')
-out.append(f'<text x="20" y="772" fill="{MUT}" font-size="10">{dates[0]}</text><text x="620" y="772" fill="{MUT}" font-size="10" text-anchor="end">{dates[-1]}</text>')
-out.append(f'<text x="{W / 2}" y="798" fill="{MUT}" font-size="10" text-anchor="middle">Terracotta: the newest piece. Drawn by tools/gen/map.py; the detail graphs live in docs/.</text>')
-
-out.append('</g>')
-out.append('</g>')
-out.append('</g>')
-out.append('</g>')
-H = 1062 + 130 + 100 + (rows * 54 + 30 - 220) - 40
-open(os.path.join(ROOT, 'architecture.svg'), 'w').write(
-    f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
-    f'style="background:{PAPER};font-family:Tree Sans,-apple-system,BlinkMacSystemFont,Helvetica,sans-serif">\n'
-    f'<defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="{T}"/></marker></defs>\n'
-    f'<rect width="100%" height="100%" fill="{PAPER}"/>\n<path d="{"".join(lines)}" stroke="{RULE}" fill="none"/>\n'
-    + '\n'.join(out) + '\n</svg>\n')
+gy = lambda v: y + (v - 10) * 96 / 140          # progress.svg's plot runs from y 10 (its peak) to 150 (none)
+PEAK = max(map(int, re.findall(r'data-apps="(\d+)"', svg)))
+CX = M + S[32]                                   # the chart starts past its scale
+for k, v in enumerate((PEAK, PEAK // 2, 0)):
+    p.add(f'<path d="M{CX} {y + k * 48}H{W - M}" stroke="{RULE}"/>')
+    p.text(CX - S[8], y + k * 48 + 4, str(v), 11, MUT, anchor='end')
+p.add('<polyline points="' + ' '.join(f'{CX + (x - x0) * (W - M - CX) / (x1 - x0):.0f},{gy(v):.0f}' for x, v in pts)
+      + f'" fill="none" stroke="{INK}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>')
+p.add(f'<circle cx="{W - M}" cy="{gy(pts[-1][1]):.0f}" r="4" fill="{PAPER}" stroke="{T}" stroke-width="2"/>')
+p.text(W - M - S[8], gy(pts[-1][1]) + 40, f'{APPS} apps', 13, weight=600, anchor='end')
+y += 96 + S[16]
+p.text(CX, y + 4, dates[0], 11, MUT); p.text(W - M, y + 4, dates[-1], 11, MUT, anchor='end')
+y += S[32]
+p.text(M, y + 4, 'Drawn by tools/gen/map.py. The detail graphs live in docs/.', 11, MUT)
+p.save('architecture.svg', y + 4 + M)
