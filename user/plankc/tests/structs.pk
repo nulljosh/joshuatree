@@ -1,0 +1,34 @@
+# plankc's structs (6.65.0): fields in order, defaults, labels, field assignment, a struct holding a list of itself.
+struct Tok {
+  line: int
+  kind: str
+  val: str = ""
+}
+
+struct N {
+  kind: str
+  kids: [N]
+}
+
+fn count(n: N) -> int {
+  var c = 1
+  for k in n.kids {
+    c += count(k)
+  }
+  return c
+}
+
+fn main() {
+  let a = Tok(1, "name")
+  let b = Tok(2, "str", "hi")
+  let c = Tok(val: "x", kind: "op", line: 3)
+  print(a, b)
+  print(c.kind, c.line + 1, [a, c])
+  a.line += 10
+  a.val = "changed"
+  print(a)
+  let tree = N("root", [N("a", []), N("b", [N("c", [])])])
+  tree.kids.append(N("d", []))
+  print(count(tree), tree.kids[1].kids[0].kind, len(tree.kids))
+  print(tree)
+}

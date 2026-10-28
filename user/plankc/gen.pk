@@ -19,6 +19,7 @@ struct G {
   locals: [Local]
   loops: [str]     # break and continue labels, two a loop
   fns: [str: str]  # function name: its return type
+  structs: [str: N]  # struct name: its Struct node
   rt: [str: int]   # the built-ins rt.pk is written with: syscall, peek, poke, global, addr, as_str
   strs: [str]      # string literals, as .asciz bodies
   next_off: int
@@ -62,6 +63,7 @@ fn int_type(n: N, ty: str) -> str {
     int_type(n, ty[1..len(ty) - 1])
     return ty
   }
+  if upper(ty[0]) and not ("<" in ty) and not ("?" in ty) and not ("." in ty) { return ty }   # a struct, checked where it is used
   nope(n, "the type \(ty)")
   return ""
 }
@@ -120,6 +122,12 @@ fn gen_expr(g: G, e: N) -> str {
     return item
   }
   if e.kind == "Method" { return method(g, e) }
+  if e.kind == "Field" {
+    let t = gen_expr(g, e.kids[0])
+    let f = field(g, e, t, e.kids[1].text)
+    emit(g, "ldr x0, [x0, #\(f.off)]")
+    return f.ty
+  }
   if e.kind == "Num" {
     if e.kids[1].text != "int" { nope(e, "a float") }
     emit(g, "ldr x0, =" + e.kids[0].text)
@@ -191,6 +199,7 @@ fn gen_expr(g: G, e: N) -> str {
   if e.kind == "Call" {
     let name = e.kids[0].text
     let a = e.kids[1].kids
+    if name in g.structs { return construct(g, e, g.structs[name]) }
     for lab in e.kids[2].kids {
       if lab.kind != "_" { nope(e, "a labeled argument") }
     }
@@ -248,7 +257,7 @@ fn to_str(g: G, e: N, t: str) {
     place(g, f)
     lit(g, "x0", "false")
     place(g, done)
-  } else if is_list(t) {
+  } else if is_list(t) or upper(t[0]) {
     lit(g, "x1", t)
     emit(g, "mov x2, #0")
     emit(g, "bl pk_rt_show")
@@ -390,6 +399,13 @@ fn gen_stmt(g: G, s: N) {
     gen_expr(g, s.kids[1])
     pop(g, "x1")
     emit(g, "str x0, [x1]")
+  } else if s.kind == "Assign" and s.kids[0].kind == "Field" {
+    let target = s.kids[0]
+    let f = field(g, s, gen_expr(g, target.kids[0]), target.kids[1].text)
+    push(g)
+    gen_expr(g, s.kids[1])
+    pop(g, "x1")
+    emit(g, "str x0, [x1, #\(f.off)]")
   } else if s.kind == "Assign" {
     if s.kids[0].kind != "Name" { nope(s, "assigning to " + s.kids[0].kind) }
     gen_expr(g, s.kids[1])
@@ -539,9 +555,78 @@ fn function(g: G, f: N) {
   emit(g, ".ltorg")
 }
 
+# ---------------------------------------------------------------- structs
+# A struct is the address of its fields, 8 bytes each, in the order written.
+fn field(g: G, e: N, t: str, name: str) -> Local {
+  if not (t in g.structs) { nope(e, "a field of a " + t) }
+  let fields = g.structs[t].kids[1].kids
+  for i in 0..len(fields) {
+    if fields[i].kids[0].text == name { return Local(name, i * 8, int_type(e, fields[i].kids[1].text)) }
+  }
+  throw "\(e.line): \(t) has no field \(name)"
+}
+
+# Name(a, b) or Name(b: 2, a: 1): each field from its argument, by place or by label, else from its default.
+fn construct(g: G, e: N, st: N) -> str {
+  let fields = st.kids[1].kids
+  let defaults = st.kids[2].kids
+  let a = e.kids[1].kids
+  let labels = e.kids[2].kids
+  if len(a) > len(fields) { nope(e, "more arguments than \(st.kids[0].text) has fields") }
+  emit(g, "mov x0, #" + str(len(fields) * 8 + 8))
+  emit(g, "bl pk_rt_alloc")
+  push(g)
+  for i in 0..len(fields) {
+    let fname = fields[i].kids[0].text
+    var v = none()
+    for j in 0..len(a) {
+      if (labels[j].kind == "_" and j == i) or (labels[j].kind == "S" and labels[j].text == fname) { v = a[j] }
+    }
+    if v.kind == "_" {
+      var k = 0
+      while k < len(defaults) {
+        if defaults[k].text == fname { v = defaults[k + 1] }
+        k += 2
+      }
+    }
+    if v.kind == "_" { throw "\(e.line): \(st.kids[0].text) needs \(fname)" }
+    let t = gen_expr(g, v)
+    let want = int_type(e, fields[i].kids[1].text)
+    if t != want and not (t == "[]" and is_list(want)) { nope(e, "a \(t) for \(fname), a \(want)") }
+    emit(g, "ldr x1, [sp]")
+    emit(g, "str x0, [x1, #" + str(i * 8) + "]")
+  }
+  pop(g, "x0")
+  return st.kids[0].text
+}
+
+# rt_layout(name), written as a tree like any parsed function: each struct's "field:type;field:type", for rt_show.
+fn layout_fn(g: G) -> N {
+  let body: [N] = []
+  for name in g.structs {
+    let parts: [str] = []
+    for f in g.structs[name].kids[1].kids { parts.append(f.kids[0].text + ":" + f.kids[1].text) }
+    let test = node("Binary", 0, [sv("=="), node("Name", 0, [sv("name")]), node("Str", 0, [sv(name)])])
+    body.append(node("If", 0, [test, lv([node("Return", 0, [node("Str", 0, [sv(parts.join(";"))])])]), lv([])]))
+  }
+  body.append(node("Return", 0, [node("Str", 0, [sv("")])]))
+  return node("Fn", 0, [sv("rt_layout"), lv([tv([sv("name"), sv("str")])]), sv("str"), lv(body), N("D", 0, "", []), lv([]), bv(false), bv(false), sv("")])
+}
+
 fn asm(prog: N, runtime: N) -> str {
-  let g = G([], 0, [], [], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1], [], 0, "")
+  let g = G([], 0, [], [], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1], [], 0, "")
   for f in runtime.kids { prog.kids.append(f) }
+  let fns: [N] = []
+  for f in prog.kids {
+    if f.kind == "Struct" {
+      if len(f.kids[3].kids) > 0 or len(f.kids[4].kids) > 0 { nope(f, "struct methods and type parameters") }
+      g.structs[f.kids[0].text] = f
+    } else {
+      fns.append(f)
+    }
+  }
+  fns.append(layout_fn(g))
+  prog.kids = fns
   for f in prog.kids {
     if f.kind != "Fn" { nope(f, "a top-level " + f.kind) }
     if f.kids[6].text == "true" or f.kids[7].text == "true" { nope(f, "extern and tool fns") }

@@ -155,6 +155,7 @@ fn rt_show(v: int, ty: str, inner: bool) -> str {
     if inner { return rt_quote(as_str(v)) }
     return as_str(v)
   }
+  if peek8(addr(ty)) != 91 { return rt_show_struct(v, ty) }   # not [: a struct
   let item = rt_sub(ty, 1, len(ty) - 1)
   var out = "["
   for i in 0..peek(v) {
@@ -162,4 +163,30 @@ fn rt_show(v: int, ty: str, inner: bool) -> str {
     out = out + rt_show(peek(peek(v + 16) + i * 8), item, true)
   }
   return out + "]"
+}
+
+# Where byte c first is in s at or after from, or len(s).
+fn rt_find_byte(s: str, c: int, from: int) -> int {
+  var i = from
+  while i < len(s) and peek8(addr(s) + i) != c { i += 1 }
+  return i
+}
+
+# ---- structs (6.65.0): the address of their fields, 8 bytes each, in order. rt_layout(name), which plankc writes for each
+# program, gives "field:type;field:type", so a struct prints as Plank's does: P(x: 1, name: "p").
+fn rt_show_struct(v: int, ty: str) -> str {
+  let layout = rt_layout(ty)
+  if len(layout) == 0 { rt_fail("plankc cannot show a " + ty) }
+  var out = ty + "("
+  var at = 0
+  var i = 0
+  while at < len(layout) {
+    let end = rt_find_byte(layout, 59, at)        # ;
+    let colon = rt_find_byte(layout, 58, at)      # :
+    if i > 0 { out = out + ", " }
+    out = out + rt_sub(layout, at, colon) + ": " + rt_show(peek(v + i * 8), rt_sub(layout, colon + 1, end), true)
+    at = end + 1
+    i += 1
+  }
+  return out + ")"
 }
