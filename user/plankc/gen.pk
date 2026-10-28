@@ -40,6 +40,9 @@ struct G {
   expect: str              # the fn type a lambda about to be written should have, from where it goes, or ""
   tramps: [str: int]       # functions already given a trampoline, so they can be values
   bytes: bool              # writing one of rt.pk's functions, where len of a str is its bytes (6.78.0)
+  generics: [str: N]       # a function with type parameters: its Fn node, written once per set of types (6.81.0)
+  instances: [str: str]    # first<int> and the like: the name its copy is written under
+  pending: [N]             # copies made while writing a function, written after it
 }
 
 fn emit(g: G, s: str) { g.out.append(s) }   # unindented: an indent would copy every line, and the assembler needs none
@@ -214,6 +217,22 @@ fn gen_expr(g: G, e: N) -> str {
     return "str"
   }
   if e.kind == "Interp" { return interp(g, e) }
+  if e.kind == "IfExpr" {   # 6.81.0: if c { a } else { b } as a value; nil on one side makes it optional
+    let at = type_of(g, e.kids[1])
+    let bt = type_of(g, e.kids[2])
+    var t = at
+    if at == "nil" { t = opt_type(bt) } else if bt == "nil" { t = opt_type(at) } else if fits(at, bt) { t = bt } else if not fits(bt, at) { nope(e, "an if with a \(at) on one side and a \(bt) on the other") }
+    let other = fresh(g)
+    let done = fresh(g)
+    gen_expr(g, e.kids[0])
+    emit(g, "cbz x0, " + other)
+    coerce(g, gen_expr(g, e.kids[1]), t)
+    emit(g, "b " + done)
+    place(g, other)
+    coerce(g, gen_expr(g, e.kids[2]), t)
+    place(g, done)
+    return t
+  }
   if e.kind == "ResultTry" {   # 6.80.0: r? is r's value, or, when r is an err, returns r from here
     let t = gen_expr(g, e.kids[0])
     if not t.starts_with("Result<") { nope(e, "? on a " + t) }
@@ -495,6 +514,7 @@ fn gen_expr(g: G, e: N) -> str {
     if has_local(g, name) { return call_value(g, e, node("Name", e.line, [sv(name)]), a) }   # next(): a closure in a local
     if name in g.structs { return construct(g, e, g.structs[name]) }
     if name == "attempt" and len(a) == 1 and not (name in g.fns) { return attempt_call(g, e, a[0]) }
+    if name in g.generics { return gen_expr(g, node("Call", e.line, [sv(instance(g, e, name, a)), e.kids[1], e.kids[2]])) }
     if name == "plankc_buf" and len(a) == 1 {   # enc.pk's stand-ins, swapped for the runtime's bytes (enc.pk says why)
       gen_expr(g, a[0])
       emit(g, "bl pk_rt_zstr")
@@ -1977,6 +1997,92 @@ fn open_try(g: G, landing: str) -> int {
   return base
 }
 
+# ---------------------------------------------------------------- generics (6.81.0)
+fn opt_type(ty: str) -> str {
+  if is_opt(ty) { return ty }
+  return ty + "?"
+}
+
+# The copy of generic function name for the types its arguments give, made and queued the first time: first([1]) is
+# first<int>, written as first__0 with every T in its types read as int. A lambda argument takes its types from the copy.
+fn instance(g: G, e: N, name: str, a: [N]) -> str {
+  let f = g.generics[name]
+  let tps: [str] = []
+  for p in f.kids[5].kids { tps.append(p.text) }
+  let params = f.kids[1].kids
+  if len(a) != len(params) { nope(e, "\(len(a)) arguments to \(name), which takes \(len(params))") }
+  let bound: [str: str] = [:]
+  for i in 0..len(a) {
+    if a[i].kind != "Lambda" { unify(params[i].kids[1].text, type_of(g, a[i]), tps, bound) }
+  }
+  let types: [str] = []
+  for p in tps {
+    if not (p in bound) { nope(e, "telling \(name)'s \(p) from its arguments") }
+    types.append(bound[p])
+  }
+  let key = name + "<" + types.join(", ") + ">"
+  if key in g.instances { return g.instances[key] }
+  let inst = name + "__" + str(len(g.instances))
+  g.instances[key] = inst
+  let copy = with_types(f, tps, types)
+  copy.kids[0] = sv(inst)
+  copy.kids[5] = lv([])
+  let ret = copy.kids[2].text
+  if ret != "void" { int_type(copy, ret) }
+  g.fns[inst] = ret
+  g.fn_nodes[inst] = copy
+  g.pending.append(copy)
+  return inst
+}
+
+# Binds the type parameters in pattern p to the parts of t that sit where they do: [T] and [int] bind T to int.
+fn unify(p: str, t: str, tps: [str], bound: [str: str]) {
+  if p in tps {
+    if not (p in bound) and t != "nil" and t != "[]" and t != "[:]" { bound[p] = t }
+    return
+  }
+  if is_opt(p) {
+    if is_opt(t) { unify(p[..len(p) - 1], t[..len(t) - 1], tps, bound) } else { unify(p[..len(p) - 1], t, tps, bound) }
+    return
+  }
+  if is_list(p) and is_list(t) and t != "[]" { unify(p[1..len(p) - 1], t[1..len(t) - 1], tps, bound) }
+}
+
+# A copy of n with each type parameter, as a whole word, read as its type. ponytail: every name in the tree is read,
+# not only types, but string literals are left alone; a variable named like a type parameter would be renamed too.
+fn with_types(n: N, tps: [str], types: [str]) -> N {
+  var text = n.text
+  if n.kind == "S" { text = swap_words(text, tps, types) }
+  let kids: [N] = []
+  for k in n.kids {
+    if n.kind == "Str" { kids.append(k) } else { kids.append(with_types(k, tps, types)) }
+  }
+  return N(n.kind, n.line, text, kids)
+}
+
+fn swap_words(s: str, tps: [str], types: [str]) -> str {
+  var out = ""
+  var i = 0
+  while i < len(s) {
+    var j = i
+    while j < len(s) and word_char(s[j]) { j += 1 }
+    if j == i {
+      out = out + s[i]
+      i += 1
+    } else {
+      let w = s[i..j]
+      let k = tps.index_of(w)
+      if k == nil { out = out + w } else { out = out + types[k!] }
+      i = j
+    }
+  }
+  return out
+}
+
+fn word_char(c: str) -> bool {
+  return (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9") or c == "_"
+}
+
 # ---------------------------------------------------------------- Result<T> (6.80.0)
 # An enum gen.pk writes for each T the first time it meets Result<T>: ok(value: T) or err(message: str), so match, print
 # and == treat it as any enum. rt_layout is written after every function, so each one met has its layout.
@@ -2144,7 +2250,7 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
 
 # The program's assembly, a line a string: for asm's text, or enc.pk's image.
 fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
-  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false)
+  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false, [:], [:], [])
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
@@ -2173,6 +2279,11 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   for f in prog.kids {
     if f.kind != "Fn" { nope(f, "a top-level " + f.kind) }
     if f.kids[6].text == "true" or f.kids[7].text == "true" { nope(f, "extern and tool fns") }
+    if len(f.kids[5].kids) > 0 {   # fn name<T>: a copy for each set of types it is called with (instance)
+      if f.kids[0].text in g.generics { throw "\(f.line): function '\(f.kids[0].text)' defined twice" }
+      g.generics[f.kids[0].text] = f
+      continue
+    }
     let ret = f.kids[2].text
     if ret != "void" { int_type(f, ret) }
     if f.kids[0].text in g.fns { throw "\(f.line): function '\(f.kids[0].text)' defined twice" }
@@ -2182,8 +2293,9 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   if not ("main" in g.fns) { throw "no fn main" }
   g.out.append("  .text")
   for f in prog.kids {
-    if f.kids[0].text != "rt_layout" { function(g, f) }
+    if f.kids[0].text != "rt_layout" and not (f.kids[0].text in g.generics) { function(g, f) }
   }
+  while len(g.pending) > 0 { function(g, g.pending.pop()) }   # generic copies, which may call for more
   function(g, layout_fn(g))   # last, so each Result<T> the functions met has its layout (6.80.0)
   for l in g.lambda_code { g.out.append(l) }   # the lambdas and trampolines the functions made
   # The trees are done with. Letting go of them here lets the collector merge their room into the one block the join at
