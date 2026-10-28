@@ -42,7 +42,7 @@ fn main() {
       }
       if len(a) > 3 {
         if not write_file(a[3], out) { throw "cannot write \(a[3])" }
-        print("plankc: wrote \(a[3]), \(len(out)) bytes")
+        print("plankc: wrote \(a[3]), \(plankc_byte_len(out)) bytes")
       } else {
         print(out)
       }

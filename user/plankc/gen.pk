@@ -39,6 +39,7 @@ struct G {
   lambda_n: int
   expect: str              # the fn type a lambda about to be written should have, from where it goes, or ""
   tramps: [str: int]       # functions already given a trampoline, so they can be values
+  bytes: bool              # writing one of rt.pk's functions, where len of a str is its bytes (6.78.0)
 }
 
 fn emit(g: G, s: str) { g.out.append(s) }   # unindented: an indent would copy every line, and the assembler needs none
@@ -477,6 +478,11 @@ fn gen_expr(g: G, e: N) -> str {
       emit(g, "strb w2, [x0]")
       return "void"
     }
+    if name == "plankc_byte_len" and len(a) == 1 {
+      gen_expr(g, a[0])
+      emit(g, "ldur x0, [x0, #-8]")
+      return "int"
+    }
     if name == "plankc_byte_at" and len(a) == 2 {
       gen_expr(g, a[0])
       push(g)
@@ -607,7 +613,7 @@ fn str_method(g: G, e: N, name: str, a: [N]) -> str {
   if name == "find" {   # where it is, or nil
     let none_ = fresh(g)
     let done = fresh(g)
-    emit(g, "bl pk_rt_find")
+    emit(g, "bl pk_rt_cfind")
     emit(g, "tbnz x0, #63, " + none_)
     emit(g, "bl pk_rt_box")
     emit(g, "b " + done)
@@ -962,8 +968,10 @@ fn float_lit(g: G, e: N, text: str) -> str {
 fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   if name == "len" and len(a) == 1 {
     let t = gen_expr(g, a[0])
-    if t == "str" {
+    if t == "str" and g.bytes {
       emit(g, "ldur x0, [x0, #-8]")
+    } else if t == "str" {   # characters, as Plank counts them (6.78.0)
+      emit(g, "bl pk_rt_clen")
     } else if is_list(t) {
       emit(g, "ldr x0, [x0]")
     } else if is_dict(t) {
@@ -1486,6 +1494,7 @@ fn function(g: G, f: N) {
   let name = f.kids[0].text
   let params = f.kids[1].kids
   g.ret_type = f.kids[2].text
+  g.bytes = name.starts_with("rt_")
   if len(params) > 8 { nope(f, "more than eight parameters") }
   if len(f.kids[5].kids) > 0 { nope(f, "type parameters") }
   g.locals = []
@@ -2000,7 +2009,7 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
 
 # The program's assembly, a line a string: for asm's text, or enc.pk's image.
 fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
-  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:])
+  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false)
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
@@ -2070,8 +2079,9 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   place(g, "pk_globals")
   emit(g, ".zero 256")   # 32 cells
   g.out.append("  .section .rodata")
-  for i in 0..len(g.strs) {   # each literal: its byte length, worked out by the assembler, then its bytes and a zero
+  for i in 0..len(g.strs) {   # each literal: its characters (6.78.0), its byte length, worked out by the assembler, then its bytes and a zero
     emit(g, ".p2align 3")
+    emit(g, ".quad " + str(len(g.strs[i])))
     emit(g, ".quad .Le" + str(i) + " - .Ls" + str(i))
     g.out.append(".Ls" + str(i) + ":")
     emit(g, ".ascii " + quote(g.strs[i]))

@@ -7,7 +7,7 @@
 
 # Bytes. Plank has neither chr nor ord, so under plank.py these three are stand-ins that never run: plankc's own build of
 # this file swaps every call for its runtime's (gen.pk, the "plankc_" names): a zeroed string of n bytes, a byte written
-# into one, a byte read out of one. The encoder runs only on plankc's runtime, on the Pi, where a string is bytes.
+# into one, a byte read out of one, a string's length in bytes (6.78.0: len counts characters). The encoder runs only on plankc's runtime, on the Pi, where a string is bytes.
 fn plankc_buf(n: int) -> str {
   return ""
 }
@@ -15,6 +15,9 @@ fn plankc_buf_set(s: str, i: int, c: int) {
 }
 fn plankc_byte_at(s: str, i: int) -> int {
   return 0
+}
+fn plankc_byte_len(s: str) -> int {
+  return len(s)
 }
 
 struct Asm {
@@ -280,7 +283,7 @@ fn float_instr(a: Asm, op: str, args: [str]) {
 # A quoted string the way gen.pk's quote writes it: \\, \", \n, \t and \0 escaped, every other byte as it is.
 fn ascii(a: Asm, q: str) {
   var i = 1
-  let end = len(q) - 1
+  let end = plankc_byte_len(q) - 1
   while i < end {
     var c = plankc_byte_at(q, i)
     if c == 92 {
@@ -322,7 +325,8 @@ fn line(a: Asm, raw: str) {
     ascii(a, rest)
   } else if op == ".quad" {
     let parts = rest.split(" - ")
-    var v = label(a, parts[0]) - label(a, parts[1])
+    var v = 0
+    if len(parts) == 2 { v = label(a, parts[0]) - label(a, parts[1]) } else { v = int(rest) }   # a literal's length, or its characters
     for i in 0..8 {
       byte(a, bits(v, 8))
       v = (v - bits(v, 8)) / 256
