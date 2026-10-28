@@ -105,6 +105,28 @@ fn rt_p10(e: int) -> float {
   return r * t
 }
 
+# x * 10^k (x >= 0) rounded to the nearest int, a tie to even, decided on the exact value; -1 past what that can do
+# (|k| over 22, or a result past 2^53). 10^|k| is exact there, so fma gives the product's rounding error exactly (or
+# the quotient's remainder); only its sign is read, since the true value is hi plus less than half of hi's last bit.
+fn rt_scaled(x: float, k: int) -> int {
+  if k > 22 or k < -22 { return -1 }
+  var hi = 0.0
+  var lo = 0.0
+  if k >= 0 {
+    hi = x * rt_p10(k)
+    lo = fma(x, rt_p10(k), -hi)
+  } else {
+    hi = x / rt_p10(0 - k)
+    lo = fma(-hi, rt_p10(0 - k), x)
+  }
+  if hi >= float(9007199254740992) { return -1 }   # 2^53
+  let whole = floor(hi)
+  let f = hi - whole
+  var n = int(whole)
+  if f > 0.5 or (f == 0.5 and (lo > 0.0 or (lo == 0.0 and n % 2 == 1))) { n += 1 }
+  return n
+}
+
 # v > 0 and finite: its first sig significant digits, rounded to nearest (a tie to even, as printf), as an int, and the
 # power of ten of the first one. A guess at that power first, as pklibc's has it; then v * 10^k (or v / 10^k) with k up
 # to 22, where 10^k is exact, so fma gives the product's rounding error exactly and the rounding is decided on the true
@@ -128,21 +150,8 @@ fn rt_digits(x: float, sig: int) -> (int, int) {
   }
   let top = int(rt_p10(sig))
   for tries in 0..3 {
-    let k = sig - 1 - e
-    if k > 22 or k < -22 { break }
-    var hi = 0.0
-    var lo = 0.0   # only its sign is read: the true value is hi + something no bigger than half hi's last bit
-    if k >= 0 {
-      hi = x * rt_p10(k)
-      lo = fma(x, rt_p10(k), -hi)
-    } else {
-      hi = x / rt_p10(0 - k)
-      lo = fma(-hi, rt_p10(0 - k), x)
-    }
-    let whole = floor(hi)
-    let f = hi - whole
-    var n = int(whole)
-    if f > 0.5 or (f == 0.5 and (lo > 0.0 or (lo == 0.0 and n % 2 == 1))) { n += 1 }
+    let n = rt_scaled(x, sig - 1 - e)
+    if n < 0 { break }
     if n >= top {
       e += 1
     } else if n < top / 10 {
@@ -275,7 +284,7 @@ fn rt_show(v: int, ty: str, inner: bool) -> str {
   if peek8(addr(ty) + len(ty) - 1) == 63 {   # T?: nil, or the value (an int or bool one out of its box)
     if v == 0 { return "nil" }
     let base = rt_sub(ty, 0, len(ty) - 1)
-    if rt_str_eq(base, "int") or rt_str_eq(base, "bool") { return rt_show(peek(v), base, inner) }
+    if rt_str_eq(base, "int") or rt_str_eq(base, "bool") or rt_str_eq(base, "float") { return rt_show(peek(v), base, inner) }
     return rt_show(v, base, inner)
   }
   if ty == "int" { return rt_int_str(v) }
@@ -1037,5 +1046,301 @@ fn rt_msort(a: int, t: int, lo: int, hi: int, before: fn(int, int) -> bool) {
   }
   for m in lo..hi {
     poke(ai + m * 8, peek(ti + m * 8))
+  }
+}
+
+# ---- 6.77.0: the built-ins Plank's examples reach for next ----
+# fixed(x, digits): x with exactly that many digits after the point, as printf's %.*f, the last one rounded exactly.
+fn rt_fixed(x: float, digits: int) -> str {
+  var d = digits
+  if d < 0 { d = 0 }
+  if d > 15 { d = 15 }
+  var v = x
+  var out = ""
+  if v < 0.0 or (v == 0.0 and 1.0 / v < 0.0) {
+    out = "-"
+    v = -v
+  }
+  if not (v == v) { return "nan" }
+  if v != 0.0 and v + v == v { return out + "inf" }
+  var n = rt_scaled(v, d)
+  if n < 0 { n = int(v * rt_p10(d) + 0.5) }   # ponytail: past 2^53 it scales; exact needs a bignum
+  var t = rt_int_str(n)
+  while len(t) <= d { t = "0" + t }
+  if d == 0 { return out + t }
+  return out + rt_sub(t, 0, len(t) - d) + "." + rt_sub(t, len(t) - d, len(t))
+}
+
+# float(s): Plank's strtod over plain decimal text, spaces around allowed. Its digits and power of ten are exact up to 15
+# digits and 10^22, so one multiply or divide rounds it to the nearest double, as strtod does.
+fn rt_parse_float(s: str) -> float {
+  let t = rt_trim(s)
+  var i = 0
+  var neg = false
+  if i < len(t) and (peek8(addr(t)) == 45 or peek8(addr(t)) == 43) {
+    neg = peek8(addr(t)) == 45
+    i = 1
+  }
+  var m = 0
+  var nd = 0       # significant digits kept
+  var exp = 0
+  var any = false
+  var dot = false
+  while i < len(t) {
+    let c = peek8(addr(t) + i)
+    if c == 46 and not dot {
+      dot = true
+    } else if c >= 48 and c <= 57 {
+      any = true
+      if nd < 18 {
+        if m > 0 or c != 48 { nd += 1 }
+        m = m * 10 + c - 48
+        if dot { exp -= 1 }
+      } else if not dot {
+        exp += 1   # past 18 digits: the rest only scale
+      }
+    } else {
+      break
+    }
+    i += 1
+  }
+  if i < len(t) and (peek8(addr(t) + i) == 101 or peek8(addr(t) + i) == 69) {
+    i += 1
+    var eneg = false
+    if i < len(t) and (peek8(addr(t) + i) == 45 or peek8(addr(t) + i) == 43) {
+      eneg = peek8(addr(t) + i) == 45
+      i += 1
+    }
+    var e = 0
+    let start = i
+    while i < len(t) and peek8(addr(t) + i) >= 48 and peek8(addr(t) + i) <= 57 {
+      e = e * 10 + peek8(addr(t) + i) - 48
+      i += 1
+    }
+    if i == start { any = false }
+    if eneg { e = 0 - e }
+    exp += e
+  }
+  if not any or i != len(t) { rt_fail("float() of \"\(s)\": not a number") }
+  var v = float(m)
+  if nd <= 15 and exp >= -22 and exp <= 22 {   # exact: one rounding
+    if exp >= 0 { v = v * rt_p10(exp) } else { v = v / rt_p10(0 - exp) }
+  } else {
+    v = v * rt_p10(exp)   # ponytail: long or far-out text rounds twice; exact needs a bignum
+  }
+  if neg { return -v }
+  return v
+}
+
+fn rt_list_remove_at(l: int, i: int) {
+  let items = peek(l + 16)
+  for k in i..peek(l) - 1 { poke(items + k * 8, peek(items + k * 8 + 8)) }
+  poke(items + (peek(l) - 1) * 8, 0)
+  poke(l, peek(l) - 1)
+}
+
+fn rt_dict_remove(d: int, k: str) {
+  let i = rt_dict_find(d, k)
+  if i < 0 {
+    rt_fail("key \"\(k)\" is not in this dict")
+    return
+  }
+  rt_list_remove_at(peek(d), i)
+  rt_list_remove_at(peek(d + 8), i)
+}
+
+# xs.min() and xs.max(): where the smallest (the first of equals) or the largest (the last of equals) is, as Plank's
+# sorted().first and .last pick, or -1 for an empty list. kind: 0 int, 1 float, 2 str.
+fn rt_list_pick(l: int, kind: int, most: bool) -> int {
+  if peek(l) == 0 { return -1 }
+  let items = peek(l + 16)
+  var at = 0
+  for i in 1..peek(l) {
+    let a = peek(items + i * 8)
+    let b = peek(items + at * 8)
+    var less = false   # a before b
+    var same = false
+    if kind == 0 {
+      less = a < b
+      same = a == b
+    } else if kind == 1 {
+      less = as_float(a) < as_float(b)
+      same = as_float(a) == as_float(b)
+    } else {
+      let c = rt_str_cmp(as_str(a), as_str(b))
+      less = c < 0
+      same = c == 0
+    }
+    if most and not less { at = i }
+    if not most and less { at = i }
+  }
+  return at
+}
+
+# The whitespace split: runs of spaces, tabs and newlines between words, none at either end.
+fn rt_split_space(s: str) -> int {
+  let out = rt_list_new()
+  var i = 0
+  while i < len(s) {
+    while i < len(s) and rt_space(peek8(addr(s) + i)) { i += 1 }
+    let at = i
+    while i < len(s) and not rt_space(peek8(addr(s) + i)) { i += 1 }
+    if i > at { rt_list_push(out, addr(rt_sub(s, at, i))) }
+  }
+  return out
+}
+
+# a == b, part by part, from their type written out, as plank.py's eq functions: lists in order, dicts by key whatever
+# their order, tuples and structs field by field, optionals nil or the same inside, enums by case and fields.
+fn rt_equal(a: int, b: int, ty: str) -> bool {
+  if ty == "int" or ty == "bool" { return a == b }
+  if ty == "float" { return as_float(a) == as_float(b) }
+  if ty == "str" { return rt_str_eq(as_str(a), as_str(b)) }
+  if rt_starts(ty, "fn(") { return a == b }
+  if peek8(addr(ty) + len(ty) - 1) == 63 {   # T?
+    if a == 0 or b == 0 { return a == b }
+    let base = rt_sub(ty, 0, len(ty) - 1)
+    if rt_str_eq(base, "int") or rt_str_eq(base, "bool") or rt_str_eq(base, "float") { return rt_equal(peek(a), peek(b), base) }
+    return rt_equal(a, b, base)
+  }
+  if peek8(addr(ty)) == 40 {   # (a tuple
+    var depth = 0
+    var at = 1
+    var i = 0
+    for k in 1..len(ty) {
+      let c = peek8(addr(ty) + k)
+      if c == 40 or c == 91 { depth += 1 }
+      if (c == 41 or c == 93) and depth > 0 { depth -= 1 }
+      if (c == 44 and depth == 0) or k == len(ty) - 1 {
+        if not rt_equal(peek(a + i * 8), peek(b + i * 8), rt_sub(ty, at, k)) { return false }
+        at = k + 2
+        i += 1
+      }
+    }
+    return true
+  }
+  if peek8(addr(ty)) == 91 and rt_dict_like(ty) {   # [str: V]
+    let colon = rt_find(ty, ": ")
+    let vt = rt_sub(ty, colon + 2, len(ty) - 1)
+    let ka = peek(a)
+    if peek(ka) != peek(peek(b)) { return false }
+    for i in 0..peek(ka) {
+      let j = rt_dict_find(b, as_str(peek(peek(ka + 16) + i * 8)))
+      if j < 0 { return false }
+      if not rt_equal(peek(peek(peek(a + 8) + 16) + i * 8), peek(peek(peek(b + 8) + 16) + j * 8), vt) { return false }
+    }
+    return true
+  }
+  if peek8(addr(ty)) == 91 {   # [T]
+    if peek(a) != peek(b) { return false }
+    let item = rt_sub(ty, 1, len(ty) - 1)
+    for i in 0..peek(a) {
+      if not rt_equal(peek(peek(a + 16) + i * 8), peek(peek(b + 16) + i * 8), item) { return false }
+    }
+    return true
+  }
+  let layout = rt_layout(ty)
+  if peek8(addr(layout)) == 35 { return rt_enum_eq(a, b, ty) }
+  var at = 0
+  var i = 0
+  while at < len(layout) {   # a struct, field by field
+    let end = rt_find_byte(layout, 59, at)
+    let colon = rt_find_byte(layout, 58, at)
+    if not rt_equal(peek(a + i * 8), peek(b + i * 8), rt_sub(layout, colon + 1, end)) { return false }
+    at = end + 1
+    i += 1
+  }
+  return true
+}
+
+# pow(x, y) for a whole-number y, by squaring. ponytail: a fractional y needs exp and log; it stops for now.
+fn rt_pow(x: float, y: float) -> float {
+  if not (floor(y) == y) or y > 1024.0 or y < -1024.0 { rt_fail("pow() with a fractional exponent is not in plankc yet") }
+  var n = int(y)
+  var neg = n < 0
+  if neg { n = 0 - n }
+  var r = 1.0
+  var b = x
+  while n > 0 {
+    if n % 2 == 1 { r = r * b }
+    b = b * b
+    n = n / 2
+  }
+  if neg { return 1.0 / r }
+  return r
+}
+
+# upper (up) or lower case, ASCII letters only, as Plank's.
+fn rt_case(s: str, up: bool) -> str {
+  let p = rt_str(len(s))
+  for i in 0..len(s) {
+    var c = peek8(addr(s) + i)
+    if up and c >= 97 and c <= 122 { c -= 32 }
+    if not up and c >= 65 and c <= 90 { c += 32 }
+    poke8(p + i, c)
+  }
+  return as_str(p)
+}
+
+# Every a in s, left to right and not overlapping, as b.
+fn rt_replace(s: str, a: str, b: str) -> str {
+  if len(a) == 0 { return s }
+  return rt_join(rt_split(s, a), b)
+}
+
+# Where the first item equal to v (part by part) is, or -1.
+fn rt_list_index(l: int, v: int, ty: str) -> int {
+  for i in 0..peek(l) {
+    if rt_equal(peek(peek(l + 16) + i * 8), v, ty) { return i }
+  }
+  return -1
+}
+
+# The items added left to right from zero, as plank.py adds them.
+fn rt_list_sum_int(l: int) -> int {
+  var n = 0
+  for i in 0..peek(l) { n += peek(peek(l + 16) + i * 8) }
+  return n
+}
+
+fn rt_list_sum_float(l: int) -> float {
+  var f = 0.0
+  for i in 0..peek(l) { f = f + as_float(peek(peek(l + 16) + i * 8)) }
+  return f
+}
+
+fn rt_list_insert(l: int, at: int, v: int) {
+  var i = at
+  if i < 0 { i += peek(l) }
+  if i < 0 or i > peek(l) { rt_fail("insert at \(at) in a list of \(peek(l))") }
+  rt_list_push(l, 0)
+  let items = peek(l + 16)
+  var k = peek(l) - 1
+  while k > i {
+    poke(items + k * 8, peek(items + k * 8 - 8))
+    k -= 1
+  }
+  poke(items + i * 8, v)
+}
+
+fn rt_list_take(l: int, at: int) -> int {
+  var i = at
+  if i < 0 { i += peek(l) }
+  if i < 0 or i >= peek(l) { rt_fail("remove_at \(at) in a list of \(peek(l))") }
+  let v = peek(peek(l + 16) + i * 8)
+  rt_list_remove_at(l, i)
+  return v
+}
+
+fn rt_list_reverse(l: int) {
+  let items = peek(l + 16)
+  var a = 0
+  var b = peek(l) - 1
+  while a < b {
+    let t = peek(items + a * 8)
+    poke(items + a * 8, peek(items + b * 8))
+    poke(items + b * 8, t)
+    a += 1
+    b -= 1
   }
 }

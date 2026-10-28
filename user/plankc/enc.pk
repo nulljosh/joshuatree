@@ -217,7 +217,11 @@ fn instr(a: Asm, op: str, args: [str]) {
     if args[0] == "sp" or args[1] == "sp" { return word(a, 2432696320 + reg(args[1]) * 32 + reg(args[0])) }   # add d, n, #0
     return word(a, 2852127712 + reg(args[1]) * 65536 + reg(args[0]))                                           # orr d, xzr, m
   }
-  if op == "ldr" and args[1].starts_with("=") { return load_const(a, reg(args[0]), int(args[1][1..])) }
+  if op == "ldr" and args[1].starts_with("=") {   # a small constant is one movz; its size still follows from the text alone
+    let v = int(args[1][1..])
+    if v >= 0 and v < 65536 { return word(a, 3531603968 + v * 32 + reg(args[0])) }
+    return load_const(a, reg(args[0]), v)
+  }
   if op == "ldr" or op == "str" or op == "ldur" or op == "stur" or op == "ldrb" or op == "strb" { return load_store(a, op, args) }
   if op == "ldp" { return word(a, 2831155200 + bits(imm(args[3]) / 8, 7) * 32768 + reg(args[1]) * 1024 + mem(args[2])[0] * 32 + reg(args[0])) }
   if op == "stp" { return word(a, 2843738112 + bits(mem(args[2])[1] / 8, 7) * 32768 + reg(args[1]) * 1024 + mem(args[2])[0] * 32 + reg(args[0])) }
