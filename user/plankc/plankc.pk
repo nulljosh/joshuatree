@@ -32,6 +32,9 @@ fn main() {
       if len(a) < 3 { throw "plankc asm needs rt.pk too: plankc asm FILE.pk RT.pk" }
       let seen: [str: int] = [:]
       let prog = load_program(a[1], seen)
+      if uses_set(prog) {   # Plank's Set<T>, in Plank (gen.pk's set_source)
+        for item in parse(set_source()).kids { prog.kids.append(item) }
+      }
       let runtime = parse(read_file(a[2]) ?? "")
       var out = ""
       if a[0] == "img" {   # on the Pi only: the image is bytes, which plank.py's build of plankc cannot write

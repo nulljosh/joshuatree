@@ -450,6 +450,12 @@ fn gen_expr(g: G, e: N) -> str {
     var rt = gen_expr(g, e.kids[2])
     emit(g, "mov x1, x0")
     pop(g, "x0")
+    if op == "in" and rt.starts_with("Set<") {   # 6.83.0: x in s is s.has(x)
+      emit(g, "mov x2, x0")
+      emit(g, "mov x0, x1")
+      emit(g, "mov x1, x2")
+      return set_call(g, rt, "has")
+    }
     if op == "in" and is_dict(rt) {
       emit(g, "mov x2, x0")
       emit(g, "mov x0, x1")
@@ -1055,6 +1061,8 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
       emit(g, "ldur x0, [x0, #-8]")
     } else if t == "str" {   # characters, as Plank counts them (6.78.0)
       emit(g, "bl pk_rt_clen")
+    } else if t.starts_with("Set<") {   # a set's size (6.83.0)
+      set_call(g, t, "size")
     } else if is_list(t) {
       emit(g, "ldr x0, [x0]")
     } else if is_dict(t) {
@@ -1413,6 +1421,9 @@ fn gen_stmt(g: G, s: N) {
     if t == "str" {   # a string's characters (6.77.0)
       emit(g, "bl pk_rt_chars")
       t = "[str]"
+    }
+    if t.starts_with("Set<") {   # a set's members (6.83.0)
+      t = set_call(g, t, "items")
     }
     if is_dict(t) and s.kids[3].kind != "_" {   # for k, v in d: each key with its value, in order (6.77.0)
       let d = new_local(g, " d", t)
@@ -2205,6 +2216,87 @@ fn swap_words(s: str, tps: [str], types: [str]) -> str {
 
 fn word_char(c: str) -> bool {
   return (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9") or c == "_"
+}
+
+# ---------------------------------------------------------------- sets (6.83.0)
+# Set<T> is Plank's own, written in Plank: plank.py's source of it, added to a program that names Set or set_of.
+# len, in and for reach its size, has and items.
+fn set_call(g: G, t: str, m: str) -> str {   # t's method m, the set in x0 and its argument in x1
+  if not struct_inst(g, t) { throw "a \(t) with no struct Set<T>" }
+  emit(g, "bl pk_" + sym(t + "." + m))
+  return g.fns[t + "." + m]
+}
+
+fn uses_set(n: N) -> bool {
+  if n.kind == "S" and (n.text == "set_of" or n.text == "Set" or n.text.starts_with("Set<")) { return true }
+  if n.kind == "Str" { return false }
+  for k in n.kids {
+    if uses_set(k) { return true }
+  }
+  return false
+}
+
+fn set_source() -> str {
+  return [
+    "struct Set<T> {",
+    "  members: [T: bool] = [:]",
+    "  fn add(x: T) {",
+    "    self.members[x] = true",
+    "  }",
+    "  fn remove(x: T) {",
+    "    if x in self.members {",
+    "      self.members.remove(x)",
+    "    }",
+    "  }",
+    "  fn has(x: T) -> bool {",
+    "    return x in self.members",
+    "  }",
+    "  fn size() -> int {",
+    "    return len(self.members)",
+    "  }",
+    "  fn items() -> [T] {",
+    "    return self.members.keys()",
+    "  }",
+    "  fn union(other: Set<T>) -> Set<T> {",
+    "    let out = Set<T>()",
+    "    for x in self.members {",
+    "      out.add(x)",
+    "    }",
+    "    for x in other.members {",
+    "      out.add(x)",
+    "    }",
+    "    return out",
+    "  }",
+    "  fn intersect(other: Set<T>) -> Set<T> {",
+    "    let out = Set<T>()",
+    "    for x in self.members {",
+    "      if other.has(x) {",
+    "        out.add(x)",
+    "      }",
+    "    }",
+    "    return out",
+    "  }",
+    "  fn minus(other: Set<T>) -> Set<T> {",
+    "    let out = Set<T>()",
+    "    for x in self.members {",
+    "      if not other.has(x) {",
+    "        out.add(x)",
+    "      }",
+    "    }",
+    "    return out",
+    "  }",
+    "  fn text() -> str {",
+    "    return \"Set\" + str(self.members.keys())",
+    "  }",
+    "}",
+    "fn set_of<T>(xs: [T]) -> Set<T> {",
+    "  let out = Set<T>()",
+    "  for x in xs {",
+    "    out.add(x)",
+    "  }",
+    "  return out",
+    "}"
+  ].join("\n")
 }
 
 # ---------------------------------------------------------------- Result<T> (6.80.0)
