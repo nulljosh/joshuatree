@@ -43,6 +43,7 @@ struct G {
   generics: [str: N]       # a function with type parameters: its Fn node, written once per set of types (6.81.0)
   instances: [str: str]    # first<int> and the like: the name its copy is written under
   pending: [N]             # copies made while writing a function, written after it
+  gstructs: [str: N]       # a struct with type parameters: its Struct node; Stack<int> is a struct of its own (6.82.0)
 }
 
 fn emit(g: G, s: str) { g.out.append(s) }   # unindented: an indent would copy every line, and the assembler needs none
@@ -139,6 +140,10 @@ fn int_type(n: N, ty: str) -> str {
     return ty
   }
   if upper(ty[0]) and not ("<" in ty) and not ("?" in ty) and not ("." in ty) { return ty }   # a struct, checked where it is used
+  if upper(ty[0]) and ty.ends_with(">") and not ("?" in ty[..ty.find("<") ?? 0]) {   # Name<T, U>: a generic struct's copy (6.82.0)
+    for a in type_arg_list(ty) { int_type(n, a) }
+    return ty
+  }
   nope(n, "the type \(ty)")
   return ""
 }
@@ -218,10 +223,7 @@ fn gen_expr(g: G, e: N) -> str {
   }
   if e.kind == "Interp" { return interp(g, e) }
   if e.kind == "IfExpr" {   # 6.81.0: if c { a } else { b } as a value; nil on one side makes it optional
-    let at = type_of(g, e.kids[1])
-    let bt = type_of(g, e.kids[2])
-    var t = at
-    if at == "nil" { t = opt_type(bt) } else if bt == "nil" { t = opt_type(at) } else if fits(at, bt) { t = bt } else if not fits(bt, at) { nope(e, "an if with a \(at) on one side and a \(bt) on the other") }
+    let t = join_types(e, type_of(g, e.kids[1]), type_of(g, e.kids[2]))
     let other = fresh(g)
     let done = fresh(g)
     gen_expr(g, e.kids[0])
@@ -230,6 +232,24 @@ fn gen_expr(g: G, e: N) -> str {
     emit(g, "b " + done)
     place(g, other)
     coerce(g, gen_expr(g, e.kids[2]), t)
+    place(g, done)
+    return t
+  }
+  if e.kind == "IfLetExpr" {   # 6.82.0: if let x = o { a } else { b } as a value
+    let other = fresh(g)
+    let done = fresh(g)
+    let ot = gen_expr(g, e.kids[1])
+    if not is_opt(ot) { nope(e, "if let on a \(ot), which is never nil") }
+    emit(g, "cbz x0, " + other)
+    if boxed(ot) { emit(g, "ldr x0, [x0]") }
+    let mark = len(g.locals)
+    store(g, new_local(g, e.kids[0].text, ot[..len(ot) - 1]))
+    let t = join_types(e, type_of(g, e.kids[2]), type_of(g, e.kids[3]))
+    coerce(g, gen_expr(g, e.kids[2]), t)
+    while len(g.locals) > mark { g.locals.pop() }
+    emit(g, "b " + done)
+    place(g, other)
+    coerce(g, gen_expr(g, e.kids[3]), t)
     place(g, done)
     return t
   }
@@ -512,6 +532,8 @@ fn gen_expr(g: G, e: N) -> str {
     let name = e.kids[0].text
     let a = e.kids[1].kids
     if has_local(g, name) { return call_value(g, e, node("Name", e.line, [sv(name)]), a) }   # next(): a closure in a local
+    if name in g.gstructs and not has_local(g, name) { return construct(g, e, g.structs[struct_from_args(g, e, name, a)]) }
+    if "<" in name and struct_inst(g, name) { return construct(g, e, g.structs[name]) }
     if name in g.structs { return construct(g, e, g.structs[name]) }
     if name == "attempt" and len(a) == 1 and not (name in g.fns) { return attempt_call(g, e, a[0]) }
     if name in g.generics { return gen_expr(g, node("Call", e.line, [sv(instance(g, e, name, a)), e.kids[1], e.kids[2]])) }
@@ -693,6 +715,7 @@ fn method(g: G, e: N) -> str {
   let a = e.kids[2].kids
   if t == "str" { return str_method(g, e, name, a) }
   if t.starts_with("Result<") { return result_method(g, e, t, name, a) }
+  struct_inst(g, t)
   if (t + "." + name) in g.fn_nodes {   # a struct's method: the value goes in first, as self
     push(g)
     return call_fn(g, e, t + "." + name, a, e.kids[3].kids, true)
@@ -1531,7 +1554,7 @@ fn count_locals(n: N) -> int {
   if n.kind == "LetTuple" { c = 1 + len(n.kids[0].kids) }
   if n.kind == "For" { c = 2 }
   if n.kind == "ForIn" { c = 4 }
-  if n.kind == "IfLet" or n.kind == "WhileLet" { c = 1 }
+  if n.kind == "IfLet" or n.kind == "WhileLet" or n.kind == "IfLetExpr" { c = 1 }
   if n.kind == "Try" { c = 5 }
   if n.kind == "Call" and n.kids[0].text == "attempt" { c = 5 }   # its try's record and its result (6.80.0)
   if n.kind == "Match" { c = 1 + 8 * len(n.kids[1].kids) }   # the subject and each arm's bindings, generously
@@ -1553,9 +1576,9 @@ fn function(g: G, f: N) {
   g.boxed_names = captured_names(f.kids[3])
   let frame = (len(params) + count_locals(f.kids[3])) * 8
   g.out.append("")
-  g.out.append("  .globl pk_" + name)
+  g.out.append("  .globl pk_" + sym(name))
   g.out.append("  .p2align 2")
-  place(g, "pk_" + name)
+  place(g, "pk_" + sym(name))
   emit(g, "stp x29, x30, [sp, #-16]!")
   emit(g, "mov x29, sp")
   emit(g, "sub sp, sp, #" + str((frame + 15) / 16 * 16))
@@ -1766,15 +1789,15 @@ fn fn_value(g: G, e: N, name: str) -> str {
     g.tramps[name] = 1
     g.lambda_code.append("")
     g.lambda_code.append("  .p2align 2")
-    g.lambda_code.append("pk_" + name + "__fn:")
+    g.lambda_code.append("pk_" + sym(name) + "__fn:")
     for i in 0..len(params) { g.lambda_code.append("mov x" + str(i) + ", x" + str(i + 1)) }
-    g.lambda_code.append("b pk_" + name)
+    g.lambda_code.append("b pk_" + sym(name))
   }
   let ps: [str] = []
   for p in params { ps.append(int_type(e, p.kids[1].text)) }
   emit(g, "mov x0, #24")
   emit(g, "bl pk_rt_alloc")
-  emit(g, "adr x1, pk_" + name + "__fn")
+  emit(g, "adr x1, pk_" + sym(name) + "__fn")
   emit(g, "str x1, [x0]")
   emit(g, "str xzr, [x0, #8]")
   return "fn(" + ps.join(", ") + ") -> " + f.kids[2].text
@@ -1965,7 +1988,7 @@ fn call_fn(g: G, e: N, name: str, a: [N], labels: [N], method: bool) -> str {
     pop(g, "x" + str(i))
     i -= 1
   }
-  emit(g, "bl pk_" + name)
+  emit(g, "bl pk_" + sym(name))
   return g.fns[name]
 }
 
@@ -1998,6 +2021,100 @@ fn open_try(g: G, landing: str) -> int {
 }
 
 # ---------------------------------------------------------------- generics (6.81.0)
+# The type of an if's value from its two sides: the same, one fitting the other, or optional when one side is nil.
+fn join_types(e: N, at: str, bt: str) -> str {
+  if at == "nil" { return opt_type(bt) }
+  if bt == "nil" { return opt_type(at) }
+  if fits(at, bt) { return bt }
+  if not fits(bt, at) { nope(e, "an if with a \(at) on one side and a \(bt) on the other") }
+  return at
+}
+
+# ---------------------------------------------------------------- generic structs (6.82.0)
+# Stack<int> is a struct of its own, made from struct Stack<T> the first time a type names it, its methods queued like
+# generic functions' copies. Its name stays Stack<int>, as Plank prints it; sym() makes a label of it.
+fn struct_inst(g: G, ty: str) -> bool {
+  if ty in g.structs { return true }
+  let lt = ty.find("<") ?? 0
+  if lt == 0 or not ty.ends_with(">") or not (ty[..lt] in g.gstructs) { return false }
+  let st = g.gstructs[ty[..lt]]
+  let tps: [str] = []
+  for p in st.kids[4].kids { tps.append(p.text) }
+  let args = type_arg_list(ty)
+  if len(args) != len(tps) { throw "\(st.line): \(ty) gives \(len(args)) types for \(len(tps))" }
+  let copy = with_types(st, tps, args)
+  copy.kids[0] = sv(ty)
+  copy.kids[4] = lv([])
+  g.structs[ty] = copy
+  for m in copy.kids[3].kids {
+    let params = [tv([sv("self"), sv(ty)])]
+    for p in m.kids[1].kids { params.append(p) }
+    let f = node("Fn", m.line, [sv(ty + "." + m.kids[0].text), lv(params), m.kids[2], m.kids[3], m.kids[4], m.kids[5], m.kids[6], m.kids[7], m.kids[8]])
+    let ret = f.kids[2].text
+    if ret != "void" { int_type(f, ret) }
+    g.fns[f.kids[0].text] = ret
+    g.fn_nodes[f.kids[0].text] = f
+    g.pending.append(f)
+  }
+  return true
+}
+
+# Stack(items: ["a"]): the copy its arguments' types name, Stack<str>.
+fn struct_from_args(g: G, e: N, name: str, a: [N]) -> str {
+  let st = g.gstructs[name]
+  let tps: [str] = []
+  for p in st.kids[4].kids { tps.append(p.text) }
+  let fields = st.kids[1].kids
+  let labels = e.kids[2].kids
+  let bound: [str: str] = [:]
+  for j in 0..len(a) {
+    if a[j].kind == "Lambda" { continue }
+    for i in 0..len(fields) {
+      if (labels[j].kind == "_" and j == i) or (labels[j].kind == "S" and labels[j].text == fields[i].kids[0].text) {
+        unify(fields[i].kids[1].text, type_of(g, a[j]), tps, bound)
+      }
+    }
+  }
+  let types: [str] = []
+  for p in tps {
+    if not (p in bound) { nope(e, "telling \(name)'s \(p) from its fields: write \(name)<...>()") }
+    types.append(bound[p])
+  }
+  let ty = name + "<" + types.join(", ") + ">"
+  struct_inst(g, ty)
+  return ty
+}
+
+# Pair<int, [str]> as ["int", "[str]"]: the commas at its top level split it.
+fn type_arg_list(ty: str) -> [str] {
+  let lt = ty.find("<") ?? 0
+  let out: [str] = []
+  let cs = ty.chars()
+  var depth = 0
+  var at = lt + 1
+  for i in lt + 1..len(cs) - 1 {
+    let c = cs[i]
+    if c == "(" or c == "[" or c == "<" { depth += 1 }
+    if c == ")" or c == "]" or (c == ">" and cs[i - 1] != "-") { depth -= 1 }
+    if c == "," and depth == 0 {
+      out.append(ty[at..i])
+      at = i + 2
+    }
+  }
+  out.append(ty[at..len(ty) - 1])
+  return out
+}
+
+# A function's name as an assembler label: Stack<int>.push is Stack_Lint_G.push.
+fn sym(name: str) -> str {
+  if not ("<" in name or "[" in name or "?" in name or "(" in name or " " in name) { return name }
+  var out = ""
+  for c in name.chars() {
+    if c == "<" { out = out + "_L" } else if c == ">" { out = out + "_G" } else if c == "," { out = out + "_C" } else if c == "[" { out = out + "_S" } else if c == "]" { out = out + "_E" } else if c == "?" { out = out + "_Q" } else if c == "(" { out = out + "_P" } else if c == ")" { out = out + "_R" } else if c == ":" { out = out + "_K" } else if c == "-" { out = out + "_M" } else if c != " " { out = out + c }
+  }
+  return out
+}
+
 fn opt_type(ty: str) -> str {
   if is_opt(ty) { return ty }
   return ty + "?"
@@ -2046,6 +2163,13 @@ fn unify(p: str, t: str, tps: [str], bound: [str: str]) {
     return
   }
   if is_list(p) and is_list(t) and t != "[]" { unify(p[1..len(p) - 1], t[1..len(t) - 1], tps, bound) }
+  if p.starts_with("(") and t.starts_with("(") {   # (A, B) and (str, int)
+    let ps = tuple_parts(p)
+    let ts = tuple_parts(t)
+    if len(ps) == len(ts) {
+      for i in 0..len(ps) { unify(ps[i], ts[i], tps, bound) }
+    }
+  }
 }
 
 # A copy of n with each type parameter, as a whole word, read as its type. ponytail: every name in the tree is read,
@@ -2178,6 +2302,7 @@ fn leave_tries(g: G, keep: int) {
 # ---------------------------------------------------------------- structs
 # A struct is the address of its fields, 8 bytes each, in the order written.
 fn field(g: G, e: N, t: str, name: str) -> Local {
+  struct_inst(g, t)
   if not (t in g.structs) { nope(e, "a field of a " + t) }
   let fields = g.structs[t].kids[1].kids
   for i in 0..len(fields) {
@@ -2250,7 +2375,7 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
 
 # The program's assembly, a line a string: for asm's text, or enc.pk's image.
 fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
-  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false, [:], [:], [])
+  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false, [:], [:], [], [:])
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
@@ -2262,8 +2387,9 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
         for p in m.kids[1].kids { params.append(p) }
         fns.append(node("Fn", m.line, [sv(f.kids[0].text + "." + m.kids[0].text), lv(params), m.kids[2], m.kids[3], m.kids[4], m.kids[5], m.kids[6], m.kids[7], m.kids[8]]))
       }
+    } else if f.kind == "Struct" and len(f.kids[4].kids) > 0 {   # struct Name<T>: made for each set of types (struct_inst)
+      g.gstructs[f.kids[0].text] = f
     } else if f.kind == "Struct" {
-      if len(f.kids[4].kids) > 0 { nope(f, "a struct's type parameters") }
       g.structs[f.kids[0].text] = f
       for m in f.kids[3].kids {   # a method is a function named Struct.name whose first parameter is self
         let params = [tv([sv("self"), sv(f.kids[0].text)])]
