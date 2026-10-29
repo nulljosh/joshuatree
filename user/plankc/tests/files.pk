@@ -1,0 +1,25 @@
+# 6.91.0: files, folders and dates on plankc. Names are 8.3 and upper case, as the Pi's FAT card keeps them, so the Mac
+# and the box agree; files.out is plank.py's output, run in an empty folder.
+fn main() {
+  let dir = "PKF"
+  remove_file(dir + "/A.TXT")
+  remove_file(dir + "/B.TXT")
+  print(mkdir(dir), mkdir(dir), is_dir(dir), exists(dir + "/A.TXT"), is_dir(dir + "/A.TXT"))
+  write_file(dir + "/B.TXT", "b")
+  write_file(dir + "/A.TXT", "one\n")
+  append_file(dir + "/A.TXT", "two\n")
+  append_file(dir + "/C.TXT", "new\n")
+  print(list_dir(dir), read_file(dir + "/A.TXT") ?? "", read_file(dir + "/C.TXT") ?? "")
+  print(exists(dir + "/A.TXT"), exists(dir + "/a.txt") or exists(dir + "/A.TXT"), exists(dir), exists("NOPE"))
+  print(remove_file(dir + "/B.TXT"), remove_file(dir + "/B.TXT"), remove_file(dir + "/C.TXT"), list_dir(dir), list_dir("NODIR"))
+  remove_file(dir + "/A.TXT")
+  print(cwd().starts_with("/"), url_encode("a b&c=d/é~x_y.z-1"))
+  let day = 86400.0
+  let t = parse_time("2026-10-01")!
+  print(t, clock("%Y-%m-%d %H:%M:%S", t), clock("%A %a %B %b %j %y %e", t), clock("%I %p %%", t + 13.0 * 3600.0))
+  print(clock("%Y-%m-%d", t + 30.0 * day), clock("%A", 0.0), clock("%Y-%m-%d %H:%M:%S", -1.0), clock("%Y-%m-%d", 951782400.0))
+  print(int((parse_time("2026-12-25")! - t) / day), parse_time("2000-03-01")!, parse_time("1999-12-31 23:59:59", "%Y-%m-%d %H:%M:%S")!)
+  print(parse_time("not a date"), parse_time("2026-13-01"), parse_time("2026-10-01x"), parse_time("01/10/2026", "%d/%m/%Y") != nil)
+  print(parse_time("2026-10-01 14:05", "%Y-%m-%d %H:%M")! - t, parse_time(" 2026-1-5", " %Y-%m-%d")!)
+  print(len(clock()) == 19, clock("%Y") == clock("%Y", time()))
+}
