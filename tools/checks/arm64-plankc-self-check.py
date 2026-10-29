@@ -70,6 +70,7 @@ try:
     mt("mcopy", "-o", fib, "::JT/PC/FIB.PK")
     mt("mcopy", "-o", floats, "::JT/PC/FLOATS.PK")
     mt("mcopy", "-o", rnd, "::JT/PC/RANDOM.PK")
+    mt("mmd", "::JT/PLANKC"); mt("mcopy", "-o", src / "rt.pk", "::JT/PLANKC/RT.PK"); mt("mcopy", "-o", fib, "::JT/FIBB.PK")   # 6.95.0: plankc build
     log, sock = tmp / "uart", tmp / "qmp"
     q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-global", "virtio-mmio.force-legacy=false",
                           "-device", "ramfb", "-device", "virtio-keyboard-device", "-drive", "if=none,id=card,file=%s,format=raw" % card, "-device", "virtio-blk-device,drive=card",
@@ -134,6 +135,12 @@ try:
     body = seg[seg.find("M3c app fltx starts"):] if "M3c app fltx starts" in seg else ""
     got = [l for l in body.split("\n")[1:] if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ", "slow step ")) and "joshua@tree" not in l]
     check("its float instructions, encoded by plankc, print what plank.py's build prints", got == floats_want and len(got) > 5 and "M3c app fltx exit 0" in seg, {"got": got[:8], "want": floats_want[:8]})
+    seg, done, secs = run("userrun plankc build FIBB.PK", "plankc", 300)   # 6.95.0: the card's runtime, the app named for its file
+    check("plankc build FIBB.PK finds the card's runtime and writes APPS/FIBB.APP (%d s)" % secs, done and "plankc: wrote APPS/FIBB.APP" in seg and "userrun fibb" in seg and "M3c app plankc exit 0" in seg, seg[-500:])
+    seg, done, secs = run("userrun fibb", "fibb", 60)
+    body = seg[seg.find("M3c app fibb starts"):] if "M3c app fibb starts" in seg else ""
+    got = [l for l in body.split("\n")[1:] if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ", "slow step ")) and "joshua@tree" not in l]
+    check("and that app runs and prints fib.out", got == [l for l in fib.with_suffix(".out").read_text().split("\n") if l] and "M3c app fibb exit 0" in seg, {"got": got[:6], "tail": seg[-300:]})
     seg, done, secs = run("userrun plankc img PC/RANDOM.PK PC/RT.PK APPS/RNDX.APP", "plankc", 300)
     check("stage 2 writes random.pk's app image on the box (%d s)" % secs, done and "plankc: wrote APPS/RNDX.APP" in seg and "M3c app plankc exit 0" in seg, seg[-500:])
     seg, done, secs = run("userrun rndx", "rndx", 60)
