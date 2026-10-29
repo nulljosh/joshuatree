@@ -368,6 +368,7 @@ static void ap_line(int rssi, unsigned chan, const char *ssid, unsigned slen) { 
     ap_shown = 1; ap_rssi = rssi;
     kputs("Wi-Fi: found our network, signal "); kputs(rssi >= -60 ? "strong" : rssi >= -72 ? "okay" : "weak"); kputs(" on channel "); kdec(chan); kputs("\n");
 }
+static unsigned escan(void);
 static int scan(void) {
     unsigned st; unsigned char v[64];
     if (!iovar("ver", 0, v, sizeof v, &st) || st) { fail("ver"); return 0; }
@@ -388,16 +389,23 @@ static int scan(void) {
     }
     unsigned char cc[12] = { 'C', 'A', 0, 0, 0xff, 0xff, 0xff, 0xff, 'C', 'A', 0, 0 };   /* wlc_country: ccode, rev -1, abbrev */
     if (!iovar("country", 1, cc, 12, &st) || st) { kputs("wifi country refused, status "); kx(st); kputs(" (scanning with the default)\n"); }
-    unsigned char es[80] = {0}; wr32(es, 1); wr16(es + 4, 1); wr16(es + 6, 0x1234);   /* escan: version 1, ESCAN_ACTION_START, sync id */
-    unsigned char *pr = es + 8; for (int i = 0; i < 6; i++) pr[36 + i] = 0xff;        /* wl_scan_params: wildcard SSID, any BSSID */
-    pr[42] = 2; pr[43] = 0;   /* bss_type ANY (2), scan_type active (0): the two bytes were swapped, so the chip refused the scan */
-    wr32(pr + 44, (unsigned)-1); wr32(pr + 48, (unsigned)-1); wr32(pr + 52, (unsigned)-1); wr32(pr + 56, (unsigned)-1);   /* nprobes, active, passive, home time: -1 = the chip's defaults */
     /* Scan results come back as events, and the chip only sends the ones in its event mask: turn on ESCAN_RESULT (event 69,
        so byte 8, bit 5) the way brcmfmac does, reading the current 18-byte mask first. */
     { unsigned char em[20] = {0}; if (iovar("event_msgs", 0, em, 18, &st) && !st) { em[8] |= 1 << 5; em[0] |= 1 | 1 << 3 | 1 << 5 | 1 << 6 | 1 << 7; em[1] |= 1 << 4; em[2] |= 1; em[5] |= 1 << 6;   /* + SET_SSID 0, AUTH 3, DEAUTH 5, DEAUTH_IND 6, ASSOC 7, DISASSOC_IND 12, LINK 16, PSK_SUP 46 */ if (!iovar("event_msgs", 1, em, 18, &st) || st) kputs("wifi event mask not set\n"); } else kputs("wifi event mask unreadable\n"); }
     if (!wlc_ioctl(2, 0, 0, &st) || st) { kputs("wifi up ioctl status "); kdec(st); kputs("\n"); } else kputs("wifi radio up\n");   /* WLC_UP */
+    unsigned found = escan();
+    if (found == (unsigned)-1) { fail("escan"); return 0; }
+    menubar_wifi(1); kputs("Wi-Fi: looked around, found "); kdec(found); kputs(ap_shown ? " networks\n" : " networks, but not ours\n"); step(8);
+    return 1;
+}
+static unsigned escan(void) {   /* 6.88.0, out of scan() so Settings can look again: how many networks it heard, or -1 */
+    unsigned st;
+    unsigned char es[80] = {0}; wr32(es, 1); wr16(es + 4, 1); wr16(es + 6, 0x1234);   /* escan: version 1, ESCAN_ACTION_START, sync id */
+    unsigned char *pr = es + 8; for (int i = 0; i < 6; i++) pr[36 + i] = 0xff;        /* wl_scan_params: wildcard SSID, any BSSID */
+    pr[42] = 2; pr[43] = 0;   /* bss_type ANY (2), scan_type active (0): the two bytes were swapped, so the chip refused the scan */
+    wr32(pr + 44, (unsigned)-1); wr32(pr + 48, (unsigned)-1); wr32(pr + 52, (unsigned)-1); wr32(pr + 56, (unsigned)-1);   /* nprobes, active, passive, home time: -1 = the chip's defaults */
     { unsigned ok = iovar("escan", 1, es, sizeof es, &st);
-      if (!ok || st) { kputs("wifi escan "); kputs(ok ? "status " : "no reply, status "); kx(st); kputs("\n"); fail("escan"); return 0; } }
+      if (!ok || st) { kputs("wifi escan "); kputs(ok ? "status " : "no reply, status "); kx(st); kputs("\n"); return (unsigned)-1; } }
     unsigned found = 0;
     /* brcmf_event, big-endian: 14 bytes of Ethernet header, 10 of bcmeth (subtype, length, version, oui, usr_subtype), then
        the 48-byte event message: version 2, flags 2, event_type 4, status 4, reason 4, auth_type 4, datalen 4, addr 6,
@@ -414,8 +422,14 @@ static int scan(void) {
         }
         mdelay(5);
     }
-    menubar_wifi(1); kputs("Wi-Fi: looked around, found "); kdec(found); kputs(ap_shown ? " networks\n" : " networks, but not ours\n"); step(8);
-    return 1;
+    return found;
+}
+int wifi_rescan(void) {   /* 6.88.0: Settings' R. The list becomes what this scan hears; -1 with no chip running */
+    if (wstep < 8) return -1;
+    nets_n = 0;
+    unsigned f = escan();
+    kputs("Wi-Fi: looked again, found "); kdec(f == (unsigned)-1 ? 0 : f); kputs(" networks\n");
+    return f == (unsigned)-1 ? -1 : (int)nets_n;
 }
 
 
@@ -597,6 +611,20 @@ static int join(void) {
     fail("join");
     return 0;
 }
+/* 6.88.0: a network saved in Settings or with `wifi join` is joined at once, not at the next start. The chip leaves the
+   one it is on (WLC_DISASSOC), JT/WIFI.TXT is read again and join() runs as at boot; then a new DHCP lease and the clock,
+   as boot.c does after the first join. Only once the firmware has scanned (step 8 on): before that, a restart. */
+void net_dhcp_forget(void); void net_stack_demo(void); void net_clock_sync(void); void menubar_notify(const char *message);
+int wifi_rejoin(void) {   /* 1 joined, 0 not now (no chip running), -1 the join failed */
+    if (wstep < 8) return 0;
+    unsigned st; unsigned char z[4] = {0};
+    link_up = 0; menubar_wifi(1);
+    wlc_ioctl(52, z, 4, &st);   /* WLC_DISASSOC */
+    net_load();
+    if (!join() || !link_up) { menubar_wifi(0); return -1; }
+    net_dhcp_forget(); net_stack_demo(); net_clock_sync(); menubar_wifi(2); menubar_notify("Wi-Fi joined");
+    return 1;
+}
 /* The Pi's network card, as the shared IP stack (drivers/nic.h) sees it: whole Ethernet frames in and out through the
    chip's data channel. A frame out is an SDPCM header, a 4-byte BDC header, then the frame itself; a frame in is the
    same, and anything that is not on the data channel (events, control replies) is skipped. */
@@ -729,6 +757,7 @@ int wifi_init(void) {
 }
 #else
 int wifi_init(void) { return 0; }
+int wifi_rejoin(void) { return 0; }
 int wifi_signal_level(void) { return 1; }
 void wifi_hold(void) {}
 void wifi_release(void) {}
@@ -736,10 +765,11 @@ void wifi_release(void) {}
 
 /* 6.22.0, both builds: what cmd.c's `wifi` and `wifi join SSID` need. The passphrase comes from the stars prompt, becomes
    the PMK here (wpa.h's wpa_pmk, PBKDF2-HMAC-SHA1) and is wiped by the caller; JT/WIFI.TXT gets the SSID and the PMK as
-   hex, never the passphrase. The Pi joins it at its next start; the chip's running state is not touched from here. */
+   hex, never the passphrase. The caller then asks wifi_rejoin (6.88.0) to join it at once. */
 #include "wpa.h"
 #ifndef PI_BUILD
 #ifdef WIFI_FAKE_SCAN   /* arm64-wifi-pane-check.py only (make WIFI_FAKE=1): three made-up networks, since QEMU has no radio */
+int wifi_rescan(void) { return 3; }   /* 6.88.0: the same three, so arm64-wifi-pane-check.py can press R */
 unsigned wifi_networks(const char **name, int *rssi, unsigned max) {
     static const char *const n[3] = { "My Home 5G", "Shaw Open", "Cafe Guest" }; static const int r[3] = { -48, -66, -79 };
     unsigned k = 0; for (; k < 3 && k < max; k++) { name[k] = n[k]; rssi[k] = r[k]; }
@@ -747,6 +777,7 @@ unsigned wifi_networks(const char **name, int *rssi, unsigned max) {
 }
 #else
 unsigned wifi_networks(const char **name, int *rssi, unsigned max) { (void)name; (void)rssi; (void)max; return 0; }
+int wifi_rescan(void) { return -1; }   /* no radio */
 #endif
 const char *wifi_network(void) { return ""; }
 int wifi_nic_up(void) { return 0; }

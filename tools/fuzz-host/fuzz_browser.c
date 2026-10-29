@@ -34,6 +34,8 @@ int keychain_set(const char *item, const char *value) { (void)item; (void)value;
 int mail_page(const char *url, char *out, unsigned max) { (void)url; (void)out; (void)max; return -1; }
 int mail_form(const char *action, const char *to, const char *subj, const char *body) { (void)action; (void)to; (void)subj; (void)body; return 0; }
 unsigned int ticks(void) { return 0; }
+int con_quiet;
+void uart_puts(const char *s) { (void)s; }   /* 6.86.0: browser_image_tick logs to the UART */
 int home_expand(const char *in, char *out, unsigned cap) { (void)in; (void)out; (void)cap; return 0; }
 int home_op(int op, const char *path, const void *data, unsigned len) { (void)op; (void)path; (void)data; (void)len; return 0; }
 int home_walk(char *path, int keep, char **leaf) { (void)path; (void)keep; (void)leaf; return 0; }

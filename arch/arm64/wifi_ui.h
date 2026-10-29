@@ -7,7 +7,7 @@
 unsigned wifi_networks(const char **name, int *rssi, unsigned max);   /* wifi.c */
 const char *wifi_network(void);
 int wifi_nic_up(void);
-int wifi_save(const char *ssid, unsigned sl, const char *pass, unsigned pl);
+int wifi_save(const char *ssid, unsigned sl, const char *pass, unsigned pl); int wifi_rejoin(void); int wifi_rescan(void);
 void accounts_wipe(void *p, unsigned n);
 int ask_char(unsigned code);   /* ask.c: the key as a character, shift and all */
 #define WF_ROWS 8
@@ -28,7 +28,7 @@ static void wf_paint(int cx, int cy, int wy, int wh) {
     gui_text(wifi_nic_up() ? "Connected" : "Not connected", cx + SET_CARD_W - gui_text_width(wifi_nic_up() ? "Connected" : "Not connected"), cy - 2, SET_HINT);
     int top = cy + 24;
     if (!n) {
-        gui_text("No networks heard at start.", cx, top + 4, SET_HINT);
+        gui_text("No networks heard. R looks again.", cx, top + 4, SET_HINT);
         gui_text("QEMU and a Pi with no antenna hear none.", cx, top + 24, SET_HINT);
     } else {
         gui_rounded_rect_on_wallpaper(cx, top, SET_CARD_W, (int)n * SET_ROW_H, 0x00FFFFFF, 10);
@@ -51,7 +51,14 @@ static void wf_paint(int cx, int cy, int wy, int wh) {
         window_rect(cx + 11 + gui_text_width(st), fy + 27, 1, 16, SET_ACCENT);
     }
     gui_text(wf_msg, cx, wy + wh - 52, SET_HINT);
-    gui_text(wf_pw ? "Enter saves for the next start, Esc cancels" : wf_focus ? "Up and Down pick, Enter asks the password, Esc" : "Enter picks a network, Esc closes", cx, wy + wh - 32, SET_HINT);
+    gui_text(wf_pw ? "Enter saves and joins, Esc cancels" : wf_focus ? "Up and Down pick, Enter asks the password, Esc" : "Enter picks a network, R looks again, Esc closes", cx, wy + wh - 32, SET_HINT);
+}
+static void wf_rescan(void) {   /* 6.88.0: R looks again, the list then holds what this scan heard */
+    wf_say("Looking..."); set_paint();
+    int n = wifi_rescan();
+    wf_sel = 0;
+    wf_say(n < 0 ? "No radio to look with." : n ? "Looked again." : "Looked again and heard none.");
+    set_log("wifi scan", n, 0); set_paint();
 }
 static void wf_enter(void) {
     const char *name[WF_ROWS]; int rssi[WF_ROWS];
@@ -74,7 +81,13 @@ static int wf_key(unsigned code) {   /* the list or the password field has the k
         const char *nm = name[wf_sel]; unsigned nl = 0; while (nm[nl]) nl++;
         int r = wifi_save(nm, nl, wf_pass, wf_pn);
         wf_close_pw();
-        if (r == 1) { wf_say("Saved. The Pi joins it at its next start."); set_log("wifi saved", -1, nm); wf_focus = 0; }
+        if (r == 1) {   /* 6.88.0: joined now, with the pane saying so while the chip works (up to 15 s) */
+            set_log("wifi saved", -1, nm); wf_focus = 0;
+            wf_say("Joining..."); set_paint();
+            int j = wifi_rejoin();
+            wf_say(j > 0 ? "Joined." : j < 0 ? "Did not join. Check the password and pick it again." : "Saved. The Pi joins it at its next start.");
+            set_log(j > 0 ? "wifi joined" : j < 0 ? "wifi join failed" : "wifi join at start", -1, nm);
+        }
         else wf_say(r < 0 ? "A password is 8 to 63 plain characters." : "No card to save it on.");
         set_paint(); return 1;
     }

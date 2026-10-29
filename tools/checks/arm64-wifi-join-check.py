@@ -69,7 +69,8 @@ try:
     n = len(uart()); line("wifi join " + NAME); time.sleep(0.5); line("short1")
     check("a passphrase under 8 characters is refused", wait_for("wifi: a passphrase is 8 to 63 plain characters, nothing saved", 10, n) and "Wi-Fi password for %s: \n" % NAME in uart()[n:], uart()[n:][-300:])
     n = len(uart()); line("wifi join " + NAME); time.sleep(0.5); line(PASS)
-    check("a good one is saved for the next start", wait_for("wifi: saved %s; the Pi joins it at its next start" % NAME, 20, n), uart()[n:][-300:])
+    check("a good one is saved, and with no radio here (QEMU) joined at the next start (6.88.0 joins at once on the Pi)",
+          wait_for("wifi: saved %s, joining" % NAME, 20, n) and wait_for("wifi: the Pi joins it at its next start", 10, n), uart()[n:][-300:])
     check("the passphrase never reaches the UART", PASS not in uart() and "short1" not in uart())
 finally:
     q.kill(); q.wait()

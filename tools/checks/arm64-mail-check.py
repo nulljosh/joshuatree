@@ -10,7 +10,9 @@ At the Terminal:
   `mail` lists the three newest first with sender names and subjects; `mail 1` shows the plain message whole, past
   its fake ending; `mail 2` shows the HTML part's heading and its quoted-printable "!" and never fetches the image;
   `mail 3` decodes base64; `mail logout` forgets it all.
-Discriminating: drop the literal skip in mail.c's imap() and `mail 1` stops at the fake ending.
+6.86.0: Blackcomb opened on mail:2 shows it and still never fetches the image.
+Discriminating: drop the literal skip in mail.c's imap() and `mail 1` stops at the fake ending; start show()'s image
+queue at 0 on mail: pages (browser.c) and Blackcomb fetches the tracker.
 Skips (exit 0) when clang's aarch64 target, ld.lld, openssl or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-mail-check.py   (from the repo root)
 """
@@ -99,7 +101,7 @@ try:
     r = subprocess.run(["make", "-C", str(arch), "kernel8.elf", "TLS_TA=" + cert], capture_output=True, text=True, timeout=600)
     if r.returncode: print(r.stderr[-2000:]); print("FAIL: arch/arm64 does not build"); sys.exit(1)
     q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256",
-                          "-global", "virtio-mmio.force-legacy=false", "-netdev", "user,id=n", "-device", "virtio-net-device,netdev=n",
+                          "-global", "virtio-mmio.force-legacy=false", "-device", "ramfb", "-netdev", "user,id=n", "-device", "virtio-net-device,netdev=n",
                           "-device", "virtio-keyboard-device", "-display", "none", "-serial", "file:" + str(log),
                           "-qmp", "unix:%s,server,nowait" % sock, "-kernel", str(arch / "kernel8.elf")],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -153,6 +155,12 @@ try:
     check("its remote image is never fetched", tracked == [], tracked)
     n = len(uart()); line("mail 3")
     check("base64 is decoded", wait_for("Hello from base64, decoded on the Pi.", 30, n), uart()[n:][-400:])
+    key("esc"); time.sleep(0.5); key("f1"); time.sleep(0.5); type_text("blackcomb"); key("ret")   # Esc gives the keys back to the desktop
+    check("Spotlight opens Blackcomb", wait_for("browser open", 10, n), uart()[n:][-300:])
+    n = len(uart()); key("ctrl", "l"); type_text("mail:2"); key("ret")
+    ok = wait_for("browser: page ", 30, n); time.sleep(3)   # 6.86.0: a page's images load after it shows, one a pass
+    check("Blackcomb shows the message, and does not fetch its remote image either (6.86.0)", ok and tracked == [], (tracked, uart()[n:][-300:]))
+    key("f2"); wait_for("terminal open", 10, n)
     n = len(uart()); line("mail logout")
     check("mail logout forgets it", wait_for("mail: signed out", 10, n), uart()[n:][-300:])
     n = len(uart()); line("mail")

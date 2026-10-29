@@ -569,6 +569,14 @@ void browser_go(const char *url) {   /* 6.32.0: open Blackcomb on a page, as typ
     con_quiet = 1; uart_puts("browser: load "); uart_puts(url); uart_putc('\n');
     br_run(cmd);
 }
+int browser_image_tick(void); int browser_images_pending(void);   /* browser.c, 6.86.0 */
+int browser_busy(void) { return browser_live && browser_images_pending(); }   /* the desktop loop keeps passing while images wait */
+void browser_tick(void) {   /* 6.86.0: one more of the page's images, then the well again; the last one logs where each was drawn */
+    if (!browser_live) return;
+    int r = browser_image_tick();
+    if (!r || spot_live || login_live || calc_front) return;   /* under Spotlight, the lock or the Calculator: the next paint has it */
+    br_wk_w = -1; br_wrap(); browser_paint(r == 2);
+}
 void browser_close(void) {
     if (!browser_live) return;
     browser_live = br_edit = 0;

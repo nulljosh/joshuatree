@@ -41,7 +41,8 @@ void *kmalloc(unsigned int n);
 #define BR_CENTER '\x06'
 #define BR_LEFT '\x07'
 #define BR_RIGHT '\x08'   /* 6.44.0: as BR_CENTER, flush right; BR_LEFT ends it too */
-#define IMG_MAX 8           /* 6.36.0: was 4. Each is kept at IMG_W x IMG_H, 480 KiB, so eight hold 3.75 MiB of BSS */
+#define IMG_MAX 16          /* 6.86.0: was 8 (4 before 6.36.0). Each is kept at IMG_W x IMG_H, 480 KiB, so sixteen hold 7.5 MiB of BSS.
+                               ponytail: 16 is the ceiling while the text marks an image as 0x10 + its number (0x20 is a space) */
 #define IMG_W 400           /* logical px: an image is kept at most this wide and tall, scaled down to fit, never up */
 #define IMG_H 300
 static char img_url[IMG_MAX][URL_MAX];
@@ -424,7 +425,8 @@ static int pseudo_link(const char *kind, unsigned k) {   /* field:K or submit:F 
    display:none is skipped whole, nested elements and all: the menus, drawers and cookie banners a page keeps out of view.
    6.33.0: a descendant selector of two parts ("header .menu", ".nav ul") too. Each such rule watches for its first part
    opening and counts that tag's own nesting, as a hidden element does, so the second part inside it is hidden.
-   ponytail: two parts at most; "a b c" and the > + ~ combinators are still left out. */
+   6.49.0 adds the child combinator, 6.50.0 three parts, 6.86.0 the sibling combinators ("h2 + p", ".ad ~ div", two parts:
+   an element after a sibling, right after it for +). ponytail: no attribute or pseudo-class selectors. */
 #define HIDE_MAX 32
 static char hide_sel[HIDE_MAX][48]; static unsigned nhide;
 static unsigned char hide_act[HIDE_MAX];   /* 6.47.0: what a rule in this table does: 1 hides, 2 bolds, 3 centres, 4 right-aligns; the
@@ -432,6 +434,10 @@ static unsigned char hide_act[HIDE_MAX];   /* 6.47.0: what a rule in this table 
 static char anc_tag[HIDE_MAX][16]; static unsigned anc_n[HIDE_MAX], anc_d[HIDE_MAX];   /* a descendant rule's open first part: its tag, how deep */
 /* 6.50.0: a three-part hiding rule ("header nav .menu") keeps its middle part the same way, opened only inside the first */
 static char mid_tag[HIDE_MAX][16]; static unsigned mid_n[HIDE_MAX], mid_d[HIDE_MAX], mid_g[HIDE_MAX];
+/* 6.86.0: a sibling rule ("a + b", "a ~ b") remembers that its first part opened, and at which depth (sib_g): a second part
+   at that depth hides while the parent stays open, and for + only until any other element opens beside it */
+static unsigned char sib_on[HIDE_MAX]; static unsigned sib_g[HIDE_MAX];
+static int is_comb(char c) { return c == ' ' || c == '>' || c == '+' || c == '~'; }
 /* 6.34.0: a rule whose font-weight is bold (or 600 and up) makes its element bold, as <b> does: the BR_BOLD mark when it
    opens, BR_PLAIN when its own tag's nesting closes. One part selectors only. ponytail: one bold element at a time,
    and the window starts each line plain, so a bold block broken by <br> is bold on its first line only. */
@@ -482,19 +488,21 @@ static void css_rules(const char *c, unsigned n) {
             while (a < sel_end && is_ws(c[a])) a++;
             unsigned b = a; while (b < sel_end && c[b] != ',') b++;
             unsigned e = b; while (e > a && is_ws(c[e - 1])) e--;
-            int simple = e > a, gaps = 0; char one[48]; unsigned on = 0;
+            int simple = e > a, gaps = 0, sib = 0; char one[48]; unsigned on = 0;
             for (unsigned k = a; k < e && simple; k++) {
-                if (c[k] == '+' || c[k] == '~' || c[k] == '[' || c[k] == ':' || c[k] == '*') simple = 0;
-                else if (c[k] == '>') {   /* 6.49.0: the child combinator, kept as '>' between the two parts, spaces round it dropped */
-                    if (on && one[on - 1] == ' ') one[on - 1] = '>'; else if (on && one[on - 1] != '>' && on < sizeof one - 1) { one[on++] = '>'; gaps++; } else simple = 0;
+                if (c[k] == '[' || c[k] == ':' || c[k] == '*') simple = 0;
+                else if (c[k] == '>' || c[k] == '+' || c[k] == '~') {   /* 6.49.0 the child combinator, 6.86.0 the sibling ones, kept between the parts, spaces round them dropped */
+                    if (c[k] != '>') sib++;
+                    if (on && one[on - 1] == ' ') one[on - 1] = c[k]; else if (on && !is_comb(one[on - 1]) && on < sizeof one - 1) { one[on++] = c[k]; gaps++; } else simple = 0;
                 }
-                else if (is_ws(c[k])) { if (!is_ws(c[k - 1]) && on && one[on - 1] != '>') { gaps++; if (on < sizeof one - 1) one[on++] = ' '; } }   /* one space between the two parts */
+                else if (is_ws(c[k])) { if (!is_ws(c[k - 1]) && on && !is_comb(one[on - 1])) { gaps++; if (on < sizeof one - 1) one[on++] = ' '; } }   /* one space between the two parts */
                 else if (on < sizeof one - 1) one[on++] = c[k]; else simple = 0;
             }
-            if (on && (one[on - 1] == ' ' || one[on - 1] == '>')) simple = 0;   /* a combinator with nothing after it */
-            if (none && simple && gaps <= 2 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = 1; mid_d[nhide] = 0; anc_d[nhide++] = 0; }
+            if (on && is_comb(one[on - 1])) simple = 0;   /* a combinator with nothing after it */
+            if (sib && (sib > 1 || gaps != 1)) simple = 0;   /* a sibling rule is two one-part selectors */
+            if (none && simple && gaps <= 2 && nhide < HIDE_MAX) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = 1; mid_d[nhide] = 0; sib_on[nhide] = 0; anc_d[nhide++] = 0; }
             for (int act = 2; act <= 4; act++)   /* 6.47.0: a descendant rule that bolds (2) or aligns (3 centre, 4 right) */
-                if (simple && gaps == 1 && nhide < HIDE_MAX && (act == 2 ? bold : mid == act - 2)) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = (unsigned char)act; anc_d[nhide++] = 0; }
+                if (simple && !sib && gaps == 1 && nhide < HIDE_MAX && (act == 2 ? bold : mid == act - 2)) { for (unsigned k = 0; k < on; k++) hide_sel[nhide][k] = one[k]; hide_sel[nhide][on] = 0; hide_act[nhide] = (unsigned char)act; anc_d[nhide++] = 0; }
             if (bold && simple && !gaps && nbold < BOLD_MAX) { for (unsigned k = 0; k < on; k++) bold_sel[nbold][k] = one[k]; bold_sel[nbold++][on] = 0; }
             if (mid && simple && !gaps && ncenter < BOLD_MAX) { for (unsigned k = 0; k < on; k++) center_sel[ncenter][k] = one[k]; center_sel[ncenter][on] = 0; center_mode[ncenter++] = (unsigned char)mid; }
             a = b + 1;
@@ -518,7 +526,7 @@ static int sel_match(const char *sel, unsigned sl, const char *tag, unsigned tn,
     if (sel[t] == '.') return attr(tag, tn, "class=", &cs, &cz) && word_in(tag + cs, cz - cs, w, wn);
     return attr(tag, tn, "id=", &is, &iz) && iz - is == wn && starts(tag + is, w);
 }
-static unsigned gap_of(const char *sel) { unsigned g = 0; while (sel[g] && sel[g] != ' ' && sel[g] != '>') g++; return g; }   /* where a descendant (' ') or child ('>', 6.49.0) rule's two parts meet */
+static unsigned gap_of(const char *sel) { unsigned g = 0; while (sel[g] && !is_comb(sel[g])) g++; return g; }   /* where a descendant (' ') or child ('>', 6.49.0) rule's two parts meet */
 /* 6.49.0: how many elements are open where the reader is (gdep), and for each child rule how many were open around its
    first part (anc_g): the second part matches only one level below. Unclosed <p> or <li> inside can only make it miss,
    never hide more than the rule says. */
@@ -533,6 +541,7 @@ static int hidden_tag(const char *tag, unsigned tn, unsigned nl) {   /* tag[0..n
     for (unsigned r = 0; r < nhide; r++) {
         const char *sel = hide_sel[r]; unsigned sl = slen(sel), g = gap_of(sel);
         if (hide_act[r] != 1) continue;
+        if (sel[g] == '+' || sel[g] == '~') { if (sib_on[r] && sib_g[r] == gdep && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1; continue; }
         unsigned g2 = gap2_of(sel, g);
         if (g2 < sl) { if (mid_d[r] && (sel[g2] != '>' || gdep == mid_g[r] + 1) && sel_match(sel + g2 + 1, sl - g2 - 1, tag, tn, nl)) return 1; continue; }
         if (g == sl ? sel_match(sel, sl, tag, tn, nl) : rule_under(r, sel, g) && sel_match(sel + g + 1, sl - g - 1, tag, tn, nl)) return 1;
@@ -549,7 +558,7 @@ static int desc_rule(int act, const char *tag, unsigned tn, unsigned nl) {   /* 
 static void anc_track(const char *tag, unsigned tn, unsigned nl, int close, int lone) {   /* 6.33.0: each descendant rule's first part, open or not */
     for (unsigned r = 0; r < nhide; r++) {
         const char *sel = hide_sel[r]; unsigned g = gap_of(sel), g2 = gap2_of(sel, g);
-        if (!sel[g]) continue;
+        if (!sel[g] || sel[g] == '+' || sel[g] == '~') continue;
         if (sel[g2] && anc_d[r]) {   /* 6.50.0: the middle part, the same way, only while the first is open */
             if (mid_d[r]) { if (nl == mid_n[r]) { unsigned m = 0; while (m < nl && (tag[m] | 32) == mid_tag[r][m]) m++; if (m == nl && !lone) mid_d[r] += close ? -1u : 1u; } }
             else if (!close && !lone && nl < sizeof mid_tag[r] && rule_under(r, sel, g) && sel_match(sel + g + 1, g2 - g - 1, tag, tn, nl)) {
@@ -564,6 +573,15 @@ static void anc_track(const char *tag, unsigned tn, unsigned nl, int close, int 
             for (unsigned m = 0; m < nl; m++) anc_tag[r][m] = (char)(tag[m] | 32);
             anc_n[r] = nl; anc_d[r] = 1; anc_g[r] = gdep;
         }
+    }
+}
+static void sib_track(const char *tag, unsigned tn, unsigned nl, int close) {   /* 6.86.0: an element opens at depth gdep, or one closed */
+    for (unsigned r = 0; r < nhide; r++) {
+        const char *sel = hide_sel[r]; unsigned g = gap_of(sel);
+        if (sel[g] != '+' && sel[g] != '~') continue;
+        if (close) { if (gdep < sib_g[r]) sib_on[r] = 0; }   /* the parent closed */
+        else if (sel_match(sel, g, tag, tn, nl)) { sib_on[r] = 1; sib_g[r] = gdep; }
+        else if (sel[g] == '+' && sib_g[r] == gdep) sib_on[r] = 0;
     }
 }
 
@@ -608,9 +626,9 @@ static void to_text(const char *h, unsigned n) {
             for (unsigned v = 0; v < sizeof lone / sizeof lone[0] && !is_lone; v++) if (is_tag(tag, tn, lone[v])) is_lone = 1;
             if (!close && nl && nl < sizeof htag && tag[0] != '!' && hidden_tag(tag, tn, nl)) {
                 if (!is_lone) { for (unsigned m = 0; m < nl; m++) htag[m] = (char)(tag[m] | 32); hn = nl; hdepth = 1; }
-                i = e + 1; continue;
+                sib_track(tag, tn, nl, 0); i = e + 1; continue;   /* a hidden element is still a sibling */
             }
-            if (nl && tag[0] != '!') { anc_track(tag, tn, nl, close, is_lone); if (!is_lone) gdep += close ? (gdep ? -1u : 0) : 1u; }
+            if (nl && tag[0] != '!') { anc_track(tag, tn, nl, close, is_lone); if (!close) sib_track(tag, tn, nl, 0); if (!is_lone) gdep += close ? (gdep ? -1u : 0) : 1u; if (close) sib_track(tag, tn, nl, 1); }
             if (!close && (is_tag(tag, tn, "a") || is_tag(tag, tn, "span") || is_tag(tag, tn, "button")) && o && text[o - 1] != ' ' && text[o - 1] != '\n') { o = put(text, o, ' '); space = 1; }   /* nav bars space their links with CSS we do not read */
             if (!close && (is_tag(tag, tn, "script") || is_tag(tag, tn, "style"))) skip = is_tag(tag, tn, "script") ? 1 : 2;
             else {
@@ -982,25 +1000,37 @@ static int decode_image(unsigned k, const unsigned char *d, unsigned n) {   /* 1
     return 1;
 }
 unsigned int ticks(void);   /* ip.c, 100 a second */
-#define IMG_TICKS 500   /* every image a page has gets 5 s in all: the window blocks while they load, and a slow host must not hold it */
-static void load_images(char *raw) {
-    char page[URL_MAX]; scopy(page, cur, slen(cur), URL_MAX);
-    unsigned t0 = ticks();
-    for (unsigned k = 0; k < nimg; k++) {
-        if (ticks() - t0 > IMG_TICKS) { img_w[k] = img_h[k] = 0; kputs("browser: image "); kdec(k + 1); kputs(" skipped, too slow\n"); continue; }
-        unsigned long mark = heap_mark();
-        void (*was)(const char *) = cmd_out; cmd_out = sink;
+/* 6.86.0: the images come after the page shows, one each pass of the desktop loop (browser_image_tick), so the window
+   answers between them instead of blocking until all are in. A page's images get 20 s in all (5 s while they blocked). */
+#define IMG_TICKS 2000
+static unsigned img_next, img_t0;   /* the next image to fetch, and when its page came */
+void uart_puts(const char *s); extern int con_quiet;
+static void img_log(const char *s) { con_quiet = 1; uart_puts(s); }   /* a pass has no Terminal line to print on: the UART only */
+int browser_images_pending(void) { return img_next < nimg; }
+int browser_image_tick(void) {   /* 0 nothing to do, 1 an image was tried, 2 it was the page's last */
+    if (img_next >= nimg) return 0;
+    unsigned k = img_next++;
+    void (*was)(const char *) = cmd_out; cmd_out = img_log;
+    img_w[k] = img_h[k] = 0;
+    unsigned long mark = heap_mark();
+    int late = ticks() - img_t0 > IMG_TICKS;
+    char *raw = late ? 0 : kmalloc(RAW_MAX);
+    if (!raw) { kputs("browser: image "); kdec(k + 1); kputs(late ? " skipped, too slow\n" : " failed, out of memory\n"); }
+    else {
+        char page[URL_MAX]; scopy(page, cur, slen(cur), URL_MAX);   /* fetch moves cur to the image's address */
+        cmd_out = sink;
         unsigned n = 0; char *body = 0;
         int got = fetch(img_url[k], raw, RAW_MAX);
         if (got > 0 && http_status_of(raw, (unsigned)got) == 200) body = page_body(raw, (unsigned)got, &n);
-        cmd_out = was;
-        img_w[k] = img_h[k] = 0;
+        cmd_out = img_log;
         int ok = body && decode_image(k, (const unsigned char *)body, n);
-        heap_release(mark);
+        scopy(cur, page, slen(page), URL_MAX);
         kputs("browser: image "); kdec(k + 1);
         if (ok) { kputs(" "); kdec(img_w[k]); kputs("x"); kdec(img_h[k]); kputs("\n"); } else kputs(" failed\n");
     }
-    scopy(cur, page, slen(page), URL_MAX);
+    heap_release(mark);
+    cmd_out = was;
+    return img_next == nimg ? 2 : 1;
 }
 
 /* 6.17.0: downloads. A reply that is not text (an image, a zip, a PDF) is saved where an app's files live, not shown,
@@ -1232,7 +1262,8 @@ static void show(const char *url, int push) {
     want_file = 0;
     if (body) {
         to_text(body, blen);
-        load_images(raw);
+        for (unsigned k = 0; k < IMG_MAX; k++) img_w[k] = img_h[k] = 0;   /* 6.86.0: none drawn until browser_image_tick has it */
+        img_next = starts(cur, "mail:") ? nimg : 0; img_t0 = ticks();   /* a mail message's remote images (trackers) are never fetched */
         if (push) {   /* a new page: it follows the one on screen, anything after that is forgotten */
             if (hn && hi + 1 < hn) hn = hi + 1;
             if (hn == HIST_MAX) { for (unsigned k = 1; k < HIST_MAX; k++) scopy(hist[k - 1], hist[k], slen(hist[k]), URL_MAX); hn--; }
@@ -1480,6 +1511,7 @@ void browser_render(const char *html, unsigned n, const char *name) {
     scopy(cur, name, slen(name), URL_MAX);
     to_text(html, n);
     for (unsigned k = 0; k < IMG_MAX; k++) img_w[k] = img_h[k] = 0;
+    img_next = nimg;   /* 6.86.0: a message's remote images are never fetched, so browser_image_tick has none to do */
     loads++;
     say_wrapped("browser: ", title[0] ? title : cur, slen(title[0] ? title : cur));
     show_lines(0, PAGE_LINES);

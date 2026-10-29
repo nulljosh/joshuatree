@@ -394,7 +394,7 @@ void mail_password(const char *pass);   /* mail.c */
 int mail_command(const char *q, unsigned n);
 int ics_command(const char *q, unsigned n);   /* ics.c */
 unsigned wifi_networks(const char **name, int *rssi, unsigned max); const char *wifi_network(void); int wifi_nic_up(void);   /* wifi.c */
-int wifi_save(const char *ssid, unsigned sl, const char *pass, unsigned pl);   /* ask.c: Esc at the prompt, or a sign-out */
+int wifi_save(const char *ssid, unsigned sl, const char *pass, unsigned pl); int wifi_rejoin(void);   /* ask.c: Esc at the prompt, or a sign-out */
 static void sudo_command(const char *q, unsigned n) {   /* q is the line after "sudo " */
     while (n && q[0] == ' ') { q++; n--; }
     if (!n) { cmd_out("sudo: use sudo COMMAND, or sudo -k to forget the password\n"); return; }
@@ -477,7 +477,11 @@ void cmd_password(const char *q, unsigned n, void (*out)(const char *)) {
         accounts_wipe(pass, sizeof pass);
         if (r < 0) cmd_out("wifi: a passphrase is 8 to 63 plain characters, nothing saved\n");
         else if (!r) cmd_out("wifi: no card to save it on\n");
-        else { cmd_out("wifi: saved "); cmd_out(pw_cmd); cmd_out("; the Pi joins it at its next start\n"); }
+        else {   /* 6.88.0: joined now, where the chip is running */
+            cmd_out("wifi: saved "); cmd_out(pw_cmd); cmd_out(", joining\n");
+            int j = wifi_rejoin();
+            cmd_out(j > 0 ? "wifi: joined\n" : j < 0 ? "wifi: it did not join; check the passphrase, wifi join tries again\n" : "wifi: the Pi joins it at its next start\n");
+        }
         pw_clear();
     } else if (st == PW_MAIL) {
         if (big || !pass[0]) cmd_out("mail: no app password, nothing changed\n"); else mail_password(pass);

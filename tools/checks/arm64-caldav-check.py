@@ -18,8 +18,9 @@ principal, the principal names the calendar home by its full https address, and 
 shows what came down; a `calendar sync` after it, and a second open, do not sync again from the open.
 6.48.0: the home also holds a Work calendar; discovery lists Personal and Work and uses 1; `calendar use 2` and a sync
 there deletes nothing (CALSYNC.TXT names Personal) and sends Dentist to Work; `calendar use 1` and a sync come back.
+6.87.0: with Calendar closed and no key for a minute, the sync runs on its own ("syncing while the Pi is idle"), not sooner.
 Discriminating: drop the &amp; unescape in ics.c's dav_feed and SUBS.TXT says "Q&amp;A"; skip the CALSYNC.TXT read in
-dav_sync and jt-d0.ics stays on the server while Gym goes back up.
+dav_sync and jt-d0.ics stays on the server while Gym goes back up; drop idle_tick's call in boot.c and no idle sync comes.
 Skips (exit 0) when clang's aarch64 target, ld.lld, openssl, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-caldav-check.py   (from the repo root)
 """
@@ -190,6 +191,9 @@ try:
           ok and len(deletes) == k and "/cal/work/jt-%s.ics" % ymd(d1) in store and "deleted on the server" not in uart()[n:], (deletes[k:], uart()[n:][-300:]))
     n = len(uart()); line("calendar use 1"); wait_for("calendar: using Personal", 10, n)
     n = len(uart()); line("calendar sync"); wait_for("calendar: 3 events read", 30, n)
+    n = len(uart()); line("calendar use 1"); wait_for("calendar: using Personal", 10, n); t0 = time.time()   # due again, Calendar closed
+    ok = wait_for("calendar: syncing while the Pi is idle", 120, n); t1 = time.time()
+    check("a minute with no input syncs on its own, not sooner (6.87.0)", ok and t1 - t0 >= 50 and wait_for("calendar: 3 events read", 30, n), (round(t1 - t0), uart()[n:][-300:]))
     check("the app password never reaches the UART", PASS not in uart() and "wrong-pass-1" not in uart())
 finally:
     q.kill(); q.wait(); server.shutdown()

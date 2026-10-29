@@ -9,10 +9,12 @@ hides only inside both, 6.50.0, and "section > div .pick" only under a direct di
 among other declarations, an <img hidden>, and visible text with a link. At the Terminal, `browse` must show the visible
 text, the @media one too, an .inner outside a p, a .deep in a p outside any div, a .pick
 under a div that is not the section's own child, the list after the .nav list closes (nested lists
-inside it count their own depth), number the visible link [1] (the hidden menu's link takes no number), and show none
+inside it count their own depth), a p right after an h3 hidden but not the next one or one after a div (6.86.0, "h3 + p"),
+every div after a .ad sibling hidden but not one outside their parent (".ad ~ div"), number the visible link [1] (the hidden menu's link takes no number), and show none
 of the hidden words.
 Discriminating: make hidden_tag in browser.c always say no and every hidden word comes back; drop anc_track's call and
-the descendant words come back; drop the middle-part tracking in anc_track and the three-part words come back.
+the descendant words come back; drop the middle-part tracking in anc_track and the three-part words come back; make
+sib_track do nothing and the sibling words come back.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-csshide-check.py   (from the repo root)
 """
@@ -35,6 +37,8 @@ p .inner { display:none }
 div p .deep { display:none }
 nav.side > ul { display:none }
 section > div .pick { display:none }
+h3 + p { display:none }
+.ad ~ div { display:none }
 </style></head><body>
 <nav class="top menu"><a href=/x>Menu link</a> Menu words</nav>
 <div id="cookie-banner"><div>We use cookies</div><div>nested crumbs</div></div>
@@ -50,6 +54,8 @@ section > div .pick { display:none }
 <ul class="nav"><li>Nav item<ul><li>Sub item</li></ul></li><li>Nav two</li></ul>
 <ul><li>After nav stays</li></ul>
 <nav class=side><script>var x = "<nav>";</script><ul><li>Side menu</li></ul><div><ul><li>Deeper list stays</li></ul></div></nav>
+<div><h3>Head stays</h3><p>Next hidden</p><p>Second p stays</p><h3>Head two</h3><div>Gap</div><p>Gap p stays</p></div>
+<div><span class=ad>Ad stays</span><b>Bold stays</b><div>Sib div hidden</div></div><div>Outer div stays</div>
 <img src=/a.png hidden>
 <p>Visible text <a href=/y>visible link</a> and the end.</p>
 </body></html>"""
@@ -97,12 +103,16 @@ try:
     check("DHCP leased an address", wait_for("net dhcp 10.0.2.15 gw 10.0.2.2", 30), uart()[-300:])
     key("f2"); wait_for("terminal open", 10)
     n = len(uart()); line("browse http://10.0.2.2:%d/hide" % port)
-    check("the page loads", wait_for("and the end.", 20, n), uart()[n:][-500:])
+    ok = wait_for("and the end.", 20, n)
+    for _ in range(3):   # browse shows 16 lines; more shows the next 16
+        if ok: break
+        line("more"); ok = wait_for("and the end.", 10, n)
+    check("the page loads", ok, uart()[n:][-500:])
     time.sleep(0.5)
     out = uart()[n:]
-    for w in ("Wide text stays", "Para stays", "Lone inner stays", "Deep outside stays", "Pick deeper stays", "After nav stays", "Deeper list stays", "Visible text", "visible link [1]"):
+    for w in ("Wide text stays", "Para stays", "Lone inner stays", "Deep outside stays", "Pick deeper stays", "After nav stays", "Deeper list stays", "Head stays", "Second p stays", "Gap p stays", "Ad stays", "Bold stays", "Outer div stays", "Visible text", "visible link [1]"):
         check("shows: %s" % w, w in out, out[-600:])
-    for w in ("Menu link", "Menu words", "cookies", "nested crumbs", "Drawer text", "Hidden paragraph", "Inline hidden", "Inner hidden", "Nav item", "Sub item", "Nav two", "Side menu", "Deep hidden", "Pick hidden"):
+    for w in ("Menu link", "Menu words", "cookies", "nested crumbs", "Drawer text", "Hidden paragraph", "Inline hidden", "Inner hidden", "Nav item", "Sub item", "Nav two", "Side menu", "Deep hidden", "Pick hidden", "Next hidden", "Sib div hidden"):
         check("hides: %s" % w, w not in out, out[-600:])
 finally:
     q.kill(); q.wait(); server.shutdown()
