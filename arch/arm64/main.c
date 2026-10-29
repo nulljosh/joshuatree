@@ -844,6 +844,29 @@ int userrun(const char *name, unsigned n, int allow_unsigned, unsigned long *sta
     return 0;
 }
 
+/* 6.94.0, ask.c's [[app NAME]] on the box: a card app run with these words to its end, ticking it (and any other app)
+   from here, for at most secs. 0 it ended (*status), -6 it ran too long and was stopped, else userrun's own refusal.
+   ponytail: user_status is whichever app ended last; another app ending in the same pass could be read instead. */
+void ufile_args_next(const char *s, unsigned n);   /* ufile.c */
+void input_drain(void);                            /* boot.c */
+int userrun_wait(const char *name, unsigned n, const char *words, unsigned wn, unsigned secs, unsigned long *status) {
+    const struct user_app *a = user_find(name, n);
+    if (!a) a = card_find(name, n, 1);
+    if (!a) return card_err ? -3 - card_err : -1;
+    ufile_args_next(words, wn);
+    int r = app_start(a);
+    if (r) return r;
+    struct app *me = ap;
+    unsigned long end = cnt_now() + cnt_hz() * secs;
+    while (me->cur == a) {
+        if (cnt_now() > end) { struct app *was = ap; ap = me; app_kill_one("stopped, it ran too long"); ap = was; return -6; }
+        app_tick();
+        input_drain();
+    }
+    *status = user_status;
+    return 0;
+}
+
 /* ---- M1c: a framebuffer. QEMU's virt machine has no display unless one is asked for; ramfb is a plain RAM
    framebuffer the guest configures through fw_cfg (a DMA write of the "etc/ramfb" file). A Pi asks its GPU firmware
    for one through the mailbox, at the monitor's own size when the firmware knows it. Either way fb_setup hands back

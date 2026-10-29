@@ -3,7 +3,8 @@
 #   plankc parse FILE.pk   the program's tree, one top-level item a line
 #   plankc [--gc=N] asm FILE.pk RT.pk [OUT.S]   aarch64 assembly for the Pi (gen.pk), with the runtime rt.pk built in, into OUT.S;
 #                    --gc=N makes the program collect every N bytes
-#   plankc img FILE.pk RT.pk OUT.APP   the app image itself, encoded by plankc (enc.pk), on the Pi only
+#   plankc img FILE.pk RT.pk OUT.APP   the app image itself, encoded by plankc (enc.pk), on the Pi only; when it cannot,
+#                    the reason goes to OUT with .ERR for .APP too, which the kernel reads back to Samantha (6.94.0)
 import "gen.pk"
 import "enc.pk"
 
@@ -55,6 +56,9 @@ fn main() {
     }
   } catch e {
     print("error: \(e)")
+    if a[0] == "img" and len(a) > 3 and a[3].ends_with(".APP") {
+      write_file(a[3][..len(a[3]) - 4] + ".ERR", "\(e)\n")
+    }
     exit(1)
   }
 }
