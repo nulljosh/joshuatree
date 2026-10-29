@@ -945,6 +945,10 @@ fn method(g: G, e: N) -> str {
     emit(g, "bl pk_rt_map")
     return "[" + fn_ret(ft) + "]"
   }
+  if name == "enumerate" and len(a) == 0 {   # [(int, T)], each item with its index (7.3.0)
+    emit(g, "bl pk_rt_list_enumerate")
+    return "[(int, " + item_type(e, t) + ")]"
+  }
   if name == "reduce" and len(a) == 2 {
     let item = item_type(e, t)
     push(g)
@@ -1177,6 +1181,16 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
     let ops = ["sqrt": "fsqrt", "floor": "frintm", "ceil": "frintp", "round": "frinta"]   # round: half away from zero, as C's
     fop(g, ops[name] + " d0, d0", false)
     return "float"
+  }
+  if name == "zip" and len(a) == 2 {   # [(A, B)], as long as the shorter list (7.3.0)
+    let ta = gen_expr(g, a[0])
+    push(g)
+    let tb = gen_expr(g, a[1])
+    if not is_list(ta) or not is_list(tb) or ta == "[]" or tb == "[]" { nope(e, "zip() of anything but two typed lists") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_zip")
+    return "[(" + item_type(e, ta) + ", " + item_type(e, tb) + ")]"
   }
   if name == "abs" and len(a) == 1 {
     let t = gen_expr(g, a[0])
