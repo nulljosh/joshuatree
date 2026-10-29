@@ -66,10 +66,13 @@ void _start(void) {
   <p>In Plank, declare the window calls with <code>extern fn</code> and draw with them: <code>jtw_open</code>, <code>jtw_fill</code>, <code>jtw_text</code>, <code>jtw_present</code>, and <code>jtw_wait</code> for keys and clicks. <a href="https://github.com/nulljosh/joshuatree/blob/main/store/slide.pk"><code>store/slide.pk</code></a>, the 15 puzzle, is a whole app in about a hundred lines. In C, open a window with <code>jt_window_open</code> and loop on <code>jt_window_poll</code>, as <a href="https://github.com/nulljosh/joshuatree/blob/main/user/calendar.c"><code>user/calendar.c</code></a> does.</p>
   <p>The headers are <a href="https://github.com/nulljosh/joshuatree/blob/main/user/jtsys.h"><code>user/jtsys.h</code></a> (every system call) and <a href="https://github.com/nulljosh/joshuatree/tree/main/user/libjt"><code>user/libjt/</code></a> (strings, drawing, fonts, pictures). Every call is listed in the <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">architecture notes</a>.</p>
 
-  <h2>5. Who can run it</h2>
+  <h2>5. When it goes wrong</h2>
+  <p><code>debug sky</code> runs your app one instruction at a time for its first twelve instructions, or <code>debug sky 40</code> for forty. Each line shows where it is, the instruction it runs next and the registers that changed, and the last one adds the stack. Then it runs on as usual.</p>
+
+  <h2>6. Who can run it</h2>
   <p>Your app is unsigned. On a Pi with no accounts that does not matter: everything runs. Once the Pi has accounts, only an admin runs an unsigned app, with <code>sudo userrun sky</code>; the first account made is an admin. The compiler on your card is unsigned too, so build with <code>sudo userrun plankc build SKY.PK</code> there.</p>
 
-  <h2>6. Put it in the store</h2>
+  <h2>7. Put it in the store</h2>
   <p>The store is what <code>install NAME</code> fetches, and every app in it is signed by Joshua's key, so it runs for anyone. To add yours, open a pull request that adds <code>store/NAME.pk</code> or <code>store/NAME.c</code>. Once it is merged, every Pi gets it with <code>install NAME</code>.</p>
 
   <h2>Stuck?</h2>

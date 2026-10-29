@@ -248,6 +248,9 @@ resume_user:                    /* x0 = the parked frame (x0-x30, elr: 32 words)
     cmp x2, #256
     b.lo 1b
     mov x4, #0x340              /* EL0t, D A and F masked, IRQ open: the watchdog's timer can reach an app that never makes a syscall */
+    adrp x5, dbg_spsr
+    ldr x5, [x5, :lo12:dbg_spsr]
+    orr x4, x4, x5              /* 7.2.0: SS when the debugger steps this app (main.c dbg_step), else 0 */
     msr spsr_el1, x4
     restore_all
     eret

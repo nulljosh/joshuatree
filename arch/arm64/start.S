@@ -23,6 +23,9 @@ _start:
     mov x0, #0x33ff
     msr cptr_el2, x0
     msr hstr_el2, xzr
+    mrs x0, mdcr_el2             /* 7.2.0: debug stays EL1's. TDE, TDA, TDOSA and TDRA reset UNKNOWN; set, the debugger's */
+    bic x0, x0, #0xf00           /* MDSCR and OS lock writes would trap to EL2, which has no handler. HPMN is kept */
+    msr mdcr_el2, x0
     mov x0, #0x0800
     movk x0, #0x30d0, lsl #16
     msr sctlr_el1, x0
