@@ -1435,3 +1435,380 @@ fn rt_list_reverse(l: int) {
     b -= 1
   }
 }
+
+# ---- time() and sleep (6.85.0): the kernel's 100 Hz ticks (JT_SYS_TASKS writes them to global(24), its 20 bytes running
+# into global(26)), counted from the wall clock's second (JT_SYS_TIME) the first time a program asks. global(27) is that
+# second in ticks less the ticks then, and global(28) is 1 once it is set.
+fn rt_ticks() -> int {
+  syscall(386, global(24), 0, 0)
+  return peek(global(24))
+}
+
+fn rt_time() -> float {
+  let t = rt_ticks()
+  if peek(global(28)) == 0 {
+    poke(global(27), syscall(13, 0, 0, 0) * 100 - t)
+    poke(global(28), 1)
+  }
+  return float(peek(global(27)) + t) / 100.0
+}
+
+# The desktop runs while it waits. One tick more than asked, so time() a sleep later is never short by a rounding.
+fn rt_sleep(s: float) {
+  let end = rt_ticks() + int(s * 100.0) + 2
+  while rt_ticks() < end { rt_yield() }
+}
+
+# ---- regular expressions (6.85.0): POSIX extended, what plank.py asks the C library for, compiled to a small program and
+# run by backtracking that never tries a (step, place) twice, so (a*)* or a long text cannot blow up. ponytail: the
+# first way that matches wins, as Perl's does, not POSIX's longest (a|ab takes a), and . and [] are bytes, not UTF-8
+# characters. A program is a list of ints, its group count first, then steps:
+#   1 c: the byte c; 2: any byte; 3 t: a byte whose entry in the 256-byte table at t is not 0; 4 x y: x steps on, and
+#   failing that y; 5 x: x steps on; 6 k: note the place in slot k; 7: the start (^); 8: the end ($); 9: a match.
+# Jumps are relative, so a piece compiles on its own and is copied in where it goes.
+fn rx_get(l: int, i: int) -> int { return peek(peek(l + 16) + i * 8) }
+
+fn rx_put(l: int, i: int, v: int) { poke(peek(l + 16) + i * 8, v) }
+
+fn rx_add(a: int, b: int) {
+  for i in 0..peek(b) { rt_list_push(a, rx_get(b, i)) }
+}
+
+fn rx_two(l: int, a: int, b: int) {
+  rt_list_push(l, a)
+  rt_list_push(l, b)
+}
+
+fn rx_bad(p: str, why: str) {
+  rt_fail("bad pattern \"\(p)\": \(why)")
+}
+
+# The pattern's byte at the parse place (st's first item), or -1 at its end; st's second item counts the groups, its
+# third the groups open here.
+fn rx_peek(p: str, st: int) -> int {
+  if rx_get(st, 0) >= len(p) { return -1 }
+  return peek8(addr(p) + rx_get(st, 0))
+}
+
+fn rx_next(st: int) { rx_put(st, 0, rx_get(st, 0) + 1) }
+
+# An empty pattern or | side is an error, as macOS's library has it; () is not.
+fn rx_alt(p: str, st: int) -> int {
+  var a = rx_cat(p, st)
+  if peek(a) == 0 and (rx_peek(p, st) == 124 or rx_get(st, 2) == 0) { rx_bad(p, "empty (sub)expression") }
+  while rx_peek(p, st) == 124 {   # |
+    rx_next(st)
+    let b = rx_cat(p, st)
+    if peek(b) == 0 { rx_bad(p, "empty (sub)expression") }
+    let out = rt_list_new()
+    rx_two(out, 4, 3)
+    rt_list_push(out, peek(a) + 5)
+    rx_add(out, a)
+    rx_two(out, 5, peek(b) + 2)
+    rx_add(out, b)
+    a = out
+  }
+  return a
+}
+
+fn rx_cat(p: str, st: int) -> int {
+  let out = rt_list_new()
+  while rx_peek(p, st) != -1 and rx_peek(p, st) != 124 and (rx_peek(p, st) != 41 or rx_get(st, 2) == 0) {   # ) with none open is itself
+    rx_add(out, rx_repeat(p, st))
+  }
+  return out
+}
+
+fn rx_num(p: str, st: int) -> int {
+  var n = -1
+  while rx_peek(p, st) >= 48 and rx_peek(p, st) <= 57 {
+    if n < 0 { n = 0 }
+    n = n * 10 + rx_peek(p, st) - 48
+    if n > 255 { rx_bad(p, "invalid repetition count(s)") }
+    rx_next(st)
+  }
+  return n
+}
+
+fn rx_repeat(p: str, st: int) -> int {
+  var e = rx_atom(p, st)
+  while true {
+    let c = rx_peek(p, st)
+    var lo = 0
+    var hi = -1   # no limit
+    if c == 42 {   # *
+      rx_next(st)
+    } else if c == 43 {   # +
+      rx_next(st)
+      lo = 1
+    } else if c == 63 {   # ?
+      rx_next(st)
+      hi = 1
+    } else if c == 123 and rx_get(st, 0) + 1 < len(p) and peek8(addr(p) + rx_get(st, 0) + 1) >= 48 and peek8(addr(p) + rx_get(st, 0) + 1) <= 57 {
+      rx_next(st)
+      lo = rx_num(p, st)
+      hi = lo
+      if rx_peek(p, st) == 44 {   # ,
+        rx_next(st)
+        hi = rx_num(p, st)
+      }
+      if rx_peek(p, st) != 125 { rx_bad(p, "braces not balanced") }
+      rx_next(st)
+      if hi >= 0 and hi < lo { rx_bad(p, "invalid repetition count(s)") }
+    } else {
+      return e
+    }
+    let out = rt_list_new()
+    for i in 0..lo { rx_add(out, e) }
+    if hi < 0 {   # e*: try e and come back, or go past
+      rx_two(out, 4, 3)
+      rt_list_push(out, peek(e) + 5)
+      rx_add(out, e)
+      rx_two(out, 5, 0 - peek(e) - 3)
+    }
+    for i in lo..hi {   # e?
+      rx_two(out, 4, 3)
+      rt_list_push(out, peek(e) + 3)
+      rx_add(out, e)
+    }
+    e = out
+  }
+  return e
+}
+
+fn rx_atom(p: str, st: int) -> int {
+  let c = rx_peek(p, st)
+  let out = rt_list_new()
+  rx_next(st)
+  if c == 40 {   # (
+    let k = rx_get(st, 1) + 1
+    rx_put(st, 1, k)
+    rx_put(st, 2, rx_get(st, 2) + 1)
+    let inner = rx_alt(p, st)
+    if rx_peek(p, st) != 41 { rx_bad(p, "parentheses not balanced") }
+    rx_next(st)
+    rx_put(st, 2, rx_get(st, 2) - 1)
+    rx_two(out, 6, k * 2)
+    rx_add(out, inner)
+    rx_two(out, 6, k * 2 + 1)
+  } else if c == 91 {   # [
+    rx_two(out, 3, rx_class(p, st))
+  } else if c == 46 {
+    rt_list_push(out, 2)
+  } else if c == 94 {
+    rt_list_push(out, 7)
+  } else if c == 36 {
+    rt_list_push(out, 8)
+  } else if c == 92 {   # \ takes the next byte as it is
+    if rx_peek(p, st) == -1 { rx_bad(p, "trailing backslash (\\)") }
+    rx_two(out, 1, rx_peek(p, st))
+    rx_next(st)
+  } else if c == 42 or c == 43 or c == 63 or c == 123 {
+    rx_bad(p, "repetition-operator operand invalid")
+  } else {
+    rx_two(out, 1, c)
+  }
+  return out
+}
+
+fn rx_named(name: str, c: int) -> bool {
+  let lower = c >= 97 and c <= 122
+  let upper = c >= 65 and c <= 90
+  let digit = c >= 48 and c <= 57
+  if rt_str_eq(name, "digit") { return digit }
+  if rt_str_eq(name, "alpha") { return lower or upper }
+  if rt_str_eq(name, "alnum") { return lower or upper or digit }
+  if rt_str_eq(name, "upper") { return upper }
+  if rt_str_eq(name, "lower") { return lower }
+  if rt_str_eq(name, "space") { return c == 32 or (c >= 9 and c <= 13) }
+  if rt_str_eq(name, "xdigit") { return digit or (c >= 97 and c <= 102) or (c >= 65 and c <= 70) }
+  if rt_str_eq(name, "punct") { return c > 32 and c < 127 and not lower and not upper and not digit }
+  return false   # a name POSIX does not have
+}
+
+# [...] after its [: a 256-byte table, 1 for each byte it takes.
+fn rx_class(p: str, st: int) -> int {
+  let t = rt_str(256)
+  for i in 0..256 { poke8(t + i, 0) }
+  var neg = false
+  if rx_peek(p, st) == 94 {
+    neg = true
+    rx_next(st)
+  }
+  var first = true
+  while rx_peek(p, st) != 93 or first {
+    let c = rx_peek(p, st)
+    if c == -1 { rx_bad(p, "brackets ([ ]) not balanced") }
+    first = false
+    rx_next(st)
+    if c == 91 and rx_peek(p, st) == 58 {   # [:name:]
+      let at = rx_get(st, 0) + 1
+      var end = at
+      while end + 1 < len(p) and not (peek8(addr(p) + end) == 58 and peek8(addr(p) + end + 1) == 93) { end += 1 }
+      if end + 1 >= len(p) { rx_bad(p, "brackets ([ ]) not balanced") }
+      let name = rt_sub(p, at, end)
+      var any = false
+      for b in 0..256 {
+        if rx_named(name, b) {
+          poke8(t + b, 1)
+          any = true
+        }
+      }
+      if not any { rx_bad(p, "invalid character class") }
+      rx_put(st, 0, end + 2)
+    } else if rx_peek(p, st) == 45 and rx_get(st, 0) + 1 < len(p) and peek8(addr(p) + rx_get(st, 0) + 1) != 93 {   # a-z
+      rx_next(st)
+      let hi = rx_peek(p, st)
+      rx_next(st)
+      if hi < c { rx_bad(p, "invalid character range") }
+      let top = hi + 1
+      for b in c..top { poke8(t + b, 1) }
+    } else {
+      poke8(t + c, 1)
+    }
+  }
+  rx_next(st)
+  if neg {
+    for b in 0..256 { poke8(t + b, 1 - peek8(t + b)) }
+  }
+  return t
+}
+
+fn rx_compile(p: str) -> int {
+  let st = rt_list_new()
+  rx_two(st, 0, 0)
+  rt_list_push(st, 0)
+  let body = rx_alt(p, st)
+  let re = rt_list_new()
+  rt_list_push(re, rx_get(st, 1))
+  rx_two(re, 6, 0)
+  rx_add(re, body)
+  rx_two(re, 6, 1)
+  rt_list_push(re, 9)
+  return re
+}
+
+# Two slots a group, the whole match first: where each starts and ends, -1 when it took no part.
+fn rx_caps(re: int) -> int {
+  let caps = rt_list_new()
+  for i in 0..rx_get(re, 0) * 2 + 2 { rt_list_push(caps, -1) }
+  return caps
+}
+
+# Whether re matches s at or after byte from, the leftmost place first, with caps filled. bol is false after
+# find_all's or replace_all's first match, as the C library's REG_NOTBOL. A (step, place) once tried is marked in seen,
+# one bit each: it failed, and the same step from the same place fails again however it was reached.
+fn rx_search(re: int, s: str, from: int, bol: bool, caps: int) -> bool {
+  for i in 0..peek(caps) { rx_put(caps, i, -1) }
+  let n = len(s)
+  let w = n - from + 1
+  let bytes = (peek(re) * w) / 8 + 1
+  let seen = rt_str(bytes)
+  for i in 0..bytes { poke8(seen + i, 0) }
+  let jobs = rt_list_new()
+  let last = n + 1
+  for start in from..last {
+    rx_two(jobs, 1, start)
+    while peek(jobs) > 0 {
+      var sp = rt_list_pop(jobs)
+      var pc = rt_list_pop(jobs)
+      if pc < 0 {   # undo a slot this failed way noted
+        rx_put(caps, -1 - pc, sp)
+        continue
+      }
+      while true {
+        let bit = pc * w + sp - from
+        let v = peek8(seen + bit / 8)
+        if (v / rt_pow2(bit % 8)) % 2 == 1 { break }
+        poke8(seen + bit / 8, v + rt_pow2(bit % 8))
+        let op = rx_get(re, pc)
+        if op == 1 or op == 2 or op == 3 {
+          if sp >= n { break }
+          let c = peek8(addr(s) + sp)
+          if op == 1 and c != rx_get(re, pc + 1) { break }
+          if op == 3 and peek8(rx_get(re, pc + 1) + c) == 0 { break }
+          if op == 2 { pc += 1 } else { pc += 2 }
+          sp += 1
+        } else if op == 4 {
+          rx_two(jobs, pc + rx_get(re, pc + 2), sp)
+          pc += rx_get(re, pc + 1)
+        } else if op == 5 {
+          pc += rx_get(re, pc + 1)
+        } else if op == 6 {
+          let k = rx_get(re, pc + 1)
+          rx_two(jobs, -1 - k, rx_get(caps, k))
+          rx_put(caps, k, sp)
+          pc += 2
+        } else if op == 7 {
+          if sp != 0 or not bol { break }
+          pc += 1
+        } else if op == 8 {
+          if sp != n { break }
+          pc += 1
+        } else {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
+fn rt_rx_matches(s: str, p: str) -> bool {
+  let re = rx_compile(p)
+  return rx_search(re, s, 0, true, rx_caps(re))
+}
+
+# The whole match and each group ("" for one that took no part, 16 at most, as plank.py's), or nil (0).
+fn rt_rx_captures(s: str, p: str) -> int {
+  let re = rx_compile(p)
+  let caps = rx_caps(re)
+  if not rx_search(re, s, 0, true, caps) { return 0 }
+  let out = rt_list_new()
+  var k = 0
+  while k * 2 < peek(caps) and k < 16 {
+    if rx_get(caps, k * 2) < 0 {
+      rt_list_push(out, addr(""))
+    } else {
+      rt_list_push(out, addr(rt_sub(s, rx_get(caps, k * 2), rx_get(caps, k * 2 + 1))))
+    }
+    k += 1
+  }
+  return out
+}
+
+# Every match, left to right; after an empty one the search moves on a byte, as plank.py's loop does.
+fn rt_rx_find_all(s: str, p: str) -> int {
+  let re = rx_compile(p)
+  let caps = rx_caps(re)
+  let out = rt_list_new()
+  var at = 0
+  var bol = true
+  while at < len(s) and rx_search(re, s, at, bol, caps) {
+    rt_list_push(out, addr(rt_sub(s, rx_get(caps, 0), rx_get(caps, 1))))
+    if rx_get(caps, 1) > at { at = rx_get(caps, 1) } else { at += 1 }
+    bol = false
+  }
+  return out
+}
+
+fn rt_rx_replace(s: str, p: str, rep: str) -> str {
+  let re = rx_compile(p)
+  let caps = rx_caps(re)
+  let parts = rt_list_new()
+  var at = 0
+  var bol = true
+  while at < len(s) and rx_search(re, s, at, bol, caps) {
+    rt_list_push(parts, addr(rt_sub(s, at, rx_get(caps, 0))))
+    rt_list_push(parts, addr(rep))
+    if rx_get(caps, 1) > at {
+      at = rx_get(caps, 1)
+    } else {   # an empty match: keep one byte so the search moves on
+      rt_list_push(parts, addr(rt_sub(s, at, at + 1)))
+      at += 1
+    }
+    bol = false
+  }
+  rt_list_push(parts, addr(rt_sub(s, at, len(s))))
+  return rt_join(parts, "")
+}
