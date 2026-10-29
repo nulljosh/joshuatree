@@ -572,6 +572,31 @@ fn rt_dict_items(d: int) -> int {
   return out
 }
 
+# 7.3.0: a list's enumerate() and zip(a, b), tuples the way rt_dict_items makes them: two cells, as long as the shorter list.
+fn rt_list_enumerate(l: int) -> int {
+  let out = rt_list_new()
+  for i in 0..peek(l) {
+    let t = rt_alloc(16)
+    poke(t, i)
+    poke(t + 8, peek(peek(l + 16) + i * 8))
+    rt_list_push(out, t)
+  }
+  return out
+}
+
+fn rt_zip(a: int, b: int) -> int {
+  let out = rt_list_new()
+  var n = peek(a)
+  if peek(b) < n { n = peek(b) }
+  for i in 0..n {
+    let t = rt_alloc(16)
+    poke(t, peek(peek(a + 16) + i * 8))
+    poke(t + 8, peek(peek(b + 16) + i * 8))
+    rt_list_push(out, t)
+  }
+  return out
+}
+
 fn rt_dict_find(d: int, k: str) -> int {
   let keys = peek(d)
   let ints = peek(d + 16) == 1
@@ -1249,6 +1274,26 @@ fn jtw_y() -> int {
 # names it time only in a program that declares it, so Plank's own time() stays itself everywhere else.
 fn rt_extern_time(t: int) -> int {
   return syscall(13, 0, 0, 0)
+}
+
+# 7.3.0: the C library calls Plank's interop example makes by name, the same way. strlen counts bytes, as C's does: renamed
+# strlen, the function is the program's, where len counts characters, so it reads the byte count itself.
+fn rt_extern_strlen(s: str) -> int {
+  return plankc_byte_len(s)
+}
+
+fn rt_extern_toupper(c: int) -> int {
+  if c >= 97 and c <= 122 { return c - 32 }
+  return c
+}
+
+fn rt_extern_fabs(x: float) -> float {
+  if x < 0.0 { return 0.0 - x }
+  return x
+}
+
+fn rt_extern_getpid() -> int {
+  return syscall(20, 0, 0, 0)   # JT_SYS_GETPID
 }
 
 # jtw-adv:start (tools/gen/plank-adv.py writes this block from user/libjt/aafont.h; do not edit by hand)
