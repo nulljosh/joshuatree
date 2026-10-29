@@ -76,5 +76,19 @@ for mode in ("lex", "parse"):
             fails.append(mode + " " + f.name)
         else:
             print("  ok: %s %s (%d lines)" % (mode, f.name, len(w)))
+# 6.93.0: plankc keeps only the functions main reaches. fib reaches printing and the heap, never JSON, regex or dates, so
+# those runtime functions are gone from its assembly; plankc's own reaches its lexer and parser.
+def globls(f):
+    a = subprocess.run([str(exe), "asm", str(f), str(src / "rt.pk")], capture_output=True, text=True, timeout=120, cwd=str(f.parent)).stdout
+    return {l[9:] for l in a.split("\n") if l.startswith("  .globl ")}
+fib = globls(plank.parent / "examples" / "fib.pk")
+for gone in ("pk_rt_json_quote", "pk_rt_rx_matches", "pk_rt_clock", "pk_rt_dict_items"):
+    ok = gone not in fib
+    print(("  ok: " if ok else "  FAIL: ") + "fib's assembly leaves out %s" % gone)
+    if not ok: fails.append("shake " + gone)
+for kept in ("main", "pk_main", "pk_fib", "pk_rt_print_str", "pk_rt_alloc"):
+    ok = kept in fib
+    print(("  ok: " if ok else "  FAIL: ") + "fib's assembly keeps %s" % kept)
+    if not ok: fails.append("shake " + kept)
 if fails: print("FAIL: " + ", ".join(fails)); sys.exit(1)
-print("PASS: plankc, written in Plank, tokenizes and parses all %d files exactly as plank.py does" % len(files))
+print("PASS: plankc, written in Plank, tokenizes and parses all %d files exactly as plank.py does, and keeps only what main reaches" % len(files))
