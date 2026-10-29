@@ -42,6 +42,9 @@ fib = Path(plank).parent / "examples/fib.pk"
 floats = src / "tests/floats.pk"   # 6.76.0: the encoder's float instructions, run on the box
 floats_want = [l for l in subprocess.run(["uv", "run", "-q", "--with", "llvmlite", "python3", str(plank), "run", str(floats)],
                                          capture_output=True, text=True, timeout=600).stdout.split("\n") if l]
+rnd = src / "tests/random.pk"   # 6.92.0: random's eor, lslv and lsrv, encoded on the box (the Mac's clang knew them, plankc did not)
+rnd_want = [l for l in subprocess.run(["uv", "run", "-q", "--with", "llvmlite", "python3", str(plank), "run", str(rnd)],
+                                      capture_output=True, text=True, timeout=600).stdout.split("\n") if l]
 want = {}
 for name, f in (("FIB.S", fib), ("SELF.S", src / "plankc.pk")):
     r = subprocess.run([str(stage1), "asm", str(f), str(src / "rt.pk")], capture_output=True, text=True, timeout=600)
@@ -66,6 +69,7 @@ try:
     for n in ("plankc.pk", "gen.pk", "enc.pk", "parse.pk", "lex.pk", "rt.pk"): mt("mcopy", "-o", src / n, "::JT/PC/" + n.upper())
     mt("mcopy", "-o", fib, "::JT/PC/FIB.PK")
     mt("mcopy", "-o", floats, "::JT/PC/FLOATS.PK")
+    mt("mcopy", "-o", rnd, "::JT/PC/RANDOM.PK")
     log, sock = tmp / "uart", tmp / "qmp"
     q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-global", "virtio-mmio.force-legacy=false",
                           "-device", "ramfb", "-device", "virtio-keyboard-device", "-drive", "if=none,id=card,file=%s,format=raw" % card, "-device", "virtio-blk-device,drive=card",
@@ -130,6 +134,12 @@ try:
     body = seg[seg.find("M3c app fltx starts"):] if "M3c app fltx starts" in seg else ""
     got = [l for l in body.split("\n")[1:] if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ", "slow step ")) and "joshua@tree" not in l]
     check("its float instructions, encoded by plankc, print what plank.py's build prints", got == floats_want and len(got) > 5 and "M3c app fltx exit 0" in seg, {"got": got[:8], "want": floats_want[:8]})
+    seg, done, secs = run("userrun plankc img PC/RANDOM.PK PC/RT.PK APPS/RNDX.APP", "plankc", 300)
+    check("stage 2 writes random.pk's app image on the box (%d s)" % secs, done and "plankc: wrote APPS/RNDX.APP" in seg and "M3c app plankc exit 0" in seg, seg[-500:])
+    seg, done, secs = run("userrun rndx", "rndx", 60)
+    body = seg[seg.find("M3c app rndx starts"):] if "M3c app rndx starts" in seg else ""
+    got = [l for l in body.split("\n")[1:] if l and not l.startswith(("M3c ", "M3 ", "key ", "userrun ", "slow step ")) and "joshua@tree" not in l]
+    check("its xor and shifts, encoded by plankc, print what plank.py's build prints", got == rnd_want and len(got) == 4 and "M3c app rndx exit 0" in seg, {"got": got[:6], "want": rnd_want})
     seg, done, secs = run("userrun plankc img PC/PLANKC.PK PC/RT.PK APPS/PLANKC2.APP", "plankc", 1800)
     check("stage 2 writes its own app image, PLANKC2 (%d s)" % secs, done and "plankc: wrote APPS/PLANKC2.APP" in seg and "M3c app plankc exit 0" in seg, seg[-500:])
     seg, done, secs = run("userrun plankc2 asm PC/PLANKC.PK PC/RT.PK PC/SELF2.S", "plankc2", 1800)

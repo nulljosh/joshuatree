@@ -252,6 +252,9 @@ fn instr(a: Asm, op: str, args: [str]) {
     return word(a, 2594113504 + inv * 4096 + reg(args[0]))
   }
   if op == "eor" and args[2] == "#1" { return word(a, 3527409664 + reg(args[1]) * 32 + reg(args[0])) }
+  if op == "eor" and args[2][0] == "x" { return word(a, 3388997632 + reg(args[2]) * 65536 + reg(args[1]) * 32 + reg(args[0])) }   # 6.92.0: bxor
+  if op == "lsl" and args[2][0] == "x" { return word(a, 2596282368 + reg(args[2]) * 65536 + reg(args[1]) * 32 + reg(args[0])) }   # shl (lslv)
+  if op == "lsr" and args[2][0] == "x" { return word(a, 2596283392 + reg(args[2]) * 65536 + reg(args[1]) * 32 + reg(args[0])) }   # shr (lsrv)
   if op == "csel" { return word(a, 2592079872 + reg(args[2]) * 65536 + cond(args[3]) * 4096 + reg(args[1]) * 32 + reg(args[0])) }
   if op == "cneg" {   # csneg d, n, n with the condition inverted
     let c = cond(args[2])
