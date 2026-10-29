@@ -65,7 +65,7 @@ Content lays itself out again to fit: the Console and Terminal change columns an
 
 ### Wi-Fi: from switching on to asking a question
 
-The Pi needs a network name and password before it can join. Since 6.22.0 you can pick it on the Pi: in Settings, Wi-Fi lists the networks it heard (Enter, pick one, type its password, Enter), or at the Terminal, `wifi` lists the networks it heard at start, `wifi join NAME` asks for the password with stars, works out the network key on the Pi and saves it as `JT/WIFI.TXT` (the name and the key, never the password); the Pi joins it at its next start. A development card can also carry one built in, prepared on the Mac:
+The Pi needs a network name and password before it can join. Since 6.22.0 you can pick it on the Pi: in Settings, Wi-Fi lists the networks it heard (Enter, pick one, type its password, Enter), or at the Terminal, `wifi` lists the networks it heard at start, `wifi join NAME` asks for the password with stars, works out the network key on the Pi and saves it as `JT/WIFI.TXT` (the name and the key, never the password); since 6.88.0 the Pi joins it at once, no restart. R in Settings' Wi-Fi looks for networks again. A development card can also carry one built in, prepared on the Mac:
 
 **Prepare the card.**
 1. Create `~/.config/joshuatree/wifi.conf` with two lines: `ssid=YOUR_NETWORK_NAME` (up to 32 bytes) and `psk=YOUR_NETWORK_PASSWORD` (8 to 63 characters).
@@ -144,7 +144,7 @@ HTTPS knows 126 root certificates: Mozilla's whole list, the one Firefox trusts,
 
 **Downloads.** A link to something that is not a page (a PDF, a zip) is saved to your `DOWNLOAD` folder (`JT/DOWNLOAD` with no accounts), and `fetch URL` at the Terminal saves any address there. A name already taken gets `~1`, `~2` and so on; nothing is written over.
 
-**Calendar subscriptions.** `calendar subscribe https://...` (or a `webcal://` link) copies a calendar feed's events into Calendar, beside your own; run it again to refresh, `calendar unsubscribe` to drop them. A day you already have an event on keeps yours. For a calendar you can also write to (iCloud, Fastmail, any CalDAV server), `calendar caldav https://.../ YOU` with the server's address (for iCloud, `https://caldav.icloud.com/`) or the calendar's own, and an app password; the Pi finds your calendar, and when there are several it lists them and `calendar use N` picks one. Then `calendar sync`: your days go up, the calendar's come down, and a day deleted on either side is deleted on the other. Opening Calendar syncs by itself, at most every 15 minutes.
+**Calendar subscriptions.** `calendar subscribe https://...` (or a `webcal://` link) copies a calendar feed's events into Calendar, beside your own; run it again to refresh, `calendar unsubscribe` to drop them. A day you already have an event on keeps yours. For a calendar you can also write to (iCloud, Fastmail, any CalDAV server), `calendar caldav https://.../ YOU` with the server's address (for iCloud, `https://caldav.icloud.com/`) or the calendar's own, and an app password; the Pi finds your calendar, and when there are several it lists them and `calendar use N` picks one. Then `calendar sync`: your days go up, the calendar's come down, and a day deleted on either side is deleted on the other. Opening Calendar syncs by itself, and so does a minute with nobody at the Pi while no app, sound or Samantha is busy, at most every 15 minutes.
 
 **Mail.** At the Terminal, `mail login imap.mail.me.com you@icloud.com` (or `imap.gmail.com`) asks for an app password, made on your account's security page, never your real one. With an account signed in it is kept in your keychain, `KEYCHAIN.BIN` in your home folder, sealed with your login password, so a restart does not ask again; `mail logout` takes it out. With no accounts it stays in memory until a restart. It only ever goes over TLS. `mail` lists the ten newest, `mail N` opens one as a page; its pictures are never fetched, since a fetched picture tells the sender you opened it. In Blackcomb, type `mail:` in the address bar for the inbox as a page: open a message, answer it in the Reply field, or write a new one in the form at the bottom. At the Terminal, `mail send someone@example.com Subject | the message` sends one, `mail reply N the message` answers message N; the sending server is the reading one with `imap.` made `smtp.`, or `mail smtp HOST[:PORT]`.
 
@@ -1018,9 +1018,11 @@ Time from pressing Enter at the login screen to the desktop. The keychain stretc
 
 In the Terminal, `wifi`. It should say `wifi: joins NAME, connected` and list the networks it heard. Then a second card with only `JT/WIFI.TXT` (no network built in) should join the same way. If it does not, the last main before the Wi-Fi rework is 0b952b10.
 
+Then without a restart (6.88.0): Settings, Wi-Fi, press R (it says `Looked again.`), pick a second network (a phone hotspot works), type its password, Enter. It should say `Joining...` and then `Joined.` within about 15 seconds, with the menu bar's Wi-Fi back to full. Pick your home network again the same way.
+
 ### 3. Real web pages (6.11.0 to 6.47.0)
 
-`browse en.wikipedia.org/wiki/Raspberry_Pi` at the Terminal, then the same page in Blackcomb (Spotlight, `blackcomb`). It should print `http 200`, readable text with numbered links, its pictures in the window (up to eight, progressive JPEGs too), and `tls: session resumed for en.wikipedia.org` on the UART for the pictures and the next page. Try a news site and a page with a sign-in form (type in a field, tick a box). Note any page that comes back blank or with a TLS error.
+`browse en.wikipedia.org/wiki/Raspberry_Pi` at the Terminal, then the same page in Blackcomb (Spotlight, `blackcomb`). It should print `http 200`, readable text with numbered links, its pictures in the window (up to sixteen, arriving one by one after the text while the window still scrolls, 6.86.0; progressive JPEGs too), and `tls: session resumed for en.wikipedia.org` on the UART for the pictures and the next page. Try a news site and a page with a sign-in form (type in a field, tick a box). Note any page that comes back blank or with a TLS error.
 
 ### 4. Mail (6.18.0, 6.20.0, 6.29.0, 6.32.0, 6.40.0)
 
@@ -1033,6 +1035,7 @@ Deletes now go both ways on the real account, so use a scratch calendar: make on
 2. `calendar use N` with the number of "JT test".
 3. Add a day in the Pi's Calendar, then `calendar sync`: it should say `1 of your days sent`, and the day shows on the Mac.
 4. Delete that day on the Mac, open Calendar on the Pi (it syncs itself): the day is gone there too.
+5. With Calendar closed, add a day on the Mac and leave the Pi alone for a minute (6.87.0): the UART says `calendar: syncing while the Pi is idle`, and the day is in the Pi's Calendar when you open it.
 
 ### 6. History and tabs (6.27.0, 6.37.0 to 6.39.0)
 

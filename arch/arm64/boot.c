@@ -46,6 +46,11 @@ static unsigned stamps_n;
 const char *boot_stamps(void) { return stamps; }   /* cmd.c: `boottime` */
 static void stamp(const char *s) { con_quiet = 1; uart_puts(s); while (*s && stamps_n < sizeof stamps - 1) stamps[stamps_n++] = *s++; }
 static void stamp_dec(unsigned long v) { char b[24]; int k = 23; b[k] = 0; do b[--k] = (char)('0' + v % 10); while ((v /= 10) && k); stamp(b + k); }
+#define IDLE_SYNC_CS 6000u   /* 6.87.0: a minute with no key, click or move */
+static unsigned input_last;      /* notice_now() at the last of them */
+static void idle_tick(void) {   /* the work that waits for nobody to be using the Pi: CalDAV's sync (ics.c) */
+    if (notice_now() - input_last >= IDLE_SYNC_CS && !apps_live() && !audio_busy() && !ask_pending() && !bt_settling()) ics_idle_sync();
+}
 static void pass_note(const char *what, unsigned long t0, int login) {
     unsigned long ms = key_ms() - t0;
     if (ms < 100 || !desk_ms || login || login_live || t0 - desk_ms > 30000) return;   /* later, a `sam` or a heavy app is slow on purpose */
@@ -57,6 +62,7 @@ void input_event(struct input_event e) {
     if (e.type == 1 && e.value == 1 && desk_ms && !first_key && !login_live) {
         first_key = 1; stamp("first key "); stamp_dec(key_ms() - desk_ms); stamp(" ms after the desktop\n");
     }
+    if (e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) input_last = notice_now();   /* 6.87.0: for idle_tick */
 #ifdef PI_BUILD
     if (e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) screen_activity();   /* any key or button or a move wakes the screen */
 #endif
@@ -408,7 +414,7 @@ void main(void) {
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick());   /* only the display sleeps: USB stays polled */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
@@ -421,10 +427,11 @@ void main(void) {
         }
 #else
         for (;;) {   /* ask_pending: a `sam` queued by Enter is run by the next pass, and a wfi with no timer would sleep through it (the key-up IRQ was already taken) */
-            if (usb_ok || brick_live || notice_up() || rep_code || bt_busy() || apps_live() || audio_busy() || ask_pending()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live || notice_up() || rep_code || bt_busy() || apps_live() || audio_busy() || ask_pending() || browser_busy()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
-            else __asm__ volatile ("wfi");
-            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(login_tick());   /* an app parked on yield runs again here */
+            else __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+                                   " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step * 500), "r"(1UL) : "memory");   /* 6.87.0: idle, still a pass a second, so idle_tick runs */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* an app parked on yield runs again here; browser_tick fetches an image and idle_tick may sync, slow on purpose, so untimed */
 #ifdef HANG_TEST
             hang_tick();
 #endif

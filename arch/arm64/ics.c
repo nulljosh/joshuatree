@@ -479,12 +479,23 @@ void ics_password(const char *pass) {
    network that does not block. */
 void uart_puts(const char *s); extern int con_quiet;
 static void quiet_out(const char *s) { con_quiet = 1; uart_puts(s); }
-void ics_autosync(void) {
+static void autosync(const char *why) {
     if (!dav_mine() || (sync_done && ticks() - sync_last < 15u * 60 * 100)) return;
     void (*was)(const char *) = cmd_out; cmd_out = quiet_out;
-    cmd_out("calendar: syncing before Calendar opens\n");
+    cmd_out(why);
     dav_sync();
     cmd_out = was;
+}
+void ics_autosync(void) { autosync("calendar: syncing before Calendar opens\n"); }
+/* 6.87.0: and on its own, without Calendar open: boot.c calls this once nobody has touched the Pi for a minute and no app,
+   sound or Samantha is busy. It looks at most once a minute (dav_mine may read the keychain off the card) and syncs at most
+   every 15 minutes. ponytail: the sync still holds the desktop for its few seconds, but only while nobody is using it; a
+   sync that never holds it needs a network that does not block. */
+void ics_idle_sync(void) {
+    static unsigned last; static int looked;
+    if (looked && ticks() - last < 60u * 100) return;
+    looked = 1; last = ticks();
+    autosync("calendar: syncing while the Pi is idle\n");
 }
 int ics_command(const char *q, unsigned n) {   /* calendar subscribe URL, calendar unsubscribe; 1 when it was one */
     if (n == 20 && starts(q, "calendar unsubscribe")) {

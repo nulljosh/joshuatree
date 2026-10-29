@@ -369,6 +369,8 @@ static u32 dhcp_lease_ip = 0;
 
 int net_nodhcp = 0; /* set from kernel.c's cmdline parse ("nodhcp"), see net.h */
 
+static int dhcp_state = 0; /* 0 = not yet attempted, 1 = leased, 2 = fell back */
+void net_dhcp_forget(void) { dhcp_state = 0; }   /* 6.88.0: the Pi joined another network, so the next net_init asks for a lease again */
 int net_init(u32 ip) {
 #ifdef NET_NIC
     if (nic_init()) {
@@ -398,7 +400,6 @@ int net_init(u32 ip) {
        every single call would make each of those commands pause for
        seconds). dhcp_state remembers the outcome of the first call and
        every later call just reapplies it. */
-    static int dhcp_state = 0; /* 0 = not yet attempted, 1 = leased, 2 = fell back */
 
     if (net_nodhcp) {
         if (dhcp_state == 0) { serial_puts("dhcp: skipped (nodhcp), using fixed config\n"); dhcp_state = 2; }

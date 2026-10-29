@@ -7,7 +7,7 @@ strong, Shaw Open okay, Cafe Guest weak). FORCE rebuilds that object on every ma
 the list never reaches a real build. On a check card with a JT folder:
   Spotlight opens Settings, Down six times reaches section 6 Wi-Fi, and its card of three rows is drawn white; Enter picks
   row 1, Down row 2, Up row 1 again (`settings wifi pick N NAME`); Enter opens the password field, and while it is open no
-  `key N` line reaches the UART; a password typed and Enter -> `settings wifi saved My Home 5G`, and JT/WIFI.TXT on the card
+  `key N` line reaches the UART; R looks again (6.88.0, `settings wifi scan 3`); a password typed and Enter -> `settings wifi saved My Home 5G`, and JT/WIFI.TXT on the card
   is that name and exactly Python's PMK. The password never reaches the UART.
 Discriminating: drop wf_secret from set_secret in users_ui.h and the typed keys show up on the UART.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64, PIL or mtools is missing.
@@ -75,6 +75,8 @@ try:
     WX, WY = 150, 100; cx, cy = WX + 8 + 150 + 16, WY + 74 + 24
     rows_white = [img.getpixel((cx + 200, cy + 15 + r * 30)) == (255, 255, 255) for r in range(3)]
     check("the card of three heard networks is drawn", all(rows_white) and img.getpixel((cx + 200, cy + 15 + 3 * 30)) != (255, 255, 255), rows_white)
+    n = len(uart()); key("r")
+    check("R looks again (6.88.0)", wait_for("settings wifi scan 3\n", 10, n), uart()[n:][-300:])
     n = len(uart()); key("ret")
     check("Enter gives the list the keys, row 1 picked", wait_for("settings wifi pick 1 My Home 5G\n", 10, n), uart()[n:][-300:])
     n = len(uart()); key("down"); key("up")

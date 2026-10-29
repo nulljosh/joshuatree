@@ -233,6 +233,7 @@ int settings_key(unsigned code) {   /* a key down with Settings in front: every 
     if (code == 1) settings_close();
     else if (set_sec == SET_USERS && (code == 28 || code == 96 || code == 57 || code == 106)) us_enter();
     else if (set_sec == SET_WIFI && (code == 28 || code == 96 || code == 57 || code == 106 || code == 15)) wf_enter();
+    else if (set_sec == SET_WIFI && code == 19) wf_rescan();   /* 6.88.0: R */
     else if (code == 103 || code == 108) set_section(set_sec + (code == 108 ? 1 : -1));
     else if ((code == 105 || code == 106) && set_row >= 0) set_adjust(set_row, code == 106 ? 1 : -1);
     else if ((code == 57 || code == 28 || code == 96) && set_row >= 0 && set_kind(set_sec, set_row) == SK_TOGGLE) set_adjust(set_row, 1);

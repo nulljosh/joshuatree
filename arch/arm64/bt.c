@@ -911,6 +911,7 @@ void bt_poll(void) {
 
 int bt_starting(void) { return st == STARTING; }
 int bt_busy(void) { return st == STARTING || st == SCANNING || st == PAIRING || st == MOUSE || st == RETRY; }
+int bt_settling(void) { return st == STARTING || st == SCANNING || st == PAIRING || st == RETRY; }   /* 6.87.0: the radio's own deadlines are running (a connected mouse is not) */
 
 static int has(const char *name, const char *w, unsigned wn) {   /* name contains the wn letters of w, any case */
     for (unsigned i = 0; name[i]; i++) {
