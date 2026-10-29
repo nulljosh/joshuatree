@@ -1243,7 +1243,7 @@ fn rt_args() -> int {
 # end, global(19) bytes handed out since the last yield, global(20) to global(22) a number's digits on the way out,
 # global(23) collections in a row that found the heap nearly full (rt_starved).
 
-fn rt_large() -> int { return 2621440 }   # 2.5 MiB for large objects; calibrate against the biggest program's output
+fn rt_large() -> int { return 4194304 }   # 4 MiB for large objects (2.5 until 6.96.0, when plankc compiling itself on the box needed a second megabyte list and sometimes found no room); calibrate against the biggest program's output
 
 fn rt_gc_init() {
   let base = syscall(397, 0, 0, 0)               # where the heap ends now

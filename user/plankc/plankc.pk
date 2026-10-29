@@ -131,7 +131,7 @@ fn load_program(path: str, seen: [str: int]) -> N {
   let parts = path.split("/")
   if len(parts) > 1 { dir = parts[..len(parts) - 1].join("/") + "/" }
   let out: [N] = []
-  for item in parse(src).kids {
+  for item in expand_tools(parse(src).kids) {
     if item.kind == "Import" {
       let next = dir + item.kids[0].text
       if item.kids[1].kind != "_" {   # import "x.pk" as m: its names become m.name (6.84.0)
@@ -161,4 +161,53 @@ fn app_name(path: str) -> str {
     if not ((c >= "A" and c <= "Z") or (c >= "0" and c <= "9") or c == "-" or c == "_") { return "" }
   }
   return base
+}
+
+# tool fn (6.96.0), as plank.py's expand_tools: besides f, a function f_tool() that wraps it as an ai.Tool, its schema read
+# off the signature, so the model's schema never drifts from the code. Done per file, before its names are qualified.
+fn expand_tools(items: [N]) -> [N] {
+  var ai = "-"
+  for it in items {
+    if it.kind == "Import" and (it.kids[0].text == "ai.pk" or it.kids[0].text.ends_with("/ai.pk")) {
+      ai = ""
+      if it.kids[1].kind != "_" { ai = it.kids[1].text }
+    }
+  }
+  let out: [N] = []
+  for f in items {
+    out.append(f)
+    if f.kind != "Fn" or f.kids[7].text != "true" { continue }
+    if ai == "-" { throw "\(f.line): tool fn needs import \"lib/ai.pk\" (it builds an ai.Tool)" }
+    if len(f.kids[4].kids) > 0 or len(f.kids[5].kids) > 0 { throw "\(f.line): a tool fn takes no defaults or type parameters" }
+    let ret = f.kids[2].text
+    if not (ret == "str" or ret == "int" or ret == "float" or ret == "bool") { throw "\(f.line): a tool fn returns str, int, float or bool, not \(ret)" }
+    let name = f.kids[0].text
+    let schema: [str] = []
+    let args: [str] = []
+    for prm in f.kids[1].kids {
+      let n = prm.kids[0].text
+      let t = prm.kids[1].text
+      let get = ["str": ".str()", "int": ".int()", "float": ".num()", "bool": ".truth()"]
+      if not (t in get) { throw "\(f.line): tool fn parameter \(n) is \(t); the model can pass str, int, float or bool" }
+      schema.append(tool_quote(n) + ": " + tool_quote(t))
+      args.append("args.get(" + tool_quote(n) + ")" + get[t])
+    }
+    var call = name + "(" + args.join(", ") + ")"
+    if ret != "str" { call = "str(" + call + ")" }
+    var p = ""
+    if ai != "" { p = ai + "." }
+    var doc = f.kids[8].text
+    if doc == "" { doc = name }
+    var sch = schema.join(", ")
+    if sch == "" { sch = ":" }
+    let src = "fn " + name + "_tool() -> " + p + "Tool { return " + p + "tool(" + tool_quote(name) + ", " + tool_quote(doc) + ", [" + sch + "], fn(args: Json) -> str { return " + call + " }) }"
+    let aliases: [str: int] = [:]
+    if ai != "" { aliases[ai] = 1 }
+    for x in program(P(lex(src), 0, aliases)).kids { out.append(x) }
+  }
+  return out
+}
+
+fn tool_quote(s: str) -> str {
+  return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 }
