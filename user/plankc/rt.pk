@@ -895,7 +895,7 @@ fn rt_uncaught(msg: str, line: int) {
 fn rt_read_file(path: str) -> int {
   let cap = 262144   # ponytail: 256 KB, past plankc's biggest source eight times over; READAT in chunks for bigger
   if peek(global(10)) == 0 { poke(global(10), rt_alloc(cap)) }
-  let n = syscall(401, addr(path), peek(global(10)), cap)
+  let n = syscall(401, addr(rt_path(path)), peek(global(10)), cap)
   if n < 0 { return 0 }
   let p = rt_str(n)
   rt_copy(p, peek(global(10)), n)
@@ -903,7 +903,279 @@ fn rt_read_file(path: str) -> int {
 }
 
 fn rt_write_file(path: str, s: str) -> bool {
-  return syscall(405, addr(path), addr(s), len(s)) >= 0
+  return syscall(405, addr(rt_path(path)), addr(s), len(s)) >= 0
+}
+
+# ---- files and folders (6.91.0). An app's root is the card's JT/ folder (ufile.c), so "/x" is JT/x: a leading slash
+# goes, and cwd() is "/". FAT names compare without case, as fat.c finds them.
+fn rt_path(p: str) -> str {
+  if len(p) > 0 and peek8(addr(p)) == 47 { return rt_sub(p, 1, len(p)) }
+  return p
+}
+
+# A folder's records (JT_SYS_READDIR, 40 bytes each: the name, its size, 1 for a folder) after their count, which is
+# below 0 when p is not a folder. ponytail: the first 64 names; READDIR says when there are more.
+fn rt_dir_read(p: str) -> int {
+  let d = rt_alloc(8 + 64 * 40)
+  poke(d, syscall(388, addr(rt_path(p)), d + 8, 64))
+  return d
+}
+
+fn rt_dir_name(d: int, i: int) -> str {
+  let r = d + 8 + i * 40
+  var k = 0
+  while k < 31 and peek8(r + k) != 0 { k += 1 }
+  return rt_sub(as_str(r), 0, k)
+}
+
+fn rt_dir_count(d: int) -> int {
+  if peek(d) > 64 { return 64 }
+  return peek(d)
+}
+
+fn rt_list_dir(p: str) -> int {
+  let d = rt_dir_read(p)
+  let out = rt_list_new()
+  for i in 0..rt_dir_count(d) {
+    let name = rt_dir_name(d, i)
+    if not rt_str_eq(name, ".") and not rt_str_eq(name, "..") {
+      rt_list_push(out, addr(name))
+      var j = peek(out) - 1   # into place, so the names come out sorted as plank.py's qsort leaves them
+      let items = peek(out + 16)
+      while j > 0 and rt_str_cmp(as_str(peek(items + (j - 1) * 8)), name) > 0 {
+        poke(items + j * 8, peek(items + (j - 1) * 8))
+        poke(items + (j - 1) * 8, addr(name))
+        j -= 1
+      }
+    }
+  }
+  return out
+}
+
+fn rt_lower_byte(c: int) -> int {
+  if c >= 65 and c <= 90 { return c + 32 }
+  return c
+}
+
+fn rt_same_name(a: str, b: str) -> bool {
+  if len(a) != len(b) { return false }
+  for i in 0..len(a) {
+    if rt_lower_byte(peek8(addr(a) + i)) != rt_lower_byte(peek8(addr(b) + i)) { return false }
+  }
+  return true
+}
+
+# -1 when nothing is at p, 0 for a file, 1 for a folder: p's name looked up in its parent's records.
+fn rt_entry(p: str) -> int {
+  let q = rt_path(p)
+  var slash = len(q) - 1
+  while slash >= 0 and peek8(addr(q) + slash) != 47 { slash -= 1 }
+  let leaf = rt_sub(q, slash + 1, len(q))
+  if len(leaf) == 0 { return 1 }   # the root
+  var parent = ""
+  if slash > 0 { parent = rt_sub(q, 0, slash) }
+  let d = rt_dir_read(parent)
+  for i in 0..rt_dir_count(d) {
+    if rt_same_name(rt_dir_name(d, i), leaf) { return peek8(d + 8 + i * 40 + 36) }
+  }
+  return -1
+}
+
+fn rt_exists(p: str) -> bool {
+  return rt_entry(p) >= 0
+}
+
+fn rt_is_dir(p: str) -> bool {
+  return rt_entry(p) == 1
+}
+
+fn rt_mkdir(p: str) -> bool {
+  return syscall(389, addr(rt_path(p)), 0, 0) == 0 or rt_is_dir(p)
+}
+
+fn rt_remove_file(p: str) -> bool {
+  return syscall(390, addr(rt_path(p)), 0, 0) >= 0
+}
+
+# ponytail: the whole file read and written again; JT_SYS_WRITEFILE is one write, so a cut leaves the old file or the new.
+fn rt_append_file(p: str, s: str) -> bool {
+  let old = rt_read_file(p)
+  if old == 0 { return rt_write_file(p, s) }
+  return rt_write_file(p, as_str(old) + s)
+}
+
+fn rt_url_encode(s: str) -> str {
+  let p = rt_str(len(s) * 3)
+  var q = p
+  for i in 0..len(s) {
+    let c = peek8(addr(s) + i)
+    if (c >= 48 and c <= 57) or (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c == 45 or c == 95 or c == 46 or c == 126 {
+      poke8(q, c)
+      q += 1
+    } else {
+      poke8(q, 37)
+      var h = c / 16
+      if h < 10 { poke8(q + 1, 48 + h) } else { poke8(q + 1, 55 + h) }
+      h = c % 16
+      if h < 10 { poke8(q + 2, 48 + h) } else { poke8(q + 2, 55 + h) }
+      q += 3
+    }
+  }
+  poke8(q, 0)
+  poke(p - 8, q - p)
+  return as_str(p)
+}
+
+# ---- dates (6.91.0): clock() and parse_time() over a civil calendar (Howard Hinnant's days_from_civil and its inverse).
+# ponytail: the Pi keeps no time zone, so local time is UTC; a zone in Settings would add its offset here.
+fn rt_days_from_civil(y0: int, m: int, d: int) -> int {
+  var y = y0
+  if m <= 2 { y -= 1 }
+  var era = y / 400
+  if y < 0 { era = (y - 399) / 400 }
+  let yoe = y - era * 400
+  var mp = m - 3
+  if m <= 2 { mp = m + 9 }
+  let doy = (153 * mp + 2) / 5 + d - 1
+  let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+  return era * 146097 + doe - 719468
+}
+
+fn rt_pad(n: int, w: int) -> str {
+  var s = rt_int_str(n)
+  while len(s) < w { s = "0" + s }
+  return s
+}
+
+fn rt_clock(fmt0: str, at: float, given: bool) -> str {
+  var fmt = fmt0
+  if len(fmt) == 0 { fmt = "%Y-%m-%d %H:%M:%S" }
+  var t = 0
+  if given {
+    t = int(at)
+    if float(t) > at { t -= 1 }   # time_t of a negative moment counts down
+  } else {
+    t = int(rt_time())
+  }
+  var days = t / 86400
+  if t % 86400 < 0 { days -= 1 }
+  let secs = t - days * 86400
+  let z = days + 719468
+  var era = z / 146097
+  if z < 0 { era = (z - 146096) / 146097 }
+  let doe = z - era * 146097
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+  let mp = (5 * doy + 2) / 153
+  let d = doy - (153 * mp + 2) / 5 + 1
+  var m = mp + 3
+  if mp >= 10 { m = mp - 9 }
+  var y = yoe + era * 400
+  if m <= 2 { y += 1 }
+  var wd = (days + 4) % 7
+  if wd < 0 { wd += 7 }
+  let h = secs / 3600
+  let days_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+  let months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+  var out = ""
+  var i = 0
+  while i < len(fmt) {
+    let c = peek8(addr(fmt) + i)
+    if c != 37 or i + 1 >= len(fmt) {
+      out = out + rt_byte_str(c)
+      i += 1
+      continue
+    }
+    let k = peek8(addr(fmt) + i + 1)
+    i += 2
+    var piece = "%" + rt_byte_str(k)   # ponytail: the rest of strftime stays as written
+    if k == 89 { piece = rt_int_str(y) }                       # Y
+    if k == 121 { piece = rt_pad(y % 100, 2) }                 # y
+    if k == 109 { piece = rt_pad(m, 2) }                       # m
+    if k == 100 { piece = rt_pad(d, 2) }                       # d
+    if k == 101 { piece = rt_sub(rt_pad(d, 2), 0, 2) }         # e
+    if k == 101 and d < 10 { piece = " " + rt_int_str(d) }
+    if k == 72 { piece = rt_pad(h, 2) }                        # H
+    if k == 73 and h % 12 == 0 { piece = "12" }                # I
+    if k == 73 and h % 12 != 0 { piece = rt_pad(h % 12, 2) }
+    if k == 112 and h < 12 { piece = "AM" }                    # p
+    if k == 112 and h >= 12 { piece = "PM" }
+    if k == 77 { piece = rt_pad(secs / 60 % 60, 2) }           # M
+    if k == 83 { piece = rt_pad(secs % 60, 2) }                # S
+    if k == 106 { piece = rt_pad(days - rt_days_from_civil(y, 1, 1) + 1, 3) }   # j
+    if k == 65 { piece = days_names[wd] }                      # A
+    if k == 97 { piece = rt_sub(days_names[wd], 0, 3) }        # a
+    if k == 66 { piece = months[m - 1] }                       # B
+    if k == 98 { piece = rt_sub(months[m - 1], 0, 3) }         # b
+    if k == 37 { piece = "%" }
+    out = out + piece
+  }
+  return out
+}
+
+# Up to w digits at byte i of s, into cell r: how many were read.
+fn rt_num_at(s: str, i: int, w: int, r: int) -> int {
+  var n = 0
+  var v = 0
+  while n < w and i + n < len(s) and peek8(addr(s) + i + n) >= 48 and peek8(addr(s) + i + n) <= 57 {
+    v = v * 10 + peek8(addr(s) + i + n) - 48
+    n += 1
+  }
+  poke(r, v)
+  return n
+}
+
+# parse_time(text, layout): seconds since 1970, boxed, or 0 (nil) when the text does not fit, as strptime and mktime.
+fn rt_parse_time(text: str, fmt0: str) -> int {
+  var fmt = fmt0
+  if len(fmt) == 0 { fmt = "%Y-%m-%d" }
+  let cell = rt_alloc(8)
+  var y = 1900
+  var m = 1
+  var d = 1
+  var h = 0
+  var mi = 0
+  var sec = 0
+  var i = 0
+  var j = 0
+  while j < len(fmt) {
+    let c = peek8(addr(fmt) + j)
+    if rt_space(c) {
+      while i < len(text) and rt_space(peek8(addr(text) + i)) { i += 1 }
+      j += 1
+      continue
+    }
+    if c != 37 or j + 1 >= len(fmt) {
+      if i >= len(text) or peek8(addr(text) + i) != c { return 0 }
+      i += 1
+      j += 1
+      continue
+    }
+    let k = peek8(addr(fmt) + j + 1)
+    j += 2
+    var w = 2
+    if k == 89 { w = 4 }
+    if k == 37 {
+      if i >= len(text) or peek8(addr(text) + i) != 37 { return 0 }
+      i += 1
+      continue
+    }
+    if not (k == 89 or k == 109 or k == 100 or k == 72 or k == 77 or k == 83) { return 0 }   # ponytail: numeric fields only
+    let n = rt_num_at(text, i, w, cell)
+    if n == 0 { return 0 }
+    i += n
+    let v = peek(cell)
+    if k == 89 { y = v }
+    if k == 109 { m = v }
+    if k == 100 { d = v }
+    if k == 72 { h = v }
+    if k == 77 { mi = v }
+    if k == 83 { sec = v }
+  }
+  if i != len(text) { return 0 }
+  if m < 1 or m > 12 or d < 1 or d > 31 or h > 23 or mi > 59 or sec > 60 { return 0 }
+  let t = rt_days_from_civil(y, m, d) * 86400 + h * 3600 + mi * 60 + sec
+  return rt_box(as_int(float(t)))
 }
 
 # The words after userrun NAME, split on spaces.

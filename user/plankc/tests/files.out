@@ -1,0 +1,14 @@
+true true true false false
+["A.TXT", "B.TXT", "C.TXT"] one
+two
+ new
+
+true true true false
+true false true ["A.TXT"] []
+true a%20b%26c%3Dd%2F%C3%A9~x_y.z-1
+1790812800 2026-10-01 00:00:00 Thursday Thu October Oct 274 26  1 01 PM %
+2026-10-31 Thursday 1969-12-31 23:59:59 2000-02-29
+85 951868800 946684799
+nil nil nil true
+50700 1767571200
+true true

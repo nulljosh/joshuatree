@@ -1228,6 +1228,58 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
     emit(g, "mov x0, #0")
     return "int"
   }
+  if (name == "exists" or name == "is_dir" or name == "mkdir" or name == "remove_file") and len(a) == 1 {   # 6.91.0
+    if gen_expr(g, a[0]) != "str" { nope(e, name + " of anything but a path") }
+    emit(g, "bl pk_rt_" + name)
+    return "bool"
+  }
+  if (name == "list_dir" or name == "url_encode") and len(a) == 1 {   # 6.91.0
+    if gen_expr(g, a[0]) != "str" { nope(e, name + " of anything but a string") }
+    emit(g, "bl pk_rt_" + name)
+    if name == "list_dir" { return "[str]" }
+    return "str"
+  }
+  if name == "cwd" and len(a) == 0 {   # 6.91.0: an app's root, the card's JT/ folder
+    lit(g, "x0", "/")
+    return "str"
+  }
+  if name == "append_file" and len(a) == 2 {   # 6.91.0
+    gen_expr(g, a[0])
+    push(g)
+    if gen_expr(g, a[1]) != "str" { nope(e, "append_file of anything but a string") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_append_file")
+    return "bool"
+  }
+  if name == "clock" and len(a) <= 2 {   # 6.91.0: clock(fmt = "%Y-%m-%d %H:%M:%S", at = now)
+    if len(a) == 0 { lit(g, "x0", "") } else if gen_expr(g, a[0]) != "str" { nope(e, "clock with a layout that is not a string") }
+    push(g)
+    if len(a) == 2 {
+      if gen_expr(g, a[1]) != "float" { nope(e, "clock at anything but a float") }
+      emit(g, "mov x1, x0")
+      emit(g, "mov x2, #1")
+    } else {
+      emit(g, "mov x1, #0")
+      emit(g, "mov x2, #0")
+    }
+    pop(g, "x0")
+    emit(g, "bl pk_rt_clock")
+    return "str"
+  }
+  if name == "parse_time" and len(a) >= 1 and len(a) <= 2 {   # 6.91.0: seconds since 1970, or nil
+    if gen_expr(g, a[0]) != "str" { nope(e, "parse_time of anything but a string") }
+    push(g)
+    if len(a) == 2 {
+      if gen_expr(g, a[1]) != "str" { nope(e, "parse_time with a layout that is not a string") }
+    } else {
+      lit(g, "x0", "")
+    }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_parse_time")
+    return "float?"
+  }
   if name == "read_file" and len(a) == 1 {
     if gen_expr(g, a[0]) != "str" { nope(e, "read_file of anything but a path") }
     emit(g, "bl pk_rt_read_file")
@@ -1286,6 +1338,7 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   if name == "poke8" { emit(g, "strb w1, [x0]") }
   if name == "as_str" { return "str" }
   if name == "as_float" { return "float" }
+  if name == "as_int" { return "int" }   # 6.91.0: a float's bits as an int, to box it
   if name == "fma" {   # a * b + c, rounded once: rt.pk's exact digits read a product's rounding error from it
     emit(g, "fmov d0, x0")
     emit(g, "fmov d1, x1")
@@ -2686,7 +2739,7 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
 
 # The program's assembly, a line a string: for asm's text, or enc.pk's image.
 fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
-  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false, [:], [:], [], [:], [:])
+  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "as_int": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false, [:], [:], [], [:], [:])
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {
