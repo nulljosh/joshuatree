@@ -113,6 +113,7 @@ int pi_exp_gpio(unsigned pin, unsigned on);    /* wifi.c */
 #define CMD_MS 3000                      /* every command's deadline */
 #define SCAN_MS 5000
 #define LINK_MS 10000                    /* the most we wait on the mouse for any one step */
+#define PASSKEY_MS 30000                 /* 6.89.0: SMP's own limit, for a person typing the passkey */
 #define RECONN_MS 12000                  /* the most one reconnect try waits for the saved mouse to answer */
 #define RC_MAX 30                        /* tries in one reconnect run (boot, a dropped link or `bt reconnect`), then it rests */
 #define PAIR_FILE "BTPAIR.BIN"
@@ -333,8 +334,11 @@ static void fail(const char *msg) {   /* one plain line (msg, or the line built 
 }
 
 /* SMP, LE legacy pairing, Just Works. Every value is little endian, as it travels; e() is AES-128 on the spec's
-   most-significant-first numbers, so it reverses key, input and output (Core spec Vol 3 Part H 2.2.1). */
-static const unsigned char tk[16];       /* Just Works: TK is zero */
+   most-significant-first numbers, so it reverses key, input and output (Core spec Vol 3 Part H 2.2.1).
+   6.89.0: we say DisplayOnly, so a device that asks for a man-in-the-middle check and can type (a keyboard: IO
+   capability KeyboardOnly or KeyboardDisplay) gets Passkey Entry: the Pi shows six digits, the person types them on the
+   keyboard and Enter, and TK is that number. Anything else, a mouse included, is still Just Works with TK zero. */
+static unsigned char tk[16];             /* Just Works: zero; Passkey Entry: the passkey, little endian */
 static unsigned char preq[7], pres[7], mrand[16], sconf[16], keysize;
 static int smp;                          /* 1 request sent, 2 our confirm sent, 3 our random sent, 4 paired */
 static unsigned char ltk[16], krand[8], kaddr[6], ktype; static unsigned kediv, keys;   /* the mouse's keys: RAM only */
@@ -395,7 +399,18 @@ static void on_smp(const unsigned char *p, unsigned n) {
         keysize = p[4] < 16 ? p[4] : 16;
         if (keysize < 7) { b[0] = 0x05; b[1] = 0x06; l2_send(6, b, 2); fail("bt: pairing failed, the mouse wants a short key"); return; }
         if (!tls_entropy(mrand, 16)) { fail("bt: pairing failed, no random numbers"); return; }
+        wipe(tk, 16);
+        int typed = ((preq[3] | pres[3]) & 0x04) && (pres[1] == 0x02 || pres[1] == 0x04);   /* MITM asked, and it has keys */
+        if (typed) {
+            unsigned char r4[4]; if (!tls_entropy(r4, 4)) { fail("bt: pairing failed, no random numbers"); return; }
+            unsigned pk = (r4[0] | r4[1] << 8u | r4[2] << 16u | (unsigned)r4[3] << 24u) % 1000000u;
+            tk[0] = (unsigned char)pk; tk[1] = (unsigned char)(pk >> 8); tk[2] = (unsigned char)(pk >> 16);
+            char d[7]; for (int i = 5; i >= 0; i--) { d[i] = (char)('0' + pk % 10); pk /= 10; } d[6] = 0;
+            put("bt: type "); put(d); put(" on the keyboard, then Enter"); say();
+            wipe(r4, 4); wipe(d, 7);
+        }
         b[0] = 0x03; smp_c1(mrand, b + 1); smp_send(b, 17); smp = 2;
+        if (typed) until = now() + ms(PASSKEY_MS);   /* its confirm comes once the digits are typed */
     } else if (p[0] == 0x03 && n == 17 && smp == 2) {      /* Pairing Confirm: the mouse's, kept to check its random */
         for (int i = 0; i < 16; i++) sconf[i] = p[1 + i];
         b[0] = 0x04; for (int i = 0; i < 16; i++) b[1 + i] = mrand[i];
@@ -412,7 +427,7 @@ static void on_smp(const unsigned char *p, unsigned n) {
         smp_e(tk, b, stk);
         for (unsigned i = keysize; i < 16; i++) stk[i] = 0;
         wipe(mrand, 16); wipe(chk, 16); wipe(b, 17);
-        smp = 4; pc = 42; until = 0;
+        smp = 4; pc = 42; until = 0; wipe(tk, 16);
     } else if (p[0] == 0x05 && n >= 2) {                   /* Pairing Failed, from the mouse */
         put("bt: pairing failed, the mouse said no, reason "); put_hex(p[1]); fail(0);
     } else if (p[0] == 0x06 && n == 17) {                  /* Encryption Information: the LTK */
@@ -430,6 +445,9 @@ static void on_smp(const unsigned char *p, unsigned n) {
 
 /* ATT. Our side is a client of the mouse's GATT database; to the mouse's own requests our database is empty. */
 static unsigned svc[4][2], nsvc, cur, pm_vh, boot_vh, next_decl, cccd, held;
+static unsigned kb_vh, kb_next; static int is_kb;   /* 6.89.0: a Boot Keyboard Input report (0x2A22), used when there is no mouse one */
+static unsigned char kb_prev[8];                    /* the last keyboard report, so hid_kbd sends only what changed */
+void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p);   /* xhci.c: the USB keyboard's own report reader */
 static int si, gs;                       /* which HID service; 1 services, 2 characteristics, 3 descriptors, 4 CCCD write */
 static unsigned rm_vh, rmn; static unsigned char rmap[192];   /* the HID report map's handle, and the map read so far */
 static unsigned char lay_ok, lay_rid, lay_btn_n, lay_xb, lay_yb, lay_wb, lay_xs, lay_ys, lay_ws;   /* its mouse report: field sizes in bits, signedness */
@@ -449,7 +467,7 @@ static void find_cccd(void) {            /* Find Information between the report'
 }
 static void next_service(void) {
     if (++si >= (int)nsvc) { fail("bt: no boot mouse report on this device"); return; }
-    cur = svc[si][0]; pm_vh = boot_vh = next_decl = rm_vh = 0;
+    cur = svc[si][0]; pm_vh = boot_vh = next_decl = rm_vh = kb_vh = kb_next = 0;
     find_chars();
 }
 static int fld(const unsigned char *r, unsigned n, unsigned off, unsigned bits, int sgn) {   /* a little endian bit field of up to 16 bits, sign-extended */
@@ -520,7 +538,7 @@ static void on_att(const unsigned char *p, unsigned n) {
                                       1UL << 0x10 | 1UL << 0x12 | 1UL << 0x16 | 1UL << 0x18 | 1UL << 0x20;
     if (!n) return;
     unsigned op = p[0];
-    if (op == 0x1B) { if (n >= 3 && boot_vh && (unsigned)(p[1] | p[2] << 8) == boot_vh && smp == 4) mouse_report(p + 3, n - 3); return; }
+    if (op == 0x1B) { if (n >= 3 && boot_vh && (unsigned)(p[1] | p[2] << 8) == boot_vh && smp == 4) { if (is_kb) hid_kbd(p + 3, n - 3, kb_prev); else mouse_report(p + 3, n - 3); } return; }
     if (op == 0x1D) { unsigned char c = 0x1E; l2_send(4, &c, 1); return; }                 /* an indication: confirm it */
     if (op == 0x02) { unsigned char r[3] = { 0x03, 23, 0 }; l2_send(4, r, 3); return; }    /* Exchange MTU: we stay at 23 */
     if (op < 64 && (reqs >> op & 1)) {   /* Error Response: Attribute Not Found to a search, Request Not Supported to the rest */
@@ -541,6 +559,8 @@ static void on_att(const unsigned char *p, unsigned n) {
             for (unsigned i = 2; i + len <= n; i += len) {
                 unsigned h = p[i] | p[i + 1] << 8u, vh = p[i + 3] | p[i + 4] << 8u, uuid = len == 7 ? (p[i + 5] | p[i + 6] << 8u) : 0;
                 if (boot_vh && !next_decl && h > boot_vh) next_decl = h;
+                if (kb_vh && !kb_next && h > kb_vh) kb_next = h;
+                if (uuid == 0x2A22 && !kb_vh) kb_vh = vh;
                 if (uuid == 0x2A4E) pm_vh = vh;
                 if (uuid == 0x2A4B && !rm_vh) rm_vh = vh;
                 if (uuid == 0x2A33 && !boot_vh) boot_vh = vh;
@@ -548,6 +568,8 @@ static void on_att(const unsigned char *p, unsigned n) {
             }
             if (last && last < svc[si][1]) { cur = last + 1; find_chars(); return; }
         } else if (op != 0x01) return;
+        is_kb = !boot_vh && kb_vh;   /* 6.89.0: a keyboard's boot report, read the way the mouse's is */
+        if (is_kb) { boot_vh = kb_vh; next_decl = kb_next; for (int i = 0; i < 8; i++) kb_prev[i] = 0; }
         if (!boot_vh) { next_service(); return; }   /* the last page: Attribute Not Found, or the service's end */
         cur = boot_vh + 1; find_cccd();
     } else if (gs == 3) {                /* descriptors: handle and UUID, 16 bit (format 1) or 128 bit (format 2) */
@@ -563,7 +585,7 @@ static void on_att(const unsigned char *p, unsigned n) {
         else enable_reports();
     } else if (gs == 6) {                /* Protocol Mode read back: 0 is boot, whose reports have the fixed layout */
         if (op == 0x0B && n >= 2 && p[1] == 0) enable_reports();
-        else if (rm_vh) { unsigned char q[3] = { 0x0A, (unsigned char)rm_vh, (unsigned char)(rm_vh >> 8) }; rmn = 0; gs = 7; att_req(q, 3); }
+        else if (rm_vh && !is_kb) { unsigned char q[3] = { 0x0A, (unsigned char)rm_vh, (unsigned char)(rm_vh >> 8) }; rmn = 0; gs = 7; att_req(q, 3); }
         else enable_reports();
     } else if (gs == 7) {                /* the report map, 22 bytes a read: Read Response, then Read Blob while a read comes back full */
         if (op == 0x0B || op == 0x0D) {
@@ -574,7 +596,7 @@ static void on_att(const unsigned char *p, unsigned n) {
         enable_reports();                /* an error or a map we could not use: the boot layout */
     } else if (gs == 4) {
         if (op == 0x13) {
-            put("bt: mouse ready"); say();
+            put(is_kb ? "bt: keyboard ready" : "bt: mouse ready"); say();
             st = MOUSE; gs = 5; until = FOREVER; rc_on = 0; wifi_release(); to_term = 0;   /* Wi-Fi back first, so its lines land in the Terminal */
         } else if (op == 0x01 && n >= 5) { put("bt: the mouse would not send reports, error "); put_hex(p[4]); fail(0); }
     }
@@ -628,6 +650,7 @@ static void disconnected(const unsigned char *p, unsigned n) {   /* Disconnectio
     if (n < 4 || p[0] || !conn || ((p[1] | p[2] << 8u) & 0xFFF) != handle) return;
     conn = 0; aqh = aqt; pend_op = 0;
     if (held) { for (unsigned b = 0; b < 3; b++) if (held >> b & 1) kinput(1, 272 + b, 0); held = 0; kinput(0, 0, 0); }
+    if (is_kb) { static const unsigned char up[8]; hid_kbd(up, 8, kb_prev); }   /* 6.89.0: no key stays held down after a hang-up */
     if (st == PAIRING && closing) { closing = 0; settle(); return; }   /* the line was printed by fail */
     unsigned lived = (unsigned)((now() - conn_t0) / ms(1));   /* how long the link was up, in ms */
     if (st == PAIRING && reconn && (pc == 43 || pc == 44) && (p[3] == 0x05 || p[3] == 0x06 || p[3] == 0x3D)) { rejected(); return; }
@@ -703,7 +726,7 @@ static void reconn_start(const struct btp *r) {   /* the saved mouse, dialled wi
     for (int j = 0; j < 6; j++) peer[j] = r->addr[j];
     peer_type = r->type;
     unsigned m = 0; for (; r->name[m] && m < sizeof peer_name - 1; m++) peer_name[m] = r->name[m]; peer_name[m] = 0;
-    conn = closing = smp = gs = tries = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
+    conn = closing = smp = gs = tries = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0; is_kb = 0; kb_vh = kb_next = 0;
     for (int i = 0; i < 16; i++) ltk[i] = r->ltk[i];
     for (int i = 0; i < 8; i++) krand[i] = r->rand[i];
     kediv = r->ediv;
@@ -839,8 +862,8 @@ static void step(void) {
         say(); to_term = 0;
         cmd(OP_CONNECT_CANCEL, 0, 0); return;
     case 37: settle(); return;
-    case 40: {   /* SMP Pairing Request: no input or output, no OOB, bonding, a 16 byte key; the mouse sends its LTK */
-        static const unsigned char rq[7] = { 0x01, 0x03, 0x00, 0x01, 16, 0x00, 0x01 };
+    case 40: {   /* SMP Pairing Request: DisplayOnly (6.89.0, was no input or output), no OOB, bonding, a 16 byte key; the device sends its LTK */
+        static const unsigned char rq[7] = { 0x01, 0x00, 0x00, 0x01, 16, 0x00, 0x01 };
         for (int i = 0; i < 7; i++) preq[i] = rq[i];
         smp = 1; smp_send(rq, 7); return;
     }
@@ -969,7 +992,7 @@ int bt_command(const char *q, unsigned n) {
         peer_type = dev[k].type;
         put("bt: dialling "); for (int j = 5; j >= 0; j--) { put_hex(peer[j]); if (j) put(":"); } put(peer_type ? " (random address)" : " (public address)"); say();
         unsigned m = 0; for (; dev[k].name[m] && m < sizeof peer_name - 1; m++) peer_name[m] = dev[k].name[m]; peer_name[m] = 0;
-        rc_on = 0; conn = closing = smp = gs = tries = reconn = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0;
+        rc_on = 0; conn = closing = smp = gs = tries = reconn = 0; nsvc = cccd = pm_vh = boot_vh = next_decl = held = credits = keys = 0; aqh = aqt = 0; is_kb = 0; kb_vh = kb_next = 0;
         wipe(ltk, 16); wipe(krand, 8);
         wifi_hold();
         to_term = 1; st = PAIRING; pc = 30; until = now();
