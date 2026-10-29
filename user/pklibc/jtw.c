@@ -1,6 +1,6 @@
 /* jtw (6.58.0): a window for a Plank program, in calls Plank's `extern fn` can make (int is a C long long, str a char *).
    A Plank app declares the ones it uses, for example `extern fn jtw_open() -> int`, then: jtw_open once; draw with jtw_fill
-   and jtw_text (logical pixels, colours as 0xRRGGBB, sharp at the Pi's scale 2); jtw_present to show the frame; jtw_wait for
+   and jtw_text or jtw_mono (logical pixels, colours as 0xRRGGBB, sharp at the Pi's scale 2); jtw_present to show the frame; jtw_wait for
    the next event: 1 a key (jtw_key: the character, or 256 up, 257 down, 258 Enter, 259 Esc, 261 left, 262 right), 2 a click
    (jtw_x, jtw_y), 4 the window changed size (draw it all again), -1 the window is gone. Built into Plank apps by
    tools/plankapp.sh, pulled in only by an app that calls it. */
@@ -18,6 +18,9 @@ long long jtw_height(void) { return win.height; }
 void jtw_fill(long long x, long long y, long long w, long long h, long long rgb) { if (win.pixels) jt_fill(&win, (int)x, (int)y, (int)w, (int)h, (unsigned)rgb); }
 long long jtw_text(long long x, long long y, const char *s, long long rgb, long long bold) {
     return win.pixels ? jt_text_draw(&win, bold ? JT_FACE_BOLD : JT_FACE_BODY, (int)x, (int)y, (unsigned)rgb, s) : x;
+}
+long long jtw_mono(long long x, long long y, const char *s, long long rgb) {   /* 6.98.0: Tree Sans Mono, an 8 px cell */
+    return win.pixels ? jt_mono_draw(&win, (int)x, (int)y, (unsigned)rgb, s) : x;
 }
 void jtw_present(void) { pending = JT_POLL_PRESENT; }
 long long jtw_wait(void) {
