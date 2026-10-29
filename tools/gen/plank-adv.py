@@ -12,6 +12,8 @@ import os, re, sys
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 src = open(os.path.join(ROOT, "user/libjt/aafont.h")).read()
+mono = open(os.path.join(ROOT, "user/libjt/aamono.h")).read()
+text_h = open(os.path.join(ROOT, "user/libjt/text.h")).read()
 
 def advances(face):
     body = re.search(r"aa_%s_glyphs\[\] = \{(.*?)\n\};" % face, src, re.S).group(1)
@@ -29,11 +31,15 @@ block = ("# jtw-adv:start (tools/gen/plank-adv.py writes this block from user/li
          '  if face == 1 { return "%s" }\n'
          '  return "%s"\n'
          "}\n"
-         "fn rt_ascent(face: int) -> int {\n"
+         "fn rt_ascent(face: int) -> int {   # face 3 is mono (6.98.0)\n"
+         "  if face == 3 { return %d }\n"
          "  if face == 1 { return %d }\n"
          "  return %d\n"
          "}\n"
-         "# jtw-adv:end\n") % (advances("BOLD"), advances("BODY"), ascent("BOLD"), ascent("BODY"))
+         "fn rt_mono_adv() -> int { return %d }\n"
+         "# jtw-adv:end\n") % (advances("BOLD"), advances("BODY"),
+                              int(re.search(r"#define AA_MONO_ASCENT (\d+)", mono).group(1)), ascent("BOLD"), ascent("BODY"),
+                              int(re.search(r"#define JT_MONO_ADV (\d+)", text_h).group(1)))
 
 rt = os.path.join(ROOT, "user/plankc/rt.pk")
 text = open(rt).read()

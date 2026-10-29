@@ -1,0 +1,168 @@
+# code: a text editor fit for code, in a window. `userrun code HELLO.PK` opens the file (or a new one of that name).
+# Written in Plank and drawn through jtw (6.98.0), so the Pi builds it itself: `userrun plankc build CODE.PK`.
+# Arrows, Home and End move; Enter keeps the line's indent; Tab is two spaces; Cmd+S saves; Esc saves and closes.
+extern fn jtw_open() -> int
+extern fn jtw_width() -> int
+extern fn jtw_height() -> int
+extern fn jtw_fill(x: int, y: int, w: int, h: int, rgb: int) -> int
+extern fn jtw_text(x: int, y: int, s: str, rgb: int, bold: int) -> int
+extern fn jtw_mono(x: int, y: int, s: str, rgb: int) -> int
+extern fn jtw_present() -> int
+extern fn jtw_wait() -> int
+extern fn jtw_key() -> int
+
+struct Ed {
+  path: str
+  lines: [str]
+  row: int = 0
+  col: int = 0
+  top: int = 0
+  dirty: bool = false
+}
+
+# Plank has no chr: the printable characters, so a key code becomes its text by slicing.
+fn typed(k: int) -> str {
+  let table = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+  return table[k - 32..k - 31]
+}
+
+fn indent(s: str) -> str {
+  var n = 0
+  while n < len(s) and s[n] == " " { n += 1 }
+  return s[..n]
+}
+
+fn rows(h: int) -> int {
+  return (h - 36 - 34) / 18
+}
+
+fn save(e: Ed) {
+  if write_file(e.path, e.lines.join("\n")) {
+    e.dirty = false
+    print("code: saved \(e.path)")
+  } else {
+    print("code: could not save \(e.path)")
+  }
+}
+
+fn key(e: Ed, k: int, h: int) {
+  let line = e.lines[e.row]
+  if k >= 32 and k <= 126 {
+    e.lines[e.row] = line[..e.col] + typed(k) + line[e.col..]
+    e.col += 1
+    e.dirty = true
+  } else if k == 9 {
+    e.lines[e.row] = line[..e.col] + "  " + line[e.col..]
+    e.col += 2
+    e.dirty = true
+  } else if k == 258 {
+    let ind = indent(line)
+    e.lines[e.row] = line[..e.col]
+    e.lines.insert(e.row + 1, ind + line[e.col..])
+    e.row += 1
+    e.col = len(ind)
+    e.dirty = true
+  } else if k == 8 {
+    if e.col > 0 {
+      e.lines[e.row] = line[..e.col - 1] + line[e.col..]
+      e.col -= 1
+      e.dirty = true
+    } else if e.row > 0 {
+      e.col = len(e.lines[e.row - 1])
+      e.lines[e.row - 1] = e.lines[e.row - 1] + line
+      e.lines.remove_at(e.row)
+      e.row -= 1
+      e.dirty = true
+    }
+  } else if k == 307 {
+    if e.col < len(line) {
+      e.lines[e.row] = line[..e.col] + line[e.col + 1..]
+      e.dirty = true
+    } else if e.row + 1 < len(e.lines) {
+      e.lines[e.row] = line + e.lines[e.row + 1]
+      e.lines.remove_at(e.row + 1)
+      e.dirty = true
+    }
+  } else if k == 256 and e.row > 0 {
+    e.row -= 1
+  } else if k == 257 and e.row + 1 < len(e.lines) {
+    e.row += 1
+  } else if k == 261 {
+    if e.col > 0 {
+      e.col -= 1
+    } else if e.row > 0 {
+      e.row -= 1
+      e.col = len(e.lines[e.row])
+    }
+  } else if k == 262 {
+    if e.col < len(line) {
+      e.col += 1
+    } else if e.row + 1 < len(e.lines) {
+      e.row += 1
+      e.col = 0
+    }
+  } else if k == 305 {
+    e.col = 0
+  } else if k == 306 {
+    e.col = len(line)
+  } else if k == 308 {
+    save(e)
+  }
+  if e.col > len(e.lines[e.row]) { e.col = len(e.lines[e.row]) }
+  if e.row < e.top { e.top = e.row }
+  if e.row >= e.top + rows(h) { e.top = e.row - rows(h) + 1 }
+}
+
+fn draw(e: Ed) {
+  let w = jtw_width()
+  let h = jtw_height()
+  let paper = 16447732
+  let ink = 1842206
+  let grey = 7697006
+  jtw_fill(0, 0, w, h, paper)
+  let name = if e.dirty { e.path + "  (edited)" } else { e.path }
+  jtw_text(16, 10, name, ink, 1)
+  jtw_fill(0, 34, w, 1, 14538958)
+  for i in 0..rows(h) {
+    let n = e.top + i
+    if n >= len(e.lines) { break }
+    let y = 40 + i * 18
+    var num = str(n + 1)
+    while len(num) < 4 { num = " " + num }
+    jtw_mono(8, y, num, grey)
+    jtw_mono(48, y, e.lines[n], ink)
+  }
+  jtw_fill(48 + e.col * 8, 40 + (e.row - e.top) * 18, 2, 16, 11882540)
+  jtw_fill(0, h - 30, w, 1, 14538958)
+  jtw_text(16, h - 24, "Line \(e.row + 1), column \(e.col + 1).  Cmd+S saves, Esc saves and closes.", grey, 0)
+  jtw_present()
+}
+
+fn main() {
+  let a = args()
+  if len(a) < 1 {
+    print("code: which file? userrun code NAME.PK")
+    return
+  }
+  var lines = (read_file(a[0]) ?? "").split("\n")
+  if len(lines) == 0 { lines = [""] }
+  let e = Ed(path: a[0], lines: lines)
+  if jtw_open() != 0 {
+    print("code: no window")
+    return
+  }
+  print("code: open \(e.path), \(len(e.lines)) lines")
+  draw(e)
+  while true {
+    let ev = jtw_wait()
+    if ev == -1 { break }
+    if ev == 1 {
+      let k = jtw_key()
+      if k == 259 { break }
+      key(e, k, jtw_height())
+    }
+    draw(e)
+  }
+  if e.dirty { save(e) }
+  print("code: closed")
+}

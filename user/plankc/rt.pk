@@ -1150,12 +1150,15 @@ fn jtw_fill(x0: int, y0: int, w0: int, h0: int, rgb: int) -> int {
 }
 
 fn jtw_text(x: int, y: int, s: str, rgb: int, bold: int) -> int {
-  return rt_jtw_text(x, y, s, rgb, bold)
+  return rt_jtw_text(x, y, s, rgb, if bold != 0 { 1 } else { 0 })
 }
 
-# s at logical x, y (its top), bold 1 or body 0, as libjt's jt_text_draw; returns the logical x after it.
-fn rt_jtw_text(x: int, y: int, s: str, rgb: int, bold: int) -> int {
-  let face = if bold != 0 { 1 } else { 0 }
+fn jtw_mono(x: int, y: int, s: str, rgb: int) -> int {   # 6.98.0: Tree Sans Mono, libjt's jt_mono_draw
+  return rt_jtw_text(x, y, s, rgb, 3)
+}
+
+# s at logical x, y (its top) in face 0 body, 1 bold or 3 mono, as libjt draws it; returns the logical x after it.
+fn rt_jtw_text(x: int, y: int, s: str, rgb: int, face: int) -> int {
   let advs = rt_adv(face)
   let w = rt_win()
   var k = 1
@@ -1177,7 +1180,8 @@ fn rt_jtw_text(x: int, y: int, s: str, rgb: int, bold: int) -> int {
         j = 31
       }
       poke8(b + i, c)
-      let a = (peek8(addr(advs) + j) - 48) * k
+      var a = rt_mono_adv() * k
+      if face != 3 { a = (peek8(addr(advs) + j) - 48) * k }
       poke8(adv + i, a)
       step += a
     }
@@ -1252,10 +1256,12 @@ fn rt_adv(face: int) -> str {   # 1x advances, space to tilde then the degree si
   if face == 1 { return "35899>95558:5755969999989955:::8>:9::98;:78:8=;;9;999::?::9555775898986994484=999968598<888757:6" }
   return "44799>94557946459699989899449997>:9::88::6898=;;9;999::>::9555765898985983384<889957588;88865696"
 }
-fn rt_ascent(face: int) -> int {
+fn rt_ascent(face: int) -> int {   # face 3 is mono (6.98.0)
+  if face == 3 { return 13 }
   if face == 1 { return 13 }
   return 13
 }
+fn rt_mono_adv() -> int { return 8 }
 # jtw-adv:end
 
 # ---- dates (6.91.0): clock() and parse_time() over a civil calendar (Howard Hinnant's days_from_civil and its inverse).
