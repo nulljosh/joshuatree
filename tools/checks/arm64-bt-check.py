@@ -42,6 +42,10 @@ The kernel is built with BT_HCD= a small made-up patch file, so the upload is ch
              written again, two reports move the pointer by 7,0 and 0,9. The fake then drops the link (reason 0x08, a sleep) and
              the kernel reconnects on its own with the saved key, writes the notifications again and the pointer moves again;
              `bt status` says connected, the last byte of the address and the attempts. Never the full address or a key.
+  8. keyboard (6.89.0): the same flow with a keyboard whose database has Boot Keyboard Input (0x2A22) and no mouse report,
+             and whose Pairing Response says KeyboardOnly with MITM: the kernel (DisplayOnly) prints `bt: type NNNNNN on the
+             keyboard, then Enter`, the fake reads those digits and uses them as TK for c1 and s1, `bt: keyboard ready`, and
+             its reports type `help` and Enter into the Terminal, which answers. With TK left at zero the pairing fails.
 In every boot no random value, confirm value or key (STK, LTK, Rand) shows on the UART, in either byte order.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing; skips boots 1 to 4 when this QEMU's
 virt machine builds no second PL011 for a second -serial (a dumpdtb probe), and still runs boot 5.
@@ -143,6 +147,11 @@ DB = [(0x01, 0x2800, u16(0x1800)), (0x02, 0x2803, decl(0x02, 0x03, 0x2A00)), (0x
       (0x2F, 0x2803, decl(0x02, 0x30, 0x2A4B)), (0x30, 0x2A4B, b"\x05\x01"),
       (0x40, 0x2800, u16(0x180A)), (0x41, 0x2803, decl(0x02, 0x42, 0x2A29)), (0x42, 0x2A29, b"Incase")]
 HID_START, HID_END, PM_VH, BOOT_VH, BOOT_CCCD = 0x20, 0x3F, 0x24, 0x2A, 0x2C
+# 6.89.0: the keyboard's database is the mouse's with Boot Keyboard Input (0x2A22) where Boot Mouse Input was
+KB_DB = [(h, 0x2A22 if t == 0x2A33 else t, decl(0x12, 0x2A, 0x2A22) if v == decl(0x12, 0x2A, 0x2A33) else v) for h, t, v in DB]
+def kb(code): return bytes([0, 0, code, 0, 0, 0, 0, 0])   # a boot keyboard report: modifiers, reserved, six keys
+KB_UP = bytes(8)
+KB_HELP = [r for c in (0x0B, 0x08, 0x0F, 0x13, 0x28) for r in (kb(c), KB_UP)]   # h e l p Enter, each pressed and let go
 def group_end(h):
     later = [x for x, t, _ in DB if t == 0x2800 and x > h]
     return later[0] - 1 if later else 0xFFFF
@@ -158,8 +167,10 @@ CONN_UPDATE = struct.pack("<HHHH", 6, 9, 44, 500)   # what the mouse asks for: 7
 class Fake(threading.Thread):
     """The radio, and the mouse at the other end of the air. Answers each H4 command, logs (opcode, parameters), and
     checks every ACL packet the kernel sends: flow control, SMP, ATT. Anything wrong goes in self.problems."""
-    def __init__(self, path, mode, saved=None):
+    def __init__(self, path, mode, saved=None, uart=None):
         super().__init__(daemon=True)
+        self.uartpath, self.tk = uart, bytes(16)   # TK: zero for Just Works, the typed passkey for the keyboard
+        self.db = KB_DB if mode == "keyboard" else DB
         self.saved = saved   # (ltk, rand, ediv) the mouse gave in an earlier boot: a reconnect must encrypt with these
         self.mode, self.log, self.problems, self.quiet = mode, [], [], False
         self.expect = list(writes) if mode != "order" else [writes[1], writes[0]] + writes[2:]
@@ -173,6 +184,7 @@ class Fake(threading.Thread):
         self.reports = []
         self.creates = 0
         self.pm, self.ignore_pm, self.rmap = b"\x01", False, DB_MAP   # Protocol Mode as the mouse holds it; a mouse that ignores the write; its report map
+        if mode == "keyboard": self.reports = KB_HELP
         if mode == "packed":
             self.ignore_pm, self.rmap = True, PACKED_MAP
             self.reports = [packed(0, 5, -3, 0), packed(0, 7, 11, 0), packed(0, -5, 3, 0), packed(1, 0, 0, 0)]
@@ -295,21 +307,28 @@ class Fake(threading.Thread):
         if self.saved: self.problems.append("SMP from the kernel in a reconnect (code 0x%02x)" % p[0]); return
         if p[0] == 0x01:
             self.preq = p
-            if len(p) != 7 or p[1] != 0x03 or p[3] & 0x09 != 0x01 or p[4] != 16 or not p[6] & 1:
-                self.problems.append("Pairing Request is not Just Works, bonding, no SC, a 16 byte key, LTK asked: %s" % p.hex())
-            self.pres = bytes([0x02, 0x03, 0x00, 0x01, 0x10, 0x00, 0x01])
+            if len(p) != 7 or p[1] != 0x00 or p[3] & 0x09 != 0x01 or p[4] != 16 or not p[6] & 1:
+                self.problems.append("Pairing Request is not DisplayOnly, bonding, no SC, a 16 byte key, LTK asked: %s" % p.hex())
+            # 6.89.0: the keyboard says KeyboardOnly and asks for MITM, so the kernel must show a passkey; the mouse stays Just Works
+            self.pres = bytes([0x02, 0x02, 0x00, 0x05, 0x10, 0x00, 0x01]) if self.mode == "keyboard" else bytes([0x02, 0x03, 0x00, 0x01, 0x10, 0x00, 0x01])
             self.l2(6, self.pres)
         elif p[0] == 0x03:
             self.mconf, self.srand = p[1:], os.urandom(16)
-            sconf = c1(bytes(16), self.srand, self.preq, self.pres, 0, BDADDR, 1, MOUSE)
+            if self.mode == "keyboard":   # a person reads the six digits off the screen and types them: here, off the UART
+                end, m = time.time() + 10, None
+                while time.time() < end and not m:
+                    m = re.search(r"bt: type (\d{6}) on the keyboard", open(self.uartpath, errors="replace").read()); time.sleep(0.05)
+                if not m: self.problems.append("no passkey shown"); return
+                self.passkey, self.tk = m.group(1), int(m.group(1)).to_bytes(16, "little")
+            sconf = c1(self.tk, self.srand, self.preq, self.pres, 0, BDADDR, 1, MOUSE)
             if self.mode == "badconfirm": sconf = bytes([sconf[0] ^ 0x5A]) + sconf[1:]
             self.secrets += [self.mconf, self.srand, sconf]
             self.l2(6, b"\x03" + sconf)
         elif p[0] == 0x04:
             mrand = p[1:]; self.secrets.append(mrand)
-            if c1(bytes(16), mrand, self.preq, self.pres, 0, BDADDR, 1, MOUSE) != self.mconf:
+            if c1(self.tk, mrand, self.preq, self.pres, 0, BDADDR, 1, MOUSE) != self.mconf:
                 self.problems.append("the kernel's Mconfirm is not c1 of its Mrand"); self.l2(6, b"\x05\x04"); return
-            self.stk = s1(bytes(16), self.srand, mrand); self.secrets.append(self.stk)
+            self.stk = s1(self.tk, self.srand, mrand); self.secrets.append(self.stk)
             self.l2(6, b"\x04" + self.srand)
         elif p[0] == 0x05: self.pairing_failed = p[1] if len(p) > 1 else -1
         else: self.problems.append("SMP code 0x%02x from the kernel" % p[0])
@@ -319,18 +338,18 @@ class Fake(threading.Thread):
         if op in (0x03, 0x01, 0x1E): self.answers.append(("att", p)); return   # answers to the mouse's own requests
         if op == 0x06:   # Find By Type Value
             s, e_, t = struct.unpack("<HHH", p[1:7]); v = p[7:]
-            found = [(h, group_end(h)) for h, ty, val in DB if s <= h <= e_ and ty == t and val == v][:5]
+            found = [(h, group_end(h)) for h, ty, val in self.db if s <= h <= e_ and ty == t and val == v][:5]
             if found: self.l2(4, b"\x07" + b"".join(u16(a) + u16(b) for a, b in found))
             else: self.att_err(op, s, 0x0A)
         elif op == 0x08:   # Read By Type, three 7-byte entries a page; the first page split over two ACL fragments
             s, e_, t = struct.unpack("<HHH", p[1:7])
-            found = [(h, val) for h, ty, val in DB if s <= h <= e_ and ty == t]
+            found = [(h, val) for h, ty, val in self.db if s <= h <= e_ and ty == t]
             if not found: self.att_err(op, s, 0x0A); return
             ln = len(found[0][1]) + 2; page = [x for x in found if len(x[1]) + 2 == ln][:21 // ln]
             self.l2(4, bytes([0x09, ln]) + b"".join(u16(h) + v for h, v in page), split=10 if s == HID_START else 0)
         elif op == 0x04:   # Find Information, format 1
             s, e_ = struct.unpack("<HH", p[1:5])
-            found = [(h, ty) for h, ty, _ in DB if s <= h <= e_][:5]
+            found = [(h, ty) for h, ty, _ in self.db if s <= h <= e_][:5]
             if found: self.l2(4, b"\x05\x01" + b"".join(u16(h) + u16(t) for h, t in found))
             else: self.att_err(op, s, 0x0A)
         elif op in (0x0A, 0x0C):   # Read Request, Read Blob: Protocol Mode and the report map
@@ -361,7 +380,7 @@ class Boot:
         self.fake = None
         if mode:
             path = os.path.join(d, "bt.sock")
-            self.fake = Fake(path, mode, saved); self.fake.start()
+            self.fake = Fake(path, mode, saved, uart=os.path.join(d, "uart")); self.fake.start()
             radio = ["-serial", "unix:" + path]
         self.q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-nic", "none",
                                    "-global", "virtio-mmio.force-legacy=false", "-device", "virtio-keyboard-device",
@@ -534,6 +553,19 @@ try:
             check(f"{mode}: the kernel answers a command after it", b.wait_for("browse URL", 10), b.uart()[-300:])
             check(f"{mode}: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
             b.close()
+
+        b = Boot("keyboard", "keyboard"); boots.append(b)   # 6.89.0: a Bluetooth keyboard, Passkey Entry, then it types help
+        check("keyboard: bring-up ends in bt: ready", b.wait_for("bt: ready, type bt scan", 30), b.uart()[-800:])
+        check("keyboard: the Terminal opens", b.terminal(), b.uart()[-300:])
+        b.type("bt scan")
+        check("keyboard: the scan ends", b.wait_for("bt: bt pair connects to number 1", 20), b.uart()[-600:])
+        n0 = len(b.uart()); b.type("bt pair")
+        check("keyboard: the Pi shows six digits to type", b.wait_for("bt: type ", 30) and re.search(r"bt: type \d{6} on the keyboard, then Enter", b.uart()[n0:]), b.uart()[n0:][-400:])
+        check("keyboard: with the typed passkey as TK the pairing completes", b.wait_for("bt: keyboard ready", 40) and not b.fake.problems, (b.fake.problems, b.uart()[n0:][-500:]))
+        check("keyboard: its keys type in the Terminal: help, Enter", b.wait_for("browse URL", 15), b.uart()[-400:])
+        check("keyboard: no random, confirm value or key on the UART", not leaked(b.uart(), b.fake.secrets), leaked(b.uart(), b.fake.secrets))
+        check("keyboard: no crash", "KERNEL CRASH" not in b.uart(), b.uart()[-300:])
+        b.close()
 
         b = Boot("badconfirm", "badconfirm"); boots.append(b)
         check("badconfirm: bring-up ends in bt: ready", b.wait_for("bt: ready, type bt scan", 30), b.uart()[-800:])

@@ -556,7 +556,7 @@ The dock and Spotlight dispatch is in `arch/arm64/windows.c` (`dock_activate`) a
 | Console scrollback | See below |
 | USB keyboard and mouse | **Keyboard works on the real board, 2026-10-06.** See below |
 | Wi-Fi (CYW43455) | Joins and holds on the board (see the log). See below |
-| Bluetooth (same chip) | `bt scan` and `bt pair` connect a mouse. Not yet seen on the board. See Bluetooth below |
+| Bluetooth (same chip) | `bt scan` and `bt pair` connect a mouse, or an LE keyboard with a typed passkey (6.89.0). See Bluetooth below |
 | Sound out of the 3.5 mm jack | Not yet heard on the board. See below |
 | Files on the SD card | Pass on QEMU. Not yet seen on the board. See Files on the card |
 | Wired Ethernet | Not yet (M4) |
@@ -841,7 +841,7 @@ Failures are one plain line:
 - `bt: pairing failed, ...` names the step.
 - `bt: no boot mouse report on this device`: the mouse speaks only the report protocol.
 
-Pairing is Just Works, with no code to type. The long-term key is kept in RAM and never printed. It is also saved to `JT/BTPAIR.BIN` for auto reconnect.
+Pairing is Just Works, with no code to type. A Bluetooth keyboard (6.89.0) pairs the same way: put it in pairing mode, `bt scan`, then `bt pair NAME` (or its number). Most keyboards then want a code: the Pi prints `bt: type 123456 on the keyboard, then Enter`; type those six digits on the Bluetooth keyboard and press Enter, and `bt: keyboard ready` follows. It must be a Bluetooth LE keyboard (Logitech's and most recent ones); Apple's Magic Keyboard speaks Bluetooth Classic, which the Pi does not. One Bluetooth device at a time: pairing a keyboard replaces a paired mouse, so keep the mouse on USB. The long-term key is kept in RAM and never printed. It is also saved to `JT/BTPAIR.BIN` for auto reconnect.
 
 The console moved because the radio receives in bursts while the kernel draws or fetches. The PL011 has a 32-byte buffer and hardware flow control (GPIO 30 to 33, as Linux wires it), so a burst waits in the radio instead of being lost. The console only ever sends.
 
@@ -1040,6 +1040,10 @@ Deletes now go both ways on the real account, so use a scratch calendar: make on
 ### 6. History and tabs (6.27.0, 6.37.0 to 6.39.0)
 
 In Blackcomb, open a second tab (Cmd+T): a tab strip appears. Type two letters of a page you visited into the address bar: it should offer it. The start page shows Top Sites after a site is visited twice.
+
+### 7. Bluetooth keyboard (6.89.0)
+
+With the wired keyboard still in: Bluetooth keyboard in pairing mode, `bt scan`, `bt pair NAME`. Type the six digits it prints on the Bluetooth keyboard, then Enter: `bt: keyboard ready`, and its keys type in the Terminal.
 
 ### What to send back
 
