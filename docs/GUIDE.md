@@ -19,9 +19,9 @@ How to use it, put it on a Raspberry Pi, and build the hardware.
 
 ## User guide
 
-Joshua Tree is a small operating system. On a Raspberry Pi 4 it draws its own desktop, reads a USB keyboard and a Bluetooth mouse, joins Wi-Fi and lets you ask Samantha questions in Terminal.
+Joshua Tree is a small operating system. On a Raspberry Pi 4 it draws its own desktop, reads a USB keyboard and a Bluetooth mouse or keyboard, joins Wi-Fi, browses the web, reads mail and calendars, and lets you ask Samantha questions in Terminal.
 
-Every app and command below passes its checks in QEMU. Only some have been seen on the real board. The Pi row of [the architecture picture](../architecture.svg) shows which.
+Every app and command below passes its checks in QEMU. Only some have been seen on the real board: the Pi section of [the architecture picture](../architecture.svg) shows which, and [`TESTING.md`](TESTING.md) is the list to try next.
 
 Your files live in the card's `JT/` folder. Open any app with F1 and its name.
 
@@ -31,7 +31,7 @@ The Pi's firmware reads `config.txt` on the card and loads `kernel8.img`. Raspbe
 
 While it boots, the Pi shows a splash: the tree mark and a thin line that glides forward as the screen, card, Wi-Fi, clock and Bluetooth finish. The desktop paints once, when Wi-Fi has joined or given up, the clock has synced or given up, and the radio is up (or has said it will not be).
 
-Any FAIL or oom line ends the splash at once, so a failure is never hidden. A crash draws its red panel over it. The boot log is kept. A click on a dock tile with no app of its own (Mail, for one) opens the Console.
+Any FAIL or oom line ends the splash at once, so a failure is never hidden. A crash draws its red panel over it. The boot log is kept. A click on a dock tile with no app of its own opens the Console.
 
 A failed Wi-Fi join does not mean the OS failed: local apps still work. A desktop picture proves the screen and boot path work, not every app, key, network request or driver.
 
