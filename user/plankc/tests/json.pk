@@ -1,0 +1,31 @@
+# 6.90.0: Plank's Json on plankc: json_parse, json_quote and the Json enum's methods.
+fn main() {
+  let j = json_parse("{\"name\": \"ada\", \"age\": 36, \"langs\": [\"en\", \"fr\"], \"ok\": true, \"pi\": 3.25, \"none\": null, \"e\": -1.5e3}")
+  print(j.get("name").str(), j.get("age").int(), j.get("pi").num(), j.get("e").num())
+  print(j.get("langs").at(1).str(), len(j.get("langs").items()), j.get("ok").truth())
+  print(j.keys())
+  print(j.text())
+  print(json_quote("say \"hi\"\n\ttab \\ done"), json_quote("é"))
+  let u = json_parse("\"caf\\u00e9 \\ud83d\\ude00 \\/ \\n\"")
+  print(u.str(), len(u.str()))
+  print(json_parse("  [ ]  ").text(), json_parse("{}").text(), json_parse("[1,[2,[3]],{\"a\":[]}]").text())
+  let body = Json.object(["model": Json.string("m"), "n": Json.number(4096.0), "xs": Json.array([Json.null, Json.bool(false)])])
+  print(body.text())
+  for bad in ["", "[1,", "{\"a\" 1}", "tru", "\"open", "[1] x", "{1: 2}", "\"\\q\"", "-"] {
+    try {
+      json_parse(bad)
+      print("parsed", bad)
+    } catch err {
+      print(err)
+    }
+  }
+  try {
+    j.get("nope")
+  } catch err {
+    print(err)
+  }
+  match j.get("langs") {
+    .array(xs) { print("array of", len(xs)) }
+    else { print("not an array") }
+  }
+}

@@ -1,0 +1,21 @@
+# 6.90.0: a dict's items(), as (key, value) tuples in the order keys arrived.
+fn main() {
+  let ages = ["ada": 36, "alan": 41, "grace": 85]
+  ages["alan"] = 42
+  ages.remove("ada")
+  ages["ada"] = 37
+  print(ages.items())
+  for p in ages.items() {
+    print("\(p.0) is \(p.1)")
+  }
+  let (k, v) = ages.items()[0]
+  print(k + "!", v * 2)
+  let sq = [3: 9, 1: 1, 2: 4]
+  var total = 0
+  for p in sq.items() { total += p.0 * p.1 }
+  print(total, len(sq.items()))
+  let empty: [str: [str]] = [:]
+  print(empty.items(), len(empty.items()))
+  let nested = ["xs": [1, 2], "ys": [3]]
+  for i, p in nested.items() { print(i, p.0, len(p.1), p.1) }
+}
