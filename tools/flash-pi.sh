@@ -82,6 +82,7 @@ if tools/plankapp.sh --plankc user/plankc/plankc.pk "$pc_tmp/PLANKC.APP" >/dev/n
     mkdir -p "$CARD"/JT/APPS "$CARD"/JT/PLANKC
     cp "$pc_tmp/PLANKC.APP" "$pc_tmp/PLANKC.SIG" "$CARD"/JT/APPS/
     cp user/plankc/rt.pk "$CARD"/JT/PLANKC/RT.PK
+    cp store/code.pk "$CARD"/JT/CODE.PK   # 6.98.1: Code's own source, so the board builds its editor itself (docs/TESTING.md, step 8)
     echo "plankc on the card: Samantha's apps build on the Pi"
 else
     echo "plankc not on the card (no Plank or no signing key): Samantha's apps build on the Mac"
