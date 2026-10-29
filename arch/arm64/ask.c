@@ -911,6 +911,56 @@ void input_drain(void);                      /* main.c: the keys that queued dur
 #define APP_BUILD_TICKS 18000      /* 3 minutes: the Mac compiles Plank, its runtime and the C library under it */
 int store_put(const char *low, unsigned n, const char *img, unsigned il);   /* store.c */
 int app_dock_card(const char *name);                                         /* appwin.c */
+/* 6.94.0: plankc on the card builds it here, with no Mac: her code goes to JT/NAME.PK, then `plankc img NAME.PK
+   PLANKC/RT.PK APPS/NAME.APP` runs to its end. When it cannot build it, plankc leaves its reason in JT/APPS/NAME.ERR, which
+   goes back to her as the next turn, as the relay's compiler words do. 0 when the card has no plankc or no runtime, so the
+   relay builds it exactly as before. */
+#define APP_HERE_SECS 120          /* plankc compiles her program and its runtime; a few seconds on the board */
+int userrun_wait(const char *name, unsigned n, const char *words, unsigned wn, unsigned secs, unsigned long *status);   /* main.c */
+static int app_build_here(const char *name, unsigned k, const char *src, unsigned len) {
+    char up[9], file[16], words[64]; unsigned f = 0, w = 0; char probe[1];
+    for (unsigned i = 0; i < k; i++) up[i] = (name[i] >= 'a' && name[i] <= 'z') ? (char)(name[i] - 32) : name[i];
+    up[k] = 0;
+    if (!sd_ready() || !sd_enter_jt(0)) return 0;
+    int has_rt = fat_chdir("PLANKC") && fat_read_file("RT.PK", probe, 1) > 0;
+    fat_cwd_set(0);
+    if (!has_rt || !sd_enter_jt(0)) return 0;
+    int has_pc = fat_chdir("APPS") && fat_read_file("PLANKC.APP", probe, 1) > 0;
+    if (has_pc) { for (unsigned i = 0; i < k; i++) file[f++] = up[i]; for (const char *p = ".ERR"; *p; p++) file[f++] = *p; file[f] = 0; fat_delete(file); }
+    fat_cwd_set(0);
+    if (!has_pc) return 0;
+    f = 0;
+    for (unsigned i = 0; i < k; i++) file[f++] = up[i];
+    for (const char *p = ".PK"; *p; p++) file[f++] = *p;
+    file[f] = 0;
+    if (sd_write(file, src, len) != 1) { kputs("app: could not write JT/"); kputs(file); kputs("\n"); result_puts("the card did not take the code\n"); return 1; }
+    for (const char *p = "img "; *p; p++) words[w++] = *p;
+    for (unsigned i = 0; i < f; i++) words[w++] = file[i];
+    for (const char *p = " PLANKC/RT.PK APPS/"; *p; p++) words[w++] = *p;
+    for (unsigned i = 0; i < k; i++) words[w++] = up[i];
+    for (const char *p = ".APP"; *p; p++) words[w++] = *p;
+    kputs("app: building "); kputs(name); kputs(" on the Pi\n");
+    unsigned long st = 1;
+    int r = userrun_wait("plankc", 6, words, w, APP_HERE_SECS, &st);
+    if (r == -1) return 0;   /* plankc went between the look and the run: the relay, as before */
+    if (r == -6) { kputs("app: the build ran too long\n"); result_puts("the build ran too long\n"); return 1; }
+    if (r < 0) { kputs("app: plankc would not start\n"); result_puts("plankc would not start\n"); return 1; }
+    if (st == 0) {
+        int opened = app_dock_card(name);
+        kputs("app: built "); kputs(name); kputs(opened ? " on the Pi, opened it\n" : " on the Pi, in JT/APPS: sudo userrun "); if (!opened) { kputs(name); kputs("\n"); }
+        result_puts(opened ? "built and opened\n" : "built; not signed, so an admin opens it with sudo userrun\n");
+        return 1;
+    }
+    static char why[501]; int n = -1;
+    f = 0; for (unsigned i = 0; i < k; i++) file[f++] = up[i]; for (const char *p = ".ERR"; *p; p++) file[f++] = *p; file[f] = 0;
+    if (sd_enter_jt(0) && fat_chdir("APPS")) n = fat_read_file(file, why, 500);
+    fat_cwd_set(0);
+    kputs("app: it did not build on the Pi\n");
+    if (n > 0) say_wrapped("app: ", why, (unsigned)n);   /* plankc's words, into the result for her next turn */
+    else result_puts("plankc stopped without saying why\n");
+    return 1;
+}
+
 static void app_build(const char *t, unsigned k) {
     char name[9]; unsigned at = 0, len = code_block(said, said_n, &at);
     int okname = k > 0 && k <= 8;
@@ -920,6 +970,7 @@ static void app_build(const char *t, unsigned k) {
     if (!named_in(sam_q, sam_qn, "app")) { kputs("app: you did not ask for an app, not built\n"); result_puts("refused, the person did not ask for an app\n"); return; }
     if (!sudo_may_write()) { kputs("app: only an admin adds an app\n"); result_puts("refused, not an admin\n"); return; }
     if (!len) { kputs("app: no code block to build\n"); result_puts("no code block\n"); return; }
+    if (app_build_here(name, k, said + at, len)) return;
     if (!CLAUDE_TOKEN_LEN || !net_get_gateway()) { kputs("app: no relay to build it\n"); result_puts("no relay\n"); return; }
     unsigned long mark = heap_mark();
     char *body = kmalloc(len * 2 + 32), *reply = kmalloc(APP_BUILD_MAX + 1);

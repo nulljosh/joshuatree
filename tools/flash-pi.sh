@@ -74,6 +74,20 @@ if ! ls "$CARD"/JT/MUSIC 2>/dev/null | grep -qi '\.\(wav\|mp3\)$'; then
     python3 tools/gen/sample-song.py "$CARD"/JT/MUSIC/HELLO.WAV
 fi
 
+# 6.94.0: plankc on the card, so Samantha's apps ([[app NAME]]) are built on the Pi with no Mac: JT/APPS/PLANKC.APP, signed
+# here with Joshua's key, and its runtime as JT/PLANKC/RT.PK. Without Plank or the key the card goes without, and the relay
+# builds her apps as before.
+pc_tmp=$(mktemp -d)
+if tools/plankapp.sh --plankc user/plankc/plankc.pk "$pc_tmp/PLANKC.APP" >/dev/null 2>&1 && tools/signapp.sh "$pc_tmp/PLANKC.APP" >/dev/null 2>&1; then
+    mkdir -p "$CARD"/JT/APPS "$CARD"/JT/PLANKC
+    cp "$pc_tmp/PLANKC.APP" "$pc_tmp/PLANKC.SIG" "$CARD"/JT/APPS/
+    cp user/plankc/rt.pk "$CARD"/JT/PLANKC/RT.PK
+    echo "plankc on the card: Samantha's apps build on the Pi"
+else
+    echo "plankc not on the card (no Plank or no signing key): Samantha's apps build on the Mac"
+fi
+rm -rf "$pc_tmp"
+
 command -v dot_clean >/dev/null && dot_clean -m "$CARD"
 if [ "${FLASH_PI_NO_EJECT:-}" = 1 ]; then :
 elif [ "$(uname -s)" = "Darwin" ]; then diskutil eject "$CARD"; else /bin/sync; fi
