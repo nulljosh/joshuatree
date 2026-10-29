@@ -35,6 +35,9 @@ fn main() {
       if uses_set(prog) {   # Plank's Set<T>, in Plank (gen.pk's set_source)
         for item in parse(set_source()).kids { prog.kids.append(item) }
       }
+      if uses_json(prog) {   # Plank's Json, in Plank (gen.pk's json_source, 6.90.0)
+        for item in parse(json_source()).kids { prog.kids.append(item) }
+      }
       let runtime = parse(read_file(a[2]) ?? "")
       var out = ""
       if a[0] == "img" {   # on the Pi only: the image is bytes, which plank.py's build of plankc cannot write

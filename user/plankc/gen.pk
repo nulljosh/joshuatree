@@ -810,6 +810,10 @@ fn method(g: G, e: N) -> str {
     if name == "keys" { return "[" + dict_parts(t)[0] + "]" }
     return "[" + dict_parts(t)[1] + "]"
   }
+  if is_dict(t) and name == "items" and len(a) == 0 {   # [(K, V)] in the order keys arrived (6.90.0)
+    emit(g, "bl pk_rt_dict_items")
+    return "[(" + dict_parts(t)[0] + ", " + dict_parts(t)[1] + ")]"
+  }
   if name == "insert" and len(a) == 2 and is_list(t) and t != "[]" {   # before item i; a negative i counts from the end
     push(g)
     if gen_expr(g, a[0]) != "int" { nope(e, "insert() at anything but an int") }
@@ -1208,6 +1212,21 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   if name == "args" and len(a) == 0 {
     emit(g, "bl pk_rt_args")
     return "[str]"
+  }
+  if name == "env" and len(a) == 1 {   # 6.90.0: an app on the Pi has no environment, so every name is unset
+    if gen_expr(g, a[0]) != "str" { nope(e, "env of anything but a name") }
+    emit(g, "mov x0, #0")
+    return "str?"
+  }
+  if name == "http" and len(a) >= 2 and len(a) <= 4 {   # 6.90.0: as plank.py with no network: "" and status() 0
+    # ponytail: the Pi's kernel lets an app reach only set hosts (JT_SYS_HTTP_GET); a real http() needs a permission first
+    for x in a { gen_expr(g, x) }
+    lit(g, "x0", "")
+    return "str"
+  }
+  if name == "status" and len(a) == 0 {   # the last http()'s code; none has reached the network
+    emit(g, "mov x0, #0")
+    return "int"
   }
   if name == "read_file" and len(a) == 1 {
     if gen_expr(g, a[0]) != "str" { nope(e, "read_file of anything but a path") }
@@ -2276,6 +2295,149 @@ fn word_char(c: str) -> bool {
 }
 
 # ---------------------------------------------------------------- sets (6.83.0)
+# ---------------------------------------------------------------- Json (6.90.0)
+# Plank's Json is plank.py's own source of it, in Plank (its JSON_SRC), added to a program that names Json, json_parse or
+# json_quote, with a reader in Plank over rt.pk's JSON cursor where plank.py writes one in LLVM IR (json_reader).
+fn uses_json(n: N) -> bool {
+  if n.kind == "S" and (n.text == "Json" or n.text == "json_parse" or n.text == "json_quote") { return true }
+  if n.kind == "Str" { return false }
+  for k in n.kids {
+    if uses_json(k) { return true }
+  }
+  return false
+}
+
+fn json_source() -> str {
+  return [
+    "enum Json {",
+    "  null",
+    "  bool(b: bool)",
+    "  number(n: float)",
+    "  string(s: str)",
+    "  array(items: [Json])",
+    "  object(fields: [str: Json])",
+    "",
+    "  fn get(key: str) -> Json {",
+    "    match self {",
+    "      .object(fields) {",
+    "        if key in fields { return fields[key] }",
+    "        throw \"no key \\\"\\(key)\\\" in this JSON object\"",
+    "      }",
+    "      else { throw \"not a JSON object, cannot look up \\\"\\(key)\\\"\" }",
+    "    }",
+    "  }",
+    "",
+    "  fn at(i: int) -> Json {",
+    "    match self {",
+    "      .array(items) { return items[i] }",
+    "      else { throw \"not a JSON array, cannot take item \\(i)\" }",
+    "    }",
+    "  }",
+    "",
+    "  fn str() -> str {",
+    "    match self {",
+    "      .string(s) { return s }",
+    "      else { throw \"this JSON value is not a string\" }",
+    "    }",
+    "  }",
+    "",
+    "  fn num() -> float {",
+    "    match self {",
+    "      .number(n) { return n }",
+    "      else { throw \"this JSON value is not a number\" }",
+    "    }",
+    "  }",
+    "",
+    "  fn int() -> int {",
+    "    return int(self.num())",
+    "  }",
+    "",
+    "  fn truth() -> bool {",
+    "    match self {",
+    "      .bool(b) { return b }",
+    "      else { throw \"this JSON value is not a bool\" }",
+    "    }",
+    "  }",
+    "",
+    "  fn keys() -> [str] {",
+    "    match self {",
+    "      .object(fields) { return fields.keys() }",
+    "      else { throw \"not a JSON object, it has no keys\" }",
+    "    }",
+    "  }",
+    "",
+    "  fn items() -> [Json] {",
+    "    match self {",
+    "      .array(items) { return items }",
+    "      else { throw \"not a JSON array, it has no items\" }",
+    "    }",
+    "  }",
+    "",
+    "  fn text() -> str {",
+    "    match self {",
+    "      .null { return \"null\" }",
+    "      .bool(b) { return str(b) }",
+    "      .number(n) {",
+    "        if n == float(int(n)) and abs(n) < 1000000000000000.0 { return str(int(n)) }",
+    "        return str(n)",
+    "      }",
+    "      .string(s) { return json_quote(s) }",
+    "      .array(items) { return \"[\" + items.map(fn(x) => x.text()).join(\",\") + \"]\" }",
+    "      .object(fields) {",
+    "        return \"{\" + fields.keys().map(fn(k) => json_quote(k) + \":\" + fields[k].text()).join(\",\") + \"}\"",
+    "      }",
+    "    }",
+    "  }",
+    "}",
+    "",
+    "fn json_quote(s: str) -> str {",
+    "  return rt_json_quote(s)",
+    "}",
+    "",
+    "fn json_parse(text: str) -> Json {",
+    "  let c = rt_json_begin(text)",
+    "  let v = json_read(c)",
+    "  rt_json_end(c)",
+    "  return v",
+    "}",
+    "",
+    "fn json_read(c: int) -> Json {",
+    "  let ch = rt_json_next(c)",
+    "  if ch == 110 {",
+    "    rt_json_null(c)",
+    "    return Json.null",
+    "  }",
+    "  if ch == 116 or ch == 102 { return Json.bool(rt_json_bool(c)) }",
+    "  if ch == 45 or (ch >= 48 and ch <= 57) { return Json.number(rt_json_number(c)) }",
+    "  if ch == 34 { return Json.string(rt_json_string(c)) }",
+    "  if ch == 91 {",
+    "    rt_json_expect(c, 91)",
+    "    var items: [Json] = []",
+    "    while rt_json_next(c) != 93 {",
+    "      items.append(json_read(c))",
+    "      if rt_json_next(c) == 44 { rt_json_expect(c, 44) }",
+    "    }",
+    "    rt_json_expect(c, 93)",
+    "    return Json.array(items)",
+    "  }",
+    "  if ch == 123 {",
+    "    rt_json_expect(c, 123)",
+    "    var fields: [str: Json] = [:]",
+    "    while rt_json_next(c) != 125 {",
+    "      let key = rt_json_string(c)",
+    "      rt_json_expect(c, 58)",
+    "      fields[key] = json_read(c)",
+    "      if rt_json_next(c) == 44 { rt_json_expect(c, 44) }",
+    "    }",
+    "    rt_json_expect(c, 125)",
+    "    return Json.object(fields)",
+    "  }",
+    "  rt_json_expect(c, 118)",
+    "  return Json.null",
+    "}"
+  ].join("\n")
+}
+
 # Set<T> is Plank's own, written in Plank: plank.py's source of it, added to a program that names Set or set_of.
 # len, in and for reach its size, has and items.
 fn set_call(g: G, t: str, m: str) -> str {   # t's method m, the set in x0 and its argument in x1

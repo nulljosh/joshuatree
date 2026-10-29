@@ -558,6 +558,20 @@ fn rt_dict_new() -> int {
   return d
 }
 
+# d.items(): a list of (key, value) tuples in the order keys arrived (6.90.0).
+fn rt_dict_items(d: int) -> int {
+  let ks = peek(d)
+  let vs = peek(d + 8)
+  let out = rt_list_new()
+  for i in 0..peek(ks) {
+    let t = rt_alloc(16)
+    poke(t, peek(peek(ks + 16) + i * 8))
+    poke(t + 8, peek(peek(vs + 16) + i * 8))
+    rt_list_push(out, t)
+  }
+  return out
+}
+
 fn rt_dict_find(d: int, k: str) -> int {
   let keys = peek(d)
   let ints = peek(d + 16) == 1
@@ -642,6 +656,226 @@ fn rt_show_dict(d: int, ty: str) -> str {
     out = out + rt_show(peek(peek(keys + 16) + i * 8), kt, true) + ": " + rt_show(peek(peek(peek(d + 8) + 16) + i * 8), vt, true)
   }
   return out + "]"
+}
+
+# ---- JSON (6.90.0): json_quote, and the cursor gen.pk's json_parse reads with, as plank.py's C runtime does it.
+# A cursor is the address of {the text's bytes, where it is}; the text's zero ends every scan.
+fn rt_json_hex(d: int) -> int {
+  if d < 10 { return 48 + d }
+  return 87 + d
+}
+
+fn rt_json_quote(s: str) -> str {
+  var n = 2
+  for i in 0..len(s) {
+    let c = peek8(addr(s) + i)
+    if c == 34 or c == 92 or c < 32 { n += 6 } else { n += 1 }
+  }
+  let p = rt_str(n)
+  var q = p + 1
+  poke8(p, 34)
+  for i in 0..len(s) {
+    let c = peek8(addr(s) + i)
+    var esc = 0
+    if c == 34 or c == 92 { esc = c }
+    if c == 10 { esc = 110 }
+    if c == 9 { esc = 116 }
+    if c == 13 { esc = 114 }
+    if esc != 0 {
+      poke8(q, 92)
+      poke8(q + 1, esc)
+      q += 2
+    } else if c < 32 {
+      poke8(q, 92)
+      poke8(q + 1, 117)
+      poke8(q + 2, 48)
+      poke8(q + 3, 48)
+      poke8(q + 4, rt_json_hex(c / 16))
+      poke8(q + 5, rt_json_hex(c % 16))
+      q += 6
+    } else {
+      poke8(q, c)
+      q += 1
+    }
+  }
+  poke8(q, 34)
+  q += 1
+  poke8(q, 0)
+  poke(p - 8, q - p)   # escapes counted 6 bytes; the string is as long as what was written
+  return as_str(p)
+}
+
+fn rt_json_fail(what: str) {
+  rt_fail("bad JSON: " + what)
+}
+
+fn rt_json_begin(s: str) -> int {
+  let c = rt_alloc(16)
+  poke(c, addr(s))
+  poke(c + 8, 0)
+  return c
+}
+
+fn rt_json_at(c: int) -> int {
+  return peek8(peek(c) + peek(c + 8))
+}
+
+fn rt_json_skip(c: int, n: int) {
+  poke(c + 8, peek(c + 8) + n)
+}
+
+fn rt_json_next(c: int) -> int {
+  var ch = rt_json_at(c)
+  while ch == 32 or ch == 10 or ch == 9 or ch == 13 {
+    rt_json_skip(c, 1)
+    ch = rt_json_at(c)
+  }
+  return ch
+}
+
+fn rt_json_word(c: int, w: str) -> bool {
+  for i in 0..len(w) {
+    if peek8(peek(c) + peek(c + 8) + i) != peek8(addr(w) + i) { return false }
+  }
+  rt_json_skip(c, len(w))
+  return true
+}
+
+fn rt_json_bool(c: int) -> bool {
+  if rt_json_word(c, "true") { return true }
+  if rt_json_word(c, "false") { return false }
+  rt_json_fail("expected true or false")
+  return false
+}
+
+fn rt_json_null(c: int) {
+  if not rt_json_word(c, "null") { rt_json_fail("expected a value, got n") }
+}
+
+fn rt_json_digits(c: int) -> int {
+  var n = 0
+  while rt_json_at(c) >= 48 and rt_json_at(c) <= 57 {
+    rt_json_skip(c, 1)
+    n += 1
+  }
+  return n
+}
+
+# A number's text by JSON's grammar, then float() of it. ponytail: strtod also takes inf, nan and hex; JSON has none.
+fn rt_json_number(c: int) -> float {
+  let start = peek(c + 8)
+  if rt_json_at(c) == 45 { rt_json_skip(c, 1) }
+  if rt_json_digits(c) == 0 { rt_json_fail("expected a number") }
+  if rt_json_at(c) == 46 {
+    rt_json_skip(c, 1)
+    rt_json_digits(c)
+  }
+  if rt_json_at(c) == 101 or rt_json_at(c) == 69 {
+    rt_json_skip(c, 1)
+    if rt_json_at(c) == 45 or rt_json_at(c) == 43 { rt_json_skip(c, 1) }
+    rt_json_digits(c)
+  }
+  return rt_parse_float(rt_sub(as_str(peek(c)), start, peek(c + 8)))
+}
+
+fn rt_json_u4(c: int) -> int {
+  var v = 0
+  for i in 0..4 {
+    let h = rt_json_at(c)
+    var d = -1
+    if h >= 48 and h <= 57 { d = h - 48 }
+    if h >= 97 and h <= 102 { d = h - 87 }
+    if h >= 65 and h <= 70 { d = h - 55 }
+    if d < 0 { return v }   # strtoul stops at the first byte that is not hex
+    v = v * 16 + d
+    rt_json_skip(c, 1)
+  }
+  return v
+}
+
+fn rt_json_utf8(q: int, cp: int) -> int {
+  if cp < 128 {
+    poke8(q, cp)
+    return q + 1
+  }
+  if cp < 2048 {
+    poke8(q, 192 + cp / 64)
+    poke8(q + 1, 128 + cp % 64)
+    return q + 2
+  }
+  if cp < 65536 {
+    poke8(q, 224 + cp / 4096)
+    poke8(q + 1, 128 + cp / 64 % 64)
+    poke8(q + 2, 128 + cp % 64)
+    return q + 3
+  }
+  poke8(q, 240 + cp / 262144)
+  poke8(q + 1, 128 + cp / 4096 % 64)
+  poke8(q + 2, 128 + cp / 64 % 64)
+  poke8(q + 3, 128 + cp % 64)
+  return q + 4
+}
+
+fn rt_json_string(c: int) -> str {
+  if rt_json_at(c) != 34 { rt_json_fail("expected a string") }
+  rt_json_skip(c, 1)
+  var room = 0
+  while peek8(peek(c) + peek(c + 8) + room) != 0 { room += 1 }
+  let p = rt_str(room)   # the rest of the text is room enough: an escape never grows
+  var q = p
+  while rt_json_at(c) != 0 and rt_json_at(c) != 34 {
+    let ch = rt_json_at(c)
+    rt_json_skip(c, 1)
+    if ch != 92 {
+      poke8(q, ch)
+      q += 1
+    } else {
+      let e = rt_json_at(c)
+      rt_json_skip(c, 1)
+      var out = -1
+      if e == 110 { out = 10 }
+      if e == 116 { out = 9 }
+      if e == 114 { out = 13 }
+      if e == 98 { out = 8 }
+      if e == 102 { out = 12 }
+      if e == 34 or e == 92 or e == 47 { out = e }
+      if e == 117 {
+        var cp = rt_json_u4(c)
+        if cp >= 55296 and cp < 56320 and rt_json_at(c) == 92 and peek8(peek(c) + peek(c + 8) + 1) == 117 {   # a surrogate pair
+          rt_json_skip(c, 2)
+          cp = 65536 + (cp - 55296) * 1024 + rt_json_u4(c) - 56320
+        }
+        q = rt_json_utf8(q, cp)
+      } else if out >= 0 {
+        poke8(q, out)
+        q += 1
+      } else {
+        rt_json_fail("unknown escape in a string")
+      }
+    }
+  }
+  if rt_json_at(c) != 34 { rt_json_fail("a string never ends") }
+  rt_json_skip(c, 1)
+  poke8(q, 0)
+  poke(p - 8, q - p)
+  return as_str(p)
+}
+
+fn rt_json_expect(c: int, ch: int) {
+  let at = rt_json_next(c)
+  if ch == 118 {
+    if at != 0 { rt_json_fail("expected a value") }
+    rt_json_fail("the text ends in the middle of a value")
+  }
+  if at != ch {
+    if at != 0 { rt_json_fail("expected " + rt_byte_str(ch) + ", got " + rt_byte_str(at)) }
+    rt_json_fail("expected " + rt_byte_str(ch) + " before the end")
+  }
+  rt_json_skip(c, 1)
+}
+
+fn rt_json_end(c: int) {
+  if rt_json_next(c) != 0 { rt_json_fail("extra text after the value") }
 }
 
 # ---- try and throw (6.68.0). global(2) is the innermost try's record: {the try before it, x29, sp, the catch's address},
