@@ -63,15 +63,11 @@ STORE = [("FORTUNE", "fortune"), ("DICE", "dice")]   # 6.56.0: the store's apps,
 for up, low in STORE:
     for ext in ("app", "sig"): shutil.copy(root / "landing/apps" / (low + "." + ext), tmp / (up + "." + ext.upper()))
 # 6.52.0, the SDK: tools/mkapp.sh builds one C file of nobody's into SUN.APP (a libjt call, a write, exit 7)
-(tmp / "sun.c").write_text("""#include "jtsys.h"
-#include "libjt/string.h"
-__attribute__((section(".text.start"), used))
-void _start(void) {
-    static const char m[] = "sun: made with the sdk\\n";
-    jt_write(1, m, (unsigned)strlen(m));
-    jt_exit(7);
-}
-""")
+# 7.1.0: the file is the one landing/sdk.html shows, so the page cannot drift from what builds and runs
+import html, re
+sun = re.search(r'<pre id="sun-c"><code>(.*?)</code></pre>', (root / "landing/sdk.html").read_text(), re.S)
+if not sun: print("FAIL: landing/sdk.html lost its sun.c example (<pre id=\"sun-c\">)"); sys.exit(1)
+(tmp / "sun.c").write_text(html.unescape(sun.group(1)) + "\n")
 mk = subprocess.run([str(root / "tools/mkapp.sh"), str(tmp / "sun.c"), str(tmp / "SUN.APP")], capture_output=True, text=True, timeout=300)
 check("tools/mkapp.sh builds sun.c into SUN.APP", mk.returncode == 0 and (tmp / "SUN.APP").exists() and (tmp / "SUN.APP").read_bytes()[-16:-12] == b"JTU1", mk.stdout + mk.stderr)
 mk = subprocess.run([str(root / "tools/mkapp.sh"), str(tmp / "sun.c"), str(tmp / "TOOLONGNAME.APP")], capture_output=True, text=True, timeout=60)

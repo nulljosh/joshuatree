@@ -50,12 +50,11 @@ A freestanding kernel for i386 and the Raspberry Pi 4, no libc. This is the forw
 
 The near-term queue. The topic sections below keep the longer plan, and shipped work is in [the Shipped log section](#shipped-log).
 
-**Now: 7.0, Online.** The software is in (6.11.0 to 6.89.0): Wi-Fi that joins and switches without a restart, Blackcomb with pictures, forms, cookies, tabs and history, mail over IMAP and SMTP, calendars that sync over CalDAV, and a Bluetooth keyboard. None of it has run on the board yet. The gate is a normal day of web, mail and calendar on the Pi, and Joshua's list for it is [`docs/TESTING.md`](TESTING.md). 7.0.0 is cut when it passes; whatever the board shows broken comes first.
+**Shipped: 7.0, Online** (7.0.0, cut 2026-10-29 on Joshua's word): Wi-Fi that joins and switches without a restart, Blackcomb with pictures, Mail, CalDAV and a Bluetooth keyboard. The board pass is still to come, from [`docs/TESTING.md`](TESTING.md); whatever it shows broken comes first.
 
-**Next: 8.0, Build things**, shipped as 6.x minors until 7.0.0 is cut. In: apps that run from the card, signed with Joshua's key and installed from the store (6.51.0 to 6.59.0), Samantha writing apps (6.59.0), and plankc, the Plank compiler written in Plank, which rebuilds itself on the Pi byte for byte (6.71.0) and now builds most of Plank's examples (6.72.0 on). Left, in order:
-1. Samantha's apps built on the Pi by plankc, so no Mac is in that path.
-2. An editor fit for code, and a debugger that steps an app.
-3. The SDK: headers and a page that walks someone through writing and installing an app. The 8.0 gate is someone other than Joshua doing exactly that.
+**Now: 8.0, Build things.** In: apps from the card, signed and installed from the store (6.51.0 to 6.59.0), Samantha writing apps and building them on the Pi (6.59.0, 6.94.0), plankc rebuilding itself on the Pi (6.71.0), Code, the editor (6.98.0), and the SDK page, `landing/sdk.html` (7.1.0). Left, in order:
+1. A debugger that steps an app.
+2. The 8.0 gate: someone other than Joshua follows the SDK page and runs their own app. That is a person, not a check.
 
 **Polish still open** (Joshua, 2026-10-26, from the Snow Leopard and Mac OS X introductions, and posts.design): long movies streamed from the card with trim, Dock Exposé, Stacks for Downloads and Documents, window buttons that react on hover, Finder icon sizes with thumbnails, full-text history in the browser, the Launchpad card fading in, and Cmd+M for the kernel-drawn windows. The magnifying Dock (6.4.0), the genie (6.5.0) and Top Sites (6.37.0) are done.
 
@@ -1011,6 +1010,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **7.1.0 (2026-10-29)**: The SDK page, `landing/sdk.html`, linked from the landing's footer: from a blank card to your own app on the Pi, written in Code and built by plankc there, or in C on the Mac, then who can run it and how it gets into the store. Two fixes so someone else can follow it: a card flashed without Joshua's signing key now gets plankc unsigned (an admin runs it) instead of none, and `tools/plankapp.sh` finds a plank clone beside the repo. Checks: `arm64-cardapp-check.py` builds and runs the page's own C example, and `flash-pi-check.sh` flashes a card with no key and wants plankc on it with no signature.
 - **7.0.1 (2026-10-29)**: The landing's film is 7.0's: the 25 second tour gains a card for the web, Blackcomb showing a page with pictures on the Pi, and ends on the seven-tuft mark (`landing/joshua-tree-ad-v10.mp4`, 1.2 MB, from `docs/hardware/ad/cards.py`). Check: `check-refs.sh` and the landing checks.
 - **7.0.0 (2026-10-29)**: Online. The Pi joins Wi-Fi without a restart, Blackcomb shows the web with its pictures, Mail reads your inbox and the calendar syncs over CalDAV, and a Bluetooth keyboard pairs (the 6.6x to 6.89 run). The 6.9x run came along: plankc builds itself and real apps on the Pi, and Code edits them there. The mark grows a seventh tuft, up top on the north arm (`tools/gen/logo.py`), on the boot splash, the README and the landing. The film gains a web card, Blackcomb on the Pi. Cut on Joshua's word before his board pass; `docs/TESTING.md` is still the list. Checks: the full suite on this PR, `logo-check.sh`, `bootmark-check.py`.
 - **6.98.1 (2026-10-29)**: The flashed card carries Code's source (`JT/CODE.PK`) beside plankc, so the board builds its own editor, and `docs/TESTING.md` has step 8: write, build and run a program on the Pi. The list now says to flash main before the board day, since 7.0.0 is cut from it. Check: `check-refs.sh` (the paths the docs name).
@@ -2109,19 +2109,19 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-28, evening Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-29, morning Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand.** Main is 6.98.1. 7.0's software is in and waits on the board (`docs/TESTING.md`); the card carries 6.89.0, with the Bluetooth keyboard. 8.0 ships as 6.x minors meanwhile: apps from the card, signed and installed from the store, Samantha writing apps, and plankc, the Plank compiler written in Plank, which rebuilds itself on the Pi byte for byte with no clang or linker (6.71.0). Since then plankc has grown most of the language (6.72.0 to 6.92.0) and builds 30 of Plank's 33 examples. None of 6.11 onward has run on the board.
+**Where things stand.** Main is 7.1.0. 7.0.0 is cut, and the card Joshua has carries 7.0.1. 8.0 is nearly in: apps from the card, signed and installed from the store, Samantha's apps built on the Pi, plankc rebuilding itself there and building 30 of Plank's 33 examples, Code the editor, and the SDK page (7.1.0). None of 6.11 onward has run on the board yet.
 
-**Waiting on Joshua.** Only the 7.0 board day (GUIDE.md, 7.0 board day): it is physical. The loop asks nothing else and decides design calls itself, saying what it chose here. Decided 2026-10-27: Wi-Fi passwords stay machine-wide, so the network is up before anyone signs in; apps are signed by Joshua's key and unsigned ones need an admin; the store is an `install` from the landing.
+**Waiting on Joshua.** The board pass (`docs/TESTING.md`): it is physical. The loop asks nothing else and decides design calls itself, saying what it chose here. Decided 2026-10-27: Wi-Fi passwords stay machine-wide, so the network is up before anyone signs in; apps are signed by Joshua's key and unsigned ones need an admin; the store is an `install` from the landing. Decided 2026-10-29: a card flashed without the key gets plankc unsigned, the same rule.
 
 **Next, in order.**
-1. Whatever the board shows broken; then 7.0.0 with Joshua's logo and UI.
-2. 8.0's last pieces: a debugger that steps an app, and the SDK page that walks someone else through writing and installing one (the 8.0 gate). Code (6.98.0) is the editor.
+1. Whatever the board shows broken.
+2. A debugger that steps an app; then 8.0.0. The gate is someone else following `landing/sdk.html`.
 3. The last examples, `scripting`, `interop` and `packages`, which need a shell, C and the network.
-4. An editor fit for code, a debugger, and the SDK page; then 8.0.0.
+4. 9.0, the kit.
 
 Restart prompt:
 

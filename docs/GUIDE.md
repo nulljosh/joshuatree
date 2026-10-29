@@ -735,20 +735,9 @@ Apps can live on the card too (6.51.0). Put an app image in `JT/APPS/` as `NAME.
 
 ### Write an app
 
-You can write an app on a Mac without touching the kernel (6.52.0). It is one C file. It includes `jtsys.h` for the system calls, can use any of `user/libjt/` (`libjt/string.h`, say), and starts at `_start`, which has to come first:
+The walk-through for someone who is not Joshua, from a blank card to an app running, is the SDK page, `landing/sdk.html` (joshuatree.jaybulb.com/sdk.html, 7.1.0). Its C example is the one `tools/checks/arm64-cardapp-check.py` builds and runs, so the page stays true. A card flashed without Joshua's signing key still carries plankc, unsigned, so an admin builds on it.
 
-```c
-#include "jtsys.h"
-#include "libjt/string.h"
-__attribute__((section(".text.start"), used))
-void _start(void) {
-    static const char m[] = "sun: made with the sdk\n";
-    jt_write(1, m, (unsigned)strlen(m));
-    jt_exit(7);
-}
-```
-
-`tools/mkapp.sh sun.c` builds it into `SUN.APP` with the flags the built-in apps use. `tools/signapp.sh SUN.APP` signs it as `SUN.SIG` (6.54.0). Copy that to `JT/APPS/` on the card and `userrun sun` runs it. The calls an app can make are the system calls in `docs/ARCHITECTURE.md`; the built-in apps in `user/` are the examples. An app with a window opens it with `jt_window_open` and loops on `jt_window_poll`, the way `user/calendar.c` does.
+You can write an app on a Mac without touching the kernel (6.52.0). It is one C file. It includes `jtsys.h` for the system calls, can use any of `user/libjt/` (`libjt/string.h`, say), and starts at `_start`, which has to come first; the SDK page has the whole file. `tools/mkapp.sh sun.c` builds it into `SUN.APP` with the flags the built-in apps use. `tools/signapp.sh SUN.APP` signs it as `SUN.SIG` (6.54.0). Copy that to `JT/APPS/` on the card and `userrun sun` runs it. The calls an app can make are the system calls in `docs/ARCHITECTURE.md`; the built-in apps in `user/` are the examples. An app with a window opens it with `jt_window_open` and loops on `jt_window_poll`, the way `user/calendar.c` does.
 
 Signed apps (6.54.0). Put `NAME.SIG` beside `NAME.APP` and anyone can run it. Without one, only an admin can: `sudo userrun NAME`, and for five minutes after that Spotlight lists it too. On a Pi with no accounts everything runs, as before. A signature that does not match (the app changed after it was signed, another key signed it, or it was copied to a new name) is refused every time, sudo or not. The kernel trusts one key, Joshua's: `tools/signapp.sh --new-key` made it, the private half lives in `~/.config/joshuatree/app-signing.pem` (keep a copy somewhere safe; a lost key means a new kernel and new signatures) and the public half is `arch/arm64/app_key.h`.
 

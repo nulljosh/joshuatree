@@ -28,7 +28,15 @@ grep -qx 'enable_uart=1' "$t/card/config.txt" || { echo "FAIL: config.txt lost e
 [ -s "$t/card/JT/MUSIC/HELLO.WAV" ] || { echo "FAIL: an empty JT/MUSIC/ did not get the sample song"; fail=1; }
 # a card that already has songs keeps exactly them
 mkdir -p "$t/card2/JT/MUSIC"; echo mine > "$t/card2/JT/MUSIC/MINE.MP3"
-FLASH_PI_FW="$t/fw" FLASH_PI_NO_EJECT=1 tools/flash-pi.sh "$t/card2" >/dev/null
+# and is flashed as anyone's card but Joshua's: no signing key (7.1.0, landing/sdk.html)
+JT_APP_KEY="$t/no-key.pem" FLASH_PI_FW="$t/fw" FLASH_PI_NO_EJECT=1 tools/flash-pi.sh "$t/card2" >/dev/null
 [ "$(ls "$t/card2/JT/MUSIC")" = MINE.MP3 ] || { echo "FAIL: flash-pi.sh added a song next to Joshua's own"; fail=1; }
+if [ -s "$t/card/JT/APPS/PLANKC.APP" ]; then   # Plank is here, so plankc was built
+    [ -s "$t/card2/JT/APPS/PLANKC.APP" ] && [ -s "$t/card2/JT/PLANKC/RT.PK" ] && [ -s "$t/card2/JT/CODE.PK" ] \
+        || { echo "FAIL: with no signing key the card went without plankc, so nobody else can build an app on the Pi"; fail=1; }
+    [ -e "$t/card2/JT/APPS/PLANKC.SIG" ] && { echo "FAIL: plankc got a signature with no key"; fail=1; }
+else
+    echo "SKIP: no Plank here, so plankc on the card is not checked"
+fi
 [ "$fail" = 0 ] && echo "PASS: flash-pi.sh writes the kernel, firmware and config, and backs up what was there"
 exit "$fail"

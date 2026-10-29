@@ -3,7 +3,7 @@
 # Plank (github.com/nulljosh/plank) compiles FILE.pk to LLVM IR (`plank emit`); clang builds that IR and Plank's own runtime for
 # the Pi with the flags the built-in apps use; user/pklibc is the C library under them, libjt the malloc and strings; ld.lld
 # links it all with user_c.ld into an image the card takes (JT/APPS/NAME.APP, then `userrun NAME`). PLANK names plank.py
-# (default: ~/Documents/Code/plank/plank.py, else the one beside `plank` on PATH); it needs uv, as plank.py does.
+# (default: ../plank/plank.py beside this clone, else ~/Documents/Code/plank/plank.py); it needs uv, as plank.py does.
 # 6.62.0: --plankc builds it with plankc instead (user/plankc, the compiler written in Plank, step 3 of the true bootstrap):
 # plank.py builds plankc, plankc writes the program's aarch64 assembly, and no LLVM IR or Plank runtime goes in.
 set -e
@@ -15,7 +15,8 @@ out=${2:-$(basename "$src" .pk | tr a-z A-Z).APP}
 name=$(basename "$out" .APP)
 case "$name" in ''|?????????*|*[!A-Z0-9_-]*) echo "plankapp: $name.APP: the name must be 1 to 8 of A-Z, 0-9, - and _"; exit 1;; esac
 root=$(cd "$(dirname "$0")/.." && pwd)
-plank=${PLANK:-$HOME/Documents/Code/plank/plank.py}
+plank=${PLANK:-$root/../plank/plank.py}   # 7.1.0: a plank clone beside this one (landing/sdk.html), then Joshua's own path
+[ -n "${PLANK:-}" ] || [ -f "$plank" ] || plank=$HOME/Documents/Code/plank/plank.py
 [ -f "$plank" ] || { echo "plankapp: no plank.py at $plank (set PLANK=)"; exit 1; }
 dir=$(mktemp -d); trap 'rm -rf "$dir"' EXIT
 if [ $plankc = 0 ]; then

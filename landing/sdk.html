@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Write an app · Joshua Tree</title>
+<meta name="description" content="Write an app for Joshua Tree, build it, and run it on your own Raspberry Pi.">
+<link rel="icon" type="image/png" href="mark.png">
+<style>
+  :root { color-scheme: light dark; --bg:#faf8f4; --fg:#161513; --sub:#5c584f; --border:#ded9cd; --card:#f1ede4; --accent:#b5502c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141311; --fg:#f3f0e9; --sub:#b3ada0; --border:#3a362e; --card:#1e1c19; --accent:#e08a5f; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; line-height: 1.6; }
+  main { max-width: 36rem; margin: 0 auto; padding: 72px 20px 96px; }
+  h1 { font-size: 40px; letter-spacing: -0.02em; line-height: 1.1; margin: 0 0 8px; }
+  h2 { font-size: 20px; margin: 40px 0 8px; }
+  p, li { color: var(--fg); font-size: 16px; }
+  .sub { color: var(--sub); margin: 0 0 32px; }
+  ol, ul { padding-left: 20px; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14px; }
+  pre { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; }
+  pre code { font-size: 13px; line-height: 1.5; }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  footer { border-top: 1px solid var(--border); margin-top: 56px; padding-top: 20px; font-size: 14px; color: var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Write an app</h1>
+  <p class="sub">For Joshua Tree 7.1. You need a Raspberry Pi 4, a microSD card and a Mac. You never touch the kernel.</p>
+
+  <h2>1. Put Joshua Tree on a card</h2>
+  <p>Clone two repositories side by side in one folder: <a href="https://github.com/nulljosh/joshuatree">joshuatree</a>, and <a href="https://github.com/nulljosh/plank">plank</a>, the language its apps are written in. Plank needs <a href="https://docs.astral.sh/uv/">uv</a>. Put a FAT32 card in the Mac, then from the joshuatree folder:</p>
+  <pre><code>tools/flash-pi.sh "/Volumes/NO NAME"</code></pre>
+  <p>It builds the kernel, fetches the Pi's boot files, puts the Plank compiler on the card, and ejects it. Put the card in the Pi and power it on. It boots straight to the desktop. Your card has no Wi-Fi password in it; join a network later from Settings.</p>
+
+  <h2>2. Write it on the Pi</h2>
+  <p>Open the Terminal (press F1, type <code>terminal</code>). Build the editor once:</p>
+  <pre><code>userrun plankc build CODE.PK</code></pre>
+  <p>Then open a new file in it:</p>
+  <pre><code>userrun code SKY.PK</code></pre>
+  <p>Type this, then press Esc to save and close:</p>
+  <pre><code>fn main() {
+  let name = "sky"
+  print(name + ": made on the pi")
+}</code></pre>
+  <p>Build it and run it:</p>
+  <pre><code>userrun plankc build SKY.PK
+userrun sky</code></pre>
+  <p>If the program has a mistake, the build prints the line and the reason. Fix it in Code and build again. Names are up to eight letters or digits, and a name a built-in app already has (like <code>hello</code> or <code>notes</code>) runs the built-in, so pick your own.</p>
+
+  <h2>3. Or write it in C on the Mac</h2>
+  <p>One C file is a whole app. It includes <code>jtsys.h</code> for the system calls and starts at <code>_start</code>:</p>
+  <pre id="sun-c"><code>#include "jtsys.h"
+#include "libjt/string.h"
+__attribute__((section(".text.start"), used))
+void _start(void) {
+    static const char m[] = "sun: made with the sdk\n";
+    jt_write(1, m, (unsigned)strlen(m));
+    jt_exit(7);
+}</code></pre>
+  <pre><code>tools/mkapp.sh sun.c</code></pre>
+  <p>That makes <code>SUN.APP</code>. Copy it to the card's <code>JT/APPS/</code> folder, put the card back in the Pi, and <code>userrun sun</code> runs it. A Plank program builds on the Mac the same way with <code>tools/plankapp.sh sky.pk</code>.</p>
+
+  <h2>4. Give it a window</h2>
+  <p>In Plank, declare the window calls with <code>extern fn</code> and draw with them: <code>jtw_open</code>, <code>jtw_fill</code>, <code>jtw_text</code>, <code>jtw_present</code>, and <code>jtw_wait</code> for keys and clicks. <a href="https://github.com/nulljosh/joshuatree/blob/main/store/slide.pk"><code>store/slide.pk</code></a>, the 15 puzzle, is a whole app in about a hundred lines. In C, open a window with <code>jt_window_open</code> and loop on <code>jt_window_poll</code>, as <a href="https://github.com/nulljosh/joshuatree/blob/main/user/calendar.c"><code>user/calendar.c</code></a> does.</p>
+  <p>The headers are <a href="https://github.com/nulljosh/joshuatree/blob/main/user/jtsys.h"><code>user/jtsys.h</code></a> (every system call) and <a href="https://github.com/nulljosh/joshuatree/tree/main/user/libjt"><code>user/libjt/</code></a> (strings, drawing, fonts, pictures). Every call is listed in the <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">architecture notes</a>.</p>
+
+  <h2>5. Who can run it</h2>
+  <p>Your app is unsigned. On a Pi with no accounts that does not matter: everything runs. Once the Pi has accounts, only an admin runs an unsigned app, with <code>sudo userrun sky</code>; the first account made is an admin. The compiler on your card is unsigned too, so build with <code>sudo userrun plankc build SKY.PK</code> there.</p>
+
+  <h2>6. Put it in the store</h2>
+  <p>The store is what <code>install NAME</code> fetches, and every app in it is signed by Joshua's key, so it runs for anyone. To add yours, open a pull request that adds <code>store/NAME.pk</code> or <code>store/NAME.c</code>. Once it is merged, every Pi gets it with <code>install NAME</code>.</p>
+
+  <h2>Stuck?</h2>
+  <p>Open an issue on <a href="https://github.com/nulljosh/joshuatree/issues">GitHub</a> with what you typed and what the Pi said.</p>
+
+  <footer><a href="/">Joshua Tree</a> · Apache License 2.0</footer>
+</main>
+</body>
+</html>
