@@ -2,7 +2,7 @@
 
 A from-scratch OS: a freestanding i386 kernel plus an ARM64 build that runs on a real Raspberry Pi 4. No libc. Needs only clang, ld.lld and qemu.
 
-- Docs are three files plus this one: `docs/GUIDE.md` (use it, the Pi, the hardware), `docs/ARCHITECTURE.md` (subsystems, design rules, system calls, security, tests) and `docs/ROADMAP.md` (plan, shipped log, story). Add to them; do not start a new .md file.
+- Docs are three files plus this one: `docs/GUIDE.md` (use it, the Pi, the hardware), `docs/ARCHITECTURE.md` (subsystems, design rules, system calls, security, tests) and `docs/ROADMAP.md` (plan, shipped log, story), plus `docs/TESTING.md`, the short board-test list Joshua works from (his ask, 2026-10-28; keep it current with each card). Add to them; do not start a new .md file.
 
 ## Build and verify
 
