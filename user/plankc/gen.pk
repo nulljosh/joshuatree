@@ -2788,7 +2788,7 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   }
   for f in prog.kids {
     if f.kind != "Fn" { nope(f, "a top-level " + f.kind) }
-    if f.kids[6].text == "true" or f.kids[7].text == "true" { nope(f, "extern and tool fns") }
+    if f.kids[6].text == "true" { nope(f, "extern fns") }   # a tool fn is a plain one; plankc.pk's expand_tools added its f_tool (6.96.0)
     if len(f.kids[5].kids) > 0 {   # fn name<T>: a copy for each set of types it is called with (instance)
       if f.kids[0].text in g.generics { throw "\(f.line): function '\(f.kids[0].text)' defined twice" }
       g.generics[f.kids[0].text] = f
@@ -2893,17 +2893,25 @@ fn shake(lines: [str], lam_at: int, lam_end: int) -> [str] {
       if k < lam_at or k >= lam_end { shake_refs(lines[k], at, keep, todo) }
     }
   }
-  let out: [str] = []
-  for k in 0..begins[0] { out.append(lines[k]) }
+  # Kept lines move down in place, so the list is never copied: plankc's own source is over 100,000 lines, and a second
+  # list that size needs a second megabyte the 64 KB-and-up space may not have (6.96.0 ran out of memory on the box).
+  var w = begins[0]
   for i in 0..len(names) {
     var end = data
     if i + 1 < len(names) { end = begins[i + 1] }
     for k in begins[i]..end {
-      if keep[i] or (k >= lam_at and k < lam_end) { out.append(lines[k]) }
+      if keep[i] or (k >= lam_at and k < lam_end) {
+        lines[w] = lines[k]
+        w += 1
+      }
     }
   }
-  for k in data..len(lines) { out.append(lines[k]) }
-  return out
+  for k in data..len(lines) {
+    lines[w] = lines[k]
+    w += 1
+  }
+  while len(lines) > w { lines.pop() }
+  return lines
 }
 
 # Each pk_ name in line l (letters, digits, _ and ., as sym writes them) that is a function not yet kept: kept, to walk.
