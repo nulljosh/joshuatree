@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Draws architecture.svg: every Joshua Tree graph in one picture (where it runs, the stack, talking to Samantha, how an
-app gets onto the Pi, the Pi bring-up, apps over time). The apps line is read from progress.svg, so
+app gets onto the Pi, the compiler building itself, the Pi bring-up, apps over time). The apps line is read from progress.svg, so
 rerun this after tools/gen/progress.sh. The Pi row is typed in: update it when the board moves. Colours, spacing, radii
 and type come from the brand kit's tokens (docs/brand/tokens.css) through tools/gen/svgkit.py, so the map cannot drift."""
 import re, os
@@ -80,6 +80,12 @@ y = chain(y, [('Write it', 'you, or Sam'), ('Build it', 'C or Plank'), ('Seal it
           ['host', 'host', 'new', 'host', 'core', 'core'])
 y = note(y + S[8], "Sealed apps run for anyone; unsealed ones (yours, or Samantha's) only for an admin; a broken seal never.") + S[32]
 
+# 8.0 (6.60.0 to 6.71.0, then 6.72.0 on): plankc, the compiler written in Plank, rebuilds itself on the Pi.
+y = sec(y, 'loop', 'It builds itself (8.0)')
+y = chain(y, [('plankc', 'Plank, in Plank'), ('On the Pi', 'compiles itself'), ('A new plankc', 'no clang, no linker'),
+              ('Same bytes', 'every time')], ['host', 'core', 'core', 'new'])
+y = note(y + S[8], 'Checked on every pull request. The kernel is still C, built on a Mac.') + S[32]
+
 # The Pi, on the real board. Solid = seen working on the board (docs/ROADMAP.md); dashed = proven in QEMU only.
 y = sec(y, 'chip', 'The Pi, on the real board')
 pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi', 'WPA2, joined', 1),
@@ -88,7 +94,9 @@ pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi'
       ('Browser', 'window, links', 1), ('Books', 'plain text', 1), ('Music', 'wav, mp3, covers', 1),
       ('Notes', 'saved to the card', 1), ('Calendar', 'four views', 1), ('Bluetooth', 'mouse pairs', 1),
       ('Sound', 'headphone jack', 0), ('Many windows', 'apps side by side', 0),
-      ('Walled memory', 'one app, one arena', 0), ('Watchdog', 'frozen app stopped', 0), ('Mic', 'Yeti, USB', 0)]
+      ('Walled memory', 'one app, one arena', 0), ('Watchdog', 'frozen app stopped', 0), ('Mic', 'Yeti, USB', 0),
+      ('Wi-Fi switch', 'no restart', 0), ('Mail', 'IMAP, reply', 0), ('CalDAV', 'syncs when idle', 0),
+      ('BT keyboard', 'LE, passkey', 0)]
 pw = (IW - 3 * S[16]) / 4
 for i, (a, b, done) in enumerate(pi):
     box(M + (i % 4) * (pw + S[16]), y + (i // 4) * (48 + S[8]), pw, 48, a, b, 'new' if done else 'todo')

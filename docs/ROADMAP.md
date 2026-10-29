@@ -5,7 +5,7 @@ Where it is going, what shipped, and the story so far.
 ## Contents
 
 - [Roadmap](#roadmap)
-- [Next priorities (reviewed 2026-10-18)](#next-priorities-reviewed-2026-10-18)
+- [Next priorities (reviewed 2026-10-28)](#next-priorities-reviewed-2026-10-28)
 - [From the gap study (2026-10-11)](#from-the-gap-study-2026-10-11)
 - [Daily driver gaps (Joshua, 2026-10-12: "keep identifying gaps and check them off as we go")](#daily-driver-gaps-joshua-2026-10-12-keep-identifying-gaps-and-check-them-off-as-we-go)
 - [Next few weeks](#next-few-weeks)
@@ -38,43 +38,28 @@ Where it is going, what shipped, and the story so far.
 
 ## Roadmap
 
-Freestanding i386 kernel, no libc. This is the forward plan. What already
-shipped lives in `git log`, `git tag -l`, and the [GitHub
-releases](https://github.com/nulljosh/joshuatree/releases), not here.
+A freestanding kernel for i386 and the Raspberry Pi 4, no libc. This is the forward plan; what shipped is in the [Shipped log](#shipped-log) and the [releases](https://github.com/nulljosh/joshuatree/releases).
 
-See the Blueprint: where the OS goes after 1.0 section for the structural plan of where this OS goes after 1.0.
-
-**Latest**: 4.0: Many windows. Run Calendar, Notes, Music and Books at once, each in its own space. If one crashes, the others never notice.
+**Latest**: 6.0: Yours. One machine for everyone in the house: each person signs in to their own desktop, files and wallpaper, and a deleted file comes back from a snapshot.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Next priorities (reviewed 2026-10-18)
+## Next priorities (reviewed 2026-10-28)
 
 The near-term queue. The topic sections below keep the longer plan, and shipped work is in [the Shipped log section](#shipped-log).
 
-**Now: 5.0, Talk to it (Joshua, 2026-10-18: "aim for v5, focus on the mic").** The gate was a ten-minute spoken conversation on the real Pi that opens and changes things. 5.0.0 was cut on Joshua's word on 2026-10-26 ("I'll test tomorrow ... I trust it works"), before that board pass, so items 1 and 3 below stay open and the first 5.0.x patches are whatever the board shows.
+**Now: 7.0, Online.** The software is in (6.11.0 to 6.89.0): Wi-Fi that joins and switches without a restart, Blackcomb with pictures, forms, cookies, tabs and history, mail over IMAP and SMTP, calendars that sync over CalDAV, and a Bluetooth keyboard. None of it has run on the board yet. The gate is a normal day of web, mail and calendar on the Pi, and Joshua's list for it is [`docs/TESTING.md`](TESTING.md). 7.0.0 is cut when it passes; whatever the board shows broken comes first.
 
-Built and passing on QEMU: USB audio and `mic` (4.6.0), speech to text on the Mac (`tools/claude-relay/stt.py`), voice mode (double-tap and hold Space, a mic mark and a level bar), her voice through `[[say]]` with a mouth in the chat view, and the agent loop. Since 4.17.0 `[[open]]` reaches every app Spotlight opens. Left:
+**Next: 8.0, Build things**, shipped as 6.x minors until 7.0.0 is cut. In: apps that run from the card, signed with Joshua's key and installed from the store (6.51.0 to 6.59.0), Samantha writing apps (6.59.0), and plankc, the Plank compiler written in Plank, which rebuilds itself on the Pi byte for byte (6.71.0) and now builds most of Plank's examples (6.72.0 on). Left, in order:
+1. Samantha's apps built on the Pi by plankc, so no Mac is in that path.
+2. An editor fit for code, and a debugger that steps an app.
+3. The SDK: headers and a page that walks someone through writing and installing an app. The 8.0 gate is someone other than Joshua doing exactly that.
 
-1. The board proof (Joshua): the Yeti in a Pi port, `mic` shows the room, hold Space and talk, she answers out loud.
-2. A full-screen face whose mouth follows her voice. Done in 4.20.0: the Samantha tile opens her chat across the screen.
-3. Whatever the board shows is broken.
+**Polish still open** (Joshua, 2026-10-26, from the Snow Leopard and Mac OS X introductions, and posts.design): long movies streamed from the card with trim, Dock Exposé, Stacks for Downloads and Documents, window buttons that react on hover, Finder icon sizes with thumbnails, full-text history in the browser, the Launchpad card fading in, and Cmd+M for the kernel-drawn windows. The magnifying Dock (6.4.0), the genie (6.5.0) and Top Sites (6.37.0) are done.
 
-**First, the 6.x refinements** (Joshua, 2026-10-26, from the Snow Leopard and Mac OS X 2000 introductions): Movies on the Pi (6.1.0), then long movies streamed from the card with QuickTime-style controls and trim, a magnifying Dock and the genie effect into it, Dock Exposé (click and hold a tile for its windows), Stacks for Downloads and Documents, window buttons that react on hover and dim in back windows, Finder icon sizes with picture thumbnails, Top Sites and full-text history in the browser.
-
-**Also from posts.design** (Joshua, 2026-10-26: the work is the page, almost no chrome):
-- [ ] The Launchpad card fades in on `lib/ease.h`'s curve (it needs a card-sized buffer to blend from).
-- [ ] Minimize for the kernel-drawn windows (Settings, Browser, Clock, Brick, the Console) and Cmd+M; 6.5.0 covers the EL0 apps.
-
-**Now: 7.0, Online (Joshua, 2026-10-26: "let's focus on internet next").** 6.0, Yours, shipped (2026-10-26): accounts, login, sudo and home folders (4.8 to 4.11), snapshots (4.12), the crash-safe card (4.14), the Users pane (4.15), backups to the Mac and back (5.2.0, 5.3.0), and each person's own wallpaper. The gate for 7.0 is a normal day of web, mail and calendar on the board.
-
-What is there today: Wi-Fi joins from the card's config, DNS and the clock come from the network, and a text browser (`arch/arm64/browser.c`) fetches HTTPS through BearSSL (`tls.c`). Its limits: TLS 1.2 only, 126 baked-in root certificates (Mozilla's list since 6.11.0), a 64 KB reply cap, text only (no images, no clicks on links, no forms, no cookies). Mail and Calendar read files on the card and sync nothing. There is no Ethernet driver for the Pi.
-
-The steps, one minor version each, cheapest unblock first:
 - [ ] [Fable] Later, not a 7.0 blocker: TLS 1.3 (BearSSL stops at 1.2, and most sites still offer 1.2), Ethernet through the Pi 4's GENET, and keep-alive (`net.c` holds one connection, so requests send `Connection: close`; 6.45.0's TLS session resumption already skips the costly part of each new connection, decided 2026-10-28).
-
 
 **Still open from the 2026-10-11 review:**
 - Codex through the relay on the Mac, read-only, never a bare-metal OAuth client on the Pi (research decision 2026-10-10).
@@ -1026,6 +1011,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **6.91.1 (2026-10-28)**: The docs caught up. The architecture picture shows the compiler building itself on the Pi and 7.0's new pieces (the Wi-Fi switch, Mail, CalDAV, the Bluetooth keyboard), dashed until the board shows them. The roadmap's Next priorities say where 7.0 and 8.0 really stand (they still described 5.0), its Latest line is 6.0 (the landing still announced 4.0), and plankc's architecture row is a fifth of what it was. Check: the doc checks (`check-refs.sh`, `design-doc-check.py`, `doc-coverage-check.py`, `landing-roadmap-check.py`).
 - **6.91.0 (2026-10-28)**: plankc gets files, folders and dates. `exists`, `is_dir`, `mkdir`, `remove_file`, `append_file`, `list_dir` (sorted, as plank.py sorts), `cwd` and `url_encode` run over the Pi's file calls; an app's root is the card's `JT/` folder, so a leading slash names it and `cwd()` is `/`. `clock(layout, at)` and `parse_time(text, layout)` work from a civil calendar in `rt.pk`, in UTC, since the Pi keeps no time zone. 28 of Plank's 33 examples now build with plankc. Check: `arm64-plank-check.py` (`tests/files.pk` against plank.py's output in an empty folder in UTC, and the `dates` example; listing names out of order or a wrong month fails it).
 - **6.90.0 (2026-10-28)**: plankc gets a dict's `items()` and Plank's `Json`, so the ai library builds on the box. `items()` gives (key, value) tuples in the order keys arrived. `Json` is plank.py's own source of it, in Plank, added to a program that names it; `json_parse` reads with a cursor in `rt.pk` and gives plank.py's error messages, and `json_quote` escapes as its C runtime does. `env()` is nil and `http()` gives "" with `status()` 0, as plank.py with no network: the Pi lets an app reach only set hosts, so a real `http()` waits on a permission. 26 of Plank's 33 examples now build with plankc. Check: `arm64-plank-check.py` (`tests/items.pk`, `tests/json.pk`, and the `agent` and `ai` examples on the box, with and without the 64 KB collector; swapping a pair's parts or dropping the backslash escape fails all four).
 - **6.89.0 (2026-10-28)**: A Bluetooth keyboard (Joshua, on the board day: "fix it then"). `bt pair` now pairs an LE keyboard as it does a mouse: the Pi says DisplayOnly, so a keyboard that asks for a typed code gets one, `bt: type 123456 on the keyboard, then Enter`, and those digits are the pairing key; a mouse still pairs with no code. Its boot keyboard reports go through the USB keyboard's own reader. One Bluetooth device at a time, and Apple's Magic Keyboard (Bluetooth Classic) is not covered. Check: `arm64-bt-check.py`'s keyboard boot (a fake keyboard reads the passkey off the screen, pairs with it, and types `help` into the Terminal; with the passkey left out of the key it fails).
@@ -2113,23 +2099,24 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-27, late afternoon Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-10-28, evening Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand.** Main is 6.91.0: plankc, the Plank compiler written in Plank, rebuilds itself on the Pi byte for byte, with its own collector, and writes its own app images with no clang or linker (6.71.0). The landing's film is now a 25 second tour (6.76.2, `docs/hardware/ad/cards.py`). An app's heap is 27 MiB (6.76.3), and plankc's collector stops a program that only thrashes a full heap. plankc has enums, tuples, closures and floats (6.73.0 to 6.76.0) the built-ins the examples reach for next (6.77.0) and strings counted in characters (6.78.0), which the Pi Terminal now draws right where its font can (6.78.1), dicts with int keys (6.79.0) `Result` with `attempt` (6.80.0) generics (6.81.0 and 6.82.0) sets (6.83.0), modules (6.84.0) and regular expressions (6.85.0), `items()` and `Json` (6.90.0), files, folders and dates (6.91.0), and 28 of Plank's 33 examples build with it. 8.0 has started (Joshua, 2026-10-27: "keep going to v10", then "you decide" and "no more questions"): apps run from the card, `tools/mkapp.sh` builds one from a C file, Spotlight lists them, they are signed (Joshua's key, `~/.config/joshuatree/app-signing.pem`), `install NAME` gets them from the store on the landing, and Plank programs build into apps with windows (`tools/plankapp.sh`, `jtw`), and Samantha writes apps (`[[app NAME]]`). Until 7.0.0 is cut, 8.0's pieces ship as 6.x minors. 7.0 Online's software is in (the 6.11.0 to 6.48.0 lines, then 6.86.0 to 6.88.0 finished the list: sixteen images a page that arrive after its text, CSS sibling rules, CalDAV syncing while the Pi is idle, Wi-Fi joining without a restart), and the board-day runbook is in `docs/GUIDE.md` (7.0 board day). A security sweep fuzzed every reader of network bytes under ASan and UBSan and fixed what it found: the calendar (6.48.1), Blackcomb's page and cookie readers (6.48.2), mail (6.48.3), the Wi-Fi scan walk (6.48.4) and DNS in both kernels (6.48.5); TCP, DHCP, ARP and the media decoders were already bounded or fuzzed. CI now keeps its apt downloads in main's cache, so a slow Azure mirror no longer times jobs out. None of 6.11 onward has run on the board.
+**Where things stand.** Main is 6.91.1. 7.0's software is in and waits on the board (`docs/TESTING.md`); the card carries 6.89.0, with the Bluetooth keyboard. 8.0 ships as 6.x minors meanwhile: apps from the card, signed and installed from the store, Samantha writing apps, and plankc, the Plank compiler written in Plank, which rebuilds itself on the Pi byte for byte with no clang or linker (6.71.0). Since then plankc has grown most of the language (6.72.0 to 6.91.0) and builds 28 of Plank's 33 examples. None of 6.11 onward has run on the board.
 
 **Waiting on Joshua.** Only the 7.0 board day (GUIDE.md, 7.0 board day): it is physical. The loop asks nothing else and decides design calls itself, saying what it chose here. Decided 2026-10-27: Wi-Fi passwords stay machine-wide, so the network is up before anyone signs in; apps are signed by Joshua's key and unsigned ones need an admin; the store is an `install` from the landing.
 
 **Next, in order.**
-1. Bootstrap steps 7 and 8, by what unlocks the most examples: tool functions for `agent`, `ai` and `toolfn`, then `dates`, `files`, `interop`, `scripting` and `world`, until all 33 build on the Pi (`packages` fetches from GitHub, which needs the network). Then plankc writes only the runtime functions a program reaches, so every image shrinks (fib is 54 KB, nearly all runtime).
-2. Whatever the board day shows is broken; then 7.0.0 with Joshua's logo and UI, and 8.0.0 right after, since 8.0's software is in.
-3. Keep-alive and TLS 1.3 stay later; 7.0's software is done.
+1. Whatever the board shows broken; then 7.0.0 with Joshua's logo and UI.
+2. Samantha's apps built on the Pi by plankc, so no Mac is in that path. Then plankc writes only the runtime functions a program reaches, so every image shrinks (fib is 54 KB, nearly all runtime).
+3. The last examples: `random` (6.92.0), then `scripting`, `interop`, `toolfn` and `packages`, which need a shell, C and the network.
+4. An editor fit for code, a debugger, and the SDK page; then 8.0.0.
 
 Restart prompt:
 
 ```
-/loop until v10
+/loop to v10
 ```
 
 Rules kept:
