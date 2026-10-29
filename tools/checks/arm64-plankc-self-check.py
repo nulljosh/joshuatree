@@ -121,7 +121,7 @@ try:
     def run(line, prog, secs):
         n = len(uart()); t0 = time.time()
         typed(line)
-        done = wait_any(["M3c app %s exit" % prog, "M3c app %s stopped" % prog], secs, n)
+        done = wait_any(["M3c app %s exit" % prog, "M3c app %s stopped" % prog, "userrun: no program called that"], secs, n)   # 6.97.0: an image an earlier step never wrote ends the wait
         return uart()[n:], done, time.time() - t0
     seg, done, secs = run("userrun plankc img PC/FIB.PK PC/RT.PK APPS/FIBX.APP", "plankc", 300)
     check("stage 2 writes fib's app image on the box (%d s)" % secs, done and "plankc: wrote APPS/FIBX.APP" in seg and "M3c app plankc exit 0" in seg, seg[-500:])

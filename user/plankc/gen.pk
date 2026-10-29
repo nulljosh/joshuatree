@@ -2786,9 +2786,28 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
     let dot = f.kids[0].text.find(".") ?? 0
     if dot > 0 and not (f.kids[0].text[..dot] in g.structs) and not (f.kids[0].text[..dot] in g.enums) { g.modules[f.kids[0].text[..dot]] = 1 }
   }
+  # 6.97.0: an extern fn the runtime defines is that function (jtw's window calls), or the runtime's rt_extern_NAME takes
+  # the name for this program alone (libc's time, which would shadow Plank's time() everywhere); any other is refused.
+  let defined: [str: N] = [:]
+  for f in prog.kids {
+    if f.kind == "Fn" and f.kids[6].text != "true" { defined[f.kids[0].text] = f }
+  }
+  let kept: [N] = []
+  for f in prog.kids {
+    if f.kind == "Fn" and f.kids[6].text == "true" {
+      let name = f.kids[0].text
+      if "rt_extern_" + name in defined {
+        defined["rt_extern_" + name].kids[0] = sv(name)
+      } else if not (name in defined) {
+        nope(f, "extern fn " + name)
+      }
+    } else {
+      kept.append(f)
+    }
+  }
+  prog.kids = kept
   for f in prog.kids {
     if f.kind != "Fn" { nope(f, "a top-level " + f.kind) }
-    if f.kids[6].text == "true" { nope(f, "extern fns") }   # a tool fn is a plain one; plankc.pk's expand_tools added its f_tool (6.96.0)
     if len(f.kids[5].kids) > 0 {   # fn name<T>: a copy for each set of types it is called with (instance)
       if f.kids[0].text in g.generics { throw "\(f.line): function '\(f.kids[0].text)' defined twice" }
       g.generics[f.kids[0].text] = f
