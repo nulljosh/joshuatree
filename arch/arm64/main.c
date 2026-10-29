@@ -486,8 +486,83 @@ static long app_clip(unsigned long op, unsigned long buf, unsigned long len) {
     }
     return -22;
 }
+/* 7.2.0, the debugger: `debug NAME [STEPS]` (cmd.c) runs an app one instruction at a time for its first STEPS instructions.
+   Software step: MDSCR_EL1.SS, and SPSR.SS on the way back to EL0, run one instruction and then take a step exception (class
+   0x32) here before the next. Each step shows where the app stopped, the instruction there and the registers that changed; the
+   last also shows every register that is not 0 and the 32 bytes at sp, and then the app runs on. Only the app's own memory is
+   read (dbg_ok), so an address it points anywhere else, the kernel's page beside it included, shows as ??. Stepping
+   lasts one turn of app_tick: an app that yields first stops being stepped and says so. MDSCR is set only around the stepped
+   app's turn, so no other app ever takes a step; KDE stays 0, so the kernel never steps itself.
+   ponytail: a trace, not a window; breakpoints and a step key are the graphical debugger (docs/ROADMAP.md). */
+unsigned dbg_want;                  /* cmd.c: the steps for the next app_start, 0 for none */
+unsigned long dbg_spsr;             /* vectors.S resume_user ORs it into the app's SPSR: bit 21, SS */
+static int dbg_slot = -1;
+static unsigned dbg_left, dbg_n;
+static unsigned long dbg_prev[32];  /* x0-x30 and sp at the last step */
+static void dbg_mdscr(int on) {
+    unsigned long v;
+    __asm__ volatile ("mrs %0, mdscr_el1" : "=r"(v));
+    v = on ? (v | 1) & ~(1UL << 13) : v & ~1UL;   /* SS on and KDE off, or SS off */
+    __asm__ volatile ("msr oslar_el1, xzr\n msr mdscr_el1, %0\n isb" :: "r"(v));   /* the OS lock can come out of reset set, and then SS does nothing */
+}
+static int dbg_ok(unsigned long a, unsigned long n) {   /* the app's own image, stack and heap: never the self-test's pages, which only slot 0 maps */
+    return span(a, n, UB + UP_APP, app_len) || span(a, n, UB + UP_ASTACK, APP_STACK_PAGES * 4096UL) || span(a, n, UB + UP_HEAP, heap_len());
+}
+static void dbg_hex(unsigned long v, int w) {   /* w digits, or as few as v needs with w 0 */
+    if (!w) { w = 1; while (w < 16 && v >> (4 * w)) w++; }
+    while (w--) uart_putc("0123456789abcdef"[(v >> (4 * w)) & 15]);
+}
+static void dbg_where(unsigned long pc) {   /* +offset into the app's image, or the whole address when it is outside it */
+    unsigned long base = UB + UP_APP;
+    if (pc >= base && pc - base < app_len) { uart_putc('+'); dbg_hex(pc - base, 4); } else { uart_puts("0x"); dbg_hex(pc, 0); }
+}
+static void dbg_reg(int i, unsigned long v) {
+    uart_putc(' ');
+    if (i == 31) uart_puts("sp"); else { uart_putc('x'); uart_dec((unsigned)i); }
+    uart_putc('='); dbg_hex(v, 0);
+}
+static void dbg_step(struct frame *f) {
+    unsigned long now[32], t;
+    for (int i = 0; i < 31; i++) now[i] = f->x[i];
+    __asm__ volatile ("mrs %0, sp_el0" : "=r"(now[31]));
+    if ((int)ap->slot != dbg_slot || !dbg_left) { dbg_mdscr(0); return; }   /* never: SS is on only for the stepped app */
+    uart_puts("step "); uart_dec(++dbg_n); uart_puts("  "); dbg_where(f->elr); uart_puts("  ");
+    if (dbg_ok(f->elr, 4)) dbg_hex(*(const unsigned *)f->elr, 8); else uart_puts("????????");   /* the next instruction, if it is the app's */
+    for (int i = 0, k = 0; i < 32; i++) if (now[i] != dbg_prev[i]) { if (++k > 4) { uart_puts(" ..."); break; } dbg_reg(i, now[i]); }
+    uart_putc('\n');
+    for (int i = 0; i < 32; i++) dbg_prev[i] = now[i];
+    if (--dbg_left) {
+        __asm__ volatile ("mrs %0, spsr_el1\n orr %0, %0, #(1 << 21)\n msr spsr_el1, %0" : "=&r"(t));   /* SS: one more step. The last thing done */
+        return;
+    }
+    uart_puts("registers:");
+    for (int i = 0, k = 0; i < 31; i++) if (now[i]) { if (k++ && !(k % 5)) uart_puts("\n          "); dbg_reg(i, now[i]); }
+    uart_puts("\n          "); dbg_reg(31, now[31]); uart_puts(" pc="); dbg_where(f->elr); uart_putc('\n');
+    for (int r = 0; r < 2; r++) {
+        uart_puts("at sp+"); dbg_hex((unsigned long)r * 16, 2); uart_putc(':');
+        for (int b = 0; b < 16; b++) {
+            unsigned long a = now[31] + (unsigned long)(r * 16 + b);
+            uart_putc(' ');
+            if (a >= now[31] && dbg_ok(a, 1)) dbg_hex(*(const unsigned char *)a, 2); else uart_puts("??");
+        }
+        uart_putc('\n');
+    }
+    uart_puts("debug: done stepping, it runs on\n");
+    dbg_slot = -1;
+    dbg_mdscr(0);
+}
+static void dbg_end(void) {   /* app_tick, after the stepped app's turn, however it ended */
+    if (dbg_left) {
+        uart_puts("debug: ");
+        uart_puts(app_parked ? "it yielded to the desktop after " : "it ended after ");
+        uart_dec(dbg_n); uart_puts(" steps, stepping stops\n");
+    }
+    dbg_slot = -1; dbg_left = 0; dbg_spsr = 0;
+    dbg_mdscr(0);
+}
 void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's FP registers, saved below the frame by el0_sync_entry */
     unsigned ec = (unsigned)(f->esr >> 26);
+    if (ec == 0x32) { dbg_step(f); return; }   /* 7.2.0: a software step, the debugger's */
     APP_FP_CLOBBER();
     if (ec == 0x15) {   /* svc from EL0 */
         unsigned long n = f->x[8], a0 = f->x[0];
@@ -700,8 +775,11 @@ void app_tick(void) {   /* every app with something to do gets its turn: it runs
         APP_FP_CLOBBER();
         arena_only((int)ap->slot);
         wd_live = 1; wd_arm();
+        int dbg = (int)ap->slot == dbg_slot && dbg_left;   /* 7.2.0: this app is being stepped */
+        if (dbg) { dbg_spsr = 1UL << 21; dbg_mdscr(1); }
         unsigned long st = resume_user(&app_frame, app_sp, app_fp);
         wd_live = 0; wd_off();
+        if (dbg) dbg_end();
         app_running = 0;
         if (!app_parked) app_end(st, user_faulted ? "stopped by a fault" : 0);
     }
@@ -731,6 +809,11 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
     app_frame.elr = entry; app_sp = UB + UP_ASTACK + APP_STACK_PAGES * 4096UL;
     app_cur = a; ap->min = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
+    if (dbg_want) {   /* 7.2.0: `debug NAME`, stepped from its first instruction */
+        dbg_slot = (int)sl; dbg_left = dbg_want; dbg_n = 0;
+        for (int i = 0; i < 31; i++) dbg_prev[i] = 0;
+        dbg_prev[31] = app_sp;
+    }
     uart_puts("M3c app "); uart_puts(a->name); uart_puts(" starts\n");
     return 0;
 }
