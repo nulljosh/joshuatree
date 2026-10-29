@@ -36,6 +36,7 @@ TL = [("open", 4),
       ("full", 4, SHOT("desktop-apps"), "Joshua Tree"),
       ("split", 2, "Written from scratch", "ink", "terra", (BUILDS("code"), 0.3, 0.5, 1.25)),
       ("split", 2, "Runs on a Pi 4", "terra", "sand", (R("landing/nimbus-hero.jpg"), 0.5, 0.5, 1.0)),
+      ("split", 2, "The web, with pictures", "paper", "terra", (BUILDS("web"), 0.40, 0.45, 2.4)),   # 7.0: Blackcomb on the Pi
       ("split", 2, "Weather", "paper", "terra", (SHOT("app-weather"), 0.5, 0.5, 1.0)),
       ("split", 2, "Stocks", "sand", "ink", (SHOT("app-stocks"), 0.5, 0.5, 1.0)),
       ("split", 2, "Calendar", "ink", "clay", (SHOT("app-calendar"), 0.5, 0.5, 1.0)),

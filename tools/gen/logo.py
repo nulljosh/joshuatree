@@ -1,4 +1,4 @@
-# The Joshua tree mark, 3.0: the crayon tree, tightened. 4.0, 5.0 and 6.0 each grew it one tuft.
+# The Joshua tree mark, 3.0: the crayon tree, tightened. 4.0, 5.0, 6.0 and 7.0 each grew it one tuft.
 #
 # The 2.25 marker scribble drawn again with a surer hand: steadier, heavier lines for the trunk and the three arms,
 # a trunk that swells where the marker pressed, a dense knot of loops at the end of every arm with paper showing
@@ -53,10 +53,13 @@ OUT = tilt([(36.0, 62.5), (30.0, 63.5), (24.0, 63.0), (19.5, 60.5)])
 # 6.0, Yours: a sixth tuft, off the short right arm and reaching down and out to the right, so the tree stops
 # leaning all its weight on one side: room for a second person on the same machine.
 EAST = tilt([(62.5, 59.8), (68.5, 64.0), (74.5, 65.5), (79.5, 63.0)])
-ARMS = (LEFT, MID, RIGHT, LOW, OUT, EAST)
+# 7.0, Online: a seventh tuft, forking up out of the middle arm into the open sky over the left tufts, the tallest
+# reach on the tree, like an aerial: the machine reaches out to the rest of the world.
+NORTH = tilt([(52.6, 55.0), (47.5, 46.5), (40.5, 35.0), (35.0, 26.0)])
+ARMS = (LEFT, MID, RIGHT, LOW, OUT, EAST, NORTH)
 CROTCH_L, CROTCH_R = tilt([(50.0, 59.0)])[0], tilt([(55.0, 57.0)])[0]
 # Each tuft its own size: (arm, knot radius, loops, blades, blade reach). The bold copy takes SMALL_R.
-TUFTS = ((LEFT, 7.2, 5, 3, 3.6), (MID, 9.4, 6, 4, 3.4), (RIGHT, 8.0, 5, 3, 3.2), (LOW, 5.4, 4, 3, 2.6), (OUT, 4.8, 4, 3, 2.4), (EAST, 5.0, 4, 3, 2.4))
+TUFTS = ((LEFT, 7.2, 5, 3, 3.6), (MID, 9.4, 6, 4, 3.4), (RIGHT, 8.0, 5, 3, 3.2), (LOW, 5.4, 4, 3, 2.6), (OUT, 4.8, 4, 3, 2.4), (EAST, 5.0, 4, 3, 2.4), (NORTH, 5.0, 4, 3, 2.4))
 SMALL_R = (6.6, 8.2, 7.0, 4.8)
 # The bold copy's ground, flat so it lands on one pixel row at 16 px (bold_box puts it there).
 SMALL_GROUND_Y = 87.8
@@ -157,6 +160,8 @@ def big():
     hi = shaky(own5, offset(OUT, 2.4, 1.7, -1), 0.3), shaky(own5, offset(OUT, 2.4, 1.7, +1), 0.3)
     own6 = random.Random(60)   # the sixth its own too, so the 5.0 tree stays as it was
     ea = shaky(own6, offset(EAST, 2.4, 1.7, -1), 0.3), shaky(own6, offset(EAST, 2.4, 1.7, +1), 0.3)
+    own7 = random.Random(70)   # and the seventh, so the 6.0 tree stays as it was
+    no = shaky(own7, offset(NORTH, 2.4, 1.7, -1), 0.3), shaky(own7, offset(NORTH, 2.4, 1.7, +1), 0.3)
     outer_l = shaky(rnd, tl[:-1] + le[0][1:], 0.4)
     outer_r = shaky(rnd, list(reversed(re[1][1:])) + list(reversed(tr[:-1])), 0.4)
     crotch_l = shaky(rnd, list(reversed(le[1][1:])) + [CROTCH_L] + me[0][1:], 0.4)
@@ -171,9 +176,10 @@ def big():
         if arm is LOW: rnd = own
         if arm is OUT: rnd = own5
         if arm is EAST: rnd = own6
+        if arm is NORTH: rnd = own7
         knots.append(scribble(rnd, cx, cy, r, loops, 0.6, (0.8, 0.66)))
         blades += flicks(rnd, cx, cy, up, r, count, reach)
-    return [(2.6, accent, [ground]), (1.8, None, [outer_l, outer_r, crotch_l, crotch_r, lo[0], lo[1], hi[0], hi[1], ea[0], ea[1]]), (2.7, None, press),
+    return [(2.6, accent, [ground]), (1.8, None, [outer_l, outer_r, crotch_l, crotch_r, lo[0], lo[1], hi[0], hi[1], ea[0], ea[1], no[0], no[1]]), (2.7, None, press),
             (3.5, None, press2), (1.6, None, knots), (2.0, None, blades)]
 
 
