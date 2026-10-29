@@ -1041,6 +1041,10 @@ Deletes now go both ways on the real account, so use a scratch calendar: make on
 
 In Blackcomb, open a second tab (Cmd+T): a tab strip appears. Type two letters of a page you visited into the address bar: it should offer it. The start page shows Top Sites after a site is visited twice.
 
+### 7. Bluetooth keyboard (6.89.0)
+
+With the wired keyboard still in: Bluetooth keyboard in pairing mode, `bt scan`, `bt pair NAME`. Type the six digits it prints on the Bluetooth keyboard, then Enter: `bt: keyboard ready`, and its keys type in the Terminal.
+
 ### What to send back
 
 The sign-in seconds, each failed step's number with the lines it printed, and a photo for anything on screen. When every step passes, 7.0.0 waits only on the refreshed logo and UI.
