@@ -3,6 +3,7 @@
 #   plankc parse FILE.pk   the program's tree, one top-level item a line
 #   plankc [--gc=N] asm FILE.pk RT.pk [OUT.S]   aarch64 assembly for the Pi (gen.pk), with the runtime rt.pk built in, into OUT.S;
 #                    --gc=N makes the program collect every N bytes
+#   plankc build NAME.PK   on the Pi (6.95.0): img with the card's runtime, PLANKC/RT.PK, into APPS/NAME.APP
 #   plankc img FILE.pk RT.pk OUT.APP   the app image itself, encoded by plankc (enc.pk), on the Pi only; when it cannot,
 #                    the reason goes to OUT with .ERR for .APP too, which the kernel reads back to Samantha (6.94.0)
 import "gen.pk"
@@ -15,8 +16,17 @@ fn main() {
     gc_every = int(a[0][5..])
     a = a[1..]
   }
+  var built = ""
+  if len(a) == 2 and a[0] == "build" {   # 6.95.0: the app is named for its file, and the runtime is the card's
+    built = app_name(a[1])
+    if built == "" {
+      print("plankc: an app's name is 1 to 8 of A-Z, 0-9, - and _, so \(a[1]) needs a shorter name")
+      exit(2)
+    }
+    a = ["img", a[1], "PLANKC/RT.PK", "APPS/" + built + ".APP"]
+  }
   if len(a) < 2 or not (a[0] == "lex" or a[0] == "parse" or a[0] == "asm" or a[0] == "img") {
-    print("usage: plankc lex|parse FILE.pk, plankc asm FILE.pk RT.pk [OUT.S], or plankc img FILE.pk RT.pk OUT.APP")
+    print("usage: plankc build NAME.PK, plankc lex|parse FILE.pk, plankc asm FILE.pk RT.pk [OUT.S], or plankc img FILE.pk RT.pk OUT.APP")
     exit(2)
   }
   let src = read_file(a[1]) ?? ""
@@ -39,6 +49,7 @@ fn main() {
       if uses_json(prog) {   # Plank's Json, in Plank (gen.pk's json_source, 6.90.0)
         for item in parse(json_source()).kids { prog.kids.append(item) }
       }
+      if built != "" and read_file(a[2]) == nil { throw "no runtime at \(a[2]): tools/flash-pi.sh puts it on the card" }
       let runtime = parse(read_file(a[2]) ?? "")
       var out = ""
       if a[0] == "img" {   # on the Pi only: the image is bytes, which plank.py's build of plankc cannot write
@@ -50,6 +61,7 @@ fn main() {
       if len(a) > 3 {
         if not write_file(a[3], out) { throw "cannot write \(a[3])" }
         print("plankc: wrote \(a[3]), \(plankc_byte_len(out)) bytes")
+        if built != "" { print("plankc: run it with userrun \(built.lower()), or sudo userrun \(built.lower()) when the Pi has accounts") }
       } else {
         print(out)
       }
@@ -133,4 +145,20 @@ fn load_program(path: str, seen: [str: int]) -> N {
     }
   }
   return N("L", 0, "", out)
+}
+
+# The app a source file makes, for plankc build: its file name less the folder and .PK, in capitals, or "" when that is
+# not 1 to 8 of A-Z, 0-9, - and _ (an app's name on the card, 8.3).
+fn app_name(path: str) -> str {
+  var base = path
+  var i = len(path) - 1
+  while i >= 0 and path[i] != "/" { i -= 1 }
+  base = path[i + 1..]
+  if base.upper().ends_with(".PK") { base = base[..len(base) - 3] }
+  base = base.upper()
+  if len(base) < 1 or len(base) > 8 { return "" }
+  for c in base.chars() {
+    if not ((c >= "A" and c <= "Z") or (c >= "0" and c <= "9") or c == "-" or c == "_") { return "" }
+  }
+  return base
 }
