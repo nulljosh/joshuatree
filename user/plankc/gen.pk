@@ -1280,6 +1280,19 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
     emit(g, "bl pk_rt_parse_time")
     return "float?"
   }
+  if name == "random" and len(a) == 0 {   # 6.92.0: a float in [0, 1)
+    emit(g, "bl pk_rt_random_float")
+    return "float"
+  }
+  if name == "random" and len(a) == 2 {   # 6.92.0: an int from lo to hi, both included
+    if gen_expr(g, a[0]) != "int" { nope(e, "random from anything but an int") }
+    push(g)
+    if gen_expr(g, a[1]) != "int" { nope(e, "random to anything but an int") }
+    emit(g, "mov x1, x0")
+    pop(g, "x0")
+    emit(g, "bl pk_rt_random_int")
+    return "int"
+  }
   if name == "read_file" and len(a) == 1 {
     if gen_expr(g, a[0]) != "str" { nope(e, "read_file of anything but a path") }
     emit(g, "bl pk_rt_read_file")
@@ -1339,6 +1352,9 @@ fn builtin(g: G, e: N, name: str, a: [N]) -> str {
   if name == "as_str" { return "str" }
   if name == "as_float" { return "float" }
   if name == "as_int" { return "int" }   # 6.91.0: a float's bits as an int, to box it
+  if name == "bxor" { emit(g, "eor x0, x0, x1") }   # 6.92.0: rt.pk's random needs xor and logical shifts
+  if name == "shl" { emit(g, "lsl x0, x0, x1") }
+  if name == "shr" { emit(g, "lsr x0, x0, x1") }
   if name == "fma" {   # a * b + c, rounded once: rt.pk's exact digits read a product's rounding error from it
     emit(g, "fmov d0, x0")
     emit(g, "fmov d1, x1")
@@ -2739,7 +2755,7 @@ fn asm(prog: N, runtime: N, gc_every: int) -> str {
 
 # The program's assembly, a line a string: for asm's text, or enc.pk's image.
 fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
-  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "as_int": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false, [:], [:], [], [:], [:])
+  let g = G([], 0, [], [], [], [], [:], [:], [:], ["syscall": 1, "peek": 1, "poke": 1, "peek8": 1, "poke8": 1, "global": 1, "addr": 1, "as_str": 1, "as_float": 1, "as_int": 1, "bxor": 1, "shl": 1, "shr": 1, "fma": 1, "stack_pointer": 1], [], 0, "", gc_every, [:], "", [:], [], 0, "", [:], false, [:], [:], [], [:], [:])
   for f in runtime.kids { prog.kids.append(f) }
   let fns: [N] = []
   for f in prog.kids {

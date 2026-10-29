@@ -1026,6 +1026,32 @@ fn rt_url_encode(s: str) -> str {
   return as_str(p)
 }
 
+# ---- random (6.92.0): plank.py's xorshift64*, its state in global(29), seeded the first time from the wall clock's
+# second and the ticks since start. bxor, shl and shr are runtime-only built-ins (eor, lsl, lsr).
+fn rt_random_next() -> int {
+  var x = peek(global(29))
+  if x == 0 { x = (syscall(13, 0, 0, 0) * 1000003 + rt_ticks()) * 2 + 1 }
+  x = bxor(x, shr(x, 12))
+  x = bxor(x, shl(x, 25))
+  x = bxor(x, shr(x, 27))
+  poke(global(29), x)
+  return x * 2685821657736338717
+}
+
+fn rt_random_int(lo0: int, hi0: int) -> int {
+  var lo = lo0
+  var hi = hi0
+  if lo > hi {
+    lo = hi0
+    hi = lo0
+  }
+  return lo + shr(rt_random_next(), 1) % (hi - lo + 1)   # ponytail: the top 63 bits, so % stays positive
+}
+
+fn rt_random_float() -> float {
+  return float(shr(rt_random_next(), 11)) / float(9007199254740992)   # 2^53
+}
+
 # ---- dates (6.91.0): clock() and parse_time() over a civil calendar (Howard Hinnant's days_from_civil and its inverse).
 # ponytail: the Pi keeps no time zone, so local time is UTC; a zone in Settings would add its offset here.
 fn rt_days_from_civil(y0: int, m: int, d: int) -> int {

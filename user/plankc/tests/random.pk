@@ -1,0 +1,30 @@
+# 6.92.0: random() and random(lo, hi). The numbers change each run, so this prints only what must hold.
+fn main() {
+  var seen: [int: int] = [:]
+  var ok = true
+  for i in 0..600 {
+    let r = random(1, 6)
+    if r < 1 or r > 6 { ok = false }
+    seen[r] = (seen.get(r) ?? 0) + 1
+  }
+  print(ok, len(seen))
+  var sum = 0.0
+  var inside = true
+  var last = -1.0
+  var moved = false
+  for i in 0..1000 {
+    let f = random()
+    if f < 0.0 or f >= 1.0 { inside = false }
+    if f != last and last >= 0.0 { moved = true }
+    last = f
+    sum += f
+  }
+  print(inside, moved, sum / 1000.0 > 0.4 and sum / 1000.0 < 0.6)
+  print(random(5, 5), random(-3, -3), random(9, 7) >= 7 and random(9, 7) <= 9)
+  var big = true
+  for i in 0..200 {
+    let r = random(0, 1000000000000)
+    if r < 0 or r > 1000000000000 { big = false }
+  }
+  print(big)
+}
