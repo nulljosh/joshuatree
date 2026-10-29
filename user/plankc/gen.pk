@@ -2807,7 +2807,9 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
   }
   while len(g.pending) > 0 { function(g, g.pending.pop()) }   # generic copies, which may call for more
   function(g, layout_fn(g))   # last, so each Result<T> the functions met has its layout (6.80.0)
+  let lam_at = len(g.out)
   for l in g.lambda_code { g.out.append(l) }   # the lambdas and trampolines the functions made
+  let lam_end = len(g.out)
   # The trees are done with. Letting go of them here lets the collector merge their room into the one block the join at
   # the end needs (half a megabyte for plankc's own source).
   prog.kids = []
@@ -2848,5 +2850,79 @@ fn asm_lines(prog: N, runtime: N, gc_every: int) -> [str] {
     g.out.append(".Le" + str(i) + ":")
     emit(g, ".byte 0")
   }
-  return g.out
+  return shake(g.out, lam_at, lam_end)
+}
+
+# ---------------------------------------------------------------- only what is reached (6.93.0)
+# Every program gets the whole of rt.pk, so fib's image was 54 KB of runtime. shake keeps only the functions main reaches:
+# a function is its `.globl` line up to the next, and it reaches every pk_ name written in it. The lambdas and trampolines
+# (lines lam_at to lam_end) are kept whole and reach what they name, since they are labelled apart from the functions.
+fn shake(lines: [str], lam_at: int, lam_end: int) -> [str] {
+  var data = len(lines)
+  for k in 0..len(lines) {
+    if lines[k] == "  .data" {
+      data = k
+      break
+    }
+  }
+  let names: [str] = []
+  let begins: [int] = []
+  let at: [str: int] = [:]
+  for k in 0..data {
+    if (k < lam_at or k >= lam_end) and lines[k].starts_with("  .globl ") {
+      let n = lines[k][9..]
+      at[n] = len(names)
+      names.append(n)
+      begins.append(k)
+    }
+  }
+  if len(names) == 0 { return lines }
+  let keep: [bool] = []
+  for i in 0..len(names) { keep.append(false) }
+  let todo: [int] = []
+  if "main" in at {
+    keep[at["main"]] = true
+    todo.append(at["main"])
+  }
+  for k in lam_at..lam_end { shake_refs(lines[k], at, keep, todo) }
+  while len(todo) > 0 {
+    let i = todo.pop()
+    var end = data
+    if i + 1 < len(names) { end = begins[i + 1] }
+    for k in begins[i]..end {
+      if k < lam_at or k >= lam_end { shake_refs(lines[k], at, keep, todo) }
+    }
+  }
+  let out: [str] = []
+  for k in 0..begins[0] { out.append(lines[k]) }
+  for i in 0..len(names) {
+    var end = data
+    if i + 1 < len(names) { end = begins[i + 1] }
+    for k in begins[i]..end {
+      if keep[i] or (k >= lam_at and k < lam_end) { out.append(lines[k]) }
+    }
+  }
+  for k in data..len(lines) { out.append(lines[k]) }
+  return out
+}
+
+# Each pk_ name in line l (letters, digits, _ and ., as sym writes them) that is a function not yet kept: kept, to walk.
+fn shake_refs(l: str, at: [str: int], keep: [bool], todo: [int]) {
+  var from = 0
+  while true {
+    let i = l[from..].find("pk_") ?? -1
+    if i < 0 { return }
+    var j = from + i + 3
+    while j < len(l) and shake_char(l[j]) { j += 1 }
+    let n = l[from + i..j]
+    if n in at and not keep[at[n]] {
+      keep[at[n]] = true
+      todo.append(at[n])
+    }
+    from = j
+  }
+}
+
+fn shake_char(c: str) -> bool {
+  return (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9") or c == "_" or c == "."
 }
