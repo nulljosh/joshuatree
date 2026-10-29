@@ -75,17 +75,24 @@ if ! ls "$CARD"/JT/MUSIC 2>/dev/null | grep -qi '\.\(wav\|mp3\)$'; then
 fi
 
 # 6.94.0: plankc on the card, so Samantha's apps ([[app NAME]]) are built on the Pi with no Mac: JT/APPS/PLANKC.APP, signed
-# here with Joshua's key, and its runtime as JT/PLANKC/RT.PK. Without Plank or the key the card goes without, and the relay
-# builds her apps as before.
+# here with Joshua's key, and its runtime as JT/PLANKC/RT.PK. Without Plank the card goes without, and the relay builds her
+# apps as before. 7.1.0: without the key (anyone's card but Joshua's, landing/sdk.html) plankc goes on unsigned, so an admin
+# runs it, or anyone on a Pi with no accounts. JT_APP_KEY names another key file (tools/checks/flash-pi-check.sh).
 pc_tmp=$(mktemp -d)
-if tools/plankapp.sh --plankc user/plankc/plankc.pk "$pc_tmp/PLANKC.APP" >/dev/null 2>&1 && tools/signapp.sh "$pc_tmp/PLANKC.APP" >/dev/null 2>&1; then
+if tools/plankapp.sh --plankc user/plankc/plankc.pk "$pc_tmp/PLANKC.APP" >/dev/null 2>&1; then
     mkdir -p "$CARD"/JT/APPS "$CARD"/JT/PLANKC
-    cp "$pc_tmp/PLANKC.APP" "$pc_tmp/PLANKC.SIG" "$CARD"/JT/APPS/
+    rm -f "$CARD"/JT/APPS/PLANKC.SIG   # an old signature beside a new image would be refused every time
+    cp "$pc_tmp/PLANKC.APP" "$CARD"/JT/APPS/
     cp user/plankc/rt.pk "$CARD"/JT/PLANKC/RT.PK
     cp store/code.pk "$CARD"/JT/CODE.PK   # 6.98.1: Code's own source, so the board builds its editor itself (docs/TESTING.md, step 8)
-    echo "plankc on the card: Samantha's apps build on the Pi"
+    if tools/signapp.sh "$pc_tmp/PLANKC.APP" "${JT_APP_KEY:-}" >/dev/null 2>&1; then
+        cp "$pc_tmp/PLANKC.SIG" "$CARD"/JT/APPS/
+        echo "plankc on the card, signed: Samantha's apps build on the Pi"
+    else
+        echo "plankc on the card, unsigned (no signing key): an admin runs it"
+    fi
 else
-    echo "plankc not on the card (no Plank or no signing key): Samantha's apps build on the Mac"
+    echo "plankc not on the card (no Plank): Samantha's apps build on the Mac"
 fi
 rm -rf "$pc_tmp"
 
