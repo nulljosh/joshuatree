@@ -90,7 +90,10 @@ try:
     for app, _, _ in PLANKC:
         if (tmp / (app.upper() + ".APP")).exists(): mt("mcopy", "-o", tmp / (app.upper() + ".APP"), "::JT/APPS/%s.APP" % app.upper())
     for e in ("app", "sig"): mt("mcopy", "-o", root / "landing/apps" / ("slide." + e), "::JT/APPS/SLIDE." + e.upper())   # 6.58.0
-    on_card = len(built) + sum(1 for a, _, _ in PLANKC if (tmp / (a.upper() + ".APP")).exists()) + 2 + 2   # slide's two, . and ..
+    r = subprocess.run([str(root / "tools/plankapp.sh"), "--plankc", str(root / "store/slide.pk"), str(tmp / "SLIDEPC.APP")], capture_output=True, text=True, timeout=600, env=pc_env)
+    check("plankc builds store/slide.pk, a Plank program with a window, into an app (6.97.0)", r.returncode == 0, (r.stdout + r.stderr)[-600:])
+    mt("mcopy", "-o", tmp / "SLIDEPC.APP", "::JT/APPS/SLIDEPC.APP")
+    on_card = len(built) + sum(1 for a, _, _ in PLANKC if (tmp / (a.upper() + ".APP")).exists()) + 2 + 2 + 1   # slide's two, . and ..
     # 6.77.1: past 64, which is all fat.c read of a directory on this card's one-sector clusters before; Slide's two come last
     check("the test card's JT/APPS holds more than 64 entries (%d)" % on_card, on_card > 64)
     log, sock = tmp / "uart", tmp / "qmp"
@@ -147,6 +150,16 @@ try:
     check("the arrows slide tiles", wait_for("slide: moved", 10, n), uart()[n:][-300:])
     n = len(uart()); key("esc")
     check("Esc closes Slide", wait_for("slide: closed", 10, n) and wait_for("M3c app slide exit 0", 10, n), uart()[n:][-300:])
+    # 6.97.0: the same Slide built by plankc, whose runtime has jtw's window calls in Plank: it opens, slides and closes.
+    start = len(uart())
+    for ch in "userrun slidepc": key({" ": "spc"}.get(ch, ch))
+    key("ret")
+    check("Slide built by plankc opens its window", wait_for("slide: window", 20, start) and wait_for("M3c window slidepc first frame", 10, start), uart()[start:][-400:])
+    n = len(uart())
+    for k in ("up", "left", "down", "right"): key(k); time.sleep(0.3)
+    check("its arrows slide tiles", wait_for("slide: moved", 10, n), uart()[n:][-300:])
+    n = len(uart()); key("esc")
+    check("Esc closes plankc's Slide", wait_for("slide: closed", 10, n) and wait_for("M3c app slidepc exit 0", 10, n), uart()[n:][-300:])
     check("no kernel crash", "KERNEL CRASH" not in uart(), uart()[-600:])
 finally:
     if q: q.kill(); q.wait()

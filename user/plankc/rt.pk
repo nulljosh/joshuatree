@@ -1052,6 +1052,212 @@ fn rt_random_float() -> float {
   return float(shr(rt_random_next(), 11)) / float(9007199254740992)   # 2^53
 }
 
+# ---- a window (6.97.0): jtw, user/pklibc/jtw.c's calls written in Plank, so a Plank program that declares them with
+# extern fn builds with plankc too. global(30) is the window's struct jt_window_info (width, height and pitch as 32-bit
+# words, the pixels' address at 16) with the frame to show waiting at 24; global(31) its struct jt_event (kind, a, b).
+# Text goes through JT_SYS_TEXT2, which draws each byte and moves by the app's own advance, so the advances are libjt's
+# (rt_adv, from tools/gen/plank-adv.py). ponytail: TEXT2 draws only into a hi-res window (scale 2, the Pi at 1080p);
+# at scale 1 text needs libjt's glyph atlas, so jtw_text there only measures.
+fn rt_u32(p: int) -> int {
+  return peek8(p) + peek8(p + 1) * 256 + peek8(p + 2) * 65536 + peek8(p + 3) * 16777216
+}
+
+fn rt_i32(p: int) -> int {
+  let v = rt_u32(p)
+  if v >= 2147483648 { return v - 4294967296 }
+  return v
+}
+
+fn rt_put32(p: int, v0: int) {
+  var v = v0
+  if v < 0 { v += 4294967296 }
+  poke8(p, v % 256)
+  poke8(p + 1, v / 256 % 256)
+  poke8(p + 2, v / 65536 % 256)
+  poke8(p + 3, v / 16777216 % 256)
+}
+
+fn rt_win() -> int {
+  let w = peek(global(30))
+  if w == 0 or peek(w + 16) == 0 { return 0 }
+  return w
+}
+
+fn rt_win_scale(w: int) -> int {
+  if rt_u32(w + 8) == rt_u32(w) * 8 { return 2 }
+  return 1
+}
+
+fn jtw_open() -> int {
+  let w = rt_alloc(32)
+  for i in 0..4 { poke(w + i * 8, 0) }
+  poke(global(30), w)
+  let e = rt_alloc(16)
+  poke(e, 0)
+  poke(e + 8, 0)
+  poke(global(31), e)
+  if syscall(384, w, 1, 0) == 0 and peek(w + 16) != 0 { return 0 }
+  return -1
+}
+
+fn jtw_width() -> int {
+  let w = rt_win()
+  if w == 0 { return 0 }
+  return rt_u32(w)
+}
+
+fn jtw_height() -> int {
+  let w = rt_win()
+  if w == 0 { return 0 }
+  return rt_u32(w + 4)
+}
+
+# The logical rectangle in colour rgb, clipped to the window; two pixels a store where it can.
+fn jtw_fill(x0: int, y0: int, w0: int, h0: int, rgb: int) -> int {
+  let w = rt_win()
+  if w == 0 { return 0 }
+  let k = rt_win_scale(w)
+  let ww = rt_u32(w)
+  let hh = rt_u32(w + 4)
+  var x = x0
+  var y = y0
+  var cw = w0
+  var ch = h0
+  if x < 0 {
+    cw += x
+    x = 0
+  }
+  if y < 0 {
+    ch += y
+    y = 0
+  }
+  if x + cw > ww { cw = ww - x }
+  if y + ch > hh { ch = hh - y }
+  if cw <= 0 or ch <= 0 { return 0 }
+  let stride = ww * k
+  let pair = rgb + rgb * 4294967296
+  let n = cw * k
+  for yy in 0..ch * k {
+    let row = peek(w + 16) + ((y * k + yy) * stride + x * k) * 4
+    var i = 0
+    while i + 1 < n {
+      poke(row + i * 4, pair)
+      i += 2
+    }
+    if i < n { rt_put32(row + i * 4, rgb) }
+  }
+  return 0
+}
+
+fn jtw_text(x: int, y: int, s: str, rgb: int, bold: int) -> int {
+  return rt_jtw_text(x, y, s, rgb, bold)
+}
+
+# s at logical x, y (its top), bold 1 or body 0, as libjt's jt_text_draw; returns the logical x after it.
+fn rt_jtw_text(x: int, y: int, s: str, rgb: int, bold: int) -> int {
+  let face = if bold != 0 { 1 } else { 0 }
+  let advs = rt_adv(face)
+  let w = rt_win()
+  var k = 1
+  if w != 0 { k = rt_win_scale(w) }
+  var pen = x * k
+  let base = (y + rt_ascent(face)) * k
+  var at = 0
+  while at < len(s) {
+    var m = len(s) - at
+    if m > 255 { m = 255 }
+    let b = rt_str(m)
+    let adv = rt_str(m)
+    var step = 0
+    for i in 0..m {
+      var c = peek8(addr(s) + at + i)
+      var j = c - 32
+      if c == 176 { j = 95 } else if c < 32 or c > 126 {
+        c = 63
+        j = 31
+      }
+      poke8(b + i, c)
+      let a = (peek8(addr(advs) + j) - 48) * k
+      poke8(adv + i, a)
+      step += a
+    }
+    if w != 0 and k == 2 {
+      let t = rt_alloc(40)
+      rt_put32(t, pen)
+      rt_put32(t + 4, base)
+      rt_put32(t + 8, rgb)
+      rt_put32(t + 12, face)
+      rt_put32(t + 16, 100)
+      rt_put32(t + 20, m)
+      poke(t + 24, b)
+      poke(t + 32, adv)
+      syscall(402, t, 0, 0)
+    }
+    pen += step
+    at += m
+  }
+  return (pen + k - 1) / k
+}
+
+fn jtw_present() -> int {
+  let w = peek(global(30))
+  if w != 0 { poke(w + 24, 1) }
+  return 0
+}
+
+# The next event: 1 a key, 2 a click, 4 the window changed size (draw it all again), -1 the window is gone.
+fn jtw_wait() -> int {
+  let w = peek(global(30))
+  let e = peek(global(31))
+  if w == 0 or e == 0 { return -1 }
+  while true {
+    let r = syscall(385, e, peek(w + 24), 0)
+    poke(w + 24, 0)
+    if r == 1 {
+      let kind = rt_u32(e)
+      if kind == 4 {
+        if syscall(384, w, 0, 0) == 0 and peek(w + 16) != 0 { return 4 }
+      } else if kind == 1 or kind == 2 {
+        return kind
+      }
+    } else if r != -11 {
+      return -1
+    } else {
+      syscall(158, 0, 0, 0)
+    }
+  }
+  return -1
+}
+
+fn jtw_key() -> int {
+  return rt_i32(peek(global(31)) + 4)
+}
+
+fn jtw_x() -> int {
+  return rt_i32(peek(global(31)) + 4)
+}
+
+fn jtw_y() -> int {
+  return rt_i32(peek(global(31)) + 8)
+}
+
+# libc's time(t), which a C-minded Plank program like Slide declares with extern fn: the wall clock's second. gen.pk
+# names it time only in a program that declares it, so Plank's own time() stays itself everywhere else.
+fn rt_extern_time(t: int) -> int {
+  return syscall(13, 0, 0, 0)
+}
+
+# jtw-adv:start (tools/gen/plank-adv.py writes this block from user/libjt/aafont.h; do not edit by hand)
+fn rt_adv(face: int) -> str {   # 1x advances, space to tilde then the degree sign, each plus 48
+  if face == 1 { return "35899>95558:5755969999989955:::8>:9::98;:78:8=;;9;999::?::9555775898986994484=999968598<888757:6" }
+  return "44799>94557946459699989899449997>:9::88::6898=;;9;999::>::9555765898985983384<889957588;88865696"
+}
+fn rt_ascent(face: int) -> int {
+  if face == 1 { return 13 }
+  return 13
+}
+# jtw-adv:end
+
 # ---- dates (6.91.0): clock() and parse_time() over a civil calendar (Howard Hinnant's days_from_civil and its inverse).
 # ponytail: the Pi keeps no time zone, so local time is UTC; a zone in Settings would add its offset here.
 fn rt_days_from_civil(y0: int, m: int, d: int) -> int {
@@ -1243,7 +1449,7 @@ fn rt_args() -> int {
 # end, global(19) bytes handed out since the last yield, global(20) to global(22) a number's digits on the way out,
 # global(23) collections in a row that found the heap nearly full (rt_starved).
 
-fn rt_large() -> int { return 4194304 }   # 4 MiB for large objects (2.5 until 6.96.0, when plankc compiling itself on the box needed a second megabyte list and sometimes found no room); calibrate against the biggest program's output
+fn rt_large() -> int { return 6291456 }   # 6 MiB for large objects (2.5 until 6.96.0 and 4 until 6.97.0: each time plankc compiling itself on the box, its runtime grown, found no room for a megabyte list); calibrate against the biggest program's output
 
 fn rt_gc_init() {
   let base = syscall(397, 0, 0, 0)               # where the heap ends now
@@ -1488,6 +1694,8 @@ fn rt_gc() {
   }
   rt_mark(peek(global(3)))
   rt_mark(peek(global(10)))
+  rt_mark(peek(global(30)))   # 6.97.0: jtw's window info and event
+  rt_mark(peek(global(31)))
   rt_yield()   # 6.84.0: and between mark and sweep, so a full 27 MiB heap's collection never holds the core 3 s on a slow host
   # sweep both spaces: every dead or free run becomes one free block, the lists made anew; global(12) counts what lived
   poke(global(12), 0)
