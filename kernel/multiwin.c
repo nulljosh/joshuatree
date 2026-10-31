@@ -392,6 +392,7 @@ int gui_multiwin_key_nonblock(void){
     if (sc == 0x3C) return KEY_F2;
     if (kbd_ctrl && (sc & 0x7F) == 0x1F) return KEY_SAVE;
     if (kbd_ctrl && (sc & 0x7F) == 0x31) return KEY_NEW;
+    if (kbd_ctrl && (sc & 0x7F) == 0x2C) return KEY_UNDO;
     if (kbd_ctrl) { int k = sc & 0x7F; if (k == 0x2E) return KEY_COPY; if (k == 0x2D) return KEY_CUT; if (k == 0x2F) return KEY_PASTE; if (sel_ok && k == 0x1E) return KEY_SELALL; if (sel_ok && gui_windows[gui_window_count - 1].icon == GUI_APP_PANES && key_ctl_code(k)) return key_ctl_code(k); } /* clipboard and select-all keys reach ring-3 windows too */
     char c = kbd_map(sc);
     if (c == '\n') return KEY_ENTER;

@@ -45,6 +45,7 @@ Discriminating: without a selection model Shift+Left is a plain Left, no
 highlight scan and marker check fail loudly.
 
 Usage: tools/checks/textselect-check.py   (from the repo root, after make kernel.elf)
+  6. 7.5.0: Ctrl+Z brings the text back (edundo=<n>), Ctrl+Z again empties it (edundo=0).
 """
 import os, sys, time
 from pathlib import Path
@@ -304,6 +305,17 @@ try:
     if ink_left == 0: ok("note body is empty, no leftover glyph ink")
     else: fail(f"{ink_left} glyph-ink pixel(s) remain in the body after selecting all and deleting")
 
+    # ---- 6 (7.5.0): Ctrl+Z puts the text back, Ctrl+Z again takes it away (one level, redo by repeat) ----
+    full = expect_all.split(",")[1]   # the note's length at the last Ctrl+A
+    keys("ctrl-z"); time.sleep(0.4)
+    img_back = dump()
+    back = sum(1 for y in range(BODY_TOP, BODY_BOTTOM) for x in range(TEXT_LEFT - 4, WIN_CONTENT_RIGHT) if is_text_ink(img_back[x, y]))
+    if marks("edundo=")[-1:] == ["edundo=" + full] and back > 0: ok(f"Ctrl+Z restored all {full} characters")
+    else: fail(f"Ctrl+Z did not restore the text (markers {marks('edundo=')}, ink {back})")
+    keys("ctrl-z"); time.sleep(0.4)
+    if marks("edundo=")[-1:] == ["edundo=0"]: ok("Ctrl+Z again redid the delete")
+    else: fail(f"second Ctrl+Z did not redo (markers {marks('edundo=')})")
+
 except Exception as e:
     fails.append(f"exception: {e}")
 finally:
@@ -315,4 +327,4 @@ if fails:
     for m in fails: print("  - " + m)
     print("serial tail: " + repr(tail))
     sys.exit(1)
-print("PASS: Shift+Left highlights exactly the last 4 characters where the caret says, Ctrl+C/V/X move exactly those bytes (clipboard hashes), typing/Delete replace a selection, a collapsed anchor never eats a character, and Ctrl+A + Backspace empties the note")
+print("PASS: Shift+Left highlights exactly the last 4 characters where the caret says, Ctrl+C/V/X move exactly those bytes (clipboard hashes), typing/Delete replace a selection, a collapsed anchor never eats a character, Ctrl+A + Backspace empties the note, and Ctrl+Z undoes and redoes it")
