@@ -186,8 +186,8 @@ Gap study, 2026-10-26 (Joshua ran `/mobbin`). Our apps beside the App Store scre
   - The relay stays the default when the Mac answers. The local model answers when it does not.
   - Check: `tools/checks/arm64-llm-check.py` extended to the real model's tokenizer and a fixed prompt.
 
-- [ ] [Sonnet] Dock magnification settings: a Settings row for off, small and large (6.3.0 ships one size, 160 percent), and the i386 desktop's dock to match through a shared `kernel/dock_draw.c`.
-  - Check: extend `tools/checks/arm64-dockmag-check.py` to each size.
+- [ ] [Sonnet] Dock magnification on the i386 desktop, to match the Pi's (7.4.0 has the Settings row there: Off, Small, Large), through a shared `kernel/dock_draw.c`.
+  - Check: an i386 dock hover check like `tools/checks/arm64-dockmag-check.py`.
 
 - [ ] [Sonnet] `sam "what is 5+5"` takes about a minute on the board while the relay answers in seconds.
   - Read 2026-10-12, not fixed. Relay discovery is already cached (`relay_ip` in `arch/arm64/ask.c`) and `ask_poll` adds no sleep, so the time is somewhere else.
@@ -1008,6 +1008,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **7.4.0 (2026-10-30)**: Dock magnification is a choice. Settings, Dock has a Magnify row: Off, Small (1.3 times at the pointer) or Large (1.6, as 6.3.0 shipped and still the default). It shows on the next hover, no restart, and JT/SETTINGS.TXT keeps it as a fourth line, `mag=N`. Check: `arm64-settings-check.py` (parse and range on the host; the - button steps Large to Small, the card holds `mag=1`, and the second boot grows a 48 pixel tile past 48 but no further than 62); `arm64-dockmag-check.py` still sees Large.
 - **7.3.0 (2026-10-29)**: plankc builds Plank's `interop` example, so 31 of its 33 build on the Pi. A C function a program declares with `extern fn` is the runtime's when rt.pk has an `rt_extern_` of that name: `strlen` (bytes, as C counts them), `toupper`, `fabs` and `getpid` now, as `time` was. A list gets `enumerate()` and there is `zip(a, b)`, tuples as long as the shorter list. Checks: `arm64-plank-check.py` (interop on the box, with and without the 64 KB collector, prints its .out) and `arm64-plankc-self-check.py` (the fixed point, 299280 bytes).
 - **7.2.0 (2026-10-29)**: A debugger. `debug NAME [STEPS]` in the Terminal runs an app one instruction at a time for its first steps: where it stopped, the next instruction, the registers that changed, then every register and the bytes at the stack, and it runs on. It uses the CPU's own single step (MDSCR_EL1.SS and SPSR.SS), turned on only around the stepped app's turn, and reads only the app's own image, stack and heap, so a pointer into the kernel shows `??`. The Pi starts at EL2, so `start.S` now clears MDCR_EL2's debug traps before dropping to EL1, or the first `debug` on the board would trap to an EL with no handler. Check: `arm64-debug-check.py` (six steps of hi; an app that aims sp and pc at the kernel's page sees only `??` and faults while the kernel carries on; an app that ends with steps to spare, then a plain `userrun` that is not stepped).
 - **7.1.0 (2026-10-29)**: The SDK page, `landing/sdk.html`, linked from the landing's footer: from a blank card to your own app on the Pi, written in Code and built by plankc there, or in C on the Mac, then who can run it and how it gets into the store. Two fixes so someone else can follow it: a card flashed without Joshua's signing key now gets plankc unsigned (an admin runs it) instead of none, and `tools/plankapp.sh` finds a plank clone beside the repo. Checks: `arm64-cardapp-check.py` builds and runs the page's own C example, and `flash-pi-check.sh` flashes a card with no key and wants plankc on it with no signature.
@@ -2113,7 +2114,7 @@ Updated 2026-10-29, morning Vancouver time. The loop's working notes live in `~/
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand.** Main is 7.3.0. 7.0.0 is cut, and the card Joshua has carries 7.0.1. 8.0 is nearly in: apps from the card, signed and installed from the store, Samantha's apps built on the Pi, plankc rebuilding itself there and building 31 of Plank's 33 examples, Code the editor, the SDK page (7.1.0) and `debug` (7.2.0). None of 6.11 onward has run on the board yet.
+**Where things stand.** Main is 7.4.0. 7.0.0 is cut, and the card Joshua has carries 7.0.1. 8.0 is nearly in: apps from the card, signed and installed from the store, Samantha's apps built on the Pi, plankc rebuilding itself there and building 31 of Plank's 33 examples, Code the editor, the SDK page (7.1.0) and `debug` (7.2.0). None of 6.11 onward has run on the board yet.
 
 **Waiting on Joshua.** The board pass (`docs/TESTING.md`): it is physical. The loop asks nothing else and decides design calls itself, saying what it chose here. Decided 2026-10-27: Wi-Fi passwords stay machine-wide, so the network is up before anyone signs in; apps are signed by Joshua's key and unsigned ones need an admin; the store is an `install` from the landing. Decided 2026-10-29: a card flashed without the key gets plankc unsigned, the same rule.
 
