@@ -29,7 +29,7 @@ Any QEMU run with a `-d` trace and `-D <file>` gets `timeout` in front: `timeout
 
 ## Versioning
 
-`VERSION` is semver `MAJOR.MINOR.PATCH`. MINOR for a new capability, PATCH for a fix, MAJOR for a real break. A code PR must bump it; the merge cuts a release (bare `X.Y.Z` tag). Release notes say what shipped, the root cause and how it was checked. Before a MINOR, rerun the full suite, review any security edge the code touches, and take one screenshot.
+`VERSION` is semver `MAJOR.MINOR.PATCH`. MINOR for a new user-visible capability, PATCH for a fix, docs, tests, refactors or polish of something already shipped, MAJOR for a break (syscall or app ABI, on-disk format, or a removed feature) or a roadmap milestone Joshua names. A MAJOR is Joshua's call and waits on its roadmap gate (8.0: someone other than Joshua follows the SDK page and runs their own app); never cut one per PR or per loop. The first slice of a capability is the MINOR; its follow-up slices are PATCHes until the capability is complete. Do not renumber or delete shipped tags. A code PR must bump it; the merge cuts a release (bare `X.Y.Z` tag). Release notes say what shipped, the root cause and how it was checked. Before a MINOR, rerun the full suite, review any security edge the code touches, and take one screenshot.
 
 ## Theme
 
