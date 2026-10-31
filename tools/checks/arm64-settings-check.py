@@ -69,27 +69,30 @@ int sudo_may_write(void) { return may; }
 #define dock_scale_pct dock_scale_pct
 #include "arch/arm64/settings.c"
 int main(void) {
-    char out[64]; unsigned n = settings_format(out, 70, 0, 7);
-    assert(n == 24 && !memcmp(out, "volume=70\nwall=0\ndock=7\n", 24));
-    n = settings_format(out, 100, 3, 25); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\n", n));
-    int v = 1, w = 1, d = 7; const char *t;
-    t = "volume=40\nwall=3\ndock=12\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 40 && w == 3 && d == 12);
-    v = 1; w = 1; d = 7; t = "volume=101\nwall=4\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 1 && w == 1 && d == 7);
-    t = "volume=26\nwall=1\ndock=26\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 26 && w == 1 && d == 7);
-    t = "volume=12345\nvolume\n=5\nwall=x\nwall=\ndock=9z\nvolumes=5\n"; v = 1; w = 1; d = 7; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 1 && w == 1 && d == 7);
-    t = "volume=55\r\nwall=3\r\ndock=20"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d); assert(v == 55 && w == 3 && d == 20);   /* CRLF, and no final newline */
-    t = "dock=5"; settings_parse(t, 6, &v, &w, &d); assert(d == 5);
-    t = "dock=55"; settings_parse(t, 6, &v, &w, &d); assert(d == 5);   /* cut at 6 bytes: 5 and a stray byte, taken as 5, never read past n */
-    settings_parse("", 0, &v, &w, &d);
+    char out[64]; unsigned n = settings_format(out, 70, 0, 7, 2);
+    assert(n == 30 && !memcmp(out, "volume=70\nwall=0\ndock=7\nmag=2\n", 30));
+    n = settings_format(out, 100, 3, 25, 0); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\nmag=0\n", n));
+    int v = 1, w = 1, d = 7, m = 2; const char *t;
+    t = "volume=40\nwall=3\ndock=12\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 40 && w == 3 && d == 12);
+    v = 1; w = 1; d = 7; t = "volume=101\nwall=4\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
+    t = "volume=26\nwall=1\ndock=26\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 26 && w == 1 && d == 7);
+    t = "volume=12345\nvolume\n=5\nwall=x\nwall=\ndock=9z\nvolumes=5\n"; v = 1; w = 1; d = 7; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
+    t = "volume=55\r\nwall=3\r\ndock=20"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 55 && w == 3 && d == 20);   /* CRLF, and no final newline */
+    t = "dock=5"; settings_parse(t, 6, &v, &w, &d, &m); assert(d == 5);
+    t = "dock=55"; settings_parse(t, 6, &v, &w, &d, &m); assert(d == 5);   /* cut at 6 bytes: 5 and a stray byte, taken as 5, never read past n */
+    settings_parse("", 0, &v, &w, &d, &m);
+    t = "mag=1\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);
+    t = "mag=3\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);   /* 7.4.0: out of range, kept */
+    settings_set_mag(-1); assert(settings_mag() == 0); settings_set_mag(9); assert(settings_mag() == 2 && !strcmp(settings_mag_name(1), "Small"));
     assert(settings_walls() == 4 && !strcmp(settings_wall_name(0), "Grey") && settings_wall_rgb(0) == 0x006E6E6Eu && !strcmp(settings_wall_name(1), "Terracotta") && settings_wall_rgb(1) == 0x00B5502Cu && settings_wall_rgb(3) == 0x00141311u);
     settings_set_wall(-1); assert(settings_wall() == 3 && wall_rgb == 0x00141311); settings_set_wall(4); assert(settings_wall() == 0 && wall_rgb == 0x006E6E6E);
     settings_set_dock(2); assert(settings_dock() == 5); settings_set_dock(99); assert(settings_dock() == 25); settings_set_dock(7);
     vol = 30; settings_set_wall(2); settings_set_dock(11); settings_save();
-    assert(settings_saved() == 1 && file_len == 25 && !memcmp(file, "volume=30\nwall=2\ndock=11\n", 25));
+    assert(settings_saved() == 1 && file_len == 31 && !memcmp(file, "volume=30\nwall=2\ndock=11\nmag=2\n", 31));
     vol = 70; settings_set_wall(0); settings_set_dock(7); repaints = 0; wall_rgb = 0; settings_load();
     assert(vol == 30 && settings_wall() == 2 && wall_rgb == 0x00923F20 && settings_dock() == 11 && repaints == 1 && settings_saved() == 1);
     repaints = 0; settings_load(); assert(repaints == 0);   /* nothing changed: no repaint */
-    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 25); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
+    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 31); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
     may = 1;
     card = 0; vol = 20; settings_save(); assert(settings_saved() == -1 && vol == 20 && settings_wall() == 2);   /* no card: said, and the choices stay */
     file_len = -1; card = 1; vol = 70; settings_load(); assert(vol == 70);                                         /* no file: nothing changes */
@@ -312,6 +315,7 @@ try:
     check("a click on a sidebar row (Dock) selects it", S.click(WX + 60, WY + 40 + 3 * 30 + 6, "settings section 3 Dock\n"))
     time.sleep(0.3)
     check("the Dock + button steps the tile size to 8", S.click(cx + 312 - 14 - 8, cy + 15, "settings dock 8\n"))
+    check("7.4.0: the Magnify - button steps Large to Small", S.click(cx + 312 - 14 - 16 - 98 + 8, cy + 30 + 15, "settings magnify 1 Small\n"))
     check("every change was saved", S.uart().count("settings saved\n") >= 12, S.uart().count("settings saved\n"))
     # the sound page, for the screenshot
     S.click(WX + 60, WY + 40 + 2 * 30 + 6, "settings section 2 Sound\n"); time.sleep(0.5)
@@ -330,16 +334,23 @@ finally:
 # ---- the card: what the first boot left, and a second boot on the same card ----
 r = mt("mtype", "::JT/SETTINGS.TXT")
 text = r.stdout.decode(errors="replace")
-check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\n", text)
+check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\nmag=1\n", text)
 S = Session("b")
 try:
     if not S.wait_for("M2 input ready", 60) or not S.wait_for("settings loaded", 30):
         check("the second boot loads the file", False, S.uart()[-600:]); raise SystemExit
-    check("second boot: it says what it loaded", "settings loaded volume 20 wall 2 dock 8\n" in S.uart(), S.uart()[-400:])
+    check("second boot: it says what it loaded", "settings loaded volume 20 wall 2 dock 8 mag 1\n" in S.uart(), S.uart()[-400:])
     S.connect(); time.sleep(1.0)
     g = S.shot()
     check("and the desktop is Clay without opening anything (the card was read after the desktop was drawn, which repainted it)", px(g, 30, 300) == CLAY and px(g, 400, 8) == bar(CLAY), (px(g, 30, 300), px(g, 400, 8)))
     check("the Console is whole after the repaint (its white well)", px(g, WX + 200, WY + 200) == (255, 255, 255), px(g, WX + 200, WY + 200))
+    # 7.4.0: Small, loaded from the card, grows the tile under the pointer to 1.3 times, not 1.6 (dock 8: 48 px tiles from x 96, y 508)
+    n = len(S.uart())
+    S.cmd("input-send-event", events=[{"type": "abs", "data": {"axis": "x", "value": int(400.5 * 32768 / W)}}, {"type": "abs", "data": {"axis": "y", "value": int(542.5 * 32768 / H)}}])
+    S.wait_for("dock magnify 5 size", 4, n); time.sleep(0.4)
+    S.cmd("input-send-event", events=[{"type": "abs", "data": {"axis": "x", "value": int(401.5 * 32768 / W)}}, {"type": "abs", "data": {"axis": "y", "value": int(542.5 * 32768 / H)}}]); time.sleep(0.4)   # a nudge: the grown-in frame logs
+    sizes = [int(x) for x in re.findall(r"dock magnify 5 size (\d+) of 48", S.uart()[n:])]
+    check("a small magnify: the hovered tile grows past 48 but stays at 1.3 times", bool(sizes) and 48 < sizes[-1] <= 48 * 13 // 10, (sizes, S.uart()[n:][-300:]))
 except SystemExit:
     pass
 finally:

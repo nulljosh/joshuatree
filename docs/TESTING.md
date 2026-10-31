@@ -12,4 +12,6 @@ What to try on the real Pi, most important first. Flash the card first (card in 
 8. **Write a program on the Pi.** In the Terminal, with `sudo` in front of each `userrun` since the Pi has accounts: `userrun plankc build CODE.PK` (the editor, built on the Pi), then `userrun code HI.PK`. Type `fn main() {`, Enter, `  print("hi")`, Enter, `}`, then Esc to save. `userrun plankc build HI.PK`, then `userrun hi` prints hi. No Mac in any of it.
 9. **Step a program.** `debug hello 6` in the Terminal. Six `step` lines, each with a `+` number, eight letters and digits, and sometimes `x0=` and the like; then `registers:`, two `at sp` rows and hello's own lines. A freeze here is the board's own debug setup, which QEMU cannot show: send a photo.
 
+10. **Dock magnify.** Settings, Dock, Magnify: step it to Small, then rest the pointer on a dock tile. It grows a little; on Large it grows more; on Off it does not grow at all.
+
 Steps 1 to 7 are 7.0's. Steps 8 and 9 are 8.0's, so a miss there does not hold 7.0 back.

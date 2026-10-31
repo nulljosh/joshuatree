@@ -3,7 +3,7 @@
    kernel/settings_ui.h (the i386 Settings: sidebar and detail pane, 36 pixel rows, 22 pixel tiles). What each choice is, and
    JT/SETTINGS.TXT, are in settings.c. Left and Right (or the - and + buttons) change a value, Tab picks the row, Up and Down
    the section, Esc closes. Every change is saved at once, and the UART says so: `settings open`, `settings section N Name`,
-   `settings wall N Name`, `settings volume N`, `settings dock N`, `settings saved` (what arm64-settings-check.py reads). The sixth section, Users (4.14.0), is users_ui.h; the seventh, Wi-Fi (6.23.0), wifi_ui.h. */
+   `settings wall N Name`, `settings volume N`, `settings dock N`, `settings magnify N Name`, `settings saved` (what arm64-settings-check.py reads). The sixth section, Users (4.14.0), is users_ui.h; the seventh, Wi-Fi (6.23.0), wifi_ui.h. */
 const char *settings_version(void);
 int settings_wall(void);
 const char *settings_wall_name(int i);
@@ -11,6 +11,7 @@ unsigned settings_wall_rgb(int i);
 int settings_walls(void);
 void settings_set_wall(int i);
 int settings_dock(void);
+int settings_mag(void); const char *settings_mag_name(int i); void settings_set_mag(int i);
 void settings_set_dock(int pct);
 int settings_saved(void);
 void settings_save(void);
@@ -35,14 +36,14 @@ static int dock_pct_boot = 7;   /* the dock size this boot drew; a changed size 
 static void s_cat(char *b, const char *s) { unsigned n = 0; while (b[n]) n++; for (; *s && n < 39; s++) b[n++] = *s; b[n] = 0; }
 static void s_num(char *b, unsigned v) { char d[11], t[12]; int n = 0, k = 0; do { d[n++] = (char)('0' + v % 10); v /= 10; } while (v); while (n) t[k++] = d[--n]; t[k] = 0; s_cat(b, t); }
 static int us_rows(void);
-static int set_rows(int sec) { static const char n[SET_SECTIONS] = { 5, 2, 3, 2, 4, 0, 0 }; return sec == SET_USERS ? us_rows() : n[sec]; }
+static int set_rows(int sec) { static const char n[SET_SECTIONS] = { 5, 2, 3, 3, 4, 0, 0 }; return sec == SET_USERS ? us_rows() : n[sec]; }
 static const char *set_label(int sec, int r) {
     static const char *const l[SET_SECTIONS][5] = { { "Version", "Board", "Memory", "Wi-Fi", "Power" }, { "Wallpaper", "Screen" },
-        { "Volume", "Mute", "Output" }, { "Tile size", "Tiles" }, { "Time", "Date", "Time zone", "Source" }, { "" }, { "" } };
+        { "Volume", "Mute", "Output" }, { "Tile size", "Magnify", "Tiles" }, { "Time", "Date", "Time zone", "Source" }, { "" }, { "" } };
     return l[sec][r];
 }
 static int set_kind(int sec, int r) {
-    if (r == 0 && (sec == SET_DISPLAY || sec == SET_SOUND || sec == SET_DOCK)) return SK_STEP;
+    if ((r == 0 && (sec == SET_DISPLAY || sec == SET_SOUND || sec == SET_DOCK)) || (sec == SET_DOCK && r == 1)) return SK_STEP;
     return sec == SET_SOUND && r == 1 ? SK_TOGGLE : SK_INFO;
 }
 static int set_first_row(int sec) { if (sec == SET_USERS || sec == SET_WIFI) return -1; for (int r = 0; r < set_rows(sec); r++) if (set_kind(sec, r) != SK_INFO) return r; return -1; }
@@ -88,7 +89,7 @@ static void set_value(int sec, int r, char *b) {
 #endif
         }
     } else if (sec == SET_DOCK) {
-        if (r == 0) { s_num(b, (unsigned)settings_dock()); s_cat(b, "%"); } else s_num(b, GUI_ICON_COUNT);
+        if (r == 0) { s_num(b, (unsigned)settings_dock()); s_cat(b, "%"); } else if (r == 1) s_cat(b, settings_mag_name(settings_mag())); else s_num(b, GUI_ICON_COUNT);
     } else {
         char time[40]; set_time_text(time, date, zone);
         s_cat(b, r == 0 ? time : r == 1 ? date : r == 2 ? zone : "Network, over HTTPS");
@@ -219,6 +220,9 @@ static void set_adjust(int r, int dir) {   /* a value in the open section, one s
     } else if (set_sec == SET_SOUND) {
         audio_mute();
         set_log("volume", audio_volume(), 0);
+    } else if (set_sec == SET_DOCK && r == 1) {   /* 7.4.0: shows at once, the next hover on the dock */
+        settings_set_mag(settings_mag() + dir);
+        set_log("magnify", settings_mag(), settings_mag_name(settings_mag()));
     } else if (set_sec == SET_DOCK) {
         settings_set_dock(settings_dock() + dir);
         set_log("dock", settings_dock(), 0);

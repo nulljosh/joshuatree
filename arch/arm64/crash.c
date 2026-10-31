@@ -358,12 +358,13 @@ void dock_dots_tick(void) {
 }
 
 /* 6.3.0: the magnifying dock (the Mac OS X 2000 introduction). With the pointer on the dock, the tiles within three slots of
-   it grow, up to 1.6 times at the pointer, on a smooth falloff; the tray widens to hold them, and the layout shifts so the
+   it grow, up to 1.6 times at the pointer (1.3 on Small, none when Settings turns it off, 7.4.0), on a smooth falloff; the tray widens to hold them, and the layout shifts so the
    tile under the pointer stays under it. Tiles grow upward into the room between the tray and the lowest window (MAG_ROOM:
    windows end at band_top - 22), with the hover label above the grown tile, so nothing a window draws is ever covered.
    The rows from MAG_ROOM above the tray to the bottom of the screen are copied once when the pointer arrives and put back
    exactly when it leaves. The decoded icon art is kept from the first hover, so a move redraws without a PNG decode. */
-#define MAG_PCT   160   /* at the pointer */
+extern int dock_mag;   /* 7.4.0, settings.c: 0 off, 1 small, 2 large */
+static const int mag_pct[3] = { 100, 130, 160 };   /* at the pointer */
 #define MAG_REACH 300   /* hundredths of a slot either side that grow */
 #define MAG_ROOM  46    /* logical px above the tray: wallpaper only (the lowest window ends band_top - 22) */
 #define MAG_IN_MS 150   /* 6.4.0: the grow-in on arrival, on the shared ease_out */
@@ -386,7 +387,7 @@ static int mag_cache(void) {
 }
 /* The pointer is on the dock: the tray's own rows, from a tile's width before the first to a tile's width after the last. */
 int dock_mag_zone(int lx, int ly) {
-    if (spot_live) return 0;   /* the Launchpad card and Spotlight reach into the room above the tray */
+    if (spot_live || !dock_mag) return 0;   /* the Launchpad card and Spotlight reach into the room above the tray */
     int y0 = gui_dock_y0(), x0 = gui_dock_x0();
     return ly >= y0 && ly < y0 + DOCK_ICON + 2 * DOCK_PAD && lx >= x0 - DOCK_ICON && lx < x0 + gui_dock_w() + DOCK_ICON;
 }
@@ -420,7 +421,7 @@ void dock_magnify(int mx, int slot) {
     int sz[GUI_ICON_COUNT], left[GUI_ICON_COUNT], cum = 0;
     for (int i = 0; i < GUI_ICON_COUNT; i++) {                /* each tile's size from its distance to the pointer */
         int c = gui_slot_x(i) + size / 2, d = (mx > c ? mx - c : c - mx) * 100 / step, w = d < MAG_REACH ? MAG_REACH - d : 0;
-        int s = size + size * (MAG_PCT - 100) / 100 * w * w / (MAG_REACH * MAG_REACH) * mag_amt / 1000;
+        int s = size + size * (mag_pct[dock_mag] - 100) / 100 * w * w / (MAG_REACH * MAG_REACH) * mag_amt / 1000;
         if (s > size + MAG_ROOM - 26 + DOCK_PAD) s = size + MAG_ROOM - 26 + DOCK_PAD;   /* the grown tile and its label stay inside the room */
         sz[i] = s; left[i] = cum; cum += s + DOCK_GAP;
     }

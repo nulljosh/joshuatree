@@ -1,5 +1,5 @@
 /* The Pi's Settings, the part that is not drawing: what the choices are, the file they live in, and loading it at boot.
-   JT/SETTINGS.TXT holds three lines, `volume=70`, `wall=0` and `dock=7`, the same key=value shape the i386 SETTINGS.TXT uses.
+   JT/SETTINGS.TXT holds four lines, `volume=70`, `wall=0`, `dock=7` and `mag=2` (7.4.0: the dock's magnify, 0 off, 1 small, 2 large), the same key=value shape the i386 SETTINGS.TXT uses.
    With accounts (6.0) the wallpaper is each person's own: ~/WALL.TXT holds `wall=N`, and the card's is the login screen's.
    A missing, short or hand-edited file is never an error: every value is range-checked and a bad line is ignored. With no
    card the choices live in memory until the next boot and the screen says so. main.c draws the window (settings_ui.h);
@@ -41,17 +41,22 @@ const char *settings_wall_name(int i) { return i >= 0 && i < SET_WALLS ? walls[i
 unsigned settings_wall_rgb(int i) { return i >= 0 && i < SET_WALLS ? walls[i].rgb : walls[0].rgb; }
 int settings_walls(void) { return SET_WALLS; }
 void settings_set_wall(int i) { wall_pick = ((i % SET_WALLS) + SET_WALLS) % SET_WALLS; wall_set(walls[wall_pick].rgb); }
+int dock_mag = 2;                     /* 7.4.0: crash.c's magnify, an index into mags */
+static const char *const mags[3] = { "Off", "Small", "Large" };
 int settings_dock(void) { return dock_scale_pct; }
 void settings_set_dock(int pct) { dock_scale_pct = pct < SET_DOCK_MIN ? SET_DOCK_MIN : pct > SET_DOCK_MAX ? SET_DOCK_MAX : pct; }
 int settings_saved(void) { return saved_state; }
+int settings_mag(void) { return dock_mag; }
+const char *settings_mag_name(int i) { return i >= 0 && i < 3 ? mags[i] : ""; }
+void settings_set_mag(int i) { dock_mag = i < 0 ? 0 : i > 2 ? 2 : i; }
 
 static int key_is(const char *t, unsigned len, const char *key) {   /* the first len bytes of t are exactly key */
     unsigned i = 0;
     for (; key[i]; i++) if (i >= len || t[i] != key[i]) return 0;
     return i == len;
 }
-/* The three values out of a file's text. Each is taken only when it is a whole number in range; the rest stay as they were. */
-void settings_parse(const char *t, unsigned n, int *vol, int *wall, int *dock) {
+/* The four values out of a file's text. Each is taken only when it is a whole number in range; the rest stay as they were. */
+void settings_parse(const char *t, unsigned n, int *vol, int *wall, int *dock, int *mag) {
     for (unsigned i = 0; i < n;) {
         unsigned k = i; while (k < n && t[k] != '=' && t[k] != '\n') k++;
         if (k < n && t[k] == '=') {
@@ -62,17 +67,18 @@ void settings_parse(const char *t, unsigned n, int *vol, int *wall, int *dock) {
                 if (key_is(t + i, k - i, "volume") && x <= 100) *vol = (int)x;
                 else if (key_is(t + i, k - i, "wall") && x < SET_WALLS) *wall = (int)x;
                 else if (key_is(t + i, k - i, "dock") && x >= SET_DOCK_MIN && x <= SET_DOCK_MAX) *dock = (int)x;
+                else if (key_is(t + i, k - i, "mag") && x <= 2) *mag = (int)x;
             }
         }
         while (i < n && t[i] != '\n') i++;
         i++;
     }
 }
-unsigned settings_format(char *out, int vol, int wall, int dock) {
+unsigned settings_format(char *out, int vol, int wall, int dock, int mag) {
     unsigned n = 0;
-    const char *keys[3] = { "volume=", "wall=", "dock=" };
-    int vals[3] = { vol, wall, dock };
-    for (int r = 0; r < 3; r++) {
+    const char *keys[4] = { "volume=", "wall=", "dock=", "mag=" };
+    int vals[4] = { vol, wall, dock, mag };
+    for (int r = 0; r < 4; r++) {
         for (const char *p = keys[r]; *p; p++) out[n++] = *p;
         char d[4]; int dn = 0, v = vals[r] < 0 ? 0 : vals[r] > 999 ? 999 : vals[r];
         do { d[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -88,7 +94,7 @@ void settings_save(void) {
         char w[8] = "wall=0\n"; w[5] = (char)('0' + wall_pick);
         mine = sd_ready() && home_save(WALL_FILE, w, 7) == 1;
     }
-    unsigned n = settings_format(buf, audio_volume(), wall_pick, dock_scale_pct);
+    unsigned n = settings_format(buf, audio_volume(), wall_pick, dock_scale_pct, dock_mag);
     if (!sudo_may_write()) { saved_state = mine ? 2 : -2; return; }     /* 4.10.0: only an admin saves the rest; anyone else's lasts until restart */
     saved_state = sd_ready() && sd_write(SET_FILE, buf, n) == 1 ? 1 : -1;
     if (saved_state == 1) card_wall = wall_pick;
@@ -96,10 +102,10 @@ void settings_save(void) {
 /* At sign-in and at the login screen (login_ui.h): the signed-in person's ~/WALL.TXT, else the card's wallpaper. The caller
    repaints. */
 void settings_user_wall(void) {
-    int w = card_wall, v = 0, d = 0;
+    int w = card_wall, v = 0, d = 0, m = 0;
     char dir[9], t[16];
     if (home_active() && home_mine(dir) && sd_ready() && sd_enter_jt(0)) {
-        if (home_in(dir, 0)) { int got = fat_read_file(WALL_FILE, t, sizeof t); if (got > 0) settings_parse(t, (unsigned)got, &v, &w, &d); }
+        if (home_in(dir, 0)) { int got = fat_read_file(WALL_FILE, t, sizeof t); if (got > 0) settings_parse(t, (unsigned)got, &v, &w, &d, &m); }
         fat_cwd_set(0);
     }
     if (w != wall_pick) settings_set_wall(w);
@@ -108,16 +114,17 @@ void settings_user_wall(void) {
    when it is already up, as on QEMU's virt machine, where the desktop is drawn before the card is looked at. */
 void settings_load(void) {
     char buf[96];
-    int vol = audio_volume(), wall = wall_pick, dock = dock_scale_pct;
+    int vol = audio_volume(), wall = wall_pick, dock = dock_scale_pct, mag = dock_mag;
     if (!sd_ready() || !sd_enter_jt(0)) return;
     int got = fat_read_file(SET_FILE, buf, sizeof buf);
     fat_chdir("..");
     if (got <= 0) return;
-    settings_parse(buf, (unsigned)got, &vol, &wall, &dock);
+    settings_parse(buf, (unsigned)got, &vol, &wall, &dock, &mag);
     audio_set_volume(vol);
     settings_set_dock(dock);
+    settings_set_mag(mag);
     card_wall = wall;
     if (wall != wall_pick) { settings_set_wall(wall); desktop_wall_changed(); }
     saved_state = 1;
-    kputs("settings loaded volume "); kdec((unsigned)audio_volume()); kputs(" wall "); kdec((unsigned)wall_pick); kputs(" dock "); kdec((unsigned)dock_scale_pct); kputs("\n");
+    kputs("settings loaded volume "); kdec((unsigned)audio_volume()); kputs(" wall "); kdec((unsigned)wall_pick); kputs(" dock "); kdec((unsigned)dock_scale_pct); kputs(" mag "); kdec((unsigned)dock_mag); kputs("\n");
 }
