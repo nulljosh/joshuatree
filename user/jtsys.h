@@ -136,6 +136,7 @@ struct jt_text { int x, y; unsigned int fg; const char *s; };
 #define JT_KEY_SDOWN 314
 #define JT_KEY_NEW   316 /* Ctrl+N or Cmd+N: a new document (Notes: a new note) */
 #define JT_KEY_SELALL 315
+#define JT_KEY_UNDO  317 /* 7.5.0: Ctrl+Z or Cmd+Z: undo (Notes: the last edit, and again to redo it) */
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
 struct jt_event { unsigned int kind; int a, b; };
 struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };

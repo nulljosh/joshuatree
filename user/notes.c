@@ -79,7 +79,7 @@ static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 #define ED_CARET 0x0085144B
 #define ED_HILITE 0x00B4D5FE
 struct arena { struct nfolder fo[MAX_FOLDERS]; struct nnote no[MAX_NOTES]; struct jt_dirent de[JT_READDIR_MAX]; char buf[512];
-    char ed[ED_MAX + 1]; unsigned short lx[ED_MAX + 1], ll[ED_MAX + 1]; unsigned char adv[96]; char clip[CLIP_MAX]; int osk_said; };
+    char ed[ED_MAX + 1], undo[ED_MAX + 1]; unsigned short lx[ED_MAX + 1], ll[ED_MAX + 1]; unsigned char adv[96]; char clip[CLIP_MAX]; int osk_said; };
 static struct arena *ar JT_DATA = 0;
 static int nfo JT_DATA = 0, nno JT_DATA = 0;
 static int fsel JT_DATA = 0, nsel JT_DATA = 0;
@@ -93,6 +93,7 @@ static unsigned edit_t JT_DATA = 0;   /* uptime ticks of the last key that left 
 static unsigned now_ticks(void) { struct jt_tasks t; jt_tasks(&t, -1); return t.ticks; }   /* uptime, 100 Hz: runs with no network and no RTC */
 static int esel JT_DATA = -1;       /* selection anchor; the selection is anchor..epos, none while -1 or equal to the caret */
 static char efile[13] JT_DATA = {0};
+static int ulen JT_DATA = -1, upos JT_DATA = 0, ulast JT_DATA = 0;   /* 7.5.0: the text before the last edit (-1: none); ulast, that edit's kind */
 static int del_armed JT_DATA = 0;   /* d once asks, d again deletes, anything else cancels */
 
 static void rect(int x, int y, int w, int h, unsigned c) { jt_fill(&win, x, y, w, h, c); }   /* hires.h: logical pixels, sharp at scale 2 */
@@ -334,7 +335,7 @@ static void edit_open(const char *file) {
         jt_close(fd);
     }
     ar->ed[elen] = 0;
-    epos = elen; escroll = 0; edirty = 0; goalx = -1; esel = -1; editing = 1; note = 0; chrome_stale = 1;
+    epos = elen; escroll = 0; edirty = 0; goalx = -1; esel = -1; editing = 1; ulen = -1; ulast = 0; note = 0; chrome_stale = 1;
     say_s("notes: edit=", efile);
 }
 
@@ -404,7 +405,25 @@ static void ed_drop_sel(void) {
     esel = -1;
 }
 
+/* 7.5.0: one level of undo, as on the first Macs: Cmd+Z puts back the text before the last edit, and again puts that edit
+   back. A run of typed letters, or of Backspaces, is one edit. ponytail: one level, a stack if anyone misses a second. */
+static void ed_snap(int kind) {
+    if (kind && kind == ulast) return;
+    for (int i = 0; i <= elen; i++) ar->undo[i] = ar->ed[i];
+    ulen = elen; upos = epos; ulast = kind;
+}
+static void ed_undo(void) {
+    if (ulen < 0) return;
+    int n = elen, p = epos;
+    for (int i = 0; i <= (n > ulen ? n : ulen); i++) { char c = ar->ed[i]; ar->ed[i] = ar->undo[i]; ar->undo[i] = c; }
+    elen = ulen; epos = upos; ulen = n; upos = p; ulast = 0; esel = -1; edirty = 1; goalx = -1;
+    say("edundo=", elen);
+}
 static void ed_key(int k) {
+    if (k == JT_KEY_UNDO) { ed_undo(); return; }
+    int kind = (k >= 32 && k <= 126) ? 1 : k == 8 ? 2 : 0;
+    if (k == 8 || k == JT_KEY_ENTER || (k >= 32 && k <= 126) || k == JT_KEY_CUT || k == JT_KEY_PASTE || k == JT_KEY_DELETE) ed_snap(ed_has_sel() ? 0 : kind);
+    else if (k != JT_KEY_SAVE) ulast = 0;   /* a move ends a typing run */
     if (k >= JT_KEY_SLEFT && k <= JT_KEY_SDOWN) {
         if (esel < 0) esel = epos;            /* the anchor stays where the first Shift+arrow found the caret */
         if (k == JT_KEY_SLEFT) { if (epos > 0) epos--; goalx = -1; }
