@@ -66,6 +66,11 @@ static void pass_note(const char *what, unsigned long t0, int login) {
     stamp("slow step "); stamp(what); stamp(" "); stamp_dec(ms); stamp(" ms, "); stamp_dec(t0 - desk_ms); stamp(" ms after the desktop\n");
 }
 #define TIMED(f) do { unsigned long t_ = key_ms(); int l_ = login_live; f; pass_note(#f, t_, l_); } while (0)
+/* 7.5.5: a mouse report only marks the pointer moved; the dock, a dragged window and the arrow are drawn once per
+   pass of the loop, at the latest position. Drawing per report let a fast mouse queue reports faster than the dock
+   magnify could draw them (22 to 31 ms a frame at 1080p in QEMU), so the dock and a dragged window trailed the hand. */
+static int ptr_due;
+void pointer_flush(void) { if (ptr_due) { ptr_due = 0; pointer_moved(); } }
 void input_event(struct input_event e) {
     static int first_key;
     if (e.type == 1 && e.value == 1 && desk_ms && !first_key && !login_live) {
@@ -85,6 +90,7 @@ void input_event(struct input_event e) {
     if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                 /* BTN_LEFT, RIGHT, MIDDLE */
         con_quiet = 1;   /* the UART only */
         uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
+        pointer_flush();   /* the moves queued before this press land first: a drag ends where the pointer let go */
         if (e.code == 272 && e.value) pointer_click();
         else if (e.code == 272) drag_end();
         return;
@@ -144,7 +150,7 @@ void input_event(struct input_event e) {
         con_quiet = 1;   /* the UART only: every report would scroll the Console */
         uart_puts("mouse "); uart_dec(mouse_x); uart_putc(','); uart_dec(mouse_y); uart_putc('\n');
         mouse_moved = 0;
-        pointer_moved();
+        ptr_due = 1;   /* 7.5.5: drawn once per pass by pointer_flush, after every queued report is in */
     }
 }
 void kinput(unsigned type, unsigned code, int value) { input_event((struct input_event){ (unsigned short)type, (unsigned short)code, (unsigned)value }); }
@@ -254,7 +260,7 @@ unsigned hear_fake(short *pcm, unsigned max) {   /* ask.c's `hear` on the hearte
     (void)pcm; (void)max; return 0;
 #endif
 }
-void input_drain(void) { usb_poll(); virtio_input_poll(); key_repeat_tick(); audio_pump(); }   /* ask.c, between agent steps and in every wait while `sam` thinks: the keys that queued, a held key repeating, and the sound */
+void input_drain(void) { usb_poll(); virtio_input_poll(); pointer_flush(); key_repeat_tick(); audio_pump(); }   /* ask.c, between agent steps and in every wait while `sam` thinks: the keys that queued, a held key repeating, and the sound */
 
 void main(void) {
     unsigned long el;
@@ -420,10 +426,16 @@ void main(void) {
         GICD(0x100) = 1u << 27;
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
         desk_ms = key_ms();
+#ifdef PTR_BURST_TEST   /* the ptrburst build (arm64-ptrburst-check.py): 20 mouse reports in one pass are drawn once */
+        { extern unsigned ptr_draws; unsigned d0 = ptr_draws;
+          for (int i = 0; i < 20; i++) { kinput(2, 0, 4); kinput(0, 0, 0); }
+          pointer_flush();
+          con_quiet = 1; uart_puts("ptrburst: 20 reports, "); uart_dec(ptr_draws - d0); uart_puts(" draws\n"); }
+#endif
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
@@ -440,7 +452,7 @@ void main(void) {
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                                    " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step * 500), "r"(1UL) : "memory");   /* 6.87.0: idle, still a pass a second, so idle_tick runs */
-            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* an app parked on yield runs again here; browser_tick fetches an image and idle_tick may sync, slow on purpose, so untimed */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* an app parked on yield runs again here; browser_tick fetches an image and idle_tick may sync, slow on purpose, so untimed */
 #ifdef HANG_TEST
             hang_tick();
 #endif

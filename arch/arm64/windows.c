@@ -48,7 +48,7 @@ static int win_target(void) {   /* the window that takes a drag: the one in fron
     if (brick_live || clock_live || browser_live || settings_live) return WT_MAIN;
     if (app_wbytes && app_front) return WT_APP;
     if (calc_live && calc_front) return WT_CALC;
-    if (con_live && !calc_live && !app_wbytes) return WT_MAIN;
+    if (con_live && !calc_front && !app_front) return WT_MAIN;   /* 7.5.5: the Console or Terminal in front, with or without an app or the Calculator open behind it */
     return -1;
 }
 static void win_limits(int t, int *minw, int *minh) {   /* a window opens at its default size and never has to be larger than that to fit its content: the Brick field has a fixed size, the rest shrink to a floor */
@@ -87,11 +87,13 @@ static void desk_compose(int x0, int y0, int x1, int y1) {
     fb_mute++;
     wall_fill(x0, y0, x1 - x0, y1 - y0);
     if (text_ok && y1 > (gui_dock_band_top() - 40) * s) tribute_paint();
-    if (con_live && box_meets(x0, y0, x1, y1, win_lx, win_ly, win_lw, win_lh)) { int cf = calc_front, af = app_front; calc_front = app_front = 0; pane_draw(); calc_front = cf; app_front = af; }
+    int con_top = !calc_front && !app_front, con_in = con_live && box_meets(x0, y0, x1, y1, win_lx, win_ly, win_lw, win_lh);   /* 7.5.5: the Console in front is drawn last */
+    if (con_in && !con_top) { int cf = calc_front, af = app_front; calc_front = app_front = 0; pane_draw(); calc_front = cf; app_front = af; }
     if (calc_live && box_meets(x0, y0, x1, y1, calc_lx, calc_ly, calc_lw, calc_lh)) calc_paint();
     struct app *k = ap;
     for (int z = (int)app_zn - 1; z >= 0; z--) { ap = &apps[app_z[z]]; if (app_wbytes && box_meets(x0, y0, x1, y1, app_lx, app_ly, app_lw, app_lh)) app_paint(); }
     ap = k;
+    if (con_in && con_top) pane_draw();
     fb_mute--;
     if (fb != keep) {
         for (int j = y0; j < y1; j++) for (int i = x0; i < x1; i++) keep[(unsigned)j * fb_pitch + (unsigned)i] = fb[(unsigned)j * fb_pitch + (unsigned)i];
@@ -107,7 +109,15 @@ static void win_set(int t, int nx, int ny, int nw, int nh) {   /* the one place 
     int ux = ox < px ? ox : px, uy = oy < py ? oy : py, ex = ox + w > px + nw * s ? ox + w : px + nw * s, ey = oy + h > py + nh * s ? oy + h : py + nh * s;
     fb_hold(); fb_tag = 1;   /* 4.3.0: everything below reaches the screen as one copy, the old and new rectangles' union */
     cur_hide(); cur_frozen++;
-    if (t == WT_MAIN && !resized) {
+    int behind = calc_live;   /* 7.5.5: another window is open behind the Console: the union is composed, not filled with wallpaper */
+    for (unsigned z = 0; z < app_zn; z++) if (apps[app_z[z]].wbytes) behind = 1;
+    if (t == WT_MAIN && behind && con_live && !brick_live && !clock_live && !browser_live && !settings_live) {
+        *px_ = nx; *py_ = ny; *pw_ = nw; *ph_ = nh;
+        if (resized) con_fit(); else { con_x += dx; con_y += dy; con_wx += dx; con_wy += dy; }
+        win_sizing = resized;
+        desk_compose(ux, uy, ex, ey);
+        win_sizing = 0;
+    } else if (t == WT_MAIN && !resized) {
         wall_vacate(*px_, *py_, *pw_, *ph_, 1);   /* what overhangs the frame stays behind otherwise */
         for (int j = 0; j < h; j++) {   /* a memmove by rows: the far rows first when moving down, the far columns first when moving right */
             int r = dy > 0 ? h - 1 - j : j;
@@ -180,8 +190,14 @@ void drag_end(void) {
         if (t == WT_APP && app_wbytes && (app_cw != app_bw || app_ch != app_bh)) app_note_resize();   /* an event the full ring dropped is asked again */
     }
 }
+#ifdef PTR_BURST_TEST
+unsigned ptr_draws;
+#endif
 void pointer_moved(void) {   /* one report done: the arrow to its new place, the dock's label to the slot under it */
     if (!fb) return;
+#ifdef PTR_BURST_TEST
+    ptr_draws++;
+#endif
     int s = (int)window_scale(), slot = gui_dock_hit_test((int)mouse_x / s, (int)mouse_y / s);
     fb_hold();   /* 4.3.0: a moved window and the arrow on top of it go to the screen as one copy, at the end */
     if (drag_on || rs_on) {

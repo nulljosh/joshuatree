@@ -417,6 +417,24 @@ void dock_unmagnify(void) {
 }
 void dock_magnify_now(int mx, int slot) { mag_skip_in = 1; dock_magnify(mx, slot); mag_skip_in = 0; }   /* after a click on a tile: no second grow-in */
 void dock_mag_tick(void) { if (mag_on && mag_amt < 1000) dock_magnify(mag_mx, mag_slot); }   /* 6.4.0: the grow-in, from the main loop */
+/* 7.5.5: each tile kept at the size it was last drawn. A rescale from the 148 px art is about 0.9 ms at 1080p in
+   QEMU, and all eleven were rescaled on every frame. Only the 2 to 4 tiles near the pointer change size between
+   frames; the rest are copied. One buffer per slot, sized for the
+   largest tile, allocated once (the heap has no free). */
+static unsigned *mag_tile[GUI_ICON_COUNT];
+static int mag_tpw[GUI_ICON_COUNT], mag_tcal[GUI_ICON_COUNT], mag_tcap;
+static unsigned *mag_tile_at(int i, int pw) {
+    if (!mag_tcap) mag_tcap = (DOCK_ICON + MAG_ROOM - 26 + DOCK_PAD) * (int)window_scale();
+    if (pw > mag_tcap) return 0;
+    if (!mag_tile[i] && !(mag_tile[i] = kmalloc((unsigned)(mag_tcap * mag_tcap) * 4))) return 0;
+    int cal = i == 3 ? cal_shown : -1;   /* slot 3, the live Calendar: its date is drawn on the tile */
+    if (mag_tpw[i] != pw || mag_tcal[i] != cal) {
+        gui_icon_art_scale(mag_art[i], mag_tile[i], pw, DOCK_TRAY_COLOR);
+        if (cal >= 0) cal_overlay(mag_tile[i], pw, cal);
+        mag_tpw[i] = pw; mag_tcal[i] = cal;
+    }
+    return mag_tile[i];
+}
 void dock_magnify(int mx, int slot) {
     int sc = (int)window_scale(), size = DOCK_ICON, step = DOCK_ICON + DOCK_GAP, y0 = gui_dock_y0();
     int top = (y0 - MAG_ROOM) * sc, rows = (int)fb_h - top, cy_bottom = y0 + DOCK_PAD + size;
@@ -447,14 +465,17 @@ void dock_magnify(int mx, int slot) {
     for (int i = 0; i < GUI_ICON_COUNT; i++) {
         int lx = shift + left[i], cx = lx + sz[i] / 2, pw = sz[i] * sc;
         gui_draw_icon_shadow(cx, cy_bottom, sz[i]);
-        unsigned long mark = heap_mark();
-        unsigned *tile = kmalloc((unsigned)(pw * pw) * 4);
-        if (tile) {
-            gui_icon_art_scale(mag_art[i], tile, pw, DOCK_TRAY_COLOR);
-            if (i == 3 && cal_shown >= 0) cal_overlay(tile, pw, cal_shown);   /* slot 3, the live Calendar */
-            gui_blit_tile(tile, lx, cy_bottom - sz[i], sz[i], DOCK_TRAY_COLOR);
+        unsigned *tile = mag_tile_at(i, pw);
+        if (tile) gui_blit_tile(tile, lx, cy_bottom - sz[i], sz[i], DOCK_TRAY_COLOR);
+        else {   /* no room for the kept tiles: one scratch tile, scaled every time, as before 7.5.5 */
+            unsigned long mark = heap_mark();
+            if ((tile = kmalloc((unsigned)(pw * pw) * 4))) {
+                gui_icon_art_scale(mag_art[i], tile, pw, DOCK_TRAY_COLOR);
+                if (i == 3 && cal_shown >= 0) cal_overlay(tile, pw, cal_shown);
+                gui_blit_tile(tile, lx, cy_bottom - sz[i], sz[i], DOCK_TRAY_COLOR);
+            }
+            heap_release(mark);
         }
-        heap_release(mark);
         if (slot_open(i)) gui_draw_dock_dot_at(cx);
     }
     if (slot >= 0 && slot < GUI_ICON_COUNT) gui_draw_dock_label(shift + left[slot] + sz[slot] / 2, y0 + 8 * mag_amt / 1000 - (sz[slot] - size), dock_names[slot]);   /* frame zero of a grow-in is dock_hover's spot; grown, 2 above the tile, inside MAG_ROOM */
