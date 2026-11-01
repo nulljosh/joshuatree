@@ -65,6 +65,19 @@ jobs:
           else
             echo "README mark unchanged"
           fi
+      # The Pi's kernel8.img and its sha256, so a self-update has one fixed URL to fetch (docs/ROADMAP.md, 7.6.0). Best effort:
+      # a failed Pi build never blocks the release above. This is the generic image; the relay CA stays on Joshua's card.
+      - name: Attach the Pi kernel and its checksum
+        if: steps.rel.outputs.tag != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sudo apt-get install -y --no-install-recommends openssl python3-pil librsvg2-bin
+          make -C arch/arm64 pi
+          cp arch/arm64/kernel8.img kernel8.img
+          shasum -a 256 kernel8.img > kernel8.img.sha256
+          gh release upload "${{ steps.rel.outputs.tag }}" kernel8.img kernel8.img.sha256
       - name: Announce the release on X (dry run until the X keys are set)
         if: steps.rel.outputs.tag != ''
         env:
