@@ -40,6 +40,19 @@ int front_close(void) {   /* the window in front, topmost first, ended the way i
 #define JT_VERSION "dev"
 #endif
 static int tree_sel, tree_about;
+int tree_cw = TREE_W, tree_ch = TREE_H;   /* 7.6.0: the card's size, the menu's or About's; keys.c's spot_close puts back this much */
+#define ABOUT_W 280
+#define ABOUT_H 236
+void menu_mark_paint(int cx, int cy, int T, unsigned ink);   /* crash.c */
+static void tree_under(int save) {   /* the screen under the card: kept before it is drawn, put back when it goes */
+    int s = (int)window_scale(), w = tree_cw * s, h = tree_ch * s, x = spot_lx * s, y = spot_ly * s;
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) {
+        unsigned *p = &fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)];
+        if (save) spot_under[j * w + i] = *p; else *p = spot_under[j * w + i];
+    }
+    if (!save) fb_flush(x, y, w, h);
+}
+static void about_center(const char *t, int y, unsigned c) { gui_text(t, spot_lx + (ABOUT_W - gui_text_width(t)) / 2, y, c); }
 static const char *const tree_rows[4] = { "About Joshua Tree", "Restart", "Shut Down", "Log Out" };
 static int tree_ry(int r) { return spot_ly + (r ? 37 + (r - 1) * SPOT_ROW : 6); }
 int tree_bar_hit(void) {   /* the pointer is on the mark or the title, physical px like the bar's own drawing */
@@ -47,14 +60,22 @@ int tree_bar_hit(void) {   /* the pointer is on the mark or the title, physical 
     return (int)mouse_x < sg(40) + text_width(1, "Joshua Tree", sg(130)) + sg(6);
 }
 static void tree_paint(void) {
-    int s = (int)window_scale(), w = TREE_W * s, h = TREE_H * s, x = spot_lx * s, y = spot_ly * s;
+    int s = (int)window_scale(), w = tree_cw * s, h = tree_ch * s, x = spot_lx * s, y = spot_ly * s;
     cur_hide();
-    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];
-    if (tree_about) {
-        gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, TREE_W, 82, 0x00faf8f4, 10);
-        gui_text("Joshua Tree", spot_lx + 16, spot_ly + 10, 0x001C1C1E);
-        gui_text("Version " JT_VERSION, spot_lx + 16, spot_ly + 32, 0x0075726E);
-        gui_text("Made by Joshua, from scratch.", spot_lx + 16, spot_ly + 54, 0x001C1C1E);
+    tree_under(0);
+    if (tree_about) {   /* 7.6.0: a small window in the middle of the screen, as a Mac's About This Mac: the mark, the name, the version */
+        gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, ABOUT_W, ABOUT_H, 0x00faf8f4, 12);
+        gui_fill_circle(spot_lx + 18, spot_ly + 16, 6, 0x00FF5F57, 0x00faf8f4);   /* the red dot: a click anywhere closes it */
+        menu_mark_paint((spot_lx + ABOUT_W / 2) * s, (spot_ly + 64) * s, 72 * s, 0x001C1C1E);
+        const char *name = "Joshua Tree";
+        gui_icon_text(name, spot_lx + (ABOUT_W - gui_icon_text_w(name, 1, s)) / 2, spot_ly + 108, 1, s, 0x001C1C1E);
+        about_center("Version " JT_VERSION, spot_ly + 140, 0x0075726E);
+#ifdef PI_BUILD
+        about_center("Raspberry Pi 4", spot_ly + 168, 0x001C1C1E);
+#else
+        about_center("QEMU virt (arm64)", spot_ly + 168, 0x001C1C1E);
+#endif
+        about_center("Made by Joshua, from scratch.", spot_ly + 196, 0x0075726E);
     } else {
         gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, TREE_W, 109, 0x00faf8f4, 10);
         gui_hairline_h(spot_lx + 10, spot_ly + 31, TREE_W - 20, 0x00DDD8CE);
@@ -74,9 +95,9 @@ void tree_open(void) {
     spot_lx = 8; spot_ly = sg(MENUBAR_H) / s + 2;
     if (!spot_under) spot_under = kmalloc((unsigned)(w * h) * 4);
     if (!spot_under) { uart_puts("oom treemenu\n"); return; }
-    w = TREE_W * s; h = TREE_H * s;
+    tree_cw = TREE_W; tree_ch = TREE_H;
     cur_hide();
-    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) spot_under[j * w + i] = fb[(unsigned)(spot_ly * s + j) * fb_pitch + (unsigned)(spot_lx * s + i)];
+    tree_under(1);
     spot_live = spot_tree = 1; tree_sel = 0; tree_about = 0;
     con_quiet = 1; uart_puts("treemenu open\n");
     tree_paint();
@@ -94,7 +115,14 @@ static void tree_logout(void) {
     menubar_notify("Logged out");
 }
 static void tree_pick(int r) {
-    if (r == 0) { tree_about = 1; tree_paint(); return; }
+    if (r == 0) {   /* the menu goes, About comes up in the middle of the screen (spot_under holds SPOT_W by spot_hmax: it fits) */
+        int s = (int)window_scale();
+        cur_hide(); tree_under(0);
+        tree_cw = ABOUT_W; tree_ch = ABOUT_H;
+        spot_lx = ((int)fb_w / s - ABOUT_W) / 2; spot_ly = ((int)fb_h / s - ABOUT_H) / 2 - 20;
+        tree_under(1);
+        tree_about = 1; tree_paint(); return;
+    }
     spot_close();
     con_quiet = 1; uart_puts(r == 1 ? "treemenu: restart\n" : r == 2 ? "treemenu: shutdown\n" : "");
     if (r == 1) power_ask(0); else if (r == 2) power_ask(1); else tree_logout();

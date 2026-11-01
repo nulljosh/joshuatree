@@ -82,9 +82,10 @@ void spot_open(void) {
     con_quiet = 1; uart_puts("spotlight open\n");
     spot_paint();
 }
+extern int tree_cw, tree_ch;   /* desk.c */
 void spot_close(void) {
     if (!spot_live) return;
-    int s = (int)window_scale(), w = (spot_tree ? TREE_W : spot_bw) * s, h = (spot_tree ? TREE_H : spot_bh) * s, x = spot_lx * s, y = spot_ly * s;
+    int s = (int)window_scale(), w = (spot_tree ? tree_cw : spot_bw) * s, h = (spot_tree ? tree_ch : spot_bh) * s, x = spot_lx * s, y = spot_ly * s;   /* 7.6.0: the tree card's own size, the menu's or About's */
     cur_hide();
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];
     fb_flush(x, y, w, h);
