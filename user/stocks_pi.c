@@ -4,9 +4,9 @@
  * The i386 Stocks (user/stocks.c) is fed by the kernel's stocks_fetch, which the ARM kernel does not have, so this is its
  * own, smaller program with the same data contract: it reads STOCKS.TXT through jt_readfile (the card's JT/STOCKS.TXT,
  * the lines stocks.c documents: "r range sel", then per symbol "i stale price prev time dprice dprev n p0 .. pn-1", all
- * prices in cents). With no such file it draws a built-in sample and says so in its status line, "Sample, not live
- * prices". A file is called "Saved prices": this program never claims a live quote. Nothing is fetched here, no network,
- * no key.
+ * prices in cents). Since 7.6.0 the kernel fetches today's quotes when Stocks opens and serves STOCKS.TXT from RAM
+ * (arch/arm64/feeds.c); a card copy is read when there is none. With neither it shows no prices and says why: no sample,
+ * no made-up numbers. Nothing is fetched here, no key.
  *
  * Up and Down pick a symbol, a click on a row picks it, Esc or the red dot closes it. One line per pick tells
  * tools/checks/arm64-stocks-check.py what was drawn.
@@ -37,10 +37,6 @@ static int dprice[ROWS] JT_DATA, dprev[ROWS] JT_DATA, np[ROWS] JT_DATA, pts[ROWS
 static const char *const SYM[ROWS] = {"AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "NFLX"};
 static const char *const NAME[ROWS] = {"Apple Inc.", "Microsoft", "Alphabet Inc.", "Amazon.com", "Tesla Inc.", "NVIDIA", "Meta Platforms", "Netflix"};
 static const char *const RNAME[5] = {"1D", "1W", "1M", "3M", "1Y"};
-/* The sample: a start price in cents and a drift per step that makes some rows rise and some fall. */
-static const int BASE[ROWS] = {18250, 41020, 16880, 18640, 24310, 11980, 49350, 62500};
-static const int DRIFT[ROWS] = {30, -45, 22, 60, -90, 120, -35, 80};
-
 static int cat(char *b, int p, const char *s) { while (*s && p < 62) b[p++] = *s++; b[p] = 0; return p; }
 static int num(const char **p) {
     int v = 0;
@@ -69,19 +65,6 @@ static void load(void) {
             if (have[i]) saved++;
             eol(&p);
         }
-    }
-    if (saved) return;
-    /* No saved prices: a sample walk per symbol, from a fixed seed so it looks the same every start. */
-    unsigned s = 12345;
-    for (int i = 0; i < ROWS; i++) {
-        int v = BASE[i];
-        np[i] = PTS; have[i] = 1; stale[i] = 0; stamp[i] = 0;
-        for (int j = 0; j < PTS; j++) {
-            s = s * 1103515245u + 12345u;
-            v += DRIFT[i] + (int)((s >> 16) % 161) - 80 + (j % 7 == 3 ? DRIFT[i] * 3 : 0);
-            pts[i][j] = v;
-        }
-        price[i] = pts[i][PTS - 1]; prev[i] = pts[i][PTS - 2]; dprice[i] = price[i]; dprev[i] = pts[i][0];
     }
 }
 
@@ -190,8 +173,12 @@ static void draw(void) {
     chart(px, cy0, pw, ch, pts[sel], n, col);
     rect(px, cy0 + ch + 4, pw, 1, RULE);
     int sy = cy0 + ch + 14;
-    if (saved) { cat(b, cat(b, 0, "Saved prices / USD / range "), RNAME[range]); text(b, px, sy, MUTED, 0); }
-    else text("Sample, not live prices", px, sy, MUTED, 0);
+    if (saved) {   /* the quote's own time, in UTC: the reader can see how fresh it is */
+        int t = stamp[sel] > 0 ? stamp[sel] % 86400 : -1, q = cat(b, 0, "USD / quote at ");
+        if (t >= 0) { b[q++] = (char)('0' + t / 36000); b[q++] = (char)('0' + t / 3600 % 10); b[q++] = ':'; b[q++] = (char)('0' + t / 600 % 6); b[q++] = (char)('0' + t / 60 % 10); b[q] = 0; cat(b, q, " UTC"); }
+        else cat(b, q, "an unknown time");
+        text(b, px, sy, MUTED, 0);
+    } else text("No prices: join Wi-Fi", px, sy, MUTED, 0);
     text("Up and Down pick a symbol", px, sy + 22, MUTED, 0);
     int ln = cat(b, cat(b, 0, "stocks: sel "), SYM[sel]); b[ln++] = '\n'; jt_write(1, b, (unsigned)ln);
 }
@@ -201,7 +188,7 @@ void _start(int argc, char **argv) {
     (void)argc; (void)argv;
     if (jt_window_open_hires(&win) != 0 || !win.pixels) { jt_write(2, "stocks: no window\n", 18); jt_exit(1); }
     load();
-    jt_write(1, saved ? "stocks: saved prices\n" : "stocks: sample, not live prices\n", saved ? 21 : 32);
+    jt_write(1, saved ? "stocks: prices\n" : "stocks: no prices\n", saved ? 15 : 18);
     draw();
     struct jt_event ev;
     unsigned flags = JT_POLL_PRESENT;

@@ -186,7 +186,9 @@ int app_cycle(void) {   /* Cmd+Tab or Ctrl+Tab: the app window furthest back com
     con_quiet = 1; uart_puts("switch "); uart_puts(ap->cur->name); uart_putc('\n');
     return 1;
 }
+void feeds_stocks(void);   /* feeds.c */
 static int app_go(const struct user_app *a) {
+    if (a->name[0] == 's' && a->name[1] == 't' && a->name[2] == 'o' && a->name[3] == 'c' && a->name[4] == 'k' && a->name[5] == 's' && !a->name[6]) feeds_stocks();   /* 7.6.0: today's quotes before it reads them */
     if (app_start(a) == -3 && app_zn) {   /* every slot is taken: the window furthest back closes for it, files written back */
         ap = &apps[app_z[app_zn - 1]];
         con_quiet = 1; uart_puts("M3c app swap: "); uart_puts(app_cur->name); uart_puts(" closed for "); uart_puts(a->name); uart_putc('\n');

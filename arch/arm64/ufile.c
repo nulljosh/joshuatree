@@ -237,6 +237,7 @@ static long u_unlink(unsigned long upath) {
     path_leave();
     return ok ? 0 : -ENOENT;
 }
+int feeds_read(const char *leaf, char *buf, unsigned cap);   /* feeds.c */
 static long u_readfile(unsigned long upath, unsigned long buf, unsigned long cap) {
     if (!cap || cap > READFILE_CAP_MAX) return -EINVAL;
     char walk[PATH_MAX + 1], *leaf;
@@ -244,8 +245,10 @@ static long u_readfile(unsigned long upath, unsigned long buf, unsigned long cap
     if (err) return err;
     if (!user_writable(buf, cap)) return -EFAULT;
     char hb[HOME_DIR_MAX + 1];
+    int n = feeds_read(walk, (char *)buf, (unsigned)cap);   /* 7.6.0: Stocks' live quotes, kept in RAM by feeds.c */
+    if (n >= 0) return n;
     if ((err = path_enter(walk, 1, &leaf, 0, cur_home(hb)))) return err;
-    int n = fat_read_file(leaf, (void *)buf, (unsigned)cap);
+    n = fat_read_file(leaf, (void *)buf, (unsigned)cap);
     path_leave();
     return n > 0 ? n : -ENOENT;
 }

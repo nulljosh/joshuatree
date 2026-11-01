@@ -16,6 +16,7 @@
 #   dragtest    drag-kernel8.elf / drag-kernel8.img: the Console dragged 100 right and 60 down at boot (clamped), for arm64-drag-check.py at 1080p
 #   dirtyrecttest dirtyrect-kernel8.elf: the glitch build (1080p ramfb) plus a `fb: flush` line per window move
 #   ptrbursttest ptrburst-kernel8.elf: 20 made-up mouse reports in one pass at boot, drawn once (arm64-ptrburst-check.py)
+#   stocksfixtest stocksfix-kernel8.elf: Stocks fetches its quotes from http://10.0.2.2:18471 (arm64-stocks-check.py's fixture)
 #   lowmemtest  lowmem-kernel8.elf: the Browser fetches with between 3 and 4 MiB of heap free (arm64-browser-lowmem-check.py)
 #   keydbgtest  keydbg-kernel8.elf: the dev card's key debug line on, plus made-up HID reports (a report ID) at boot
 #   calctest    calc-kernel8.elf: the Calculator open at boot with four sums typed into it
@@ -250,7 +251,7 @@ vectors.o: vectors.S
 # main.c is being split (4.23.2 on): MAINSRC is main.c and the files cut out of it. Every build that compiles main.c
 # compiles each of them with the same flags (a test build's -D, PI_BUILD, MAINFLAGS) and links them into the one
 # object (ld -r) the image links, so the split never changes what a test build turns on, nor any link line.
-MAINSRC = main.c virtio.c boot.c desk.c keys.c windows.c appwin.c pointer.c crash.c console.c eltests.c
+MAINSRC = main.c virtio.c boot.c desk.c keys.c windows.c appwin.c pointer.c crash.c console.c eltests.c feeds.c
 # Each rule sets MAINFLAGS_PART (a target-specific variable, so flags holding commas, like APP_NAME=a,b,c, survive)
 # and runs MAINLINK.
 MAINLINK = set -e; for f in $(MAINSRC); do $(CC) $(MAINFLAGS_PART) -c $$f -o $@.$${f%.c}.o; done; ld.lld -r -o $@ $(patsubst %.c,$@.%.o,$(MAINSRC))
@@ -359,6 +360,8 @@ $(eval $(call variant,ptrburst,-DPTR_BURST_TEST,,))
 ptrbursttest: ptrburst-kernel8.elf
 $(eval $(call variant,lowmem,-DBROWSER_LOWMEM_TEST,,))
 lowmemtest: lowmem-kernel8.elf
+$(eval $(call variant,stocksfix,-DSTOCKS_TEST_PORT=18471,,))
+stocksfixtest: stocksfix-kernel8.elf
 $(eval $(call variant,glitch,-DFB_BOOT_W=1920 -DFB_BOOT_H=1080 -DHEAP_SIZE=40UL*1024*1024,,))
 glitchtest: glitch-kernel8.elf
 # 4.3.0: the glitch build plus FB_TRACE's `fb: flush` line per window move (arm64-dirtyrect-check.py)
@@ -388,7 +391,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: lowmemtest ptrbursttest glitchtest dirtyrecttest brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest reminderstest
+.PHONY: stocksfixtest lowmemtest ptrbursttest glitchtest dirtyrecttest brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest reminderstest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
