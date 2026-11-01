@@ -279,10 +279,20 @@ static unsigned seq, reqid;
    Reading a flat 1536 bytes swallowed the start of whatever frame came next, so once the firmware had events queued
    (after the radio came up) the replies to set-commands vanished: the seventeenth run saw 'status 0' no-replies for
    clmload, country and escan while the plain gets before them worked. */
+static unsigned f2_dropped;   /* 7.5.5: frames terminated, printed once so a board photo shows it happened */
+static void f2_term(void) {   /* brcmf_sdio_rxfail: SFC_RF_TERM into FRAMECTRL (0x1000D), then wait for RFRAMEBCHI/LO (0x1001C/B) to read 0 */
+    cmd52(1, 0x1000D, 1, 1, 0);
+    for (unsigned t = 0; t < 1000; t++) { unsigned hi = 1, lo = 1; cmd52(1, 0x1001C, 0, 0, &hi); cmd52(1, 0x1001B, 0, 0, &lo); if (!hi && !lo) break; }
+}
 static int f2_read(void) {
     if (!cmd53(2, 0x8000, 0, frame, 64)) return 0;
-    unsigned len = frame[0] | frame[1] << 8;
-    if (len > 64 && len <= 1600) { unsigned rest = (len - 64 + 3) & ~3u; if (!cmd53(2, 0x8000, 0, frame + 64, rest)) return 0; }
+    int rest = f2_rest(frame);
+    if (rest < 0) {   /* the chip drops the rest, so the next read starts on a frame; the caller sees no frame */
+        if (!f2_dropped++) { kputs("wifi: dropped a frame of "); kdec(frame[0] | frame[1] << 8); kputs(" bytes\n"); }
+        f2_term(); frame[0] = frame[1] = frame[2] = frame[3] = 0;
+        return 1;
+    }
+    if (rest && !cmd53(2, 0x8000, 0, frame + 64, (unsigned)rest)) return 0;
     return 1;
 }
 /* What the last frame read back looked like, printed when a command gets no matching reply. */

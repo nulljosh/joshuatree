@@ -24,6 +24,13 @@ int main(void) {
     /* 26 + 16 bytes of entries, padded to 44, plus the 4-byte trailer: 11 words */
     if (m != 48 || memcmp(o, "macaddr=00:90:4c:c5:12:38", 26) || o[25] || rd32(o + 44) != (11u | (~11u & 0xffff) << 16)) return 5;
     if (fw_padded(3) != 4 || fw_padded(8) != 8) return 6;
+    /* 7.5.5: a 1700-byte frame is read whole (it was left half read), a 2049-byte or broken one is terminated */
+    unsigned char h[4]; memset(h, 0, 4); if (f2_rest(h) != 0) return 7;
+    wr16(h, 40); wr16(h + 2, ~40u & 0xffff); if (f2_rest(h) != 0) return 8;
+    wr16(h, 1700); wr16(h + 2, ~1700u & 0xffff); if (f2_rest(h) != 1636) return 9;
+    wr16(h, 2048); wr16(h + 2, ~2048u & 0xffff); if (f2_rest(h) != 1984) return 10;
+    wr16(h, 2049); wr16(h + 2, ~2049u & 0xffff); if (f2_rest(h) != -1) return 11;
+    wr16(h, 1700); wr16(h + 2, 0x1234); if (f2_rest(h) != -1) return 12;
     puts("wifi-host-check ok"); return 0;
 }
 EOF
