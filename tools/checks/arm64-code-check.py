@@ -99,8 +99,11 @@ try:
     n = len(uart()); key("esc")
     check("Esc saves the file and closes", wait_any(["code: closed"], 20, n) and "code: saved HI.PK" in uart()[n:] and wait_any(["M3c app code exit 0"], 10, n), uart()[n:][-400:])
 
+    n_hi = len(uart())
     seg, done = run("userrun plankc build HI.PK", "plankc", 300)
     check("plankc builds the program typed in Code", done and "plankc: wrote APPS/HI.APP" in seg and "M3c app plankc exit 0" in seg, seg[-500:])
+    # 7.5.7: plankc yields, so it ends long after the command; its end is said in the Terminal (the board showed nothing)
+    check("the Terminal hears that plankc ended", wait_any(["userrun plankc: exit 0"], 10, n_hi), uart()[n_hi:][-300:])
     seg, done = run("userrun hi", "hi", 60)
     check("and it runs: hi from the pi", done and "hi from the pi" in seg and "M3c app hi exit 0" in seg, seg[-400:])
     check("no kernel crash", "KERNEL CRASH" not in uart(), uart()[-600:])

@@ -571,7 +571,9 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             const char *p = (const char *)f->x[1]; unsigned long len = f->x[2];
             if (a0 != 1 && a0 != 2) { f->x[0] = (unsigned long)-9; return; }   /* -EBADF: the console is fd 1 and fd 2, nothing else yet */
             if (!user_in_range((unsigned long)p, len)) { f->x[0] = (unsigned long)-14; return; }   /* -EFAULT */
-            for (unsigned long i = 0; i < len; i++) { if (con_line_start && !user_loud) con_quiet = 1; uart_putc(p[i]); }   /* the boot self-test talks to the UART only */
+            int was = con_to_term; if (ap->term) term_output(1);   /* 7.5.7: an app the Terminal started still writes there after it yields */
+            for (unsigned long i = 0; i < len; i++) { if (con_line_start && !user_loud && !ap->term) con_quiet = 1; uart_putc(p[i]); }   /* the boot self-test talks to the UART only */
+            if (ap->term && !was) { term_output(0); ask_redraw(); }
             f->x[0] = len;
         } else if (n == SYS_EXIT || n == JT_SYS_EXIT) {
             uart_puts("M3 EL0 exit "); uart_dec((unsigned)f->x[0]); uart_putc('\n');
@@ -757,6 +759,14 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
     uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times\n");
+    if (me->term && !user_loud) {   /* 7.5.7: it ended after it yielded, so cmd.c's own line is long gone: say it in the Terminal */
+        int was = con_to_term; term_output(1);
+        kputs("userrun "); kputs(a->name);
+        if (how) { kputs(" "); kputs(how); } else { kputs(": exit "); kdec((unsigned)status); }
+        kputs("\n");
+        if (!was) { term_output(0); ask_redraw(); }
+    }
+    me->term = 0;
 }
 void app_kill_one(const char *how) { if (app_cur && !app_running) app_end((unsigned long)-1, how); }
 void app_kill(const char *how) {   /* every app ends: a kernel-drawn window is opening where the apps' windows were */
@@ -808,7 +818,7 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
     app_frame.elr = entry; app_sp = UB + UP_ASTACK + APP_STACK_PAGES * 4096UL;
-    app_cur = a; ap->min = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
+    app_cur = a; ap->min = 0; ap->term = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
     if (dbg_want) {   /* 7.2.0: `debug NAME`, stepped from its first instruction */
         dbg_slot = (int)sl; dbg_left = dbg_want; dbg_n = 0;
         for (int i = 0; i < 31; i++) dbg_prev[i] = 0;
@@ -919,6 +929,7 @@ int userrun(const char *name, unsigned n, int allow_unsigned, unsigned long *sta
     int r = app_start(a);
     if (r) return r;
     struct app *me = ap;
+    me->term = 1;   /* 7.5.7: plankc's "wrote APPS/HI.APP", minutes later, reached only the UART on the board */
     user_loud = 1;
     app_tick();
     user_loud = 0;
