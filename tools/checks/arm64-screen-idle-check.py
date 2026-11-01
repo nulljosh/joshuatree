@@ -12,7 +12,8 @@ TMP = Path(scratch_dir('screen-idle'))
 source = r'''
 #include <assert.h>
 static unsigned now, calls, last_blank;
-static int accepted=1, busy, brick_live;
+static int accepted=1, busy, brick_live, input_ok=1;
+__attribute__((unused)) static int input_present(void) { return input_ok; }
 static unsigned notice_now(void) { return now; }
 static int ask_pending(void) { return busy; }
 static int screen_blank(unsigned blank) { calls++; last_blank=blank; return accepted; }
@@ -34,6 +35,11 @@ int main(void) {
     now=0xfffffff0u; screen_activity(); assert(calls==6 && !screen_asleep);
     now=0x751fu; screen_tick(); assert(calls==6);
     now=0x7520u; screen_tick(); assert(calls==7 && screen_asleep);
+    /* 7.5.3: nothing attached to wake it, so it never sleeps; once something is, a full five minutes count from then */
+    screen_activity(); assert(calls==8 && !screen_asleep);
+    input_ok=0; now=0x7520u+90000u; screen_tick(); assert(calls==8 && !screen_asleep);
+    input_ok=1; now+=29999; screen_tick(); assert(calls==8);
+    now+=1; screen_tick(); assert(calls==9 && screen_asleep);
 }
 '''
 header = (ROOT/'arch/arm64/screen_idle.h').read_text()
@@ -45,6 +51,7 @@ def host_check(text):
     return subprocess.run([str(exe)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10)
 assert host_check(header).returncode == 0, 'idle/wake state check failed'
 assert host_check(header.replace('screen_asleep = 0;', 'screen_asleep = 1;')).returncode != 0, 'broken-wake control passed'
+assert host_check(header.replace(' || !input_present()', '')).returncode != 0, 'sleeps-with-no-input control passed'
 print('PASS: five-minute boundary, activity reset, wrap, active apps, refused requests and broken-wake control',flush=True)
 subprocess.run(['make','-s','-C',str(ROOT/'arch/arm64'),'screen-kernel8.img'],check=True)
 log, sock = TMP/'uart', TMP/'qmp'

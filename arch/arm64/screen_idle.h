@@ -1,4 +1,5 @@
-/* Display only: USB, networking and apps keep running while HDMI is blank. */
+/* Display only: USB, networking and apps keep running while HDMI is blank. 7.5.3: with no keyboard or mouse attached
+   (input_present() is 0) the screen never sleeps, since nothing could wake it: the first board test went dark for good. */
 #define SCREEN_IDLE_CS 30000u
 static unsigned screen_last;
 static int screen_asleep;
@@ -11,7 +12,7 @@ static void screen_activity(void) {
 }
 static void screen_tick(void) {
     unsigned now = notice_now();
-    if (ask_pending() || brick_live) { screen_last = now; return; }
+    if (ask_pending() || brick_live || !input_present()) { screen_last = now; return; }
     if (screen_asleep || now - screen_last < SCREEN_IDLE_CS) return;
     screen_last = now;   /* a refused request gets another five minutes, never a tight retry loop */
     if (screen_blank(1)) {
