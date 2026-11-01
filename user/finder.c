@@ -4,7 +4,8 @@
  * the name and the size per row, and a status line. Rows are 24 px, text is the house body face, nothing is chunky.
  * Everything reads through SYS_READDIR and SYS_READFILE, paths relative to the card's JT/ folder like Notes' paths.
  *
- * Keys: Up and Down choose, Enter opens a folder or previews a .TXT file read-only (Notes takes no path yet), Backspace goes
+ * Keys: Up and Down choose, Enter opens a folder, previews a .TXT file read-only (Notes takes no path yet) or plays a .WAV or
+ * .MP3 in Music (7.7.0), Backspace goes
  * up a folder (or closes the preview), Left goes to the sidebar, Right and Tab back to the list, Esc closes (the preview
  * first). A click chooses a row, a second click on it opens it. With no card or no JT/ folder the list is what the build
  * carries itself, the apps, and the status line says so.
@@ -244,6 +245,11 @@ static void open_sel(void) {
     char path[PATH_MAX_LEN + 1];
     join(path, cwd, d->name);
     if (d->is_dir) { int k = 0; for (; path[k]; k++) cwd[k] = path[k]; cwd[k] = 0; load(); return; }
+    if (kind_of(d) == K_MUSIC) {   /* 7.7.0: a song opens in Music, which plays it */
+        say("finder: music="); say(path); say("\n");
+        if (jt_launch_with("music", path) < 0) say("finder: music refused\n");
+        return;
+    }
     if (kind_of(d) != K_TXT) return;
     int n = jt_readfile(path, ar->pv, PV_MAX);
     if (n < 0) { say("finder: preview failed\n"); return; }

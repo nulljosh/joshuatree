@@ -304,6 +304,28 @@ void ufile_args_start(unsigned slot) {
     args_n[slot + 1] = args_next_n;
     args_next_n = 0;
 }
+/* JT_SYS_LAUNCH_REQUEST (396, 7.7.0 on the Pi): an app asks the desktop to open a table app by name, with ARG as that
+   app's words (Files opens a song in Music). Only kept here; main.c's app_tick opens it between app turns, never inside
+   one. app_dock takes table names only, so nothing on the card is started this way. */
+static char launch_name[PATH_MAX + 1], launch_arg[PATH_MAX + 1];
+static long u_launch(unsigned long uname, unsigned long uarg) {
+    char nm[PATH_MAX + 1], ar[PATH_MAX + 1];
+    long err = copy_path(uname, nm);
+    if (err) return err;
+    ar[0] = 0;
+    if (uarg && (err = copy_path(uarg, ar))) return err;
+    unsigned n = 0; while (nm[n]) n++;
+    if (!n || n > 15) return -EINVAL;
+    for (unsigned i = 0; i <= n; i++) launch_name[i] = nm[i];
+    for (unsigned i = 0; i <= PATH_MAX && (launch_arg[i] = ar[i]); i++) ;
+    return 0;
+}
+int ufile_launch_take(char *name, char *arg) {   /* main.c: 1 and the request, once */
+    if (!launch_name[0]) return 0;
+    for (unsigned i = 0; i <= PATH_MAX; i++) { name[i] = launch_name[i]; arg[i] = launch_arg[i]; }
+    launch_name[0] = 0;
+    return 1;
+}
 static long u_args(unsigned long buf, unsigned long cap) {
     if (ufile_owner > APP_SLOTS) return -EINVAL;
     unsigned n = args_n[ufile_owner];
@@ -324,6 +346,7 @@ long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned
     case 388: return u_readdir(a0, a1, a2);
     case 389: return u_mkdir(a0);
     case 390: return u_unlink(a0);
+    case 396: return u_launch(a0, a1);
     case 401: return u_readfile(a0, a1, a2);
     case 403: return u_readat(a0, a1);
     case 404: return u_args(a0, a1);

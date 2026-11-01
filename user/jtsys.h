@@ -275,6 +275,9 @@ static inline int jt_sysinfo(struct jt_sysinfo *si)               { return jt_sy
 /* 0 queued, -EINVAL no app by that exact name, -EBUSY one is already pending. The desktop opens it on its next pass. */
 static inline int jt_refresh(int kind, int arg)                   { return jt_syscall(JT_SYS_REFRESH, (jt_arg)kind, (jt_arg)arg, 0); }
 static inline int jt_launch(const char *app)                      { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (jt_arg)app, 0, 0); }
+/* 7.7.0, the Pi: open an app with ARG as its words (JT_SYS_ARGS), as Files opens a song in Music. i386 ignores ARG. */
+static inline int jt_launch_with(const char *app, const char *arg) { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (jt_arg)app, (jt_arg)arg, 0); }
+static inline int jt_args(char *buf, unsigned cap)                 { return jt_syscall(JT_SYS_ARGS, (jt_arg)buf, (jt_arg)cap, 0); }
 /* Replace the system clipboard with len bytes (0 clears). Returns len, -EINVAL over JT_CLIP_MAX, -EFAULT. */
 static inline int jt_clip_set(const void *buf, unsigned len)      { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_SET, (jt_arg)buf, len); }
 /* Copy out at most len bytes of the clipboard; returns bytes copied (0 when empty), -EFAULT. A short len clips the paste. */
