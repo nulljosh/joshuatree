@@ -10,6 +10,14 @@ int ask_secret(void);                         /* ask.c: the line being typed hol
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 void ask_poll(void);
 #ifdef PI_BUILD
+int usb_input_count(void);   /* xhci.c: keyboards plus mice found on the hubs */
+int bt_input_live(void);     /* bt.c: a Bluetooth mouse is connected */
+/* 7.5.3: the screen only sleeps when something attached could wake it (SCREEN_SELFTEST injects its own input). */
+#ifdef SCREEN_SELFTEST
+static int input_present(void) { return 1; }
+#else
+static int input_present(void) { return usb_input_count() > 0 || bt_input_live(); }
+#endif
 #include "screen_idle.h"
 #endif
 #include "login_ui.h"   /* 4.9.0: the login screen, over everything while JT/USERS.TXT has an account and nobody has signed in */

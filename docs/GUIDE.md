@@ -61,7 +61,7 @@ Content lays itself out again to fit: the Console and Terminal change columns an
 
 **Power.** Type `reboot` or `shutdown` in Terminal (typing the word is the confirmation). Or press Ctrl+Alt+Delete to restart and Ctrl+Alt+End to shut down; Terminal asks first (Enter proceeds, Escape cancels). On a Mac keyboard Alt is Option and End may need Fn+Right. Both are refused while Samantha is answering. Both write every open file to the card first, so a note you were saving is kept. Shutdown powers down the SD interface and shows "It is safe to unplug the power now."; it does not cut the board's power. The same two items, Restart and Shut Down, sit in the tree menu at the left of the menu bar. With accounts, neither needs sudo or a password: it is the signed-in person's own machine.
 
-**Screen sleep.** Five minutes without keyboard or mouse blanks the HDMI picture. A key or mouse move wakes it and still reaches the app. Brick and an active Samantha request keep the screen awake. Apps, USB and networking keep running. This is not suspend and saves nothing. HDMI sleep and wake still need a physical Pi test.
+**Screen sleep.** Five minutes without keyboard or mouse blanks the HDMI picture. It only does this while a keyboard or mouse is plugged in (or a Bluetooth mouse is connected), since nothing else could wake it. A key or mouse move wakes it and still reaches the app. Brick and an active Samantha request keep the screen awake. Apps, USB and networking keep running. This is not suspend and saves nothing. HDMI sleep and wake still need a physical Pi test.
 
 ### Wi-Fi: from switching on to asking a question
 

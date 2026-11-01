@@ -552,6 +552,7 @@ static void uac_gone(unsigned slot) { for (unsigned k = 0; k < 2; k++) if (uacs[
 
 /* The sound layer's way in. usb_mic_record blocks for up to ms milliseconds (it keeps the controller's events drained) and
    returns how many 16 kHz mono samples it got; nothing is kept when nothing has armed the ring. */
+int usb_input_count(void) { return nkbd + nmouse; }   /* 7.5.3: the screen sleeps only while one of these can wake it */
 int usb_mic_ok(void) { return uacs[0].on; }
 unsigned usb_mic_record(short *dst, unsigned max, unsigned ms) {
     if (!uacs[0].on) return 0;
