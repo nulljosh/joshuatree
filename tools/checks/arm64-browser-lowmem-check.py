@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""7.5.6: the Browser loads a small page when less than 4 MiB of heap is free (arch/arm64/browser.c raw_alloc).
+"""7.6.0: the Browser loads a small page when less than 4 MiB of heap is free (arch/arm64/browser.c raw_alloc).
 
 On the 27 inch ASUS a 19 KB page said "browser: out of memory": every fetch asked for one 4 MiB reply buffer, and the
 desktop (the magnified dock keeps a copy of its band) had left less than that. raw_alloc now takes the biggest buffer

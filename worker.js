@@ -91,6 +91,7 @@ async function handleProxy(request, env) {
   if (targetUrl.hostname === "joshuatree.jaybulb.com"
       && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password) {
     if (targetUrl.pathname === "/api/stocks") return handleStocks(targetUrl);
+    if (targetUrl.pathname === "/api/weather") return handleWeather(request);
     if (targetUrl.pathname === "/api/quotes") return handleQuotes();
     if (targetUrl.pathname === "/api/books") return handleBooks();
     if (targetUrl.pathname === "/api/lexly") return handleLexly(targetUrl);
@@ -283,6 +284,28 @@ function stockWire(data, symbol) {
   const n = Math.min(raw.length, 64);
   const points = Array.from({length: n}, (_, i) => raw[n === 1 ? 0 : Math.round(i * (raw.length - 1) / (n - 1))]);
   return [price, prev, time, n, ...points].join(" ");
+}
+// The Pi's Weather (arch/arm64/feeds.c): the caller's own place from Cloudflare's request.cf (no IP lookup on the Pi)
+// and Open-Meteo's forecast, as the WEATHER.TXT lines user/weather_pi.c reads: city, have, temp (whole degrees C),
+// code (WMO), then "d weekday code hi lo" for five days (weekday 0 is Sunday). No place or no forecast: "have 0".
+async function handleWeather(request) {
+  const cf = request.cf ?? {};
+  const lat = Number(cf.latitude), lon = Number(cf.longitude);
+  const city = String(cf.city ?? "").replace(/[^\p{L}\p{N} .'-]/gu, "").slice(0, 30);
+  const head = {"Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store"};
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return new Response("have 0\n", {headers: head});
+  try {
+    const q = `latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`;
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`, {signal: AbortSignal.timeout(8000)});
+    if (!r.ok) throw Error("forecast");
+    const w = await r.json(), d = w.daily;
+    const lines = [`city ${city || "Here"}`, "have 1", `temp ${Math.round(w.current.temperature_2m)}`, `code ${w.current.weather_code}`];
+    for (let i = 0; i < d.time.length && i < 5; i++) {
+      const wd = new Date(d.time[i] + "T12:00:00Z").getUTCDay();
+      lines.push(`d ${wd} ${d.weather_code[i]} ${Math.round(d.temperature_2m_max[i])} ${Math.round(d.temperature_2m_min[i])}`);
+    }
+    return new Response(lines.join("\n") + "\n", {headers: head});
+  } catch { return new Response("have 0\n", {headers: head}); }
 }
 async function handleStocks(url) {
   const range = url.searchParams.get("range") ?? "0";
@@ -777,6 +800,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/stocks") return handleStocks(url);
+    if (url.pathname === "/api/weather") return handleWeather(request);
     if (url.pathname === "/api/quotes") return handleQuotes();
     if (url.pathname === "/api/books") return handleBooks();
     if (url.pathname === "/api/lexly") return handleLexly(url);

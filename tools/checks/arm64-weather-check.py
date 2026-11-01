@@ -2,14 +2,16 @@
 """ARM64 Weather: the dock tile and Spotlight open user/weather_pi.c in a window at EL0, and it draws the city, the
 temperature large, a condition glyph, high and low and a row of five day cards (headless QEMU, own private scratch).
 
-Boots the normal ARM kernel on QEMU's virt machine with ramfb and virtio keyboard and tablet, no network and no card, so
-there is no WEATHER.TXT and the app must show its labelled sample. Through QMP it:
-  - clicks the Weather tile (slot 8): "dock Weather: not on ARM yet" is gone; the scheduler starts weather ("M3c app
-    weather starts"), its window opens, and it says "weather: 0 saved, days 5" and "weather: temp 18 code 0";
+7.6.0: no sample data. Opening Weather makes the kernel fetch the reading (arch/arm64/feeds.c) and serve WEATHER.TXT
+from RAM. Here the feedsfix build fetches it from this script's own server on the host (a fixture, test only) through
+QEMU's user network, on the virt machine with ramfb and virtio keyboard and tablet. Through QMP it:
+  - clicks the Weather tile (slot 8): the kernel says "weather: live reading fetched", the scheduler starts weather
+    ("M3c app weather starts"), its window opens, and it says "weather: 1 saved, days 5" and "weather: temp 18 code 0";
   - samples the framebuffer against weather_pi.c's own layout: ink for the large temperature, the terracotta sun (the
-    sample is clear), five card-coloured day cards in a row with the page colour between them, and ink inside each;
+    fixture is clear), five card-coloured day cards in a row with the page colour between them, and ink inside each;
   - presses Esc: "weather: closed", "M3c app weather exit 0", and the wallpaper is back where the window stood;
   - opens it again from Spotlight (F1, "weat", Enter) and closes it with its red dot.
+Then the normal kernel with no network: Weather opens with no reading and says so, nothing made up.
 No KERNEL CRASH, no load failure. Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Set JT_WEATHER_SHOT=path.ppm to keep the screendump of the open window.
 Usage: tools/checks/arm64-weather-check.py   (from the repo root)
@@ -23,8 +25,18 @@ root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 arch = os.path.join(root, "arch/arm64")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
     print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
-if subprocess.run(["make", "-s", "-C", arch, "kernel8.elf"], capture_output=True).returncode:
-    print("FAIL: arch/arm64 `make kernel8.elf` does not build"); sys.exit(1)
+if subprocess.run(["make", "-s", "-C", arch, "kernel8.elf", "feedsfixtest"], capture_output=True).returncode:
+    print("FAIL: arch/arm64 `make kernel8.elf feedsfixtest` does not build"); sys.exit(1)
+import http.server, threading
+FIXTURE = b"city Testville\nhave 1\ntemp 18\ncode 0\nd 0 0 21 12\nd 1 2 19 11\nd 2 3 17 10\nd 3 61 15 9\nd 4 71 3 -2\n"   # test data only
+class Fixture(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200); self.send_header("Content-Type", "text/plain"); self.send_header("Content-Length", str(len(FIXTURE)))
+        self.end_headers(); self.wfile.write(FIXTURE)
+    def log_message(self, *a): pass
+try: server = http.server.HTTPServer(("127.0.0.1", 18471), Fixture)
+except OSError: print("FAIL: port 18471 is taken"); sys.exit(1)
+threading.Thread(target=server.serve_forever, daemon=True).start()
 fails = []
 def check(name, ok, detail=""):
     print(("  ok: " if ok else "  FAIL: ") + name + ("" if ok or not detail else " -- " + str(detail)[-400:]))
@@ -38,11 +50,12 @@ BG, CARD, ACCENT, RED = (0xf5, 0xf0, 0xeb), (0xec, 0xe5, 0xdc), (0xb5, 0x50, 0x2
 
 tmp = scratch_dir("arm64-weather")
 log, sock = tmp + "/uart", tmp + "/qmp"
-q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-nic", "none",
+q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256",
+                      "-netdev", "user,id=n", "-device", "virtio-net-device,netdev=n",
                       "-global", "virtio-mmio.force-legacy=false", "-device", "ramfb",
                       "-device", "virtio-keyboard-device", "-device", "virtio-tablet-device", "-display", "none",
                       "-serial", "file:" + log, "-qmp", "unix:%s,server,nowait" % sock,
-                      "-kernel", os.path.join(arch, "kernel8.elf")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                      "-kernel", os.path.join(arch, "feedsfix-kernel8.elf")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 def uart(): return open(log, errors="replace").read() if os.path.exists(log) else ""
 def wait_for(text, secs=6.0, after=0):
     end = time.time() + secs
@@ -51,7 +64,7 @@ def wait_for(text, secs=6.0, after=0):
         time.sleep(0.05)
     return False
 try:
-    if not wait_for("M2 input ready", 40):
+    if not (wait_for("M2 input ready", 40) and wait_for("net dhcp ", 30)):
         fails.append(f"the desktop did not boot, got {uart()[-600:]!r}"); raise SystemExit
     s_ = socket.socket(socket.AF_UNIX); s_.settimeout(20); s_.connect(sock); f = s_.makefile("rw"); f.readline()
     def cmd(c, **a):
@@ -89,8 +102,8 @@ try:
     out = uart()[n0:]
     check("the Weather tile starts user/weather_pi.c under the scheduler, not the old 'not on ARM yet' line",
           ok and "M3c app weather starts" in out and "not on ARM yet" not in out, out[-500:])
-    check("it found no saved reading and drew the labelled sample: 5 days, 18 degrees, code 0",
-          "weather: 0 saved, days 5\n" in out and "weather: temp 18 code 0\n" in out, out[-300:])
+    check("the kernel fetched the reading and the app drew it: 5 days, 18 degrees, code 0",
+          "weather: live reading fetched\n" in out and "weather: 1 saved, days 5\n" in out and "weather: temp 18 code 0\n" in out, out[-300:])
     m = re.search(r"M3c window weather (\d+)x(\d+) at (\d+),(\d+)\n", out)
     if not m: fails.append("no 'M3c window weather WxH at X,Y' line"); raise SystemExit
     vw, vh, cx0, cy0 = map(int, m.groups())
@@ -134,8 +147,27 @@ except SystemExit:
     pass
 finally:
     q.kill(); q.wait()
+# ---- no network: no reading, and it says so ----
+log = tmp + "/uart2"
+q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-nic", "none",
+                      "-global", "virtio-mmio.force-legacy=false", "-device", "ramfb",
+                      "-device", "virtio-keyboard-device", "-device", "virtio-tablet-device", "-display", "none",
+                      "-serial", "file:" + log, "-qmp", "unix:%s2,server,nowait" % sock,
+                      "-kernel", os.path.join(arch, "kernel8.elf")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+try:
+    if wait_for("M2 input ready", 40):
+        s_ = socket.socket(socket.AF_UNIX); s_.settimeout(20); s_.connect(sock + "2"); f = s_.makefile("rw"); f.readline()
+        cmd("qmp_capabilities")
+        n = len(uart()); click(*slot_centre(8))
+        ok = wait_for("M3c window weather first frame", 8, n)
+        check("with no network Weather opens with no reading and says so, nothing made up",
+              ok and "weather: no network, no reading\n" in uart()[n:] and "weather: 0 saved, days 0\n" in uart()[n:], uart()[n:][-300:])
+        if os.environ.get("JT_WEATHER_EMPTY_SHOT"): time.sleep(0.5); shot(os.environ["JT_WEATHER_EMPTY_SHOT"])
+    else: check("the no-network desktop boots", False, uart()[-300:])
+finally:
+    q.kill(); q.wait(); server.shutdown()
 if fails:
     for msg in fails: print("FAIL: " + msg)
     sys.exit(1)
 print("PASS: the Weather tile and Spotlight open the Pi Weather window: the temperature, a sun glyph and five day cards are drawn "
-      "(labelled sample with no reading), and Esc and the red dot close it")
+      "from a fetched reading, Esc and the red dot close it, and with no network it shows no reading")

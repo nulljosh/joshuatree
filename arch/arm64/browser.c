@@ -1027,7 +1027,7 @@ static unsigned img_next, img_t0;   /* the next image to fetch, and when its pag
 void uart_puts(const char *s); extern int con_quiet;
 static void img_log(const char *s) { con_quiet = 1; uart_puts(s); }   /* a pass has no Terminal line to print on: the UART only */
 int browser_images_pending(void) { return img_next < nimg; }
-/* 7.5.6: the reply buffer as big as the heap allows, RAW_MAX down to 256 KiB. A flat RAW_MAX needs 4 MiB free in one
+/* 7.6.0: the reply buffer as big as the heap allows, RAW_MAX down to 256 KiB. A flat RAW_MAX needs 4 MiB free in one
    piece; with the desktop holding much of the heap (the magnified dock keeps a copy of its band) a 19 KB page said out of
    memory on the board. */
 static char *raw_alloc(unsigned *cap) {

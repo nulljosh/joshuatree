@@ -4,7 +4,7 @@ change pills on the left and an anti-aliased line chart of the selected symbol o
 scratch).
 
 7.6.0: no sample data. Opening Stocks makes the kernel fetch today's quotes (arch/arm64/feeds.c) and serve STOCKS.TXT
-from RAM. Here the stocksfix build fetches them from this script's own server on the host (a fixture, test only) through
+from RAM. Here the feedsfix build fetches them from this script's own server on the host (a fixture, test only) through
 QEMU's user network, on the virt machine with ramfb and virtio keyboard and tablet. Through QMP it:
   - clicks the Stocks tile (slot 9): the kernel says "stocks: live prices fetched", the scheduler starts stocks, its
     window opens and it says "stocks: prices" and "stocks: sel AAPL";
@@ -26,8 +26,8 @@ root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 arch = os.path.join(root, "arch/arm64")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
     print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
-if subprocess.run(["make", "-s", "-C", arch, "kernel8.elf", "stocksfixtest"], capture_output=True).returncode:
-    print("FAIL: arch/arm64 `make kernel8.elf stocksfixtest` does not build"); sys.exit(1)
+if subprocess.run(["make", "-s", "-C", arch, "kernel8.elf", "feedsfixtest"], capture_output=True).returncode:
+    print("FAIL: arch/arm64 `make kernel8.elf feedsfixtest` does not build"); sys.exit(1)
 import http.server, threading
 def fixture_row(i):   # test data only: 64 closes, AAPL and every other row up, the rest down, so both pill colours show
     up = i % 2 == 0
@@ -60,7 +60,7 @@ q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex
                       "-global", "virtio-mmio.force-legacy=false", "-device", "ramfb",
                       "-device", "virtio-keyboard-device", "-device", "virtio-tablet-device", "-display", "none",
                       "-serial", "file:" + log, "-qmp", "unix:%s,server,nowait" % sock,
-                      "-kernel", os.path.join(arch, "stocksfix-kernel8.elf")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                      "-kernel", os.path.join(arch, "feedsfix-kernel8.elf")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 def uart(): return open(log, errors="replace").read() if os.path.exists(log) else ""
 def wait_for(text, secs=6.0, after=0):
     end = time.time() + secs

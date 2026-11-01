@@ -1,10 +1,11 @@
-/* feeds.c, 7.6.0: live data for the Pi's Stocks, held in RAM.
+/* feeds.c, 7.6.0: live data for the Pi's Stocks and Weather, held in RAM.
  *
  * The i386 kernel fetches quotes into STOCKS.TXT; the Pi's Stocks (user/stocks_pi.c) read that file off the card and,
  * with none, drew a made-up sample. Now opening Stocks fetches the site Worker's /api/stocks (Yahoo quotes, one line per
  * symbol: "price prev time n p0 .. pn-1", cents) and keeps them here in the file's own format; ufile.c's readfile
  * answers STOCKS.TXT from this copy, so nothing is written to the card. No network, or a bad reply: nothing is kept, and
- * the app says it has no prices. STOCKS_URL is the source; the stocksfix test build points it at the check's server.
+ * the app says it has no prices. Weather (7.6.0) is the same: /api/weather already answers in WEATHER.TXT's lines, kept
+ * as they came once they look whole. FEEDS_TEST_PORT (the feedsfix build) points both at a check's own server.
  */
 int browser_get(const char *url, char **body, unsigned *n);   /* browser.c */
 unsigned net_get_gateway(void);                                /* net.c */
@@ -12,13 +13,15 @@ unsigned long heap_mark(void);
 void heap_release(unsigned long m);
 void kputs(const char *s);
 
-#ifdef STOCKS_TEST_PORT   /* the stocksfix build: arm64-stocks-check.py serves a fixture on the host */
+#ifdef FEEDS_TEST_PORT   /* the feedsfix build: arm64-stocks-check.py and arm64-weather-check.py serve fixtures on the host */
 #define STR_(x) #x
 #define STR(x) STR_(x)
-#define STOCKS_URL "http://10.0.2.2:" STR(STOCKS_TEST_PORT) "/api/stocks?range=0"
+#define FEEDS_HOST "http://10.0.2.2:" STR(FEEDS_TEST_PORT)
 #else
-#define STOCKS_URL "https://joshuatree.jaybulb.com/api/stocks?range=0"
+#define FEEDS_HOST "https://joshuatree.jaybulb.com"
 #endif
+#define STOCKS_URL FEEDS_HOST "/api/stocks?range=0"
+#define WEATHER_URL FEEDS_HOST "/api/weather"   /* the Worker answers with the caller's own place (request.cf) and Open-Meteo's forecast */
 #define ROWS 8
 #define PTS 32   /* stocks_pi.c's PTS: the points are cut to this by even sampling, as kernel/stocks.c does */
 
@@ -75,12 +78,33 @@ void feeds_stocks(void) {
     } else kputs("stocks: could not fetch prices\n");
     heap_release(mark);
 }
-/* ufile.c's readfile: STOCKS.TXT from RAM when a fetch kept one; -1 sends it on to the card. */
+static char weather_txt[1024];
+static unsigned weather_len;
+void feeds_weather(void) {
+    weather_len = 0;
+    if (!net_get_gateway()) { kputs("weather: no network, no reading\n"); return; }
+    unsigned long mark = heap_mark();
+    char *body = 0; unsigned n = 0;
+    int st = browser_get(WEATHER_URL, &body, &n);
+    int ok = st == 200 && body && n > 5 && n < sizeof weather_txt && body[0] == 'c' && body[1] == 'i' && body[2] == 't' && body[3] == 'y' && body[4] == ' ';
+    for (unsigned i = 0; ok && i < n; i++) if ((unsigned char)body[i] < ' ' && body[i] != '\n') ok = 0;   /* text lines only */
+    if (ok) { for (unsigned i = 0; i < n; i++) weather_txt[i] = body[i]; weather_len = n; }
+    kputs(ok ? "weather: live reading fetched\n" : "weather: could not fetch a reading\n");
+    heap_release(mark);
+}
+/* ufile.c's readfile: STOCKS.TXT or WEATHER.TXT from RAM when a fetch kept one; -1 sends it on to the card. */
+static int named(const char *leaf, const char *w) {
+    unsigned i = 0;
+    for (; w[i]; i++) { char a = leaf[i]; if (a >= 'a' && a <= 'z') a -= 32; if (a != w[i]) return 0; }
+    return !leaf[i];
+}
 int feeds_read(const char *leaf, char *buf, unsigned cap) {
-    const char *w = "STOCKS.TXT"; unsigned i = 0;
-    for (; w[i]; i++) { char a = leaf[i]; if (a >= 'a' && a <= 'z') a -= 32; if (a != w[i]) return -1; }
-    if (leaf[i] || !stocks_len) return -1;
-    unsigned k = stocks_len < cap ? stocks_len : cap;
-    for (unsigned j = 0; j < k; j++) buf[j] = stocks_txt[j];
+    const char *src; unsigned len;
+    if (named(leaf, "STOCKS.TXT")) { src = stocks_txt; len = stocks_len; }
+    else if (named(leaf, "WEATHER.TXT")) { src = weather_txt; len = weather_len; }
+    else return -1;
+    if (!len) return -1;
+    unsigned k = len < cap ? len : cap;
+    for (unsigned j = 0; j < k; j++) buf[j] = src[j];
     return (int)k;
 }
