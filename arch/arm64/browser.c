@@ -348,7 +348,7 @@ static int fetch_once(const char *url, char *raw, unsigned max) {
         }
         if (!u.tls) kputs("browser: tcp ok\n");
         raw[got] = 0;
-        if ((unsigned)got >= max - 1) kputs("browser: page too big, showing the first 4 MiB\n");
+        if ((unsigned)got >= max - 1) { kputs("browser: page too big, showing the first "); kdec(max >> 10); kputs(" KiB\n"); }
         take_cookies(raw, (unsigned)got, &u);
         int status = http_status_of(raw, (unsigned)got);
         kputs("browser: http "); kdec((unsigned)status); kputs(status >= 400 ? " (the server refused)\n" : status < 200 ? " (not a page)\n" : "\n");
@@ -1027,6 +1027,13 @@ static unsigned img_next, img_t0;   /* the next image to fetch, and when its pag
 void uart_puts(const char *s); extern int con_quiet;
 static void img_log(const char *s) { con_quiet = 1; uart_puts(s); }   /* a pass has no Terminal line to print on: the UART only */
 int browser_images_pending(void) { return img_next < nimg; }
+/* 7.5.6: the reply buffer as big as the heap allows, RAW_MAX down to 256 KiB. A flat RAW_MAX needs 4 MiB free in one
+   piece; with the desktop holding much of the heap (the magnified dock keeps a copy of its band) a 19 KB page said out of
+   memory on the board. */
+static char *raw_alloc(unsigned *cap) {
+    for (unsigned c = RAW_MAX; c >= (256u << 10); c >>= 1) { char *r = kmalloc(c); if (r) { *cap = c; return r; } }
+    *cap = 0; return 0;
+}
 int browser_image_tick(void) {   /* 0 nothing to do, 1 an image was tried, 2 it was the page's last */
     if (img_next >= nimg) return 0;
     unsigned k = img_next++;
@@ -1034,13 +1041,13 @@ int browser_image_tick(void) {   /* 0 nothing to do, 1 an image was tried, 2 it 
     img_w[k] = img_h[k] = 0;
     unsigned long mark = heap_mark();
     int late = ticks() - img_t0 > IMG_TICKS;
-    char *raw = late ? 0 : kmalloc(RAW_MAX);
+    unsigned cap = 0; char *raw = late ? 0 : raw_alloc(&cap);
     if (!raw) { kputs("browser: image "); kdec(k + 1); kputs(late ? " skipped, too slow\n" : " failed, out of memory\n"); }
     else {
         char page[URL_MAX]; scopy(page, cur, slen(cur), URL_MAX);   /* fetch moves cur to the image's address */
         cmd_out = sink;
         unsigned n = 0; char *body = 0;
-        int got = fetch(img_url[k], raw, RAW_MAX);
+        int got = fetch(img_url[k], raw, cap);
         if (got > 0 && http_status_of(raw, (unsigned)got) == 200) body = page_body(raw, (unsigned)got, &n);
         cmd_out = img_log;
         int ok = body && decode_image(k, (const unsigned char *)body, n);
@@ -1255,14 +1262,14 @@ static void show(const char *url, int push) {
     unsigned long mark = heap_mark();
     char vid[12];
     if (yt_id(url, vid) && has(url, "play=1")) { yt_play(vid); heap_release(mark); return; }   /* 6.10.0: not a page, the clip */
-    char *raw = kmalloc(RAW_MAX);
+    unsigned cap; char *raw = raw_alloc(&cap);
     if (!raw) { kputs("browser: out of memory\n"); heap_release(mark); return; }
     if (!net_get_gateway()) { kputs("browser: no network\n"); heap_release(mark); return; }
     kputs("browser: fetching\n");
     unsigned dns_was = net_dns_wait_ticks, connect_was = net_connect_wait_ticks;
     net_dns_wait_ticks = DNS_TICKS; net_connect_wait_ticks = CONNECT_TICKS;
     char was[URL_MAX]; scopy(was, cur, slen(cur), URL_MAX);
-    int got = fetch(url, raw, RAW_MAX);
+    int got = fetch(url, raw, cap);
     net_dns_wait_ticks = dns_was; net_connect_wait_ticks = connect_was;
     unsigned blen = 0;
     char *body = got > 0 ? page_body(raw, (unsigned)got, &blen) : 0;
@@ -1541,10 +1548,10 @@ void browser_render(const char *html, unsigned n, const char *name) {
 int browser_get(const char *url, char **body, unsigned *n) {
     char was[URL_MAX]; scopy(was, cur, slen(cur), URL_MAX);
     *body = 0; *n = 0;
-    char *raw = kmalloc(RAW_MAX);
+    unsigned cap; char *raw = raw_alloc(&cap);
     if (!raw) return -1;
     void (*out)(const char *) = cmd_out; cmd_out = sink;
-    int got = fetch(url, raw, RAW_MAX), st = got > 0 ? http_status_of(raw, (unsigned)got) : -1;
+    int got = fetch(url, raw, cap), st = got > 0 ? http_status_of(raw, (unsigned)got) : -1;
     if (got > 0) *body = page_body(raw, (unsigned)got, n);
     cmd_out = out;
     scopy(cur, was, slen(was), URL_MAX);

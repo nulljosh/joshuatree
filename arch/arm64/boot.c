@@ -426,6 +426,10 @@ void main(void) {
         GICD(0x100) = 1u << 27;
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
         desk_ms = key_ms();
+#ifdef BROWSER_LOWMEM_TEST   /* the lowmem build (arm64-browser-lowmem-check.py): the desktop is up; leave 3 to 4 MiB of heap free, as on the board */
+        { unsigned long m0 = heap_mark(); unsigned k = 0; while (kmalloc(1u << 20)) k++; heap_release(m0); if (k > 3) kmalloc((k - 3) << 20);
+          con_quiet = 1; uart_puts("lowmem: "); uart_dec(k > 3 ? 3 : k); uart_puts(" MiB and change left\n"); }
+#endif
 #ifdef PTR_BURST_TEST   /* the ptrburst build (arm64-ptrburst-check.py): 20 mouse reports in one pass are drawn once */
         { extern unsigned ptr_draws; unsigned d0 = ptr_draws;
           for (int i = 0; i < 20; i++) { kinput(2, 0, 4); kinput(0, 0, 0); }

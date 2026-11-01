@@ -16,6 +16,7 @@
 #   dragtest    drag-kernel8.elf / drag-kernel8.img: the Console dragged 100 right and 60 down at boot (clamped), for arm64-drag-check.py at 1080p
 #   dirtyrecttest dirtyrect-kernel8.elf: the glitch build (1080p ramfb) plus a `fb: flush` line per window move
 #   ptrbursttest ptrburst-kernel8.elf: 20 made-up mouse reports in one pass at boot, drawn once (arm64-ptrburst-check.py)
+#   lowmemtest  lowmem-kernel8.elf: the Browser fetches with between 3 and 4 MiB of heap free (arm64-browser-lowmem-check.py)
 #   keydbgtest  keydbg-kernel8.elf: the dev card's key debug line on, plus made-up HID reports (a report ID) at boot
 #   calctest    calc-kernel8.elf: the Calculator open at boot with four sums typed into it
 #   caltest     cal-kernel8.elf: the clock fixed at CAL_UTC, so the Calendar tile shows that month with that day in the accent
@@ -356,6 +357,8 @@ dragtest: drag-kernel8.elf drag-kernel8.img
 keydbgtest: keydbg-kernel8.elf
 $(eval $(call variant,ptrburst,-DPTR_BURST_TEST,,))
 ptrbursttest: ptrburst-kernel8.elf
+$(eval $(call variant,lowmem,-DBROWSER_LOWMEM_TEST,,))
+lowmemtest: lowmem-kernel8.elf
 $(eval $(call variant,glitch,-DFB_BOOT_W=1920 -DFB_BOOT_H=1080 -DHEAP_SIZE=40UL*1024*1024,,))
 glitchtest: glitch-kernel8.elf
 # 4.3.0: the glitch build plus FB_TRACE's `fb: flush` line per window move (arm64-dirtyrect-check.py)
@@ -385,7 +388,7 @@ run-pi: kernel8.img
 clean:
 	rm -rf *.o *.a *.elf *.img hello_c.bin uapp_*.bin claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg bt_fw.S bt_fw.S.tmp
 FORCE:
-.PHONY: ptrbursttest glitchtest dirtyrecttest brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest reminderstest
+.PHONY: lowmemtest ptrbursttest glitchtest dirtyrecttest brtracetest wifi-fw bt-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest dragtest apptest keydbgtest calctest caltest sdtest sdwtest notestest reminderstest
 
 # Power checks invoke the real keyboard confirmation and Pi watchdog.
 $(eval $(call variant,poweroff,-DPOWER_SELFTEST=1,,))
