@@ -40,7 +40,7 @@ Where it is going, what shipped, and the story so far.
 
 A freestanding kernel for i386 and the Raspberry Pi 4, no libc. This is the forward plan; what shipped is in the [Shipped log](#shipped-log) and the [releases](https://github.com/nulljosh/joshuatree/releases).
 
-**Latest**: 7.0: Online. Join Wi-Fi, browse the web with pictures in Blackcomb, read your mail and see your calendar, all on the Pi.
+**Latest**: 7.6: Real stock prices and real weather on the Pi, a dock that keeps up with your mouse, and an About window like a Mac.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
