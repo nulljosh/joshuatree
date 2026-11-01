@@ -65,6 +65,7 @@ int tls_connect(unsigned ip, unsigned short port, const char *host) { (void)ip; 
 int tls_handshake(void) { return -1; }
 int tls_exchange(const void *request, unsigned request_len, char *out, unsigned max) { (void)request; (void)request_len; (void)out; (void)max; return -1; }
 int tls_last_error(void) { return 0; }
+const char *net_error_name(int err) { (void)err; return "send failed"; }
 
 #include "../../arch/arm64/browser.c"
 
@@ -133,8 +134,26 @@ static void fuzz(const char *name, void (*f)(const char *, unsigned), const char
     free(m);
     fprintf(stderr, "browser-fuzz: %s, %ld cases\n", name, g_cases - before);
 }
+/* 7.5.4: a reply that stops early says so, never "page too big" (the first board test read Wikipedia's that way). */
+static char said[256];
+static void out_keep(const char *s) { strncat(said, s, sizeof said - strlen(said) - 1); }
+static void cut_checks(void) {
+    char a[] = "HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nonly a little";
+    unsigned n = 0;
+    cmd_out = out_keep; said[0] = 0;
+    if (page_body(a, sizeof a - 1, &n) || !strstr(said, "reply cut short")) { puts("FAIL: a short Content-Length reply was read as a page"); exit(1); }
+    char g[64] = "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\n\r\n";   /* gzip header, then four junk bytes where the trailer should be */
+    unsigned h = (unsigned)strlen(g);
+    const unsigned char gz[] = { 0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 4, 5, 6, 0xff, 0xff, 0xff, 0x7f };
+    memcpy(g + h, gz, sizeof gz); said[0] = 0;
+    if (page_body(g, h + (unsigned)sizeof gz, &n) || !strstr(said, "reply cut short") || strstr(said, "too big")) { puts("FAIL: a cut gzip reply was called too big"); exit(1); }
+    cmd_out = out_null;
+    puts("ok: cut replies say cut short");
+}
+
 int main(void) {
     signal(SIGALRM, on_alarm);
+    cut_checks();
     fuzz("page", run_page, PAGE, sizeof PAGE - 1, 4000);
     fuzz("cookies", run_head, HEAD, sizeof HEAD - 1, 4000);
     puts(g_hangs ? "BROWSER FUZZ: FAIL (hang)" : "BROWSER FUZZ: PASS");
