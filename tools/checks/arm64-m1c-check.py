@@ -225,6 +225,8 @@ if "raspi4b" in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capt
         # A 1080p monitor gets a 1080p desktop; a 4K one gets exactly half, so the firmware's 2x scale stays sharp.
         shoot("pi 1080p", ["-machine", "raspi4b", "-serial", "null", "-global", "bcm2835-fb.xres=1920", "-global", "bcm2835-fb.yres=1080"], "kernel8.img", (1920, 1080))
         shoot("pi 1080p hover", ["-machine", "raspi4b", "-serial", "null", "-global", "bcm2835-fb.xres=1920", "-global", "bcm2835-fb.yres=1080"], "hover-kernel8.img", (1920, 1080), hover=True)
+        # A 27 inch 1440p monitor (Joshua's ASUS, 2026-11-01) is not halved (only past 2560 wide is); 2560x1440x4 must still fit FB_RAM_MAX so it keeps its back buffer.
+        shoot("pi 1440p", ["-machine", "raspi4b", "-serial", "null", "-global", "bcm2835-fb.xres=2560", "-global", "bcm2835-fb.yres=1440"], "kernel8.img", (2560, 1440))
         shoot("pi 4K", ["-machine", "raspi4b", "-serial", "null", "-global", "bcm2835-fb.xres=3840", "-global", "bcm2835-fb.yres=2160"], "kernel8.img", (1920, 1080))
 else:
     print("  QEMU here has no raspi4b model (needs QEMU 9 or newer), Pi screen skipped")
