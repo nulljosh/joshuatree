@@ -3,10 +3,10 @@
  * Built only by arch/arm64/Makefile, as the app called "mail" (the Mail dock tile, Spotlight and Samantha's [[open mail]]
  * start it until mail is signed in; 6.32.0 then opens the real inbox in Blackcomb instead). i386 keeps user/mail.c. Read only: no network mail, no passwords, no address book, nothing written to the card.
  * The mail is MAIL.TXT in the card's JT/ folder when there is one, the very format user/mail.c keeps ("r|from|subject|body"
- * lines, a first character of u unread, r read, s sent, x unsent), else a handful of made-up sample messages, and the
- * window says so ("Sample messages" under the mailboxes). Up and Down move in the list, Left and Right change mailbox,
+ * lines, a first character of u unread, r read, s sent, x unsent); with none, the reading pane says how to sign in
+ * (7.5.4: it used to show made-up sample messages). Up and Down move in the list, Left and Right change mailbox,
  * Enter opens the message in the reading pane (and marks it read in memory), Esc closes the message, then the window.
- * Serial markers: mail: ring-3 window, mail: n=COUNT samples=0|1, mail: box=I, mail: sel=I, mail: read=I (the message's
+ * Serial markers: mail: ring-3 window, mail: n=COUNT, mail: box=I, mail: sel=I, mail: read=I (the message's
  * place in the file), mail: closed.
  */
 #include "jtsys.h"
@@ -41,7 +41,6 @@ struct arena { struct msg msgs[MAX]; char filebuf[4096]; };   /* past _user_end:
 static struct arena *ar JT_DATA = 0;
 #define msgs (ar->msgs)
 static int count JT_DATA = 0;
-static int samples JT_DATA = 0;
 static int box JT_DATA = 0;        /* 0 Inbox, 1 Unread, 2 Sent */
 static int vis[MAX] JT_DATA;       /* message indexes in the chosen mailbox */
 static int nvis JT_DATA = 0;
@@ -70,34 +69,11 @@ static void fit(char *out, const char *s, int maxw, int face) {   /* cut to a pi
     while (n > 1 && jt_text_width(face, out) > maxw) out[--n] = 0;
 }
 
-static void add_sample(const char *f, const char *s, const char *b, const char *d, int read, int sent) {
-    struct msg *m = &msgs[count++];
-    m->from = f; m->subject = s; m->body = b; m->date = d; m->read = read; m->sent = sent;
-}
-/* Made-up messages, labelled as samples on screen. No real people, addresses or accounts. */
-static void seed(void) {
-    samples = 1;
-    add_sample("Joshua Tree", "Welcome to Mail",
-        "This is the Mail window on the Pi. The messages you see here are samples that ship with the system, not real mail. "
-        "Put a MAIL.TXT in the JT folder on the card and they are replaced by yours.", "Oct 12", 0, 0);
-    add_sample("Dock Weekly", "Ten things the dock does",
-        "Hover a tile for its name. Left and Right walk the dock from the keyboard, Enter opens the tile, and F1 opens Spotlight to find anything by name.", "Oct 11", 0, 0);
-    add_sample("Field Notes", "Your reading list",
-        "Three books are waiting in the Books app. Drop plain text files into the BOOKS folder on the card and they show up in the library.", "Oct 9", 1, 0);
-    add_sample("Calendar", "Tomorrow at a glance",
-        "Nothing on the calendar for tomorrow. A sample reminder: water the plants, then take the long way home.", "Oct 8", 1, 0);
-    add_sample("Sample Sender", "A message with a longer subject line than fits",
-        "Long subjects are cut to the width of the list, and the whole subject is shown in the reading pane above the body. "
-        "Bodies wrap to the width of the window, so a narrower window just means more lines.", "Oct 6", 1, 0);
-    add_sample("To: sample@example.com", "Re: Welcome to Mail",
-        "Thanks, the three panes look right. Sent messages live in their own mailbox on the left.", "Oct 12", 1, 1);
-}
-
 /* user/mail.c's format, parsed in place: the separators become NULs. */
 static void load(void) {
     char *b = ar->filebuf;
     int n = jt_readfile("MAIL.TXT", b, 4096 - 1);
-    if (n <= 0) { seed(); return; }
+    if (n <= 0) return;   /* 7.5.4: no sample messages (Joshua: "no sample data"), the window asks for a sign-in instead */
     b[n] = 0;
     int i = 0;
     while (i < n && count < MAX) {
@@ -118,7 +94,6 @@ static void load(void) {
         count++;
         i++;
     }
-    if (!count) seed();
 }
 
 static int in_box(int i, int bx) { return bx == 2 ? msgs[i].sent != 0 : msgs[i].sent == 0 && (bx == 0 || !msgs[i].read); }
@@ -169,7 +144,6 @@ static void draw(void) {
         num(c, box_count(b));
         text(c, SIDE_W - 14 - jt_text_width(JT_FACE_BODY, c), y - 1, DIM);
     }
-    if (samples) { text("Sample", 14, H - 44, DIM); text("messages", 14, H - 26, DIM); }
     /* message list */
     btext(box_name[box], lx + 12, 8, INK);
     num(c, nvis);
@@ -193,6 +167,13 @@ static void draw(void) {
     }
     /* reading pane */
     if (opened < 0) {
+        if (!count) {   /* no mail on the card and not signed in: say how, never show made-up messages */
+            btext("Sign in to read your mail", rx + 24, H / 2 - 40, INK);
+            text("In the Terminal:", rx + 24, H / 2 - 12, DIM);
+            text("mail login imap.mail.me.com NAME", rx + 24, H / 2 + 8, DIM);
+            text("with an app-specific password.", rx + 24, H / 2 + 28, DIM);
+            return;
+        }
         text(nvis ? "Press Enter to read" : "Nothing to read", rx + 24, H / 2 - 20, FADE);
         return;
     }
@@ -230,7 +211,6 @@ void _start(int argc, char **argv) {
     draw();
     jt_write(1, "mail: ring-3 window\n", 20);
     say("mail: n=", count);
-    say("mail: samples=", samples);
     unsigned flags = JT_POLL_PRESENT;
     for (;;) {
         struct jt_event ev;

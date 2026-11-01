@@ -318,7 +318,13 @@ static int fetch_once(const char *url, char *raw, unsigned max) {
         #undef RQ
         /* Each stage prints one line when it passes, so a photo of the screen says where a failed fetch stopped. */
         unsigned ip; int got;
-        if (!http_resolve_host(u.host, &ip)) { kputs(net_last_error() == NET_ERR_DNS_TIMEOUT ? "browser: dns timeout\n" : "browser: no such host\n"); return -1; }
+        if (!http_resolve_host(u.host, &ip)) {   /* 7.5.4: "no such host" only when the resolver said so (the board said it for example.com) */
+            int e = net_last_error();
+            if (e == NET_ERR_DNS_TIMEOUT) kputs("browser: dns timeout\n");
+            else if (e == NET_ERR_DNS_NXDOMAIN) kputs("browser: no such host\n");
+            else { kputs("browser: dns failed, "); kputs(net_error_name(e)); kputs("\n"); }
+            return -1;
+        }
         kputs("browser: dns ok\n");
         if (u.tls) {
             if (tls_connect(ip, u.port, u.host) < 0) { kputs(tls_last_error() == TLS_ERR_ENTROPY ? "browser: hardware randomness unavailable\n" : "browser: connect timeout\n"); return -1; }
@@ -902,6 +908,15 @@ static int header_has(const char *raw, unsigned h, const char *name, const char 
     }
     return 0;
 }
+static unsigned content_length(const char *raw, unsigned h) {   /* Content-Length: N in raw[0..h), 0 when absent */
+    for (unsigned i = 0; i < h; i++) {
+        if ((i && raw[i - 1] != '\n') || !starts(raw + i, "content-length:")) continue;
+        unsigned e = i + 15, v = 0; while (e < h && raw[e] == ' ') e++;
+        for (; e < h && raw[e] >= '0' && raw[e] <= '9' && v < 100000000u; e++) v = v * 10 + (unsigned)(raw[e] - '0');
+        return v;
+    }
+    return 0;
+}
 /* Transfer-Encoding: chunked, undone in place: the hex size lines go and the chunks close up. The new length, or -1 when
    a size line is not hex or a chunk runs past what arrived. */
 static int dechunk(char *b, unsigned n) {
@@ -938,6 +953,9 @@ static char *gunzip(const unsigned char *g, unsigned *n) {
     if (g[3] & 2) p += 2;                                                   /* FHCRC */
     if (p + 8 > len) goto bad;
     size = g[len - 4] | (unsigned)g[len - 3] << 8 | (unsigned)g[len - 2] << 16 | (unsigned)g[len - 1] << 24;
+    /* 7.5.4: deflate grows at most 1032 times, so a bigger size means these last four bytes are not the trailer: the reply
+       stopped early (the board read Wikipedia's that way and called it too big). */
+    if ((unsigned long)size > (unsigned long)len * 1032) { kputs("browser: reply cut short, "); kdec(len); kputs(" bytes came\n"); return 0; }
     if (size > PAGE_MAX) { kputs("browser: page too big\n"); return 0; }
     if (!(out = kmalloc(size + 1))) { kputs("browser: out of memory\n"); return 0; }
     if (inflate_raw(g + p, len - 8 - p, (unsigned char *)out, size) != 0) goto bad;
@@ -955,6 +973,8 @@ static char *page_body(char *raw, unsigned got, unsigned *n) {
         kputs("browser: chunked reply cut short\n"); return 0;
     }
     body[len] = 0; *n = (unsigned)len;
+    unsigned want = b ? content_length(raw, (unsigned)b) : 0;   /* 7.5.4: fewer bytes than the server promised is a cut, not a page */
+    if (want && (unsigned)len < want) { kputs("browser: reply cut short, "); kdec((unsigned)len); kputs(" of "); kdec(want); kputs(" bytes\n"); return 0; }
     if (b && header_has(raw, (unsigned)b, "content-encoding:", "gzip")) body = gunzip((const unsigned char *)body, n);
     if (body) { kputs("browser: body "); kdec(*n); kputs(" bytes\n"); }
     return body;

@@ -279,10 +279,20 @@ static unsigned seq, reqid;
    Reading a flat 1536 bytes swallowed the start of whatever frame came next, so once the firmware had events queued
    (after the radio came up) the replies to set-commands vanished: the seventeenth run saw 'status 0' no-replies for
    clmload, country and escan while the plain gets before them worked. */
+static unsigned f2_dropped;   /* 7.5.4: frames terminated, printed once so a board photo shows it happened */
+static void f2_term(void) {   /* brcmf_sdio_rxfail: SFC_RF_TERM into FRAMECTRL (0x1000D), then wait for RFRAMEBCHI/LO (0x1001C/B) to read 0 */
+    cmd52(1, 0x1000D, 1, 1, 0);
+    for (unsigned t = 0; t < 1000; t++) { unsigned hi = 1, lo = 1; cmd52(1, 0x1001C, 0, 0, &hi); cmd52(1, 0x1001B, 0, 0, &lo); if (!hi && !lo) break; }
+}
 static int f2_read(void) {
     if (!cmd53(2, 0x8000, 0, frame, 64)) return 0;
-    unsigned len = frame[0] | frame[1] << 8;
-    if (len > 64 && len <= 1600) { unsigned rest = (len - 64 + 3) & ~3u; if (!cmd53(2, 0x8000, 0, frame + 64, rest)) return 0; }
+    int rest = f2_rest(frame);
+    if (rest < 0) {   /* the chip drops the rest, so the next read starts on a frame; the caller sees no frame */
+        if (!f2_dropped++) { kputs("wifi: dropped a frame of "); kdec(frame[0] | frame[1] << 8); kputs(" bytes\n"); }
+        f2_term(); frame[0] = frame[1] = frame[2] = frame[3] = 0;
+        return 1;
+    }
+    if (rest && !cmd53(2, 0x8000, 0, frame + 64, (unsigned)rest)) return 0;
     return 1;
 }
 /* What the last frame read back looked like, printed when a command gets no matching reply. */
@@ -670,6 +680,24 @@ void wifi_release(void) {
     if (!wlc_ioctl(2, 0, 0, &st) || st) { kputs("wifi up again, status "); kdec(st); kputs("\n"); }
     if (join()) kputs("wifi back after Bluetooth\n"); else menubar_wifi(0);
 }
+/* 7.5.4: a join that failed is tried again. On the board the Bluetooth mouse reconnected after a restart, the join after
+   wifi_release failed, and nothing tried again: the Pi stayed offline ("error send" from Samantha, the browser and mail)
+   until Settings joined by hand. From the main loop: while a network is saved, the chip is up, Bluetooth is not using the
+   antenna and the link is down, rejoin after 15 s, then 30, 60, up to 4 minutes between tries (a join can hold the loop
+   for up to 15 s, so never in a tight loop). Back to 15 s once joined. */
+int bt_settling(void);
+void wifi_tick(void) {
+    static unsigned long next; static unsigned gap = 15;
+    if (link_up || !net_len || held || wstep < 8) { next = 0; gap = 15; return; }
+    if (bt_settling()) return;
+    unsigned long t = now();
+    if (!next) { next = t + ticks_per_ms() * 1000UL * gap; return; }
+    if (t < next) return;
+    kputs("wifi: not connected, joining "); kputs((const char *)net_ssid); kputs(" again\n");
+    wifi_rejoin();
+    if (gap < 240) gap *= 2;
+    next = now() + ticks_per_ms() * 1000UL * gap;
+}
 
 /* WLAN power. On the Pi 4 the chip's WL_ON line is pin 1 of the firmware's GPIO expander (expander pins are numbered
    from 128), reached only through the mailbox. Tags from Linux's include/soc/bcm2835/raspberrypi-firmware.h:
@@ -761,6 +789,7 @@ int wifi_rejoin(void) { return 0; }
 int wifi_signal_level(void) { return 1; }
 void wifi_hold(void) {}
 void wifi_release(void) {}
+void wifi_tick(void) {}
 #endif
 
 /* 6.22.0, both builds: what cmd.c's `wifi` and `wifi join SSID` need. The passphrase comes from the stars prompt, becomes

@@ -172,15 +172,29 @@ static unsigned mark_lerp_n(const unsigned char *m, int n, int x0, int y0, int w
 }
 static unsigned mark_lerp(const unsigned char *m, int x0, int y0, int wx, int wy) { return mark_lerp_n(m, MENU_MARK_W, x0, y0, wx, wy); }
 #ifdef QUIET_BOOT
-/* The splash's mark: the 160 px stored copy (the menu's 80 px one, stretched 2.75x, was the smudge on the Pi), ink over a
-   known flat ground written straight to the screen, so nothing depends on what was there before. */
+/* The splash's mark, ink over a known flat ground written straight to the screen, so nothing depends on what was there
+   before. 7.5.4: from the 400 px copy (splash_mark.h), each screen pixel the average of the stored pixels under it; the
+   160 px one stretched to 300 at 1080p was soft on the board, as the menu's 80 px one stretched 2.75x was a smudge. */
+#include "splash_mark.h"
+static unsigned splash_box(int col, int row, int T) {   /* the stored pixels under screen pixel (col, row) of a T px mark, averaged */
+    int n = SPLASH_MARK_W, x0 = col * n / T, x1 = (col + 1) * n / T, y0 = row * n / T, y1 = (row + 1) * n / T;
+    if (x1 <= x0) x1 = x0 + 1;
+    if (y1 <= y0) y1 = y0 + 1;
+    unsigned s = 0;
+    for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) s += splash_mark_cov[y * n + x];
+    return s / (unsigned)((x1 - x0) * (y1 - y0));
+}
 void splash_mark(int cx, int cy, int T, unsigned ink, unsigned bg) {
-    int ox = cx - T / 2, oy = cy - T / 2, n = BOOT_MARK_W;
+    int ox = cx - T / 2, oy = cy - T / 2, n = SPLASH_MARK_W;
     for (int row = 0; row < T; row++) for (int col = 0; col < T; col++) {
-        int fx = (2 * col + 1) * n * 128 / T - 128, fy = (2 * row + 1) * n * 128 / T - 128;
-        if (fx < 0) fx = 0;
-        if (fy < 0) fy = 0;
-        unsigned a = mark_lerp_n(boot_mark_cov, n, fx >> 8, fy >> 8, fx & 255, fy & 255);
+        unsigned a;
+        if (T <= n) a = splash_box(col, row, T);
+        else {   /* a screen past 1440 tall: blend the four nearest, as before */
+            int fx = (2 * col + 1) * n * 128 / T - 128, fy = (2 * row + 1) * n * 128 / T - 128;
+            if (fx < 0) fx = 0;
+            if (fy < 0) fy = 0;
+            a = mark_lerp_n(splash_mark_cov, n, fx >> 8, fy >> 8, fx & 255, fy & 255);
+        }
         if (!a) continue;
         unsigned out = 0;
         for (int sh = 0; sh <= 16; sh += 8) out |= ((((ink >> sh) & 0xFF) * a + ((bg >> sh) & 0xFF) * (255 - a)) / 255) << sh;
