@@ -14,7 +14,8 @@ is opened (Spotlight) and put through the same script, read back from real scree
     bottom edge alone changes one side only;
   - drag it far out: it stops at the right of the screen and at the dock's band, which is untouched;
   - back to its first size, then the red dot closes it and leaves flat wallpaper.
-Last, the Calendar over the Console: dragging it away draws the Console behind whole again where it was covered.
+Last, the Calendar over the Console: dragging it away draws the Console behind whole again where it was covered; then the
+Terminal brought in front of the open Calendar still resizes by its corner and the Calendar behind stays drawn (7.5.5).
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-resize-check.py   (from the repo root)
 """
@@ -330,6 +331,20 @@ try:
             time.sleep(0.4)
             img = screendump(cmd, tmp)
             check("the Terminal behind is drawn whole where the Calendar left it", at is not None and px(img, px0 * S, py0 * S) != WALL, (at, px(img, px0 * S, py0 * S)))
+            # 7.5.5: the Terminal in front of an open app window still drags and resizes (the board test: no resize with apps open)
+            nt = uart().count("terminal open")
+            key("f2")
+            wait_for("terminal open", 30, nt + 1); time.sleep(0.3)
+            t = tuple(cons.rect)
+            c0 = corner(t)
+            at, size = drag(c0, (c0[0] + 30, c0[1] + 20))
+            check("the Terminal in front of an open app still resizes by its corner", size == (t[2] + 30, t[3] + 20), (t, at, size, uart()[-300:]))
+            cal_at = re.findall(r"window at (\d+),(\d+)\n", uart())[-2]   # where the Calendar drag above left it
+            qx, qy = int(cal_at[0]) + r[2] - 10, int(cal_at[1]) + r[3] // 2
+            nt2 = (t[0], t[1], t[2] + 30, t[3] + 20)
+            img = screendump(cmd, tmp)
+            check("and the Calendar behind it is still drawn, not wallpaper", not inside(nt2, qx, qy) and px(img, qx * S, qy * S) != WALL, (nt2, qx, qy, px(img, qx * S, qy * S)))
+            if size: drag(corner(nt2), corner(t))   # back to its size
         else:
             check("the Calendar opens over the Terminal", False, uart()[-300:])
         for name, bad in (("a kernel crash", "KERNEL CRASH"), ("an app fault", "M3c app [a-z]+ [^\n]*fault"), ("an out-of-memory line", "oom ")):
