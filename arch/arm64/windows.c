@@ -180,8 +180,14 @@ void drag_end(void) {
         if (t == WT_APP && app_wbytes && (app_cw != app_bw || app_ch != app_bh)) app_note_resize();   /* an event the full ring dropped is asked again */
     }
 }
+#ifdef PTR_BURST_TEST
+unsigned ptr_draws;
+#endif
 void pointer_moved(void) {   /* one report done: the arrow to its new place, the dock's label to the slot under it */
     if (!fb) return;
+#ifdef PTR_BURST_TEST
+    ptr_draws++;
+#endif
     int s = (int)window_scale(), slot = gui_dock_hit_test((int)mouse_x / s, (int)mouse_y / s);
     fb_hold();   /* 4.3.0: a moved window and the arrow on top of it go to the screen as one copy, at the end */
     if (drag_on || rs_on) {
