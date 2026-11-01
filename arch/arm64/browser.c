@@ -1552,6 +1552,7 @@ int browser_get(const char *url, char **body, unsigned *n) {
     if (!raw) return -1;
     void (*out)(const char *) = cmd_out; cmd_out = sink;
     int got = fetch(url, raw, cap), st = got > 0 ? http_status_of(raw, (unsigned)got) : -1;
+    if ((unsigned)got >= cap - 1) got = -1;   /* 7.6.0: a reply that filled the buffer was cut there; a caller (a calendar, a download) never keeps half of one */
     if (got > 0) *body = page_body(raw, (unsigned)got, n);
     cmd_out = out;
     scopy(cur, was, slen(was), URL_MAX);

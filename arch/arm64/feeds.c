@@ -9,6 +9,7 @@
  */
 int browser_get(const char *url, char **body, unsigned *n);   /* browser.c */
 unsigned net_get_gateway(void);                                /* net.c */
+extern unsigned int net_dns_wait_ticks, net_connect_wait_ticks;   /* net.c */
 unsigned long heap_mark(void);
 void heap_release(unsigned long m);
 void kputs(const char *s);
@@ -25,8 +26,17 @@ void kputs(const char *s);
 #define ROWS 8
 #define PTS 32   /* stocks_pi.c's PTS: the points are cut to this by even sampling, as kernel/stocks.c does */
 
-static char stocks_txt[4096];
+static char stocks_txt[4096], stocks_new[4096];
 static unsigned stocks_len;
+/* The open waits on this: short DNS and connect waits, as the Browser's own page view (browser.c show) uses, not the
+   20 to 50 s WAN defaults, so a Wi-Fi with no internet costs a few seconds, not the desktop for a minute. */
+static int get(const char *url, char **body, unsigned *n) {
+    unsigned d = net_dns_wait_ticks, c = net_connect_wait_ticks;
+    net_dns_wait_ticks = 300; net_connect_wait_ticks = 400;
+    int st = browser_get(url, body, n);
+    net_dns_wait_ticks = d; net_connect_wait_ticks = c;
+    return st;
+}
 
 static char *put(char *o, const char *end, unsigned v) {
     char t[12]; int n = 0;
@@ -61,31 +71,29 @@ static int row(const char **pp, char **oo, const char *end, unsigned i) {
     *oo = o;
     return 1;
 }
-void feeds_stocks(void) {
-    stocks_len = 0;
+void feeds_stocks(void) {   /* a good reply replaces the kept quotes; a failed one leaves the last good ones */
     if (!net_get_gateway()) { kputs("stocks: no network, no prices\n"); return; }
     unsigned long mark = heap_mark();
     char *body = 0; unsigned n = 0;
-    int st = browser_get(STOCKS_URL, &body, &n);
+    int st = get(STOCKS_URL, &body, &n);
     if (st == 200 && body && n) {
-        char *o = stocks_txt, *end = stocks_txt + sizeof stocks_txt;   /* a row is at most about 420 bytes: eight fit */
+        char *o = stocks_new, *end = stocks_new + sizeof stocks_new;   /* a row is at most about 420 bytes: eight fit */
         const char *p = body;
         unsigned good = 0;
         *o++ = 'r'; *o++ = ' '; *o++ = '0'; *o++ = ' '; *o++ = '0'; *o++ = '\n';
         for (unsigned i = 0; i < ROWS && *p && end - o > 480; i++) good += (unsigned)row(&p, &o, end, i);
-        if (good) stocks_len = (unsigned)(o - stocks_txt);
+        if (good) { stocks_len = (unsigned)(o - stocks_new); for (unsigned k = 0; k < stocks_len; k++) stocks_txt[k] = stocks_new[k]; }
         kputs(good ? "stocks: live prices fetched\n" : "stocks: the reply held no prices\n");
     } else kputs("stocks: could not fetch prices\n");
     heap_release(mark);
 }
 static char weather_txt[1024];
 static unsigned weather_len;
-void feeds_weather(void) {
-    weather_len = 0;
+void feeds_weather(void) {   /* the same: a failed fetch keeps the last good reading */
     if (!net_get_gateway()) { kputs("weather: no network, no reading\n"); return; }
     unsigned long mark = heap_mark();
     char *body = 0; unsigned n = 0;
-    int st = browser_get(WEATHER_URL, &body, &n);
+    int st = get(WEATHER_URL, &body, &n);
     int ok = st == 200 && body && n > 5 && n < sizeof weather_txt && body[0] == 'c' && body[1] == 'i' && body[2] == 't' && body[3] == 'y' && body[4] == ' ';
     for (unsigned i = 0; ok && i < n; i++) if ((unsigned char)body[i] < ' ' && body[i] != '\n') ok = 0;   /* text lines only */
     if (ok) { for (unsigned i = 0; i < n; i++) weather_txt[i] = body[i]; weather_len = n; }
@@ -107,4 +115,8 @@ int feeds_read(const char *leaf, char *buf, unsigned cap) {
     unsigned k = len < cap ? len : cap;
     for (unsigned j = 0; j < k; j++) buf[j] = src[j];
     return (int)k;
+}
+void feeds_for(const char *app) {   /* appwin.c's app_go, before an app starts: the data it reads, fetched now */
+    if (named(app, "STOCKS")) feeds_stocks();
+    else if (named(app, "WEATHER")) feeds_weather();
 }

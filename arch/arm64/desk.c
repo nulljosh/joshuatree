@@ -543,9 +543,11 @@ static void desktop_chrome(int band_y) {   /* the mark, the title, the status ic
         }
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
 }
+void dock_mag_reserve(void);   /* crash.c */
 void fb_desktop(void) {
     int W = (int)fb_w, H = (int)fb_h;
     dock_pct_boot = dock_scale_pct;
+    dock_mag_reserve();   /* 7.6.0: the dock's kept buffers, before anything can magnify it and outside any heap mark */
     int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
     int mb = sg(MENUBAR_H);                               /* the menu bar's height on this screen: 26 on the 960x540 grid */
 #ifndef QUIET_BOOT

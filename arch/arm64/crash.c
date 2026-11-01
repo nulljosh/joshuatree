@@ -417,16 +417,30 @@ void dock_unmagnify(void) {
 }
 void dock_magnify_now(int mx, int slot) { mag_skip_in = 1; dock_magnify(mx, slot); mag_skip_in = 0; }   /* after a click on a tile: no second grow-in */
 void dock_mag_tick(void) { if (mag_on && mag_amt < 1000) dock_magnify(mag_mx, mag_slot); }   /* 6.4.0: the grow-in, from the main loop */
-/* 7.5.5: each tile kept at the size it was last drawn. A rescale from the 148 px art is about 0.9 ms at 1080p in
-   QEMU, and all eleven were rescaled on every frame. Only the 2 to 4 tiles near the pointer change size between
-   frames; the rest are copied. One buffer per slot, sized for the
-   largest tile, allocated once (the heap has no free). */
+/* 7.6.0: what the magnifying dock keeps, taken once when the desktop is first drawn (dock_mag_reserve), never from
+   inside dock_magnify. The heap has no free, only marks: a buffer first taken while a mark was held (voice mode's
+   vm_mark across loop passes, a `sam` reply's) was freed by its release and then written again as the dock's. So the
+   band copy, the decoded art and one tile per slot are sized here for the biggest dock Settings allows. A tile keeps
+   the slot's resting size (all but the 2 to 4 near the pointer are at it); a grown one is scaled on a scratch tile
+   that its frame gives back (7.5.5 rescaled all eleven every frame, about 0.9 ms each at 1080p in QEMU). */
 static unsigned *mag_tile[GUI_ICON_COUNT];
 static int mag_tpw[GUI_ICON_COUNT], mag_tcal[GUI_ICON_COUNT], mag_tcap;
-static unsigned *mag_tile_at(int i, int pw) {
-    if (!mag_tcap) mag_tcap = (DOCK_ICON + MAG_ROOM - 26 + DOCK_PAD) * (int)window_scale();
-    if (pw > mag_tcap) return 0;
-    if (!mag_tile[i] && !(mag_tile[i] = kmalloc((unsigned)(mag_tcap * mag_tcap) * 4))) return 0;
+static unsigned mag_copy_cap;   /* words */
+extern int dock_scale_pct;
+void dock_mag_reserve(void) {
+    if (mag_copy || !fb) return;
+    int was = dock_scale_pct, sc = (int)window_scale();
+    dock_scale_pct = 25;   /* settings.c's SET_DOCK_MAX: the biggest tile and the tallest band */
+    int big = DOCK_ICON, top = (gui_dock_y0() - MAG_ROOM) * sc;
+    dock_scale_pct = was;
+    if (top < 0) top = 0;
+    mag_copy_cap = ((unsigned)fb_h - (unsigned)top) * fb_pitch;
+    if (!mag_cache() || !(mag_copy = kmalloc(mag_copy_cap * 4))) { uart_puts("oom dock magnify\n"); mag_copy_cap = 0; return; }
+    mag_tcap = big * sc;
+    for (int i = 0; i < GUI_ICON_COUNT; i++) if (!(mag_tile[i] = kmalloc((unsigned)(mag_tcap * mag_tcap) * 4))) break;
+}
+static unsigned *mag_tile_at(int i, int pw) {   /* the slot's resting tile, scaled once; 0 for any other size */
+    if (pw != DOCK_ICON * (int)window_scale() || pw > mag_tcap || !mag_tile[i]) return 0;
     int cal = i == 3 ? cal_shown : -1;   /* slot 3, the live Calendar: its date is drawn on the tile */
     if (mag_tpw[i] != pw || mag_tcal[i] != cal) {
         gui_icon_art_scale(mag_art[i], mag_tile[i], pw, DOCK_TRAY_COLOR);
@@ -441,10 +455,8 @@ void dock_magnify(int mx, int slot) {
     if (top < 0 || !fb) return;
     int arrow = cur_on; fb_hold(); cur_hide();   /* the band and the arrow reach the screen as one copy: no blink of the arrow on a grow-in frame */
     if (!mag_on) {
-        if (!mag_cache()) { if (arrow) cur_show(); fb_release(); return; }
+        if (!mag_copy || (unsigned)rows * fb_pitch > mag_copy_cap) { if (arrow) cur_show(); fb_release(); return; }   /* nothing kept (dock_mag_reserve): no magnify */
         if (dock_band) dock_hover(-1);                      /* any label off first: the copy holds the plain dock */
-        if (!mag_copy) mag_copy = kmalloc((unsigned)rows * fb_pitch * 4);
-        if (!mag_copy) { if (arrow) cur_show(); fb_release(); uart_puts("oom dock magnify\n"); return; }
         for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) mag_copy[i] = fb[(unsigned)top * fb_pitch + i];
         mag_on = 1; mag_t0 = mag_skip_in ? 0 : mag_ms(); mag_skip_in = 0;
     } else for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) fb[(unsigned)top * fb_pitch + i] = mag_copy[i];

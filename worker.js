@@ -291,7 +291,8 @@ function stockWire(data, symbol) {
 async function handleWeather(request) {
   const cf = request.cf ?? {};
   const lat = Number(cf.latitude), lon = Number(cf.longitude);
-  const city = String(cf.city ?? "").replace(/[^\p{L}\p{N} .'-]/gu, "").slice(0, 30);
+  // ASCII only: the Pi draws bytes with an ASCII face, so "Zürich" is sent as "Zurich" (accents dropped, anything else out)
+  const city = String(cf.city ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9 .'-]/g, "").slice(0, 30);
   const head = {"Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store"};
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return new Response("have 0\n", {headers: head});
   try {
@@ -827,7 +828,7 @@ export default {
 // response handling are still real, plain JS testable directly under Node.
 export { isAllowedTarget, handleProxy, ALLOWED_HOSTS };
 
-export { stockWire, handleStocks };
+export { stockWire, handleStocks, handleWeather };
 export { bookrankWire, handleBooks };
 export { hikkoWire, hikkoText, handleHikko };
 export { lexlyQuestions, lexlyText, lexlyCourseWire, lexlyQuestionWire, handleLexly, LEXLY_COURSES };

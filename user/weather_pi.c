@@ -125,7 +125,7 @@ static void draw(void) {
     char b[48];
     rect(0, 0, vw, vh, BG);
     text(city, pad, 16, TEXT, 1);
-    if (!have) { text("No reading: join Wi-Fi", pad, 54, MID, 1); return; }   /* nothing made up */
+    if (!have) { text("No reading right now", pad, 54, MID, 1); return; }   /* offline or the feed failed: nothing made up */
     right("Open-Meteo", vw - pad, 16, DIM, 0);
     /* the temperature large, the condition and the glyph beside it */
     deg(b, temp);

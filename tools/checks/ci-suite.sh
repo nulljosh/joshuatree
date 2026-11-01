@@ -271,6 +271,7 @@ retry|0|Stocks fills all five watchlist rows from a full-size stub Worker reply 
 once |2|Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-check.mjs
 retry|4|Epiphany command bar: AAPL GP draws the chart, an unknown code errors cleanly|python3 ./tools/checks/epiphany-cmdbar-check.py
 once |7|Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
+once |7|Worker /api/weather: WEATHER.TXT's lines for the caller's place, an ASCII city, have 0 when it cannot|node ./tools/checks/worker-weather-check.mjs
 once |7|Worker /api/waitlist store, validate, count|node ./tools/checks/waitlist-check.mjs
 once |7|Mail Send: Worker /api/mail/send guards and Resend shape, kernel bearer wiring|python3 ./tools/checks/mailsend-check.py
 once |1|Worker /api/proxy: a silent upstream cannot hang the guest (weather/chat freeze regression)|node ./tools/checks/weatherproxy-hang-check.mjs

@@ -173,12 +173,22 @@ static void draw(void) {
     chart(px, cy0, pw, ch, pts[sel], n, col);
     rect(px, cy0 + ch + 4, pw, 1, RULE);
     int sy = cy0 + ch + 14;
-    if (saved) {   /* the quote's own time, in UTC: the reader can see how fresh it is */
-        int t = stamp[sel] > 0 ? stamp[sel] % 86400 : -1, q = cat(b, 0, "USD / quote at ");
-        if (t >= 0) { b[q++] = (char)('0' + t / 36000); b[q++] = (char)('0' + t / 3600 % 10); b[q++] = ':'; b[q++] = (char)('0' + t / 600 % 6); b[q++] = (char)('0' + t / 60 % 10); b[q] = 0; cat(b, q, " UTC"); }
-        else cat(b, q, "an unknown time");
+    if (saved && stale[sel]) text("Saved quote, USD", px, sy, MUTED, 0);   /* a card copy's row the fetch marked stale */
+    else if (saved) {   /* the quote's own date and time, in UTC: the reader can see how fresh it is */
+        static const char *const MON[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+        int q = cat(b, 0, "USD / ");
+        if (stamp[sel] > 0) {   /* days since 1970 to a civil date (Hinnant's days_from_civil, run backwards) */
+            unsigned t = (unsigned)stamp[sel], z = t / 86400 + 719468, era = z / 146097, doe = z - era * 146097;
+            unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365, doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+            unsigned mp = (5 * doy + 2) / 153, d = doy - (153 * mp + 2) / 5 + 1, m = mp < 10 ? mp + 3 : mp - 9, h = t % 86400;
+            q = cat(b, q, MON[m - 1]); b[q++] = ' ';
+            if (d >= 10) b[q++] = (char)('0' + d / 10);
+            b[q++] = (char)('0' + d % 10); b[q++] = ','; b[q++] = ' ';
+            b[q++] = (char)('0' + h / 36000); b[q++] = (char)('0' + h / 3600 % 10); b[q++] = ':';
+            b[q++] = (char)('0' + h / 600 % 6); b[q++] = (char)('0' + h / 60 % 10); b[q] = 0; cat(b, q, " UTC");
+        } else cat(b, q, "time unknown");
         text(b, px, sy, MUTED, 0);
-    } else text("No prices: join Wi-Fi", px, sy, MUTED, 0);
+    } else text("Prices unavailable right now", px, sy, MUTED, 0);
     text("Up and Down pick a symbol", px, sy + 22, MUTED, 0);
     int ln = cat(b, cat(b, 0, "stocks: sel "), SYM[sel]); b[ln++] = '\n'; jt_write(1, b, (unsigned)ln);
 }

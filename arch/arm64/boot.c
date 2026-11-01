@@ -434,7 +434,13 @@ void main(void) {
         { extern unsigned ptr_draws; unsigned d0 = ptr_draws;
           for (int i = 0; i < 20; i++) { kinput(2, 0, 4); kinput(0, 0, 0); }
           pointer_flush();
-          con_quiet = 1; uart_puts("ptrburst: 20 reports, "); uart_dec(ptr_draws - d0); uart_puts(" draws\n"); }
+          con_quiet = 1; uart_puts("ptrburst: 20 reports, "); uart_dec(ptr_draws - d0); uart_puts(" draws\n");
+          /* 7.6.0: magnifying the dock takes nothing from the heap (its buffers are kept from the desktop's first paint),
+             so a heap mark held around it can never free them */
+          unsigned long h0 = heap_mark(); int s = (int)window_scale();
+          mouse_x = (unsigned)((gui_slot_x(5) + DOCK_ICON / 2) * s); mouse_y = (unsigned)((gui_dock_y0() + DOCK_PAD + DOCK_ICON / 2) * s);
+          pointer_moved();
+          con_quiet = 1; uart_puts("ptrburst: dock magnify took "); uart_dec((unsigned)(heap_mark() - h0)); uart_puts(" heap bytes\n"); }
 #endif
 #ifdef PI_BUILD
         (void)step;
