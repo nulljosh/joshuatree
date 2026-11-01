@@ -22,6 +22,7 @@ EXEMPT=(
     "drivers/wall_sat.h"
     "kernel/wall_sat.h"
     "kernel/boot_mark.h"
+    "arch/arm64/splash_mark.h"   # 7.5.6: the 400 px splash mark, from tools/gen/gen_boot_mark.py
     "drivers/editor_fonts.h"
     "kernel/icon_art.h"
     "drivers/icon_art.h"

@@ -86,6 +86,44 @@ try:
     if not fails: print(f"  ok: grey {grey:.0%}, no terracotta, {ink} ink pixels, {hard} crisp edge steps, grey bar, every ink row of the art present ({rows} rows) at {W}x{H}")
 finally:
     q.kill(); q.wait(); subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
+# 7.5.6: sharp at 1080p, where the mark is 300 px. The 160 px copy stretched there was soft on the board (mean difference
+# 6.2 from a direct 300 px render of landing/logo.svg); the 400 px copy box-filtered down is 2.7.
+if not fails and shutil.which("rsvg-convert"):
+    import io
+    subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
+    if subprocess.run(["make", "-C", arch, "MAINFLAGS=-DQUIET_BOOT -DSPLASH_STEP_MS=1500 -DWIFI_ICON_TEST=0 -DFB_BOOT_W=1920 -DFB_BOOT_H=1080"], capture_output=True).returncode:
+        fails.append("the 1080p splash build does not build")
+    else:
+        log2, sock2 = tmp + "/uart2", tmp + "/qmp2"
+        q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-nic", "none", "-device", "ramfb",
+                              "-display", "none", "-serial", "file:" + log2, "-qmp", "unix:%s,server,nowait" % sock2,
+                              "-kernel", os.path.join(arch, "kernel8.elf")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(300):
+                if os.path.exists(log2) and "splash step 3 " in open(log2, errors="replace").read(): break
+                time.sleep(0.1)
+            s2 = socket.socket(socket.AF_UNIX)
+            for _ in range(50):
+                try: s2.connect(sock2); break
+                except OSError: time.sleep(0.2)
+            f2 = s2.makefile("rw"); f2.readline()
+            def cmd2(c, **a):
+                f2.write(json.dumps({"execute": c, "arguments": a}) + "\n"); f2.flush()
+                while True:
+                    r = json.loads(f2.readline())
+                    if "return" in r or "error" in r: return r
+            cmd2("qmp_capabilities"); shot2 = tmp + "/s2.ppm"; cmd2("screendump", filename=shot2); time.sleep(0.5)
+            img2 = Image.open(shot2).convert("L"); W2, H2 = img2.size
+            sz2 = int(150 * H2 / 540); cx2, cy2 = W2 // 2, H2 // 2 - int(30 * H2 / 540)
+            box2 = list(img2.crop((cx2 - sz2 // 2, cy2 - sz2 // 2, cx2 - sz2 // 2 + sz2, cy2 - sz2 // 2 + sz2)).tobytes())
+            png = subprocess.run(["rsvg-convert", "-w", str(sz2), "-h", str(sz2), os.path.join(root, "landing", "logo.svg")], capture_output=True).stdout
+            alpha = Image.open(io.BytesIO(png)).convert("RGBA").split()[3].tobytes()
+            diff = sum(abs(p - round((0x1C * a + 0xE5 * (255 - a)) / 255)) for p, a in zip(box2, alpha)) / (sz2 * sz2)
+            if (W2, H2) != (1920, 1080): fails.append(f"the 1080p splash build came up at {W2}x{H2}")
+            elif diff > 4.5: fails.append(f"the 1080p splash mark is soft: mean difference {diff:.1f} from a direct {sz2} px render (4.5 allowed)")
+            else: print(f"  ok: at 1920x1080 the {sz2} px mark is within {diff:.1f} of a direct render of landing/logo.svg")
+        finally:
+            q.kill(); q.wait(); subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 if fails:
     for m in fails: print("FAIL:", m)
     sys.exit(1)
