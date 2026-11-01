@@ -79,4 +79,16 @@ static inline unsigned nvram_pack(const char *txt, unsigned tlen, unsigned char 
 }
 /* Firmware goes to the chip in 64-byte backplane windows; the image is padded up to a 4-byte multiple. */
 static inline unsigned fw_padded(unsigned n) { return (n + 3) & ~3u; }
+/* 7.5.4: what to do after the first 64 bytes of an F2 read, from its 4-byte hardware header (length, then its complement).
+   0: nothing more (no frame, or it fit). -1: terminate it (a broken header, or longer than the 2048 bytes brcmfmac's
+   MAX_RX_DATASZ allows). Otherwise the bytes still to read. Before this, a frame over 1600 bytes was left half read in the
+   chip's FIFO, so every later read and write was out of step: the first board test lost the network after one Wikipedia
+   page. Linux: drivers/net/wireless/broadcom/brcm80211/brcmfmac/sdio.c, brcmf_sdio_hdparse and brcmf_sdio_rxfail. */
+#define F2_FRAME_MAX 2048
+static inline int f2_rest(const unsigned char *h) {
+    unsigned len = rd16(h), ck = rd16(h + 2);
+    if (!(len | ck)) return 0;
+    if (((len ^ ck) & 0xffff) != 0xffff || len > F2_FRAME_MAX) return -1;
+    return len > 64 ? (int)fw_padded(len - 64) : 0;
+}
 #endif

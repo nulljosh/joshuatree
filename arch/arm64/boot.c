@@ -9,6 +9,7 @@ int ask_key(unsigned code, unsigned value);   /* ask.c: the prompt's line editor
 int ask_secret(void);                         /* ask.c: the line being typed holds a password */
 int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 void ask_poll(void);
+void wifi_tick(void);   /* wifi.c, 7.5.4: a failed join is tried again */
 #ifdef PI_BUILD
 int usb_input_count(void);   /* xhci.c: keyboards plus mice found on the hubs */
 int bt_input_live(void);     /* bt.c: a Bluetooth mouse is connected */
@@ -422,7 +423,7 @@ void main(void) {
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
@@ -439,7 +440,7 @@ void main(void) {
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                                    " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step * 500), "r"(1UL) : "memory");   /* 6.87.0: idle, still a pass a second, so idle_tick runs */
-            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* an app parked on yield runs again here; browser_tick fetches an image and idle_tick may sync, slow on purpose, so untimed */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* an app parked on yield runs again here; browser_tick fetches an image and idle_tick may sync, slow on purpose, so untimed */
 #ifdef HANG_TEST
             hang_tick();
 #endif
