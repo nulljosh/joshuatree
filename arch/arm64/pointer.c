@@ -68,9 +68,9 @@ void tribute_paint(void) {   /* the line over the dock, drawn on the flat wallpa
     }
     text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
 }
-void wall_fill(int x, int y, int w, int h) {   /* physical px: the flat wallpaper colour (wall.c); there is no picture to save, so a window can leave from anywhere */
-    unsigned c = fb_color(wall_get());
-    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = c;
+void wall_fill(int x, int y, int w, int h) {   /* physical px: the wallpaper there (wall.c works out any pixel), so a window can leave from anywhere */
+    if (w <= 0) return;
+    for (int j = 0; j < h; j++) wall_span(fb + (unsigned)(y + j) * fb_pitch + (unsigned)x, x, y + j, w, (int)fb_w, (int)fb_h, fb_swap);
 }
 void wall_minus(int ox, int oy, int ow, int oh, int nx, int ny, int nw, int nh) {   /* physical px: wallpaper over the old rectangle except where the new one is */
     for (int j = 0; j < oh; j++) {

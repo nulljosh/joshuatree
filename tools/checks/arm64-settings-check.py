@@ -84,8 +84,8 @@ int main(void) {
     t = "zoom=1\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);
     t = "zoom=3\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);   /* 7.4.0: out of range, kept */
     settings_set_mag(-1); assert(settings_mag() == 0); settings_set_mag(9); assert(settings_mag() == 2 && !strcmp(settings_mag_name(1), "Small"));
-    assert(settings_walls() == 4 && !strcmp(settings_wall_name(0), "Blue") && settings_wall_rgb(0) == 0x003B6EA5u && !strcmp(settings_wall_name(1), "Terracotta") && settings_wall_rgb(1) == 0x00B5502Cu && settings_wall_rgb(3) == 0x00141311u);
-    settings_set_wall(-1); assert(settings_wall() == 3 && wall_rgb == 0x00141311); settings_set_wall(4); assert(settings_wall() == 0 && wall_rgb == 0x003B6EA5);
+    assert(settings_walls() == 5 && !strcmp(settings_wall_name(4), "Park") && settings_wall_rgb(4) == 0x00EC9E76u && !strcmp(settings_wall_name(0), "Blue") && settings_wall_rgb(0) == 0x003B6EA5u && !strcmp(settings_wall_name(1), "Terracotta") && settings_wall_rgb(1) == 0x00B5502Cu && settings_wall_rgb(3) == 0x00141311u);
+    settings_set_wall(-1); assert(settings_wall() == 4 && wall_rgb == 0x01000000); settings_set_wall(5); assert(settings_wall() == 0 && wall_rgb == 0x003B6EA5);
     settings_set_dock(2); assert(settings_dock() == 5); settings_set_dock(99); assert(settings_dock() == 25); settings_set_dock(7);
     vol = 30; settings_set_wall(2); settings_set_dock(11); settings_save();
     assert(settings_saved() == 1 && file_len == 32 && !memcmp(file, "volume=30\nwall=2\ndock=11\nzoom=2\n", 32));

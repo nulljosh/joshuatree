@@ -137,8 +137,10 @@ inflate.o: ../../drivers/inflate.c
 	$(CC) $(SHARED) -c $< -o $@
 jpeg.o: ../../drivers/jpeg.c ../../drivers/jpeg.h   # 6.14.0: Blackcomb's inline JPEGs (Movies has its own ring-3 copy)
 	$(CC) $(SHARED) -c $< -o $@
-wall.o: wall.c ../../kernel/wall_sat.h
+wall.o: wall.c park_wall.h ../../kernel/wall_sat.h
 	$(CC) $(SHARED) -c $< -o $@
+pi-wall.o: wall.c park_wall.h   # 8.9.0: the Pi starts on the park picture
+	$(CC) $(SHARED) -DPI_BUILD -c $< -o $@
 # The dock: the i386 desktop's own painters and dock layout, the same source files, drawn through main.c's window shim.
 GUIOBJ = gui_paint.o dock_geom.o
 gui_paint.o: ../../kernel/gui_paint.c ../../kernel/gui_paint.h ../../kernel/dock_geom.h
@@ -151,7 +153,7 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
 SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
-PISDOBJ = pi-emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
+PISDOBJ = pi-emmc.o fat.o ufile.o pi-settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c home.h emmc.h ../../drivers/fat.h
@@ -159,6 +161,8 @@ ufile.o: ufile.c home.h emmc.h ../../drivers/fat.h
 # Settings (3.13.0): the choices, JT/SETTINGS.TXT and the version the About page shows, read from VERSION at build time.
 settings.o: settings.c audio.h emmc.h ../../drivers/fat.h ../../VERSION
 	$(SDCC) -DJT_VERSION='"$(shell cat ../../VERSION)"' -c $< -o $@
+pi-settings.o: settings.c audio.h emmc.h ../../drivers/fat.h ../../VERSION   # 8.9.0: the Pi's own defaults (dock zoom off)
+	$(SDCC) -DPI_BUILD -DJT_VERSION='"$(shell cat ../../VERSION)"' -c $< -o $@
 # Accounts (4.8.0): the i386 kernel's own PBKDF2 over BearSSL (already linked through --start-lib) and the Pi's account store.
 auth_kdf.o: ../../kernel/auth_kdf.c ../../kernel/auth_kdf.h
 	$(SDCC) -I$(BSSL)/inc -I$(BSSL)/shim -c $< -o $@
@@ -306,10 +310,10 @@ pi-main.o: $(MAINSRC) $(MAINDEP)
 	$(MAINLINK)
 kernel8.elf: start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
 	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
-pi-kernel8.elf: pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
+pi-kernel8.elf: pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
 pi: wifi-fw bt-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
@@ -323,10 +327,10 @@ $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
 $(1)-kernel8.elf: start.o $(1)-vectors.o $(USEROBJ) $(1)-main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
 	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o $(USEROBJ) $(1)-main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
-$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(3) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
+$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
 $(1)-kernel8.img: $(1)-pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
 endef
 fptest.o: fptest.c
 	$(FPCC) -c $< -o $@

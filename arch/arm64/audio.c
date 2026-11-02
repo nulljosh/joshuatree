@@ -327,6 +327,7 @@ static int chime_note(int i, int start, int len, unsigned freq) {   /* frame i o
     return chime_sin((unsigned)((unsigned long)t * freq * 65536 / CHIME_RATE)) * env / 1024;
 }
 int audio_chime(void) {
+    if (!volume) { put_str("audio: chime skipped, muted\n"); return 0; }   /* 8.9.0: muted means no chime, and the jack is never touched before a restart */
     for (int i = 0; i < CHIME_FRAMES; i++) {
         int v = chime_note(i, 0, CHIME_FRAMES, 659) + chime_note(i, CHIME_RATE * 12 / 100, CHIME_FRAMES - CHIME_RATE * 12 / 100, 880);
         short s = (short)(v * AMP / 8192);   /* both notes at once stay under AMP */

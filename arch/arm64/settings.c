@@ -19,14 +19,24 @@ int home_in(const char *dir, int make);
 int home_save(const char *name, const void *data, unsigned len);
 
 #define SET_FILE "SETTINGS.TXT"
-#define SET_WALLS 4
+#define SET_WALLS 5
 #define SET_DOCK_MIN 5
 #define SET_DOCK_MAX 25
 static const struct { const char *name; unsigned rgb; } walls[SET_WALLS] = {
-    { "Blue", 0x003B6EA5u }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u } };
-static int wall_pick;                 /* index into walls */
+    { "Blue", 0x003B6EA5u }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u },
+    { "Park", 0x01000000u } };   /* 8.9.0: the picture, Joshua Tree at dusk (wall.c's WALL_PARK); the Pi's default */
+#ifdef PI_BUILD
+static int wall_pick = 4;             /* index into walls: the park picture on the Pi (8.9.0) */
+#else
+static int wall_pick;                 /* index into walls: the flat blue on QEMU, which the checks read */
+#endif
 static int saved_state;               /* 0 not yet saved, 1 on the card, 2 only the wallpaper (yours), -1 no card or the card refused it, -2 not an admin */
-static int card_wall;                 /* JT/SETTINGS.TXT's wallpaper: the login screen's, and anyone's with no ~/WALL.TXT */
+#ifdef PI_BUILD
+static int card_wall = 4;
+#else
+static int card_wall;
+#endif
+                                      /* card_wall: JT/SETTINGS.TXT's wallpaper: the login screen's, and anyone's with no ~/WALL.TXT */
 #define WALL_FILE "WALL.TXT"          /* 6.0, Yours: each person's wallpaper, `wall=N`, in their own home folder */
 
 const char *settings_version(void) {
@@ -38,7 +48,7 @@ const char *settings_version(void) {
 }
 int settings_wall(void) { return wall_pick; }
 const char *settings_wall_name(int i) { return i >= 0 && i < SET_WALLS ? walls[i].name : ""; }
-unsigned settings_wall_rgb(int i) { return i >= 0 && i < SET_WALLS ? walls[i].rgb : walls[0].rgb; }
+unsigned settings_wall_rgb(int i) { unsigned c = i >= 0 && i < SET_WALLS ? walls[i].rgb : walls[0].rgb; return c & 0x01000000u ? 0x00EC9E76u : c; }   /* the picture's swatch: its horizon */
 int settings_walls(void) { return SET_WALLS; }
 void settings_set_wall(int i) { wall_pick = ((i % SET_WALLS) + SET_WALLS) % SET_WALLS; wall_set(walls[wall_pick].rgb); }
 #ifndef DOCK_ZOOM
