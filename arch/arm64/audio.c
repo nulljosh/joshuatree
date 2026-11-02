@@ -208,7 +208,7 @@ static void app_begin(void) {
     pcm_clean(0, PCM_FRAMES);
     app_hash = 2166136261u; app_abs = app_fed = 0;
     fading = 0;
-    pump_at = 0; pcm_wr = run0 = n;
+    pump_at = 0; pcm_wr = run0 = n + GUARD;   /* the rise, then GUARD frames of silence, then the sound */
     if (pcm_start()) { fail("app sound did not start"); aq_tail = aq_head; aq_end = 0; return; }
     app_live = 1;
 }
