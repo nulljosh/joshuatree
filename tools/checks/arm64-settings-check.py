@@ -69,6 +69,10 @@ int sudo_may_write(void) { return may; }
 #define dock_scale_pct dock_scale_pct
 #include "arch/arm64/settings.c"
 int main(void) {
+#ifdef PI_BUILD   /* 8.9.0: the Pi's own defaults: dock zoom off, the park picture */
+    assert(settings_mag() == 0 && settings_wall() == 4);
+    puts("PASS: pi defaults"); return 0;
+#endif
     char out[64]; unsigned n = settings_format(out, 70, 0, 7, 2);
     assert(n == 31 && !memcmp(out, "volume=70\nwall=0\ndock=7\nzoom=2\n", 31));
     n = settings_format(out, 100, 3, 25, 0); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\nzoom=0\n", n));
@@ -117,6 +121,16 @@ with tempfile.TemporaryDirectory(prefix="jt-settings-") as tmp:
     if cc.returncode == 0:
         r = subprocess.run([exe], capture_output=True, text=True, timeout=30)
         check("settings.c: text, parsing, load, save and no card", r.returncode == 0 and "PASS" in r.stdout, r.stdout + r.stderr)
+    # 8.9.0: the Pi image starts with dock zoom off and the park wallpaper. Built from pi-settings.o and pi-wall.o (with
+    # PI_BUILD); before, the Pi linked the QEMU objects and the zoom stayed on (Joshua: "remove the grow animation by default").
+    pexe = os.path.join(tmp, "tpi")
+    cc = subprocess.run(["clang", "-std=gnu11", "-DPI_BUILD", "-Wall", "-Wextra", "-Werror", "-Wno-unused-function", "-I", root, "-I", os.path.join(root, "arch/arm64"), src, "-o", pexe], capture_output=True, text=True)
+    r = subprocess.run([pexe], capture_output=True, text=True, timeout=30) if cc.returncode == 0 else None
+    mk = open(os.path.join(root, "arch/arm64/Makefile")).read()
+    pisd = re.search(r"^PISDOBJ = (.*)$", mk, re.M); pilink = re.search(r"^pi-kernel8.elf: (.*)$", mk, re.M)
+    check("on the Pi, dock zoom is off and the park picture is the wallpaper, and the Pi image links those objects",
+          r is not None and "PASS: pi defaults" in r.stdout and pisd and "pi-settings.o" in pisd.group(1).split() and pilink and "pi-wall.o" in pilink.group(1).split(),
+          (cc.stderr[-300:], r and r.stdout + r.stderr))
 
 # ---- 2. the desktop ----
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
