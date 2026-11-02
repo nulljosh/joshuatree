@@ -321,7 +321,7 @@ The goal: every app in the Portfolio catalog that fits this OS opens from the La
 - [ ] [Sonnet] Dream and Costanza: read-only feeds of entries and poems.
 - [ ] [Sonnet] Cadence and Tripwire: commit streak and API drift status.
 - [ ] [Sonnet] Plain and Block Frame: fold into Notes as modes instead of new apps, or skip.
-- [ ] [Sonnet] Plank: run one-file programs. Needs the compiler ported, the biggest of these.
+- [x] [Sonnet] Plank: run one-file programs. Needs the compiler ported, the biggest of these. Shipped: `userrun plankc build NAME.PK` on the box (`arm64-code-check.py`).
 - [ ] [Sonnet] Blackcomb: the 7.0 browser steps under Next priorities.
 - Not planned: Talli (private case data), Swing (video chat), Notate (speech model), Seamark (vision model), NYC, Conveyer, Vancouver Vice. They need hardware or models this OS does not have. Turing is Samantha, already here.
 
@@ -367,11 +367,11 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
 - [ ] [Fable] Admin and sudo (Joshua, 2026-10-06: "fix it soon"). Done on the Pi in 4.8.0 to 4.10.0: accounts, the login screen, an admin flag, `sudo`, `makeadmin` and `unadmin` (`tools/checks/arm64-sudo-check.py`). Left: the same tier on i386.
   - An admin flag per account, a password prompt before anything that installs, deletes a user or changes system settings, and a normal-user role that cannot. On i386 it touches `kernel/auth.h`, Settings and the syscall gate.
   - Per-user home folders shipped in 4.11.0; file permissions follow (6.0).
-- [ ] [Fable] Sound over DMA.
+- [x] [Fable] Sound over DMA. Shipped: app sound goes over DMA (`arch/arm64/audio.c`, M3e; `arm64-music-check.py`).
   - Move the PWM FIFO feed to a DMA channel so long sounds do not hold the CPU, then HDMI audio. Then Movies plays a clip with sound on the Pi.
   - An app's sound goes through DMA since 2.59.0 (Music, M3e, `tools/checks/arm64-music-check.py`), waiting on the board.
   - `beep` is still polled. HDMI audio and Movies remain.
-- [ ] [Fable] SD card reads and writes through EMMC2, so files survive a reboot and the Wi-Fi firmware can load from the card.
+- [x] [Fable] SD card reads and writes through EMMC2, so files survive a reboot and the Wi-Fi firmware can load from the card. Shipped: EMMC2 reads and writes (`emmc.c`, `arm64-sd-check.py`, `arm64-power-check.py` keeps a file across a reboot); the Wi-Fi firmware loads from the card and joins on the board (2026-11-01).
   - Reads (2.53.0) and writes (2.57.0) pass under QEMU and wait on the board.
   - Loading the firmware from the card remains.
 - [ ] [Sonnet] `get`, the Joshua Tree installer: a public recipes repo in the Homebrew shape (name, URL, checksum), a C command that downloads an app over Wi-Fi and drops it on the card. Needs Wi-Fi stage 2 and SD writes.
@@ -392,14 +392,14 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
 - [ ] [Fable] A/B boot, so a bad self-update can never brick the Pi: keep the last good kernel on the card as `kernel8.old`, boot the new one once, and fall back to the old one if the new build never reaches the desktop (the Pi bootloader's `tryboot` is the likely mechanism; check it on the board).
 Also missing, added 2026-10-06 night, in order:
 - [ ] [Fable] The other three cores: wake them from the spin table, give each a stack, run the desktop on one and the drivers on another.
-- [ ] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, HID over GATT (Joshua's mouse is Bluetooth Low Energy).
+- [x] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, HID over GATT (Joshua's mouse is Bluetooth Low Energy). Shipped: the Incase Ergonomic Mouse paired and drove the desktop on the board (2026-11-01; `arm64-bt-check.py`).
   - BT1 (2.51.0): the patch, the version and `bt scan`, checked against a fake controller.
   - BT2 (2.54.0): `bt pair`, Just Works, GATT HID, boot reports into the pointer, checked against a fake mouse.
   - BT3 (3.5.0): the pairing is saved to `JT/BTPAIR.BIN` and a reboot reconnects it, checked against a fake mouse on a QEMU card.
   - Left: the board test of the reconnect, and report mode for a mouse with no boot report.
 - [ ] [Sonnet] Heat and the fan: read the SoC temperature through the mailbox, show it, drive the fan pin.
 - [ ] [Fable] Update over Wi-Fi: the Pi fetches the newest kernel8.img from the GitHub release and writes it to the card, then reboots. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror (no TLS yet).
-- [ ] [Sonnet] A Wi-Fi settings screen on the Pi: name and password typed on the keyboard and saved on the card, so nothing is baked into the build.
+- [x] [Sonnet] A Wi-Fi settings screen on the Pi: name and password typed on the keyboard and saved on the card, so nothing is baked into the build. Shipped: Settings, Wi-Fi joins a typed network and saves it on the card (TESTING.md step 1, board 2026-11-01).
 - [ ] [Fable] The Pi 5 (M5): the RP1 chip over PCIe for every peripheral.
 Gaps against Linux distributions (Kali, Ubuntu, Arch), 2026-10-06 night. Most are already on the version road (4.0 processes and a real shell, 6.0 users and backups, 7.0 TLS and a browser, 8.0 a compiler and `get`); these are the ones it did not name:
 - [ ] [Fable] An SSH server: log in to the Pi from the Mac over Wi-Fi, with its own crypto (ed25519, ChaCha20-Poly1305). It makes the serial cable optional for everything but early boot.
@@ -412,8 +412,8 @@ The rest of the Linux gaps, tagged with the version that owns them (Joshua, 2026
 - [ ] [Fable] [4.0] A real shell and Terminal: a command line with pipes, redirects, job control, a PATH and scripts, so `ls | grep` works. Tabs and splits come after.
 - [ ] [Fable] [6.0] Users and permissions: accounts, file owners and modes, a login screen, an admin role that can install. Joshua's "admin privileges" idea starts here.
 - [ ] [Fable] [7.0] TLS 1.3 in the kernel or a ring-3 library: the gate for HTTPS, so websites, Plex and a real Claude API connection work without a relay.
-- [ ] [Fable] [7.0] A web browser on the Pi (Blackcomb on this OS; NetSurf is the reference port). Needs TLS, fonts and a JavaScript engine decision.
-- [ ] [Fable] [8.0] A compiler and linker on the box (the Plank compiler first), so the OS can build its own apps. The last piece of "build Joshua Tree inside Joshua Tree".
+- [x] [Fable] [7.0] A web browser on the Pi (Blackcomb on this OS; NetSurf is the reference port). Needs TLS, fonts and a JavaScript engine decision. Shipped in 7.0 as Blackcomb (`arm64-browser-check.py`, `arm64-images-check.py`).
+- [x] [Fable] [8.0] A compiler and linker on the box (the Plank compiler first), so the OS can build its own apps. The last piece of "build Joshua Tree inside Joshua Tree". Shipped: plankc builds Code and a typed program on the Pi itself (`arm64-code-check.py`, board 2026-11-01).
   The true bootstrap, a Plank compiler written in Plank that writes aarch64 itself, with no LLVM (plan of 2026-10-27, each step its own PR and check):
   1. Done in 6.60.0, for the whole language, not a subset: `user/plankc/lex.pk`. Check: `plankc-check.py`, its tokens match plank.py's on all 33 examples, plankc's own files and `cases.pk`.
   2. Done in 6.61.0, again the whole language: `user/plankc/parse.pk`. Check: `plankc-check.py`, its tree matches plank.py's on the same files, the parser reading itself included.
@@ -590,7 +590,7 @@ Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk)
 The OS stays free. Monetization is custom hardware built to run it. Everything this kernel drives today runs on QEMU's emulated devices; porting to physical hardware comes first, not a coding task yet. 1.0 ships a USB-bootable ISO with a PS/2 fallback; USB is the 1.1 headline, built in this order.
 
 - [ ] [Fable] xHCI USB host controller. Everything below hangs off it.
-- [ ] [Fable] USB keyboard and mouse (HID). Also covers "Bluetooth" keyboards that ship with a USB dongle.
+- [x] [Fable] USB keyboard and mouse (HID). Also covers "Bluetooth" keyboards that ship with a USB dongle. Shipped: xHCI HID keyboard and mouse behind a hub (`arm64-mouse-check.py`, board).
 - [ ] [Fable] USB storage, so an external SSD mounts.
 - [ ] [Fable] USB audio in, so a microphone works. Needs the sound work below.
 - [ ] [Fable] True Bluetooth: radio over USB, pairing, keyboard and mouse. Hardest, last.
@@ -604,7 +604,7 @@ The OS stays free. Monetization is custom hardware built to run it. Everything t
 - [ ] [Sonnet] Laptop basics: battery level, trackpad, lid close.
 - [ ] [Joshua] One real PC booted from the USB stick, keyboard and mouse working, photographed. The USB image and non-emulator graphics are only proven in QEMU so far.
 - [ ] [Fable] Install to disk from the USB stick.
-- [ ] [Fable] Wi-Fi.
+- [x] [Fable] Wi-Fi. Shipped on the Pi (`wifi.c`, joined on the board 2026-11-01).
 - [ ] [Joshua] Trademark search and registration (CIPO or USPTO) for Joshua Tree and the mark before the first boxes ship; a quick search found Joshua Tree Technologies LLC and a JOSHUA TREE VOICE mark, and many STRATA marks in the software and computer classes, so clear the names first.
 
 ## Bloomberg terminal
@@ -660,7 +660,7 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Sonnet] Photos app: grid of the images on disk, click for full view, arrow keys to move. Built on `drivers/png.c`, plus baseline JPEG if the wallpaper decoder can be reused.
 - [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
 - [ ] [Sonnet] Keyboard shortcuts for the snap zones (halves, quarters, full), split out of the snapping item that shipped in #82.
-- [ ] [Sonnet] Music app: WAV playback from disk, playlist, play, pause, skip, volume. Unblocked: the Sound Blaster driver shipped in 1.6.9.
+- [x] [Sonnet] Music app: WAV playback from disk, playlist, play, pause, skip, volume. Unblocked: the Sound Blaster driver shipped in 1.6.9. Shipped: user/music.c plays WAV and MP3 from Files and MUSIC with play, pause, seek, next, shuffle and volume (`music-check.py`, `arm64-music-check.py`; the jack on the board 2026-11-01).
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
 - [ ] [Sonnet] Video editor: basic timeline, trimming, and export.
@@ -677,7 +677,7 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 ### Mac gaps (Joshua, 2026-10-07)
 The Mac apps and menu bar pieces this OS still lacks, listed so they can be picked up one at a time.
 
-- [ ] [Sonnet] Browser (a real web browser app, not a stub).
+- [x] [Sonnet] Browser (a real web browser app, not a stub). Shipped as Blackcomb (tabs, history, pictures; `arm64-browser-app-check.py`).
 - [ ] [Sonnet] Messages.
 - [ ] [Sonnet] FaceTime.
 - [ ] [Sonnet] Preview (open and view documents and images).
