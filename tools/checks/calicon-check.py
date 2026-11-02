@@ -128,9 +128,9 @@ a, b = tile(img_feb), tile(img_nov)
 
 same = sum(1 for k in a if max(abs(x - y) for x, y in zip(a[k], b[k])) > 8)
 top = sum(1 for (i, j), c in b.items() if j < TILE_W * 0.36 and accent(c))
-low = {k: c for k, c in b.items() if k[1] > TILE_W * 0.38 and k[1] < TILE_W * 0.85}
+low = {k: c for k, c in b.items() if k[1] > TILE_W * 0.38 and k[1] < TILE_W * 0.95}   # 7.7.0: the page runs edge to edge, the squares sit low
 greys = sum(1 for c in low.values() if grey(c))
-row = int(TILE_W * 0.45)  # through the first row of day squares
+row = int(TILE_W * 0.89)  # 7.7.0: through the row of day squares under the edge-to-edge band
 runs, prev = 0, False
 for i in range(TILE_W):
     g = grey(b[(i, row)]) or accent(b[(i, row)])
