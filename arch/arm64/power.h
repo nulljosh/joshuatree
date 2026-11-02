@@ -42,7 +42,7 @@ static void power_halt_screen(void) {
     int s = (int)window_scale(), W = (int)fb_w, H = (int)fb_h, lw = 320, lh = 150;
     int cx = (W / s - lw) / 2, cy = (H / s - lh) / 2;
     cur_hide();
-    fb_rect(0, 0, W, H, wall_get());
+    wall_paint(fb, fb_pitch, W, H, fb_swap);
     gui_rounded_rect_on_wallpaper(cx, cy, lw, lh, 0x00faf8f4, 14);
     menu_mark_paint(W / 2, (cy + 44) * s, sg(48), 0x001C1C1E);
     const char *a = "Shut down", *b = "It is safe to unplug the power now.";

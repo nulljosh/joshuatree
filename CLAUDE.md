@@ -33,7 +33,7 @@ Any QEMU run with a `-d` trace and `-D <file>` gets `timeout` in front: `timeout
 
 ## Theme
 
-The Pi wallpaper is one flat colour, a calm blue `#3B6EA5` by default (8.9.0; Settings offers Blue, Terracotta, Clay and Ink; terracotta `#b5502c` stays the brand accent); the UI face is Tree Sans; the mark is a painted Joshua tree (`docs/brand/tree.png`, 8.0), with a flat traced glyph for 32 px and under, every copy from `tools/gen/gen_brand_art.py`. Landing page: the painting's paper `#f4f3ec`, bark ink `#261a13`, one terracotta accent `#b5502c` (its soil), rounded cards, no teal, purple or gradients. Dark mode is `#15110e`. The boot splashes and the menu bars show the glyph in one ink, Apple style (`tools/gen/gen_boot_mark.py`). The rest is in `docs/ARCHITECTURE.md` (Design rules).
+The Pi wallpaper is the park picture, Joshua Tree at dusk (`arch/arm64/park_wall.h`, 8.9.0); QEMU builds start on the flat calm blue `#3B6EA5` so the checks read one colour (Settings offers Blue, Terracotta, Clay, Ink and Park; terracotta `#b5502c` stays the brand accent); the UI face is Tree Sans; the mark is a painted Joshua tree (`docs/brand/tree.png`, 8.0), with a flat traced glyph for 32 px and under, every copy from `tools/gen/gen_brand_art.py`. Landing page: the painting's paper `#f4f3ec`, bark ink `#261a13`, one terracotta accent `#b5502c` (its soil), rounded cards, no teal, purple or gradients. Dark mode is `#15110e`. The boot splashes and the menu bars show the glyph in one ink, Apple style (`tools/gen/gen_boot_mark.py`). The rest is in `docs/ARCHITECTURE.md` (Design rules).
 
 ## ARM64 and the Pi
 

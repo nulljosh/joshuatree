@@ -595,20 +595,18 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     }
     if (word_is(q, n, "stick") || is(q, n, "stick")) {   /* 8.9.0: a USB stick: stick ls, stick cat NAME, stick copy NAME (into JT/) */
         int stick_begin(void); void stick_end(void); unsigned long usb_disk_blocks(void); void *kmalloc(unsigned int n);
-        const char *r = q + 5; unsigned m = n > 5 ? n - 5 : 0;
-        while (m && *r == ' ') { r++; m--; }
-        char verb[8], name[16]; unsigned u = word(r, m, verb, sizeof verb); r += u; m -= u;
-        while (m && *r == ' ') { r++; m--; }
-        word(r, m, name, sizeof name);
-        int ls = !verb[0] || (verb[0] == 'l' && verb[1] == 's' && !verb[2]);
-        int cat = verb[0] == 'c' && verb[1] == 'a' && verb[2] == 't' && !verb[3], copy = verb[0] == 'c' && verb[1] == 'o' && verb[2] == 'p' && verb[3] == 'y' && !verb[4];
+        char verb[8], name[16]; unsigned u = word(q + 5, n - 5, verb, sizeof verb), vn = 0;   /* word skips the spaces before each */
+        word(q + 5 + u, n - 5 - u, name, sizeof name);
+        while (verb[vn]) vn++;
+        int ls = !vn || word_is(verb, vn, "ls"), cat = word_is(verb, vn, "cat"), copy = word_is(verb, vn, "copy");
         if (!ls && !cat && !copy) { cmd_out("stick ls, stick cat NAME, stick copy NAME (into JT/ on the card)\n"); return; }
         if ((cat || copy) && !name[0]) { cmd_out("stick: which file? stick ls lists them\n"); return; }
         if (copy && accounts_count() && !priv("stick copy")) return;   /* a write to JT/, an admin's, like write */
         if (!usb_disk_blocks()) { cmd_out("stick: no USB stick\n"); return; }
         static unsigned char *sbuf; const unsigned SMAX = 256 * 1024;
         if (!sbuf) sbuf = kmalloc(SMAX);
-        if (!sbuf || !stick_begin()) { cmd_out("stick: no FAT partition on it\n"); return; }
+        if (!sbuf) { cmd_out("stick: out of memory\n"); return; }
+        if (!stick_begin()) { cmd_out("stick: no FAT partition on it\n"); return; }
         int got = 0;
         if (ls) { ls_count = 0; fat_list(ls_one); if (!ls_count) cmd_out("stick: empty\n"); }
         else got = fat_read_file(name, sbuf, SMAX);

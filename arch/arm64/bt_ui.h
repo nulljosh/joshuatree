@@ -23,7 +23,7 @@ static void bp_paint(int cx, int cy, int wy, int wh) {
         for (unsigned r = 0; r < n; r++) {
             int ry = top + (int)r * SET_ROW_H;
             if (r) gui_hairline_h(cx + 12, ry, SET_CARD_W - 24, 0x00E8E2D8);
-            char num[3] = { (char)('1' + r), 0, 0 };   /* 8.9.0: the number the key takes, so the list works without a mouse */
+            char num[2] = { (char)('1' + r), 0 };   /* 8.9.0: the number the key takes, so the list works without a mouse */
             gui_text(num, cx + 14, ry + 7, SET_HINT);
             gui_text(name[r], cx + 34, ry + 7, SET_INK);
             gui_text(near[r], cx + SET_CARD_W - 14 - gui_text_width(near[r]), ry + 7, SET_HINT);

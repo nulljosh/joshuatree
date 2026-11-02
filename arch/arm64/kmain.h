@@ -120,9 +120,9 @@ extern int wheel_acc;
 unsigned int window_scale(void);
 int ask_pending(void);
 int calc_type(int ch);
-unsigned wall_get(void);
-unsigned wall_px(int x, int y, int w, int h);
-void wall_span(unsigned *dst, int x, int y, int n, int w, int h, int swap);   /* 8.9.0: a row of it, in the screen's byte order */   /* 8.9.0: the wallpaper at a screen pixel (the park picture or a flat colour) */
+unsigned wall_get(void);   /* the flat colour, or wall.c's WALL_PARK for the picture: paint with wall_fill or wall_paint, never as a colour */
+unsigned wall_px(int x, int y, int w, int h);   /* 8.9.0: the wallpaper at a screen pixel (the park picture or a flat colour) */
+void wall_span(unsigned *dst, int x, int y, int n, int w, int h, int swap);   /* 8.9.0: a row of it, in the screen's byte order */
 extern unsigned int boot_el;
 int brick_key(unsigned code, unsigned value);
 void brick_tick(void);
