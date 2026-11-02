@@ -50,7 +50,7 @@ QX, QY, QW, QH = TOP_LEFT_QUARTER
 EDGE_POINTS = [(QX + QW + 20, QY + 40), (QX + 200, QY + QH + 15)]
 # Dock slots (SLOTS order in appclose-check.py/multiwindow-check.py):
 # 0 Apps, 1 Files, 2 Mail, 3 Calendar, 4 Notes, 5 Reminders, ...
-SLOT = {"Burrow": 1, "Mail": 2, "Notes": 4}  # 1.9.12: Calendar is a ring-3 program with a fixed viewport now; 1.9.20 gave Notes compositor hooks so it stands in for Weather (a lone Notes click opens the blocking editor, so it is opened as a second window)
+SLOT = {"Files": 1, "Mail": 2, "Notes": 4}  # 1.9.12: Calendar is a ring-3 program with a fixed viewport now; 1.9.20 gave Notes compositor hooks so it stands in for Weather (a lone Notes click opens the blocking editor, so it is opened as a second window)
 W1_CLOSE = (154, 116)             # window 1 (second concurrent window): x=130,y=100
 NOTES_TITLEBAR = (130 + 300, 100 + 10)
 BAND = (0xED, 0xE6, 0xDC)         # Notes browse view's selected-row band
@@ -143,7 +143,7 @@ try:
     baseline_edges = [pixel(baseline_img, x, y) for x, y in EDGE_POINTS]
 
     # Notes joins the compositor only as a second window: Files, Notes on top, close Files.
-    open_app("Burrow"); open_app("Notes")
+    open_app("Files"); open_app("Notes")
     close_at(*W0_CLOSE); close_at(*W0_CLOSE)
     imgA = dump()
     if not (is_red(pixel(imgA, *W1_CLOSE)) and not is_red(pixel(imgA, *W0_CLOSE))):

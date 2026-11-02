@@ -72,7 +72,7 @@ MIN_AA_STEPS = 1      # raster samples partway between background and fill at th
 MARGIN_TOL = 10        # luminance tolerance for the top/bottom margin check
 EDGE_TO_EDGE = {"calendar"}   # 7.7.0: Calendar is a page edge to edge, a terracotta band at the top (Joshua, board test)
 TOP_ROW, BOT_ROW = 8, 118
-# Burrow is a full-bleed Finder-style split by design (owner call): its light
+# Files is a full-bleed Finder-style split by design (owner call): its light
 # left half crosses both margins, so only its right, tile-coloured half is held to them.
 FULL_BLEED = {"burrow": range(72, 108, 4)}
 

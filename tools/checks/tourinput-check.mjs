@@ -10,12 +10,12 @@
 // never broken, and not what this checks): it watches the real, unmodified
 // idle tour and reads the guest's own serial log, the one place a landed
 // keystroke or a real window shows up without guessing at pixels. The 2.0
-// lap opens with Mail composing inline, then Burrow:
+// lap opens with Mail composing inline, then Files:
 //   mail: ring-3 window        Mail's window opened from its dock tile
 //   mail: compose=1            the scripted 'c' reached the guest
 //   mail: filed n=3            all three typed fields landed and Enter filed a 3rd message
-//   mail: closed               Escape closed Mail (no Mail left behind Burrow)
-//   burrow: ring-3 window      Burrow opened next, after Mail was gone
+//   mail: closed               Escape closed Mail (no Mail left behind Files)
+//   burrow: ring-3 window      Files opened next, after Mail was gone
 //   burrow: saved view=0       its scripted '2' then '1' keys reached the guest
 //
 // Usage: node tools/checks/tourinput-check.mjs   (JT_CHROMIUM overrides the browser)
@@ -48,14 +48,14 @@ await page.route('**/api/proxy**', r => r.fulfill({ status: 403, body: '' })); /
 await page.goto(url, { waitUntil: 'load' });
 
 // In order, each one only counts after the one before it (Mail must be gone
-// before Burrow opens, so a Mail left behind fails here).
+// before Files opens, so a Mail left behind fails here).
 const STEPS = [
   ['mail: ring-3 window', 'Mail opened'],
   ['mail: compose=1', 'the scripted c reached Mail'],
   ['mail: filed n=3', 'the three typed fields landed and filed a 3rd message'],
   ['mail: closed', 'Escape closed Mail'],
-  ['burrow: ring-3 window', 'Burrow opened after Mail closed'],
-  ['burrow: saved view=0', "Burrow's scripted 2 then 1 keys landed"],
+  ['burrow: ring-3 window', 'Files opened after Mail closed'],
+  ['burrow: saved view=0', "Files's scripted 2 then 1 keys landed"],
 ];
 let pass = false, seenAt = -1, step = 0;
 const t0 = Date.now();
@@ -80,6 +80,6 @@ try {
   server.close();
 }
 console.log(pass
-  ? '\nPASS: the idle tour\'s own scripted Mail compose and Burrow keys landed in the guest with no visitor interaction'
-  : '\nFAIL: the idle tour did not complete its Mail then Burrow opening (keyboard_adapter.emu_enabled regression or tour stall)');
+  ? '\nPASS: the idle tour\'s own scripted Mail compose and Files keys landed in the guest with no visitor interaction'
+  : '\nFAIL: the idle tour did not complete its Mail then Files opening (keyboard_adapter.emu_enabled regression or tour stall)');
 process.exit(pass ? 0 : 1);

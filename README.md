@@ -15,7 +15,7 @@ A small operating system, written from scratch, that runs on a Raspberry Pi 4, i
 
 <p>
   <img src="landing/shots/samantha-chat.webp" width="32%" alt="Samantha">
-  <img src="landing/shots/app-files.webp" width="32%" alt="Burrow, the file browser">
+  <img src="landing/shots/app-files.webp" width="32%" alt="Files, the file browser">
   <img src="landing/shots/app-notes.webp" width="32%" alt="Notes">
   <img src="landing/shots/app-terminal.webp" width="32%" alt="Terminal running uptime, mem and ls">
   <img src="landing/shots/app-weather.webp" width="32%" alt="Weather, live">

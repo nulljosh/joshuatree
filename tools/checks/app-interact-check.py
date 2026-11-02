@@ -41,7 +41,7 @@ CLOSE_X, CLOSE_Y = 94, 56             # windowed (dock-launched) close hitbox
 APPS_CLOSE_X, APPS_CLOSE_Y = FOLDER_CLOSE_X, FOLDER_CLOSE_Y
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
-DOCK_SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Trash"]
+DOCK_SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Trash"]
 
 subprocess.run(["./tools/mkdisk.sh", DISK], check=True)
 

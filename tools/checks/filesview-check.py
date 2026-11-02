@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Burrow's List / Icons choice persists (it used to live in the kernel's
-files_view and SETTINGS.TXT; Burrow is ring 3 now and keeps it in
+"""Files's List / Icons choice persists (it used to live in the kernel's
+files_view and SETTINGS.TXT; Files is ring 3 now and keeps it in
 BURROW.TXT through the ordinary file syscalls).
 
-Boots headless with no disk (ramfs), opens Burrow from the dock and:
+Boots headless with no disk (ramfs), opens Files from the dock and:
   1. asserts the first run starts on Icons ("burrow: view=1", Icons button
      highlighted, List not) because no BURROW.TXT exists yet;
   2. presses 1: "burrow: saved view=0" and the List button is the
@@ -26,7 +26,7 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 226
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-BURROW_SLOT = 1   # GUI_DOCK_DEFAULT: {Apps, Burrow, Mail, ...}
+BURROW_SLOT = 1   # GUI_DOCK_DEFAULT: {Apps, Files, Mail, ...}
 CLOSE_X, CLOSE_Y = 94, 56
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 VIEW_X, VIEW_Y = 78, 72   # gui_launch_from_dock: viewport at (x+8, y+32)
@@ -105,7 +105,7 @@ try:
     time.sleep(5.0)
     def esc_and_wait(n):
         b.keys("esc")
-        if not b.wait("burrow: closed", 8, n): fails.append("Burrow did not close on Esc")
+        if not b.wait("burrow: closed", 8, n): fails.append("Files did not close on Esc")
         time.sleep(0.8)
     b.open_burrow()
     if not b.wait("burrow: view=1", 15): fails.append("first run did not start on Icons (burrow: view=1)")
@@ -119,7 +119,7 @@ try:
         fails.append(f"after 1: toolbar is {b.button(img, 0)}/{b.button(img, 1)}, want List active")
     esc_and_wait(1)
     b.open_burrow()
-    if not b.wait("burrow: view=0", 15): fails.append("the reopened Burrow did not read view=0 back from BURROW.TXT")
+    if not b.wait("burrow: view=0", 15): fails.append("the reopened Files did not read view=0 back from BURROW.TXT")
     img = b.frame()
     if b.button(img, 0) != "active": fails.append(f"after reopen: List is {b.button(img, 0)}, want active (persistence)")
     b.keys("2")
@@ -142,4 +142,4 @@ if fails:
     for x in fails: print("  - " + x)
     print("--- serial tail ---"); print(b.serial()[-1200:])
     sys.exit(1)
-print("PASS: Burrow starts on Icons, 1 saves List to BURROW.TXT, a fresh run reads it back, 2 saves Icons, and the kernel no longer owns the choice")
+print("PASS: Files starts on Icons, 1 saves List to BURROW.TXT, a fresh run reads it back, 2 saves Icons, and the kernel no longer owns the choice")

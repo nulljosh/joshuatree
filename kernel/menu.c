@@ -22,7 +22,7 @@
    the CPU. "-" is a separator row, not a real item. */
 #define GUI_MENU_ITEM_COUNT 8
 static const char *GUI_MENU_LABELS[GUI_MENU_ITEM_COUNT] = {
-    "About Joshua Tree", "Burrow", "Notes", "Settings", "Lock Screen", "-", "Restart", "Shut Down"
+    "About Joshua Tree", "Files", "Notes", "Settings", "Lock Screen", "-", "Restart", "Shut Down"
 };
 #define GUI_MENU_ROW_H  22
 #define GUI_MENU_SEP_H  9

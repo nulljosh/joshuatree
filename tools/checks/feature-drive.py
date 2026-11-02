@@ -50,7 +50,7 @@ CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-25)
-APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
+APPS = ["Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
         "Scrounge", "Keyrate", "Bookrank", "Quotes", "Plan", "Patois", "Toroid", "Thinkpond",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity", "Apps", "Trash"]
@@ -78,7 +78,7 @@ ACTIONS = [
     (8, "Scrounge", ["down", "down"]),
     (21, "Portfolio", ["down", "down"]),
     (22, "Activity", ["down", "down"]),
-    (0, "Burrow", []),  # open only
+    (0, "Files", []),  # open only
     (1, "Mail", []),   # open only
     (7, "Weather", []),  # open only
     (25, "Trash", []),  # open only

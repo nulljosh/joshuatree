@@ -35,7 +35,7 @@ CLOSE_X, CLOSE_Y = 94, 56
 APPS_CLOSE = (80, 46)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
-SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"]
+SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):

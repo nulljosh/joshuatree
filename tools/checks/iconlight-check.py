@@ -54,16 +54,16 @@ PORT = free_port()
 # config (960x540 @2x, dock_scale_pct 7, GUI_ICON_COUNT 11).
 DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 226, 469, 2
 PITCH = DOCK_ICON + DOCK_GAP
-SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"]
+SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"]
 COLS = range(20, 54)
 TOP_ROWS, BOT_ROWS, HL_ROW, EDGE_ROW = range(3, 8), range(64, 70), 0, 73
 DEPTH_MIN, DEPTH_MAX = 6, 45   # glossy 90-99, Big Sur 16-28
 HL_MIN, HL_FRAC = 3, 0.30  # row 0 at least 3 brighter AND 30% of the way from the band to white
 EDGE_MAX = 6                   # glossy 17-28, Big Sur about 2
 BAND_RANGE_MAX = 12
-# Burrow is a full-bleed Finder-style split: its light left half runs edge to
+# Files is a full-bleed Finder-style split: its light left half runs edge to
 # edge by design, so the light is measured on its right, tile-coloured half.
-FULL_BLEED = {"Burrow": range(42, 54)}
+FULL_BLEED = {"Files": range(42, 54)}
 # 7.7.0: Samantha is her glasses on a lit copper tile again, so she is measured. Calendar is a page edge to edge (a
 # terracotta band over a white page, Joshua's board test), not a glyph on a lit tile, so it has no falloff to measure;
 # calicon-check.py, iconart-check.py and iconinset-check.py still hold its art, colour and edge.

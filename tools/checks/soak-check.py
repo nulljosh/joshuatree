@@ -29,7 +29,7 @@ CLOSE_X, CLOSE_Y = 94, 56
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 
-APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
+APPS = ["Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
         "Scrounge", "Keyrate", "Bookrank", "Quotes", "Tonchi", "Toroid", "Hikko",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity"]

@@ -19,7 +19,7 @@ closing Files first, and proves from the real framebuffer that:
      depends on; window 1 is offset to x=130,y=100), not just two list
      entries with nothing actually drawn.
   2. Both windows' real, distinguishing content is visible simultaneously:
-     Files' real "Burrow" title text and Notes' real row band
+     Files' real "Files" title text and Notes' real row band
      background, sampled at each window's own content rect.
   3. Closing Notes (the focused/topmost window) via its own X leaves
      Files still open and still showing its real content, i.e. the other
@@ -90,7 +90,7 @@ INK = (0x1C, 0x1C, 0x1E)
 # (130,100)) and Files shows its flat (250,248,246) background, so it tells
 # which of the two is on top.
 NOTES_PROBE = (500, 199)
-SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"]
+SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
