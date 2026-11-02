@@ -1,0 +1,7 @@
+{"out": "ten.mp4",
+ "number": "10", "name": "JOSHUA TREE", "bars": 10,
+ "mark": "../../brand/mark-paper.png",
+ "font_bold": "../../../tools/fonts/treesans/TreeSansDisplay-Bold.ttf",
+ "palette": {"ink": "#261a13", "paper": "#f4f3ec", "gold": "#b5502c", "light": "#dca872"},
+ "shots": ["shots-10/language-es.png", "../../../landing/shots/app-weather.webp", "shots-10/desktop-pi.png",
+           "../../../landing/shots/app-stocks.webp", "../../../landing/shots/app-hamurapi.webp"]}
