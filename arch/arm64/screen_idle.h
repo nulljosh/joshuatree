@@ -3,6 +3,10 @@
 #define SCREEN_IDLE_CS 30000u
 static unsigned screen_last;
 static int screen_asleep;
+/* 11.0.0, the tree menu's Sleep: the screen goes dark a second later, busy or not, as a Mac's does. The deadline does
+   not look at screen_last, so the release of the very click or key that chose it cannot cancel it. */
+static unsigned sleep_at;
+void screen_sleep_soon(void) { sleep_at = notice_now() + 100; if (!sleep_at) sleep_at = 1; }
 static void screen_activity(void) {
     screen_last = notice_now();
     if (screen_asleep && screen_blank(0)) {
@@ -12,8 +16,12 @@ static void screen_activity(void) {
 }
 static void screen_tick(void) {
     unsigned now = notice_now();
-    if (ask_pending() || brick_live || !input_present()) { screen_last = now; return; }
-    if (screen_asleep || now - screen_last < SCREEN_IDLE_CS) return;
+    int asked = 0;
+    if (sleep_at) { if ((int)(now - sleep_at) < 0) return; sleep_at = 0; asked = input_present(); }
+    if (!asked) {
+        if (ask_pending() || brick_live || !input_present()) { screen_last = now; return; }
+        if (screen_asleep || now - screen_last < SCREEN_IDLE_CS) return;
+    }
     screen_last = now;   /* a refused request gets another five minutes, never a tight retry loop */
     if (screen_blank(1)) {
         screen_asleep = 1;
