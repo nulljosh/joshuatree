@@ -2098,6 +2098,8 @@ Demand paging for the heap (8.7.0). `JT_SYS_BRK` only moves the heap's top. A he
 
 Swap (8.12.0). A heap page no longer lives on its own address in the arena: `heap_fault` takes a frame for it from one pool every app shares (`SWAP_POOL_PAGES`, 32 MiB at `SWAP_BASE`, right after the four arenas), and `frame_of` remembers whose page each frame holds. When the pool is full, `pool_take` pushes out the page mapped longest ago: its entry is cleared and the TLB flushed on every core first, so a thread on core 1 to 3 faults and asks core 0 instead of writing into it, then the frame is written to JT/SWAP.BIN (`fat_write_at`, made fresh with `fat_write_file` and no data on the first eviction of a boot) and the entry keeps the file slot with bit 1 set and bit 0 clear. The next touch reads it back into a frame. `heap_fault_span` pins the spans a call hands the kernel until the next call, so faulting a buffer in never pushes out its own start; `heap_drop` gives frames and slots back when brk shrinks or the app ends. With no card the pool is the limit and a touch past it is the app's fault. `mem` in the Terminal shows the pool and the traffic. Check: `arm64-swap-check.py`.
 
+The kit's screens (8.13.0). `fb_pick_size` (main.c) asks the firmware for the panel's size and takes it as the buffer when it is at least 720x480; narrower and the dock does not fit, so anything smaller or odd keeps 800x600. That covers the 7 inch DSI touch screen (800x480), the 8 inch HDMI ones (1024x600, 1280x800) and Touch Display 2 standing up (720x1280). `window_scale` (crash.c) doubles only a screen that is both 1080 tall and 1600 wide, so a tall narrow panel keeps its width. The boot's own picture test (`M1c fb ok`, desk.c) samples the bottom-right wallpaper in the corner, clear of a dock that spans a 720 wide panel. Check: `arm64-screens-check.py`.
+
 The block cache (8.8.0). `blockdev_read_sector` and `blockdev_write_sector` in `emmc.c`, fat.c's only way to the card, keep 128 sectors (64 KiB), the least recently used one replaced. It is write-through: a write goes to the card first and only then into the cache, so the order 4.13.0's crash safety rests on is still the card's order and a pulled plug loses nothing the cache held. `sd_mount` empties it. `disk` in the Terminal counts sectors from the cache, sectors read from the card and sectors written. Check: `arm64-diskcache-check.py`.
 
 ## Threat model
@@ -2525,7 +2527,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (365 checks)
+### The suite (366 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2832,6 +2834,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Spawn and wait (8.4.0): a card app spawns kids with words and waits for each exit status, two at once in the other order, a fault reported as -1, -ENOENT for no such app and -ECHILD for a stranger's pid, every kid's line in the Terminal before the parent's summary (skips where the tools are missing) | `tools/checks/arm64-spawn-check.py` | retry |
 | Sockets (8.5.0): a card app connects to a TCP server on the host, writes a line and reads the server's capitalised answer through fd 100, a write after close is -EBADF, a dead port is -ECONNREFUSED and a bad name -EHOSTUNREACH (skips where the tools are missing) | `tools/checks/arm64-sock-check.py` | retry |
 | The desktop comes first (8.6.0): a single-threaded card app that computes for seconds without yielding is cut off at least ten times, finishes with the right sum, and `sched` says no app held the core longer than 60 ms in a turn (skips where the tools are missing) | `tools/checks/arm64-sched-check.py` | retry |
+| The kit's screens (8.13.0): on QEMU's raspi4b the Pi image fills 800x480, 1024x600, 1280x800, 720x1280 and 1080p panels at their own pixels with the menu bar, a window and all 12 dock tiles (skips where the tools are missing) | `tools/checks/arm64-screens-check.py` | retry |
 | Swap (8.12.0): a card app grows a 4 MiB heap through a 64-page pool, every page reads back its own stamp after going to JT/SWAP.BIN and back, a 128 KiB heap buffer round-trips through a file, and `mem` counts the pages out and in (skips where the tools are missing) | `tools/checks/arm64-swap-check.py` | retry |
 | Demand paging (8.7.0): a card app asks for an 8 MiB heap and touches six pages, one first touched by the kernel storing through a pointer for it; what it wrote reads back, untouched and re-grown pages read 0, and the kernel counts exactly 6 heap pages, not 2048 (skips where the tools are missing) | `tools/checks/arm64-heap-check.py` | retry |
 | The block cache (8.8.0): five repeated cats read nothing more from the card and the cache answers them; a file written just before QEMU is killed is on the card with its bytes; a second boot reads both files (skips where the tools are missing) | `tools/checks/arm64-diskcache-check.py` | retry |

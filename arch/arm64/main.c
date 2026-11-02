@@ -1682,7 +1682,8 @@ int mbox_call(void) {
 }
 /* First ask how big the monitor is, so the picture fills it at its own pixels instead of an 800x600 box the firmware
    blows up. Past 2560 wide (a 4K panel) take exactly half each way: a 2x scale stays crisp and the buffer stays small.
-   Anything odd, or no answer, keeps 800x600. */
+   8.13.0: the kit's small panels too, down to 720x480 (narrower and the dock no longer fits): the 7 inch DSI touch screen (800x480), the 8 inch HDMI ones
+   (1024x600, 1280x800) and Touch Display 2 standing up (720x1280). Anything odd, or no answer, keeps 800x600. */
 static void fb_pick_size(void) {
     unsigned q[] = { 8 * 4, 0, 0x40003, 8, 0, 0, 0, 0 };   /* get physical (display) width and height */
     for (unsigned i = 0; i < sizeof q / 4; i++) mbox[i] = q[i];
@@ -1691,7 +1692,7 @@ static void fb_pick_size(void) {
     if (disp_w > 8192 || disp_h > 8192) return;
     unsigned w = disp_w, h = disp_h;
     if (w > 2560) { w /= 2; h /= 2; }
-    if (w >= 800 && h >= 600 && (w > 800 || h > 600)) { fb_w = w; fb_h = h; }
+    if (w >= 720 && h >= 480 && (w != 800 || h != 600)) { fb_w = w; fb_h = h; }
 }
 int fb_setup(void) {
     fb_pick_size();
@@ -1714,7 +1715,7 @@ int fb_setup(void) {
     fb = (unsigned int *)(unsigned long)(mbox[23] & 0x3FFFFFFF);   /* a VideoCore bus address: drop the alias bits */
     fb_pitch = mbox[28] / 4;
     fb_swap = mbox[19] == 1;   /* the firmware answers the order it really used; follow it if it overrode us */
-    if (mbox[5] >= 800 && mbox[6] >= 600 && mbox[5] <= fb_pitch) { fb_w = mbox[5]; fb_h = mbox[6]; }   /* the size it really gave */
+    if (mbox[5] >= 720 && mbox[6] >= 480 && mbox[5] <= fb_pitch) { fb_w = mbox[5]; fb_h = mbox[6]; }   /* the size it really gave */
     return 1;
 }
 /* M4: tell the firmware the VL805 USB controller is out of PCIe reset, so it loads the VL805's firmware.

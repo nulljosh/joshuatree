@@ -86,7 +86,7 @@ const unsigned char *const *const icon_art = ICON_ART;   /* keys.c draws the Lau
 const unsigned int *const icon_art_len = ICON_ART_LEN;
 #include "../../kernel/boot_mark.h"
 int dock_scale_pct = 7;   /* the i386 default (Settings can change it there; nothing does here yet) */
-unsigned int window_scale(void) { return fb_h >= 1080 ? 2 : 1; }
+unsigned int window_scale(void) { return fb_h >= 1080 && fb_w >= 1600 ? 2 : 1; }   /* 8.13.0: and wide, so a 720x1280 panel standing up keeps its 720 */
 unsigned int window_width(void) { return fb_w / window_scale(); }
 unsigned int window_height(void) { return fb_h / window_scale(); }
 /* Offscreen painting. On the Pi the framebuffer is the live scanout: a window repainted in place shows every half-drawn

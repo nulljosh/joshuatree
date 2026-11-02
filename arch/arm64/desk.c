@@ -658,8 +658,8 @@ void fb_desktop(void) {
     unsigned well = 0x00ffffff;
 #endif
     int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == well && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
-    unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
-    ok = ok && wall_ok && w0 == fb_color(wall_px(50, sc(300), W, H)) && w1 == fb_color(wall_px(fb_w - 50, H - sc(8), W, H)) && w2 == fb_color(wall_px(fb_w - 50, mb + sc(40), W, H));
+    unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 2], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];   /* 8.13.0: w1 in the very corner, clear of a dock that spans a 720 wide panel */
+    ok = ok && wall_ok && w0 == fb_color(wall_px(50, sc(300), W, H)) && w1 == fb_color(wall_px(fb_w - 2, H - sc(8), W, H)) && w2 == fb_color(wall_px(fb_w - 50, mb + sc(40), W, H));
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
     desktop_up = 1;
 #ifdef QUIET_BOOT
