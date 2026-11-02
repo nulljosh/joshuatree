@@ -34,6 +34,18 @@ static int power_key(unsigned code) {
     return 1;
 }
 int ufile_sync(void);   /* ufile.c */
+/* 9.3.0, update.c: restart into a staged kernel. On the Pi the firmware's reboot flags (tag 0x00038064) say tryboot, so the next
+   boot alone reads TRYBOOT.TXT; any boot after it reads config.txt and the kernel that worked. */
+#ifndef POWER_HOST_TEST
+void power_restart_tryboot(void) {
+#ifdef PI_BUILD
+    unsigned m[] = { 7 * 4, 0, 0x00038064, 4, 0, 1, 0 };
+    for (unsigned i = 0; i < 7; i++) mbox[i] = m[i];
+    if (!mbox_call()) uart_puts("update: the firmware did not take the tryboot flag; restarting anyway\n");
+#endif
+    power_apply(0);
+}
+#endif
 #if defined(PI_BUILD) && !defined(POWER_HOST_TEST)
 /* The Pi 4 cannot cut its own power, so a shutdown ends on a plain screen: the mark, "Shut down" and "It is safe to unplug
    the power now" on the wallpaper. */

@@ -241,7 +241,7 @@ extern unsigned disp_w;
 void dock_activate(int slot);
 extern unsigned *dock_band;
 void dock_hover(int slot);
-extern int reader_on; const char *reader_line(int slot); void reader_set(int on); void reader_focus(int slot); void reader_tick(void); void reader_say(const char *t);   /* desk.c, ask.c: the 10.0.0 screen reader */
+extern int reader_on; const char *reader_line(int slot); void reader_set(int on); void reader_focus(int slot); void reader_tick(void); void update_tick(void); void reader_say(const char *t);   /* desk.c, ask.c: the 10.0.0 screen reader */
 extern unsigned *dock_mem;
 void dock_paint(void);
 extern int dock_sel;

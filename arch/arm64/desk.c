@@ -58,10 +58,14 @@ static void about_center(const char *t, int y, unsigned c) { gui_text(t, spot_lx
    card's machinery holds it (spot_under, spot_tree), so a key or a click reaches power.h's power_key first. */
 #define DLG_W 300
 #define DLG_H 180
-static int tree_dlg;   /* 0, or 1 shut down, 2 restart: the card is the power dialog */
+static int tree_dlg;   /* 0, or 1 shut down, 2 restart: the card is the power dialog; 3 Software Update (9.3.0) */
+#define UPD_H 236
+static char upd_ver[16], upd_news[96];
+static int upd_btn_x(void) { return spot_lx + (SPOT_W - 200) / 2; }
+static int upd_btn_y(void) { return spot_ly + 150; }
 static int dlg_btn_y(void) { return spot_ly + DLG_H - 44; }
 static int dlg_btn_w(void) { return (DLG_W - 48) / 2; }
-int power_dialog_up(void) { return spot_live && spot_tree && tree_dlg; }
+int power_dialog_up(void) { return spot_live && spot_tree && (tree_dlg == 1 || tree_dlg == 2); }
 static const char *const tree_rows[4] = { "About Joshua Tree", "Restart", "Shut Down", "Log Out" };
 static int tree_ry(int r) { return spot_ly + (r ? 37 + (r - 1) * SPOT_ROW : 6); }
 int tree_bar_hit(void) {   /* the pointer is on the mark or the title, physical px like the bar's own drawing */
@@ -72,7 +76,23 @@ static void tree_paint(void) {
     int s = (int)window_scale(), w = tree_cw * s, h = tree_ch * s, x = spot_lx * s, y = spot_ly * s;
     cur_hide();
     tree_under(0);
-    if (tree_dlg) {
+    if (tree_dlg == 3) {   /* 9.3.0, Software Update (docs/brand/v10/update.webp): the mark, the version, what is new, one button */
+        gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, SPOT_W, UPD_H, 0x00faf8f4, 12);
+        menu_mark_paint((spot_lx + SPOT_W / 2) * s, (spot_ly + 40) * s, 48 * s, 0x001C1C1E);
+        char t[40] = "Joshua Tree "; { unsigned k = 12; for (const char *p = upd_ver; *p && k < 39; p++) t[k++] = *p; t[k] = 0; }
+        gui_icon_text(t, spot_lx + (SPOT_W - gui_icon_text_w(t, 1, s)) / 2, spot_ly + 74, 1, s, 0x001C1C1E);
+        char l1[96], l2[96]; unsigned cut = 0, n = 0;   /* what is new, in two lines at a space */
+        while (upd_news[n]) n++;
+        for (unsigned i = 0; i < n; i++) if (upd_news[i] == ' ') { char b[96]; for (unsigned j = 0; j < i; j++) b[j] = upd_news[j]; b[i] = 0; if (gui_text_width(b) <= SPOT_W - 24) cut = i; }
+        if (gui_text_width(upd_news) <= SPOT_W - 24 || !cut) cut = n;
+        for (unsigned j = 0; j < cut; j++) l1[j] = upd_news[j]; l1[cut] = 0;
+        { unsigned k = 0; for (unsigned j = cut < n ? cut + 1 : n; j < n; j++) l2[k++] = upd_news[j]; l2[k] = 0; }
+        about_center(l1, spot_ly + 104, 0x0075726E); about_center(l2, spot_ly + 122, 0x0075726E);
+        gui_rounded_rect_on_wallpaper(upd_btn_x(), upd_btn_y(), 200, 32, 0x00b5502c, 16);
+        gui_text("Update and Restart", upd_btn_x() + (200 - gui_text_width("Update and Restart")) / 2, upd_btn_y() + 8, 0x00FFFFFF);
+        about_center("If it does not start, the Pi goes back", spot_ly + 196, 0x0075726E);
+        about_center("to the version that worked.", spot_ly + 214, 0x0075726E);
+    } else if (tree_dlg) {
         const char *t = tree_dlg == 1 ? "Shut down now?" : "Restart now?", *go = tree_dlg == 1 ? "Shut Down" : "Restart";
         gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, DLG_W, DLG_H, 0x00faf8f4, 12);
         menu_mark_paint((spot_lx + DLG_W / 2) * s, (spot_ly + 36) * s, 44 * s, 0x001C1C1E);
@@ -109,7 +129,8 @@ static void tree_paint(void) {
     fb_flush(x, y, w, h);
     cur_show();
     con_quiet = 1;
-    if (tree_dlg) uart_puts(tree_dlg == 1 ? "power dialog: shut down\n" : "power dialog: restart\n");
+    if (tree_dlg == 3) { uart_puts("software update: "); uart_puts(upd_ver); uart_putc('\n'); }
+    else if (tree_dlg) uart_puts(tree_dlg == 1 ? "power dialog: shut down\n" : "power dialog: restart\n");
     else { uart_puts(tree_about ? "treemenu: about\n" : "treemenu: row "); if (!tree_about) { uart_dec((unsigned)tree_sel); uart_putc('\n'); } }
 }
 void tree_open(void) {
@@ -138,6 +159,28 @@ void power_dialog(int off) {   /* power.h's power_ask: the card in the middle of
     spot_live = spot_tree = 1; tree_about = 0; tree_dlg = off ? 1 : 2;
     tree_paint();
 }
+void update_dialog(const char *ver, const char *news) {   /* update.c's update_check: a newer version is out */
+    if (!fb || !text_ok) return;
+    int s = (int)window_scale(), w = SPOT_W * s, h = spot_hmax() * s;   /* the buffer Spotlight sizes; SPOT_W by UPD_H fits it */
+    unsigned i = 0; for (; ver[i] && i + 1 < sizeof upd_ver; i++) upd_ver[i] = ver[i]; upd_ver[i] = 0;
+    for (i = 0; news[i] && i + 1 < sizeof upd_news; i++) upd_news[i] = news[i]; upd_news[i] = 0;
+    if (spot_live) spot_close();
+    if (!spot_under) spot_under = kmalloc((unsigned)(w * h) * 4);
+    if (!spot_under) { uart_puts("oom software update\n"); return; }
+    tree_cw = SPOT_W; tree_ch = UPD_H;
+    spot_lx = ((int)fb_w / s - SPOT_W) / 2; spot_ly = ((int)fb_h / s - UPD_H) / 2 - 20;
+    cur_hide();
+    tree_under(1);
+    spot_live = spot_tree = 1; tree_about = 0; tree_dlg = 3;
+    tree_paint();
+}
+void update_install(void);   /* update.c */
+int sudo_may_write(void);   /* sudo.c */
+static void update_go(void) {   /* 10.0.0 audit: the button is an admin's, as `update install` is (cmd.c's priv) */
+    spot_close(); tree_dlg = 0;
+    if (!sudo_may_write()) { uart_puts("update: not an admin\n"); menubar_notify("Only an admin can update"); return; }
+    update_install();
+}
 void power_dialog_close(void) { if (power_dialog_up()) spot_close(); tree_dlg = 0; }
 /* Log Out closes every window; with no accounts it says so on the menu bar, with accounts the login screen (login_ui.h) comes back. */
 void tree_close_all(void) {
@@ -165,12 +208,14 @@ static void tree_pick(int r) {
     if (r == 1) power_ask(0); else if (r == 2) power_ask(1); else tree_logout();
 }
 void tree_key(unsigned code) {
+    if (tree_dlg == 3) { if (code == 28 || code == 96) update_go(); else if (code == 1) { spot_close(); tree_dlg = 0; } return; }   /* Software Update: Return updates, Esc closes */
     if (tree_about || code == 1) { spot_close(); return; }   /* About closes on any key; Esc closes the menu */
     if (code == 103) { tree_sel = (tree_sel + 3) % 4; tree_paint(); }
     else if (code == 108) { tree_sel = (tree_sel + 1) % 4; tree_paint(); }
     else if (code == 28 || code == 96) tree_pick(tree_sel);
 }
 void tree_click(int lx, int ly) {
+    if (tree_dlg == 3) { if (in_box(lx, ly, upd_btn_x(), upd_btn_y(), 200, 32)) update_go(); return; }
     if (tree_dlg) {   /* the power dialog: Cancel or the action; anywhere else it stays, as a Mac's does */
         int by = dlg_btn_y(), bw = dlg_btn_w(), cx = spot_lx + 16, gx = cx + bw + 16;
         if (in_box(lx, ly, cx, by, bw, 28)) power_key(1);

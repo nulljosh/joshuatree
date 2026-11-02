@@ -446,6 +446,12 @@ Do not copy either private key onto the card or into git.
 
 `tools/checks/arm64-relay-discovery-check.py` makes its throwaway certificates with these same commands.
 
+### Software Update (9.3.0)
+
+Type `update` in the Terminal. It asks the newest GitHub release which version is out, and when that is not the one running, Software Update opens: the version, a line on what is new, and Update and Restart (or Return; `update install` does the same, and needs an admin). The Pi fetches the new kernel and its signature, and writes nothing unless the signature is Joshua's. It puts the new kernel beside the one that works, as `KERNEL8.NEW`, and restarts into it once. If the new kernel runs for 20 seconds it becomes `KERNEL8.IMG`. If it never gets there, turn the Pi off and on: it starts the old kernel, which drops the update and says so on the menu bar.
+
+A card flashed by `tools/flash-pi.sh` carries your relay key inside its kernel, and the release image does not, so `update` refuses to replace it. Flash that card again instead. Each release's signature is added on the Mac by `tools/update-sign.sh`, because CI never holds the key.
+
 ### Update the relay and card together
 
 From the repository root, start the reviewed relay with TLS:

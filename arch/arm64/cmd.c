@@ -724,6 +724,11 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         ufile_args_next("", 0);   /* taken by app_start, or never: a refused run leaves nothing for the next app */
         if (nm) return;
     }
+    if (word_is(q, n, "update") || word_is(q, n, "update install")) {   /* 9.3.0: self-update (update.c); installing is an admin's */
+        void update_check(void), update_install(void);
+        if (n == 6) update_check(); else if (priv("update")) update_install();
+        return;
+    }
     if (n > 8 && is(q, n, "install")) {   /* 6.55.0: an app from the store into JT/APPS, signed or not at all (store.c) */
         const char *name = q + 8; unsigned m = n - 8;
         while (m && name[0] == ' ') { name++; m--; }

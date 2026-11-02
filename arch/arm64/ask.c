@@ -1331,6 +1331,7 @@ static void face_tick(void) {   /* ask_poll: the mouth follows the voice, 25 tim
     con_tui_mouth(m);
     if (m / 25 != last) { last = m / 25; kputs("face: mouth="); kdec((unsigned)m); kputs("\n"); }
 }
+int ask_dev_build(void) { return CLAUDE_TOKEN_LEN != 0; }   /* update.c: a dev card's kernel carries the relay token */
 void reader_say(const char *t) { unsigned k = 0; while (t[k]) k++; voice_fetch(t, k); }   /* desk.c: the screen reader's line, in her voice */
 static void voice_fetch(const char *t, unsigned k) {
     if (!CLAUDE_TOKEN_LEN || !net_get_gateway()) return;        /* no relay: the caption is all there is */
