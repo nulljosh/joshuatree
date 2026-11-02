@@ -93,15 +93,16 @@ pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi'
       ('Samantha', 'chat on the Pi', 1), ('Pi actions', 'note, green light', 1), ('HTTPS', 'Browser, 37 roots', 1),
       ('Browser', 'window, links', 1), ('Books', 'plain text', 1), ('Music', 'wav, mp3, covers', 1),
       ('Notes', 'saved to the card', 1), ('Calendar', 'four views', 1), ('Bluetooth', 'mouse pairs', 1),
-      ('Sound', 'headphone jack', 0), ('Many windows', 'apps side by side', 0),
+      ('Sound', 'headphone jack', 0), ('Many windows', 'apps side by side', 1),
       ('Walled memory', 'one app, one arena', 0), ('Watchdog', 'frozen app stopped', 0), ('Mic', 'Yeti, USB', 0),
       ('Wi-Fi switch', 'no restart', 0), ('Mail', 'IMAP, reply', 0), ('CalDAV', 'syncs when idle', 0),
-      ('BT keyboard', 'LE, passkey', 0)]
+      ('BT keyboard', 'LE, passkey', 0), ('Settings', 'wallpaper, sound', 1), ('Build apps', 'plankc on the Pi', 1),
+      ('Live data', 'stocks, weather', 0), ('Settings tile', 'in the dock', 0)]
 pw = (IW - 3 * S[16]) / 4
 for i, (a, b, done) in enumerate(pi):
     box(M + (i % 4) * (pw + S[16]), y + (i // 4) * (48 + S[8]), pw, 48, a, b, 'new' if done else 'todo')
 y += ((len(pi) + 3) // 4) * (48 + S[8])
-y = note(y, 'Solid: seen working on the real board (2026-10-12, v3). Dashed: built and checked in QEMU, not yet seen there.') + S[32]
+y = note(y, 'Solid: seen working on the real board (2026-11-01, 7.5). Dashed: built and checked in QEMU, not yet seen there.') + S[32]
 
 y = sec(y, 'bars', 'Apps shipped')
 pts = [tuple(map(int, q.split(','))) for q in re.search(r'<polyline points="([^"]+)"', svg).group(1).split()]

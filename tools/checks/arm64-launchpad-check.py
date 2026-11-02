@@ -33,7 +33,7 @@ dock_x0, dock_y0 = (W - (12 * icon + 11 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 -
 def slot_centre(slot): return dock_x0 + 10 + slot * (icon + 6) + icon // 2, dock_y0 + 10 + icon // 2
 CREAM, RED = (0xfa, 0xf8, 0xf4), (0xff, 0x5f, 0x57)
 CARD_W, CARD_H, PAD, TOP, CW, CH, COLS, N = 646, 430, 22, 20, 86, 78, 7, 29   # 4.24.0: the five games made 27, seven across; 4.25.0 Chess made 28; 6.1.0 Movies 29, a fifth row
-CALC = 15   # the Calculator is the 16th name (slot 16)
+CALC = 16   # the Calculator is the 17th name (slot 17; 7.8.0 Settings joined the dock)
 GREYED = ["Trash"]
 
 tmp = scratch_dir("arm64-launchpad")
