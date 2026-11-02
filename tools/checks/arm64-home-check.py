@@ -90,6 +90,8 @@ void fat_list(void (*cb)(const char *, unsigned, int)) { for (int i = 1; i < 200
 unsigned fat_cwd_get(void) { return cwd; }
 void fat_cwd_set(unsigned c) { cwd = c; }
 int fat_mount(void) { return 1; }
+int feeds_read(const char *leaf, char *buf, unsigned cap) { (void)leaf; (void)buf; (void)cap; return -1; }   /* 7.6.0 feeds.c: no live data here */
+int feeds_stocks_for(const char *syms) { (void)syms; return 0; }
 void fat_vfs_register(void) {}
 int sd_ready(void) { return ready; }
 int sd_enter_jt(int make) {
