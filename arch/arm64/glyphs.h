@@ -46,7 +46,7 @@ static int glyph_in(int kind, int level, int x, int y) {
         if (dy >= 0 || (dx < 0 ? -dx : dx) > -dy) return 0;
         for (int k = 0; k < 3; k++) { int ri = 52 + 52 * k, ro = ri + 28; if (d2 >= ri * ri && d2 <= ro * ro) return 1; }
         return 0; }
-    case GL_BT:      /* 7.8.0: the Bluetooth rune, a stem with two arrowheads on its right */
+    case GL_BT:      /* 7.9.0: the Bluetooth rune, a stem with two arrowheads on its right */
         return g_capsule(x, y, 124, 30, 124, 226, 14) || g_capsule(x, y, 124, 30, 186, 82, 14) || g_capsule(x, y, 186, 82, 66, 172, 14)
             || g_capsule(x, y, 66, 84, 186, 174, 14) || g_capsule(x, y, 186, 174, 124, 226, 14);
     }
