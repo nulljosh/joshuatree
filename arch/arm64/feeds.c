@@ -71,7 +71,7 @@ static int row(const char **pp, char **oo, const char *end, unsigned i) {
     *oo = o;
     return 1;
 }
-/* 7.8.0: Stocks' own watchlist (JT_SYS_FEED, ufile.c has checked it), or the Worker's default eight with none. 1 when
+/* 7.7.0: Stocks' own watchlist (JT_SYS_FEED, ufile.c has checked it), or the Worker's default eight with none. 1 when
    a good reply was kept. */
 int feeds_stocks_for(const char *syms) {   /* a good reply replaces the kept quotes; a failed one leaves the last good ones */
     if (!net_get_gateway()) { kputs("stocks: no network, no prices\n"); return 0; }
@@ -126,5 +126,5 @@ int feeds_read(const char *leaf, char *buf, unsigned cap) {
     return (int)k;
 }
 void feeds_for(const char *app) {   /* appwin.c's app_go, before an app starts: the data it reads, fetched now */
-    if (named(app, "WEATHER")) feeds_weather();   /* 7.8.0: Stocks asks itself (JT_SYS_FEED), with its own watchlist */
+    if (named(app, "WEATHER")) feeds_weather();   /* 7.7.0: Stocks asks itself (JT_SYS_FEED), with its own watchlist */
 }

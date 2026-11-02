@@ -14,6 +14,6 @@ What to try on the real Pi, most important first. Flash the card first (card in 
 
 10. **Dock magnify.** Settings, Dock, Magnify: step it to Small, then rest the pointer on a dock tile. It grows a little; on Large it grows more; on Off it does not grow at all.
 
-11. **Since the last card (7.5 to 7.7).** Move the mouse fast across the dock and drag a window: both keep up with your hand. Open Stocks and Weather on Wi-Fi: real prices with today's date, your own city's forecast. Open Files, Music, double-click a .wav: Music opens and plays it. The tree menu's About is a window in the middle. Restart from the tree menu: a dialog asks (Cancel or Restart), then a soft two-note chime, no crackle from the jack.
+11. **Since the last card (7.5 to 7.7).** Move the mouse fast across the dock and drag a window: both keep up with your hand. Open Stocks and Weather on Wi-Fi: real prices with today's date, your own city's forecast. In Stocks press +, type a symbol, Enter: it joins the list with a price; Delete takes the selected one off. Open Files, Music, double-click a .wav: Music opens and plays it. The tree menu's About is a window in the middle. Restart from the tree menu: a dialog asks (Cancel or Restart), then a soft two-note chime, no crackle from the jack.
 
 Steps 1 to 7 are 7.0's. Steps 8 and 9 are 8.0's, so a miss there does not hold 7.0 back.

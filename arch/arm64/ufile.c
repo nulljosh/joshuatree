@@ -320,21 +320,22 @@ static long u_launch(unsigned long uname, unsigned long uarg) {
     for (unsigned i = 0; i <= PATH_MAX && (launch_arg[i] = ar[i]); i++) ;
     return 0;
 }
-/* JT_SYS_FEED (406, 7.8.0): an app asks for a live feed in RAM. 1 is Stocks with its own watchlist, up to 8 symbols of
+/* JT_SYS_FEED (406, 7.7.0): an app asks for a live feed in RAM. 1 is Stocks with its own watchlist, up to 8 symbols of
    capital letters, digits, dots and dashes between commas; anything else is refused before it reaches a URL. */
 int feeds_stocks_for(const char *syms);   /* feeds.c */
 static long u_feed(unsigned long kind, unsigned long uarg) {
-    char a[PATH_MAX + 1];
+    char a[8 * 11];   /* 8 symbols of up to 10, 7 commas and the NUL: longer than a path, so not copy_path */
     if (kind != 1) return -EINVAL;
-    long err = copy_path(uarg, a);
-    if (err) return err;
-    unsigned n = 0, commas = 0;
-    for (; a[n]; n++) {
-        char c = a[n];
-        if (c == ',') { if (!n || a[n - 1] == ',') return -EINVAL; commas++; continue; }
-        if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-')) return -EINVAL;
+    unsigned n = 0, commas = 0, len = 0;
+    for (;; n++) {
+        if (n >= sizeof a) return -EINVAL;
+        if (!user_in_range(uarg + n, 1)) return -EFAULT;
+        char c = a[n] = ((const char *)uarg)[n];
+        if (!c) break;
+        if (c == ',') { if (!len) return -EINVAL; commas++; len = 0; continue; }
+        if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-') || ++len > 10 || (len == 1 && (c == '.' || c == '-'))) return -EINVAL;   /* the Worker's rule */
     }
-    if (!n || a[n - 1] == ',' || commas > 7) return -EINVAL;
+    if (!len || commas > 7) return -EINVAL;
     return feeds_stocks_for(a) ? 0 : -EIO;
 }
 int ufile_launch_take(char *name, char *arg) {   /* main.c: 1 and the request, once */

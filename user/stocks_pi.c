@@ -36,7 +36,7 @@ static int have[ROWS] JT_DATA, stale[ROWS] JT_DATA, price[ROWS] JT_DATA, prev[RO
 static int dprice[ROWS] JT_DATA, dprev[ROWS] JT_DATA, np[ROWS] JT_DATA, pts[ROWS][PTS] JT_DATA;
 static const char *const DEF_SYM[ROWS] = {"AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "NFLX"};
 static const char *const DEF_NAME[ROWS] = {"Apple Inc.", "Microsoft", "Alphabet Inc.", "Amazon.com", "Tesla Inc.", "NVIDIA", "Meta Platforms", "Netflix"};
-/* 7.8.0: the watchlist is the person's own, up to 8 symbols in JT/WATCH.TXT (one a line). + adds one, Delete or Backspace
+/* 7.7.0: the watchlist is the person's own, up to 8 symbols in JT/WATCH.TXT (one a line). + adds one, Delete or Backspace
    takes the selected one off; with no file it is the eight above. The kernel fetches exactly these (JT_SYS_FEED). */
 static char wsym[ROWS][12] JT_DATA, adding_buf[12] JT_DATA;
 static int nrows JT_DATA, adding JT_DATA;
@@ -83,7 +83,7 @@ static void load(void) {
     file[n < 0 ? 0 : n] = 0;
     const char *p = file;
     if (*p == 'r') {
-        p++; range = num(&p); (void)num(&p);   /* the file's sel is always 0: the one on screen stays (7.8.0, after an add) */
+        p++; range = num(&p); (void)num(&p);   /* the file's sel is always 0: the one on screen stays (7.7.0, after an add) */
         if (range < 0 || range >= 5) range = 0;
         if (sel < 0 || sel >= nrows) sel = 0;
         eol(&p);
@@ -257,7 +257,7 @@ void _start(int argc, char **argv) {
                 if (first + row < nrows && row < rows_visible()) { sel = first + row; draw(); }
             }
         } else if (ev.kind == JT_EV_KEY) {
-            if (adding) {   /* 7.8.0: typing a symbol to add */
+            if (adding) {   /* 7.7.0: typing a symbol to add */
                 int n = 0; while (adding_buf[n]) n++;
                 if (ev.a == JT_KEY_ESC) { adding = 0; draw(); }
                 else if (ev.a == JT_KEY_ENTER || ev.a == '\n' || ev.a == '\r') {

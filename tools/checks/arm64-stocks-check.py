@@ -10,6 +10,8 @@ QEMU's user network, on the virt machine with ramfb and virtio keyboard and tabl
     window opens and it says "stocks: prices" and "stocks: sel AAPL";
   - samples the framebuffer: the page colour, green and red pills in the watchlist, a chart line with soft edges;
   - presses Down: "stocks: sel MSFT" and the chart region changes;
+  - 7.7.0: Delete takes MSFT off and "+", IBM, Enter adds IBM; each time the kernel refetches with &symbols= set to
+    exactly the list (the fixture records the path); then eight symbols longer than a file path still fetch;
   - presses Esc: "M3c app stocks exit 0" and the wallpaper is back where the window stood;
   - opens it again from Spotlight (F1, "stoc", Enter) and closes it with its red dot.
 Then the normal kernel with no network: Stocks opens with no prices and says so ("stocks: no prices"), nothing made up.
@@ -34,8 +36,10 @@ def fixture_row(i):   # test data only: 64 closes, AAPL and every other row up, 
     pts = [20000 + i * 3000 + (j * 25 if up else -j * 25) + (j % 5) * 40 for j in range(64)]
     return "%d %d 1793390401 64 %s" % (pts[-1], pts[0], " ".join(map(str, pts)))
 FIXTURE = ("\n".join(fixture_row(i) for i in range(8)) + "\n").encode()
+PATHS = []   # every path the kernel asked for: 7.7.0 sends the watchlist as &symbols=
 class Fixture(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        PATHS.append(self.path)
         self.send_response(200); self.send_header("Content-Type", "text/plain"); self.send_header("Content-Length", str(len(FIXTURE)))
         self.end_headers(); self.wfile.write(FIXTURE)
     def log_message(self, *a): pass
@@ -133,6 +137,29 @@ try:
     chart_b = region(b2, sx, cy0 + ch0, cw_, vh - ch0 - 72)
     diff = sum(1 for p, q_ in zip(chart_a, chart_b) if p != q_)
     check("the chart changed (%d pixels differ)" % diff, diff > 80, diff)
+    # ---- 7.7.0: Delete takes MSFT off, + adds IBM, and the kernel fetches exactly that list ----
+    n = len(uart()); p0 = len(PATHS); key("delete")
+    check("Delete takes the selected MSFT off the watchlist", wait_for("stocks: unwatch MSFT\n", 4, n) and wait_for("stocks: live prices fetched", 6, n), uart()[n:][-300:])
+    asked = PATHS[p0:]
+    check("the refetch asks for the list without MSFT", bool(asked) and "symbols=AAPL," in asked[-1] and "MSFT" not in asked[-1], asked)
+    n = len(uart()); p0 = len(PATHS); key("equal")
+    for k in "ibm": key(k)
+    key("ret")
+    check("+ then IBM and Enter adds IBM", wait_for("stocks: watch IBM\n", 4, n) and wait_for("stocks: live prices fetched", 6, n), uart()[n:][-300:])
+    asked = PATHS[p0:]
+    check("the refetch asks for IBM too", bool(asked) and asked[-1].endswith(",IBM") and "MSFT" not in asked[-1], asked)
+    # a full list of long symbols is longer than a file path (63 bytes): the kernel still takes it
+    for _ in range(7): key("up")
+    for _ in range(5): key("delete"); time.sleep(0.6)
+    longs = ["ABCDEFGHIJ", "KLMNOPQRST", "UVWXYZABCD", "EFGHIJKLMN", "OPQRSTUVWX"]
+    n = len(uart()); p0 = len(PATHS)
+    for sym in longs:
+        m0 = len(uart()); key("equal")
+        for k in sym.lower(): key(k)
+        key("ret"); wait_for("stocks: watch " + sym + "\n", 4, m0); wait_for("stocks: live prices fetched", 6, m0)
+    want = "symbols=" + ",".join(["META", "NFLX", "IBM"] + longs)
+    check("eight symbols, %d bytes of list, still fetch" % (len(want) - 8), bool(PATHS[p0:]) and PATHS[-1].endswith(want) and "stocks: no fetch" not in uart()[n:],
+          (PATHS[p0:][-1:], uart()[n:][-300:]))
     # ---- Esc closes it ----
     n = len(uart()); key("esc")
     check("Esc closes Stocks and the app exits 0", wait_for("M3c app stocks exit 0", 4, n) and "stocks: closed\n" in uart()[n:], uart()[n:][-300:])

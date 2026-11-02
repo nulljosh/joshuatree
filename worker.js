@@ -312,7 +312,7 @@ async function handleStocks(url) {
   const range = url.searchParams.get("range") ?? "0";
   if (!/^[0-4]$/.test(range)) return new Response("Invalid range", {status: 400});
   const [period, interval] = STOCK_RANGES[Number(range)];
-  // 7.8.0: the Pi's own watchlist, up to 8 symbols (letters, digits, dot, dash); none gives the default eight
+  // 7.7.0: the Pi's own watchlist, up to 8 symbols (letters, digits, dot, dash); none gives the default eight
   const asked = url.searchParams.get("symbols");
   let symbols = STOCK_SYMBOLS;
   if (asked !== null) {
