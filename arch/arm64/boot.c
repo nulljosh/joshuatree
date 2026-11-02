@@ -426,11 +426,21 @@ void main(void) {
         GICD(0x100) = 1u << 27;
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
         desk_ms = key_ms();
+#ifdef BROWSER_LOWMEM_TEST   /* the lowmem build (arm64-browser-lowmem-check.py): the desktop is up; leave 3 to 4 MiB of heap free, as on the board */
+        { unsigned long m0 = heap_mark(); unsigned k = 0; while (kmalloc(1u << 20)) k++; heap_release(m0); if (k > 3) kmalloc((k - 3) << 20);
+          con_quiet = 1; uart_puts("lowmem: "); uart_dec(k > 3 ? 3 : k); uart_puts(" MiB and change left\n"); }
+#endif
 #ifdef PTR_BURST_TEST   /* the ptrburst build (arm64-ptrburst-check.py): 20 mouse reports in one pass are drawn once */
         { extern unsigned ptr_draws; unsigned d0 = ptr_draws;
           for (int i = 0; i < 20; i++) { kinput(2, 0, 4); kinput(0, 0, 0); }
           pointer_flush();
-          con_quiet = 1; uart_puts("ptrburst: 20 reports, "); uart_dec(ptr_draws - d0); uart_puts(" draws\n"); }
+          con_quiet = 1; uart_puts("ptrburst: 20 reports, "); uart_dec(ptr_draws - d0); uart_puts(" draws\n");
+          /* 7.6.0: magnifying the dock takes nothing from the heap (its buffers are kept from the desktop's first paint),
+             so a heap mark held around it can never free them */
+          unsigned long h0 = heap_mark(); int s = (int)window_scale();
+          mouse_x = (unsigned)((gui_slot_x(5) + DOCK_ICON / 2) * s); mouse_y = (unsigned)((gui_dock_y0() + DOCK_PAD + DOCK_ICON / 2) * s);
+          pointer_moved();
+          con_quiet = 1; uart_puts("ptrburst: dock magnify took "); uart_dec((unsigned)(heap_mark() - h0)); uart_puts(" heap bytes\n"); }
 #endif
 #ifdef PI_BUILD
         (void)step;

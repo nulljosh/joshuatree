@@ -4,9 +4,9 @@
  * The i386 Weather (user/weather.c) is fed by the kernel's weather_fetch, which the ARM kernel does not have, so this
  * is its own, smaller program with the same data contract: it reads WEATHER.TXT through jt_readfile (the card's
  * JT/WEATHER.TXT, the lines weather.c documents: city, word, have, temp, code, isday and one
- * "d weekday code hi lo rain uv sunrise sunset" per day). With no such file, or one that says have 0, it draws a
- * built-in sample and says so in its status line, "Sample, not a live reading". A file is called "Saved reading": this
- * program never claims a live one. Nothing is fetched here and no key is involved.
+ * "d weekday code hi lo rain uv sunrise sunset" per day). Since 7.6.0 the kernel fetches the reading for where the Pi
+ * is when Weather opens and serves WEATHER.TXT from RAM (arch/arm64/feeds.c); a card copy is read when there is none.
+ * With neither, or one that says have 0, it shows no reading and says why: no sample. Nothing is fetched here, no key.
  *
  * House style (docs/ARCHITECTURE.md): flat, sans serif, terracotta #b5502c accent, glyphs from discs and capsules, no text in
  * a glyph. Esc or the red dot closes it. One line per start tells tools/checks/arm64-weather-check.py what was drawn.
@@ -96,14 +96,6 @@ static int num(const char **p) {
 static int is(const char *l, const char *k) { int n = 0; while (k[n]) { if (l[n] != k[n]) return 0; n++; } return l[n] == ' '; }
 static void copy(char *d, int max, const char *s) { int n = 0; while (*s && *s != '\n' && n < max - 1) d[n++] = *s++; d[n] = 0; }
 
-static void sample(void) {   /* shown, and labelled, whenever there is no saved reading */
-    static const int s_code[DAYS] = {0, 2, 3, 61, 71}, s_hi[DAYS] = {21, 19, 17, 15, 3}, s_lo[DAYS] = {12, 11, 10, 9, -2};
-    unsigned now = 0; int dow = 1;
-    if (jt_time(&now) > 0 && now) dow = (int)((now / 86400 + 4) % 7);
-    copy(city, sizeof city, "Vancouver");
-    temp = 18; code = 0; nd = DAYS;
-    for (int i = 0; i < DAYS; i++) { wd[i] = (dow + i) % 7; dcode[i] = s_code[i]; hi[i] = s_hi[i]; lo[i] = s_lo[i]; }
-}
 static void load(void) {
     int n = jt_readfile("WEATHER.TXT", file, sizeof file - 1);
     file[n < 0 ? 0 : n] = 0;
@@ -119,8 +111,8 @@ static void load(void) {
         while (*l && *l != '\n') l++;
         if (*l) l++;
     }
-    if (!have || nd <= 0) { have = 0; sample(); }
-    if (!city[0]) copy(city, sizeof city, "Vancouver");
+    if (!have || nd <= 0) { have = 0; nd = 0; }
+    if (!city[0]) copy(city, sizeof city, "Weather");
     copy(word, sizeof word, word_for(code));
 }
 
@@ -133,7 +125,8 @@ static void draw(void) {
     char b[48];
     rect(0, 0, vw, vh, BG);
     text(city, pad, 16, TEXT, 1);
-    right(have ? "Saved reading" : "Sample, not a live reading", vw - pad, 16, have ? DIM : MID, 0);
+    if (!have) { text("No reading right now", pad, 54, MID, 1); return; }   /* offline or the feed failed: nothing made up */
+    right("Open-Meteo", vw - pad, 16, DIM, 0);
     /* the temperature large, the condition and the glyph beside it */
     deg(b, temp);
     int bx = jt_text_draw(&win, JT_FACE_DISPLAY, pad - 2, 44, TEXT, b) + 20;

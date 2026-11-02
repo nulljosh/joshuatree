@@ -5,7 +5,8 @@ Part 1, QEMU virt with ramfb, a USB keyboard and mouse behind a hub, virtio-net 
   - clicks the tree: the cream card opens under the bar (pixels), four rows hold text, row 0 is terracotta;
   - Down moves the terracotta to row 1; Esc puts the desktop back pixel for pixel; F10 and Ctrl+Option+T open it again;
     a click outside dismisses it; a click on the mark while it is open closes it;
-  - About: Enter shows the version, any key closes it;
+  - About: Enter shows a window in the middle of the screen (7.6.0) with the mark and the version, any key closes it
+    and puts the screen back;
   - Restart by a mouse click and Shut Down by Up/Down/Enter reach the same Enter-confirms prompt as the chords, Esc cancels;
     Enter on a confirmed Restart reaches power_apply (the virt build has no watchdog and says so);
   - Log Out with a Terminal and a Calculator open closes both and leaves the bare wallpaper;
@@ -168,23 +169,36 @@ try:
     # About
     step("treemenu open", lambda: keys("f10"))
     ok = step("treemenu: about", lambda: keys("ret"))
-    d = shot()
+    time.sleep(0.2); d = shot()
+    if os.environ.get("JT_ABOUT_SHOT"): open(os.environ["JT_ABOUT_SHOT"], "wb").write(b"P6\n%d %d\n255\n" % (W, H) + d[1])
     ver = open(os.path.join(root, "VERSION")).read().strip()
-    check("About opens a card with the version line", ok and region(d, CX + 16, CY + 32, 150, 16) != region(base, CX + 16, CY + 32, 150, 16), ver)
+    AX, AY, AW, AH = (W - 280) // 2, (H - 236) // 2 - 20, 280, 236   # 7.6.0: About is a window in the middle of the screen
+    check("About opens in the middle of the screen: the menu card is gone, the window is cream with the mark's ink at its centre",
+          ok and region(d, CX + 40, CY + 10, 170, 90) == region(base, CX + 40, CY + 10, 170, 90) and px(d, AX + 20, AY + 100) == CREAM
+          and sum(1 for c in region(d, AX + 104, AY + 28, 72, 72) if sum(c) < 200) > 100, ver)
+    check("and it shows the version line", region(d, AX + 40, AY + 140, 200, 16) != region(base, AX + 40, AY + 140, 200, 16))
     ok = step("treemenu close", lambda: keys("x"))
-    check("any key closes About", ok)
+    time.sleep(0.2)
+    check("any key closes About and puts the screen back where it stood", ok and region(shot(), AX, AY, AW, AH) == region(base, AX, AY, AW, AH))
 
-    # Restart by mouse, Shut Down by keys, both stop at the chords' own prompt
+    # Restart by mouse, Shut Down by keys, both stop at the chords' own confirm, the power dialog (7.7.0)
     step("treemenu open", lambda: click(*MARK))
     ok = step("Restart? Unsaved", lambda: click(CX + 60, ROW_Y[1] + 10))
-    check("clicking Restart asks the chords' question in the Terminal", ok, uart()[-300:])
-    ok = step("Power action cancelled.", lambda: keys("esc"))
-    check("Esc cancels it", ok)
+    time.sleep(0.3); dl = shot()
+    if os.environ.get("JT_POWER_SHOT"): open(os.environ["JT_POWER_SHOT"], "wb").write(b"P6\n%d %d\n255\n" % (W, H) + dl[1])
+    DX, DY = (W - 300) // 2, (H - 180) // 2 - 20   # 7.7.0: the confirm is a dialog in the middle of the screen, not the Terminal
+    BY, BW = DY + 180 - 44, (300 - 48) // 2
+    check("clicking Restart opens the power dialog in the middle: cream card, the terracotta Restart button",
+          ok and "power dialog: restart" in uart() and px(dl, DX + 10, DY + 120) == CREAM and px(dl, DX + 16 + BW + 16 + 6, BY + 14) == TERRA,
+          (px(dl, DX + 10, DY + 120), px(dl, DX + 16 + BW + 16 + 6, BY + 14)))
+    ok = step("Power action cancelled.", lambda: click(DX + 16 + BW // 2, BY + 14))
+    time.sleep(0.2)
+    check("its Cancel button cancels and puts the screen back", ok and region(shot(), DX, DY, 300, 120) == region(base, DX, DY, 300, 120))   # above the buttons: the arrow rests on Cancel
     step("treemenu open", lambda: keys("f10"))
     ok = step("Shut down? Unsaved", lambda: keys("down", "down", "ret"))
     check("Down, Down, Enter on Shut Down asks the same", ok, uart()[-300:])
     ok = step("Power action cancelled.", lambda: keys("esc"))
-    check("Esc cancels that too", ok)
+    check("Esc cancels the dialog too", ok)
     step("treemenu open", lambda: keys("f10"))
     n = len(uart())
     keys("down", "ret")

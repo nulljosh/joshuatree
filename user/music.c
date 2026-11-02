@@ -699,6 +699,23 @@ void _start(int argc, char **argv) {
     rng ^= (unsigned)jt_time(0);
     scan_library();
     layout();
+    {   /* 7.7.0: opened from Files with a song (JT_SYS_ARGS holds its path, JT/ relative): select it and play it */
+        char a[72]; int n = jt_args(a, sizeof a - 1);
+        if (n > 0) {
+            a[n] = 0;
+            int found = -1;
+            for (int i = 0; i < ntracks && found < 0; i++) {
+                const char *p = a, *d = tracks[i].dir ? "MUSIC/" : "";
+                while (*d && (*p == *d || (*p ^ 32) == *d)) { p++; d++; }
+                if (*d) continue;
+                int k = 0;
+                while (p[k] && tracks[i].file[k] && ((p[k] | 32) == (tracks[i].file[k] | 32))) k++;
+                if (!p[k] && !tracks[i].file[k]) found = i;
+            }
+            if (found >= 0) { say("music: opened ", tracks[found].file, 0, 0); start_track(found); }
+            else { set_msg("Music plays songs in Files and its MUSIC folder"); say("music: not in the library ", a, 0, 0); }
+        }
+    }
     {   char line[48]; int l = 0; const char *p = "music: ui bar=";
         while (*p) line[l++] = *p++;
         l += utoa10((unsigned)rx, line + l); line[l++] = ',';

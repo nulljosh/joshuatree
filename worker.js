@@ -91,6 +91,7 @@ async function handleProxy(request, env) {
   if (targetUrl.hostname === "joshuatree.jaybulb.com"
       && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password) {
     if (targetUrl.pathname === "/api/stocks") return handleStocks(targetUrl);
+    if (targetUrl.pathname === "/api/weather") return handleWeather(request);
     if (targetUrl.pathname === "/api/quotes") return handleQuotes();
     if (targetUrl.pathname === "/api/books") return handleBooks();
     if (targetUrl.pathname === "/api/lexly") return handleLexly(targetUrl);
@@ -284,11 +285,41 @@ function stockWire(data, symbol) {
   const points = Array.from({length: n}, (_, i) => raw[n === 1 ? 0 : Math.round(i * (raw.length - 1) / (n - 1))]);
   return [price, prev, time, n, ...points].join(" ");
 }
+// The Pi's Weather (arch/arm64/feeds.c): the caller's own place from Cloudflare's request.cf (no IP lookup on the Pi)
+// and Open-Meteo's forecast, as the WEATHER.TXT lines user/weather_pi.c reads: city, have, temp (whole degrees C),
+// code (WMO), then "d weekday code hi lo" for five days (weekday 0 is Sunday). No place or no forecast: "have 0".
+async function handleWeather(request) {
+  const cf = request.cf ?? {};
+  const lat = Number(cf.latitude), lon = Number(cf.longitude);
+  // ASCII only: the Pi draws bytes with an ASCII face, so "Zürich" is sent as "Zurich" (accents dropped, anything else out)
+  const city = String(cf.city ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9 .'-]/g, "").slice(0, 30);
+  const head = {"Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store"};
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return new Response("have 0\n", {headers: head});
+  try {
+    const q = `latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`;
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`, {signal: AbortSignal.timeout(8000)});
+    if (!r.ok) throw Error("forecast");
+    const w = await r.json(), d = w.daily;
+    const lines = [`city ${city || "Here"}`, "have 1", `temp ${Math.round(w.current.temperature_2m)}`, `code ${w.current.weather_code}`];
+    for (let i = 0; i < d.time.length && i < 5; i++) {
+      const wd = new Date(d.time[i] + "T12:00:00Z").getUTCDay();
+      lines.push(`d ${wd} ${d.weather_code[i]} ${Math.round(d.temperature_2m_max[i])} ${Math.round(d.temperature_2m_min[i])}`);
+    }
+    return new Response(lines.join("\n") + "\n", {headers: head});
+  } catch { return new Response("have 0\n", {headers: head}); }
+}
 async function handleStocks(url) {
   const range = url.searchParams.get("range") ?? "0";
   if (!/^[0-4]$/.test(range)) return new Response("Invalid range", {status: 400});
   const [period, interval] = STOCK_RANGES[Number(range)];
-  const lines = await Promise.all(STOCK_SYMBOLS.map(async symbol => {
+  // 7.7.0: the Pi's own watchlist, up to 8 symbols (letters, digits, dot, dash); none gives the default eight
+  const asked = url.searchParams.get("symbols");
+  let symbols = STOCK_SYMBOLS;
+  if (asked !== null) {
+    symbols = asked.split(",");
+    if (!symbols.length || symbols.length > 8 || !symbols.every(s => /^[A-Z0-9][A-Z0-9.-]{0,9}$/.test(s))) return new Response("Invalid symbols", {status: 400});
+  }
+  const lines = await Promise.all(symbols.map(async symbol => {
     try {
       const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${period}&interval=${interval}`, {
         headers: {"User-Agent": "Mozilla/5.0"},
@@ -777,6 +808,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/stocks") return handleStocks(url);
+    if (url.pathname === "/api/weather") return handleWeather(request);
     if (url.pathname === "/api/quotes") return handleQuotes();
     if (url.pathname === "/api/books") return handleBooks();
     if (url.pathname === "/api/lexly") return handleLexly(url);
@@ -803,7 +835,7 @@ export default {
 // response handling are still real, plain JS testable directly under Node.
 export { isAllowedTarget, handleProxy, ALLOWED_HOSTS };
 
-export { stockWire, handleStocks };
+export { stockWire, handleStocks, handleWeather };
 export { bookrankWire, handleBooks };
 export { hikkoWire, hikkoText, handleHikko };
 export { lexlyQuestions, lexlyText, lexlyCourseWire, lexlyQuestionWire, handleLexly, LEXLY_COURSES };

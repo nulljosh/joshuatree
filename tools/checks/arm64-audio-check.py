@@ -60,7 +60,7 @@ HARNESS = r'''
 #define PI_BUILD
 #include "arch/arm64/audio.c"
 static int mode;
-static unsigned cm_ctl, gpfsel4 = 0x040, pup = 0xFFFFFFFF, pwm_ctl = 0xDEAD, rng1, rng2, fifo_len, fifo_n, minv = ~0u, maxv, first[8];
+static unsigned cm_ctl, gpfsel4 = 0x040, pup = 0xFFFFFFFF, pwm_ctl = 0xDEAD, rng1, rng2, fifo_len, fifo_n, minv = ~0u, maxv, first[8], lastv;
 static unsigned long reads;
 void kputs(const char *s) { fputs(s, stdout); }
 unsigned audio_rd(unsigned long a) {
@@ -87,7 +87,7 @@ void audio_wr(unsigned long a, unsigned v) {
     else if (a == PWM1_BASE + 0x20) rng2 = v;
     else if (a == PWM1_BASE + 0x18) {
         if (pwm_ctl != 0x2121 || fifo_len >= 16 || v > rng1) { fprintf(stderr, "bad FIFO write %u ctl %x len %u\n", v, pwm_ctl, fifo_len); exit(5); }
-        fifo_len++; if (fifo_n < 8) first[fifo_n] = v; fifo_n++;
+        fifo_len++; if (fifo_n < 8) first[fifo_n] = v; fifo_n++; lastv = v;
         if (v < minv) minv = v;
         if (v > maxv) maxv = v;
     } else { fprintf(stderr, "write of %lx\n", a); exit(6); }
@@ -97,13 +97,14 @@ int main(int argc, char **argv) {
     int r;
     if (atoi(argv[2]) >= 0) audio_set_volume(atoi(argv[2]));   /* -1: leave the default */
     if (!strcmp(argv[3], "tone")) r = audio_tone(atoi(argv[4]), atoi(argv[5]));
+    else if (!strcmp(argv[3], "chime")) r = audio_chime();
     else {
         static const short s[6] = {-32768, 32767, 0, 0, 100, -100};
         r = audio_play(s, 3, 44100);
     }
-    printf("RESULT ret=%d fifo=%u min=%u max=%u range=%u reads=%lu ctl=%x low=%x pin42=%x clk=%x first=%u,%u,%u,%u,%u,%u\n",
+    printf("RESULT ret=%d fifo=%u min=%u max=%u range=%u reads=%lu ctl=%x low=%x pin42=%x clk=%x first=%u,%u,%u,%u,%u,%u last=%u\n",
            r, fifo_n, minv, maxv, rng1, reads, pwm_ctl, gpfsel4 & 0x3F, gpfsel4 & 0x1C0, cm_ctl & 0x10,
-           first[0], first[1], first[2], first[3], first[4], first[5]);
+           first[0], first[1], first[2], first[3], first[4], first[5], lastv);
     return 0;
 }
 '''
@@ -125,6 +126,14 @@ def run(mode, *args, vol=100):   # vol 100 keeps the FIFO numbers below at full 
     return p.stdout, dict(kv.split("=") for kv in res.group(1).split()) if res else {}
 
 
+# 7.7.0: the restart chime starts and ends on the PWM's midpoint (no step, no pop) and is loud enough to hear in between
+out, d = run(0, "chime")
+if d:
+    mid = int(d.get("range", 0)) // 2
+    ok = d.get("ret") == "0" and "audio: chime" in out and abs(int(d["first"].split(",")[0]) - mid) <= 2 and abs(int(d["last"]) - mid) <= 2 \
+        and int(d["max"]) - int(d["min"]) > int(d["range"]) // 8
+    if ok: print("  ok: the restart chime starts and ends on the PWM midpoint, with a real note between")
+    else: fails.append(f"chime: ends or swing wrong {d}")
 frames, h = tone_sum(440, 100, 100)
 out, d = run(0, "tone", 440, 100)
 if f"audio: {frames} frames, ring sum 0x{h:08x}," not in out: fails.append(f"host tone line wrong: {out!r}, wanted {frames} frames sum {h:08x}")

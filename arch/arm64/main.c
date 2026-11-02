@@ -773,7 +773,19 @@ void app_kill(const char *how) {   /* every app ends: a kernel-drawn window is o
     for (unsigned i = 0; i < APP_SLOTS; i++) { ap = &apps[i]; if (app_cur && !app_running) app_end((unsigned long)-1, how); }
     ap = &apps[app_top >= 0 ? app_top : 0];
 }
+int ufile_launch_take(char *name, char *arg);   /* ufile.c */
+void ufile_args_next(const char *s, unsigned n);
+int app_dock(const char *name);                  /* appwin.c */
 void app_tick(void) {   /* every app with something to do gets its turn: it runs until it yields, exits or faults, and a fault ends that app alone */
+    {   static char nm[65], arg[65];   /* 7.7.0: an app asked for another (Files opens a song in Music): opened here, between turns */
+        if (ufile_launch_take(nm, arg)) {
+            unsigned n = 0; while (arg[n]) n++;
+            ufile_args_next(arg, n);
+            con_quiet = 1; uart_puts("launch "); uart_puts(nm); uart_putc(' '); uart_puts(arg); uart_putc('\n');
+            if (!app_dock(nm)) { con_quiet = 1; uart_puts("launch: no such app\n"); }
+            ufile_args_next("", 0);
+        }
+    }
     for (unsigned i = 0; i < APP_SLOTS; i++) {
         ap = &apps[i];
         if (!app_cur || app_running) continue;

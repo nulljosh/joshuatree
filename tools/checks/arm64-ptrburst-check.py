@@ -9,6 +9,10 @@ The ptrburst build feeds 20 made-up mouse reports in one go at boot, then flushe
 pointer_moved ran. It must be 1. Discriminating: call pointer_moved() on each EV_SYN again (the pre-7.5.5 code) and
 it says 20.
 
+7.6.0: then the pointer goes onto the dock and the build says how many heap bytes the magnify took. It must be 0: the
+dock's buffers are kept from the desktop's first paint, so a heap mark held around a magnify (voice mode's, a `sam`
+reply's) cannot free them. Discriminating: take them lazily in dock_magnify again (7.5.5) and it says about 3 MB.
+
 Usage: tools/checks/arm64-ptrburst-check.py   (from the repo root)
 """
 import os, re, shutil, subprocess, sys, time
@@ -40,4 +44,7 @@ m = re.search(r"ptrburst: 20 reports, (\d+) draws", out)
 if not m: print("FAIL: no ptrburst line\n" + out[-600:]); sys.exit(1)
 if "KERNEL CRASH" in out: print("FAIL: kernel crash\n" + out[-600:]); sys.exit(1)
 if m.group(1) != "1": print(f"FAIL: 20 queued mouse reports were drawn {m.group(1)} times, not once"); sys.exit(1)
-print("PASS: 20 queued mouse reports are drawn once, at the latest position")
+h = re.search(r"ptrburst: dock magnify took (\d+) heap bytes", out)
+if not h or "dock magnify 5 size" not in out: print("FAIL: the dock did not magnify under the pointer\n" + out[-600:]); sys.exit(1)
+if h.group(1) != "0": print(f"FAIL: magnifying the dock took {h.group(1)} heap bytes; a heap mark held around it would free them"); sys.exit(1)
+print("PASS: 20 queued mouse reports are drawn once, at the latest position, and magnifying the dock takes nothing from the heap")

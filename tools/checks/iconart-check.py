@@ -49,6 +49,8 @@ TOL = 8
 # Burrow is a full-bleed Finder-style split (its left half is a light tint
 # edge to edge), so only its right, tile-coloured half is sampled.
 FULL_BLEED = {"Burrow": range(42, 54)}
+# 7.7.0: Calendar is a page edge to edge, a terracotta band over its top rows, so only a white strip under the band is sampled.
+OWN_BANDS = {"Calendar": (range(31, 36),)}
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -152,7 +154,7 @@ for slot, (name, svg) in enumerate(zip(SLOTS, SVGS)):
     x0 = (SLOT0_X + slot * PITCH) * SCALE
     y0 = ICON_TOP_Y * SCALE
     worst = 0
-    for band in BANDS:
+    for band in OWN_BANDS.get(name, BANDS):
         got = [0, 0, 0]; want = [0.0, 0.0, 0.0]; n = 0
         for y in band:
             t = (y + 0.5) / pw

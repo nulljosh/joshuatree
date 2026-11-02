@@ -7,7 +7,9 @@ holding JT/HELLO.TXT, JT/DOCUMENTS/{NOTE.TXT, SUB/INNER.TXT}, JT/MUSIC/ALPHA.WAV
     folders first); on screen the sidebar and the first rows carry ink and the selected row is shaded;
   - Enter on Documents (DOCUME~1 on an 8.3 card, as mtools makes it) lists it (SUB first, then NOTE.TXT), Enter on SUB lists INNER.TXT, Backspace goes back up to Documents;
   - Enter on NOTE.TXT previews it read-only ("finder: preview=NOTE.TXT bytes=N"), the text is on screen, Backspace closes it;
-  - Left and Down in the sidebar go to Music ("finder: dir=MUSIC n=1");
+  - Left and Down in the sidebar go to Music ("finder: dir=MUSIC n=1"); 7.7.0: Right and Enter on ALPHA.WAV open it in
+    Music through JT_SYS_LAUNCH_REQUEST ("launch music MUSIC/ALPHA.WAV"), Music starts that song ("music: opened
+    ALPHA.WAV"), and Esc closes Music;
   - Esc closes it ("finder: closed", exit 0).
 A second boot with no card: Spotlight's Burrow (the dock's tile, slot 1) opens Finder, which says "finder: builtin" and lists the built-in apps with a plain note.
 No EL0 fault, no KERNEL CRASH. FINDER_SHOT=path.png keeps a screendump of the window of the list (needs sips or magick).
@@ -138,6 +140,11 @@ try:
     check("Left then Down in the sidebar goes to the next place after Home, Documents", b.wait_for("finder: dir=DOCUME~1 n=2\n", 5, n1), b.uart()[n1:][-200:])
     n1 = len(b.uart()); b.key("down")
     check("Down again lands on MUSIC with its one song", b.wait_for("finder: dir=MUSIC n=1\n", 5, n1), b.uart()[n1:][-300:])
+    n1 = len(b.uart()); b.key("right"); b.key("ret")   # 7.7.0: Enter on the song opens it in Music, which plays it
+    ok = b.wait_for("finder: music=MUSIC/ALPHA.WAV\n", 5, n1) and b.wait_for("launch music MUSIC/ALPHA.WAV\n", 5, n1) and b.wait_for("music: opened ALPHA.WAV", 10, n1)
+    check("Enter on ALPHA.WAV opens Music with it, and Music starts that song", ok, b.uart()[n1:][-400:])
+    n1 = len(b.uart()); b.key("esc")
+    check("Esc closes Music, Finder is in front again", b.wait_for("M3c app music exit", 5, n1), b.uart()[n1:][-300:])
     n1 = len(b.uart()); b.key("esc")
     check("Esc closes Finder with exit 0", b.wait_for("finder: closed\n", 5, n1) and b.wait_for("M3c app finder exit 0", 5, n1), b.uart()[n1:][-300:])
     after = b.uart().partition("M3c app finder starts")[2]

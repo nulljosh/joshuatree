@@ -30,6 +30,12 @@ try {
   assert.equal(response.headers.get('cache-control'),'no-store');
   const direct=await worker.fetch(new Request(target),{});
   assert.equal(await direct.text(),wire);
+  // 7.7.0: the Pi's own watchlist (&symbols=) fetches exactly those, and a bad list fetches nothing
+  calls=0; const mine=await (await handleStocks(new URL('https://example.com/api/stocks?range=0&symbols=AAPL,IBM'))).text();
+  assert.equal(calls,2); assert.equal(mine.trim().split('\n').length,2); assert.equal(mine,stockWire(fixture('AAPL'),'AAPL')+'\n'+stockWire(fixture('IBM'),'IBM')+'\n');
+  for (const bad of ['','aapl','A,B,C,D,E,F,G,H,I','AAPL,../x','AAPL,']) {
+    calls=0; assert.equal((await handleStocks(new URL('https://example.com/api/stocks?range=0&symbols='+encodeURIComponent(bad)))).status,400,bad); assert.equal(calls,0);
+  }
   for (const url of ['http://evil.example/api/stocks','http://joshuatree.jaybulb.com/other','http://joshuatree.jaybulb.com:123/api/stocks']) {
     assert.equal((await handleProxy(new Request('https://example.com/api/proxy?url='+encodeURIComponent(url)))).status,403);
   }
