@@ -56,6 +56,16 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 
 **Now: 9.0, the kit.**
 
+**The Berkeley list** (Joshua, 2026-11-01: "are we missing anything" from Berkeley's CS162 lectures). What the course covers that Joshua Tree still lacks, in order, before 10.0:
+- [ ] [Fable] Threads in an app, with locks and condition variables built on the CPU's atomic instructions (lectures 3, 6 to 9). Check: two threads bump one counter a million times each and the total is exact; with the lock taken out it is not.
+- [ ] [Fable] All four of the Pi's cores (today one runs and three sleep). Check: four busy threads finish in about a quarter of the time on QEMU's `-smp 4`.
+- [ ] [Fable] Apps that start apps: spawn, wait for the exit code, and a pipe from one app's output to another's input (lectures 4 and 5). Check: `userrun ls | userrun wc` counts the files.
+- [ ] [Fable] Sockets for apps, so an app talks TCP itself instead of only `http_get` (lectures 5 and 24).
+- [ ] [Fable] Priorities in the scheduler, so a busy app never makes the pointer or the sound stutter (lectures 10 to 12).
+- [ ] [Fable] Memory the way the course teaches it: pages loaded when first touched, copy on write, and pages pushed out to the card when memory runs low (lectures 13 to 17).
+- [ ] [Fable] A block cache, and writes that survive a pulled plug: a small journal in front of FAT so a cut mid-write leaves the old file or the new one, never a torn one (lectures 19 to 22). Check: cut QEMU at every write of a save and fsck the card.
+Left out on purpose: distributed file systems, key value stores and Chord (lectures 25 and 26); a desktop does not need them.
+
 **Polish still open** (Joshua, 2026-10-26, from the Snow Leopard and Mac OS X introductions, and posts.design): long movies streamed from the card with trim, Dock Exposé, Stacks for Downloads and Documents, window buttons that react on hover, Finder icon sizes with thumbnails, full-text history in the browser, the Launchpad card fading in, and Cmd+M for the kernel-drawn windows. The magnifying Dock (6.4.0), the genie (6.5.0) and Top Sites (6.37.0) are done.
 
 - [ ] [Fable] Later, not a 7.0 blocker: TLS 1.3 (BearSSL stops at 1.2, and most sites still offer 1.2), Ethernet through the Pi 4's GENET, and keep-alive (`net.c` holds one connection, so requests send `Connection: close`; 6.45.0's TLS session resumption already skips the costly part of each new connection, decided 2026-10-28).
