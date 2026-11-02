@@ -1094,7 +1094,7 @@ On the Pi's desktop every window drags and resizes the same way.
 - A window grows no further than the sides of the screen and the strip above the dock.
 - The frame is the same one throughout, with its 18 pixel corner and nothing added. The content lays itself out again for the new size.
 
-The dock holds `DOCK_SLOTS = 12` tiles in this order: `DOCK_ORDER = Apps, Burrow, Mail, Calendar, Notes, Reminders, Terminal, Samantha, Weather, Stocks, Settings, Trash`. Settings (7.8.0) is a tile like Apps and Trash, not an app: `GUI_SETTINGS` 40 in `APPS[]`, opening the i386 Settings window and, on the Pi, `settings_open` (`DOCK_SETTINGS`, the same slot Spotlight and the menu bar use, so it is listed once). Its art is a gear on graphite (`restyle_icons.py`). Portfolio mode swaps in the fleet.
+The dock holds `DOCK_SLOTS = 12` tiles in this order: `DOCK_ORDER = Apps, Files, Mail, Calendar, Notes, Reminders, Terminal, Samantha, Weather, Stocks, Settings, Trash`. Settings (7.8.0) is a tile like Apps and Trash, not an app: `GUI_SETTINGS` 40 in `APPS[]`, opening the i386 Settings window and, on the Pi, `settings_open` (`DOCK_SETTINGS`, the same slot Spotlight and the menu bar use, so it is listed once). Its art is a gear on graphite (`restyle_icons.py`). Portfolio mode swaps in the fleet.
 
 The dock's size and edges:
 - A tile is `dock_scale_pct = 7` percent of the screen height, so `DOCK_ICON = 37` pixels on the desktop.
