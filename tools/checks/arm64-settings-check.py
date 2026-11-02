@@ -10,7 +10,8 @@ status icons and JT/SETTINGS.TXT.
   2. QEMU virt, headless, with ramfb, a virtio keyboard and tablet and the check card (sdcard.py) as a virtio disk. Spotlight (F1,
      "sett", Enter) opens Settings in About. The window's close dot and the nine sidebar tiles are sampled from a screendump:
      each tile is terracotta with its own glyph (no two the same). Down and Up walk About, Display, Sound, Dock, Date and Time, Users, Wi-Fi, Bluetooth (the Users pane is arm64-users-check.py).
-  3. Display: Right changes the wallpaper to Clay and the whole desktop repaints (wallpaper, the menu bar's blend, the dock
+  3. Display: Glass (11.3.0) steps from Standard to Frosted and the menu bar is 176 of 256 white, saved as glass=3 and loaded
+     on the second boot. Right changes the wallpaper to Clay and the whole desktop repaints (wallpaper, the menu bar's blend, the dock
      tray's surroundings), Right again to Ink, Left back to Clay. Esc closes: the window's place is the new wallpaper. The
      Calculator then opens and closes: the pixels it saved at boot are refilled, so its place is the new wallpaper too, not the old one.
   4. The menu bar's icons (speaker, power, and the Wi-Fi fan and the clock beside them): their columns come off the UART, a click
@@ -73,26 +74,29 @@ int main(void) {
     assert(settings_mag() == 0 && settings_wall() == 4);
     puts("PASS: pi defaults"); return 0;
 #endif
-    char out[64]; unsigned n = settings_format(out, 70, 0, 7, 2);
-    assert(n == 31 && !memcmp(out, "volume=70\nwall=0\ndock=7\nzoom=2\n", 31));
-    n = settings_format(out, 100, 3, 25, 0); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\nzoom=0\n", n));
-    int v = 1, w = 1, d = 7, m = 2; const char *t;
-    t = "volume=40\nwall=3\ndock=12\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 40 && w == 3 && d == 12);
-    v = 1; w = 1; d = 7; t = "volume=101\nwall=5\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
-    t = "volume=26\nwall=1\ndock=26\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 26 && w == 1 && d == 7);
-    t = "volume=12345\nvolume\n=5\nwall=x\nwall=\ndock=9z\nvolumes=5\n"; v = 1; w = 1; d = 7; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
-    t = "volume=55\r\nwall=3\r\ndock=20"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 55 && w == 3 && d == 20);   /* CRLF, and no final newline */
-    t = "dock=5"; settings_parse(t, 6, &v, &w, &d, &m); assert(d == 5);
-    t = "dock=55"; settings_parse(t, 6, &v, &w, &d, &m); assert(d == 5);   /* cut at 6 bytes: 5 and a stray byte, taken as 5, never read past n */
-    settings_parse("", 0, &v, &w, &d, &m);
-    t = "zoom=1\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);
-    t = "zoom=3\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);   /* 7.4.0: out of range, kept */
+    char out[64]; unsigned n = settings_format(out, 70, 0, 7, 2, 2);
+    assert(n == 39 && !memcmp(out, "volume=70\nwall=0\ndock=7\nzoom=2\nglass=2\n", 39));
+    n = settings_format(out, 100, 3, 25, 0, 4); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\nzoom=0\nglass=4\n", n));
+    int v = 1, w = 1, d = 7, m = 2, g = 2; const char *t;
+    t = "volume=40\nwall=3\ndock=12\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m, &g); assert(v == 40 && w == 3 && d == 12);
+    v = 1; w = 1; d = 7; t = "volume=101\nwall=5\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m, &g); assert(v == 1 && w == 1 && d == 7);
+    t = "volume=26\nwall=1\ndock=26\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m, &g); assert(v == 26 && w == 1 && d == 7);
+    t = "volume=12345\nvolume\n=5\nwall=x\nwall=\ndock=9z\nvolumes=5\n"; v = 1; w = 1; d = 7; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m, &g); assert(v == 1 && w == 1 && d == 7);
+    t = "volume=55\r\nwall=3\r\ndock=20"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m, &g); assert(v == 55 && w == 3 && d == 20);   /* CRLF, and no final newline */
+    t = "dock=5"; settings_parse(t, 6, &v, &w, &d, &m, &g); assert(d == 5);
+    t = "dock=55"; settings_parse(t, 6, &v, &w, &d, &m, &g); assert(d == 5);   /* cut at 6 bytes: 5 and a stray byte, taken as 5, never read past n */
+    settings_parse("", 0, &v, &w, &d, &m, &g);
+    t = "zoom=1\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m, &g); assert(m == 1);
+    t = "zoom=3\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m, &g); assert(m == 1);   /* 7.4.0: out of range, kept */
+    t = "glass=4\nglass=5\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m, &g); assert(g == 4);   /* 11.3.0: Tinted; 5 is past the end, kept */
+    settings_set_glass(-3); assert(settings_glass() == 0 && settings_glass_alpha() == 64); settings_set_glass(9); assert(settings_glass() == 4 && !strcmp(settings_glass_name(4), "Tinted"));
+    settings_set_glass(2); assert(settings_glass_alpha() == 128);
     settings_set_mag(-1); assert(settings_mag() == 0); settings_set_mag(9); assert(settings_mag() == 2 && !strcmp(settings_mag_name(1), "Small"));
     assert(settings_walls() == 5 && !strcmp(settings_wall_name(4), "Park") && settings_wall_rgb(4) == 0x00EC9E76u && !strcmp(settings_wall_name(0), "Blue") && settings_wall_rgb(0) == 0x003B6EA5u && !strcmp(settings_wall_name(1), "Terracotta") && settings_wall_rgb(1) == 0x00B5502Cu && settings_wall_rgb(3) == 0x00141311u);
     settings_set_wall(-1); assert(settings_wall() == 4 && wall_rgb == 0x01000000); settings_set_wall(5); assert(settings_wall() == 0 && wall_rgb == 0x003B6EA5);
     settings_set_dock(2); assert(settings_dock() == 5); settings_set_dock(99); assert(settings_dock() == 25); settings_set_dock(7);
     vol = 30; settings_set_wall(2); settings_set_dock(11); settings_save();
-    assert(settings_saved() == 1 && file_len == 32 && !memcmp(file, "volume=30\nwall=2\ndock=11\nzoom=2\n", 32));
+    assert(settings_saved() == 1 && file_len == 40 && !memcmp(file, "volume=30\nwall=2\ndock=11\nzoom=2\nglass=2\n", 40));
     vol = 70; settings_set_wall(0); settings_set_dock(7); repaints = 0; wall_rgb = 0; settings_load();
     assert(vol == 30 && settings_wall() == 2 && wall_rgb == 0x00923F20 && settings_dock() == 11 && repaints == 1 && settings_saved() == 1);
     repaints = 0; settings_load(); assert(repaints == 0);   /* nothing changed: no repaint */
@@ -102,7 +106,7 @@ int main(void) {
         int wp = settings_wall(); settings_load(); assert(vol == 40 && settings_wall() == wp && settings_dock() == 9);
         memcpy(file, keep, sizeof keep); file_len = kl; settings_set_dock(11);
     }
-    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 32); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
+    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 40); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
     may = 1;
     card = 0; vol = 20; settings_save(); assert(settings_saved() == -1 && vol == 20 && settings_wall() == 2);   /* no card: said, and the choices stay */
     file_len = -1; card = 1; vol = 70; settings_load(); assert(vol == 70);                                         /* no file: nothing changes */
@@ -155,7 +159,7 @@ WX, WY, WW, WH = (W - 500) // 2, 100, 500, 350      # the window: the Console's 
 SX, SY = (W - 510) // 2, 36                            # 8.9.0: Settings' own window (settings_ui.h SET_WIN_W 510, at y 36)
 GREY = (0x3B, 0x6E, 0xA5)
 ACCENT, CLAY, INK, TERRA, RED, GLYPH = (0xb5, 0x50, 0x2c), (0x92, 0x3f, 0x20), (0x14, 0x13, 0x11), (0xb5, 0x50, 0x2c), (0xff, 0x5f, 0x57), (0xfa, 0xf8, 0xf4)
-def bar(c): return tuple(((v >> 1) & 0x7f) + 0x80 for v in c)    # the menu bar over a wallpaper colour: half itself, half white
+def bar(c, a=128): return tuple((v * (256 - a) >> 8) + a for v in c)    # the menu bar over a wallpaper colour: a/256 white (Glass, 11.3.0); Standard is half itself, half white
 fails_boot = []
 
 
@@ -290,6 +294,10 @@ try:
     d = S.settle(lambda i: all(px(i, x, y) == INK for x, y in spots))
     check("Ink everywhere the wallpaper shows", all(px(d, x, y) == INK for x, y in spots), [px(d, x, y) for x, y in spots])
     check("Left: back to Clay", S.press("left", "settings wall 2 Clay\n"))
+    S.key("tab"); time.sleep(0.3)   # 11.3.0: the Glass row
+    check("Tab, Right: Glass goes from Standard to Frosted", S.press("right", "settings glass 3 Frosted\n"))
+    fr = S.settle(lambda i: px(i, 300, 8) == bar(CLAY, 176))
+    check("the menu bar is frosted: 176 of 256 white over Clay, not the half and half", px(fr, 300, 8) == bar(CLAY, 176) != bar(CLAY), (px(fr, 300, 8), bar(CLAY, 176)))
     time.sleep(0.5)
     n = len(S.uart()); S.key("esc")
     check("Esc closes Settings", S.wait_for("settings closed\n", 6, n))
@@ -360,15 +368,15 @@ finally:
 # ---- the card: what the first boot left, and a second boot on the same card ----
 r = mt("mtype", "::JT/SETTINGS.TXT")
 text = r.stdout.decode(errors="replace")
-check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\nzoom=1\n", text)
+check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\nzoom=1\nglass=3\n", text)
 S = Session("b")
 try:
     if not S.wait_for("M2 input ready", 60) or not S.wait_for("settings loaded", 30):
         check("the second boot loads the file", False, S.uart()[-600:]); raise SystemExit
-    check("second boot: it says what it loaded", "settings loaded volume 20 wall 2 dock 8 mag 1\n" in S.uart(), S.uart()[-400:])
+    check("second boot: it says what it loaded", "settings loaded volume 20 wall 2 dock 8 mag 1 glass 3\n" in S.uart(), S.uart()[-400:])
     S.connect(); time.sleep(1.0)
     g = S.shot()
-    check("and the desktop is Clay without opening anything (the card was read after the desktop was drawn, which repainted it)", px(g, 30, 300) == CLAY and px(g, 400, 8) == bar(CLAY), (px(g, 30, 300), px(g, 400, 8)))
+    check("and the desktop is Clay without opening anything (the card was read after the desktop was drawn, which repainted it)", px(g, 30, 300) == CLAY and px(g, 400, 8) == bar(CLAY, 176), (px(g, 30, 300), px(g, 400, 8)))
     check("the Console is whole after the repaint (its white well)", px(g, WX + 200, WY + 200) == (255, 255, 255), px(g, WX + 200, WY + 200))
     # 7.4.0: Small, loaded from the card, grows the tile under the pointer to 1.3 times, not 1.6 (dock 8: 48 px tiles from x 79, y 508; slot 5 is centred at x 373)
     n = len(S.uart())

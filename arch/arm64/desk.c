@@ -698,11 +698,12 @@ static void splash_begin(void) {
 static int desktop_up;   /* fb_desktop has painted the desktop once: a wallpaper change may repaint it */
 static int text_early;         /* the deferred boot started the text engine for the login card */
 int desktop_deferred;   /* 4.10.0, the Pi's quiet boot: an account is on the card, so the login card goes up first and login_done paints the desktop */
-static void menubar_base(void) {   /* the bar over bare wallpaper: half wallpaper, half white, per pixel, closed by a one pixel rule */
+static void menubar_base(void) {   /* the bar over bare wallpaper: glass, the wallpaper with white mixed in, per pixel, closed by a one pixel rule */
     int W = (int)fb_w, mb = sg(MENUBAR_H);
+    unsigned a = (unsigned)settings_glass_alpha(), k = 256 - a;   /* 11.3.0, Settings' Glass: a/256 white; Standard's 128 is the old half and half */
     for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {
         unsigned c = fb[(unsigned)y * fb_pitch + (unsigned)x];
-        fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
+        fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 16 & 255) * k >> 8) + a << 16 | ((c >> 8 & 255) * k >> 8) + a << 8 | ((c & 255) * k >> 8) + a;   /* each colour lane: itself times (256 - a)/256, plus a */
     }
     fb_rect(0, mb - 1, W, 1, MENUBAR_RULE);
 }

@@ -12,6 +12,7 @@ int settings_walls(void);
 void settings_set_wall(int i);
 int settings_dock(void);
 int settings_mag(void); const char *settings_mag_name(int i); void settings_set_mag(int i);
+int settings_glass(void); const char *settings_glass_name(int i); void settings_set_glass(int i);
 void settings_set_dock(int pct);
 int settings_saved(void);
 void settings_save(void);
@@ -40,14 +41,14 @@ static int set_rect[4];   /* the Terminal's rectangle while Settings is open */
 static void s_cat(char *b, const char *s) { unsigned n = 0; while (b[n]) n++; for (; *s && n < 39; s++) b[n++] = *s; b[n] = 0; }
 static void s_num(char *b, unsigned v) { char d[11], t[12]; int n = 0, k = 0; do { d[n++] = (char)('0' + v % 10); v /= 10; } while (v); while (n) t[k++] = d[--n]; t[k] = 0; s_cat(b, t); }
 static int us_rows(void);
-static int set_rows(int sec) { static const char n[SET_SECTIONS] = { 5, 2, 3, 3, 4, 0, 0, 0, 0 }; return sec == SET_USERS ? us_rows() : n[sec]; }
+static int set_rows(int sec) { static const char n[SET_SECTIONS] = { 5, 3, 3, 3, 4, 0, 0, 0, 0 }; return sec == SET_USERS ? us_rows() : n[sec]; }
 static const char *set_label(int sec, int r) {
-    static const char *const l[SET_SECTIONS][5] = { { "Version", "Board", "Memory", "Wi-Fi", "Power" }, { "Wallpaper", "Screen" },
+    static const char *const l[SET_SECTIONS][5] = { { "Version", "Board", "Memory", "Wi-Fi", "Power" }, { "Wallpaper", "Glass", "Screen" },
         { "Volume", "Mute", "Output" }, { "Tile size", "Magnify", "Tiles" }, { "Time", "Date", "Time zone", "Source" }, { "" }, { "" }, { "" }, { "" } };
     return l[sec][r];
 }
 static int set_kind(int sec, int r) {
-    if ((r == 0 && (sec == SET_DISPLAY || sec == SET_SOUND || sec == SET_DOCK)) || (sec == SET_DOCK && r == 1)) return SK_STEP;
+    if ((r == 0 && (sec == SET_DISPLAY || sec == SET_SOUND || sec == SET_DOCK)) || (r == 1 && (sec == SET_DOCK || sec == SET_DISPLAY))) return SK_STEP;
     return sec == SET_SOUND && r == 1 ? SK_TOGGLE : SK_INFO;
 }
 static int set_first_row(int sec) { if (sec == SET_USERS || sec == SET_WIFI || sec == SET_BT || sec == SET_LANG) return -1; for (int r = 0; r < set_rows(sec); r++) if (set_kind(sec, r) != SK_INFO) return r; return -1; }
@@ -82,6 +83,7 @@ static void set_value(int sec, int r, char *b) {
         else s_cat(b, "Wall power, no battery");
     } else if (sec == SET_DISPLAY) {
         if (r == 0) s_cat(b, settings_wall_name(settings_wall()));
+        else if (r == 1) s_cat(b, settings_glass_name(settings_glass()));
         else { s_num(b, fb_w); s_cat(b, " x "); s_num(b, fb_h); }
     } else if (sec == SET_SOUND) {
         if (r == 0) { s_num(b, (unsigned)audio_volume()); s_cat(b, "%"); }
@@ -225,8 +227,8 @@ static void set_adjust(int r, int dir) {   /* a value in the open section, one s
     int kind = set_kind(set_sec, r);
     if (kind == SK_INFO) return;
     if (set_sec == SET_DISPLAY) {
-        settings_set_wall(settings_wall() + dir);
-        set_log("wall", settings_wall(), settings_wall_name(settings_wall()));
+        if (r == 1) { settings_set_glass(settings_glass() + dir); set_log("glass", settings_glass(), settings_glass_name(settings_glass())); }
+        else { settings_set_wall(settings_wall() + dir); set_log("wall", settings_wall(), settings_wall_name(settings_wall())); }
         set_saved();
         desktop_wall_changed();   /* repaints the desktop, then this window on top of it */
         return;

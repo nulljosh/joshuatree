@@ -133,6 +133,7 @@ int set_secret(void);
 extern void settings_load(void);
 extern int spot_live;
 void menubar_notify(const char *message);
+int settings_glass_alpha(void);   /* settings.c, 11.3.0: the menu bar glass's white, of 256 */
 unsigned notice_now(void);
 int screen_blank(unsigned blank);
 void screen_sleep_soon(void);   /* screen_idle.h, 11.0.0: the tree menu's Sleep */
