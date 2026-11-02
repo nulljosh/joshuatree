@@ -70,6 +70,7 @@ TOL_SQUIRCLE = 1.0    # logical units of allowed radius deviation from the share
                        # measures 0.3-0.4 (rasterization/sampling noise, not a real mismatch).
 MIN_AA_STEPS = 1      # raster samples partway between background and fill at the crossing
 MARGIN_TOL = 10        # luminance tolerance for the top/bottom margin check
+EDGE_TO_EDGE = {"calendar"}   # 7.7.0: Calendar is a page edge to edge, a terracotta band at the top (Joshua, board test)
 TOP_ROW, BOT_ROW = 8, 118
 # Burrow is a full-bleed Finder-style split by design (owner call): its light
 # left half crosses both margins, so only its right, tile-coloured half is held to them.
@@ -201,8 +202,8 @@ def main():
     for name in files:
         text = open(os.path.join(SVG_DIR, name + ".svg")).read()
         m = re.search(r"Tile (#[0-9A-Fa-f]{6}) -> (#[0-9A-Fa-f]{6})", text)
-        if not m:
-            continue  # imported fleet-brand art bleeds full-canvas by design, not part of this convention
+        if not m or name in EDGE_TO_EDGE:
+            continue  # imported fleet-brand art (and EDGE_TO_EDGE) bleeds full-canvas by design, not part of this convention
         img = rasterize(os.path.join(SVG_DIR, name + ".svg"))
         top_miss, bot_miss = margin_check(name, img, m.group(1), m.group(2))
         ok = top_miss <= MARGIN_TOL and bot_miss <= MARGIN_TOL
