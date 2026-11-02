@@ -92,7 +92,7 @@ int main(void) {
     vol = 70; settings_set_wall(0); settings_set_dock(7); repaints = 0; wall_rgb = 0; settings_load();
     assert(vol == 30 && settings_wall() == 2 && wall_rgb == 0x00923F20 && settings_dock() == 11 && repaints == 1 && settings_saved() == 1);
     repaints = 0; settings_load(); assert(repaints == 0);   /* nothing changed: no repaint */
-    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 31); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
+    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 32); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
     may = 1;
     card = 0; vol = 20; settings_save(); assert(settings_saved() == -1 && vol == 20 && settings_wall() == 2);   /* no card: said, and the choices stay */
     file_len = -1; card = 1; vol = 70; settings_load(); assert(vol == 70);                                         /* no file: nothing changes */
@@ -132,6 +132,7 @@ if mt("mmd", "::JT").returncode: print("FAIL: mtools could not make JT/ on the c
 
 W, H = 800, 600
 WX, WY, WW, WH = (W - 500) // 2, 100, 500, 350      # the window: the Console's rectangle (fb_desktop)
+SX, SY = (W - 510) // 2, 36                            # 8.9.0: Settings' own window (settings_ui.h SET_WIN_W 510, at y 36)
 GREY = (0x6e, 0x6e, 0x6e)
 ACCENT, CLAY, INK, TERRA, RED, GLYPH = (0xb5, 0x50, 0x2c), (0x92, 0x3f, 0x20), (0x14, 0x13, 0x11), (0xb5, 0x50, 0x2c), (0xff, 0x5f, 0x57), (0xfa, 0xf8, 0xf4)
 def bar(c): return tuple(((v >> 1) & 0x7f) + 0x80 for v in c)    # the menu bar over a wallpaper colour: half itself, half white
@@ -232,17 +233,17 @@ try:
     check("Enter opens Settings in About", S.wait_for("settings open\n", 6, n) and S.wait_for("settings section 0 About\n", 6, n), S.uart()[n:][-300:])
     time.sleep(0.4)
     a = S.shot()
-    check("the window has its red close dot", px(a, WX + 19, WY + 16) == RED, px(a, WX + 19, WY + 16))
+    check("the window has its red close dot", px(a, SX + 19, SY + 16) == RED, px(a, SX + 19, SY + 16))
     tiles = []
     for i in range(8):
-        tb = box(a, WX + 20, WY + 40 + i * 30, 18, 18)
+        tb = box(a, SX + 20, SY + 40 + i * 30, 18, 18)
         tiles.append(tb)
     terra = [sum(1 for p in tb if p == ACCENT) for tb in tiles]
     glyph = [sum(1 for p in tb if sum(abs(p[k] - GLYPH[k]) for k in range(3)) < 40) for tb in tiles]
     check("each of the eight sidebar tiles is terracotta with a glyph on it (%s accent, %s glyph pixels)" % (terra, glyph),
           all(t > 100 for t in terra) and all(g > 5 for g in glyph), (terra, glyph))
     check("no two glyphs are the same picture", len({tuple(tb) for tb in tiles}) == 8)
-    check("the Settings title is in the sidebar's neighbour: About, Version, Board, Memory, Wi-Fi, Power rows draw (the card is white)", px(a, WX + 8 + 150 + 16 + 5, WY + 74 + 5) == (255, 255, 255))
+    check("the Settings title is in the sidebar's neighbour: About, Version, Board, Memory, Wi-Fi, Power rows draw (the card is white)", px(a, SX + 8 + 150 + 16 + 5, SY + 74 + 5) == (255, 255, 255))
     # ---- sections ----
     names = ["Display", "Sound", "Dock", "Date and Time", "Users", "Wi-Fi", "Bluetooth"]
     keep_dir = os.environ.get("JT_SETTINGS_SHOTS")   # a folder: one png of every section, for looking at
@@ -261,10 +262,10 @@ try:
     check("Right again: wallpaper 2, Clay", S.press("right", "settings wall 2 Clay\n"))
     check("... and it is saved", S.wait_for("settings saved\n", 6))
     spots = [(30, 300), (770, 300), (60, 560), (100, 90)]
-    c = S.settle(lambda i: all(px(i, x, y) == CLAY for x, y in spots) and px(i, WX + 19, WY + 16) == RED)
+    c = S.settle(lambda i: all(px(i, x, y) == CLAY for x, y in spots) and px(i, SX + 19, SY + 16) == RED)
     check("the whole desktop is Clay: wallpaper at four places", all(px(c, x, y) == CLAY for x, y in spots), [px(c, x, y) for x, y in spots])
     check("the menu bar was blended again over the new colour (half Clay, half white)", px(c, 300, 8) == bar(CLAY), (px(c, 300, 8), bar(CLAY)))
-    check("the window is back on top of the new desktop and the dock is whole (its cream tray, not Clay)", px(c, WX + 19, WY + 16) == RED and px(c, W // 2, H - 60) not in (CLAY, TERRA), (px(c, WX + 19, WY + 16), px(c, W // 2, H - 60)))
+    check("the window is back on top of the new desktop and the dock is whole (its cream tray, not Clay)", px(c, SX + 19, SY + 16) == RED and px(c, W // 2, H - 60) not in (CLAY, TERRA), (px(c, SX + 19, SY + 16), px(c, W // 2, H - 60)))
     check("Right again: wallpaper 3, Ink", S.press("right", "settings wall 3 Ink\n"))
     d = S.settle(lambda i: all(px(i, x, y) == INK for x, y in spots))
     check("Ink everywhere the wallpaper shows", all(px(d, x, y) == INK for x, y in spots), [px(d, x, y) for x, y in spots])
@@ -289,7 +290,7 @@ try:
     # ---- the menu bar's icons ----
     check("a click on the speaker opens Settings in Sound", S.click(mid(1), 12, "settings section 2 Sound\n") and S.wait_for("menubar click sound\n", 2))
     time.sleep(0.5)
-    cx, cy = WX + 8 + 150 + 16, WY + 74
+    cx, cy = SX + 8 + 150 + 16, SY + 74
     plus, minus = (cx + 312 - 14 - 8, cy + 15), (cx + 312 - 14 - 16 - 16 - 6 - 70 - 6 + 8, cy + 15)
     sp_before = S.shot()
     check("Sound: + raises the volume to 80", S.click(*plus, "settings volume 80\n"))
@@ -312,13 +313,13 @@ try:
     check("a click on the power symbol opens About", S.click(mid(0), 12, "settings section 0 About\n") and S.wait_for("menubar click power\n", 2))
     check("the Wi-Fi fan opens About too", S.click(mid(2), 12, "menubar click wifi\n"))
     check("the clock opens Date and Time", S.click(mid(3), 12, "settings section 4 Date and Time\n") and S.wait_for("menubar click clock\n", 2))
-    check("a click on a sidebar row (Dock) selects it", S.click(WX + 60, WY + 40 + 3 * 30 + 6, "settings section 3 Dock\n"))
+    check("a click on a sidebar row (Dock) selects it", S.click(SX + 60, SY + 40 + 3 * 30 + 6, "settings section 3 Dock\n"))
     time.sleep(0.3)
     check("the Dock + button steps the tile size to 8", S.click(cx + 312 - 14 - 8, cy + 15, "settings dock 8\n"))
     check("7.4.0: the Magnify - button steps Large to Small", S.click(cx + 312 - 14 - 16 - 98 + 8, cy + 30 + 15, "settings magnify 1 Small\n"))
     check("every change was saved", S.uart().count("settings saved\n") >= 12, S.uart().count("settings saved\n"))
     # the sound page, for the screenshot
-    S.click(WX + 60, WY + 40 + 2 * 30 + 6, "settings section 2 Sound\n"); time.sleep(0.5)
+    S.click(SX + 60, SY + 40 + 2 * 30 + 6, "settings section 2 Sound\n"); time.sleep(0.5)
     S.click(*plus, "settings volume 20\n"); time.sleep(0.5)
     shot = S.shot()
     keep = os.environ.get("JT_SETTINGS_SHOT")
