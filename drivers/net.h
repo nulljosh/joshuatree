@@ -90,6 +90,7 @@ int tcp_open(unsigned int dest_ip, unsigned short dest_port);
 int tcp_write(const void *data, unsigned int len);
 int tcp_read(void *buf, unsigned int max, unsigned int timeout_ticks);
 void tcp_close(void);
+unsigned tcp_stream_port(void);   /* 8.5.0: the open stream's local port, 0 when none is open */
 
 /* Why the last dns_resolve/tcp_get failed. Every failure path in net.c
    used to collapse into the same 0/-1, so a caller could not tell "no

@@ -799,6 +799,7 @@ void m1_selftest(void) {
     __asm__ volatile ("msr vbar_el1, %0\n isb" :: "r"(vectors));
     uart_puts("M1 vectors set\n");
     m1b_selftest();   /* with the exception table in place a bad map prints instead of hanging */
+    { void smp_start(void); smp_start(); }   /* 8.2.0: cores 1 to 3, on the tables m1b_selftest just made */
     __asm__ volatile ("svc #0");                   /* proves the sync path and the return */
     unsigned long freq; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(freq));
     if (!freq) freq = 54000000;                    /* a Pi 4 whose firmware left CNTFRQ unset runs its timer at 54 MHz */

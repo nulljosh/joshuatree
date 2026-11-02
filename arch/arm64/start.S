@@ -2,18 +2,7 @@
    QEMU's virt machine (image at 0x40000000, enters at EL1) and a real Raspberry Pi 4 (the firmware
    puts kernel8.img at 0x80000 because config.txt says kernel_address=0x80000, and enters at EL2). Either way: park every core but 0, drop to EL1
    with the MMU off, set a stack, call main. The EL the firmware gave us is kept in boot_el. */
-.section .text.boot
-.global _start
-_start:
-    mrs x0, mpidr_el1
-    and x0, x0, #3
-    cbnz x0, park
-    mrs x0, CurrentEL
-    lsr x0, x0, #2
-    adrp x1, boot_el
-    str w0, [x1, :lo12:boot_el]
-    cmp x0, #2
-    b.ne at_el1
+.macro drop_to_el1 target
     /* EL2 to EL1: EL1 runs aarch64, nothing trapped, EL1 sees the timer, interrupts masked, return into el1_entry */
     mov x0, #(1 << 31)
     msr hcr_el2, x0
@@ -31,9 +20,23 @@ _start:
     msr sctlr_el1, x0
     mov x0, #0x3c5
     msr spsr_el2, x0
-    adr x0, at_el1
+    adr x0, \target
     msr elr_el2, x0
     eret
+.endm
+.section .text.boot
+.global _start
+_start:
+    mrs x0, mpidr_el1
+    and x0, x0, #3
+    cbnz x0, park
+    mrs x0, CurrentEL
+    lsr x0, x0, #2
+    adrp x1, boot_el
+    str w0, [x1, :lo12:boot_el]
+    cmp x0, #2
+    b.ne at_el1
+    drop_to_el1 at_el1
 at_el1:
     mrs x0, cpacr_el1
     orr x0, x0, #(3 << 20)       /* the floating point unit: the TrueType rasterizer uses it */
@@ -58,7 +61,34 @@ at_el1:
 park:
     wfe
     b park
+/* 8.2.0: cores 1 to 3 start here, sent by PSCI CPU_ON (QEMU virt) or the spin table at 0xe0, 0xe8 and 0xf0 (a Pi, whose
+   firmware leaves them waiting on it). The MMU is off; drop to EL1 as core 0 did, switch the FPU on, take this core's
+   16 KiB stack and go to main.c's core_main, which turns the MMU on with core 0's tables. */
+.global secondary_entry
+secondary_entry:
+    mrs x0, CurrentEL
+    lsr x0, x0, #2
+    cmp x0, #2
+    b.ne sec_el1
+    drop_to_el1 sec_el1
+sec_el1:
+    mrs x0, cpacr_el1
+    orr x0, x0, #(3 << 20)
+    msr cpacr_el1, x0
+    isb
+    msr s3_3_c4_c4_0, xzr
+    mrs x0, mpidr_el1
+    and x0, x0, #3
+    adrp x1, core_stacks
+    add x1, x1, :lo12:core_stacks
+    add x1, x1, x0, lsl #14      /* core n's stack ends n * 16 KiB in */
+    mov sp, x1
+    bl core_main
+    b park
 
+.section .bss
+.balign 16
+core_stacks: .skip 0x10000       /* 16 KiB each for cores 1 to 3 (the first 16 KiB, core 0's slot, goes unused) */
 .section .data
 .global boot_el
 boot_el: .word 0

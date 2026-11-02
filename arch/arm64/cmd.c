@@ -44,7 +44,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), debug NAME [STEPS] (run an app one instruction at a time: where it is, the instruction, the registers that changed, then its registers and stack), install NAME (an app from the store), "
+                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), userrun A | userrun B (A's output is B's input), cores, sched, debug NAME [STEPS] (run an app one instruction at a time: where it is, the instruction, the registers that changed, then its registers and stack), install NAME (an app from the store), "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
                            "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
@@ -593,6 +593,22 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         if (k < n && q[k] == '.') { jt_command(q + 6, n - 6, 0); return; }
         cmd_out("write: use write NAME.EXT TEXT\n"); return;
     }
+    if (word_is(q, n, "sched")) {   /* 8.6.0: the longest one app held the core in a turn since the last time this was asked */
+        extern unsigned long sched_worst; unsigned long cnt_hz(void);
+        cmd_out("sched: the longest turn an app took was "); cmd_dec((unsigned)(sched_worst * 1000 / cnt_hz())); cmd_out(" ms; every app runs in 10 ms slices, the desktop between them\n");
+        sched_worst = 0; return;
+    }
+    if (word_is(q, n, "cores")) {   /* 8.2.0: which of the four cores are up, and how often each has woken */
+        extern volatile unsigned long core_runs[4], core_mpidr[4]; extern volatile int core_up[4]; unsigned cores_count(void);
+        cmd_out("cores: "); cmd_dec(cores_count()); cmd_out(" of 4 running\n");
+        for (int c = 0; c < 4; c++) {
+            cmd_out("core "); cmd_dec((unsigned)c);
+            if (!core_up[c]) { cmd_out(": asleep\n"); continue; }
+            cmd_out(c ? ": up, woken " : ": up, runs the kernel"); if (c) cmd_dec((unsigned)core_runs[c]);
+            cmd_out(c ? " times\n" : "\n");
+        }
+        return;
+    }
     if (word_is(q, n, "users")) { users_command(); return; }
     if (word_is(q, n, "admins")) { admins_command(); return; }
     if (word_is(q, n, "sudo")) { sudo_command(q, 0); return; }
@@ -624,6 +640,32 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         userrun_command(name, nm);
         dbg_want = 0;   /* taken by app_start, or never: a refused run leaves nothing for the next app */
         return;
+    }
+    if (n > 8 && is(q, n, "userrun")) {   /* 8.3.0: userrun A [WORDS] | userrun B [WORDS], A's output is B's input */
+        unsigned bar = 0;
+        while (bar < n && q[bar] != '|') bar++;
+        if (bar < n) {
+            const char *a = q + 8, *b = q + bar + 1; unsigned am = bar - 8, bm = n - bar - 1;
+            while (bm && b[0] == ' ') { b++; bm--; }
+            if (bm > 8 && b[0] == 'u' && b[1] == 's' && b[2] == 'e' && b[3] == 'r' && b[4] == 'r' && b[5] == 'u' && b[6] == 'n' && b[7] == ' ') { b += 8; bm -= 8; }
+            while (am && a[0] == ' ') { a++; am--; }
+            while (am && a[am - 1] == ' ') am--;
+            while (bm && b[0] == ' ') { b++; bm--; }
+            unsigned an = 0, bn = 0, aw, bw;
+            while (an < am && a[an] != ' ') an++;
+            while (bn < bm && b[bn] != ' ') bn++;
+            for (aw = an; aw < am && a[aw] == ' '; aw++) { }
+            for (bw = bn; bw < bm && b[bw] == ' '; bw++) { }
+            if (!an || !bn) { cmd_out("userrun A | userrun B: A's output becomes B's input\n"); return; }
+            int userrun_pipe(const char *, unsigned, const char *, unsigned, const char *, unsigned, const char *, unsigned, int);
+            int r = userrun_pipe(a, an, a + aw, am - aw, b, bn, b + bw, bm - bw, !accounts_count() || sudo_run);
+            if (r == -3) cmd_out("userrun: a pipe or every app slot is busy, wait for it to end\n");
+            else if (r == -1 || r == -11) cmd_out("userrun: no program called that on one side of the pipe\n");
+            else if (r == -4 || r == -5 || r == -14 || r == -15) cmd_out("userrun: one side of the pipe is not signed, or its signature does not match: sudo userrun\n");
+            else if (r) cmd_out("userrun: one side of the pipe would not load\n");
+            else cmd_out("userrun: both running, the first one's output goes to the second\n");
+            return;
+        }
     }
     if (n > 8 && q[0] == 'u' && q[1] == 's' && q[2] == 'e' && q[3] == 'r' && q[4] == 'r' && q[5] == 'u' && q[6] == 'n' && q[7] == ' ') {
         const char *name = q + 8; unsigned m = n - 8;

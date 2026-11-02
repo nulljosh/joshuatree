@@ -137,14 +137,22 @@ void splash_creep(void);
 void splash_finish(void);
 extern int splash_on;
 void splash_step(int n, const char *name);
-struct frame { unsigned long x[31]; unsigned long elr, esr; };   /* what vectors.S saved */
+struct frame { unsigned long x[31]; unsigned long elr, esr; };
+#define APP_THREADS 4   /* 8.1.0: threads per app */
+enum { TH_FREE, TH_READY, TH_WAIT };   /* what vectors.S saved */
 struct user_app { const char *name, *start, *end; };   /* userapps.S: one row per program, ended by a zero name */
 #define APP_EVQ 16
 struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app_* names below are macros onto `ap`, the slot being run or shown */
     const struct user_app *cur;
-    struct frame frame;
-    unsigned long fp[66];                 /* M3e: its q0-q31, FPCR and FPSR where it parked (vectors.S's save_fp layout) */
-    unsigned long sp, last, wbytes;
+    struct thread {                       /* 8.1.0: an app's threads; th[0] is the one it started with */
+        struct frame frame;               /* where it parked: x0-x30, the pc, and in esr the NZCV flags to put back (resume_user) */
+        unsigned long fp[66];             /* M3e: its q0-q31, FPCR and FPSR where it parked (vectors.S's save_fp layout) */
+        unsigned long sp;
+        int state;                        /* TH_FREE, TH_READY, TH_WAIT (asleep on a futex word, at wait) */
+        unsigned long wait;
+    } th[APP_THREADS];
+    unsigned tcur, preempts, spin, cut;   /* cut: its last turn ended at a slice, not by its own yield (8.6.0) */        /* the thread being run; slices taken from its threads; slices since any of them made a call */
+    unsigned long last, wbytes;
     int hi;                               /* 3.9.0: the window buffer is device size (scale 2, the app asked for it) */
     unsigned long brk;                    /* M3e: the heap top JT_SYS_BRK set, 0 while it has none */
     unsigned long close_at;               /* the red dot was clicked: past this count, an app that did not close itself is ended */
@@ -163,6 +171,8 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
     unsigned l3off, slot;                 /* its first l3 entry; its index in apps */
     int min;                              /* 6.5.0: minimized into the dock (the yellow dot): alive, off screen, out of the z order */
     int term;                             /* 7.5.4: started by `userrun` in the Terminal: what it prints after it yields, and how it ends, go there */
+    int pin, pout;                        /* 8.3.0: reads fd 0 from the pipe / writes fd 1 into it (`userrun A | userrun B`) */
+    unsigned pid, parent;                 /* 8.4.0: its process number, and the slot + 1 of the app that spawned it (0: none) */
 };
 #define APP_SLOTS 4      /* 4.0: apps that can run at once, one 32 MiB arena each, back to back above USER_BASE */
 extern struct app *ap;

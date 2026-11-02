@@ -159,8 +159,10 @@ void exc_sync(struct frame *f) {
     if (ec == 0x25 && kprobe_armed) { kprobe_faulted = 1; kprobe_armed = 0; f->elr += 4; return; }   /* skip the access */
     crash(f);
 }
-void exc_irq(struct frame *f) {   /* the timer stops after three ticks, so a core asleep in wfi can only be woken by a device */
-    (void)f;
+int app_preempt(const struct frame *f, const unsigned long *fp, unsigned long spsr);   /* 8.1.0, below with the scheduler */
+static long app_spawn(unsigned long name, unsigned long words); static long app_wait(const struct frame *f, const unsigned long *fp, unsigned long pid);   /* 8.4.0 */
+static int dbg_slot; static unsigned dbg_left;   /* 7.2.0, set further down: a stepped app is never preempted */
+void exc_irq(struct frame *f, const unsigned long *fp) {   /* the timer stops after three ticks, so a core asleep in wfi can only be woken by a device */
 #ifdef FP_TEST
     fp_clobber();
 #endif
@@ -175,7 +177,7 @@ void exc_irq(struct frame *f) {   /* the timer stops after three ticks, so a cor
         unsigned long spsr; __asm__ volatile ("mrs %0, spsr_el1" : "=r"(spsr));
         __asm__ volatile ("msr cntp_ctl_el0, %0" :: "r"(0UL));
         GICC(0x10) = iar;
-        if ((spsr & 0xF) == 0) wd_kill();   /* it was in EL0: never returns, leave_user hands the core back to app_tick */
+        if ((spsr & 0xF) == 0 && !app_preempt(f, fp, spsr)) wd_kill();   /* it was in EL0: an app with threads gives the core to the next one (8.1.0), else its three seconds are up; neither returns, leave_user hands the core back to app_tick */
         return;
     }
     if (id == TIMER_INTID) {
@@ -241,6 +243,8 @@ void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects; 0
    memory (strongly ordered, no caching, no unaligned access). QEMU's virt keeps its devices in the first GiB and RAM in
    the second; a Pi 4 has RAM from 0 and its peripherals in the last GiB. */
 static void apps_init(void);
+void mmu_on_core(void);
+unsigned long cnt_now(void); unsigned long cnt_hz(void);
 static void mmu_init(void) {
     const unsigned long NORMAL = 0x1UL | (1UL << 2) /* attr 1 */ | (3UL << 8) /* inner shareable */ | (1UL << 10) /* access flag */ | (1UL << 54) /* EL0 may not execute it: only the user code page can */;
     const unsigned long DEVICE = 0x1UL | (0UL << 2) /* attr 0 */ | (1UL << 10) | (1UL << 53) | (1UL << 54);   /* never executable */
@@ -266,6 +270,9 @@ static void mmu_init(void) {
     for (int i = 0; i < APP_SLOTS * ARENA_BLOCKS * 512; i++) l3[i] = 0;
     for (int k = 0; k < APP_SLOTS * ARENA_BLOCKS; k++) l2[((USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21) + k] = (unsigned long)(l3 + k * 512) | 3;
     l1[RAM_GIB] = (unsigned long)l2 | 3;
+    mmu_on_core();
+}
+void mmu_on_core(void) {   /* core 0 from mmu_init; since 8.2.0 cores 1 to 3 too, on the same tables */
     unsigned long mair = (0xFFUL << 8) | 0x00UL;                       /* attr 1 normal write-back, attr 0 device-nGnRnE */
     unsigned long tcr = 25UL | (1UL << 8) | (1UL << 10) | (3UL << 12) | (1UL << 23) | (2UL << 32);   /* 39-bit VA, 4 KiB pages, write-back, TTBR1 off, 40-bit PA */
     unsigned long sctlr;
@@ -274,6 +281,52 @@ static void mmu_init(void) {
     sctlr |= (1UL << 0) | (1UL << 2) | (1UL << 12);                   /* MMU, data cache, instruction cache */
     __asm__ volatile ("msr sctlr_el1, %0\n isb" :: "r"(sctlr) : "memory");
 }
+/* 8.2.0: all four cores. Core 0 runs the kernel as before; smp_start wakes cores 1 to 3 at start.S's secondary_entry, by
+   PSCI CPU_ON on QEMU's virt machine (hvc, or smc when we were given EL2) and by the spin table on a Pi (the firmware's stub
+   watches 0xd8 + 8 * core and jumps to whatever lands there). Each turns the MMU on with core 0's tables, says it is up, and
+   then counts: one pass a wake-up, and core 0 sends one (sev) every desktop pass. They run nothing of the kernel's yet, so no
+   locks are needed so far; the next step gives them app threads, and the futex call must take a lock first (th_futex).
+   `cores` in the Terminal shows them. */
+volatile unsigned long core_runs[4];
+volatile unsigned long core_mpidr[4];
+volatile int core_up[4];
+void core_main(unsigned long core) {
+    mmu_on_core();
+    __asm__ volatile ("msr vbar_el1, %0\n isb" :: "r"(vectors));
+    unsigned long m; __asm__ volatile ("mrs %0, mpidr_el1" : "=r"(m));
+    core &= 3;
+    core_mpidr[core] = m & 0xFFFFFF;
+    __asm__ volatile ("dmb ish" ::: "memory");
+    core_up[core] = 1;
+    __asm__ volatile ("dsb ish\n sev" ::: "memory");
+    for (;;) { core_runs[core]++; __asm__ volatile ("wfe"); }
+}
+extern char secondary_entry[];
+static long psci_on(unsigned long mpidr, unsigned long entry) {
+    register unsigned long x0 __asm__("x0") = 0xC4000003UL, x1 __asm__("x1") = mpidr, x2 __asm__("x2") = entry, x3 __asm__("x3") = 0;
+    if (boot_el == 2) __asm__ volatile ("smc #0" : "+r"(x0) : "r"(x1), "r"(x2), "r"(x3) : "memory");
+    else __asm__ volatile ("hvc #0" : "+r"(x0) : "r"(x1), "r"(x2), "r"(x3) : "memory");
+    return (long)x0;
+}
+void smp_start(void) {
+    core_up[0] = 1;
+    { unsigned long m; __asm__ volatile ("mrs %0, mpidr_el1" : "=r"(m)); core_mpidr[0] = m & 0xFFFFFF; }
+    for (unsigned c = 1; c < 4; c++) {
+#ifdef PI_BUILD
+        *(volatile unsigned long *)(0xd8UL + 8 * c) = (unsigned long)secondary_entry;
+        __asm__ volatile ("dc civac, %0\n dsb sy\n sev" :: "r"(0xd8UL + 8 * c) : "memory");   /* the waiting core reads it with its caches off */
+#else
+        if (psci_on(c, (unsigned long)secondary_entry) != 0) { con_quiet = 1; uart_puts("core "); uart_dec(c); uart_puts(" not there\n"); continue; }
+#endif
+        unsigned long t0 = cnt_now(), lim = cnt_hz() / 5;
+        while (!core_up[c] && cnt_now() - t0 < lim) { }
+        con_quiet = 1;   /* the UART's line, kept off the boot console (and so out of a crash report's last lines) */
+        uart_puts("core "); uart_dec(c);
+        if (core_up[c]) { uart_puts(" up, mpidr "); uart_hex(core_mpidr[c]); uart_putc('\n'); }
+        else uart_puts(" did not answer\n");
+    }
+}
+unsigned cores_count(void) { unsigned n = 0; for (int c = 0; c < 4; c++) n += core_up[c] != 0; return n; }
 void kfree(void *p) { (void)p; }   /* a bump heap never frees; text.c rolls the heap back instead (heap_mark, heap_release) */
 unsigned long heap_mark(void) { return heap_next; }
 void heap_release(unsigned long m) { heap_next = m; }
@@ -315,6 +368,13 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_AUDIO 393         /* M3e: play, status, stop (audio.c holds the queue) */
 #define JT_SYS_TASKS 386         /* 3.19.0: uptime in 100 Hz ticks for hamurabi.c (the rest of struct jt_tasks stays 0), no kill */
 #define JT_SYS_BRK 397           /* M3e: the heap top */
+#define JT_SYS_THREAD_SPAWN 407  /* 8.1.0: threads, see th_spawn */
+#define JT_SYS_THREAD_EXIT 408
+#define JT_SYS_FUTEX 409
+#define JT_SYS_SPAWN 410        /* 8.4.0: spawn and wait, see app_spawn */
+#define JT_SYS_WAIT 411
+#define JT_SYS_CONNECT 412      /* 8.5.0: a TCP socket, see sock_connect */
+#define JT_SYS_CLOSE 6
 #define JT_SYS_TEXT2 402         /* 3.9.0: Tree Sans into a device-size window buffer (user/libjt/hires.h) */
 #define JT_SYS_CLIPBOARD 399     /* 3.10.0: copy and paste, see clip_put below */
 #define JT_CLIP_SET 1
@@ -335,9 +395,10 @@ unsigned long cal_utc(void);   /* the clock the Calendar tile reads, further dow
    app_wbytes at UP_WIN, 0 with no window, and app_q is the ring of events the desktop queued for it. */
 struct app apps[APP_SLOTS];
 struct app *ap = &apps[0];         /* the app whose state the code below means: the one resume_user is in, else the one in front */
-#define app_frame (ap->frame)
-#define app_fp (ap->fp)
-#define app_sp (ap->sp)
+#define app_th (ap->th[ap->tcur])
+#define app_frame (app_th.frame)
+#define app_fp (app_th.fp)
+#define app_sp (app_th.sp)
 #define app_last (ap->last)
 #define app_brk (ap->brk)
 #define app_parked (ap->parked)
@@ -350,9 +411,18 @@ unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_
    read or an HTTP wait, is never charged to it. IRQs are unmasked at EL0 only for apps (resume_user); the kernel itself still
    runs with them masked. Counts as a fault: app_tick ends the app and the desktop carries on.
    ponytail: one fixed budget, 3 s; per-app budgets if an app ever needs a long pure-compute stretch. */
-static void wd_arm(void) { unsigned long t = cnt_hz() * 3; __asm__ volatile ("msr cntp_tval_el0, %0\n msr cntp_ctl_el0, %1\n isb" :: "r"(t), "r"(1UL)); }
+static unsigned th_live(void);   /* 8.1.0: an app's threads that have not exited */
+static void wd_arm(void) { unsigned long t = cnt_hz() / 100;   /* 8.6.0: every app runs in 10 ms slices (8.1.0: those with threads) */ __asm__ volatile ("msr cntp_tval_el0, %0\n msr cntp_ctl_el0, %1\n isb" :: "r"(t), "r"(1UL)); }
 static void wd_off(void) { __asm__ volatile ("msr cntp_ctl_el0, %0\n isb" :: "r"(0UL)); }
-void wd_rearm(void) { if (wd_live) wd_arm(); }
+static long wd_left;   /* 8.6.0: what was left of the slice when the app's call came in */
+void wd_pause(void) { if (wd_live) { long t; __asm__ volatile ("mrs %0, cntp_tval_el0" : "=r"(t)); wd_left = (int)t; } }
+void wd_rearm(void) {   /* after every call: the slice goes on from where the call found it, so time inside the kernel (a slow card
+                           read) is never charged to the app, and a call never buys it a fresh slice either; the spin count clears */
+    if (!wd_live) return;
+    ap->spin = 0;
+    unsigned long t = wd_left > 0 ? (unsigned long)wd_left : 1;
+    __asm__ volatile ("msr cntp_tval_el0, %0\n isb" :: "r"(t));
+}
 static void apps_init(void) { for (unsigned i = 0; i < APP_SLOTS; i++) { apps[i].base = USER_BASE + i * ARENA_SIZE; apps[i].l3off = i * ARENA_BLOCKS * 512; apps[i].slot = i; } }
 /* The app windows' stacking: app_z lists the slots that have a window, front first. app_top is the front one (-1 with none); outside
    app_tick, `ap` always points at it, so the desktop's clicks, keys and drags land on the window in front. */
@@ -427,17 +497,175 @@ static long app_brk_set(unsigned long want) {
 }
 /* JT_SYS_SCHED_YIELD from the scheduled app: keep every register and where it stood, with 0 as the call's answer, and go back
    to the desktop's loop. app_tick resumes it on a later pass, at the instruction after its svc. */
-static void app_park(const struct frame *f, const unsigned long *fp) {
+/* 8.1.0: threads. An app has up to APP_THREADS, each with its own registers, pc, stack and FP block (struct thread); app_frame,
+   app_fp and app_sp mean the one being run, th[tcur]. One core, so they take turns: a thread runs until it yields, sleeps on a
+   futex word, exits, or its 10 ms slice ends (the watchdog's timer, re-armed as a slice while an app has more than one thread:
+   app_preempt). Each park keeps the NZCV flags (in frame.esr, which resume_user puts back), since a slice can end between a
+   compare and its branch. Locks live in the app (user/libjt/thread.c, ldaxr and stlxr); the kernel only puts a thread to
+   sleep and wakes it (JT_SYS_FUTEX). */
+static unsigned th_live(void) { unsigned n = 0; for (unsigned i = 0; i < APP_THREADS; i++) n += ap->th[i].state != TH_FREE; return n; }
+static void th_save(const struct frame *f, const unsigned long *fp, unsigned long spsr) {
     for (int i = 0; i < 31; i++) app_frame.x[i] = f->x[i];
     for (int i = 0; i < 66; i++) app_fp[i] = fp[i];   /* M3e: its floating point registers, the block el0_sync_entry saved */
-    app_frame.x[0] = 0; app_frame.elr = f->elr;
+    app_frame.elr = f->elr; app_frame.esr = spsr;
     __asm__ volatile ("mrs %0, sp_el0" : "=r"(app_sp));
+}
+static void th_next(void) {   /* the next ready thread after this one takes the core, run soon; with none other ready, tcur stays */
+    for (unsigned k = 1; k <= APP_THREADS; k++) {
+        unsigned i = (ap->tcur + k) % APP_THREADS;
+        if (ap->th[i].state == TH_READY) { if (i != ap->tcur) app_kick = 1; ap->tcur = i; return; }
+    }
+}
+static unsigned long spsr_now(void) { unsigned long v; __asm__ volatile ("mrs %0, spsr_el1" : "=r"(v)); return v; }
+static void app_park(const struct frame *f, const unsigned long *fp) {
+    th_save(f, fp, spsr_now());
+    app_frame.x[0] = 0;
+    th_next();
+    app_parked = 1;
+    leave_user(0);
+}
+int app_preempt(const struct frame *f, const unsigned long *fp, unsigned long spsr) {   /* from exc_irq at a slice's end: 0 the watchdog's case, 1 run on */
+    /* 3 s of slices with no call from any thread stops an app: it is frozen. A job started from the Terminal (`userrun`: plankc
+       compiling) gets 30 s, since the slices keep the desktop going and a slow runner took plankc past 3 s. */
+    if (!app_running || ++ap->spin >= (ap->term ? 3000u : 300u)) return 0;
+    if (!fp || ((int)ap->slot == dbg_slot && dbg_left)) { wd_arm(); return 1; }   /* the FP_NOSAVE control build, or being stepped: no switch, the next slice */
+    ap->preempts++; ap->cut = 1;
+    th_save(f, fp, spsr);
+    __asm__ volatile ("clrex");        /* a load-exclusive cut off by the slice must not pair with the next thread's store */
+    app_kick = 1;
+    th_next();
+    app_parked = 1;
+    leave_user(0);
+}
+static long th_spawn(unsigned long entry, unsigned long sp, unsigned long arg) {   /* JT_SYS_THREAD_SPAWN: the new thread's number, or -errno */
+    if (!app_running) return -38;
+    if ((entry & 3) || !span(entry, 4, UB + UP_APP, app_code)) return -14;      /* it starts in the app's own code */
+    if ((sp & 15) || sp < 16 || !user_writable(sp - 16, 16)) return -14;        /* on a stack of its own memory, 16-byte aligned */
+    for (unsigned i = 0; i < APP_THREADS; i++) {
+        struct thread *t = &ap->th[i];
+        if (t->state != TH_FREE) continue;
+        for (int k = 0; k < 31; k++) t->frame.x[k] = 0;
+        for (int k = 0; k < 66; k++) t->fp[k] = 0;
+        t->frame.x[0] = arg; t->frame.elr = entry; t->frame.esr = 0; t->sp = sp; t->wait = 0; t->state = TH_READY;
+        wd_arm();   /* two threads now: the slice starts */
+        return (long)i;
+    }
+    return -11;   /* -EAGAIN: every thread is taken */
+}
+static long th_futex(const struct frame *f, const unsigned long *fp) {   /* JT_SYS_FUTEX: op 0 sleeps while *addr == val, op 1 wakes up to val sleepers */
+    unsigned long op = f->x[0], addr = f->x[1], val = f->x[2];
+    if (!app_running) return -38;
+    if ((addr & 3) || !user_writable(addr, 4)) return -14;
+    if (op == 1) {
+        long n = 0;
+        for (unsigned i = 0; i < APP_THREADS && (unsigned long)n < val; i++)
+            if (ap->th[i].state == TH_WAIT && ap->th[i].wait == addr) { ap->th[i].state = TH_READY; n++; }
+        return n;
+    }
+    if (op) return -22;
+    /* ponytail: the compare and the sleep are one step only because there is one core and the kernel runs with IRQs masked.
+       The four-core change needs a lock here (and in the wake above). */
+    if (*(volatile unsigned *)addr != (unsigned)val) return -11;   /* it changed already: -EAGAIN, the caller looks again */
+    th_save(f, fp, spsr_now());
+    app_frame.x[0] = 0;
+    app_th.state = TH_WAIT; app_th.wait = addr;
+    th_next();
+    app_parked = 1;
+    leave_user(0);
+}
+/* 8.3.0: a pipe, `userrun A | userrun B` in the Terminal: what A writes to fd 1 is what B reads from fd 0, through 4 KiB
+   here. A write of up to 4 KiB goes in whole or not at all; a write into a pipe without room for it and a read from an empty one park the thread with its pc back on the svc, so it asks again
+   when it next runs, and the other end kicks it when there is room or data. A read with the writer gone gets 0, the end;
+   a write with the reader gone gets -EPIPE. One pipe at a time.
+   ponytail: one pipe and a 4 KiB ring; a pipe per pair, and a bigger one, when a shell runs longer pipelines. */
+static struct { unsigned char buf[4096]; unsigned h, t; int w, r; } pipe0;   /* h - t bytes waiting; w and r are slot + 1, 0 once that end closed */
+static void park_retry(const struct frame *f, const unsigned long *fp) {
+    th_save(f, fp, spsr_now());
+    app_frame.elr -= 4;   /* back onto the svc */
+    th_next();
+    app_parked = 1;
+    leave_user(0);
+}
+static long pipe_write(const struct frame *f, const unsigned long *fp, unsigned long p, unsigned long len) {
+    if (!user_in_range(p, len)) return -14;
+    if (!pipe0.r) return -32;   /* -EPIPE: nobody will read it */
+    unsigned long n = 0, room = sizeof pipe0.buf - (pipe0.h - pipe0.t);
+    if (len <= sizeof pipe0.buf && room < len) room = 0;   /* a write that fits the pipe goes in whole or waits, never half (POSIX's PIPE_BUF rule) */
+    while (n < len && room) { room--; pipe0.buf[pipe0.h++ % sizeof pipe0.buf] = ((const unsigned char *)p)[n++]; }
+    if (n) { apps[pipe0.r - 1].kick = 1; return (long)n; }
+    if (!len) return 0;
+    if (!app_running) return -11;
+    park_retry(f, fp);
+    return 0;
+}
+static long pipe_read(const struct frame *f, const unsigned long *fp, unsigned long p, unsigned long len) {
+    if (!user_writable(p, len)) return -14;
+    unsigned long n = 0;
+    while (n < len && pipe0.h != pipe0.t) ((unsigned char *)p)[n++] = pipe0.buf[pipe0.t++ % sizeof pipe0.buf];
+    if (n) { if (pipe0.w) apps[pipe0.w - 1].kick = 1; return (long)n; }
+    if (!len || !pipe0.w) return 0;   /* the writer has ended and every byte is read: the end */
+    if (!app_running) return -11;
+    park_retry(f, fp);
+    return 0;
+}
+static void pipe_close(void) {   /* from app_end: this app's end of the pipe goes, and the other end is woken to see it */
+    if (ap->pout && pipe0.w == (int)ap->slot + 1) { pipe0.w = 0; if (pipe0.r) apps[pipe0.r - 1].kick = 1; }
+    if (ap->pin && pipe0.r == (int)ap->slot + 1) { pipe0.r = 0; if (pipe0.w) apps[pipe0.w - 1].kick = 1; }
+    ap->pin = ap->pout = 0;
+}
+/* 8.5.0: a socket for an app. JT_SYS_CONNECT (host, port) opens a TCP connection to a name or a dotted address and answers
+   fd 100; JT_SYS_WRITE, JT_SYS_READ and JT_SYS_CLOSE on fd 100 are that connection. It is net.c's one TCP stream, the same
+   one the Browser and TLS use, so it is one socket at a time for the whole box, and when the kernel takes the stream for a
+   page the app's next call gets -ECONNRESET (its port is gone: tcp_stream_port). A read with nothing yet parks the thread
+   (park_retry) so the desktop keeps going; 0 is the other end closing. -EBUSY with another app's socket open,
+   -EHOSTUNREACH when the name does not resolve or the network is not up, -ECONNREFUSED when nobody answers on that port.
+   ponytail: the one stream net.c has; a table of streams when two apps need the network at once. */
+#define SOCK_FD 100
+int http_resolve_host(const char *host, unsigned int *ip);
+int tcp_open(unsigned int dest_ip, unsigned short dest_port); int tcp_write(const void *data, unsigned int len);
+int tcp_read(void *buf, unsigned int max, unsigned int timeout_ticks); void tcp_close(void); unsigned tcp_stream_port(void);
+static unsigned sock_slot, sock_port;   /* the owner's slot + 1 (0: no socket), and its stream's local port */
+static int sock_mine(void) { return sock_slot == ap->slot + 1 && sock_port && tcp_stream_port() == sock_port; }
+static long sock_connect(unsigned long host, unsigned long port) {
+    char h[64]; unsigned n = 0;
+    if (!app_running) return -38;
+    for (; n < 63; n++) { if (!user_in_range(host + n, 1)) return -14; h[n] = ((const char *)host)[n]; if (!h[n]) break; }
+    if (!n || n == 63 || !port || port > 65535) return -22;
+    if (sock_slot && sock_slot != ap->slot + 1 && apps[sock_slot - 1].cur) return -16;   /* -EBUSY */
+    if (sock_slot == ap->slot + 1 && sock_mine()) tcp_close();
+    sock_slot = 0;
+    unsigned ip;
+    if (!http_resolve_host(h, &ip)) return -113;   /* -EHOSTUNREACH */
+    if (!tcp_open(ip, (unsigned short)port)) return -111;   /* -ECONNREFUSED: a reset, or no answer */
+    sock_slot = ap->slot + 1; sock_port = tcp_stream_port();
+    return SOCK_FD;
+}
+static long sock_call(const struct frame *f, const unsigned long *fp, unsigned long n) {
+    unsigned long p = f->x[1], len = f->x[2];
+    if (n == JT_SYS_CLOSE) { if (sock_mine()) tcp_close(); if (sock_slot == ap->slot + 1) sock_slot = 0; return 0; }
+    if (sock_slot != ap->slot + 1) return -9;   /* -EBADF: no socket of its own */
+    if (!sock_mine()) return -104;              /* -ECONNRESET: the kernel took the stream */
+    if (n == JT_SYS_READ) {
+        if (!user_writable(p, len)) return -14;
+        if (!len) return 0;
+        int r = tcp_read((void *)p, len > 1460 ? 1460 : (unsigned)len, 1);
+        if (r >= 0) return r;   /* bytes, or 0 when the other end closed */
+        park_retry(f, fp);      /* nothing yet: ask again on a later pass */
+    }
+    if (!user_in_range(p, len)) return -14;
+    return tcp_write((const void *)p, (unsigned)len) ? (long)len : -104;
+}
+static void sock_drop(void) { if (sock_slot == ap->slot + 1) { if (sock_mine()) tcp_close(); sock_slot = 0; } }   /* from app_end */
+static void th_exit(unsigned long status) {   /* JT_SYS_THREAD_EXIT: this thread ends; the last one to end is the app's exit */
+    app_th.state = TH_FREE;
+    if (!th_live()) leave_user(status);
+    th_next();
     app_parked = 1;
     leave_user(0);
 }
 static void wd_kill(void) {   /* 4.5: from exc_irq, the app has had its three seconds at EL0 without a syscall */
     wd_live = 0;
-    uart_puts("M4 watchdog: "); uart_puts(app_cur ? app_cur->name : "app"); uart_puts(" ran 3 s without a syscall, stopped\n");
+    uart_puts("M4 watchdog: "); uart_puts(app_cur ? app_cur->name : "app"); uart_puts(ap->term ? " ran 30 s without a syscall, stopped\n" : " ran 3 s without a syscall, stopped\n");
     user_faulted = 1;
     leave_user((unsigned long)-1);
 }
@@ -561,11 +789,15 @@ static void dbg_end(void) {   /* app_tick, after the stepped app's turn, however
     dbg_mdscr(0);
 }
 void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's FP registers, saved below the frame by el0_sync_entry */
+    wd_pause();   /* 8.6.0: the slice stops while the kernel works for the app; wd_rearm (vectors.S, on the way out) restarts it */
     unsigned ec = (unsigned)(f->esr >> 26);
     if (ec == 0x32) { dbg_step(f); return; }   /* 7.2.0: a software step, the debugger's */
     APP_FP_CLOBBER();
     if (ec == 0x15) {   /* svc from EL0 */
         unsigned long n = f->x[8], a0 = f->x[0];
+        if (a0 == 1 && ap->pout && (n == SYS_WRITE || n == JT_SYS_WRITE)) { f->x[0] = (unsigned long)pipe_write(f, fp, f->x[1], f->x[2]); return; }   /* 8.3.0 */
+        if (a0 == SOCK_FD && (n == SYS_WRITE || n == JT_SYS_WRITE || n == JT_SYS_READ || n == JT_SYS_CLOSE)) { f->x[0] = (unsigned long)sock_call(f, fp, n == SYS_WRITE ? JT_SYS_WRITE : n); return; }   /* 8.5.0 */
+        if (a0 == 0 && ap->pin && n == JT_SYS_READ) { f->x[0] = (unsigned long)pipe_read(f, fp, f->x[1], f->x[2]); return; }
         if (n == JT_SYS_WRITE && a0 != 1 && a0 != 2) f->x[0] = (unsigned long)ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: a file from open (fd 0 is -EBADF there) */
         else if (n == SYS_WRITE || n == JT_SYS_WRITE) {
             const char *p = (const char *)f->x[1]; unsigned long len = f->x[2];
@@ -581,6 +813,10 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
         } else if (n == JT_SYS_SCHED_YIELD) {   /* every turn of an app's loop, so never logged */
             if (app_running) app_park(f, fp);
             f->x[0] = 0;                         /* outside the scheduler (the boot self-test) there is nothing to yield to */
+        } else if (n == JT_SYS_FUTEX) {   /* 8.1.0: sleeps (never returns) or answers */
+            f->x[0] = (unsigned long)th_futex(f, fp);
+        } else if (n == JT_SYS_THREAD_EXIT && app_running) {
+            th_exit(a0);
         } else if (n == JT_SYS_WINDOW_POLL) f->x[0] = (unsigned long)app_window_poll(a0, f->x[1]);   /* the same */
         else {
             long r;
@@ -596,6 +832,10 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             else if (n == JT_SYS_TEXT2) r = app_text(a0);
             else if (n == JT_SYS_AUDIO) r = app_audio(a0, f->x[1], f->x[2]);   /* M3e */
             else if (n == JT_SYS_BRK) r = app_brk_set(a0);
+            else if (n == JT_SYS_THREAD_SPAWN) r = th_spawn(a0, f->x[1], f->x[2]);   /* 8.1.0 */
+            else if (n == JT_SYS_SPAWN) r = app_spawn(a0, f->x[1]);   /* 8.4.0 */
+            else if (n == JT_SYS_WAIT) r = app_wait(f, fp, a0);
+            else if (n == JT_SYS_CONNECT) r = sock_connect(a0, f->x[1]);   /* 8.5.0 */
             else if (n == JT_SYS_CLIPBOARD) r = app_clip(a0, f->x[1], f->x[2]);   /* 3.10.0 */
             else if (n == JT_SYS_TASKS) {
                 if (!a0 || !user_writable(a0, 20)) r = -14;
@@ -745,6 +985,58 @@ int user_run(const struct user_app *a) {
    with a window does, leaves the desktop responsive; only an app run this way gets a window. A parked app runs again on the
    next pass that has an event for it, and every 10 ms (the generic counter, never `ticks`) in case it is animating. An app
    that loops without ever making a syscall still holds the core: preempting one needs IRQs unmasked at EL0, not done yet. */
+/* 8.4.0: apps that start apps. JT_SYS_SPAWN (name, words, 0) loads NAME (built in, or a card app by the same rule as
+   `userrun`) into a free slot with WORDS as its JT_SYS_ARGS, prints to the same place its parent does, and answers its
+   process number. JT_SYS_WAIT (pid) gives back that child's exit status once it has ended (-1 for a fault or a kill),
+   parking the caller until then (park_retry; the child's end kicks it). Each ended child is kept in `reaped` until its
+   parent waits, or a newer one needs the room. -ENOENT for a name nothing answers to, -EAGAIN with every slot taken,
+   -ECHILD for a pid that is not this app's child.
+   ponytail: eight remembered exits, the oldest dropped; a per-parent list if an app ever spawns dozens. */
+static struct { unsigned pid, parent; long status; } reaped[8];
+static void reap_note(unsigned pid, unsigned parent, unsigned long status, int killed) {
+    if (!parent) return;
+    unsigned k = 0;
+    for (unsigned i = 0; i < 8; i++) if (!reaped[i].pid) { k = i; goto put; }
+    for (unsigned i = 1; i < 8; i++) if (reaped[i].pid < reaped[k].pid) k = i;
+put:
+    reaped[k].pid = pid; reaped[k].parent = parent; reaped[k].status = killed ? -1 : (long)(int)status;
+    if (apps[parent - 1].cur) apps[parent - 1].kick = 1;
+}
+int app_start(const struct user_app *a);
+const struct user_app *user_find(const char *name, unsigned n);
+const struct user_app *card_find(const char *name, unsigned n, int allow_unsigned);
+unsigned accounts_count(void);
+void ufile_args_next(const char *s, unsigned n);
+static long app_spawn(unsigned long name, unsigned long words) {
+    char nm[16], w[65]; unsigned n = 0, wn = 0;
+    if (!app_running) return -38;
+    for (; n < 15; n++) { if (!user_in_range(name + n, 1)) return -14; nm[n] = ((const char *)name)[n]; if (!nm[n]) break; }
+    if (!n || n == 15) return -22;
+    if (words) for (; wn < 64; wn++) { if (!user_in_range(words + wn, 1)) return -14; w[wn] = ((const char *)words)[wn]; if (!w[wn]) break; }
+    w[wn] = 0;
+    struct app *me = ap;
+    const struct user_app *a = user_find(nm, n);
+    if (!a) a = card_find(nm, n, !accounts_count());   /* an unsigned card app only on a box with no accounts, as userrun without sudo */
+    if (!a) return -2;
+    ufile_args_next(w, wn);
+    int r = app_start(a);
+    ufile_args_next("", 0);
+    struct app *kid = ap;
+    ap = me;   /* app_start moved `ap` to the child's slot; the rest of this call is the parent's */
+    arena_only((int)me->slot);   /* and the loader's page-table work must not have opened another arena to it */
+    if (r == -3) return -11;
+    if (r) return -8;   /* -ENOEXEC: it would not load */
+    kid->term = me->term; kid->parent = me->slot + 1;
+    return (long)kid->pid;
+}
+static long app_wait(const struct frame *f, const unsigned long *fp, unsigned long pid) {
+    if (!app_running) return -38;
+    for (unsigned i = 0; i < 8; i++)
+        if (reaped[i].pid == pid && reaped[i].parent == ap->slot + 1) { long st = reaped[i].status; reaped[i].pid = 0; return st; }
+    for (unsigned i = 0; i < APP_SLOTS; i++)
+        if (apps[i].cur && apps[i].pid == pid && apps[i].parent == ap->slot + 1) { park_retry(f, fp); return 0; }
+    return -10;   /* -ECHILD */
+}
 void app_kill_one(const char *how);
 static void app_end(unsigned long status, const char *how) {   /* an exit, a fault or a kill: the window goes, then the pages */
     const struct user_app *a = app_cur;
@@ -752,10 +1044,14 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     ufile_owner = ap->slot + 1;
     ufile_release();   /* M3d: its open files are written back and closed, after an exit, a fault or its red dot alike */
     audio_app_stop();  /* M3e: and its sound stops (what is already in the PWM ring plays out) */
+    pipe_close();      /* 8.3.0 */
+    sock_drop();       /* 8.5.0 */
+    reap_note(ap->pid, ap->parent, status, how != 0);   /* 8.4.0: kept for the app that spawned it to wait for */
     struct app *me = ap;
     app_window_close();   /* leaves `ap` on the window now in front... */
     ap = me;              /* ...so put it back: the pages unmapped and the line printed below are this app's, not the front one's */
     app_unmap();
+    if (me->preempts) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" was cut off "); uart_dec(me->preempts); uart_puts(" times\n"); }   /* 8.1.0: arm64-threads-check.py reads it */
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
     uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times\n");
@@ -776,7 +1072,9 @@ void app_kill(const char *how) {   /* every app ends: a kernel-drawn window is o
 int ufile_launch_take(char *name, char *arg);   /* ufile.c */
 void ufile_args_next(const char *s, unsigned n);
 int app_dock(const char *name);                  /* appwin.c */
+unsigned long sched_worst;   /* 8.6.0: `sched` in the Terminal reads it and starts again */
 void app_tick(void) {   /* every app with something to do gets its turn: it runs until it yields, exits or faults, and a fault ends that app alone */
+    __asm__ volatile ("sev");   /* 8.2.0: one wake-up for cores 1 to 3 each desktop pass (core_main counts them) */
     {   static char nm[65], arg[65];   /* 7.7.0: an app asked for another (Files opens a song in Music): opened here, between turns */
         if (ufile_launch_take(nm, arg)) {
             unsigned n = 0; while (arg[n]) n++;
@@ -788,18 +1086,20 @@ void app_tick(void) {   /* every app with something to do gets its turn: it runs
     }
     for (unsigned i = 0; i < APP_SLOTS; i++) {
         ap = &apps[i];
-        if (!app_cur || app_running) continue;
+        if (!app_cur || app_running || app_th.state != TH_READY) continue;   /* 8.1.0: every thread asleep on a futex: nothing to run */
         unsigned long now = cnt_now();
         if (app_close_at && now > app_close_at) { app_kill_one("closed by its red dot"); continue; }   /* it never read the close click */
         if (!app_kick && now - app_last < cnt_hz() / 100) continue;
         app_kick = 0; app_last = now; app_runs++;
-        app_parked = 0; user_faulted = 0; app_running = 1; ufile_owner = ap->slot + 1;
+        app_parked = 0; user_faulted = 0; app_running = 1; ufile_owner = ap->slot + 1; ap->cut = 0;
         APP_FP_CLOBBER();
         arena_only((int)ap->slot);
         wd_live = 1; wd_arm();
         int dbg = (int)ap->slot == dbg_slot && dbg_left;   /* 7.2.0: this app is being stepped */
         if (dbg) { dbg_spsr = 1UL << 21; dbg_mdscr(1); }
+        unsigned long t0 = cnt_now();
         unsigned long st = resume_user(&app_frame, app_sp, app_fp);
+        if (cnt_now() - t0 > sched_worst) sched_worst = cnt_now() - t0;   /* 8.6.0: the longest an app held the core in one turn */
         wd_live = 0; wd_off();
         if (dbg) dbg_end();
         app_running = 0;
@@ -827,15 +1127,19 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
         ufile_mkdirs("MUSIC");         /* M3e: Music's library, JT/MUSIC/, there for songs dropped onto the card from a Mac */
     if (a->name[0] == 'b' && a->name[1] == 'o' && a->name[2] == 'o' && a->name[3] == 'k' && a->name[4] == 's' && !a->name[5])
         ufile_mkdirs("BOOKS");         /* 2.66: Books' library, JT/BOOKS/, the books the card ships with and the ones dropped there */
+    for (unsigned i = 0; i < APP_THREADS; i++) ap->th[i].state = TH_FREE;   /* 8.1.0: one thread to start with */
+    ap->tcur = 0; ap->th[0].state = TH_READY; ap->preempts = ap->spin = 0;
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
+    app_frame.esr = 0;                                 /* no flags to put back */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
     app_frame.elr = entry; app_sp = UB + UP_ASTACK + APP_STACK_PAGES * 4096UL;
-    app_cur = a; ap->min = 0; ap->term = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
+    app_cur = a; ap->min = 0; ap->term = 0; ap->pin = ap->pout = 0; ap->parent = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
     if (dbg_want) {   /* 7.2.0: `debug NAME`, stepped from its first instruction */
         dbg_slot = (int)sl; dbg_left = dbg_want; dbg_n = 0;
         for (int i = 0; i < 31; i++) dbg_prev[i] = 0;
         dbg_prev[31] = app_sp;
     }
+    ap->pid = user_pid;
     uart_puts("M3c app "); uart_puts(a->name); uart_puts(" starts\n");
     return 0;
 }
@@ -944,12 +1248,35 @@ int userrun(const char *name, unsigned n, int allow_unsigned, unsigned long *sta
     me->term = 1;   /* 7.5.4: plankc's "wrote APPS/HI.APP", minutes later, reached only the UART on the board */
     user_loud = 1;
     app_tick();
+    for (unsigned k = 0; k < 300 && me->cur == a && me->cut; k++) app_tick();   /* 8.6.0: a first turn a slice cut short is not its answer: more turns until it yields or ends (3 s at most), as one turn was before */
     user_loud = 0;
     if (me->cur == a) return me->wbytes ? 2 : 1;
     *status = user_status; *faulted = user_faulted;
     return 0;
 }
 
+/* 8.3.0: `userrun A | userrun B`. B, the reader, starts first, then A with its fd 1 into the pipe; both report to the
+   Terminal when they end. 0 both running, else userrun's refusal for whichever would not start (A's as -10 + r). */
+int userrun_pipe(const char *a, unsigned an, const char *aw, unsigned awn, const char *b, unsigned bn, const char *bw, unsigned bwn, int allow_unsigned) {
+    if (pipe0.w || pipe0.r) return -3;   /* one pipe at a time */
+    const struct user_app *rb = user_find(b, bn), *ra;   /* found and started one at a time: a card app is read into one shared buffer */
+    if (!rb) rb = card_find(b, bn, allow_unsigned);
+    if (!rb) return card_err ? -3 - card_err : -1;
+    ufile_args_next(bw, bwn);
+    int r = app_start(rb);
+    if (r) return r;
+    struct app *rd = ap; rd->term = 1; rd->pin = 1;
+    ra = user_find(a, an);
+    if (!ra) ra = card_find(a, an, allow_unsigned);
+    if (!ra) { r = card_err ? -3 - card_err : -1; ap = rd; app_kill_one("its pipe's writer was not found"); return -10 + r; }
+    ufile_args_next(aw, awn);
+    r = app_start(ra);
+    if (r) { ap = rd; app_kill_one("its pipe's writer would not start"); return -10 + r; }
+    struct app *wr = ap; wr->term = 1; wr->pout = 1;
+    pipe0.h = pipe0.t = 0; pipe0.r = (int)rd->slot + 1; pipe0.w = (int)wr->slot + 1;
+    ufile_args_next("", 0);
+    return 0;
+}
 /* 6.94.0, ask.c's [[app NAME]] on the box: a card app run with these words to its end, ticking it (and any other app)
    from here, for at most secs. 0 it ended (*status), -6 it ran too long and was stopped, else userrun's own refusal.
    ponytail: user_status is whichever app ended last; another app ending in the same pass could be read instead. */
