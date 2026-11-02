@@ -754,8 +754,8 @@ None of this is kernel code. It builds and runs on the Mac.
 | `landing/ad/icons/*.png` | The 26 app icons as the OS draws them: 23 rendered from `art/icons/*.svg`, plus Portfolio, Activity and Clock cropped from the Apps grid capture and masked to the same tile shape. |
 | `tools/ad-desktop-capture.py` | Headless QEMU run that drives the real kernel over QMP (Apps grid scroll, snap Samantha and Notes, send a line) and saves the 1920x1080 framebuffer for the ad. |
 | `tools/ad-audio.py` | Narration and sound for the ad: Samantha's ElevenLabs voice per line, the `docs/hardware/ad/music2.py` bed cut to 30 s, ffmpeg places each line on its beat and ducks the bed under the voice. |
-| `landing/joshua-tree-ad-v10.mp4` | The film on the landing (7.0.1): a 26 s tour, 1920x1080 h264 with its own score, in the grammar of a launch tour (hard cuts on a 120 BPM beat, each card a flat colour block with one plain label beside a real screen (7.0 adds the web, Blackcomb with pictures on the Pi), a fast run of games, then the mark builds out of squares and lands on the name). Made by `docs/hardware/ad/cards.py`. The 6.72.1 film, "It builds itself.", is still made by `docs/hardware/ad/builds.json`. |
-| `landing/joshua-tree-ad-v10-poster.jpg` | The film's poster: its name card, "Free" and "Download the ISO". |
+| `landing/joshua-tree-ad-v11.mp4` | The film on the landing (11.5.1): 30 s, 1920x1080 h264, 179 hard cuts of real screens from the Pi build at 1080p in QEMU (every app opened from Spotlight with the network and a card attached, so Weather, Stocks and Blackcomb show live data), full windows and pixel close-ups, every cut on a 32nd of an original 128 BPM piano score, slowing for Mission Control and Spaces, ending on the name. The 6.72.1 film, "It builds itself.", is still made by `docs/hardware/ad/builds.json`. |
+| `landing/joshua-tree-ad-v11-poster.jpg` | The film's poster: Launchpad, every app on the Pi. |
 
 ### Where to go next
 
