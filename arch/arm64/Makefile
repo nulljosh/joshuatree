@@ -92,10 +92,11 @@ appsig.o: appsig.c appsig.h $(APP_KEY) FORCE
 STORE_BASE ?=
 store.o: store.c appsig.h uimg.h FORCE
 	$(NETCC) $(if $(STORE_BASE),-DSTORE_BASE='"$(STORE_BASE)"') -c $< -o $@
-# 9.3.0: self-update (update.c). UPDATE_BASE= points it at a stub for tools/checks/arm64-update-check.py only; FORCE, as store.o.
+# 9.3.0: self-update (update.c). UPDATE_BASE= and UPDATE_DL= point it at a stub for tools/checks/arm64-update-check.py only; FORCE, as store.o.
 UPDATE_BASE ?=
+UPDATE_DL ?=
 update.o: update.c appsig.h FORCE
-	$(NETCC) $(if $(UPDATE_BASE),-DUPDATE_BASE='"$(UPDATE_BASE)"') -c $< -o $@
+	$(NETCC) $(if $(UPDATE_BASE),-DUPDATE_BASE='"$(UPDATE_BASE)"') $(if $(UPDATE_DL),-DUPDATE_DL='"$(UPDATE_DL)"') -c $< -o $@
 claude_cfg.h: claude_cfg.sh FORCE
 	@./claude_cfg.sh
 wifi_cfg.h: wifi_cfg.sh FORCE

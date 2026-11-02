@@ -6,10 +6,11 @@ Boots the ARM64 kernel on QEMU's virt machine with a virtio keyboard and an 800x
 2. three quick right arrows give three lines, "Apps, app, 1 of 12. Press Return to open." through Mail, 3 of 12;
 3. after the focus rests (600 ms), Mail alone is spoken ("reader speak Mail"), not Apps or Files;
 4. the caption is a wide pill centred over the dock, not the short label over Mail's tile;
-5. `reader off` in the Terminal turns it off: the menu bar mark goes, and the next arrow says nothing.
+5. `reader off` in the Terminal turns it off: the menu bar mark goes, and the next arrow says nothing;
+6. the state is kept on the card (JT/READER.TXT, 1 then 0), and a boot with it at 1 comes up with the reader on.
 Discriminating: drop reader_focus from dock_select (keys.c) and steps 2 to 4 fail; drop the rest test in reader_tick
-(desk.c) and Apps and Files are spoken too.
-Skips (exit 0) without clang, ld.lld or qemu-system-aarch64.
+(desk.c) and Apps and Files are spoken too; drop the sd_write in reader_set and step 6 fails.
+Skips (exit 0) without clang, ld.lld, qemu-system-aarch64 or mtools.
 Usage: tools/checks/arm64-reader-check.py   (from the repo root)
 """
 import json, os, shutil, socket, subprocess, sys, time
@@ -17,11 +18,12 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scratch import scratch_dir
+from sdcard import PART, build_card
 
 root = Path(__file__).resolve().parents[2]
 arch = root / "arch/arm64"
-if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
-    print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
+if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64", "mtype", "mcopy")):
+    print("SKIP: clang, ld.lld, qemu-system-aarch64 or mtools not installed"); sys.exit(0)
 tmp = Path(scratch_dir("arm64-reader"))
 fails = []
 def check(name, ok, detail=""):
@@ -38,11 +40,19 @@ icon = min(H * PCT // 100, (min(740, W - 40) - 2 * PAD - (ICONS - 1) * GAP) // I
 y0 = H - icon - 2 * PAD - MBOT
 LABEL_BG = (0xF4, 0xF1, 0xEC)   # DOCK_LABEL_BG, kernel/gui_paint.h
 
+card = str(tmp / "card.img"); build_card(card, False)
+MT = dict(os.environ, MTOOLS_SKIP_CHECK="1")
+def mt(*a): return subprocess.run([a[0], "-i", f"{card}@@{PART * 512}", *map(str, a[1:])], capture_output=True, env=MT)
+mt("mmd", "::JT")
 log, sock, shot = tmp / "uart", tmp / "qmp", tmp / "shot.ppm"
-q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-global", "virtio-mmio.force-legacy=false",
+def boot():
+    if log.exists(): log.unlink()
+    return subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-global", "virtio-mmio.force-legacy=false",
                       "-device", "ramfb", "-device", "virtio-keyboard-device", "-nic", "none",
+                      "-drive", "if=none,id=card,file=%s,format=raw" % card, "-device", "virtio-blk-device,drive=card",
                       "-display", "none", "-serial", "file:" + str(log), "-qmp", "unix:%s,server,nowait" % sock, "-kernel", str(arch / "kernel8.elf")],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+q = boot()
 def uart(): return log.read_text(errors="replace") if log.exists() else ""
 def wait_for(text, secs, after=0):
     end = time.time() + secs
@@ -72,6 +82,7 @@ try:
 
     n = len(uart()); key("meta_l", "f5")
     check("Cmd+F5 turns the reader on", wait_for("reader on", 5, n), uart()[n:][-300:])
+    time.sleep(0.5); check("and keeps it on the card (JT/READER.TXT is 1)", mt("mtype", "::JT/READER.TXT").stdout == b"1", mt("mtype", "::JT/READER.TXT").stdout)
     time.sleep(0.5); off_mark = None
     n = len(uart())
     for _ in range(3): key("right", gap=0.12)
@@ -101,6 +112,11 @@ try:
     px = screen(); off_cap, off_mark = caption(px), mark(px)
     check("with it off, no wide caption (%d) and no menu bar mark (%d)" % (off_cap, off_mark), off_cap < on_cap // 4 and off_mark < on_mark // 4, (off_cap, off_mark))
     check("no kernel crash", "KERNEL CRASH" not in uart() and q.poll() is None, uart()[-400:])
+    check("`reader off` is kept too (JT/READER.TXT is 0)", mt("mtype", "::JT/READER.TXT").stdout == b"0", mt("mtype", "::JT/READER.TXT").stdout)
+    q.kill(); q.wait()
+    (tmp / "one").write_bytes(b"1"); mt("mcopy", "-o", tmp / "one", "::JT/READER.TXT")
+    q = boot()
+    check("a boot with JT/READER.TXT at 1 comes up with the reader on", wait_for("reader loaded on", 60), uart()[-400:])
 finally:
     q.kill(); q.wait()
     subprocess.run(["make", "-C", str(arch), "clean"], capture_output=True, timeout=60)

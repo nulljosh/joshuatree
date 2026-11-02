@@ -61,7 +61,11 @@ static void about_center(const char *t, int y, unsigned c) { gui_text(t, spot_lx
 static int tree_dlg;   /* 0, or 1 shut down, 2 restart: the card is the power dialog; 3 Software Update (9.3.0) */
 #define UPD_H 236
 static char upd_ver[16], upd_news[96];
-static int upd_btn_x(void) { return spot_lx + (SPOT_W - 200) / 2; }
+#define UPD_CW 96    /* Cancel, a gap of 10, Update and Restart UPD_BW: 286 of the card's SPOT_W */
+#define UPD_BW 180
+_Static_assert(UPD_CW + 10 + UPD_BW <= SPOT_W - 12, "the update card's buttons fit inside it");
+static int upd_cancel_x(void) { return spot_lx + (SPOT_W - UPD_CW - 10 - UPD_BW) / 2; }
+static int upd_btn_x(void) { return upd_cancel_x() + UPD_CW + 10; }
 static int upd_btn_y(void) { return spot_ly + 150; }
 static int dlg_btn_y(void) { return spot_ly + DLG_H - 44; }
 static int dlg_btn_w(void) { return (DLG_W - 48) / 2; }
@@ -86,10 +90,13 @@ static void tree_paint(void) {
         for (unsigned i = 0; i < n; i++) if (upd_news[i] == ' ') { char b[96]; for (unsigned j = 0; j < i; j++) b[j] = upd_news[j]; b[i] = 0; if (gui_text_width(b) <= SPOT_W - 24) cut = i; }
         if (gui_text_width(upd_news) <= SPOT_W - 24 || !cut) cut = n;
         for (unsigned j = 0; j < cut; j++) l1[j] = upd_news[j]; l1[cut] = 0;
-        { unsigned k = 0; for (unsigned j = cut < n ? cut + 1 : n; j < n; j++) l2[k++] = upd_news[j]; l2[k] = 0; }
+        { unsigned k = 0; for (unsigned j = cut < n ? cut + 1 : n; j < n; j++) l2[k++] = upd_news[j]; l2[k] = 0;
+          while (k && gui_text_width(l2) > SPOT_W - 24) { do k--; while (k && ((unsigned char)l2[k] & 0xC0) == 0x80); l2[k] = 0; } }   /* whole UTF-8 characters */   /* 10.0.0 audit: the second line never runs off the card */
         about_center(l1, spot_ly + 104, 0x0075726E); about_center(l2, spot_ly + 122, 0x0075726E);
-        gui_rounded_rect_on_wallpaper(upd_btn_x(), upd_btn_y(), 200, 32, 0x00b5502c, 16);
-        gui_text("Update and Restart", upd_btn_x() + (200 - gui_text_width("Update and Restart")) / 2, upd_btn_y() + 8, 0x00FFFFFF);
+        gui_rounded_rect_on_wallpaper(upd_cancel_x(), upd_btn_y(), UPD_CW, 32, 0x00E6E1D9, 16);
+        gui_text("Cancel", upd_cancel_x() + (UPD_CW - gui_text_width("Cancel")) / 2, upd_btn_y() + 8, 0x001C1C1E);
+        gui_rounded_rect_on_wallpaper(upd_btn_x(), upd_btn_y(), UPD_BW, 32, 0x00b5502c, 16);
+        gui_text("Update and Restart", upd_btn_x() + (UPD_BW - gui_text_width("Update and Restart")) / 2, upd_btn_y() + 8, 0x00FFFFFF);
         about_center("If it does not start, the Pi goes back", spot_ly + 196, 0x0075726E);
         about_center("to the version that worked.", spot_ly + 214, 0x0075726E);
     } else if (tree_dlg) {
@@ -176,7 +183,7 @@ void update_dialog(const char *ver, const char *news) {   /* update.c's update_c
 }
 void update_install(void);   /* update.c */
 int sudo_may_write(void);   /* sudo.c */
-static void update_go(void) {   /* 10.0.0 audit: the button is an admin's, as `update install` is (cmd.c's priv) */
+static void update_go(void) {   /* the button is a signed-in admin's, as `sudo update install` is in the Terminal */
     spot_close(); tree_dlg = 0;
     if (!sudo_may_write()) { uart_puts("update: not an admin\n"); menubar_notify("Only an admin can update"); return; }
     update_install();
@@ -215,7 +222,11 @@ void tree_key(unsigned code) {
     else if (code == 28 || code == 96) tree_pick(tree_sel);
 }
 void tree_click(int lx, int ly) {
-    if (tree_dlg == 3) { if (in_box(lx, ly, upd_btn_x(), upd_btn_y(), 200, 32)) update_go(); return; }
+    if (tree_dlg == 3) {   /* Update and Restart; Cancel or a tap off the card closes it (a touch screen has no Esc) */
+        if (in_box(lx, ly, upd_btn_x(), upd_btn_y(), UPD_BW, 32)) update_go();
+        else if (in_box(lx, ly, upd_cancel_x(), upd_btn_y(), UPD_CW, 32) || !in_box(lx, ly, spot_lx, spot_ly, SPOT_W, UPD_H)) { spot_close(); tree_dlg = 0; uart_puts("software update: closed\n"); }
+        return;
+    }
     if (tree_dlg) {   /* the power dialog: Cancel or the action; anywhere else it stays, as a Mac's does */
         int by = dlg_btn_y(), bw = dlg_btn_w(), cx = spot_lx + 16, gx = cx + bw + 16;
         if (in_box(lx, ly, cx, by, bw, 28)) power_key(1);
@@ -523,23 +534,29 @@ void menubar_notify(const char *message) {
    Press Return to open." in the caption above it (dock_hover) and on the UART; once the focus has rested READER_REST, her
    voice reads it through the relay (ask.c reader_say), so a run of arrows speaks only the last. No relay token: the caption
    is all there is. */
+int sd_ready(void); int sd_write(const char *name, const void *data, unsigned len); int sd_enter_jt(int make);
+int fat_read_file(const char *name, void *buf, unsigned bufsize); void fat_cwd_set(unsigned cluster);
 #define READER_REST 60   /* ticks at 100 Hz: 600 ms */
 static int reader_slot = -1;
 static unsigned reader_at;
 unsigned ticks(void);   /* clock.c, 100 Hz */
 static unsigned rd_put(char *b, unsigned n, const char *s) { while (*s && n < 190) b[n++] = *s++; b[n] = 0; return n; }
 static unsigned rd_num(char *b, unsigned n, int v) { if (v >= 10) b[n++] = (char)('0' + v / 10); b[n++] = (char)('0' + v % 10); b[n] = 0; return n; }
-const char *reader_line(int slot) {
+_Static_assert(S_SEC0 == GUI_ICON_COUNT, "lang.h: one dock name per dock slot, then the Settings sections");
+static const char *rd_line(int slot, const char *(*w)(int)) {   /* w: tr to draw, tr_say to speak (Hindi's source row) */
     static char b[192];   /* 9.2.0: in the picked language (lang.c), UTF-8 */
-    unsigned n = rd_put(b, 0, tr(S_DOCK0 + slot));
-    if (slot != GUI_ICON_COUNT - 1) { n = rd_put(b, n, ", "); n = rd_put(b, n, tr(S_APP)); }
-    n = rd_put(b, n, ", "); n = rd_num(b, n, slot + 1); n = rd_put(b, n, " "); n = rd_put(b, n, tr(S_OF)); n = rd_put(b, n, " "); n = rd_num(b, n, GUI_ICON_COUNT);
-    n = rd_put(b, n, ". "); rd_put(b, n, tr(S_RETURN));
+    unsigned n = rd_put(b, 0, w(S_DOCK0 + slot));
+    if (slot != GUI_ICON_COUNT - 1) { n = rd_put(b, n, ", "); n = rd_put(b, n, w(S_APP)); }
+    n = rd_put(b, n, ", "); n = rd_num(b, n, slot + 1); n = rd_put(b, n, " "); n = rd_put(b, n, w(S_OF)); n = rd_put(b, n, " "); n = rd_num(b, n, GUI_ICON_COUNT);
+    n = rd_put(b, n, ". "); rd_put(b, n, w(S_RETURN));
     return b;
 }
+const char *reader_line(int slot) { return rd_line(slot, tr); }
 void reader_set(int on) {
     reader_on = on != 0; reader_slot = -1;
     uart_puts(reader_on ? "reader on\n" : "reader off\n");
+    reader_say(tr_say(reader_on ? S_READER_ON : S_READER_OFF));   /* 10.0.0 audit: the change is heard, not only drawn */
+    if (sd_ready() && sd_write("READER.TXT", reader_on ? "1" : "0", 1) != 1) uart_puts("reader: not saved\n");   /* and kept */
     if (!fb || !text_ok || login_live) return;
     if (dock_band && hover_slot >= 0) dock_hover(hover_slot);   /* the label under the focus, in its other form */
     cur_hide(); menubar_wifi(mb_wifi); cur_show();
@@ -554,7 +571,13 @@ void reader_tick(void) {   /* the poll loop: speak the focus once it has rested 
     int s = reader_slot; reader_slot = -1;
     if (s != dock_sel) return;   /* Return opened it, or Esc let go: nothing to say */
     con_quiet = 1; uart_puts("reader speak "); uart_puts(dock_names[s]); uart_putc('\n');
-    reader_say(reader_line(s));
+    reader_say(rd_line(s, tr_say));
+}
+void reader_load(void) {   /* boot.c, after sd_mount: JT/READER.TXT, 1 when it was left on */
+    char c = 0;
+    if (!sd_ready() || !sd_enter_jt(0)) return;
+    if (fat_read_file("READER.TXT", &c, 1) == 1 && c == '1') { reader_on = 1; uart_puts("reader loaded on\n"); }
+    fat_cwd_set(0);
 }
 static void cal_tick(void) {   /* the day has changed (or the clock just arrived): the Calendar tile again, the hover band's copy with it */
     if (!fb || login_live || dock_mag_on() || cal_today() == cal_shown) return;

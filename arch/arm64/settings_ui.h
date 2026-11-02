@@ -22,6 +22,7 @@ void desktop_wall_changed(void);
 
 enum { SET_ABOUT, SET_DISPLAY, SET_SOUND, SET_DOCK, SET_TIME, SET_USERS, SET_WIFI, SET_BT, SET_LANG, SET_SECTIONS };
 enum { SK_INFO, SK_STEP, SK_TOGGLE };
+_Static_assert(S_SETTINGS - S_SEC0 == SET_SECTIONS, "lang.h: one word per Settings section");
 static const char *const set_names[SET_SECTIONS] = { "About", "Display", "Sound", "Dock", "Date and Time", "Users", "Wi-Fi", "Bluetooth", "Language" };   /* the UART's names; the window draws tr(S_SEC0 + i) */
 static const int set_glyph[SET_SECTIONS] = { GL_ABOUT, GL_DISPLAY, GL_SOUND, GL_DOCK, GL_CLOCK, GL_USER, GL_WIFI, GL_BT, GL_GLOBE };
 static int set_sec, set_row, set_con, set_minute = -1;

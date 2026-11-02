@@ -194,7 +194,9 @@ void ask_redraw(void) { if (tui_on) tui_paint(1); else prompt_row(ac->line, ac->
 /* One key event, while the Terminal is in front (Shift always). 1 when it is the editor's. */
 static int stop_flag;        /* the kill switch: Esc, or "stop" and Enter, while the agent loop runs */
 static int is_stop(const char *s, unsigned n) { return n == 4 && s[0] == 's' && s[1] == 't' && s[2] == 'o' && s[3] == 'p'; }
-int ask_pending(void) { return ac->pending || sam_state || tui_on || pw_on; }   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
+static char reader_text[192];   /* 10.0.0 audit: the reader's line waits here for ask_poll, never fetched from inside desk.c's tick */
+int ask_pending(void) { return ac->pending || sam_state || tui_on || pw_on; }
+int reader_waiting(void) { return reader_text[0] != 0; }   /* boot.c's idle: a line to speak, so no long sleep first */   /* main.c: a question is running, so Esc is the kill switch and not "back to the desktop" */
 int ask_key(unsigned code, unsigned value) {
     if (code == KEY_LSHIFT || code == KEY_RSHIFT) { shift = value != 0; return 1; }
     if (code == KEY_CAPSLOCK) { if (value) caps = !caps; return 1; }   /* one flip per press */
@@ -1332,7 +1334,13 @@ static void face_tick(void) {   /* ask_poll: the mouth follows the voice, 25 tim
     if (m / 25 != last) { last = m / 25; kputs("face: mouth="); kdec((unsigned)m); kputs("\n"); }
 }
 int ask_dev_build(void) { return CLAUDE_TOKEN_LEN != 0; }   /* update.c: a dev card's kernel carries the relay token */
-void reader_say(const char *t) { unsigned k = 0; while (t[k]) k++; voice_fetch(t, k); }   /* desk.c: the screen reader's line, in her voice */
+void reader_say(const char *t) { unsigned k = 0; while (t[k] && k + 1 < sizeof reader_text) { reader_text[k] = t[k]; k++; } reader_text[k] = 0; }   /* the newest line wins */
+static void reader_speak(void) {   /* ask_poll, while Samantha is not mid-turn: one TLS round trip to the relay's voice */
+    char t[sizeof reader_text]; unsigned k = 0;
+    for (; reader_text[k]; k++) t[k] = reader_text[k];
+    t[k] = 0; reader_text[0] = 0;
+    voice_fetch(t, k);   /* ponytail: blocks the loop for that one round trip, as [[say]] does; async TLS if it ever stutters */
+}
 static void voice_fetch(const char *t, unsigned k) {
     if (!CLAUDE_TOKEN_LEN || !net_get_gateway()) return;        /* no relay: the caption is all there is */
     static char body[VOICE_TEXT_MAX * 2 + 16];
@@ -1637,6 +1645,7 @@ void ask_poll(void) {
     face_tick();                               /* the chat view's mouth, while she speaks */
     if (ac->pending) run_typed();
     else if (sam_state == 1) sam_run();
+    else if (reader_text[0]) reader_speak();
 }
 /* net_idle, while `sam` waits: the keys that arrived, and a line Enter completed runs now. Not while an action is
    capturing its output for the next turn (that output must be Samantha's alone): the line waits for the next pass. */

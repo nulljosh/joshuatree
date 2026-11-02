@@ -43,7 +43,7 @@ table = table[table.index("{") + 1: table.index("\n};")]
 rows = [c_strings(r) for r in re.findall(r"\{([^{}]*)\}", table)]
 hi_block = src[src.index("L_hi_src[S_COUNT] = {"):]
 hi = c_strings(hi_block[: hi_block.index("};")])
-assert len(rows) == 12 and len(hi) == 28 and all(len(r) in (0, 28) for r in rows), (len(rows), len(hi))
+assert len(rows) == 12 and len(hi) == len(rows[0]) and all(len(r) in (0, len(hi)) for r in rows), (len(rows), len(hi))
 
 def is_deva(c): return 0x0900 <= ord(c) <= 0x097F or c in "\u200c\u200d"
 want = {"latin": set(), "jp": set(), "sc": set(), "kr": set()}

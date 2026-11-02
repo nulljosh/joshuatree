@@ -37,13 +37,14 @@ int ufile_sync(void);   /* ufile.c */
 /* 9.3.0, update.c: restart into a staged kernel. On the Pi the firmware's reboot flags (tag 0x00038064) say tryboot, so the next
    boot alone reads TRYBOOT.TXT; any boot after it reads config.txt and the kernel that worked. */
 #ifndef POWER_HOST_TEST
-void power_restart_tryboot(void) {
+int power_restart_tryboot(void) {   /* 0 when the firmware refused the flag (update.c then drops what it staged), else 1 */
 #ifdef PI_BUILD
     unsigned m[] = { 7 * 4, 0, 0x00038064, 4, 0, 1, 0 };
     for (unsigned i = 0; i < 7; i++) mbox[i] = m[i];
-    if (!mbox_call()) uart_puts("update: the firmware did not take the tryboot flag; restarting anyway\n");
+    if (!mbox_call() || !(mbox[4] & 0x80000000u)) return 0;   /* 10.0.0 audit: the tag's own response bit, not only the call's */
 #endif
-    power_apply(0);
+    power_apply(0);   /* on the Pi it does not return; QEMU's virt build only says so */
+    return 1;
 }
 #endif
 #if defined(PI_BUILD) && !defined(POWER_HOST_TEST)

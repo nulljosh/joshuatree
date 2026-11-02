@@ -289,7 +289,7 @@ void main(void) {
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
     accounts_load();           /* accounts.c: JT/USERS.TXT, the names `users` lists */
     sudo_load();               /* sudo.c: JT/SUDOERS.TXT, who may sudo */
-    { void lang_load(void); lang_load(); void update_boot(void); update_boot(); }   /* 9.3.0: a staged update, committed or dropped (update.c) */   /* 9.2.0: JT/LANG.TXT, the language the desktop draws in */
+    { void lang_load(void); lang_load(); void update_boot(void); update_boot(); void reader_load(void); reader_load(); }   /* 9.3.0: a staged update, committed or dropped (update.c) */   /* 9.2.0: JT/LANG.TXT, the language the desktop draws in */
     settings_load();           /* settings.c: JT/SETTINGS.TXT, before the Pi's desktop is first painted (the splash waits) */
     SPLASH(2, "sd");
 #ifdef SD_SELFTEST   /* the sd builds (arm64-sd-check.py) run the Terminal's own commands at boot on the check's card */
@@ -466,7 +466,7 @@ void main(void) {
         }
 #else
         for (;;) {   /* ask_pending: a `sam` queued by Enter is run by the next pass, and a wfi with no timer would sleep through it (the key-up IRQ was already taken) */
-            if (usb_ok || brick_live || notice_up() || rep_code || bt_busy() || apps_live() || audio_busy() || ask_pending() || browser_busy()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+            if (usb_ok || brick_live || notice_up() || rep_code || bt_busy() || apps_live() || audio_busy() || ask_pending() || reader_waiting() || browser_busy()) __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                                    " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step * 500), "r"(1UL) : "memory");   /* 6.87.0: idle, still a pass a second, so idle_tick runs */

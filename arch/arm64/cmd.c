@@ -726,7 +726,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     }
     if (word_is(q, n, "update") || word_is(q, n, "update install")) {   /* 9.3.0: self-update (update.c); installing is an admin's */
         void update_check(void), update_install(void);
-        if (n == 6) update_check(); else if (priv("update")) update_install();
+        if (n == 6) update_check(); else if (priv("update install")) update_install();
         return;
     }
     if (n > 8 && is(q, n, "install")) {   /* 6.55.0: an app from the store into JT/APPS, signed or not at all (store.c) */
