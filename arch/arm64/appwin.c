@@ -65,8 +65,35 @@ static void app_repaint_all(void) {   /* every app window, back to front: what a
     ap = keep;
 }
 static void app_unminimize(void);
+/* 11.1.0, Spaces: four desktops, Ctrl+Left and Ctrl+Right step between them, as on a Mac. An app's window stays on the
+   desktop it was on: a switch parks every app window here (min 2: alive, off screen, out of the z order, so painting, clicks
+   and Cmd+Tab pass it by, as they pass a minimized one) and brings back the ones parked there, in their old order.
+   ponytail: only app windows have a desktop. The Console and the Terminal show on every one, and Spotlight, Settings,
+   Blackcomb, Brick, the clock and the Calculator close on a switch, as Cmd+Tab closes most of them; give them a desktop
+   when that is missed. */
+#define SPACES 4
+static int space_cur;
+static unsigned char park_z[APP_SLOTS];
+static void space_switch(int k) {
+    if (k < 0 || k >= SPACES || k == space_cur || !fb) return;
+    spot_close(); settings_close(); brick_close(); clock_close(); browser_close(); calc_close();
+    for (unsigned z = 0; z < app_zn; z++) { struct app *a = &apps[app_z[z]]; a->min = 2; a->space = space_cur; park_z[a->slot] = (unsigned char)z; }
+    app_zn = 0; app_top = -1; app_front = 0;
+    space_cur = k;
+    for (int z = APP_SLOTS - 1; z >= 0; z--) for (unsigned i = 0; i < APP_SLOTS; i++)
+        if (apps[i].cur && apps[i].min == 2 && apps[i].space == k && park_z[i] == z) { apps[i].min = 0; app_z_front(i); }
+    wall_repaint();
+    if (con_live) { con_live = 0; pane_open(cp); }
+    app_front = app_zn > 0;
+    if (app_front) { ap = &apps[app_z[0]]; app_repaint_all(); }
+    char t[] = "Desktop 1"; t[8] = (char)('1' + k);
+    menubar_notify(t);
+    con_quiet = 1; uart_puts("space "); uart_putc((char)('1' + k)); uart_putc('\n');
+}
+int space_step(int d) { space_switch(space_cur + d); return 1; }
 void app_raise(void) {   /* this app's window in front of the Console, the Terminal and the other apps, with the keys */
     if (!app_wbytes) return;
+    if (ap->min == 2) { struct app *me = ap; space_switch(me->space); ap = me; if (app_top == (int)me->slot) return; }   /* parked on another desktop: go there, as a Mac does (drawn once: a second frame over the first darkens its edge) */
     if (ap->min) { app_unminimize(); return; }
     int was = app_front && app_top == (int)ap->slot;
     app_front = 1;
