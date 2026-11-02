@@ -2517,7 +2517,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (359 checks)
+### The suite (360 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2666,6 +2666,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Multi-window chrome doesn't redraw on plain keystrokes | `tools/checks/mwkeyflash-check.sh` | retry |
 | Drawing lands offscreen, window_present puts it on screen | `tools/checks/backbuffer-check.sh` | retry |
 | Multi-window apps draw exactly one toolbar, not two | `tools/checks/mwdupetoolbar-check.sh` | retry |
+| CI manifest: every ci-suite row splits into mode, shard, name and a runnable command, so a pipe inside a name (8.3.0) cannot hand bash half a sentence | `tools/checks/ci-manifest-check.py` | once |
 | JPEG decoder, host harness (baseline and, since 6.46.0, progressive) | `tools/checks/jpeg-host-check.sh` | once |
 | Media decoders (WAV, MP3), host harness under ASan and UBSan | `tools/checks/media-host-check.sh` | once |
 | Tasks keep their own x87 float state across switches | `tools/checks/fpu-check.sh` | retry |
@@ -2818,7 +2819,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | The debugger (7.2.0): `debug hi 6` in the Terminal steps a card app six instructions, each step with where it is, the instruction and the registers that changed, then its registers and the bytes at sp, and it runs on to its exit; an app that points sp and pc at the kernel's own page sees only ?? and faults while the kernel carries on; an app that exits with steps to spare is said to have ended, and the next userrun is not stepped (skips where the tools are missing) | `tools/checks/arm64-debug-check.py` | retry |
 | Threads (8.1.0): a card app's two threads add to a shared count under a jt_mutex and the total is exact, a count with no lock comes out short, the threads took turns in 10 ms slices, a thread outside the app's code or on a crooked stack is refused, and the same app with the lock taken out comes out short (skips where the tools are missing) | `tools/checks/arm64-threads-check.py` | retry |
 | Four cores (8.2.0): on QEMU virt with -smp 4 cores 1 to 3 come up through PSCI, each with its own MPIDR, and `cores` in the Terminal shows each one's wake-up count climbing; with one CPU the boot says they are not there and carries on; the Pi image on raspi4b brings all three up through the spin table (skips where the tools are missing) | `tools/checks/arm64-smp-check.py` | retry |
-| Pipes (8.3.0): `userrun gen | `tools/checks/arm64-pipe-check.py` | retry |
+| Pipes (8.3.0): `userrun gen` piped into `userrun wc` in the Terminal carries 600 lines, more than the 4 KiB pipe, into wc in order (count and checksum match), both exit 0; `userrun gen` piped into `userrun head` ends with gen getting -EPIPE and exiting 32 (skips where the tools are missing) | `tools/checks/arm64-pipe-check.py` | retry |
 | Spawn and wait (8.4.0): a card app spawns kids with words and waits for each exit status, two at once in the other order, a fault reported as -1, -ENOENT for no such app and -ECHILD for a stranger's pid, every kid's line in the Terminal before the parent's summary (skips where the tools are missing) | `tools/checks/arm64-spawn-check.py` | retry |
 | Sockets (8.5.0): a card app connects to a TCP server on the host, writes a line and reads the server's capitalised answer through fd 100, a write after close is -EBADF, a dead port is -ECONNREFUSED and a bad name -EHOSTUNREACH (skips where the tools are missing) | `tools/checks/arm64-sock-check.py` | retry |
 | The desktop comes first (8.6.0): a single-threaded card app that computes for seconds without yielding is cut off at least ten times, finishes with the right sum, and `sched` says no app held the core longer than 60 ms in a turn (skips where the tools are missing) | `tools/checks/arm64-sched-check.py` | retry |
