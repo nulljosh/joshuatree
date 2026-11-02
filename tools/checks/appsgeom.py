@@ -18,7 +18,7 @@ def _panel_h(rows): return _D["APPS_GRID_TOP"] + (rows - 1) * _D["APPS_CELL_H"] 
 
 
 def folder_geometry(lw=960, lh=540):
-    """Default dock (11 tiles, 7 percent scale), as in kernel/dock_geom.c."""
+    """Default dock (12 tiles, 7 percent scale), as in kernel/dock_geom.c."""
     icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 11 * 6) // 12))
     bot = lh - icon - 2 * 10 - 24; top = MENU_H
     rows = 3

@@ -4,7 +4,7 @@ through ramfb; on QEMU's Raspberry Pi 4B model through the VideoCore mailbox, th
 
 Boots each build, waits for "M1c fb ok" on the UART, then asks QEMU for a screendump over QMP and checks real pixels:
 the menu bar (its rule, and half wallpaper half white), the Satellite wallpaper (real photo pixels, in colour, not the old flat fill), the i386 dock (its tray,
-hairline and 11 icon tiles, from the shared kernel/gui_paint.c; at 1080p every tile, Calendar included, must be the shared icon art pixel for pixel,
+hairline and 12 icon tiles, from the shared kernel/gui_paint.c; at 1080p every tile, Calendar included, must be the shared icon art pixel for pixel,
 so nothing is drawn over Calendar's page-and-grid picture), the i386 window frame on the Console (cream body, rounded
 corner, title hairline, traffic lights, centred title, white well) and the tribute line above the dock. A dockhover test build
 (`make hovertest`) must show the i386 hover label, capsule and name, over slot 3; the shipped kernel must not. On the Pi model it also fakes a 1080p
@@ -113,7 +113,7 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         sc = lambda v: v * h // 600                                  # the kernel's own layout rule: an 800x600 design scaled by height
         win_w, win_h = sc(500), sc(350); win_x, win_y = (w - win_w) // 2, sc(100)
         # The dock is the i386 desktop's own (kernel/gui_paint.c, kernel/dock_geom.c): a 1080p screen is the 960x540
-        # grid at scale 2, a smaller one scale 1. Same layout math as dock_geom.c, dock_scale_pct 7, 11 icons.
+        # grid at scale 2, a smaller one scale 1. Same layout math as dock_geom.c, dock_scale_pct 7, 12 icons.
         s2 = 2 if h >= 1080 else 1; lw, lh = w // s2, h // s2
         icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 11 * 6) // 12))
         dock_w = 12 * icon + 11 * 6 + 2 * 10; dock_x0 = (lw - dock_w) // 2; dock_y0 = lh - icon - 2 * 10 - 24
@@ -181,17 +181,17 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
             elif ink_ < 20 * s2: fails.append(f"{name}: the hover label has no name in ink ({ink_} pixels)")
             else: print(f"  ok: {name} hover label over slot 3: capsule {cap[0]}, {ink_} ink pixels of 'Calendar'")
         elif sum(1 for c in cap if c == (0xf4, 0xf1, 0xec)) > 2: fails.append(f"{name}: a hover label shows with nothing hovered")
-        if "M1d dock 11 icons" not in out: fails.append(f"{name}: no 'M1d dock 11 icons' line: the icon artwork did not draw")
+        if "M1d dock 12 icons" not in out: fails.append(f"{name}: no 'M1d dock 12 icons' line: the icon artwork did not draw")
         tiles = []                                                   # each slot's tile: the icon artwork, not bare tray
-        for slot in range(11):
+        for slot in range(12):
             x0, y0 = (dock_x0 + 10 + slot * (icon + 6)) * s2, (dock_y0 + 10) * s2
             px_ = [at(x, y) for y in range(y0 + 4 * s2, y0 + (icon - 4) * s2, s2) for x in range(x0 + 4 * s2, x0 + (icon - 4) * s2, s2)]
             tiles.append((sum(1 for c in px_ if c != (0xef, 0xeb, 0xe4)) * 100 // len(px_), len(set(px_))))
         bare = [i for i, (cover, _) in enumerate(tiles) if cover < 60]
         if bare: fails.append(f"{name}: dock slots {bare} show the tray, not an icon (cover % per slot: {[t[0] for t in tiles]})")
-        elif len({at((dock_x0 + 10 + k * (icon + 6) + icon // 2) * s2, (dock_y0 + 10 + icon // 3) * s2) for k in range(11)}) < 6:
-            fails.append(f"{name}: the 11 dock tiles look alike, the artwork is not drawing")
-        else: print(f"  ok: {name} dock: 11 icon tiles of {icon} at scale {s2}, {min(t[1] for t in tiles)}+ colours each")
+        elif len({at((dock_x0 + 10 + k * (icon + 6) + icon // 2) * s2, (dock_y0 + 10 + icon // 3) * s2) for k in range(12)}) < 6:
+            fails.append(f"{name}: the 12 dock tiles look alike, the artwork is not drawing")
+        else: print(f"  ok: {name} dock: 12 icon tiles of {icon} at scale {s2}, {min(t[1] for t in tiles)}+ colours each")
         y0 = (dock_y0 + 10) * s2
         if s2 == 2 and icon * s2 < ART_SIZE:                         # at 1080p each tile is the shared art, area-filtered exactly
             off = []

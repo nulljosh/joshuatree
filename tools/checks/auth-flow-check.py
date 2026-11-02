@@ -117,7 +117,7 @@ def settings_section_for_row(row):
     raise ValueError(f'row {row} is not in any settings section')
 # The Notes dock icon, the exact coordinates editor_qa.py's open_notes()
 # already proved land on it.
-# 2.0: Notes is a ring-3 compositor window and the dock has 11 tiles with Notes
+# 2.0: Notes is a ring-3 compositor window and the dock has 12 tiles with Notes
 # in slot 4 (SLOT0_X 226, pitch 43, tile 37), so aim at its centre. The proof
 # that it opened is Notes' own serial marker, not a kernel symbol.
 DOCK_NOTES_X, DOCK_NOTES_Y = 226 + 4 * 43 + 18, 487
