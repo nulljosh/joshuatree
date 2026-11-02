@@ -4,7 +4,6 @@
    prints on the mini UART instead, on the same header pins: the PL011 belongs to the Bluetooth radio (bt.c). */
 #include "kmain.h"   /* the platform addresses, and what main.c shares with the parts cut out of it (boot.c, virtio.c): declared once, checked here */
 #include "bt.h"
-#include "apple_mask.h"
 #include "appsig.h"   /* 6.54.0: NAME.SIG */
 #include "uimg.h"   /* 6.51.0: the image check, shared with tools/fuzz-host/fuzz_uimg.c */
 #define UART_DR   (UART_BASE + 0x00)

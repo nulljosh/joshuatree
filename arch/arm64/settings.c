@@ -41,7 +41,14 @@ const char *settings_wall_name(int i) { return i >= 0 && i < SET_WALLS ? walls[i
 unsigned settings_wall_rgb(int i) { return i >= 0 && i < SET_WALLS ? walls[i].rgb : walls[0].rgb; }
 int settings_walls(void) { return SET_WALLS; }
 void settings_set_wall(int i) { wall_pick = ((i % SET_WALLS) + SET_WALLS) % SET_WALLS; wall_set(walls[wall_pick].rgb); }
-int dock_mag = 0;                     /* 7.4.0: crash.c's magnify, an index into mags; 8.9.0: off unless chosen (Joshua: "disable zoom") */
+#ifndef DOCK_ZOOM
+#ifdef PI_BUILD
+#define DOCK_ZOOM 0   /* 8.9.0: off on the Pi unless chosen in Settings (Joshua: "disable zoom") */
+#else
+#define DOCK_ZOOM 2   /* QEMU builds keep it on, so the magnify checks (dockmag, genie, ptrburst, traffic, calendar) still see it */
+#endif
+#endif
+int dock_mag = DOCK_ZOOM;             /* 7.4.0: crash.c's magnify, an index into mags */
 static const char *const mags[3] = { "Off", "Small", "Large" };
 int settings_dock(void) { return dock_scale_pct; }
 void settings_set_dock(int pct) { dock_scale_pct = pct < SET_DOCK_MIN ? SET_DOCK_MIN : pct > SET_DOCK_MAX ? SET_DOCK_MAX : pct; }
