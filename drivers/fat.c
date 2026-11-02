@@ -350,6 +350,31 @@ int fat_read_at(const char *name, unsigned int off, void *buf, unsigned int len)
     return (int)(total - remaining);
 }
 
+int fat_write_at(const char *name, unsigned int off, const void *buf, unsigned int len) {   /* 8.12.0: in place, never past the end */
+    at_first = 0;
+    if (!mounted) return -1;
+    struct dir_entry *e = find_entry_in(current_dir_cluster, name);
+    if (!e || (e->attr & ATTR_DIRECTORY) || off > e->file_size || len > e->file_size - off) return -1;
+    u32 per = (u32)sectors_per_cluster * 512u, cluster = entry_cluster(e), skip = off % per;
+    for (u32 i = off / per; i && cluster >= 2 && cluster < eoc; i--) cluster = fat_entry_read(cluster);
+    const u8 *in = (const u8 *)buf;
+    u32 remaining = len;
+    u8 sector[512];
+    while (remaining && cluster >= 2 && cluster < eoc) {
+        u32 lba = cluster_to_lba(cluster);
+        for (u8 s = 0; s < sectors_per_cluster && remaining; s++) {
+            if (skip >= 512) { skip -= 512; continue; }
+            u32 chunk = 512 - skip < remaining ? 512 - skip : remaining;
+            if (chunk < 512 && !blockdev_read_sector(lba + s, sector)) return (int)(len - remaining);   /* a part sector: keep the rest */
+            for (u32 i = 0; i < chunk; i++) sector[skip + i] = in[i];
+            if (!blockdev_write_sector(lba + s, sector)) return (int)(len - remaining);
+            in += chunk; remaining -= chunk; skip = 0;
+        }
+        if (remaining) cluster = fat_entry_read(cluster);
+    }
+    return (int)(len - remaining);
+}
+
 int fat_delete(const char *name) {
     at_first = 0;
     if (!mounted) return 0;
@@ -532,9 +557,8 @@ static int write_file(const char *name, const void *data, unsigned int len, int 
             u8 buf[512];
             memset(buf, 0, sizeof(buf)); /* zero-pad the tail of the last sector */
             u32 chunk = remaining < 512 ? remaining : 512;
-            for (u32 i = 0; i < chunk; i++) buf[i] = src[i];
+            if (src) { for (u32 i = 0; i < chunk; i++) buf[i] = src[i]; src += chunk; }   /* 8.12.0: no data writes zeros (a swap file) */
             if (!blockdev_write_sector(lba + s, buf)) goto failed;
-            src += chunk;
             remaining -= chunk;
         }
     }

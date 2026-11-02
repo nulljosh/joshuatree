@@ -8,7 +8,7 @@ status icons and JT/SETTINGS.TXT.
      6.0: a signed-in person who is not an admin saves the wallpaper to ~/WALL.TXT; sign-in applies it, the login screen and
      anyone without one get the card's, and an out-of-range one is ignored.
   2. QEMU virt, headless, with ramfb, a virtio keyboard and tablet and the check card (sdcard.py) as a virtio disk. Spotlight (F1,
-     "sett", Enter) opens Settings in About. The window's close dot and the eight sidebar tiles are sampled from a screendump:
+     "sett", Enter) opens Settings in About. The window's close dot and the nine sidebar tiles are sampled from a screendump:
      each tile is terracotta with its own glyph (no two the same). Down and Up walk About, Display, Sound, Dock, Date and Time, Users, Wi-Fi, Bluetooth (the Users pane is arm64-users-check.py).
   3. Display: Right changes the wallpaper to Clay and the whole desktop repaints (wallpaper, the menu bar's blend, the dock
      tray's surroundings), Right again to Ink, Left back to Clay. Esc closes: the window's place is the new wallpaper. The
@@ -255,17 +255,17 @@ try:
     a = S.shot()
     check("the window has its red close dot", px(a, SX + 19, SY + 16) == RED, px(a, SX + 19, SY + 16))
     tiles = []
-    for i in range(8):
+    for i in range(9):
         tb = box(a, SX + 20, SY + 40 + i * 30, 18, 18)
         tiles.append(tb)
     terra = [sum(1 for p in tb if p == ACCENT) for tb in tiles]
     glyph = [sum(1 for p in tb if sum(abs(p[k] - GLYPH[k]) for k in range(3)) < 40) for tb in tiles]
-    check("each of the eight sidebar tiles is terracotta with a glyph on it (%s accent, %s glyph pixels)" % (terra, glyph),
+    check("each of the nine sidebar tiles is terracotta with a glyph on it (%s accent, %s glyph pixels)" % (terra, glyph),
           all(t > 100 for t in terra) and all(g > 5 for g in glyph), (terra, glyph))
-    check("no two glyphs are the same picture", len({tuple(tb) for tb in tiles}) == 8)
+    check("no two glyphs are the same picture", len({tuple(tb) for tb in tiles}) == 9)
     check("the Settings title is in the sidebar's neighbour: About, Version, Board, Memory, Wi-Fi, Power rows draw (the card is white)", px(a, SX + 8 + 150 + 16 + 5, SY + 74 + 5) == (255, 255, 255))
     # ---- sections ----
-    names = ["Display", "Sound", "Dock", "Date and Time", "Users", "Wi-Fi", "Bluetooth"]
+    names = ["Display", "Sound", "Dock", "Date and Time", "Users", "Wi-Fi", "Bluetooth", "Language"]
     keep_dir = os.environ.get("JT_SETTINGS_SHOTS")   # a folder: one png of every section, for looking at
     if keep_dir:
         os.makedirs(keep_dir, exist_ok=True); png(a, os.path.join(keep_dir, "about.png"))
@@ -273,7 +273,7 @@ try:
         check("Down: section %d is %s" % (i, name), S.press("down", "settings section %d %s\n" % (i, name)))
         if keep_dir: time.sleep(0.4); png(S.shot(), os.path.join(keep_dir, name.split()[0].lower() + ".png"))
     check("Down wraps to About", S.press("down", "settings section 0 About\n"))
-    check("Up wraps to Bluetooth, then Wi-Fi, then Users", S.press("up", "settings section 7 Bluetooth\n") and S.press("up", "settings section 6 Wi-Fi\n") and S.press("up", "settings section 5 Users\n"))
+    check("Up wraps to Language, then Bluetooth, Wi-Fi and Users", S.press("up", "settings section 8 Language\n") and S.press("up", "settings section 7 Bluetooth\n") and S.press("up", "settings section 6 Wi-Fi\n") and S.press("up", "settings section 5 Users\n"))
     check("Up, Up, Up, Up: Date and Time, Dock, Sound, Display", S.press("up", "settings section 4 Date and Time\n") and S.press("up", "settings section 3 Dock\n") and S.press("up", "settings section 2 Sound\n") and S.press("up", "settings section 1 Display\n"))
     # ---- wallpaper ----
     check("Right in Display: wallpaper 1, Terracotta (Grey is first and the default)", S.press("right", "settings wall 1 Terracotta\n"))
@@ -384,4 +384,4 @@ finally:
 
 if fails:
     print("FAIL: %d of the Settings checks failed" % len(fails)); sys.exit(1)
-print("PASS: Settings opens from Spotlight and the menu bar, eight sections with glyphs, a wallpaper change repaints the desktop and a closed window leaves it, volume and dock size step, JT/SETTINGS.TXT survives a reboot")
+print("PASS: Settings opens from Spotlight and the menu bar, nine sections with glyphs, a wallpaper change repaints the desktop and a closed window leaves it, volume and dock size step, JT/SETTINGS.TXT survives a reboot")

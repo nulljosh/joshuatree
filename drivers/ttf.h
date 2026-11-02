@@ -74,6 +74,7 @@ void ttf_free_glyph(ttf_glyph_t *g);
 
 /* Horizontal advance for codepoint at px_size, in pixels (rounded). */
 int ttf_advance(ttf_font_t *font, unsigned int codepoint, float px_size);
+int ttf_has(ttf_font_t *font, unsigned int codepoint);   /* 9.2.0: 1 when the face has a glyph for it (the Pi's fallback faces) */
 
 /* Kerning adjustment between two consecutive codepoints at px_size, in
    pixels (rounded); 0 if the font has no kern table for the pair. */

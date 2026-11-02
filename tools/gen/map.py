@@ -54,9 +54,9 @@ y += 48 + S[32]
 y = sec(y, 'stack', 'The layers')
 y = note(y, 'The same in all four places. Each layer only talks to the one under it.') + S[8]
 stack = [('Apps', f'{APPS} apps, each walled off, so one crash stays one crash', 'asks by system call'),
-         ('Desktop and Samantha', 'windows, dock, menu bar; Samantha runs what you type or say', 'draws off-screen, then shows it'),
-         ('Kernel', 'takes turns between apps, stops a frozen one, files, network', 'drives the parts'),
-         ('Drivers', 'screen, keyboard, mouse, mic, Wi-Fi, Bluetooth, SD card, sound', ''),
+         ('Desktop', 'windows, dock, menu bar, Spotlight, Settings, Samantha', 'draws off-screen, then shows it'),
+         ('Kernel', 'four cores, 10 ms turns, threads, pipes, sockets, files, network', 'drives the parts'),
+         ('Drivers', 'screen, keyboard, mouse, mic, Wi-Fi, Bluetooth, SD card, USB stick, sound', ''),
          ('The machine', 'a Raspberry Pi 4, a PC, or QEMU pretending to be one', '')]
 for i, (a, b, hand) in enumerate(stack):
     p.add(f'<rect x="{M}" y="{y}" width="{IW}" height="40" rx="{R[8]}" ' + (f'fill="{CARD}" stroke="{RULE}"/>' if i == 4 else f'fill="{G}" fill-opacity=".08" stroke="{G}" stroke-opacity=".5"/>'))
@@ -86,6 +86,17 @@ y = chain(y, [('plankc', 'Plank, in Plank'), ('On the Pi', 'compiles itself'), (
               ('Same bytes', 'every time')], ['host', 'core', 'core', 'new'])
 y = note(y + S[8], 'Checked on every pull request. The kernel is still C, built on a Mac.') + S[32]
 
+# 8.1 to 8.11: what Berkeley's CS162 teaches that the kernel lacked, one minor each (docs/ROADMAP.md, the Berkeley list).
+y = sec(y, 'stack', 'The operating systems course (8.1 to 8.12)')
+os_ = [('Threads', 'locks, wait, signal', 1), ('Four cores', 'all up, all used', 1), ('Pipes', 'one app into the next', 1), ('Spawn', 'and wait', 1),
+       ('Sockets', 'TCP for apps', 1), ('Fair turns', '10 ms slices', 1), ('Paging', 'on first touch', 1), ('Block cache', 'for the card', 1),
+       ('Swap', 'heap pages to the card', 1)]
+ow = (IW - 3 * S[16]) / 4
+for i, (a, b, done) in enumerate(os_):
+    box(M + (i % 4) * (ow + S[16]), y + (i // 4) * (48 + S[8]), ow, 48, a, b, 'core' if done else 'todo')
+y += ((len(os_) + 3) // 4) * (48 + S[8])
+y = note(y, 'Built and checked in QEMU on every pull request.') + S[32]
+
 # The Pi, on the real board. Solid = seen working on the board (docs/ROADMAP.md); dashed = proven in QEMU only.
 y = sec(y, 'chip', 'The Pi, on the real board')
 pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi', 'WPA2, joined', 1),
@@ -93,16 +104,18 @@ pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi'
       ('Samantha', 'chat on the Pi', 1), ('Pi actions', 'note, green light', 1), ('HTTPS', 'Browser, 37 roots', 1),
       ('Browser', 'window, links', 1), ('Books', 'plain text', 1), ('Music', 'wav, mp3, covers', 1),
       ('Notes', 'saved to the card', 1), ('Calendar', 'four views', 1), ('Bluetooth', 'mouse pairs', 1),
-      ('Sound', 'headphone jack', 0), ('Many windows', 'apps side by side', 1),
+      ('Sound', 'headphone jack', 1), ('Many windows', 'apps side by side', 1),
       ('Walled memory', 'one app, one arena', 0), ('Watchdog', 'frozen app stopped', 0), ('Mic', 'Yeti, USB', 0),
       ('Wi-Fi switch', 'no restart', 0), ('Mail', 'IMAP, reply', 0), ('CalDAV', 'syncs when idle', 0),
       ('BT keyboard', 'LE, passkey', 0), ('Settings', 'wallpaper, sound', 1), ('Build apps', 'plankc on the Pi', 1),
-      ('Live data', 'stocks, weather', 0), ('Settings tile', 'in the dock', 0)]
+      ('Live data', 'stocks, weather', 0), ('Settings tile', 'in the dock', 1),
+      ('Park wallpaper', 'Joshua Tree at dusk', 1), ('Four cores', '4 of 4 up', 1), ('Wikipedia', 'in Blackcomb', 1), ('USB stick', 'ls, cat, copy', 0),
+      ('Kit screens', '800x480 to 1080p', 0), ('Touch', 'USB touch panels', 0), ('GPU', 'V3D, board only', 0), ('Camera', 'board only', 0)]
 pw = (IW - 3 * S[16]) / 4
 for i, (a, b, done) in enumerate(pi):
     box(M + (i % 4) * (pw + S[16]), y + (i // 4) * (48 + S[8]), pw, 48, a, b, 'new' if done else 'todo')
 y += ((len(pi) + 3) // 4) * (48 + S[8])
-y = note(y, 'Solid: seen working on the real board (2026-11-01, 7.5). Dashed: built and checked in QEMU, not yet seen there.') + S[32]
+y = note(y, 'Solid: seen working on the real board (2026-11-02, 8.9). Dashed: built and checked in QEMU, not yet seen there.') + S[32]
 
 y = sec(y, 'bars', 'Apps shipped')
 pts = [tuple(map(int, q.split(','))) for q in re.search(r'<polyline points="([^"]+)"', svg).group(1).split()]

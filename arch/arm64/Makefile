@@ -31,7 +31,7 @@
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token), but only when
 # JT_WIFI_DEV=1 (tools/flash-pi.sh) or CLAUDE_RELAY_TOKEN_FILE is set explicitly (the checks); a release build has neither.
 JT_VERSION := $(shell tr -d '\n' < ../../VERSION)   # the tree menu's About line (main.c)
-CC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -O2 -Wall -Wextra -DJT_VERSION='"$(JT_VERSION)"'
+CC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -O2 -Wall -Wextra -DJT_VERSION='"$(JT_VERSION)"' $(KFLAGS)
 # ttf.c, text.c and libc.c are the one part that uses floating point (the TrueType rasterizer), so they skip
 # -mgeneral-regs-only; start.S turns the FPU on at EL1. Everything else stays integer-only.
 FPCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -fno-math-errno -fno-builtin -O2 -Wall -Wextra -Wno-unused-parameter
@@ -39,8 +39,8 @@ NETPORT ?= 0
 # The IP stack is the i386 kernel's own drivers/net.c and drivers/http.c, built against drivers/nic.h (-DNET_NIC)
 # instead of the PC network cards. -mstrict-align: a real board's firmware may leave alignment checks on.
 NETCC = $(CC) -DNET_NIC -mstrict-align -I../../drivers -I../../kernel
-NETOBJ = rng.o net.o http.o ip.o clock.o tls.o appsig.o store.o browser.o mail.o ics.o nimble.o $(BSSLOBJ)
-NETLD = rng.o net.o http.o ip.o clock.o tls.o appsig.o store.o browser.o mail.o ics.o nimble.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
+NETOBJ = rng.o net.o http.o ip.o clock.o tls.o appsig.o store.o update.o browser.o mail.o ics.o nimble.o $(BSSLOBJ)
+NETLD = rng.o net.o http.o ip.o clock.o tls.o appsig.o store.o update.o browser.o mail.o ics.o nimble.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
 all: kernel8.elf
 rng.o: rng.c rng.h
 	$(CC) -c $< -o $@
@@ -92,6 +92,11 @@ appsig.o: appsig.c appsig.h $(APP_KEY) FORCE
 STORE_BASE ?=
 store.o: store.c appsig.h uimg.h FORCE
 	$(NETCC) $(if $(STORE_BASE),-DSTORE_BASE='"$(STORE_BASE)"') -c $< -o $@
+# 9.3.0: self-update (update.c). UPDATE_BASE= and UPDATE_DL= point it at a stub for tools/checks/arm64-update-check.py only; FORCE, as store.o.
+UPDATE_BASE ?=
+UPDATE_DL ?=
+update.o: update.c appsig.h FORCE
+	$(NETCC) $(if $(UPDATE_BASE),-DUPDATE_BASE='"$(UPDATE_BASE)"') $(if $(UPDATE_DL),-DUPDATE_DL='"$(UPDATE_DL)"') -c $< -o $@
 claude_cfg.h: claude_cfg.sh FORCE
 	@./claude_cfg.sh
 wifi_cfg.h: wifi_cfg.sh FORCE
@@ -152,8 +157,8 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
-PISDOBJ = pi-emmc.o fat.o ufile.o pi-settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
+SDOBJ = emmc.o fat.o ufile.o settings.o lang.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
+PISDOBJ = pi-emmc.o fat.o ufile.o pi-settings.o lang.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c home.h emmc.h ../../drivers/fat.h

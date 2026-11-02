@@ -196,7 +196,7 @@ bad_entry:
     msr daifset, #2
 .endm
 .section .text
-.global enter_user, resume_user
+.global enter_user, resume_user, core_run, core_reenter
 enter_user:
     mov x6, x3                  /* arg2 survives the context save below */
     save_kctx
@@ -241,6 +241,9 @@ enter_user:
     eret
 resume_user:                    /* x0 = the parked frame (x0-x30, elr: 32 words), x1 = its sp_el0, x2 = its FP block */
     save_kctx
+/* 8.11.0: core_resume is resume_user without the save, for cores 1 to 3: they never come back here (main.c core_trap starts
+   their idle loop again on a fresh stack through core_reenter), and k_ctx is core 0's. */
+core_resume:
     msr sp_el0, x1
     load_fp x2
     sub sp, sp, #272
@@ -260,6 +263,17 @@ resume_user:                    /* x0 = the parked frame (x0-x30, elr: 32 words)
     msr spsr_el1, x4
     restore_all
     eret
+core_run:                       /* x0 = this core's stack top, x1 = the frame, x2 = its sp_el0, x3 = its FP block: core_resume from a
+                                   fresh stack, so a thread resumed from inside a trap (main.c core_trap) does not pile frames up */
+    mov sp, x0
+    mov x0, x1
+    mov x1, x2
+    mov x2, x3
+    b core_resume
+core_reenter:                   /* x0 = this core's stack top, x1 = the core: back to main.c core_loop, the trap's frames dropped */
+    mov sp, x0
+    mov x0, x1
+    b core_loop
 .global leave_user
 leave_user:
     adrp x3, k_ctx

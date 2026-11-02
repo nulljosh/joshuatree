@@ -48,6 +48,9 @@ int fat_mkdir(const char *name);
    Returns 1 on success, 0 if the name already exists (no overwrite yet,
    same scope decision as fat_mkdir) or the disk is full. */
 int fat_write_file(const char *name, const void *data, unsigned int len);
+/* 8.12.0: data 0 makes a file of len zero bytes. fat_write_at overwrites len bytes from byte off of an existing file, never
+   growing it (the swap file); returns the bytes written, -1 when the file is missing or the span runs past its end. */
+int fat_write_at(const char *name_8_3, unsigned int off, const void *buf, unsigned int len);
 int fat_replace_file(const char *name, const void *data, unsigned int len);
 
 /* The current directory as its first cluster (0 the root), for a caller

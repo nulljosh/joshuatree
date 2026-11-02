@@ -1,7 +1,7 @@
 /* Small flat glyphs for the menu bar and Settings' sidebar: bold shapes, no text, one ink, drawn from a few circles, rounded
    boxes and capsules on a 256 unit square. Each pixel takes 4x4 samples, so the edges are anti-aliased at scale 1 and 2 and
    the glyph sits on any background. #included into main.c (it paints through fb, fb_pitch and fb_color). */
-enum { GL_ABOUT, GL_DISPLAY, GL_SOUND, GL_DOCK, GL_CLOCK, GL_POWER, GL_USER, GL_WIFI, GL_BT };
+enum { GL_ABOUT, GL_DISPLAY, GL_SOUND, GL_DOCK, GL_CLOCK, GL_POWER, GL_USER, GL_WIFI, GL_BT, GL_GLOBE, GL_CHECK };
 
 static int g_circle(int x, int y, int cx, int cy, int r) { int dx = x - cx, dy = y - cy; return dx * dx + dy * dy <= r * r; }
 static int g_box(int x, int y, int x0, int y0, int x1, int y1, int r) {   /* a rounded box: [x0,x1) by [y0,y1), corner radius r */
@@ -49,6 +49,15 @@ static int glyph_in(int kind, int level, int x, int y) {
     case GL_BT:      /* 7.9.0: the Bluetooth rune, a stem with two arrowheads on its right */
         return g_capsule(x, y, 124, 30, 124, 226, 14) || g_capsule(x, y, 124, 30, 186, 82, 14) || g_capsule(x, y, 186, 82, 66, 172, 14)
             || g_capsule(x, y, 66, 84, 186, 174, 14) || g_capsule(x, y, 186, 174, 124, 226, 14);
+    case GL_GLOBE: {  /* 9.2.0: Language, a globe: a ring, a meridian and the equator */
+        int dx = x - 128, dy = y - 128;
+        if (g_circle(x, y, 128, 128, 108) && !g_circle(x, y, 128, 128, 86)) return 1;
+        if (!g_circle(x, y, 128, 128, 100)) return 0;
+        long a = 50, b = 104, ai = 30, bi = 84;
+        if ((long)dx * dx * b * b + (long)dy * dy * a * a <= a * a * b * b && (long)dx * dx * bi * bi + (long)dy * dy * ai * ai >= ai * ai * bi * bi) return 1;
+        return g_capsule(x, y, 28, 128, 228, 128, 11); }
+    case GL_CHECK:   /* 9.2.0: the tick by the language in use */
+        return g_capsule(x, y, 40, 136, 100, 196, 22) || g_capsule(x, y, 100, 196, 220, 60, 22);
     }
     return 0;
 }

@@ -1,6 +1,7 @@
 /* crash.c: cut out of main.c (the god-file split). The crash screen: an unexpected exception at EL1 reported on the UART and drawn as a panel, then a quiet halt. Built as part of main.o (the Makefile's MAINSRC) with
    main.c's own flags; what it shares with main.c is declared in kmain.h. */
 #include "kmain.h"
+#include "lang.h"
 /* ---- The crash screen. An unexpected exception at EL1 (a kernel bug; the deliberate EL0 faults are answered in
    exc_el0_sync) ends here: the report goes out on the UART first, then onto the screen as a red panel over whatever was
    drawn, then the core sleeps in a wfe loop for good. Nothing here uses floating point or the console (which may be
@@ -86,7 +87,7 @@ const unsigned char *const *const icon_art = ICON_ART;   /* keys.c draws the Lau
 const unsigned int *const icon_art_len = ICON_ART_LEN;
 #include "../../kernel/boot_mark.h"
 int dock_scale_pct = 7;   /* the i386 default (Settings can change it there; nothing does here yet) */
-unsigned int window_scale(void) { return fb_h >= 1080 ? 2 : 1; }
+unsigned int window_scale(void) { return fb_h >= 1080 && fb_w >= 1600 ? 2 : 1; }   /* 8.13.0: and wide, so a 720x1280 panel standing up keeps its 720 */
 unsigned int window_width(void) { return fb_w / window_scale(); }
 unsigned int window_height(void) { return fb_h / window_scale(); }
 /* Offscreen painting. On the Pi the framebuffer is the live scanout: a window repainted in place shows every half-drawn
@@ -303,7 +304,8 @@ void dock_hover(int slot) {
         for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) dock_band[i] = fb[(unsigned)top * fb_pitch + i];
     } else for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) fb[(unsigned)top * fb_pitch + i] = dock_band[i];
     if (slot >= 0 && slot < GUI_ICON_COUNT) {
-        gui_draw_dock_label(gui_slot_x(slot) + DOCK_ICON / 2, gui_dock_y0(), dock_names[slot]);
+        if (reader_on) gui_draw_dock_label((int)(fb_w / window_scale()) / 2, gui_dock_y0(), reader_line(slot));   /* 10.0.0: the screen reader's caption, centred over the dock */
+        else gui_draw_dock_label(gui_slot_x(slot) + DOCK_ICON / 2, gui_dock_y0(), tr(S_DOCK0 + slot));   /* 9.2.0: in the picked language; the UART line stays English */
         con_quiet = 1;   /* the UART only: a pointer sweeping the dock would fill the Console */
         uart_puts("M1d hover "); uart_dec((unsigned)slot); uart_putc(' '); uart_puts(dock_names[slot]); uart_putc('\n');
     }
@@ -492,7 +494,7 @@ void dock_magnify(int mx, int slot) {
         }
         if (slot_open(i)) gui_draw_dock_dot_at(cx);
     }
-    if (slot >= 0 && slot < GUI_ICON_COUNT) gui_draw_dock_label(shift + left[slot] + sz[slot] / 2, y0 + 8 * mag_amt / 1000 - (sz[slot] - size), dock_names[slot]);   /* frame zero of a grow-in is dock_hover's spot; grown, 2 above the tile, inside MAG_ROOM */
+    if (slot >= 0 && slot < GUI_ICON_COUNT) gui_draw_dock_label(shift + left[slot] + sz[slot] / 2, y0 + 8 * mag_amt / 1000 - (sz[slot] - size), tr(S_DOCK0 + slot));   /* frame zero of a grow-in is dock_hover's spot; grown, 2 above the tile, inside MAG_ROOM */
     fb_flush(0, top, (int)fb_w, rows);
     if (slot != mag_slot || (mag_amt == 1000 && was < 1000)) {   /* a new tile, or the grow-in done */
         mag_slot = slot; con_quiet = 1;

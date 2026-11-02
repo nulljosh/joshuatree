@@ -635,14 +635,22 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         cmd_out("sched: the longest turn an app took was "); cmd_dec((unsigned)(sched_worst * 1000 / cnt_hz())); cmd_out(" ms; every app runs in 10 ms slices, the desktop between them\n");
         sched_worst = 0; return;
     }
+    if (word_is(q, n, "reader on") || word_is(q, n, "reader off")) { extern int reader_on; void reader_set(int on); reader_set(q[8] == 'n'); cmd_out(reader_on ? "reader: on; the arrows read the dock, Cmd+F5 turns it off\n" : "reader: off\n"); return; }   /* 10.0.0 */
+    if (word_is(q, n, "mem")) {   /* 8.12.0: the heap's frame pool and the swap file */
+        extern unsigned pool_in; extern unsigned long swap_outs, swap_ins; unsigned swap_pool_pages(void);
+        cmd_out("mem: "); cmd_dec(pool_in); cmd_out(" of "); cmd_dec(swap_pool_pages()); cmd_out(" heap pages in RAM, ");
+        cmd_dec((unsigned)swap_outs); cmd_out(" sent to the card, "); cmd_dec((unsigned)swap_ins); cmd_out(" read back\n");
+        return;
+    }
     if (word_is(q, n, "cores")) {   /* 8.2.0: which of the four cores are up, and how often each has woken */
-        extern volatile unsigned long core_runs[4 * 8], core_mpidr[4]; extern volatile int core_up[4]; unsigned cores_count(void);
+        extern volatile unsigned long core_runs[4 * 8], core_jobs[4 * 8], core_mpidr[4]; extern volatile int core_up[4]; unsigned cores_count(void);
         cmd_out("cores: "); cmd_dec(cores_count()); cmd_out(" of 4 running\n");
         for (int c = 0; c < 4; c++) {
             cmd_out("core "); cmd_dec((unsigned)c);
             if (!core_up[c]) { cmd_out(": asleep\n"); continue; }
             cmd_out(c ? ": up, woken " : ": up, runs the kernel"); if (c) cmd_dec((unsigned)core_runs[c * 8]);
-            cmd_out(c ? " times\n" : "\n");
+            if (c) { cmd_out(" times, ran "); cmd_dec((unsigned)core_jobs[c * 8]); cmd_out(" app slices"); }   /* 8.11.0 */
+            cmd_out("\n");
         }
         return;
     }
@@ -715,6 +723,11 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         if (nm) userrun_command(name, nm);
         ufile_args_next("", 0);   /* taken by app_start, or never: a refused run leaves nothing for the next app */
         if (nm) return;
+    }
+    if (word_is(q, n, "update") || word_is(q, n, "update install")) {   /* 9.3.0: self-update (update.c); installing is an admin's */
+        void update_check(void), update_install(void);
+        if (n == 6) update_check(); else if (priv("update install")) update_install();
+        return;
     }
     if (n > 8 && is(q, n, "install")) {   /* 6.55.0: an app from the store into JT/APPS, signed or not at all (store.c) */
         const char *name = q + 8; unsigned m = n - 8;
