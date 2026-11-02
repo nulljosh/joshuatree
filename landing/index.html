@@ -16,8 +16,8 @@
 <meta name="twitter:title" content="Joshua Tree">
 <meta name="twitter:description" content="A whole computer, built from nothing: its own desktop, its own network, its own files, and a real text editor. Free, and open for you to help build.">
 <meta name="twitter:image" content="https://joshuatree.jaybulb.com/og-image.png">
-<link rel="icon" type="image/svg+xml" href="mark-bold.svg">
-<link rel="alternate icon" type="image/png" href="mark.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="280x280" href="mark.png">
 <!-- v52 preloaded v86.wasm/kernel.elf here to start their ~5MB fetch the
      instant the HTML parsed, a real head start on first-boot time back when
      the demo was expected to start immediately regardless of scroll
@@ -66,9 +66,9 @@ p,li,.sub{text-wrap:pretty}
      a warm terracotta, used sparingly (the step-card top rule, focus
      rings, footer link color) -- direct request, "too much blue", no
      teal/purple/gradients anywhere on the page. */
-  :root { color-scheme: light dark; --bg:#faf8f4; --fg:#161513;
-    --sub:#5c584f; --border:#ded9cd; --card:#ffffff; --accent:#b5502c; --accent2:#b5502c; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#141311; --fg:#f3f0e9; --sub:#b3ada0; --border:#3a362e; --card:#1d1b17; --accent:#e08a5f; --accent2:#e08a5f; } }
+  :root { color-scheme: light dark; --bg:#f4f3ec; --fg:#261a13;
+    --sub:#66574a; --border:#ddd6c6; --card:#fbfaf5; --accent:#b5502c; --accent2:#b5502c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#15110e; --fg:#f2ece1; --sub:#b8aa96; --border:#3b3128; --card:#1e1813; --accent:#e08a5f; --accent2:#e08a5f; } }
   * { box-sizing: border-box; }
   /* v144: typographic widows -- a lede wrapping to leave one lonely word
      on its own last line ("it."). text-wrap: balance evens a heading's
@@ -363,7 +363,7 @@ p,li,.sub{text-wrap:pretty}
      rather than a small 72px icon someone could miss at a glance on a
      mostly-black hero, not re-shipping something that was never live. */
   #boot-logo { position: absolute; inset: 0; margin: auto; width: 140px; height: 100px; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; animation: bootpulse 1.6s ease-in-out infinite; transition: opacity 0.3s ease; }
-  #boot-logo .ink-img { width: 64px; height: 49px; background: #ece8df; --src: url(mark-tree.svg); }
+  #boot-logo img { display: block; width: 64px; height: 64px; }
   #boot-logo span { color: #fff; font-size:var(--t13); letter-spacing: 0.04em; opacity: 0.8; text-shadow: 0 2px 10px rgba(0,0,0,0.85);line-height:var(--lh13)}
   #boot-logo[hidden] { display: none; }
   /* 2.11.1: hero poster, above the stage and boot logo, below the full-screen button. object-fit
@@ -534,10 +534,10 @@ p,li,.sub{text-wrap:pretty}
   .foot-meta a { color: var(--sub); }
   footer a { color: var(--accent2); }
   /* The mark: a Joshua tree, branches raised like Joshua's arms. */
-  .hero-logo { display: block; width: 96px; height: 96px; margin: 0 auto; }
+  .hero-logo { display: block; width: 176px; height: 176px; margin: 0 auto -8px; }
+  @media (max-width: 700px) { .hero-logo { width: 128px; height: 128px; } }
   .closing-name { font-size:var(--t22); font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; text-align: center; text-wrap: balance;line-height:var(--lh22)}
   .seal { display: block; width: 120px; height: 120px; margin: 0 auto 8px; }
-  @media (prefers-color-scheme: dark) { .hero-logo, .seal { filter: invert(0.93); } }
   .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   html:not(.demo) #demo-frame, html.demo .hero-shot { display: none; }
   html.demo .hero-cta { display: none; }
@@ -560,6 +560,20 @@ p,li,.sub{text-wrap:pretty}
   .waitlist-section { padding: 24px 20px 72px; text-align: center; }
   .waitlist-section h2 { font-size:var(--t36); letter-spacing: -0.03em; margin: 0 0 12px;line-height:var(--lh36)}
   .waitlist-card { max-width: 480px; margin: 0 auto; }
+  /* 8.0: build a Nimbus. The plans as a brown print (tools/gen/gen_brand_art.py recolours the CAD's own sheets), then the steps. */
+  .build-section { max-width: 1040px; margin: 0 auto; padding: 24px 20px 88px; }
+  .build-section h2 { font-size:var(--t36); line-height:var(--lh36); letter-spacing: -0.03em; margin: 0 0 12px; text-align: center; }
+  .build-section > .sub { max-width: 60ch; margin: 0 auto; text-align: center; color: var(--sub); }
+  .build-prints { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 40px 0 0; }
+  .build-prints img { display: block; width: 100%; height: auto; border-radius: 12px; }
+  .build-steps { list-style: none; counter-reset: step; margin: 40px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px 24px; }
+  .build-steps li { counter-increment: step; color: var(--sub); font-size:var(--t15); line-height:var(--lh15); }
+  .build-steps li::before { content: counter(step); display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 12px; border-radius: 50%; background: var(--accent); color: var(--bg); font-weight: 600; font-size:var(--t15); }
+  .build-steps b { display: block; color: var(--fg); font-weight: 600; font-size:var(--t17); line-height:var(--lh17); margin-bottom: 4px; }
+  .build-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 24px; margin: 40px 0 0; padding: 0; list-style: none; }
+  .build-links a { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent2); font-weight: 600; text-decoration: none; }
+  .build-links a:hover { text-decoration: underline; }
+  @media (max-width: 760px) { .build-prints, .build-steps { grid-template-columns: 1fr; } }
   .waitlist-form { display: flex; gap: 10px; margin: 24px auto 0; max-width: 420px; }
   .waitlist-form input[type="email"] { flex: 1; min-width: 0; background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 999px; padding: 12px 18px; font-size:var(--t15); font-family: inherit;line-height:var(--lh15);letter-spacing:var(--tr15)}
   .waitlist-form input[type="email"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -597,7 +611,7 @@ p,li,.sub{text-wrap:pretty}
     </button>
     <a class="poster-skip" href="?desktop">Skip to the desktop</a>
     <div id="boot-logo" aria-hidden="true">
-      <div class="ink-img"></div>
+      <img src="tree.png" alt="" width="64" height="64">
       <span>Booting...</span>
     </div>
     <div id="stage">
@@ -633,7 +647,7 @@ p,li,.sub{text-wrap:pretty}
 
 <header class="hero">
   <div class="hero-copy">
-    <img class="hero-logo" src="logo.svg" alt="The Joshua Tree mark: a Joshua tree with its branches raised like arms" width="96" height="96">
+    <img class="hero-logo" src="tree.png" alt="The Joshua Tree mark: a painted Joshua tree with its branches raised like arms" width="176" height="176">
     <!-- Sep 2026, direct urgent correction -- this line briefly named
          Satellite Wallpaper (v0.76.7), but a real headless test of this
          exact deployed page found the browser demo can never actually show
@@ -664,7 +678,7 @@ p,li,.sub{text-wrap:pretty}
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
 <h1>Introducing Joshua Tree.</h1>
-    <p class="eyebrow" data-latest="7.8: Settings in the dock, your own stock watchlist with live prices, and songs that open straight from Files"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
+    <p class="eyebrow" data-latest="8.0: Build things. Write an app on the Pi or the Mac and run it, with a new painted mark and an Apple-style boot"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
     <p class="hero-line"><span data-fact="apps">38</span> apps on a Raspberry Pi.</p>
     <p class="hero-sub">Joshua Tree is a whole computer built from nothing. It is free, open source, and it runs on a Raspberry Pi 4.</p>
     <p class="hero-cta"><a class="boot-btn" href="?demo">Try it in your browser</a></p>
@@ -683,7 +697,7 @@ p,li,.sub{text-wrap:pretty}
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">38</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">7.8.0</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">8.0.0</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
@@ -913,16 +927,39 @@ p,li,.sub{text-wrap:pretty}
     <p class="waitlist-status" id="waitlist-status" role="status" aria-live="polite"></p>
     <video id="film" class="ad-video" controls preload="none" playsinline poster="joshua-tree-ad-v10-poster.jpg" aria-label="A 26 second tour of Joshua Tree: its apps, the web with pictures, Samantha, the store and its own compiler"><source src="joshua-tree-ad-v10.mp4" type="video/mp4"></video>
     <p class="neo-cap">The tour: the apps, the web, Samantha, the store, and the compiler that builds itself.</p>
-        <a class="neo-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/GUIDE.md#nimbus"><img class="neo-img" src="nimbus-hero.jpg" alt="A render of Nimbus, a small square computer running Joshua Tree" width="1200" height="825" loading="lazy" decoding="async"></a>
-    <p class="neo-cap">Nimbus, a small square computer: a Pi 4 and a 7 inch screen in a printed shell. A concept for now, not for sale yet. <a class="neo-more" href="https://github.com/nulljosh/joshuatree/blob/main/docs/GUIDE.md#nimbus">See the plans</a>.</p>
+        <a class="neo-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/GUIDE.md#nimbus"><img class="neo-img" src="nimbus-painted.webp" alt="A painting of Nimbus, a small cream computer on a walnut foot, running Joshua Tree" width="1200" height="825" loading="lazy" decoding="async"></a>
+    <p class="neo-cap">Nimbus, a small square computer: a Pi 4 and a screen in a printed shell. Not for sale yet, but you can <a class="neo-more" href="#build">build one yourself</a>.</p>
   </div>
+</section>
+
+<section class="build-section reveal" id="build" aria-label="Build a Nimbus">
+  <h2>Build one yourself.</h2>
+  <p class="sub">Nimbus is two printed shells, a Raspberry Pi 4, a small HDMI screen and six screws. The plans are free and drawn from the real 3D model, at full size.</p>
+  <div class="build-prints">
+    <img src="nimbus-print-front.webp" alt="Blueprint of the Nimbus front: 236 by 230 millimetres, the screen opening and the SD card slot" width="1600" height="1132" loading="lazy" decoding="async">
+    <img src="nimbus-print-parts.webp" alt="Blueprint of Nimbus taken apart: the front shell and the back cover" width="1600" height="1132" loading="lazy" decoding="async">
+  </div>
+  <ol class="build-steps">
+    <li><b>Glue the glass to the ledge.</b>Front shell face down on a soft cloth. Run foam tape round the 2 mm ledge and lay the 194 x 110 mm glass in the opening.</li>
+    <li><b>Seat the display.</b>Tape the screen to the back of the glass, driver board in the middle. Keep its ribbon and power leads free.</li>
+    <li><b>Screw the Pi down.</b>Four M2.5 x 6 screws into the standoffs on the floor, USB end toward the back.</li>
+    <li><b>Fit the back ports.</b>Push the two USB-C extenders and the jack into the strip on the back cover. Plug them into the Pi and the screen, and run the SD extender out of the front slot.</li>
+    <li><b>Close the case.</b>Fold the cables in and bring the back cover onto the lip. Turn it over and drive the two M3 x 12 screws up through the foot.</li>
+    <li><b>Fill the mark.</b>Press the terracotta line into its groove under the tree on the back. A drop of glue holds it flush.</li>
+  </ol>
+  <ul class="build-links">
+    <li><a href="https://github.com/nulljosh/joshuatree/raw/main/docs/hardware/nimbus/pack/nimbus-blueprint-1to1-A3.pdf">Blueprint, A3 at full size</a></li>
+    <li><a href="https://github.com/nulljosh/joshuatree/raw/main/docs/hardware/nimbus/pack/nimbus-blueprint-1to1-Letter-tiles.pdf">Blueprint on Letter pages</a></li>
+    <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/hardware/nimbus/pack/bom.csv">Parts list</a></li>
+    <li><a href="https://github.com/nulljosh/joshuatree/tree/main/docs/hardware/nimbus/pack">Print files (STL)</a></li>
+  </ul>
 </section>
 
 </main>
 
 <footer>
 <section class="grain-zone" aria-label="About Joshua Tree">
-  <img class="seal" src="logo.svg" alt="The Joshua Tree mark: a Joshua tree with its branches raised like arms" width="160" height="160" loading="lazy">
+  <img class="seal" src="tree.png" alt="The Joshua Tree mark: a painted Joshua tree with its branches raised like arms" width="160" height="160" loading="lazy">
   <div class="foot-story"><h2>Rooted ideas.<br>Bolder tomorrows.</h2>
   <p class="closing-name">Settlers named the Joshua tree for Joshua, arms raised to the sky.</p>
   <p class="closing">A real computer built from nothing, not a skin on someone else's. <span data-fact="apps">38</span> apps, Samantha to run them, and now a real Raspberry Pi with Wi-Fi. Free and open source, named for the tree that survives on nothing.</p>
@@ -974,7 +1011,7 @@ p,li,.sub{text-wrap:pretty}
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">7.8.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">8.0.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"><canvas></canvas></div>
 </footer>
@@ -1042,7 +1079,7 @@ p,li,.sub{text-wrap:pretty}
     gl.viewport(0, 0, w, h);
     var cs = getComputedStyle(document.documentElement);
     gl.uniform2f(u('res'), w, h); gl.uniform1f(u('time'), (performance.now() - t0) / 1000); gl.uniform1f(u('dpr'), dpr);
-    gl.uniform3fv(u('paper'), rgb(cs.getPropertyValue('--bg').trim() || '#faf8f4'));
+    gl.uniform3fv(u('paper'), rgb(cs.getPropertyValue('--bg').trim() || '#f4f3ec'));
     gl.uniform3fv(u('ink'), rgb(cs.getPropertyValue('--accent').trim() || '#b5502c'));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
@@ -1056,7 +1093,7 @@ p,li,.sub{text-wrap:pretty}
     [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach(function (k) { gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE); });
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.uniform1i(u('img'), 0); gl.uniform1f(u('imgAsp'), pic.width / pic.height);
-    gl.uniform4f(u('dev'), 1.451, 0.476, 0.3525, 0.3725);   // measured off the render's solid alpha: centre and half size, in photo heights
+    gl.uniform4f(u('dev'), 1.452, 0.476, 0.3275, 0.3581);   // measured off the painting's solid alpha: centre and half size, in photo heights
     ready = true; box.classList.add('live'); draw();
   };
   pic.src = 'nimbus-footer.webp';

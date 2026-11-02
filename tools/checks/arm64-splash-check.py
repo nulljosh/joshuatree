@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-"""The Pi's boot splash is a neutral grey screen with the tree mark crisp in the middle and a calm grey bar under it.
+"""The Pi's boot splash is a neutral grey screen with the flat tree glyph in one ink in the middle and a calm grey bar under it.
 
-Joshua's photo of the real boot showed a terracotta screen and a dark blurry blob where the mark should be (the 80 px menu bar
-copy stretched 2.75x, ink on orange). The splash now paints light grey 0xE5E5E7 and the 160 px stored mark in ink 0x1C1C1E over it.
+Joshua's photo of the real boot once showed a terracotta screen and a dark blurry blob where the mark should be. The splash paints
+light grey 0xE5E5E7 and, since 8.0, the glyph (arch/arm64/splash_mark.h, from docs/brand/glyph.png) in ink 0x1C1C1E, Apple style.
 Boots the -DQUIET_BOOT -DSPLASH_STEP_MS=1500 build headless on QEMU's virt machine with ramfb, takes a screendump while the splash
-holds, and asserts on real pixels: the background is the grey, no pixel anywhere is terracotta (red well above blue), the mark's
-box has many dark ink pixels, and its edges are crisp (many neighbouring pixels a strong brightness step apart).
+holds, and asserts on real pixels: the background is the grey, nothing outside the mark's box is terracotta, and the box matches
+the glyph inked on the grey at that size (mean colour difference) with no colour in it, so a torn, missing, blurred or painted mark fails.
 Set SPLASH_OUT=/path.png to keep the screendump. Skips (exit 0) when clang, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-splash-check.py   (from the repo root)
 """
 import json, os, shutil, socket, subprocess, sys, tempfile, time
+from PIL import Image
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 arch = os.path.join(root, "arch/arm64")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
     print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
-GREY = (0xE5, 0xE5, 0xE7)
+GREY, INK = (0xE5, 0xE5, 0xE7), (0x1C, 0x1C, 0x1E)
+MARK, LIFT = 100, 24   # desk.c splash_begin: the mark is sg(100) square, centred sg(24) above the middle
 fails = []
 tmp = tempfile.mkdtemp(prefix="jt-splash-")
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
@@ -46,50 +48,35 @@ try:
     shot = tmp + "/s.ppm"; cmd("screendump", filename=shot); time.sleep(0.5)
     parts = open(shot, "rb").read().split(b"\n", 3); W, H = map(int, parts[1].split()); d = parts[3]
     def px(x, y): i = (y * W + x) * 3; return tuple(d[i:i + 3])
-    from PIL import Image
     img = Image.frombytes("RGB", (W, H), d)
     out = os.environ.get("SPLASH_OUT")
     if out: os.makedirs(os.path.dirname(out), exist_ok=True); img.save(out)
-    pts = [px(x, y) for y in range(0, H, 3) for x in range(0, W, 3)]
+    sc = H / 540; sz = int(MARK * sc); cx, cy = W // 2, H // 2 - int(LIFT * sc)
+    bx0, by0 = cx - sz // 2, cy - sz // 2
+    inbox = lambda x, y: bx0 <= x < bx0 + sz and by0 <= y < by0 + sz
+    pts = [px(x, y) for y in range(0, H, 3) for x in range(0, W, 3) if not inbox(x, y)]
     grey = sum(1 for c in pts if c == GREY) / len(pts)
     terra = sum(1 for c in pts if c[0] > c[2] + 24)
-    sc = H / 540; sz = int(150 * sc); cx, cy = W // 2, H // 2 - int(30 * sc)
-    box = [px(x, y) for y in range(cy - sz // 2, cy + sz // 2) for x in range(cx - sz // 2, cx + sz // 2)]
-    ink = sum(1 for c in box if max(c) < 0x50)
-    hard = 0   # crisp edges: neighbouring pixels (right or below) that differ by a strong step in brightness
-    for y in range(cy - sz // 2, cy + sz // 2 - 1):
-        for x in range(cx - sz // 2, cx + sz // 2 - 1):
-            v = max(px(x, y))
-            if abs(v - max(px(x + 1, y))) >= 0x60 or abs(v - max(px(x, y + 1))) >= 0x60: hard += 1
-    # Row by row against the stored art: every row that should carry ink must, so torn or missing rows (the Pi showed slivers) fail.
-    import re
-    src = open(os.path.join(root, "kernel", "boot_mark.h")).read()
-    body = re.search(r"boot_mark_cov\[\d+\][^{]*\{(.*?)\};", src, re.S).group(1)
-    cov = bytes(int(v, 0) for v in re.findall(r"0x[0-9a-fA-F]+|\d+", body))[:160 * 160]
-    exp = Image.frombytes("L", (160, 160), cov).resize((sz, sz), Image.BILINEAR)
-    ex = exp.load(); torn = 0; rows = 0; mism = 0; tot = 0
-    for r in range(sz):
-        want = [x for x in range(sz) if ex[x, r] >= 200]
-        if len(want) < 2: continue
-        rows += 1
-        got = sum(1 for x in want if max(px(cx - sz // 2 + x, cy - sz // 2 + r)) < 0x60)
-        tot += len(want); mism += len(want) - got
-        if got < len(want) * 0.6: torn += 1
-    if torn > rows // 25 or mism > tot * 0.25: fails.append(f"the mark does not match its art row by row: {torn} of {rows} ink rows torn, {mism} of {tot} ink pixels missing")
+    def painted(n):   # the glyph's coverage inked on the grey at n px, what the splash should show
+        a = Image.open(os.path.join(root, "docs", "brand", "glyph.png")).convert("RGBA").getchannel("A").resize((n, n), Image.BOX)
+        return Image.composite(Image.new("RGB", (n, n), INK), Image.new("RGB", (n, n), GREY), a)
+    want = painted(sz).load()
+    diff = sum(abs(a - b) for y in range(sz) for x in range(sz) for a, b in zip(px(bx0 + x, by0 + y), want[x, y])) / (sz * sz * 3)
+    colour = sum(1 for y in range(sz) for x in range(sz) if max(px(bx0 + x, by0 + y)) - min(px(bx0 + x, by0 + y)) > 8)
+    inked = sum(1 for y in range(sz) for x in range(sz) if px(bx0 + x, by0 + y)[0] < 0x60)
     if grey < 0.9: fails.append(f"background is not the grey ({grey:.0%} of samples are #E5E5E7)")
-    if terra: fails.append(f"{terra} terracotta-ish samples on the splash")
-    if ink < sz * sz // 14: fails.append(f"the mark is faint: only {ink} ink pixels in its {sz}px box")
-    if hard < sz // 2: fails.append(f"the mark's edges are soft: {hard} dark/light steps")
+    if terra: fails.append(f"{terra} terracotta-ish samples outside the mark")
+    if diff > 4: fails.append(f"the mark is not the glyph: mean difference {diff:.1f} per channel from it inked on the grey (4 allowed)")
+    if colour: fails.append(f"the mark is not flat: {colour} pixels in it carry colour, the glyph is one ink")
+    if inked < sz * sz // 10: fails.append(f"the mark is missing: only {inked} ink pixels in its box")
     bw = int(140 * sc); bx = (W - bw) // 2; by = H // 2 + int(62 * sc)
     bar = [px(x, by) for x in range(bx, bx + bw)]
     if any(c[0] > c[2] + 24 for c in bar) or len(set(bar)) < 2: fails.append("the progress bar is missing or not grey")
-    if not fails: print(f"  ok: grey {grey:.0%}, no terracotta, {ink} ink pixels, {hard} crisp edge steps, grey bar, every ink row of the art present ({rows} rows) at {W}x{H}")
+    if not fails: print(f"  ok: grey {grey:.0%}, no terracotta outside the mark, the flat glyph within {diff:.1f} per channel, {inked} ink pixels, grey bar, at {W}x{H}")
 finally:
     q.kill(); q.wait(); subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
-# 7.5.4: sharp at 1080p, where the mark is 300 px. The 160 px copy stretched there was soft on the board (mean difference
-# 6.2 from a direct 300 px render of landing/logo.svg); the 400 px copy box-filtered down is 2.7.
-if not fails and shutil.which("rsvg-convert"):
-    import io
+# 7.5.4: sharp at 1080p, where the mark is 200 px; the 400 px copy is only ever box-filtered down.
+if not fails:
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
     if subprocess.run(["make", "-C", arch, "MAINFLAGS=-DQUIET_BOOT -DSPLASH_STEP_MS=1500 -DWIFI_ICON_TEST=0 -DFB_BOOT_W=1920 -DFB_BOOT_H=1080"], capture_output=True).returncode:
         fails.append("the 1080p splash build does not build")
@@ -113,18 +100,17 @@ if not fails and shutil.which("rsvg-convert"):
                     r = json.loads(f2.readline())
                     if "return" in r or "error" in r: return r
             cmd2("qmp_capabilities"); shot2 = tmp + "/s2.ppm"; cmd2("screendump", filename=shot2); time.sleep(0.5)
-            img2 = Image.open(shot2).convert("L"); W2, H2 = img2.size
-            sz2 = int(150 * H2 / 540); cx2, cy2 = W2 // 2, H2 // 2 - int(30 * H2 / 540)
+            img2 = Image.open(shot2).convert("RGB"); W2, H2 = img2.size
+            sz2 = int(MARK * H2 / 540); cx2, cy2 = W2 // 2, H2 // 2 - int(LIFT * H2 / 540)
             box2 = list(img2.crop((cx2 - sz2 // 2, cy2 - sz2 // 2, cx2 - sz2 // 2 + sz2, cy2 - sz2 // 2 + sz2)).tobytes())
-            png = subprocess.run(["rsvg-convert", "-w", str(sz2), "-h", str(sz2), os.path.join(root, "landing", "logo.svg")], capture_output=True).stdout
-            alpha = Image.open(io.BytesIO(png)).convert("RGBA").split()[3].tobytes()
-            diff = sum(abs(p - round((0x1C * a + 0xE5 * (255 - a)) / 255)) for p, a in zip(box2, alpha)) / (sz2 * sz2)
+            ref = list(painted(sz2).tobytes())
+            diff = sum(abs(a - b) for a, b in zip(box2, ref)) / len(ref)
             if (W2, H2) != (1920, 1080): fails.append(f"the 1080p splash build came up at {W2}x{H2}")
-            elif diff > 4.5: fails.append(f"the 1080p splash mark is soft: mean difference {diff:.1f} from a direct {sz2} px render (4.5 allowed)")
-            else: print(f"  ok: at 1920x1080 the {sz2} px mark is within {diff:.1f} of a direct render of landing/logo.svg")
+            elif diff > 4.5: fails.append(f"the 1080p splash mark is soft: mean difference {diff:.1f} per channel from the glyph at {sz2} px (4.5 allowed)")
+            else: print(f"  ok: at 1920x1080 the {sz2} px glyph is within {diff:.1f} per channel of the source")
         finally:
             q.kill(); q.wait(); subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 if fails:
     for m in fails: print("FAIL:", m)
     sys.exit(1)
-print("PASS: the Pi boot splash is grey with a crisp ink tree mark and a grey bar, no terracotta")
+print("PASS: the Pi boot splash is grey with the flat ink glyph, sharp at 800x600 and 1080p, and a grey bar")

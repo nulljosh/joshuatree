@@ -115,8 +115,11 @@ try:
     def count(img, box, near, tol=14):
         return sum(1 for p in img.crop(box).getdata() if all(abs(p[i] - near[i]) <= tol for i in range(3)))
     empty = shot("empty")
-    check("the empty well shows the mascot: its ink and its cheeks", count(empty, PAGE, (22, 21, 19), 24) > 400 and count(empty, PAGE, (231, 154, 120), 40) > 8,
-          (count(empty, PAGE, (22, 21, 19), 24), count(empty, PAGE, (231, 154, 120), 40)))
+    def where(img, box, f): return sum(1 for p in img.crop(box).getdata() if f(*p))
+    warm = lambda r, g, b: r > 140 and r - g > 40 and r - b > 50   # 8.0: the painted tree's terracotta soil (arm64-mascot-empty-check.py's test)
+    dark = lambda r, g, b: max(r, g, b) < 0x90                     # its bark and the caption's ink
+    check("the empty well shows the mascot: its soil and its bark", where(empty, PAGE, warm) > 60 and where(empty, PAGE, dark) > 150,
+          (where(empty, PAGE, warm), where(empty, PAGE, dark)))
     empty.crop(WIN).save(tmp / "empty-window.png")
     type_text("http://10.0.2.2:%d/one" % port); key("ret")
     check("Enter logs the load", wait_for("browser: load http://10.0.2.2:%d/one" % port, 10), uart()[-400:])

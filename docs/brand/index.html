@@ -6,7 +6,7 @@
 <title>Joshua Tree Brand Kit</title>
 <link rel="stylesheet" href="tokens.css">
 <style>
-/* One page of the brand: the mark, the mascot, colour, type, icons and the desktop pieces.
+/* One page of the brand: the mark, the glyph, colour, type, icons and the desktop pieces.
    The tokens (colour, type, space, radii) are in tokens.css next to this file, which tools/gen/map.py also reads; open this file straight from disk. */
 @font-face { font-family: "Tree Sans"; font-weight: 400; src: url(../../landing/fonts/TreeSans-Regular.woff2) format("woff2"); }
 @font-face { font-family: "Tree Sans"; font-weight: 500; src: url(../../landing/fonts/TreeSans-Medium.woff2) format("woff2"); }
@@ -30,16 +30,13 @@ a { color: var(--accent); }
 .marks { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
 .plate { border-radius: 18px; padding: 24px; display: grid; gap: 16px; align-content: start; }
 .plate img { width: 100%; aspect-ratio: 1; object-fit: contain; }
-.plate.paper { background: #faf8f4; color: #161513; box-shadow: inset 0 0 0 1px #ded9cd; }
-.plate.ink { background: #161513; color: #f3f0e9; }
+.plate.paper { background: #f4f3ec; color: #261a13; box-shadow: inset 0 0 0 1px #ddd6c6; }
+.plate.ink { background: #261a13; color: #f2ece1; }
 .plate.grey { background: #e5e5e7; color: #1c1c1e; }
 .plate small { font-size: 13px; line-height: 20px; opacity: .75; }
 .small-sizes { display: flex; gap: 24px; align-items: end; padding: 24px; border-radius: 18px; background: var(--card); box-shadow: inset 0 0 0 1px var(--rule); margin-top: 16px; flex-wrap: wrap; }
 .small-sizes img { display: block; }
 .small-sizes span { display: block; font-size: 11px; line-height: 16px; color: var(--sub); text-align: center; margin-top: 4px; }
-.mascot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: center; }
-.mascot img { width: 100%; max-width: 440px; border-radius: 18px; background: #faf8f4; }
-.mascot ul { margin: 16px 0 0; padding-left: 20px; color: var(--sub); }
 .sws { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px 16px; }
 .sw { display: grid; gap: 4px; }
 .sw .chip { height: 96px; border-radius: 12px; display: flex; align-items: end; padding: 12px; font: 500 13px/20px var(--sans); font-variant-numeric: tabular-nums; box-shadow: inset 0 0 0 1px var(--rule); }
@@ -79,7 +76,6 @@ footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--rule);
   header { grid-template-columns: 1fr; }
   header img { width: 112px; height: 112px; }
   h1 { font-size: 48px; line-height: 64px; }
-  .mascot { grid-template-columns: 1fr; }
   .ty { grid-template-columns: 1fr; gap: 4px; }
 }
 </style>
@@ -89,69 +85,68 @@ footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--rule);
 <header>
   <div>
     <h1>Joshua Tree</h1>
-    <p class="lede">A computer you can read end to end. This page is the brand in one place: the mark, the friend, the colours, the type and the pieces of the desktop.</p>
+    <p class="lede">A computer you can read end to end. This page is the brand in one place: the mark, the colours, the type and the pieces of the desktop.</p>
   </div>
-  <img src="../../landing/mark-bold.svg" alt="The Joshua Tree mark">
+  <img src="tree.png" alt="The Joshua Tree mark: a painted Joshua tree">
 </header>
 
 <section id="mark">
   <h2>The mark</h2>
-  <p>One Joshua tree drawn in crayon. Steady ink lines, a trunk that swells where the marker pressed, three arms ending in looping tufts with paper showing through, and one terracotta stroke for the ground. The ground is the mark's only colour.</p>
+  <p>One Joshua tree, painted. Gouache and watercolour in the manner of a wildlife plate: a shaggy bark trunk leaning left, three arms, a spiky rosette at each tip, and a wash of terracotta soil with a few stones. It keeps its own colours on every page, light or dark. The source is <code>docs/brand/tree.png</code>; every copy comes from <code>tools/gen/gen_brand_art.py</code>.</p>
   <div class="marks">
-    <div class="plate paper"><img src="mark-ink.png" alt="The mark in ink on paper"><small>On paper. The default.</small></div>
-    <div class="plate ink"><img src="mark-paper.png" alt="The mark in paper on ink"><small>On ink. Line turns paper, the ground stays terracotta.</small></div>
-    <div class="plate grey"><img src="mark-ink.png" alt="The mark on splash grey"><small>The Pi boot splash: ink on splash grey.</small></div>
-  </div>
-  <div class="small-sizes" aria-label="The bold mark at small sizes">
-    <div><img src="../../landing/mark-bold.svg" width="16" height="16" alt=""><span>16</span></div>
-    <div><img src="../../landing/mark-bold.svg" width="24" height="24" alt=""><span>24</span></div>
-    <div><img src="../../landing/mark-bold.svg" width="32" height="32" alt=""><span>32</span></div>
-    <div><img src="../../landing/mark-bold.svg" width="48" height="48" alt=""><span>48</span></div>
-    <div><img src="../../landing/icon.svg" width="64" height="64" alt=""><span>app icon</span></div>
+    <div class="plate paper"><img src="tree.png" alt="The painted tree on paper"><small>On paper. The default.</small></div>
+    <div class="plate ink"><img src="tree.png" alt="The painted tree on a dark page"><small>On a dark page. Nothing changes.</small></div>
+    <div class="plate grey"><img src="tree.png" alt="The painted tree on splash grey"><small>On splash grey.</small></div>
   </div>
 </section>
 
-<section id="mascot">
-  <h2>The mascot</h2>
-  <div class="mascot">
-    <img src="mascot.png" alt="The mascot: the tree drawn as a friend, with dot eyes, a small smile and pink cheeks">
-    <div>
-      <p>The mark drawn as a kid would draw a friend. The same crayon hand on a chubbier tree with a belly, shorter arms, two dot eyes, a small smile and terracotta-pink cheeks.</p>
-      <ul>
-        <li>Shows up where the OS wants a face: the splash, the login, empty screens.</li>
-        <li>Never on a working screen.</li>
-        <li>No hands, no hair, no grin.</li>
-      </ul>
-    </div>
+<section id="glyph">
+  <h2>The glyph</h2>
+  <p>Below 48 px the brushwork turns to mud, so the painting is traced flat: the tree in bark ink, the soil in terracotta, the same pose. The favicon, menu bars and anything 32 px or smaller use it. Never use the glyph large where the painting fits.</p>
+  <div class="small-sizes" aria-label="The glyph and the painting at small sizes">
+    <div><img src="glyph.png" width="16" height="16" alt=""><span>16</span></div>
+    <div><img src="glyph.png" width="24" height="24" alt=""><span>24</span></div>
+    <div><img src="glyph.png" width="32" height="32" alt=""><span>32</span></div>
+    <div><img src="tree.png" width="48" height="48" alt=""><span>48, painting</span></div>
+    <div><img src="tree.png" width="96" height="96" alt=""><span>96, painting</span></div>
   </div>
 </section>
 
 <section id="colour">
   <h2>Colour</h2>
-  <p>Paper, ink and one terracotta. The accent is used sparingly: the mark's ground, focus rings, links. Never purple, never teal, never a gradient that changes hue.</p>
+  <p>Paper, ink and one terracotta, each taken from the painting: its paper, its darkest bark, its soil. The accent is used sparingly: focus rings, links, the one button. Never purple, never teal, never a gradient that changes hue.</p>
   <ul class="sws">
-<li class="sw"><span class="chip" style="background:#b5502c;color:#faf8f4">#b5502c</span><b>Terracotta</b><span>The one accent. Ground stroke of the mark, focus rings, links.</span></li>
-<li class="sw"><span class="chip" style="background:#e08a5f;color:#faf8f4">#e08a5f</span><b>Terracotta, on dark</b><span>The same accent on a dark page.</span></li>
-<li class="sw"><span class="chip" style="background:#faf8f4;color:#161513">#faf8f4</span><b>Paper</b><span>Page ground in light.</span></li>
-<li class="sw"><span class="chip" style="background:#161513;color:#faf8f4">#161513</span><b>Ink</b><span>Text and the mark's line.</span></li>
-<li class="sw"><span class="chip" style="background:#5c584f;color:#faf8f4">#5c584f</span><b>Ink soft</b><span>Secondary text on paper.</span></li>
-<li class="sw"><span class="chip" style="background:#b3ada0;color:#161513">#b3ada0</span><b>Ink soft, on dark</b><span>Secondary text on ink.</span></li>
-<li class="sw"><span class="chip" style="background:#ded9cd;color:#161513">#ded9cd</span><b>Hairline</b><span>Rules and card edges in light.</span></li>
+<li class="sw"><span class="chip" style="background:#b5502c;color:#f4f3ec">#b5502c</span><b>Terracotta</b><span>The one accent. Ground stroke of the mark, focus rings, links.</span></li>
+<li class="sw"><span class="chip" style="background:#e08a5f;color:#f4f3ec">#e08a5f</span><b>Terracotta, on dark</b><span>The same accent on a dark page.</span></li>
+<li class="sw"><span class="chip" style="background:#f4f3ec;color:#261a13">#f4f3ec</span><b>Paper</b><span>Page ground in light.</span></li>
+<li class="sw"><span class="chip" style="background:#261a13;color:#f4f3ec">#261a13</span><b>Ink</b><span>Text and the mark's line.</span></li>
+<li class="sw"><span class="chip" style="background:#66574a;color:#f4f3ec">#66574a</span><b>Ink soft</b><span>Secondary text on paper.</span></li>
+<li class="sw"><span class="chip" style="background:#b8aa96;color:#261a13">#b8aa96</span><b>Ink soft, on dark</b><span>Secondary text on ink.</span></li>
+<li class="sw"><span class="chip" style="background:#ddd6c6;color:#261a13">#ddd6c6</span><b>Hairline</b><span>Rules and card edges in light.</span></li>
+  </ul>
+  <h3 class="sub">From the painting</h3>
+  <p>For brand art only: illustrations, the share card, this page. Never window chrome or text.</p>
+  <ul class="sws">
+<li class="sw"><span class="chip" style="background:#5a3623;color:#f4f3ec">#5a3623</span><b>Bark</b><span>The trunk in shadow.</span></li>
+<li class="sw"><span class="chip" style="background:#9f693c;color:#f4f3ec">#9f693c</span><b>Sienna</b><span>The trunk in light.</span></li>
+<li class="sw"><span class="chip" style="background:#dca872;color:#261a13">#dca872</span><b>Ochre</b><span>Dry leaves under each rosette.</span></li>
+<li class="sw"><span class="chip" style="background:#6b6640;color:#f4f3ec">#6b6640</span><b>Sage</b><span>The living leaves.</span></li>
+<li class="sw"><span class="chip" style="background:#d98a5a;color:#261a13">#d98a5a</span><b>Soil</b><span>The ground wash, the accent's lighter self.</span></li>
   </ul>
   <h3 class="sub">On the desktop</h3>
   <ul class="sws">
-<li class="sw"><span class="chip" style="background:#f5f0eb;color:#161513">#f5f0eb</span><b>Window body</b><span>WINDOW_BODY</span></li>
-<li class="sw"><span class="chip" style="background:#1c1c1e;color:#faf8f4">#1c1c1e</span><b>Window ink</b><span>WINDOW_INK</span></li>
-<li class="sw"><span class="chip" style="background:#d9d3cb;color:#161513">#d9d3cb</span><b>Window rule</b><span>WINDOW_RULE</span></li>
-<li class="sw"><span class="chip" style="background:#efebe4;color:#161513">#efebe4</span><b>Dock tray</b><span>DOCK_TRAY_COLOR</span></li>
-<li class="sw"><span class="chip" style="background:#d6d0c6;color:#161513">#d6d0c6</span><b>Tray edge</b><span>TRAY_EDGE</span></li>
-<li class="sw"><span class="chip" style="background:#bdb8b0;color:#161513">#bdb8b0</span><b>Menu bar rule</b><span>MENUBAR_RULE</span></li>
-<li class="sw"><span class="chip" style="background:#f4f1ec;color:#161513">#f4f1ec</span><b>Dock label</b><span>DOCK_LABEL_BG</span></li>
-<li class="sw"><span class="chip" style="background:#ff5f57;color:#faf8f4">#ff5f57</span><b>Close dot</b><span>CLOSE_DOT</span></li>
-<li class="sw"><span class="chip" style="background:#e5e5e7;color:#161513">#e5e5e7</span><b>Splash grey</b><span>the Pi boot splash</span></li>
-    <li class="sw"><span class="chip" style="background:#6e6e6e;color:#faf8f4">#6e6e6e</span><b>Wallpaper</b><span>graphite, one flat colour since 3.9.0</span></li>
-<li class="sw"><span class="chip" style="background:#201009;color:#faf8f4">#201009</span><b>Night floor</b><span>NIGHT_FLOOR, where the wallpaper goes at night</span></li>
-<li class="sw"><span class="chip" style="background:#dddddd;color:#161513">#dddddd</span><b>Day tint</b><span>DAY_TINT</span></li>
+<li class="sw"><span class="chip" style="background:#f5f0eb;color:#261a13">#f5f0eb</span><b>Window body</b><span>WINDOW_BODY</span></li>
+<li class="sw"><span class="chip" style="background:#1c1c1e;color:#f4f3ec">#1c1c1e</span><b>Window ink</b><span>WINDOW_INK</span></li>
+<li class="sw"><span class="chip" style="background:#d9d3cb;color:#261a13">#d9d3cb</span><b>Window rule</b><span>WINDOW_RULE</span></li>
+<li class="sw"><span class="chip" style="background:#efebe4;color:#261a13">#efebe4</span><b>Dock tray</b><span>DOCK_TRAY_COLOR</span></li>
+<li class="sw"><span class="chip" style="background:#d6d0c6;color:#261a13">#d6d0c6</span><b>Tray edge</b><span>TRAY_EDGE</span></li>
+<li class="sw"><span class="chip" style="background:#bdb8b0;color:#261a13">#bdb8b0</span><b>Menu bar rule</b><span>MENUBAR_RULE</span></li>
+<li class="sw"><span class="chip" style="background:#f4f1ec;color:#261a13">#f4f1ec</span><b>Dock label</b><span>DOCK_LABEL_BG</span></li>
+<li class="sw"><span class="chip" style="background:#ff5f57;color:#f4f3ec">#ff5f57</span><b>Close dot</b><span>CLOSE_DOT</span></li>
+<li class="sw"><span class="chip" style="background:#e5e5e7;color:#261a13">#e5e5e7</span><b>Splash grey</b><span>the Pi boot splash</span></li>
+    <li class="sw"><span class="chip" style="background:#6e6e6e;color:#f4f3ec">#6e6e6e</span><b>Wallpaper</b><span>graphite, one flat colour since 3.9.0</span></li>
+<li class="sw"><span class="chip" style="background:#201009;color:#f4f3ec">#201009</span><b>Night floor</b><span>NIGHT_FLOOR, where the wallpaper goes at night</span></li>
+<li class="sw"><span class="chip" style="background:#dddddd;color:#261a13">#dddddd</span><b>Day tint</b><span>DAY_TINT</span></li>
   </ul>
 </section>
 
@@ -210,7 +205,7 @@ footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--rule);
 
 <section id="history">
   <h2>Mark history</h2>
-  <p>The mark grows one small step at a time and never gets redesigned from scratch. From 4.0 on it is refreshed with every major release.</p>
+  <p>The mark grew one small step at a time, until 8.0 traded the crayon for a painting.</p>
   <ul class="history">
     <li><b>1.3</b><span>The engraved badge traced to clean lines; window buttons, a power-symbol sun and a prompt added.</span></li>
     <li><b>1.4</b><span>New mark: the engraved tree on its own, a ground line, one ink colour.</span></li>
@@ -219,10 +214,11 @@ footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--rule);
     <li><b>2.25</b><span>A new, much simpler mark: one tree scribbled in crayon like a hand-drawn album cover.</span></li>
     <li><b>3.0</b><span>The crayon tree tightened: steadier lines, denser tufts, and the ground in terracotta, its first colour.</span></li>
     <li><b>4.0</b><span>One more crayon stroke at the foot of the trunk. From here the mark is touched with every major release.</span></li>
+    <li><b>8.0</b><span>A painting replaces the crayon: one Joshua tree in gouache, like a wildlife album cover, with a flat traced glyph for small sizes. Paper, ink and soil come from it.</span></li>
   </ul>
 </section>
 
-<footer>35 icons from art/icons. Sources: tokens.css, docs/ARCHITECTURE.md (Design rules), landing/, tools/gen/logo.py, tools/gen/mascot.py. Apache 2.0.</footer>
+<footer>35 icons from art/icons. Sources: tokens.css, docs/ARCHITECTURE.md (Design rules), landing/, docs/brand/tree.png, tools/gen/gen_brand_art.py. Apache 2.0.</footer>
 </main>
 </body>
 </html>

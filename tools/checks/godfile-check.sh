@@ -36,6 +36,7 @@ EXEMPT=(
     "drivers/dejavu_mono_font.h"
     "drivers/dejavu_mono_bold_font.h"
     "arch/arm64/face_art.h"   # tools/gen/gen_face_art.py
+    "arch/arm64/mascot_art.h"   # 8.0: the painted mark as a PNG, from tools/gen/gen_mascot_art.py
 )
 
 # Ratchet: files already over LIMIT the day this check landed. Ceiling is

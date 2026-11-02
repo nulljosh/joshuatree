@@ -486,6 +486,7 @@ void menubar_tick(void) {   /* the poll loop calls this; it redraws only when th
     }
     cal_tick();
     clock_tick();
+    bp_tick();   /* 7.8.0: Settings' Bluetooth page follows the radio */
     if (settings_live && !spot_live && set_sec == SET_TIME && cal_utc() / 60 != (unsigned long)set_minute) set_paint();   /* the Date and Time page follows the minute */
     unsigned long u = net_clock_utc();
     if (!u || mb_wifi < 0) return;
@@ -539,7 +540,7 @@ static void splash_begin(void) {
     int W = (int)fb_w, H = (int)fb_h;
     fb_rect(0, 0, W, H, 0x00E5E5E7);
     fb_flush(0, 0, W, H);
-    splash_mark(W / 2, H / 2 - sg(30), sg(150), 0x001C1C1E, 0x00E5E5E7);
+    splash_mark(W / 2, H / 2 - sg(24), sg(100), 0x00E5E5E7);   /* 8.0: the flat glyph, Apple-sized, over the bar */
     splash_on = 1;
     uart_puts("splash up\n");
     splash_step(1, "fb");

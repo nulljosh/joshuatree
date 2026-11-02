@@ -306,7 +306,7 @@ extern int drag_on;
 void win_move_to(int nx, int ny);
 extern unsigned long fp_spin(volatile unsigned *t, unsigned want);
 void uart_hex(unsigned long v);
-void splash_mark(int cx, int cy, int T, unsigned ink, unsigned bg);
+void splash_mark(int cx, int cy, int T, unsigned bg);
 #define APPLE_N 48   /* apple_mask.h: the bitten apple after the tribute line, one copy in main.c */
 extern const unsigned char apple_mask[APPLE_N * APPLE_N];
 #define app_close_at (ap->close_at)

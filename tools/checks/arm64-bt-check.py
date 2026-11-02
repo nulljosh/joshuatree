@@ -497,9 +497,18 @@ try:
         first = (x0 + fx, y0 + fy)
         hx, hy = (dx - fx) // 2, (dy - fy) // 2
         mid = (first[0] + hx, first[1] + hy)
-        b.fake.reports = [bytes([0, fx & 255, fy & 255]), bytes([0, hx & 255, hy & 255]), bytes([0, (dx - fx - hx) & 255, (dy - fy - hy) & 255, 1]),   # the third with a wheel byte
+        b.fake.reports = [bytes([0, fx & 255, fy & 255]), bytes([0, hx & 255, hy & 255]), bytes([0, (dx - fx - hx) & 255, (dy - fy - hy) & 255, 1]),   # the second with a wheel byte
                           b"\x01\x00\x00", b"\x00\x00\x00"]
-        b.type("bt pair")
+        # 7.8.0: pair from Settings' Bluetooth page, not the Terminal: Spotlight opens Settings, Down to the eighth section,
+        # the page lists the scan's rows and 1 pairs the first, through the same bt_command the Terminal's `bt pair 1` is
+        b.key("f1"); b.wait_for("spotlight open", 5)
+        for ch in "sett": b.key(ch)
+        b.key("ret")
+        check("Settings opens", b.wait_for("settings open", 8), b.uart()[-300:])
+        for _ in range(7): b.key("down")
+        check("Down seven times is the Bluetooth page", b.wait_for("settings section 7 Bluetooth", 5), b.uart()[-300:])
+        b.key("1")
+        check("1 on the Bluetooth page pairs the first row, the mouse", b.wait_for("settings bt pair 1 Microsoft Bluetooth Mouse", 5), b.uart()[-300:])
         check("bt pair picks the mouse by name", b.wait_for("bt: connecting to Microsoft Bluetooth Mouse", 10), b.uart()[-400:])
         check("bt: connected", b.wait_for("bt: connected", 15), b.uart()[-400:])
         check("bt: paired", b.wait_for("bt: paired", 20), b.uart()[-400:])
