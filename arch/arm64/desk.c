@@ -193,6 +193,7 @@ int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the d
     if (browser_live && ((gui_held && code == 17) || (ctrl_held && !gui_held && code == 15))) { unsigned f; if (browser_tabs(&f) > 1) return browser_key(code); }   /* 6.16.0: Cmd+W and Ctrl+Tab are Blackcomb's while it has more than one tab */
     if (gui_held && (code == 17 || code == 16)) return front_close();   /* Cmd+W closes the front window, Cmd+Q quits the front app: every window here is one app's, so both end it */
     if ((gui_held || ctrl_held) && code == 15) return app_cycle();   /* Cmd+Tab, or Ctrl+Tab on a keyboard with no Cmd */
+    if (gui_held && code == 63) { reader_set(!reader_on); return 1; }   /* 10.0.0: Cmd+F5, the screen reader, as on a Mac */
     if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
     if (code == 68 || (ctrl_held && alt_held && code == 20)) { int was = spot_live && spot_tree; spot_close(); if (!was) tree_open(); return 1; }   /* F10 or Ctrl+Option+T: the tree menu, for a board with no mouse; again closes it */
     if (code == 60 || (ctrl_held && code == 20)) { spot_close(); settings_close(); brick_close(); clock_close(); browser_close(); pane_open(&term_p); return 1; }   /* F2, Ctrl+T: the Terminal in front, an open Calculator behind it */
@@ -378,6 +379,7 @@ void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, u
    saved bare bar back first, so old pixels never show through. */
 #define WIFI_INK 0x001C1C1E
 static int mb_mic;
+int reader_on;   /* 10.0.0: the screen reader, below menubar_notify */
 void menubar_mic(int on) {   /* ask.c: voice mode started or ended; the bar is redrawn with or without the mark */
     if (mb_mic == (on != 0)) return;
     mb_mic = on != 0;
@@ -430,6 +432,10 @@ void menubar_wifi(int state) {
         fb_rect(mx + isz / 2 - sg(1), iy + ch, sg(2), isz - ch - sg(2), t);
         fb_rect(cx0 - sg(1), iy + isz - sg(2), cw + sg(2), sg(2), t);
     }
+    if (reader_on && !notice.text[0]) {   /* 10.0.0: the screen reader's mark, in words, left of the status icons */
+        int rx = (mb_mic ? wx - sg(12) - isz : wx) - sg(16), tw = text_width(2, "Screen reader on", sg(120));
+        text_draw(2, "Screen reader on", rx - tw, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, rx, H);
+    }
     mb_hit[0][0] = wx - sg(5); mb_hit[0][1] = wx + isz + sg(5);         /* power */
     mb_hit[1][0] = sx - sg(5); mb_hit[1][1] = sx + isz + sg(5);         /* sound */
     mb_hit[2][0] = ox - R - sg(5); mb_hit[2][1] = ox + R + sg(5);       /* Wi-Fi */
@@ -466,6 +472,43 @@ void menubar_notify(const char *message) {
     cur_hide(); menubar_wifi(mb_wifi); cur_show();
     if (settings_live && !spot_live) set_paint();   /* the volume keys come through here: the Sound page shows the new level */
     uart_puts("notice: "); uart_puts(notice.text); uart_putc('\n');
+}
+/* 10.0.0, the screen reader (Cmd+F5, or `reader on` in the Terminal). Each arrow along the dock puts "Notes, app, 5 of 12.
+   Press Return to open." in the caption above it (dock_hover) and on the UART; once the focus has rested READER_REST, her
+   voice reads it through the relay (ask.c reader_say), so a run of arrows speaks only the last. No relay token: the caption
+   is all there is. */
+#define READER_REST 60   /* ticks at 100 Hz: 600 ms */
+static int reader_slot = -1;
+static unsigned reader_at;
+unsigned ticks(void);   /* clock.c, 100 Hz */
+static unsigned rd_put(char *b, unsigned n, const char *s) { while (*s && n < 95) b[n++] = *s++; b[n] = 0; return n; }
+static unsigned rd_num(char *b, unsigned n, int v) { if (v >= 10) b[n++] = (char)('0' + v / 10); b[n++] = (char)('0' + v % 10); b[n] = 0; return n; }
+const char *reader_line(int slot) {
+    static char b[96];
+    unsigned n = rd_put(b, 0, dock_names[slot]);
+    n = rd_put(b, n, slot == GUI_ICON_COUNT - 1 ? ", " : ", app, ");
+    n = rd_num(b, n, slot + 1); n = rd_put(b, n, " of "); n = rd_num(b, n, GUI_ICON_COUNT);
+    rd_put(b, n, ". Press Return to open.");
+    return b;
+}
+void reader_set(int on) {
+    reader_on = on != 0; reader_slot = -1;
+    uart_puts(reader_on ? "reader on\n" : "reader off\n");
+    if (!fb || !text_ok || login_live) return;
+    if (dock_band && hover_slot >= 0) dock_hover(hover_slot);   /* the label under the focus, in its other form */
+    cur_hide(); menubar_wifi(mb_wifi); cur_show();
+}
+void reader_focus(int slot) {   /* keys.c dock_select: the arrows moved the dock's focus */
+    if (!reader_on || slot < 0) return;
+    con_quiet = 1; uart_puts("reader: "); uart_puts(reader_line(slot)); uart_putc('\n');
+    reader_slot = slot; reader_at = ticks();
+}
+void reader_tick(void) {   /* the poll loop: speak the focus once it has rested */
+    if (reader_slot < 0 || ticks() - reader_at < READER_REST) return;
+    int s = reader_slot; reader_slot = -1;
+    if (s != dock_sel) return;   /* Return opened it, or Esc let go: nothing to say */
+    con_quiet = 1; uart_puts("reader speak "); uart_puts(dock_names[s]); uart_putc('\n');
+    reader_say(reader_line(s));
 }
 static void cal_tick(void) {   /* the day has changed (or the clock just arrived): the Calendar tile again, the hover band's copy with it */
     if (!fb || login_live || dock_mag_on() || cal_today() == cal_shown) return;

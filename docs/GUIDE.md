@@ -201,6 +201,7 @@ No mouse is needed. These keys are in `arch/arm64/main.c` (`ui_key`), and `tools
 | F1, Cmd+Space | Toggle Spotlight: press again to close. Type to filter app names, including Clock (prefix or any part). Up and Down choose, Enter opens, Esc closes |
 | A letter or digit | With no pane holding the keys, opens Spotlight with that character already typed |
 | Enter, Space, Tab | With no pane holding the keys and no dock label, opens Spotlight, empty |
+| Cmd+F5 | The screen reader on or off (or `reader on` and `reader off` in the Terminal). The menu bar says Screen reader on; Left and Right along the dock are read in a caption, and spoken in Samantha's voice once you stop |
 | F2, Ctrl+T | The Terminal, at once, closing Spotlight if open. It has the keyboard |
 | F11, F12 | Volume down and up by 10 (0 to 100), before any pane. The menu bar says "Volume N" and the speaker clicks. The Mac media keys Volume Down, Volume Up and Mute do the same (Mute toggles 0 and the last level) |
 | F3 | Switch Terminal session when no request is running |

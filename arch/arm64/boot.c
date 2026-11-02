@@ -452,7 +452,7 @@ void main(void) {
 #ifdef PI_BUILD
         (void)step;
         for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
-            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(reader_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
@@ -469,7 +469,7 @@ void main(void) {
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                                    " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step * 500), "r"(1UL) : "memory");   /* 6.87.0: idle, still a pass a second, so idle_tick runs */
-            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(traffic_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* an app parked on yield runs again here; browser_tick fetches an image and idle_tick may sync, slow on purpose, so untimed */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(reader_tick()); TIMED(traffic_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* an app parked on yield runs again here; browser_tick fetches an image and idle_tick may sync, slow on purpose, so untimed */
 #ifdef HANG_TEST
             hang_tick();
 #endif

@@ -635,6 +635,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         cmd_out("sched: the longest turn an app took was "); cmd_dec((unsigned)(sched_worst * 1000 / cnt_hz())); cmd_out(" ms; every app runs in 10 ms slices, the desktop between them\n");
         sched_worst = 0; return;
     }
+    if (word_is(q, n, "reader on") || word_is(q, n, "reader off")) { extern int reader_on; void reader_set(int on); reader_set(q[8] == 'n'); cmd_out(reader_on ? "reader: on; the arrows read the dock, Cmd+F5 turns it off\n" : "reader: off\n"); return; }   /* 10.0.0 */
     if (word_is(q, n, "mem")) {   /* 8.12.0: the heap's frame pool and the swap file */
         extern unsigned pool_in; extern unsigned long swap_outs, swap_ins; unsigned swap_pool_pages(void);
         cmd_out("mem: "); cmd_dec(pool_in); cmd_out(" of "); cmd_dec(swap_pool_pages()); cmd_out(" heap pages in RAM, ");

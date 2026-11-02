@@ -303,7 +303,8 @@ void dock_hover(int slot) {
         for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) dock_band[i] = fb[(unsigned)top * fb_pitch + i];
     } else for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) fb[(unsigned)top * fb_pitch + i] = dock_band[i];
     if (slot >= 0 && slot < GUI_ICON_COUNT) {
-        gui_draw_dock_label(gui_slot_x(slot) + DOCK_ICON / 2, gui_dock_y0(), dock_names[slot]);
+        if (reader_on) gui_draw_dock_label((int)(fb_w / window_scale()) / 2, gui_dock_y0(), reader_line(slot));   /* 10.0.0: the screen reader's caption, centred over the dock */
+        else gui_draw_dock_label(gui_slot_x(slot) + DOCK_ICON / 2, gui_dock_y0(), dock_names[slot]);
         con_quiet = 1;   /* the UART only: a pointer sweeping the dock would fill the Console */
         uart_puts("M1d hover "); uart_dec((unsigned)slot); uart_putc(' '); uart_puts(dock_names[slot]); uart_putc('\n');
     }
