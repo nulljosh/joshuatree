@@ -561,6 +561,46 @@ static long th_futex(const struct frame *f, const unsigned long *fp) {   /* JT_S
     app_parked = 1;
     leave_user(0);
 }
+/* 8.3.0: a pipe, `userrun A | userrun B` in the Terminal: what A writes to fd 1 is what B reads from fd 0, through 4 KiB
+   here. A write of up to 4 KiB goes in whole or not at all; a write into a pipe without room for it and a read from an empty one park the thread with its pc back on the svc, so it asks again
+   when it next runs, and the other end kicks it when there is room or data. A read with the writer gone gets 0, the end;
+   a write with the reader gone gets -EPIPE. One pipe at a time.
+   ponytail: one pipe and a 4 KiB ring; a pipe per pair, and a bigger one, when a shell runs longer pipelines. */
+static struct { unsigned char buf[4096]; unsigned h, t; int w, r; } pipe0;   /* h - t bytes waiting; w and r are slot + 1, 0 once that end closed */
+static void park_retry(const struct frame *f, const unsigned long *fp) {
+    th_save(f, fp, spsr_now());
+    app_frame.elr -= 4;   /* back onto the svc */
+    th_next();
+    app_parked = 1;
+    leave_user(0);
+}
+static long pipe_write(const struct frame *f, const unsigned long *fp, unsigned long p, unsigned long len) {
+    if (!user_in_range(p, len)) return -14;
+    if (!pipe0.r) return -32;   /* -EPIPE: nobody will read it */
+    unsigned long n = 0, room = sizeof pipe0.buf - (pipe0.h - pipe0.t);
+    if (len <= sizeof pipe0.buf && room < len) room = 0;   /* a write that fits the pipe goes in whole or waits, never half (POSIX's PIPE_BUF rule) */
+    while (n < len && room) { room--; pipe0.buf[pipe0.h++ % sizeof pipe0.buf] = ((const unsigned char *)p)[n++]; }
+    if (n) { apps[pipe0.r - 1].kick = 1; return (long)n; }
+    if (!len) return 0;
+    if (!app_running) return -11;
+    park_retry(f, fp);
+    return 0;
+}
+static long pipe_read(const struct frame *f, const unsigned long *fp, unsigned long p, unsigned long len) {
+    if (!user_writable(p, len)) return -14;
+    unsigned long n = 0;
+    while (n < len && pipe0.h != pipe0.t) ((unsigned char *)p)[n++] = pipe0.buf[pipe0.t++ % sizeof pipe0.buf];
+    if (n) { if (pipe0.w) apps[pipe0.w - 1].kick = 1; return (long)n; }
+    if (!len || !pipe0.w) return 0;   /* the writer has ended and every byte is read: the end */
+    if (!app_running) return -11;
+    park_retry(f, fp);
+    return 0;
+}
+static void pipe_close(void) {   /* from app_end: this app's end of the pipe goes, and the other end is woken to see it */
+    if (ap->pout && pipe0.w == (int)ap->slot + 1) { pipe0.w = 0; if (pipe0.r) apps[pipe0.r - 1].kick = 1; }
+    if (ap->pin && pipe0.r == (int)ap->slot + 1) { pipe0.r = 0; if (pipe0.w) apps[pipe0.w - 1].kick = 1; }
+    ap->pin = ap->pout = 0;
+}
 static void th_exit(unsigned long status) {   /* JT_SYS_THREAD_EXIT: this thread ends; the last one to end is the app's exit */
     app_th.state = TH_FREE;
     if (!th_live()) leave_user(status);
@@ -699,6 +739,8 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
     APP_FP_CLOBBER();
     if (ec == 0x15) {   /* svc from EL0 */
         unsigned long n = f->x[8], a0 = f->x[0];
+        if (a0 == 1 && ap->pout && (n == SYS_WRITE || n == JT_SYS_WRITE)) { f->x[0] = (unsigned long)pipe_write(f, fp, f->x[1], f->x[2]); return; }   /* 8.3.0 */
+        if (a0 == 0 && ap->pin && n == JT_SYS_READ) { f->x[0] = (unsigned long)pipe_read(f, fp, f->x[1], f->x[2]); return; }
         if (n == JT_SYS_WRITE && a0 != 1 && a0 != 2) f->x[0] = (unsigned long)ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: a file from open (fd 0 is -EBADF there) */
         else if (n == SYS_WRITE || n == JT_SYS_WRITE) {
             const char *p = (const char *)f->x[1]; unsigned long len = f->x[2];
@@ -890,6 +932,7 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     ufile_owner = ap->slot + 1;
     ufile_release();   /* M3d: its open files are written back and closed, after an exit, a fault or its red dot alike */
     audio_app_stop();  /* M3e: and its sound stops (what is already in the PWM ring plays out) */
+    pipe_close();      /* 8.3.0 */
     struct app *me = ap;
     app_window_close();   /* leaves `ap` on the window now in front... */
     ap = me;              /* ...so put it back: the pages unmapped and the line printed below are this app's, not the front one's */
@@ -974,7 +1017,7 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
     app_frame.esr = 0;                                 /* no flags to put back */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
     app_frame.elr = entry; app_sp = UB + UP_ASTACK + APP_STACK_PAGES * 4096UL;
-    app_cur = a; ap->min = 0; ap->term = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
+    app_cur = a; ap->min = 0; ap->term = 0; ap->pin = ap->pout = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
     if (dbg_want) {   /* 7.2.0: `debug NAME`, stepped from its first instruction */
         dbg_slot = (int)sl; dbg_left = dbg_want; dbg_n = 0;
         for (int i = 0; i < 31; i++) dbg_prev[i] = 0;
@@ -1094,6 +1137,28 @@ int userrun(const char *name, unsigned n, int allow_unsigned, unsigned long *sta
     return 0;
 }
 
+/* 8.3.0: `userrun A | userrun B`. B, the reader, starts first, then A with its fd 1 into the pipe; both report to the
+   Terminal when they end. 0 both running, else userrun's refusal for whichever would not start (A's as -10 + r). */
+int userrun_pipe(const char *a, unsigned an, const char *aw, unsigned awn, const char *b, unsigned bn, const char *bw, unsigned bwn, int allow_unsigned) {
+    if (pipe0.w || pipe0.r) return -3;   /* one pipe at a time */
+    const struct user_app *rb = user_find(b, bn), *ra;   /* found and started one at a time: a card app is read into one shared buffer */
+    if (!rb) rb = card_find(b, bn, allow_unsigned);
+    if (!rb) return card_err ? -3 - card_err : -1;
+    ufile_args_next(bw, bwn);
+    int r = app_start(rb);
+    if (r) return r;
+    struct app *rd = ap; rd->term = 1; rd->pin = 1;
+    ra = user_find(a, an);
+    if (!ra) ra = card_find(a, an, allow_unsigned);
+    if (!ra) { r = card_err ? -3 - card_err : -1; ap = rd; app_kill_one("its pipe's writer was not found"); return -10 + r; }
+    ufile_args_next(aw, awn);
+    r = app_start(ra);
+    if (r) { ap = rd; app_kill_one("its pipe's writer would not start"); return -10 + r; }
+    struct app *wr = ap; wr->term = 1; wr->pout = 1;
+    pipe0.h = pipe0.t = 0; pipe0.r = (int)rd->slot + 1; pipe0.w = (int)wr->slot + 1;
+    ufile_args_next("", 0);
+    return 0;
+}
 /* 6.94.0, ask.c's [[app NAME]] on the box: a card app run with these words to its end, ticking it (and any other app)
    from here, for at most secs. 0 it ended (*status), -6 it ran too long and was stopped, else userrun's own refusal.
    ponytail: user_status is whichever app ended last; another app ending in the same pass could be read instead. */
