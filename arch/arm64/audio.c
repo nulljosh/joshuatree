@@ -249,6 +249,7 @@ static int drain(void) {   /* the ring into the sink, a frame at a time */
 }
 
 /* Push `frames` frames through the ring from `src` (stereo) or, when src is 0, a triangle wave of `freq` Hz. */
+static int ramp_out;   /* 8.9.0: the chime: end on a fade from the midpoint down to the pin's off level (stream, below) */
 static int stream(const short *src, int frames, int rate, int freq) {
     unsigned phase = 0, step = freq ? (unsigned)(((unsigned long)freq << 32) / (unsigned)rate) : 0;
     int bad = 0;
@@ -269,6 +270,22 @@ static int stream(const short *src, int frames, int rate, int freq) {
             ring_push(l, r); i++;
         }
         bad = drain();
+    }
+    /* 8.9.0: the crack after the chime (Joshua, on the board: "the crackle happens after the nice chime") was hw_close
+       dropping the pin from the PWM's midpoint, half the supply, to off in one step. A clip that asks for it ends on a
+       quarter second's smooth slide (3t^2 - 2t^3) from the midpoint to the bottom, raw, past the volume, so the pin is
+       already at the level hw_close leaves it at. */
+    if (!bad && ramp_out) {
+        int n = rate / 4;
+        for (int k = 0; k < n && !bad; ) {
+            while (k < n && ring_count < RING_FRAMES) {
+                long t = (long)(k + 1) * 1024 / n, e = (3 * t * t * 1024 - 2 * t * t * t) / (1024L * 1024L);   /* 0..1024 */
+                short v = (short)(-32768L * e / 1024);
+                ring[ring_head * 2] = ring[ring_head * 2 + 1] = v;
+                ring_head = (ring_head + 1) % RING_FRAMES; ring_count++; k++;
+            }
+            bad = drain();
+        }
     }
     if (!bad && hw_finish()) bad = -1;
     hw_close();
@@ -312,7 +329,10 @@ int audio_chime(void) {
         chime_buf[i * 2] = chime_buf[i * 2 + 1] = s;
     }
     put_str("audio: chime\n");
-    return stream(chime_buf, CHIME_FRAMES, CHIME_RATE, 0);
+    ramp_out = 1;
+    int r = stream(chime_buf, CHIME_FRAMES, CHIME_RATE, 0);
+    ramp_out = 0;
+    return r;
 }
 int audio_tone(int freq_hz, int ms) {
     if (freq_hz < 20 || freq_hz > 20000 || ms < 1 || ms > 5000) { fail("tone needs 20..20000 Hz and 1..5000 ms"); return -1; }
