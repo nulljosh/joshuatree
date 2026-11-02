@@ -52,10 +52,10 @@ DOCK_TRAY = (0xEF, 0xEB, 0xE4)
 PARK = (480, 200)
 
 
-# Renamed apps show their product name but their files and log lines kept the old spelling (Hamurabi, Tonchi, Hikko, Windgate, Curbfind).
-SOURCE_NAME = {"hamurapi": "hamurabi", "patois": "tonchi", "thinkpond": "hikko", "airwell": "windgate", "scrounge": "curbfind"}
-# Their boot flags and files kept the old names too, except Hamurapi, whose flag is already hamurapi.
-FLAG_NAME = {"patois": "tonchi", "thinkpond": "hikko", "airwell": "windgate", "scrounge": "curbfind"}
+# Renamed apps show their product name but their files and log lines kept the old spelling (Hamurabi, Tonchi, Hikko, Windgate, Curbfind, Burrow).
+SOURCE_NAME = {"files": "burrow", "hamurapi": "hamurabi", "patois": "tonchi", "thinkpond": "hikko", "airwell": "windgate", "scrounge": "curbfind"}
+# Their boot flags and files kept the old names too, except Hamurapi, whose flag is already hamurapi. Files (8.10.0) is still open=burr.
+FLAG_NAME = {"files": "burrow", "patois": "tonchi", "thinkpond": "hikko", "airwell": "windgate", "scrounge": "curbfind"}
 
 
 def parse_apps():
