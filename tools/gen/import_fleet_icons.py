@@ -20,8 +20,7 @@ from restyle_icons import squircle_path, HL_WIDTH, HL_ALPHA, HL_FADE  # single s
 
 # art/icons name -> repo folder
 FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "tonchi": "patois", "hikko": "thinkpond",
-         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook", "windgate": "airwell",
-         "chat": "turing:web/mascot.svg"}   # Samantha: her mascot, Turing's app icon since v5.12.4 (a flat portrait: copper hair, tortoise-shell glasses). A "repo:path" value names the file when it is not repo/icon.svg.
+         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook", "windgate": "airwell"}   # 7.7.0: Samantha's dock icon is authored in restyle_icons.py (her glasses), no longer imported from Turing
 
 # Dock tile color per app. Most projects ship a near-black tile, so eight of
 # them side by side read as one black strip; the dock repaints each one's
@@ -33,7 +32,7 @@ TILE = {"epiphany": "#D6DEE6", "curbfind": "#C8644F", "bookrank": "#3E5C86", "to
 
 
 # Art that is a bare shape, not a tile: the colour laid under it.
-GROUND = {"chat": ("#F5F5F8", "#E0E1E6")}   # top -> bottom, the light-tile gradient (quotes, settings); a flat cream ground vanished into the tray
+GROUND = {}   # name -> (top, bottom): a ground laid under art that is a bare shape, not a tile (Samantha's portrait had one until 7.7.0)
 GROUND_FIT = 0.6875   # 88 of 128 units: 20 clear above and below, the bust stays inside the 16 top / 20 bottom margins
 
 
