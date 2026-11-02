@@ -525,9 +525,9 @@ static void app_park(const struct frame *f, const unsigned long *fp) {
     leave_user(0);
 }
 int app_preempt(const struct frame *f, const unsigned long *fp, unsigned long spsr) {   /* from exc_irq at a slice's end: 0 the watchdog's case, 1 run on */
-    /* 3 s of slices with no call from any thread stops an app with a window: it is frozen. 8.9.0: one without a window (plankc
-       compiling, a userrun job) gets 30 s, since the slices keep the desktop going and a slow runner took plankc past 3 s. */
-    if (!app_running || ++ap->spin >= (ap->bw ? 300u : 3000u)) return 0;
+    /* 3 s of slices with no call from any thread stops an app: it is frozen. A job started from the Terminal (`userrun`: plankc
+       compiling) gets 30 s, since the slices keep the desktop going and a slow runner took plankc past 3 s. */
+    if (!app_running || ++ap->spin >= (ap->term ? 3000u : 300u)) return 0;
     if (!fp || ((int)ap->slot == dbg_slot && dbg_left)) { wd_arm(); return 1; }   /* the FP_NOSAVE control build, or being stepped: no switch, the next slice */
     ap->preempts++; ap->cut = 1;
     th_save(f, fp, spsr);
@@ -665,7 +665,7 @@ static void th_exit(unsigned long status) {   /* JT_SYS_THREAD_EXIT: this thread
 }
 static void wd_kill(void) {   /* 4.5: from exc_irq, the app has had its three seconds at EL0 without a syscall */
     wd_live = 0;
-    uart_puts("M4 watchdog: "); uart_puts(app_cur ? app_cur->name : "app"); uart_puts(ap->bw ? " ran 3 s without a syscall, stopped\n" : " ran 30 s without a syscall, stopped\n");
+    uart_puts("M4 watchdog: "); uart_puts(app_cur ? app_cur->name : "app"); uart_puts(ap->term ? " ran 30 s without a syscall, stopped\n" : " ran 3 s without a syscall, stopped\n");
     user_faulted = 1;
     leave_user((unsigned long)-1);
 }
