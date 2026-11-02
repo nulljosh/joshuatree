@@ -150,6 +150,9 @@ irq_entry:
     mov x0, sp
 #ifndef FP_NOSAVE
     save_fp
+    mov x1, sp                  /* 8.1.0: the FP block too, so a slice's end can park a thread (main.c app_preempt) */
+#else
+    mov x1, xzr                 /* no FP block: app_preempt leaves the thread alone */
 #endif
     bl exc_irq
 #ifndef FP_NOSAVE
@@ -251,6 +254,9 @@ resume_user:                    /* x0 = the parked frame (x0-x30, elr: 32 words)
     adrp x5, dbg_spsr
     ldr x5, [x5, :lo12:dbg_spsr]
     orr x4, x4, x5              /* 7.2.0: SS when the debugger steps this app (main.c dbg_step), else 0 */
+    ldr x5, [x0, #256]          /* 8.1.0: the frame's esr word holds the NZCV flags it parked with (a slice can end mid compare) */
+    and x5, x5, #0xF0000000
+    orr x4, x4, x5
     msr spsr_el1, x4
     restore_all
     eret

@@ -159,8 +159,9 @@ void exc_sync(struct frame *f) {
     if (ec == 0x25 && kprobe_armed) { kprobe_faulted = 1; kprobe_armed = 0; f->elr += 4; return; }   /* skip the access */
     crash(f);
 }
-void exc_irq(struct frame *f) {   /* the timer stops after three ticks, so a core asleep in wfi can only be woken by a device */
-    (void)f;
+int app_preempt(const struct frame *f, const unsigned long *fp, unsigned long spsr);   /* 8.1.0, below with the scheduler */
+static int dbg_slot; static unsigned dbg_left;   /* 7.2.0, set further down: a stepped app is never preempted */
+void exc_irq(struct frame *f, const unsigned long *fp) {   /* the timer stops after three ticks, so a core asleep in wfi can only be woken by a device */
 #ifdef FP_TEST
     fp_clobber();
 #endif
@@ -175,7 +176,7 @@ void exc_irq(struct frame *f) {   /* the timer stops after three ticks, so a cor
         unsigned long spsr; __asm__ volatile ("mrs %0, spsr_el1" : "=r"(spsr));
         __asm__ volatile ("msr cntp_ctl_el0, %0" :: "r"(0UL));
         GICC(0x10) = iar;
-        if ((spsr & 0xF) == 0) wd_kill();   /* it was in EL0: never returns, leave_user hands the core back to app_tick */
+        if ((spsr & 0xF) == 0) { app_preempt(f, fp, spsr); wd_kill(); }   /* it was in EL0: an app with threads gives the core to the next one (8.1.0), else its three seconds are up; neither returns, leave_user hands the core back to app_tick */
         return;
     }
     if (id == TIMER_INTID) {
@@ -315,6 +316,9 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_AUDIO 393         /* M3e: play, status, stop (audio.c holds the queue) */
 #define JT_SYS_TASKS 386         /* 3.19.0: uptime in 100 Hz ticks for hamurabi.c (the rest of struct jt_tasks stays 0), no kill */
 #define JT_SYS_BRK 397           /* M3e: the heap top */
+#define JT_SYS_THREAD_SPAWN 407  /* 8.1.0: threads, see th_spawn */
+#define JT_SYS_THREAD_EXIT 408
+#define JT_SYS_FUTEX 409
 #define JT_SYS_TEXT2 402         /* 3.9.0: Tree Sans into a device-size window buffer (user/libjt/hires.h) */
 #define JT_SYS_CLIPBOARD 399     /* 3.10.0: copy and paste, see clip_put below */
 #define JT_CLIP_SET 1
@@ -335,9 +339,10 @@ unsigned long cal_utc(void);   /* the clock the Calendar tile reads, further dow
    app_wbytes at UP_WIN, 0 with no window, and app_q is the ring of events the desktop queued for it. */
 struct app apps[APP_SLOTS];
 struct app *ap = &apps[0];         /* the app whose state the code below means: the one resume_user is in, else the one in front */
-#define app_frame (ap->frame)
-#define app_fp (ap->fp)
-#define app_sp (ap->sp)
+#define app_th (ap->th[ap->tcur])
+#define app_frame (app_th.frame)
+#define app_fp (app_th.fp)
+#define app_sp (app_th.sp)
 #define app_last (ap->last)
 #define app_brk (ap->brk)
 #define app_parked (ap->parked)
@@ -350,9 +355,14 @@ unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_
    read or an HTTP wait, is never charged to it. IRQs are unmasked at EL0 only for apps (resume_user); the kernel itself still
    runs with them masked. Counts as a fault: app_tick ends the app and the desktop carries on.
    ponytail: one fixed budget, 3 s; per-app budgets if an app ever needs a long pure-compute stretch. */
-static void wd_arm(void) { unsigned long t = cnt_hz() * 3; __asm__ volatile ("msr cntp_tval_el0, %0\n msr cntp_ctl_el0, %1\n isb" :: "r"(t), "r"(1UL)); }
+static unsigned th_live(void);   /* 8.1.0: an app's threads that have not exited */
+static void wd_arm(void) { unsigned long t = th_live() > 1 ? cnt_hz() / 100 : cnt_hz() * 3;   /* 8.1.0: with threads, a 10 ms slice */ __asm__ volatile ("msr cntp_tval_el0, %0\n msr cntp_ctl_el0, %1\n isb" :: "r"(t), "r"(1UL)); }
 static void wd_off(void) { __asm__ volatile ("msr cntp_ctl_el0, %0\n isb" :: "r"(0UL)); }
-void wd_rearm(void) { if (wd_live) wd_arm(); }
+void wd_rearm(void) {   /* after every call: a lone thread's three seconds start again; with threads the slice runs on (a call must not
+                           buy a thread a fresh one, or one that calls often is never preempted) and only the spin count clears */
+    if (!wd_live) return;
+    if (th_live() > 1) ap->spin = 0; else wd_arm();
+}
 static void apps_init(void) { for (unsigned i = 0; i < APP_SLOTS; i++) { apps[i].base = USER_BASE + i * ARENA_SIZE; apps[i].l3off = i * ARENA_BLOCKS * 512; apps[i].slot = i; } }
 /* The app windows' stacking: app_z lists the slots that have a window, front first. app_top is the front one (-1 with none); outside
    app_tick, `ap` always points at it, so the desktop's clicks, keys and drags land on the window in front. */
@@ -427,11 +437,84 @@ static long app_brk_set(unsigned long want) {
 }
 /* JT_SYS_SCHED_YIELD from the scheduled app: keep every register and where it stood, with 0 as the call's answer, and go back
    to the desktop's loop. app_tick resumes it on a later pass, at the instruction after its svc. */
-static void app_park(const struct frame *f, const unsigned long *fp) {
+/* 8.1.0: threads. An app has up to APP_THREADS, each with its own registers, pc, stack and FP block (struct thread); app_frame,
+   app_fp and app_sp mean the one being run, th[tcur]. One core, so they take turns: a thread runs until it yields, sleeps on a
+   futex word, exits, or its 10 ms slice ends (the watchdog's timer, re-armed as a slice while an app has more than one thread:
+   app_preempt). Each park keeps the NZCV flags (in frame.esr, which resume_user puts back), since a slice can end between a
+   compare and its branch. Locks live in the app (user/libjt/thread.c, ldaxr and stlxr); the kernel only puts a thread to
+   sleep and wakes it (JT_SYS_FUTEX). */
+static unsigned th_live(void) { unsigned n = 0; for (unsigned i = 0; i < APP_THREADS; i++) n += ap->th[i].state != TH_FREE; return n; }
+static void th_save(const struct frame *f, const unsigned long *fp, unsigned long spsr) {
     for (int i = 0; i < 31; i++) app_frame.x[i] = f->x[i];
     for (int i = 0; i < 66; i++) app_fp[i] = fp[i];   /* M3e: its floating point registers, the block el0_sync_entry saved */
-    app_frame.x[0] = 0; app_frame.elr = f->elr;
+    app_frame.elr = f->elr; app_frame.esr = spsr;
     __asm__ volatile ("mrs %0, sp_el0" : "=r"(app_sp));
+}
+static void th_next(void) {   /* the next ready thread after this one takes the core, run soon; with none other ready, tcur stays */
+    for (unsigned k = 1; k <= APP_THREADS; k++) {
+        unsigned i = (ap->tcur + k) % APP_THREADS;
+        if (ap->th[i].state == TH_READY) { if (i != ap->tcur) app_kick = 1; ap->tcur = i; return; }
+    }
+}
+static unsigned long spsr_now(void) { unsigned long v; __asm__ volatile ("mrs %0, spsr_el1" : "=r"(v)); return v; }
+static void app_park(const struct frame *f, const unsigned long *fp) {
+    th_save(f, fp, spsr_now());
+    app_frame.x[0] = 0;
+    th_next();
+    app_parked = 1;
+    leave_user(0);
+}
+int app_preempt(const struct frame *f, const unsigned long *fp, unsigned long spsr) {   /* from exc_irq: returns only when it is not a slice's end */
+    if (!app_running || !fp || th_live() < 2 || ((int)ap->slot == dbg_slot && dbg_left)) return 0;   /* fp 0: the FP_NOSAVE control build */
+    if (++ap->spin >= 300) return 0;   /* 3 s of slices with no call from any thread: the watchdog's case after all */
+    ap->preempts++;
+    th_save(f, fp, spsr);
+    __asm__ volatile ("clrex");        /* a load-exclusive cut off by the slice must not pair with the next thread's store */
+    app_kick = 1;
+    th_next();
+    app_parked = 1;
+    leave_user(0);
+}
+static long th_spawn(unsigned long entry, unsigned long sp, unsigned long arg) {   /* JT_SYS_THREAD_SPAWN: the new thread's number, or -errno */
+    if (!app_running) return -38;
+    if ((entry & 3) || !span(entry, 4, UB + UP_APP, app_code)) return -14;      /* it starts in the app's own code */
+    if ((sp & 15) || sp < 16 || !user_writable(sp - 16, 16)) return -14;        /* on a stack of its own memory, 16-byte aligned */
+    for (unsigned i = 0; i < APP_THREADS; i++) {
+        struct thread *t = &ap->th[i];
+        if (t->state != TH_FREE) continue;
+        for (int k = 0; k < 31; k++) t->frame.x[k] = 0;
+        for (int k = 0; k < 66; k++) t->fp[k] = 0;
+        t->frame.x[0] = arg; t->frame.elr = entry; t->frame.esr = 0; t->sp = sp; t->wait = 0; t->state = TH_READY;
+        wd_arm();   /* two threads now: the slice starts */
+        return (long)i;
+    }
+    return -11;   /* -EAGAIN: every thread is taken */
+}
+static long th_futex(const struct frame *f, const unsigned long *fp) {   /* JT_SYS_FUTEX: op 0 sleeps while *addr == val, op 1 wakes up to val sleepers */
+    unsigned long op = f->x[0], addr = f->x[1], val = f->x[2];
+    if (!app_running) return -38;
+    if ((addr & 3) || !user_writable(addr, 4)) return -14;
+    if (op == 1) {
+        long n = 0;
+        for (unsigned i = 0; i < APP_THREADS && (unsigned long)n < val; i++)
+            if (ap->th[i].state == TH_WAIT && ap->th[i].wait == addr) { ap->th[i].state = TH_READY; n++; }
+        return n;
+    }
+    if (op) return -22;
+    /* ponytail: the compare and the sleep are one step only because there is one core and the kernel runs with IRQs masked.
+       The four-core change needs a lock here (and in the wake above). */
+    if (*(volatile unsigned *)addr != (unsigned)val) return -11;   /* it changed already: -EAGAIN, the caller looks again */
+    th_save(f, fp, spsr_now());
+    app_frame.x[0] = 0;
+    app_th.state = TH_WAIT; app_th.wait = addr;
+    th_next();
+    app_parked = 1;
+    leave_user(0);
+}
+static void th_exit(unsigned long status) {   /* JT_SYS_THREAD_EXIT: this thread ends; the last one to end is the app's exit */
+    app_th.state = TH_FREE;
+    if (!th_live()) leave_user(status);
+    th_next();
     app_parked = 1;
     leave_user(0);
 }
@@ -581,6 +664,10 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
         } else if (n == JT_SYS_SCHED_YIELD) {   /* every turn of an app's loop, so never logged */
             if (app_running) app_park(f, fp);
             f->x[0] = 0;                         /* outside the scheduler (the boot self-test) there is nothing to yield to */
+        } else if (n == JT_SYS_FUTEX) {   /* 8.1.0: sleeps (never returns) or answers */
+            f->x[0] = (unsigned long)th_futex(f, fp);
+        } else if (n == JT_SYS_THREAD_EXIT && app_running) {
+            th_exit(a0);
         } else if (n == JT_SYS_WINDOW_POLL) f->x[0] = (unsigned long)app_window_poll(a0, f->x[1]);   /* the same */
         else {
             long r;
@@ -596,6 +683,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             else if (n == JT_SYS_TEXT2) r = app_text(a0);
             else if (n == JT_SYS_AUDIO) r = app_audio(a0, f->x[1], f->x[2]);   /* M3e */
             else if (n == JT_SYS_BRK) r = app_brk_set(a0);
+            else if (n == JT_SYS_THREAD_SPAWN) r = th_spawn(a0, f->x[1], f->x[2]);   /* 8.1.0 */
             else if (n == JT_SYS_CLIPBOARD) r = app_clip(a0, f->x[1], f->x[2]);   /* 3.10.0 */
             else if (n == JT_SYS_TASKS) {
                 if (!a0 || !user_writable(a0, 20)) r = -14;
@@ -758,7 +846,9 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     app_unmap();
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
-    uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times\n");
+    uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times");
+    if (ap->preempts) { uart_puts(", "); uart_dec(ap->preempts); uart_puts(" slices"); }   /* 8.1.0: arm64-threads-check.py reads it */
+    uart_putc('\n');
     if (me->term && !user_loud) {   /* 7.5.4: it ended after it yielded, so cmd.c's own line is long gone: say it in the Terminal */
         int was = con_to_term; term_output(1);
         kputs("userrun "); kputs(a->name);
@@ -788,7 +878,7 @@ void app_tick(void) {   /* every app with something to do gets its turn: it runs
     }
     for (unsigned i = 0; i < APP_SLOTS; i++) {
         ap = &apps[i];
-        if (!app_cur || app_running) continue;
+        if (!app_cur || app_running || app_th.state != TH_READY) continue;   /* 8.1.0: every thread asleep on a futex: nothing to run */
         unsigned long now = cnt_now();
         if (app_close_at && now > app_close_at) { app_kill_one("closed by its red dot"); continue; }   /* it never read the close click */
         if (!app_kick && now - app_last < cnt_hz() / 100) continue;
@@ -827,7 +917,10 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
         ufile_mkdirs("MUSIC");         /* M3e: Music's library, JT/MUSIC/, there for songs dropped onto the card from a Mac */
     if (a->name[0] == 'b' && a->name[1] == 'o' && a->name[2] == 'o' && a->name[3] == 'k' && a->name[4] == 's' && !a->name[5])
         ufile_mkdirs("BOOKS");         /* 2.66: Books' library, JT/BOOKS/, the books the card ships with and the ones dropped there */
+    for (unsigned i = 0; i < APP_THREADS; i++) ap->th[i].state = TH_FREE;   /* 8.1.0: one thread to start with */
+    ap->tcur = 0; ap->th[0].state = TH_READY; ap->preempts = ap->spin = 0;
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
+    app_frame.esr = 0;                                 /* no flags to put back */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
     app_frame.elr = entry; app_sp = UB + UP_ASTACK + APP_STACK_PAGES * 4096UL;
     app_cur = a; ap->min = 0; ap->term = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;

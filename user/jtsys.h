@@ -70,6 +70,9 @@
 #define JT_REC_CHUNK_MAX 8192
 #define JT_SYS_SYSINFO     395 /* 1.9.26: weather, chat host, phone flag, time in one read-only struct; see kernel/syscall.h */
 #define JT_SYS_BRK         397 /* 1.9.27: per-task heap top; 0 queries, else sets. Returns the top or -errno; see kernel/brk.c */
+#define JT_SYS_THREAD_SPAWN 407 /* 8.1.0, Pi only: (entry, stack top, arg) starts a thread in this app, returns its number or -errno; libjt/thread.h */
+#define JT_SYS_THREAD_EXIT  408 /* 8.1.0, Pi only: this thread ends; the last thread to end is the app's exit */
+#define JT_SYS_FUTEX        409 /* 8.1.0, Pi only: (0, addr, val) sleeps while *addr == val; (1, addr, n) wakes up to n sleepers */
 #define JT_SYS_CLIPBOARD   399 /* 1.9.28: the one system clipboard, 4 KB; see kernel/syscall.h */
 #define JT_CLIP_SET        1
 #define JT_CLIP_GET        2
