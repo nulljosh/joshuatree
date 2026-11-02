@@ -151,6 +151,7 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
         int state;                        /* TH_FREE, TH_READY, TH_WAIT (asleep on a futex word, at wait) */
         unsigned long wait;
     } th[APP_THREADS];
+    unsigned heap_pages;                  /* 8.7.0: heap pages it has touched, each mapped on its first touch */
     unsigned tcur, preempts, spin, cut;   /* cut: its last turn ended at a slice, not by its own yield (8.6.0) */        /* the thread being run; slices taken from its threads; slices since any of them made a call */
     unsigned long last, wbytes;
     int hi;                               /* 3.9.0: the window buffer is device size (scale 2, the app asked for it) */
