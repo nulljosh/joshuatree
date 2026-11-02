@@ -44,7 +44,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), userrun A | userrun B (A's output is B's input), cores, debug NAME [STEPS] (run an app one instruction at a time: where it is, the instruction, the registers that changed, then its registers and stack), install NAME (an app from the store), "
+                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), userrun A | userrun B (A's output is B's input), cores, sched, debug NAME [STEPS] (run an app one instruction at a time: where it is, the instruction, the registers that changed, then its registers and stack), install NAME (an app from the store), "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
                            "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
@@ -592,6 +592,11 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         while (k < n && q[k] != ' ' && q[k] != '.') k++;
         if (k < n && q[k] == '.') { jt_command(q + 6, n - 6, 0); return; }
         cmd_out("write: use write NAME.EXT TEXT\n"); return;
+    }
+    if (word_is(q, n, "sched")) {   /* 8.6.0: the longest one app held the core in a turn since the last time this was asked */
+        extern unsigned long sched_worst; unsigned long cnt_hz(void);
+        cmd_out("sched: the longest turn an app took was "); cmd_dec((unsigned)(sched_worst * 1000 / cnt_hz())); cmd_out(" ms; every app runs in 10 ms slices, the desktop between them\n");
+        sched_worst = 0; return;
     }
     if (word_is(q, n, "cores")) {   /* 8.2.0: which of the four cores are up, and how often each has woken */
         extern volatile unsigned long core_runs[4], core_mpidr[4]; extern volatile int core_up[4]; unsigned cores_count(void);

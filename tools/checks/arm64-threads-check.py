@@ -4,12 +4,13 @@
 Boots the ARM64 kernel in QEMU with a card holding two apps built from one C file by tools/mkapp.sh, and runs them from the Terminal:
 1. THREADS: two threads each add one to a shared counter 4,000,000 times under a jt_mutex, and to a second counter with no lock;
    the main thread sleeps on a jt_cond until both say they are done, then joins them. The locked total is exactly 8,000,000,
-   the unlocked one is short (so the kernel really did cut threads off mid add), and the app's end line counts its slices.
+   and the app's line says how many times its threads were cut off. (Its unlocked count is printed, not checked: when a
+   slice ends inside the lock the other thread sleeps at once, so how many slices land mid add varies from run to run.)
    It also asks for a thread outside its own code and one on a crooked stack, and both are refused with -EFAULT.
 2. NOLOCK: the same file with the lock calls taken out. Its "locked" total is short too, which is what proves the mutex,
    and not luck, made the first total exact.
-Discriminating: drop app_preempt (main.c) and there are no slices and both totals come out exact, so check 1 fails on the
-unlocked total and the slice count; drop the NZCV restore in resume_user and the counts go wrong or the app faults; make
+Discriminating: drop app_preempt (main.c) and there are no slices, so check 1 fails on the slice count and NOLOCK comes
+out exact; drop the NZCV restore in resume_user and the counts go wrong or the app faults; make
 jt_mutex_lock a no-op and check 1 fails on the locked total.
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-threads-check.py   (from the repo root)
@@ -126,7 +127,8 @@ try:
     if not wait_for("terminal open", 10): raise SystemExit("FAIL: F2 did not open the Terminal: %r" % uart()[-300:])
     time.sleep(0.5)
     LINE = re.compile(r"threads: spawn (-?\d+) (-?\d+) bad (-?\d+) (-?\d+) locked (\d+) racy (\d+)")
-    END = re.compile(r"M3c app (\w+) exit (\d+), ran \d+ times(?:, (\d+) slices)?")
+    END = re.compile(r"M3c app (\w+) exit (\d+), ran \d+ times")
+    CUT = re.compile(r"M3c app threads was cut off (\d+) times")
 
     out = say("userrun threads", "M3c app threads ")
     m, e = LINE.search(out), END.search(out)
@@ -136,9 +138,8 @@ try:
         check("two threads start, numbered 1 and 2", (a, b) == (1, 2), (a, b))
         check("a thread outside the app's code and one on a crooked stack are refused (-EFAULT)", (be, bs) == (-14, -14), (be, bs))
         check("the locked total is exact: %d" % (2 * ITER), lk == 2 * ITER, lk)
-        check("the unlocked total is short, so threads were cut off mid add (%d)" % rc, rc < 2 * ITER, rc)
     else: check("threads prints its totals", False, out[-900:])
-    sl = int(e.group(3) or 0) if e else 0
+    c = CUT.search(out); sl = int(c.group(1)) if c else 0
     check("its threads took turns: at least 5 slices (%d)" % sl, sl >= 5, out[-400:])
 
     out = say("userrun nolock", "M3c app nolock ")

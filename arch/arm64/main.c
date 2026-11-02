@@ -177,7 +177,7 @@ void exc_irq(struct frame *f, const unsigned long *fp) {   /* the timer stops af
         unsigned long spsr; __asm__ volatile ("mrs %0, spsr_el1" : "=r"(spsr));
         __asm__ volatile ("msr cntp_ctl_el0, %0" :: "r"(0UL));
         GICC(0x10) = iar;
-        if ((spsr & 0xF) == 0) { app_preempt(f, fp, spsr); wd_kill(); }   /* it was in EL0: an app with threads gives the core to the next one (8.1.0), else its three seconds are up; neither returns, leave_user hands the core back to app_tick */
+        if ((spsr & 0xF) == 0 && !app_preempt(f, fp, spsr)) wd_kill();   /* it was in EL0: an app with threads gives the core to the next one (8.1.0), else its three seconds are up; neither returns, leave_user hands the core back to app_tick */
         return;
     }
     if (id == TIMER_INTID) {
@@ -411,12 +411,12 @@ unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_
    runs with them masked. Counts as a fault: app_tick ends the app and the desktop carries on.
    ponytail: one fixed budget, 3 s; per-app budgets if an app ever needs a long pure-compute stretch. */
 static unsigned th_live(void);   /* 8.1.0: an app's threads that have not exited */
-static void wd_arm(void) { unsigned long t = th_live() > 1 ? cnt_hz() / 100 : cnt_hz() * 3;   /* 8.1.0: with threads, a 10 ms slice */ __asm__ volatile ("msr cntp_tval_el0, %0\n msr cntp_ctl_el0, %1\n isb" :: "r"(t), "r"(1UL)); }
+static void wd_arm(void) { unsigned long t = cnt_hz() / 100;   /* 8.6.0: every app runs in 10 ms slices (8.1.0: those with threads) */ __asm__ volatile ("msr cntp_tval_el0, %0\n msr cntp_ctl_el0, %1\n isb" :: "r"(t), "r"(1UL)); }
 static void wd_off(void) { __asm__ volatile ("msr cntp_ctl_el0, %0\n isb" :: "r"(0UL)); }
 void wd_rearm(void) {   /* after every call: a lone thread's three seconds start again; with threads the slice runs on (a call must not
                            buy a thread a fresh one, or one that calls often is never preempted) and only the spin count clears */
     if (!wd_live) return;
-    if (th_live() > 1) ap->spin = 0; else wd_arm();
+    ap->spin = 0;
 }
 static void apps_init(void) { for (unsigned i = 0; i < APP_SLOTS; i++) { apps[i].base = USER_BASE + i * ARENA_SIZE; apps[i].l3off = i * ARENA_BLOCKS * 512; apps[i].slot = i; } }
 /* The app windows' stacking: app_z lists the slots that have a window, front first. app_top is the front one (-1 with none); outside
@@ -519,10 +519,10 @@ static void app_park(const struct frame *f, const unsigned long *fp) {
     app_parked = 1;
     leave_user(0);
 }
-int app_preempt(const struct frame *f, const unsigned long *fp, unsigned long spsr) {   /* from exc_irq: returns only when it is not a slice's end */
-    if (!app_running || !fp || th_live() < 2 || ((int)ap->slot == dbg_slot && dbg_left)) return 0;   /* fp 0: the FP_NOSAVE control build */
-    if (++ap->spin >= 300) return 0;   /* 3 s of slices with no call from any thread: the watchdog's case after all */
-    ap->preempts++;
+int app_preempt(const struct frame *f, const unsigned long *fp, unsigned long spsr) {   /* from exc_irq at a slice's end: 0 the watchdog's case, 1 run on */
+    if (!app_running || ++ap->spin >= 300) return 0;   /* 3 s of slices with no call from any thread: the watchdog stops it */
+    if (!fp || ((int)ap->slot == dbg_slot && dbg_left)) { wd_arm(); return 1; }   /* the FP_NOSAVE control build, or being stepped: no switch, the next slice */
+    ap->preempts++; ap->cut = 1;
     th_save(f, fp, spsr);
     __asm__ volatile ("clrex");        /* a load-exclusive cut off by the slice must not pair with the next thread's store */
     app_kick = 1;
@@ -1043,11 +1043,10 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     app_window_close();   /* leaves `ap` on the window now in front... */
     ap = me;              /* ...so put it back: the pages unmapped and the line printed below are this app's, not the front one's */
     app_unmap();
+    if (me->preempts) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" was cut off "); uart_dec(me->preempts); uart_puts(" times\n"); }   /* 8.1.0: arm64-threads-check.py reads it */
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
-    uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times");
-    if (ap->preempts) { uart_puts(", "); uart_dec(ap->preempts); uart_puts(" slices"); }   /* 8.1.0: arm64-threads-check.py reads it */
-    uart_putc('\n');
+    uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times\n");
     if (me->term && !user_loud) {   /* 7.5.4: it ended after it yielded, so cmd.c's own line is long gone: say it in the Terminal */
         int was = con_to_term; term_output(1);
         kputs("userrun "); kputs(a->name);
@@ -1065,6 +1064,7 @@ void app_kill(const char *how) {   /* every app ends: a kernel-drawn window is o
 int ufile_launch_take(char *name, char *arg);   /* ufile.c */
 void ufile_args_next(const char *s, unsigned n);
 int app_dock(const char *name);                  /* appwin.c */
+unsigned long sched_worst;   /* 8.6.0: `sched` in the Terminal reads it and starts again */
 void app_tick(void) {   /* every app with something to do gets its turn: it runs until it yields, exits or faults, and a fault ends that app alone */
     __asm__ volatile ("sev");   /* 8.2.0: one wake-up for cores 1 to 3 each desktop pass (core_main counts them) */
     {   static char nm[65], arg[65];   /* 7.7.0: an app asked for another (Files opens a song in Music): opened here, between turns */
@@ -1083,13 +1083,15 @@ void app_tick(void) {   /* every app with something to do gets its turn: it runs
         if (app_close_at && now > app_close_at) { app_kill_one("closed by its red dot"); continue; }   /* it never read the close click */
         if (!app_kick && now - app_last < cnt_hz() / 100) continue;
         app_kick = 0; app_last = now; app_runs++;
-        app_parked = 0; user_faulted = 0; app_running = 1; ufile_owner = ap->slot + 1;
+        app_parked = 0; user_faulted = 0; app_running = 1; ufile_owner = ap->slot + 1; ap->cut = 0;
         APP_FP_CLOBBER();
         arena_only((int)ap->slot);
         wd_live = 1; wd_arm();
         int dbg = (int)ap->slot == dbg_slot && dbg_left;   /* 7.2.0: this app is being stepped */
         if (dbg) { dbg_spsr = 1UL << 21; dbg_mdscr(1); }
+        unsigned long t0 = cnt_now();
         unsigned long st = resume_user(&app_frame, app_sp, app_fp);
+        if (cnt_now() - t0 > sched_worst) sched_worst = cnt_now() - t0;   /* 8.6.0: the longest an app held the core in one turn */
         wd_live = 0; wd_off();
         if (dbg) dbg_end();
         app_running = 0;
@@ -1238,6 +1240,7 @@ int userrun(const char *name, unsigned n, int allow_unsigned, unsigned long *sta
     me->term = 1;   /* 7.5.4: plankc's "wrote APPS/HI.APP", minutes later, reached only the UART on the board */
     user_loud = 1;
     app_tick();
+    for (unsigned k = 0; k < 300 && me->cur == a && me->cut; k++) app_tick();   /* 8.6.0: a first turn a slice cut short is not its answer: more turns until it yields or ends (3 s at most), as one turn was before */
     user_loud = 0;
     if (me->cur == a) return me->wbytes ? 2 : 1;
     *status = user_status; *faulted = user_faulted;
