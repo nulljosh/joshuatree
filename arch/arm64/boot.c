@@ -312,6 +312,9 @@ void main(void) {
 #endif   /* quiet boot: splash_finish prints it, once text_init has measured the font */
     int inputs = virtio_input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
+#ifdef PI_BUILD
+    { void battery_tick(void); battery_tick(); }   /* 10.3.0: the gauge, if there is one, before the loop (QEMU's raspi4b never runs it) */
+#endif
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
 #ifdef USB_AUDIO_TEST   /* the usbaudiotest build: a USB speaker plays 440 Hz for half a second at boot (arm64-usbaudio-check.py) */
     { int usb_spk_tone(int freq, int ms); usb_spk_tone(440, 500); }
