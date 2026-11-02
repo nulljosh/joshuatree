@@ -3,7 +3,8 @@
 blend an ordered (Bayer 4x4) dither between two neighbouring colours, then shown 4x on the Pi's 1080p screen with every fourth
 row dimmed, a scanline look. The sun sits low behind the far ridge, so the trees and the granite piles are backlit. The middle
 of the bottom is kept quiet for the dock and the line above it.
-Writes arch/arm64/park_wall.h (4-bit indexed, two pixels a byte, 64,800 bytes) and, given a path, a 1920 x 1080 preview PNG.
+Writes arch/arm64/park_wall.h (4-bit indexed, two pixels a byte, 64,800 bytes) and the 1920 x 1080 preview the brand kit
+shows, docs/brand/park-wall.png (or the path given).
 Usage: tools/gen/gen_park_wall.py [preview.png]"""
 import math, random, sys
 from pathlib import Path
@@ -147,11 +148,11 @@ for i in range(0, len(packed), 40): rows.append("    " + ",".join(str(b) for b i
 rows.append("};")
 out.write_text("\n".join(rows) + "\n")
 
-if len(sys.argv) > 1:   # the preview, as the Pi shows it at 1080p: 4x, every fourth row at 80 percent
+if True:   # the preview, as the Pi shows it at 1080p: 4x, every fourth row at 80 percent
     from PIL import Image
     small = Image.new("RGB", (W, H)); small.putdata([PAL[idx[y][x]] for y in range(H) for x in range(W)])
     big = small.resize((W * 4, H * 4), Image.NEAREST); px = big.load()
     for y in range(3, H * 4, 4):
         for x in range(W * 4): px[x, y] = tuple(v * 4 // 5 for v in px[x, y])
-    big.save(sys.argv[1])
+    big.save(sys.argv[1] if len(sys.argv) > 1 else root / "docs/brand/park-wall.png")
 print("wrote", out, len(packed), "bytes")

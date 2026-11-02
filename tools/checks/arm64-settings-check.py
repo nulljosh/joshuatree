@@ -74,7 +74,7 @@ int main(void) {
     n = settings_format(out, 100, 3, 25, 0); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\nzoom=0\n", n));
     int v = 1, w = 1, d = 7, m = 2; const char *t;
     t = "volume=40\nwall=3\ndock=12\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 40 && w == 3 && d == 12);
-    v = 1; w = 1; d = 7; t = "volume=101\nwall=4\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
+    v = 1; w = 1; d = 7; t = "volume=101\nwall=5\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
     t = "volume=26\nwall=1\ndock=26\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 26 && w == 1 && d == 7);
     t = "volume=12345\nvolume\n=5\nwall=x\nwall=\ndock=9z\nvolumes=5\n"; v = 1; w = 1; d = 7; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
     t = "volume=55\r\nwall=3\r\ndock=20"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 55 && w == 3 && d == 20);   /* CRLF, and no final newline */

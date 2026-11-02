@@ -54,7 +54,7 @@ h3.sub { margin: 48px 0 16px; }
 .icons figcaption { font-size: 11px; line-height: 16px; color: var(--sub); text-transform: capitalize; }
 .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px 32px; margin-bottom: 40px; }
 .rules p { color: var(--sub); font-size: 15px; line-height: 20px; }
-.desk { border-radius: var(--r18); padding: 48px 24px 24px; display: grid; justify-items: center; gap: 40px; background: var(--wallpaper); overflow: hidden; }
+.desk { border-radius: var(--r18); padding: 48px 24px 24px; display: grid; justify-items: center; gap: 40px; background: var(--wallpaper) url(park-wall.png) center / cover; image-rendering: pixelated; overflow: hidden; }
 .win { width: min(520px, 100%); background: #f5f0eb; color: #1c1c1e; border-radius: 18px; box-shadow: 0 12px 32px rgba(32,16,9,.25); overflow: hidden; }
 .win .bar { height: 44px; display: grid; grid-template-columns: 64px 1fr 64px; align-items: center; border-bottom: 1px solid #d9d3cb; font: 600 15px/20px var(--sans); text-align: center; }
 .win .dots { display: flex; gap: 8px; padding-left: 16px; }
@@ -64,6 +64,9 @@ h3.sub { margin: 48px 0 16px; }
 .win .body p { max-width: none; }
 .dock { display: flex; gap: 6px; padding: 10px; background: #efebe4; border-radius: 18px; box-shadow: inset 0 1px 0 #d6d0c6, inset 0 -1px 0 #d6d0c6, 0 6px 14px rgba(32,16,9,.18); max-width: 100%; overflow-x: auto; }
 .dock img { flex: none; }
+.wall { display: block; width: 100%; height: auto; border-radius: var(--r18); image-rendering: pixelated; }
+.pal { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+.pal li { aspect-ratio: 1; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--rule); }
 .never { columns: 2 280px; column-gap: 32px; padding-left: 20px; color: var(--sub); margin: 0; }
 .never li { break-inside: avoid; margin-bottom: 8px; }
 .history { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; }
@@ -144,9 +147,22 @@ footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--rule);
 <li class="sw"><span class="chip" style="background:#f4f1ec;color:#261a13">#f4f1ec</span><b>Dock label</b><span>DOCK_LABEL_BG</span></li>
 <li class="sw"><span class="chip" style="background:#ff5f57;color:#f4f3ec">#ff5f57</span><b>Close dot</b><span>CLOSE_DOT</span></li>
 <li class="sw"><span class="chip" style="background:#e5e5e7;color:#261a13">#e5e5e7</span><b>Splash grey</b><span>the Pi boot splash</span></li>
-    <li class="sw"><span class="chip" style="background:#6e6e6e;color:#f4f3ec">#6e6e6e</span><b>Wallpaper</b><span>graphite, one flat colour since 3.9.0</span></li>
+<li class="sw"><span class="chip" style="background:#3b6ea5;color:#f4f3ec">#3b6ea5</span><b>Blue</b><span>the flat wallpaper, and the park picture's sky</span></li>
 <li class="sw"><span class="chip" style="background:#201009;color:#f4f3ec">#201009</span><b>Night floor</b><span>NIGHT_FLOOR, where the wallpaper goes at night</span></li>
 <li class="sw"><span class="chip" style="background:#dddddd;color:#261a13">#dddddd</span><b>Day tint</b><span>DAY_TINT</span></li>
+  </ul>
+</section>
+
+<section id="wallpaper">
+  <h2>The wallpaper</h2>
+  <p>Joshua Tree National Park at dusk, the Pi's default since 8.9. The sun sits low behind the far ridge, so the trees and the granite piles are backlit, and the middle of the ground stays quiet for the dock. It is drawn small on purpose: 480 by 270 pixels in 16 colours, every blend an ordered dither, shown four times over at 1080p with every fourth row dimmed, like an old screen. The one place in the system where pixels show, and they are meant to. The source is <code>tools/gen/gen_park_wall.py</code>; Settings can still pick a flat colour.</p>
+  <img class="wall" src="park-wall.png" width="1920" height="1080" alt="The park wallpaper: a dithered dusk sky over purple ridges, Joshua trees and granite boulders on warm sand">
+  <h3 class="sub">Its 16 colours</h3>
+  <ul class="pal">
+    <li style="background:#141c3e" title="night"></li><li style="background:#223568" title="deep blue"></li><li style="background:#3b6ea5" title="the house blue"></li><li style="background:#729cc9" title="high sky"></li>
+    <li style="background:#b8c6d8" title="pale sky"></li><li style="background:#f3d2a2" title="peach glow"></li><li style="background:#ec9e76" title="horizon"></li><li style="background:#fbecc6" title="the sun"></li>
+    <li style="background:#9a7ca8" title="far ridge"></li><li style="background:#664f7d" title="near ridge"></li><li style="background:#403155" title="ridge shadow"></li><li style="background:#c99366" title="sand"></li>
+    <li style="background:#9c6847" title="sand in shadow"></li><li style="background:#6c4534" title="near ground"></li><li style="background:#b5502c" title="terracotta"></li><li style="background:#261a13" title="bark ink"></li>
   </ul>
 </section>
 
@@ -179,7 +195,7 @@ footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--rule);
 
 <section id="desktop">
   <h2>Window and dock</h2>
-  <p>One frame for every window: an 18 px corner, a hairline under the title, the name centred in ink, a red close dot on the left. The dock is a warm cream tray with a soft shadow. Behind them the wallpaper is one flat graphite grey.</p>
+  <p>One frame for every window: an 18 px corner, a hairline under the title, the name centred in ink, a red close dot on the left. The dock is a warm cream tray with a soft shadow. Behind them is the park at dusk.</p>
   <div class="desk">
     <div class="win" role="img" aria-label="A Joshua Tree window">
       <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span>Notes</span><span></span></div>
@@ -192,7 +208,7 @@ footer { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--rule);
 <section id="never">
   <h2>What it never does</h2>
   <ul class="never">
-    <li>Shows a pixel. Text, icons and wallpaper are anti-aliased at 2x.</li>
+    <li>Shows a pixel by accident. Text and icons are anti-aliased at 2x; the park wallpaper is the one place pixels show, on purpose.</li>
     <li>Draws an emoji.</li>
     <li>Uses purple or teal in an icon or the window chrome.</li>
     <li>Puts a border, stripe or card edge on something just to decorate it.</li>
