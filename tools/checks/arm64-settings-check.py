@@ -84,8 +84,8 @@ int main(void) {
     t = "zoom=1\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);
     t = "zoom=3\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);   /* 7.4.0: out of range, kept */
     settings_set_mag(-1); assert(settings_mag() == 0); settings_set_mag(9); assert(settings_mag() == 2 && !strcmp(settings_mag_name(1), "Small"));
-    assert(settings_walls() == 4 && !strcmp(settings_wall_name(0), "Grey") && settings_wall_rgb(0) == 0x006E6E6Eu && !strcmp(settings_wall_name(1), "Terracotta") && settings_wall_rgb(1) == 0x00B5502Cu && settings_wall_rgb(3) == 0x00141311u);
-    settings_set_wall(-1); assert(settings_wall() == 3 && wall_rgb == 0x00141311); settings_set_wall(4); assert(settings_wall() == 0 && wall_rgb == 0x006E6E6E);
+    assert(settings_walls() == 4 && !strcmp(settings_wall_name(0), "Blue") && settings_wall_rgb(0) == 0x003B6EA5u && !strcmp(settings_wall_name(1), "Terracotta") && settings_wall_rgb(1) == 0x00B5502Cu && settings_wall_rgb(3) == 0x00141311u);
+    settings_set_wall(-1); assert(settings_wall() == 3 && wall_rgb == 0x00141311); settings_set_wall(4); assert(settings_wall() == 0 && wall_rgb == 0x003B6EA5);
     settings_set_dock(2); assert(settings_dock() == 5); settings_set_dock(99); assert(settings_dock() == 25); settings_set_dock(7);
     vol = 30; settings_set_wall(2); settings_set_dock(11); settings_save();
     assert(settings_saved() == 1 && file_len == 32 && !memcmp(file, "volume=30\nwall=2\ndock=11\nzoom=2\n", 32));
@@ -133,7 +133,7 @@ if mt("mmd", "::JT").returncode: print("FAIL: mtools could not make JT/ on the c
 W, H = 800, 600
 WX, WY, WW, WH = (W - 500) // 2, 100, 500, 350      # the window: the Console's rectangle (fb_desktop)
 SX, SY = (W - 510) // 2, 36                            # 8.9.0: Settings' own window (settings_ui.h SET_WIN_W 510, at y 36)
-GREY = (0x6e, 0x6e, 0x6e)
+GREY = (0x3B, 0x6E, 0xA5)
 ACCENT, CLAY, INK, TERRA, RED, GLYPH = (0xb5, 0x50, 0x2c), (0x92, 0x3f, 0x20), (0x14, 0x13, 0x11), (0xb5, 0x50, 0x2c), (0xff, 0x5f, 0x57), (0xfa, 0xf8, 0xf4)
 def bar(c): return tuple(((v >> 1) & 0x7f) + 0x80 for v in c)    # the menu bar over a wallpaper colour: half itself, half white
 fails_boot = []

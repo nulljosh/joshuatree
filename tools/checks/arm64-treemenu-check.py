@@ -40,7 +40,7 @@ MARK = (12 * H // 540, MB // 2)          # the mark's centre
 CX, CY, CW = 8, MB + 2, 220              # the card on the logical grid (main.c TREE_W)
 ROW_Y = [CY + 6, CY + 37, CY + 59, CY + 81]
 CREAM, TERRA = (0xfa, 0xf8, 0xf4), (0xb5, 0x50, 0x2c)
-WALL = (0x6e, 0x6e, 0x6e)   # the graphite grey wallpaper, the default since 3.9.0; terracotta is the selection, not the wall
+WALL = (0x3B, 0x6E, 0xA5)   # the graphite grey wallpaper, the default since 3.9.0; terracotta is the selection, not the wall
 wx, wy, ww, wh = (W - 500) // 2, 100, 500, 350   # the Console's and the Terminal's frame
 
 tmp = scratch_dir("arm64-treemenu")

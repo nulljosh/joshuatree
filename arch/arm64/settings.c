@@ -23,7 +23,7 @@ int home_save(const char *name, const void *data, unsigned len);
 #define SET_DOCK_MIN 5
 #define SET_DOCK_MAX 25
 static const struct { const char *name; unsigned rgb; } walls[SET_WALLS] = {
-    { "Grey", 0x006E6E6Eu }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u } };
+    { "Blue", 0x003B6EA5u }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u } };
 static int wall_pick;                 /* index into walls */
 static int saved_state;               /* 0 not yet saved, 1 on the card, 2 only the wallpaper (yours), -1 no card or the card refused it, -2 not an admin */
 static int card_wall;                 /* JT/SETTINGS.TXT's wallpaper: the login screen's, and anyone's with no ~/WALL.TXT */
