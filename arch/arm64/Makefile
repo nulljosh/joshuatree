@@ -411,6 +411,7 @@ $(eval $(call variant,powerfile,-DPOWER_FILE_TEST=1,,))
 $(eval $(call variant,powernoflush,-DPOWER_FILE_TEST=1 -DPOWER_NOFLUSH,,))
 $(eval $(call variant,treerestart,-DTREEMENU_SELFTEST=1,,))
 $(eval $(call variant,treeshutdown,-DTREEMENU_SELFTEST=2,,))
+$(eval $(call variant,treesleep,-DTREEMENU_SELFTEST=3,,))
 $(eval $(call variant,notice,-DNOTICE_SELFTEST,,))
 $(eval $(call variant,screen,-DSCREEN_SELFTEST,,))
 $(eval $(call variant,sudoshort,-DSUDO_TTL_MS=12000,,))   # sudo remembers a password for 12 s, for tools/checks/arm64-sudo-check.py

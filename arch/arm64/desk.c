@@ -70,7 +70,7 @@ static int upd_btn_y(void) { return spot_ly + 150; }
 static int dlg_btn_y(void) { return spot_ly + DLG_H - 44; }
 static int dlg_btn_w(void) { return (DLG_W - 48) / 2; }
 int power_dialog_up(void) { return spot_live && spot_tree && (tree_dlg == 1 || tree_dlg == 2); }
-static const char *const tree_rows[4] = { "About Joshua Tree", "Restart", "Shut Down", "Log Out" };
+static const char *const tree_rows[5] = { "About Joshua Tree", "Sleep", "Restart", "Shut Down", "Log Out" };   /* 11.0.0: Sleep, as a Mac's */
 static int tree_ry(int r) { return spot_ly + (r ? 37 + (r - 1) * SPOT_ROW : 6); }
 int tree_bar_hit(void) {   /* the pointer is on the mark or the title, physical px like the bar's own drawing */
     if (!text_ok || (int)mouse_y >= sg(MENUBAR_H) - 1) return 0;
@@ -125,9 +125,9 @@ static void tree_paint(void) {
 #endif
         about_center("Made by Joshua, from scratch.", spot_ly + 196, 0x0075726E);
     } else {
-        gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, TREE_W, 109, 0x00faf8f4, 10);
+        gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, TREE_W, TREE_H - 3, 0x00faf8f4, 10);
         gui_hairline_h(spot_lx + 10, spot_ly + 31, TREE_W - 20, 0x00DDD8CE);
-        for (int r = 0; r < 4; r++) {
+        for (int r = 0; r < 5; r++) {
             int ry = tree_ry(r), on = r == tree_sel;
             if (on) window_rect(spot_lx + 8, ry, TREE_W - 16, SPOT_ROW - 2, 0x00b5502c);
             gui_text(tree_rows[r], spot_lx + 22, ry + 2, on ? 0x00FFFFFF : 0x001C1C1E);
@@ -211,14 +211,19 @@ static void tree_pick(int r) {
         tree_about = 1; tree_paint(); return;
     }
     spot_close();
-    con_quiet = 1; uart_puts(r == 1 ? "treemenu: restart\n" : r == 2 ? "treemenu: shutdown\n" : "");
-    if (r == 1) power_ask(0); else if (r == 2) power_ask(1); else tree_logout();
+    con_quiet = 1; uart_puts(r == 1 ? "treemenu: sleep\n" : r == 2 ? "treemenu: restart\n" : r == 3 ? "treemenu: shutdown\n" : "");
+#ifdef PI_BUILD
+    if (r == 1) screen_sleep_soon();
+#else
+    if (r == 1) uart_puts("sleep: this build has no display power\n");
+#endif
+    else if (r == 2) power_ask(0); else if (r == 3) power_ask(1); else tree_logout();
 }
 void tree_key(unsigned code) {
     if (tree_dlg == 3) { if (code == 28 || code == 96) update_go(); else if (code == 1) { spot_close(); tree_dlg = 0; } return; }   /* Software Update: Return updates, Esc closes */
     if (tree_about || code == 1) { spot_close(); return; }   /* About closes on any key; Esc closes the menu */
-    if (code == 103) { tree_sel = (tree_sel + 3) % 4; tree_paint(); }
-    else if (code == 108) { tree_sel = (tree_sel + 1) % 4; tree_paint(); }
+    if (code == 103) { tree_sel = (tree_sel + 4) % 5; tree_paint(); }
+    else if (code == 108) { tree_sel = (tree_sel + 1) % 5; tree_paint(); }
     else if (code == 28 || code == 96) tree_pick(tree_sel);
 }
 void tree_click(int lx, int ly) {
@@ -233,12 +238,12 @@ void tree_click(int lx, int ly) {
         else if (in_box(lx, ly, gx, by, bw, 28)) power_key(28);
         return;
     }
-    if (tree_about || !in_box(lx, ly, spot_lx, spot_ly, TREE_W, 109)) { spot_close(); return; }   /* outside the card, or any click on About, dismisses */
-    for (int r = 0; r < 4; r++) if (in_box(lx, ly, spot_lx + 8, tree_ry(r), TREE_W - 16, SPOT_ROW)) { tree_sel = r; tree_pick(r); return; }
+    if (tree_about || !in_box(lx, ly, spot_lx, spot_ly, TREE_W, TREE_H - 3)) { spot_close(); return; }   /* outside the card, or any click on About, dismisses */
+    for (int r = 0; r < 5; r++) if (in_box(lx, ly, spot_lx + 8, tree_ry(r), TREE_W - 16, SPOT_ROW)) { tree_sel = r; tree_pick(r); return; }
 }
 void tree_hover(int lx, int ly) {
     if (tree_about || tree_dlg) return;
-    for (int r = 0; r < 4; r++) if (in_box(lx, ly, spot_lx + 8, tree_ry(r), TREE_W - 16, SPOT_ROW) && r != tree_sel) { tree_sel = r; tree_paint(); return; }
+    for (int r = 0; r < 5; r++) if (in_box(lx, ly, spot_lx + 8, tree_ry(r), TREE_W - 16, SPOT_ROW) && r != tree_sel) { tree_sel = r; tree_paint(); return; }
 }
 void tui_log(const char *s) { con_quiet = 1; uart_puts(s); }   /* ask.c: the chat view's "tui| ..." lines, UART only (one line, newline included) */
 int volume_key(unsigned code);   /* cmd.c: F11 and F12, Volume Down, Up and Mute */

@@ -180,7 +180,7 @@ int menubar_click(int x, int y);   /* 1 when the click landed on one of the stat
    spot_live, declared above (so every window, drag, app frame and click that stands back for the bar stands back for it), the same saved
    pixels, the same rows of SPOT_ROW and terracotta selection. spot_tree says which card is up. */
 #define TREE_W 220
-#define TREE_H 112
+#define TREE_H 132
 int spot_tree;
 void tree_open(void);
 void tree_key(unsigned code);

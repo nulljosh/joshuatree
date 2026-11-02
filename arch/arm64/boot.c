@@ -14,7 +14,7 @@ void wifi_tick(void);   /* wifi.c, 7.5.4: a failed join is tried again */
 int usb_input_count(void);   /* xhci.c: keyboards plus mice found on the hubs */
 int bt_input_live(void);     /* bt.c: a Bluetooth mouse is connected */
 /* 7.5.3: the screen only sleeps when something attached could wake it (SCREEN_SELFTEST injects its own input). */
-#ifdef SCREEN_SELFTEST
+#if defined(SCREEN_SELFTEST) || TREEMENU_SELFTEST == 3
 static int input_present(void) { return 1; }
 #else
 static int input_present(void) { return usb_input_count() > 0 || bt_input_live(); }
@@ -430,7 +430,7 @@ void main(void) {
         }
     }
 #endif
-#ifdef TREEMENU_SELFTEST   /* 1 restart, 2 shut down: the tree clicked open and driven by the board's own key events, then the power prompt confirmed */
+#ifdef TREEMENU_SELFTEST   /* 1 restart, 2 shut down, 3 sleep: the tree clicked open and driven by the board's own key events */
     {
         int px = sg(12), py = sg(MENUBAR_H) / 2;
         kinput(3, 0, px * 32768 / (int)fb_w + 1); kinput(3, 1, py * 32768 / (int)fb_h + 1); kinput(0, 0, 0);
@@ -438,9 +438,16 @@ void main(void) {
         kinput(1, 1, 1);   /* Esc closes the card */
         uart_puts(spot_live ? "treemenu: esc FAILED\n" : "treemenu: esc survived\n");
         kinput(1, 68, 1);   /* F10 opens it again */
-        kinput(1, 108, 1); if (TREEMENU_SELFTEST == 2) kinput(1, 108, 1);
-        kinput(1, 28, 1);   /* Enter on Restart or Shut Down: the Terminal's prompt */
+        for (int i = 0; i < TREEMENU_SELFTEST; i++) kinput(1, 108, 1);   /* row 1 Sleep, 2 Restart, 3 Shut Down */
+        kinput(1, 28, 1);   /* Enter on the row: Sleep, or the power prompt */
+#if TREEMENU_SELFTEST == 3
+        kinput(1, 28, 0);   /* the Enter's own release must not cancel it */
+        { unsigned t = notice_now(); while (notice_now() - t < 150) screen_tick(); }
+        uart_puts(screen_asleep ? "treemenu: slept\n" : "treemenu: sleep FAILED\n");
+        kinput(1, 57, 1); kinput(1, 57, 0);   /* a key wakes it */
+#else
         kinput(1, 28, 1);   /* Enter confirms: the watchdog */
+#endif
     }
 #endif
 #ifdef KEY_SELFTEST

@@ -135,6 +135,7 @@ extern int spot_live;
 void menubar_notify(const char *message);
 unsigned notice_now(void);
 int screen_blank(unsigned blank);
+void screen_sleep_soon(void);   /* screen_idle.h, 11.0.0: the tree menu's Sleep */
 void splash_creep(void);
 void splash_finish(void);
 extern int splash_on;
@@ -300,7 +301,7 @@ extern int text_init(void);
 extern int text_width(int which, const char *s, int px10);
 extern volatile unsigned irq_ticks;
 #define TIMER_INTID 30   /* the EL1 physical timer, a private interrupt on every GIC */
-#define TREE_H 112
+#define TREE_H 132
 #define TREE_W 220
 extern char vectors[];
 void wall_fill(int x, int y, int w, int h);

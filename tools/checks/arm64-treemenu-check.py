@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""ARM64 tree menu (the mark and "Joshua Tree" at the left of the menu bar): About, Restart, Shut Down, Log Out.
+"""ARM64 tree menu (the mark and "Joshua Tree" at the left of the menu bar): About, Sleep, Restart, Shut Down, Log Out.
 
 Part 1, QEMU virt with ramfb, a USB keyboard and mouse behind a hub, virtio-net and a slow fake relay. Through QMP it:
-  - clicks the tree: the cream card opens under the bar (pixels), four rows hold text, row 0 is terracotta;
+  - clicks the tree: the cream card opens under the bar (pixels), five rows hold text, row 0 is terracotta;
   - Down moves the terracotta to row 1; Esc puts the desktop back pixel for pixel; F10 and Ctrl+Option+T open it again;
-    a click outside dismisses it; a click on the mark while it is open closes it;
+    a click outside dismisses it; a click on the mark while it is open closes it; Sleep says the virt build has no display power;
   - About: Enter shows a window in the middle of the screen (7.6.0) with the mark and the version, any key closes it
     and puts the screen back;
   - Restart by a mouse click and Shut Down by Up/Down/Enter reach the same Enter-confirms prompt as the chords, Esc cancels;
@@ -12,7 +12,8 @@ Part 1, QEMU virt with ramfb, a USB keyboard and mouse behind a hub, virtio-net 
   - Log Out with a Terminal and a Calculator open closes both and leaves the bare wallpaper;
   - mid-question (`sam` waiting on the relay) Restart and Shut Down refuse politely and arm nothing; after the answer they ask.
 Part 2, QEMU raspi4b (no USB; the TREEMENU_SELFTEST builds click the tree and press the keys through the board's own input
-path): Restart reboots the model (the banner prints twice) and Shut Down halts it (QEMU exits 0).
+path): Restart reboots the model (the banner prints twice), Shut Down halts it (QEMU exits 0), and Sleep blanks the screen
+(its Enter's own release does not cancel it) and a key wakes it (11.0.0).
 Skips (exit 0) when clang, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-treemenu-check.py   (from the repo root)
 """
@@ -38,7 +39,7 @@ def slot_centre(slot): return dock_x0 + 10 + slot * (icon + 6) + icon // 2, dock
 MB = 26 * H // 540                       # the menu bar, sg(26)
 MARK = (12 * H // 540, MB // 2)          # the mark's centre
 CX, CY, CW = 8, MB + 2, 220              # the card on the logical grid (main.c TREE_W)
-ROW_Y = [CY + 6, CY + 37, CY + 59, CY + 81]
+ROW_Y = [CY + 6, CY + 37, CY + 59, CY + 81, CY + 103]
 CREAM, TERRA = (0xfa, 0xf8, 0xf4), (0xb5, 0x50, 0x2c)
 WALL = (0x3B, 0x6E, 0xA5)   # the graphite grey wallpaper, the default since 3.9.0; terracotta is the selection, not the wall
 wx, wy, ww, wh = (W - 500) // 2, 100, 500, 350   # the Console's and the Terminal's frame
@@ -109,7 +110,7 @@ try:
         return int(parts[1].split()[0]), parts[3]
     def px(img, x, y): i = (y * img[0] + x) * 3; return tuple(img[1][i:i + 3])
     def region(img, x, y, w, h): return [px(img, i, j) for j in range(y, y + h) for i in range(x, x + w)]
-    CARD = (CX, CY, CW, 112)
+    CARD = (CX, CY, CW, 132)
     def same(img, ref):   # the card's box is the same pixels as the reference, bar the pointer arrow's own box
         a, b = region(img, *CARD), region(ref, *CARD)
         bad = [(i % CW + CX, i // CW + CY) for i in range(len(a)) if a[i] != b[i] and not (abs(i % CW + CX - pos[0]) < 14 and 0 <= i // CW + CY - pos[1] < 24)]
@@ -146,12 +147,12 @@ try:
     check("the card is cream, rounded, under the bar", px(a, CX + CW - 6, CY + 60) == CREAM and px(a, CX + CW // 2, CY + 100) == CREAM
           and region(a, *CARD) != region(base, *CARD), (px(a, CX + CW - 6, CY + 60), px(a, CX + CW // 2, CY + 100)))
     check("the card's corners keep the wallpaper (rounded)", px(a, CX, CY) == WALL, px(a, CX, CY))
-    check("all four rows hold text", all(row_ink(a, r) > 15 for r in range(4)), [row_ink(a, r) for r in range(4)])
+    check("all five rows hold text", all(row_ink(a, r) > 15 for r in range(5)), [row_ink(a, r) for r in range(5)])
     check("row 0 is the terracotta selection, row 1 is not", px(a, CX + 12, ROW_Y[0] + 3) == TERRA and px(a, CX + 12, ROW_Y[1] + 3) == CREAM)
-    check("a hairline sits between About and Restart", px(a, CX + 100, CY + 31) != CREAM, px(a, CX + 100, CY + 31))
+    check("a hairline sits between About and Sleep", px(a, CX + 100, CY + 31) != CREAM, px(a, CX + 100, CY + 31))
     ok = step("treemenu: row 1", lambda: keys("down"))
     b = shot()
-    check("Down moves the selection to Restart", ok and px(b, CX + 12, ROW_Y[1] + 3) == TERRA and px(b, CX + 12, ROW_Y[0] + 3) == CREAM)
+    check("Down moves the selection to Sleep", ok and px(b, CX + 12, ROW_Y[1] + 3) == TERRA and px(b, CX + 12, ROW_Y[0] + 3) == CREAM)
     ok = step("treemenu close", lambda: keys("esc"))
     time.sleep(0.2); c = shot()
     check("Esc closes it and the desktop is back pixel for pixel", ok and same(c, base)[0], same(c, base))
@@ -165,6 +166,12 @@ try:
     check("Ctrl+Option+T opens it from the keyboard", ok)
     ok = step("treemenu close", lambda: click(*MARK))
     check("a click on the mark while it is open closes it", ok)
+
+    # Sleep (11.0.0): on virt there is no display power to switch, and it says so
+    step("treemenu open", lambda: keys("f10"))
+    n = len(uart())
+    keys("down", "ret")
+    check("Down, Enter on Sleep chooses it", wait_for("treemenu: sleep", 6, n) and wait_for("sleep: this build has no display power", 4, n), uart()[n:][-300:])
 
     # About
     step("treemenu open", lambda: keys("f10"))
@@ -183,7 +190,7 @@ try:
 
     # Restart by mouse, Shut Down by keys, both stop at the chords' own confirm, the power dialog (7.7.0)
     step("treemenu open", lambda: click(*MARK))
-    ok = step("Restart? Unsaved", lambda: click(CX + 60, ROW_Y[1] + 10))
+    ok = step("Restart? Unsaved", lambda: click(CX + 60, ROW_Y[2] + 10))
     time.sleep(0.3); dl = shot()
     if os.environ.get("JT_POWER_SHOT"): open(os.environ["JT_POWER_SHOT"], "wb").write(b"P6\n%d %d\n255\n" % (W, H) + dl[1])
     DX, DY = (W - 300) // 2, (H - 180) // 2 - 20   # 7.7.0: the confirm is a dialog in the middle of the screen, not the Terminal
@@ -195,13 +202,13 @@ try:
     time.sleep(0.2)
     check("its Cancel button cancels and puts the screen back", ok and region(shot(), DX, DY, 300, 120) == region(base, DX, DY, 300, 120))   # above the buttons: the arrow rests on Cancel
     step("treemenu open", lambda: keys("f10"))
-    ok = step("Shut down? Unsaved", lambda: keys("down", "down", "ret"))
-    check("Down, Down, Enter on Shut Down asks the same", ok, uart()[-300:])
+    ok = step("Shut down? Unsaved", lambda: keys("down", "down", "down", "ret"))
+    check("Down three times, Enter on Shut Down asks the same", ok, uart()[-300:])
     ok = step("Power action cancelled.", lambda: keys("esc"))
     check("Esc cancels the dialog too", ok)
     step("treemenu open", lambda: keys("f10"))
     n = len(uart())
-    keys("down", "ret")
+    keys("down", "down", "ret")
     ok = wait_for("Restart? Unsaved", 6, n)
     ok2 = step("power: restart (this build has no power control)", lambda: keys("ret"))
     check("Enter on the prompt reaches power_apply (virt has no watchdog)", ok and ok2, uart()[-300:])
@@ -226,12 +233,12 @@ try:
     keys("ret"); time.sleep(1.0)
     step("treemenu open", lambda: keys("f10"))
     n = len(uart())
-    keys("down", "ret")
+    keys("down", "down", "ret")
     ok = wait_for("Wait for Samantha to finish, then try again.", 6, n)
     check("Restart mid-answer is refused politely", ok and "Restart? Unsaved" not in uart()[n:], uart()[n:][-300:])
     step("treemenu open", lambda: keys("f10"))
     n = len(uart())
-    keys("down", "down", "ret")
+    keys("down", "down", "down", "ret")
     ok = wait_for("Wait for Samantha to finish, then try again.", 6, n)
     check("Shut Down mid-answer is refused politely", ok and "Shut down? Unsaved" not in uart()[n:], uart()[n:][-300:])
     n = len(uart()); keys("ret")
@@ -242,7 +249,7 @@ try:
     time.sleep(0.5)
     step("treemenu open", lambda: keys("f10"))
     n = len(uart())
-    keys("down", "ret")
+    keys("down", "down", "ret")
     check("after the answer Restart asks again", wait_for("Restart? Unsaved", 6, n), uart()[n:][-300:])
     if "KERNEL CRASH" in uart(): check("the kernel did not crash", False, uart()[-300:])
 except SystemExit:
@@ -256,8 +263,8 @@ finally:
 # Part 2: the Pi model, real watchdog
 if not fails:
     try:
-        build("treerestart-kernel8.img", "treeshutdown-kernel8.img", env={k: v for k, v in os.environ.items() if not k.startswith("CLAUDE_RELAY")})
-        for name, action in (("treerestart", "restart"), ("treeshutdown", "shutdown")):
+        build("treerestart-kernel8.img", "treeshutdown-kernel8.img", "treesleep-kernel8.img", env={k: v for k, v in os.environ.items() if not k.startswith("CLAUDE_RELAY")})
+        for name, action in (("treerestart", "restart"), ("treeshutdown", "shutdown"), ("treesleep", "sleep")):
             plog = "%s/%s.log" % (tmp, name)
             p = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-serial", "null", "-display", "none", "-serial", "file:" + plog,
                                   "-kernel", os.path.join(arch, name + "-kernel8.img")], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -267,11 +274,12 @@ if not fails:
                     out = open(plog, errors="replace").read() if os.path.exists(plog) else ""
                     if action == "shutdown" and p.poll() is not None: done = p.returncode == 0; break
                     if action == "restart" and out.count("Joshua Tree on ARM64") >= 2: done = p.poll() is None; break
+                    if action == "sleep" and ("screen: awake" in out or "FAILED" in out): done = "treemenu: slept" in out and "screen: asleep" in out and "screen: awake" in out; break
                     if p.poll() is not None: break
                     time.sleep(0.1)
                 check("raspi4b %s through the tree menu (click, Esc, F10, rows, Enter, Enter)" % action,
                       done and "treemenu: esc survived" in out and out.count("treemenu open") == 2 and ("treemenu: " + action) in out
-                      and ("power: " + action) in out, out[-500:])
+                      and (action == "sleep" or ("power: " + action) in out), out[-500:])
             finally:
                 if p.poll() is None: p.terminate()
                 p.wait(timeout=10); p.stderr.close()
@@ -280,5 +288,5 @@ if not fails:
 
 if fails:
     print("FAIL: %d tree menu checks failed" % len(fails)); sys.exit(1)
-print("PASS: the tree menu opens on a click or F10, shows four rows, closes on Esc or an outside click, About shows the version, "
-      "Restart and Shut Down ask the chords' question and refuse mid-answer, Log Out closes every window, raspi4b restarts and halts")
+print("PASS: the tree menu opens on a click or F10, shows five rows, closes on Esc or an outside click, About shows the version, "
+      "Restart and Shut Down ask the chords' question and refuse mid-answer, Log Out closes every window, raspi4b restarts, halts and sleeps (a key wakes it)")
