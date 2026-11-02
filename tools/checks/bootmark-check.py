@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Headless proof the boot splash draws the real landing brand mark
-(landing/logo.svg via kernel/boot_mark.h), not the old stick-figure tree
+"""Headless proof the boot splash draws the real brand mark
+(docs/brand/glyph.png via kernel/boot_mark.h, 7.10), not the old stick-figure tree
 primitive it replaced.
 
 Same boot + pmemsave shape as bootlogo-check.py: boots kernel.elf with
 -display none, pmemsaves the framebuffer right at the boot splash, then
-downsamples the captured mark region and compares it against the source
-SVG rasterized fresh (rsvg-convert, same path gen_boot_mark.py uses) --
+downsamples the captured mark region and compares it against the glyph
+gen_boot_mark.py reads --
 a real image match, not a coordinate guess. Also asserts the captured
 mark clears a fill-coverage floor the old thin-limbed primitive can't,
 so a regression back to the primitive glyph fails this even if some
@@ -88,13 +88,9 @@ cw, ch = crop.size
 # crop. Before 2.12 this stretched the whole square viewBox (margins included) onto the tight crop,
 # which only matched while the mark happened to fill the viewBox; the 2.12 ground line moved the
 # bottom edge and that exposed it.
-ref_png = "/tmp/jt-bootmark-ref.png"
-subprocess.run(["rsvg-convert", "-w", "1000", "-h", "1000", "landing/logo.svg", "-o", ref_png], check=True)
-# Use the alpha channel, not a grayscale of the flattened RGB: rsvg draws
-# the mark as black fill/stroke on transparent, which flattens to
-# black-on-WHITE (inverted brightness vs. the splash's white-ink-on-black),
-# not a coverage map comparable to the captured crop.
-ref = Image.open(ref_png).convert("RGBA").split()[3]
+# 7.10: the source is the painted tree's flat glyph (docs/brand/glyph.png, written by gen_brand_art.py). Use its
+# alpha channel, a coverage map comparable to the captured crop whatever colour the splash draws it in.
+ref = Image.open("docs/brand/glyph.png").convert("RGBA").split()[3]
 ref = ref.crop(ref.point(lambda v: 255 if v > 40 else 0).getbbox()).resize((cw, ch), Image.LANCZOS)
 
 crop_small = crop.resize((64, int(64 * ch / cw)))
@@ -109,12 +105,12 @@ match = sum(1 for a, b in zip(cd, rd) if (a > 40) == (b > 40)) / n
 # a version string.
 coverage = sum(1 for v in cd if v > 40) / n
 
-print(f"mark bbox {bb} ({cw}x{ch}), silhouette match vs source SVG: {match:.1%}, fill coverage: {coverage:.1%}")
+print(f"mark bbox {bb} ({cw}x{ch}), silhouette match vs the glyph: {match:.1%}, fill coverage: {coverage:.1%}")
 fail = 0
 if match < 0.75:
-    fail = 1; print("FAIL: captured splash mark does not match landing/logo.svg -- old stick tree or something else is drawing")
+    fail = 1; print("FAIL: captured splash mark does not match docs/brand/glyph.png -- the old crayon tree or something else is drawing")
 if coverage < 0.08:
     fail = 1; print("FAIL: fill coverage reads like the old thin-limbed stick tree, not the landing mark")
 if not fail:
-    print("PASS: boot splash draws the real landing/logo.svg mark")
+    print("PASS: boot splash draws the brand glyph (the painted tree traced flat)")
 sys.exit(fail)

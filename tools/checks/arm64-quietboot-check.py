@@ -10,7 +10,7 @@ here -DQUIET_BOOT turns it on for virt, which can be clicked). WIFI_ICON_TEST ma
     click on the Terminal tile opens the Terminal (`terminal open`), so the log was kept the whole time.
   - Build 2, joined: the same fan is flat ink, 0x1C1C1E, the clock's ink, with no grey 0x909090 left in it (3.19.1: the speaker and power icons wear the same ink).
   - Build 3, the splash (-DSPLASH_STEP_MS=1500 holds each boot stage so screendumps can catch it): the first dump is solid
-    terracotta with the tree mark centred (ink pixels), a track and one sixth of the bar filled, and no window frame, no menu
+    grey with the flat tree glyph centred (ink pixels), a track and one sixth of the bar filled, and no window frame, no menu
     bar, nothing white; a later dump (after the wifi stage) is still that splash with half the bar; the one before the end has
     five sixths; none of them shows the menu bar's rule or a Console frame. The desktop's first screendump comes after the
     `boot done` line, and the Console's rectangle is flat wallpaper then, too.
@@ -174,8 +174,8 @@ try:
                 pts = [px(img, x, y) for y in range(0, H, 4) for x in range(0, W, 4)]
                 wall = sum(1 for c in pts if c == SPL) / len(pts)
                 white = sum(1 for c in pts if min(c) > 0xEE)
-                cx, sz = W // 2, 110 * H // 540
-                my = H // 2 - 30 * H // 540
+                cx, sz = W // 2, 100 * H // 540   # desk.c splash_begin: the flat glyph, sg(100) square, sg(24) above the middle
+                my = H // 2 - 24 * H // 540
                 inkpx = sum(1 for y in range(my - sz // 2, my + sz // 2) for x in range(cx - sz // 2, cx + sz // 2) if max(px(img, x, y)) < 0x50)
                 rule = px(img, W // 2, 26 * H // 540 - 1)
                 bw = 140 * H // 540; bx = (W - bw) // 2; by = H // 2 + 62 * H // 540
