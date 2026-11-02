@@ -4,6 +4,11 @@ kernel_address=0x80000
 disable_overscan=1
 enable_uart=1
 uart_2ndstage=1
-# 8.9.0: the headphone jack's pins (GPIO 40 and 41) held low from the first firmware stage, so the jack is still through a
-# restart and the boot until a sound plays; audio.c's hw_close holds them low again after each one.
+# 8.9.0: the jack's pins (GPIO 40 and 41) held
+# low from the firmware's first stage, so the
+# jack stays quiet through a restart until a
+# sound plays; audio.c's hw_close holds them low
+# again after each one. Lines stay under 50
+# characters: arm64-sd-check reads this file
+# back through the kernel's cat, which wraps.
 gpio=40,41=op,dl

@@ -64,7 +64,7 @@ def make_card(tag, users, sudoers):
 def card_file(card, name): return mt(card, "mtype", "::JT/" + name).stdout.decode(errors="replace")
 
 W, H = 800, 600
-WX, WY = (W - 500) // 2, 100
+WX, WY = (W - 510) // 2, 36   # 8.9.0: Settings opens at its own 510 wide, 36 down (settings_ui.h SET_WIN_W)
 CX, CY = WX + 8 + 150 + 16, WY + 74            # the card's top left, as settings_ui.h draws it
 ROW = 30
 def row_xy(r): return CX + 150, CY + r * ROW + 15
