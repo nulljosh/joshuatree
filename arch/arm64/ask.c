@@ -308,8 +308,10 @@ void say_wrapped(const char *prefix, const char *s, unsigned n) {   /* browser.c
    can add rows without a rebuild once a second plugin needs it; until then a row here is the cheapest thing that works. */
 struct plugin { const char *name, *arg, *help; void (*run)(const char *text, unsigned n); };
 void nimble_say(const char *q, unsigned n);   /* nimble.c: ask Nimble and print the answer and its sources */
+void shortcut_act(const char *q, unsigned n);   /* below, 11.4.0: save a shortcut under a name the person typed */
 static const struct plugin plugins[] = {
     { "nimble", "QUESTION", "web answer with sources", nimble_say },
+    { "shortcut", "NAME = CMD; CMD", "save a shortcut", shortcut_act },
 };
 #define PLUGIN_N ((unsigned)(sizeof plugins / sizeof plugins[0]))
 #define ACT_PLUGIN 16            /* ACT_PLUGIN + i is plugins[i] */
@@ -385,6 +387,16 @@ static int named_in(const char *q, unsigned qn, const char *name) {
     return 0;
 }
 /* pi-actions end */
+int shortcut_save(const char *name, unsigned nn, const char *body, unsigned bn);   /* cmd.c */
+void shortcut_act(const char *q, unsigned n) {   /* Samantha's [[shortcut NAME = CMD; CMD]]: saved only under a name the person typed (Turing's law 12, as [[save]]) */
+    unsigned eq = 0; while (eq < n && q[eq] != '=') eq++;
+    char name[16]; unsigned nn = 0;
+    for (unsigned i = 0; i < eq && nn < sizeof name - 1; i++) if (q[i] != ' ') name[nn++] = q[i];
+    name[nn] = 0;
+    if (eq >= n || !nn) { kputs("shortcut: write it as NAME = COMMAND; COMMAND\n"); return; }
+    if (!named_in(sam_q, sam_qn, name)) { kputs("shortcut: "); kputs(name); kputs(" was not in your question, not saved\n"); return; }
+    shortcut_save(q, eq, q + eq + 1, n - eq - 1);
+}
 /* A line that carries a password (`adduser NAME PASSWORD`, `deluser NAME PASSWORD`) is shown with the password starred out:
    in the prompt row while it is typed, in the echo after Enter, and so on the UART too. out holds n + 1 bytes. 1 if starred. */
 static int hide_password(const char *s, unsigned n, char *out) {

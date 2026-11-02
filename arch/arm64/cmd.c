@@ -204,6 +204,104 @@ static int is(const char *q, unsigned n, const char *w) {   /* the line starts w
 }
 void logout_request(void);   /* main.c: the login screen comes back on the next pass of the main loop */
 void cmd_run(const char *q, unsigned n, void (*out)(const char *));
+/* 11.4.0, Shortcuts: a few Terminal commands under one name, as macOS's Shortcuts chains actions. JT/SHORTCUT.TXT holds one
+   a line, `NAME = COMMAND; COMMAND`. `shortcut` lists them, `shortcut NAME` runs each command as if it were typed (shown
+   first, with the same sudo rules), `shortcut NAME = ...` saves one and `shortcut rm NAME` drops it. Samantha writes them
+   through her `shortcut` plugin (ask.c), only under a name the person typed. A shortcut never runs another one.
+   ponytail: one 2 KB file read whole each time; a folder of them when someone has more than a screenful. */
+#define SC_FILE "SHORTCUT.TXT"
+#define SC_MAX 2048
+static char sc_buf[SC_MAX + 1];
+static int sc_running;
+static unsigned sc_load(void) {
+    int got = 0;
+    if (sd_ready() && sd_enter_jt(0)) { got = fat_read_file(SC_FILE, sc_buf, SC_MAX); fat_chdir(".."); }
+    if (got < 0) got = 0;
+    sc_buf[got] = 0;
+    return (unsigned)got;
+}
+static void sc_trim(const char **s, unsigned *n) { while (*n && **s == ' ') { (*s)++; (*n)--; } while (*n && (*s)[*n - 1] == ' ') (*n)--; }
+static int sc_name_ok(const char *s, unsigned n) {
+    if (!n || n > 12) return 0;
+    for (unsigned i = 0; i < n; i++) { char c = s[i]; if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) return 0; }
+    return 1;
+}
+static int sc_same(const char *line, unsigned ln, const char *name, unsigned nn) {   /* the line is NAME's: "NAME =" */
+    unsigned k = 0; while (k < ln && line[k] != '=') k++;
+    const char *a = line; unsigned an = k; sc_trim(&a, &an);
+    if (an != nn) return 0;
+    for (unsigned i = 0; i < nn; i++) if (a[i] != name[i]) return 0;
+    return k < ln;
+}
+/* Save (or with no body, drop) NAME. 1 saved, 0 refused (it says why). Shared with Samantha's plugin. */
+int shortcut_save(const char *name, unsigned nn, const char *body, unsigned bn) {
+    sc_trim(&name, &nn); sc_trim(&body, &bn);
+    if (!sc_name_ok(name, nn)) { cmd_out("shortcut: a name is 1 to 12 of a-z, 0-9 and -\n"); return 0; }
+    if (bn > 200) { cmd_out("shortcut: 200 characters at most\n"); return 0; }
+    for (unsigned i = 0; i < bn; i++) if (body[i] == '\n' || body[i] == '\r' || (unsigned char)body[i] < 32) { cmd_out("shortcut: one line only\n"); return 0; }
+    for (unsigned i = 0; i + 8 <= bn; i++)
+        if ((i == 0 || body[i - 1] == ';' || body[i - 1] == ' ') && word_is(body + i, 8, "shortcut") && (i + 8 == bn || body[i + 8] == ' ' || body[i + 8] == ';')) {
+            cmd_out("shortcut: a shortcut cannot run another\n"); return 0;
+        }
+    if (!sd_ready()) { cmd_out("shortcut: no SD card\n"); return 0; }
+    if (!sudo_may_write()) { cmd_out("shortcut: only an admin saves shortcuts\n"); return 0; }
+    static char out[SC_MAX + 1];
+    unsigned n = sc_load(), o = 0, found = 0;
+    for (unsigned i = 0; i < n;) {   /* every other line as it was */
+        unsigned e = i; while (e < n && sc_buf[e] != '\n') e++;
+        if (sc_same(sc_buf + i, e - i, name, nn)) found = 1;
+        else if (e > i) { for (unsigned k = i; k < e; k++) out[o++] = sc_buf[k]; out[o++] = '\n'; }
+        i = e + 1;
+    }
+    if (bn) {
+        if (o + nn + bn + 4 > SC_MAX) { cmd_out("shortcut: the file is full, drop one first\n"); return 0; }
+        for (unsigned k = 0; k < nn; k++) out[o++] = name[k];
+        out[o++] = ' '; out[o++] = '='; out[o++] = ' ';
+        for (unsigned k = 0; k < bn; k++) out[o++] = body[k];
+        out[o++] = '\n';
+    } else if (!found) { cmd_out("shortcut: none named that\n"); return 0; }
+    if (sd_write(SC_FILE, out, o) != 1) { cmd_out("shortcut: the card refused it\n"); return 0; }
+    char nm[13]; for (unsigned k = 0; k < nn; k++) nm[k] = name[k]; nm[nn] = 0;
+    cmd_out(bn ? "shortcut: saved " : "shortcut: dropped "); cmd_out(nm); cmd_out("\n");
+    return 1;
+}
+static void shortcut_command(const char *q, unsigned n) {   /* the words after `shortcut` (n may be 0) */
+    sc_trim(&q, &n);
+    unsigned eq = 0; while (eq < n && q[eq] != '=') eq++;
+    if (eq < n) { shortcut_save(q, eq, q + eq + 1, n - eq - 1); return; }
+    if (is(q, n, "rm")) { shortcut_save(q + 3, n - 3, "", 0); return; }
+    unsigned len = sc_load();
+    if (!n) {
+        if (!len) { cmd_out("shortcut: none yet. shortcut NAME = COMMAND; COMMAND saves one\n"); return; }
+        say_wrapped("", sc_buf, len);
+        return;
+    }
+    if (sc_running) { cmd_out("shortcut: a shortcut cannot run another\n"); return; }
+    for (unsigned i = 0; i < len;) {
+        unsigned e = i; while (e < len && sc_buf[e] != '\n') e++;
+        if (sc_same(sc_buf + i, e - i, q, n)) {
+            unsigned b = i; while (sc_buf[b] != '=') b++;
+            static char body[SC_MAX + 1]; unsigned bn = 0;   /* a copy: a command may read the file again */
+            for (unsigned k = b + 1; k < e; k++) body[bn++] = sc_buf[k];
+            void (*out)(const char *) = cmd_out;
+            sc_running = 1;
+            for (unsigned s = 0; s < bn;) {
+                unsigned t = s; while (t < bn && body[t] != ';') t++;
+                const char *c = body + s; unsigned cn = t - s; sc_trim(&c, &cn);
+                if (cn) {
+                    char shown[204]; unsigned k = 0; for (; k < cn && k < 200; k++) shown[k] = c[k]; shown[k] = 0;
+                    out("shortcut> "); out(shown); out("\n");
+                    cmd_run(c, cn, out);
+                }
+                s = t + 1;
+            }
+            sc_running = 0; cmd_out = out;
+            return;
+        }
+        i = e + 1;
+    }
+    cmd_out("shortcut: none named that. shortcut lists them\n");
+}
 static int eq_(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 static int sudo_run;   /* above 0 while a command runs under sudo: the password was just checked, or is still remembered */
 /* A privileged command (adduser, deluser of someone else, any write to JT/, passwd for someone else, makeadmin, unadmin). With
@@ -572,6 +670,8 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (n == 3 && q[0] == 's' && q[1] == 'a' && q[2] == 'm') { sam_command(q + 3, 0); return; }
     if (is(q, n, "sam")) { sam_command(q + 4, n - 4); return; }
     if (n == 4 && q[0] == 'h' && q[1] == 'e' && q[2] == 'l' && q[3] == 'p') { say_wrapped("", help, sizeof help - 1); return; }
+    if (word_is(q, n, "shortcut")) { shortcut_command(q, 0); return; }
+    if (is(q, n, "shortcut")) { shortcut_command(q + 9, n - 9); return; }
     if ((n == 2 && q[0] == 'l' && q[1] == 's') || is(q, n, "ls")) {
         if (!sd_ready()) { cmd_out("ls: no SD card\n"); return; }
         char dir[64] = "";

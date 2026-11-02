@@ -43,6 +43,8 @@ CASES = [   # reply -> printed text, actions as "kind:text"
 harness = m.group(0) + r"""
 #include <stdio.h>
 #include <string.h>
+void nimble_say(const char *q, unsigned n) { (void)q; (void)n; }   /* the plugins' own code is the kernel's; only the table is under test */
+void shortcut_act(const char *q, unsigned n) { (void)q; (void)n; }
 int main(int argc, char **argv) {
     {   /* [[save]]'s helpers: the first fenced block, and a name the person typed */
         const char *r = "Here.\n```c\nint x;\n```\nmore"; unsigned at = 0, l = code_block(r, (unsigned)strlen(r), &at);
