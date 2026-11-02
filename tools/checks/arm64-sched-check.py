@@ -8,6 +8,8 @@ or more and only asks the time now and then, never yielding. `sched` in the Term
 2. it was cut off at least 10 times (so it ran long enough for the test to mean something),
 3. and no app held the core for more than 60 ms in one turn. Before 8.6.0 a single-threaded app kept the core until it
    yielded or the 3 s watchdog fired, so the pointer and the sound stopped for that long.
+4. (8.9.0) quiet, a windowless app that computes for more than 3 s with no call at all, is not stopped: only an app with a
+   window is frozen after 3 s; one without (plankc compiling) gets 30 s. Before, a slow CI runner stopped plankc mid-build.
 Discriminating: put wd_arm back to 3 s for a lone thread (8.1.0's rule) and busy holds the core for its whole run (3).
 Skips (exit 0) when clang's aarch64 target, ld.lld, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-sched-check.py   (from the repo root)
@@ -48,20 +50,31 @@ void _start(void) {
     jt_exit(0);
 }
 """)
+(tmp / "quiet.c").write_text(r"""#include "jtsys.h"
+static void say(const char *s) { int n = 0; while (s[n]) n++; jt_syscall(JT_SYS_WRITE, 1, (jt_arg)s, (jt_arg)n); }
+__attribute__((section(".text.start"), used))
+void _start(void) {
+    volatile unsigned sum = 0;
+    for (unsigned i = 0; i < QUIET_N; i++) sum += i;   /* no call at all, for longer than 3 s */
+    say(sum == (unsigned)((unsigned long)QUIET_N * (QUIET_N - 1) / 2) ? "quiet: sum ok\n" : "quiet: sum bad\n");
+    jt_exit(0);
+}
+""".replace("QUIET_N", "2400000000u"))
 def busy_sum():   # busy.c's sum, in chunks so it stays a few seconds
     total = 0
     for base in range(0, 120000000, 4000000):
         total += sum(i ^ (i >> 3) for i in range(base, base + 4000000))
     return total & 0xFFFFFFFF
 WANT = busy_sum()
-mk = subprocess.run([str(root / "tools/mkapp.sh"), str(tmp / "busy.c"), str(tmp / "BUSY.APP")], capture_output=True, text=True, timeout=300)
-if mk.returncode: print(mk.stdout + mk.stderr); print("FAIL: tools/mkapp.sh could not build busy.c"); sys.exit(1)
+for app in ("busy", "quiet"):
+    mk = subprocess.run([str(root / "tools/mkapp.sh"), str(tmp / (app + ".c")), str(tmp / (app.upper() + ".APP"))], capture_output=True, text=True, timeout=300)
+    if mk.returncode: print(mk.stdout + mk.stderr); print("FAIL: tools/mkapp.sh could not build " + app + ".c"); sys.exit(1)
 card = str(tmp / "card.img")
 build_card(card, False)
 MT = dict(os.environ, MTOOLS_SKIP_CHECK="1")
 def mt(*a): return subprocess.run([a[0], "-i", f"{card}@@{PART * 512}", *a[1:]], capture_output=True, env=MT)
 if mt("mmd", "::JT").returncode or mt("mmd", "::JT/APPS").returncode: print("FAIL: mtools could not make JT/APPS"); sys.exit(1)
-for f in ("BUSY.APP",):
+for f in ("BUSY.APP", "QUIET.APP"):
     if mt("mcopy", "-o", str(tmp / f), "::JT/APPS/" + f).returncode: print("FAIL: mtools could not copy " + f); sys.exit(1)
 
 log, sock = tmp / "uart", tmp / "qmp"
@@ -106,6 +119,10 @@ try:
     out = say("sched", "sched:", 10)
     w = re.search(r"the longest turn an app took was (\d+) ms", out)
     check("no app held the core for more than 60 ms in one turn (%s ms)" % (w.group(1) if w else "?"), w and int(w.group(1)) <= 60, out[-400:])
+    out = say("userrun quiet", "userrun quiet: exit", 120)
+    c = re.search(r"M3c app quiet was cut off (\d+) times", out); qc = int(c.group(1)) if c else 0
+    check("quiet, with no window, computes past 3 s with no call (%d slices) and is not stopped" % qc,
+          "quiet: sum ok" in out and "userrun quiet: exit 0" in out and qc > 300 and "watchdog" not in out, out[-600:])
     check("no kernel crash", "KERNEL CRASH" not in uart() and "stopped by a fault" not in uart() and q.poll() is None, uart()[-600:])
 finally:
     q.kill(); q.wait()

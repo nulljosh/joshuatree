@@ -130,7 +130,7 @@ try:
     END = re.compile(r"M3c app (\w+) exit (\d+), ran \d+ times")
     CUT = re.compile(r"M3c app threads was cut off (\d+) times")
 
-    out = say("userrun threads", "M3c app threads ")
+    out = say("userrun threads", "userrun threads: exit", 300)
     m, e = LINE.search(out), END.search(out)
     check("threads runs to its own exit 0", e and e.group(1) == "threads" and e.group(2) == "0", out[-900:])
     if m:
@@ -142,7 +142,7 @@ try:
     c = CUT.search(out); sl = int(c.group(1)) if c else 0
     check("its threads took turns: at least 5 slices (%d)" % sl, sl >= 5, out[-400:])
 
-    out = say("userrun nolock", "M3c app nolock ")
+    out = say("userrun nolock", "userrun nolock: exit", 300)
     m = LINE.search(out)
     check("with the lock taken out the 'locked' total is short too (%s)" % (m.group(5) if m else "?"), m and int(m.group(5)) < 2 * ITER, out[-900:])
     check("no kernel crash, and neither app was stopped by a fault", "KERNEL CRASH" not in uart() and "stopped by a fault" not in uart() and q.poll() is None, uart()[-600:])
