@@ -97,6 +97,9 @@ static void pass_note(const char *what, unsigned long t0, int login) {
    magnify could draw them (22 to 31 ms a frame at 1080p in QEMU), so the dock and a dragged window trailed the hand. */
 static int ptr_due;
 void pointer_flush(void) { if (ptr_due) { ptr_due = 0; pointer_moved(); } }
+void kinput(unsigned type, unsigned code, int value);
+static void tp_emit(unsigned type, unsigned code, int value) { kinput(type, code, value); }   /* the trackpad's mouse events come back in here */
+#include "trackpad.h"
 void input_event(struct input_event e) {
     static int first_key;
     if (e.type == 1 && e.value == 1 && desk_ms && !first_key && !login_live) {
@@ -106,6 +109,7 @@ void input_event(struct input_event e) {
 #ifdef PI_BUILD
     if (e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) screen_activity();   /* any key or button or a move wakes the screen */
 #endif
+    if (tp_event(e.type, e.code, (int)e.value, (unsigned)key_ms(), fb_w, fb_h)) return;                  /* 10.2.0: fingers on a trackpad, as mouse events */
     if (e.type == 1 && e.value < 2) {                                                                      /* a real press or release; value 2 is our own repeat */
         if (!e.value) { if (e.code == rep_code) rep_code = 0; }
         else if ((e.code == 14 || (e.code < 58 && ask_char(e.code))) && !(brick_live && !spot_live) && !ctrl_held && !gui_held && !alt_held) {
