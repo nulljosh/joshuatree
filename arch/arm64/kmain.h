@@ -174,7 +174,8 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
     int shown;                            /* the app has presented a frame since its window opened */
     unsigned long base;                   /* its arena: USER_BASE + slot * ARENA_SIZE (apps are position independent, so each loads where its arena is) */
     unsigned l3off, slot;                 /* its first l3 entry; its index in apps */
-    int min;                              /* 6.5.0: minimized into the dock (the yellow dot): alive, off screen, out of the z order */
+    int min;                              /* 6.5.0: minimized into the dock (the yellow dot): alive, off screen, out of the z order; 2: parked on another desktop (11.1.0) */
+    int space;                            /* 11.1.0: the desktop it is parked on, while min is 2 */
     int term;                             /* 7.5.4: started by `userrun` in the Terminal: what it prints after it yields, and how it ends, go there */
     int pin, pout;                        /* 8.3.0: reads fd 0 from the pipe / writes fd 1 into it (`userrun A | userrun B`) */
     unsigned pid, parent;                 /* 8.4.0: its process number, and the slot + 1 of the app that spawned it (0: none) */
@@ -257,6 +258,7 @@ int fb_setup(void);
 extern int fb_swap;
 int front_close(void);
 int app_cycle(void);
+int space_step(int d);   /* appwin.c, 11.1.0: Spaces, Ctrl+Left and Ctrl+Right */
 #define GICC(o) REG(GICC_BASE + (o))
 extern unsigned long heap_next;
 extern unsigned heap_oom;
