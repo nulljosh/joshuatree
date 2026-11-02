@@ -1105,7 +1105,11 @@ void ufile_args_next(const char *s, unsigned n);
 int app_dock(const char *name);                  /* appwin.c */
 unsigned long sched_worst;   /* 8.6.0: `sched` in the Terminal reads it and starts again */
 void app_tick(void) {   /* every app with something to do gets its turn: it runs until it yields, exits or faults, and a fault ends that app alone */
-    __asm__ volatile ("sev");   /* 8.2.0: one wake-up for cores 1 to 3 each desktop pass (core_main counts them) */
+    {   /* 8.2.0: a wake-up for cores 1 to 3 (core_main counts them). 8.9.0: at most every 10 ms, not every pass: on the board
+           the desktop's loop spins, and a sev each pass woke them 59 million times in minutes. */
+        static unsigned long last_sev;
+        if (cnt_now() - last_sev >= cnt_hz() / 100) { last_sev = cnt_now(); __asm__ volatile ("sev"); }
+    }
     {   static char nm[65], arg[65];   /* 7.7.0: an app asked for another (Files opens a song in Music): opened here, between turns */
         if (ufile_launch_take(nm, arg)) {
             unsigned n = 0; while (arg[n]) n++;

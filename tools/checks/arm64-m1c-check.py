@@ -83,6 +83,8 @@ else: print("  ok: start.S is PC-relative and zeroes FPCR")
 if "kernel_address=0x80000" not in open(os.path.join(root, "tools/pi-config.txt")).read():
     fails.append("tools/pi-config.txt lost kernel_address=0x80000")
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from parkwall import park as PARK   # 8.9.0: the Pi image's wallpaper, pixel for pixel
 def shoot(name, qemu_args, image, size=(800, 600), hover=False):
     tmp = tempfile.mkdtemp()
     log, sock, shot = tmp + "/uart", tmp + "/qmp", tmp + "/shot.ppm"
@@ -122,8 +124,9 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         ink = sum(1 for c in win if max(c) < 0x90)                  # dark text pixels
         soft = sum(1 for c in win if 0x30 < c[0] < 0xd0 and c[0] == c[1] == c[2])   # grey edge pixels: only smooth, anti-aliased text has them
         quiet = name.startswith("pi")                               # 3.6.2: the Pi image never draws the Console at boot (arm64-quietboot-check.py)
-        if quiet:
-            flat = sum(1 for c in win if c == (0x3B, 0x6E, 0xA5))
+        if quiet:   # 8.9.0: the Pi image boots on the park picture, so each pixel is checked against it
+            want = [PARK(x, y, w, h) for y in range(win_y + sc(32), win_y + win_h - sc(14)) for x in range(win_x + sc(8), win_x + win_w - sc(4))]
+            flat = sum(1 for c, e in zip(win, want) if c == e)
             if flat != len(win): fails.append(f"{name}: the Console's rectangle is not flat wallpaper ({len(win) - flat} of {len(win)} pixels differ)")
             else: print(f"  ok: {name} no Console window at boot: the rectangle is flat wallpaper")
         elif ink < 300: fails.append(f"{name}: the boot log is not on screen (only {ink} text pixels in the window)")
@@ -145,10 +148,12 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
             if any(abs(a - b) > 32 or a < 0x7f for a, b in zip(bar, want_bar)): bad.append((x, bar, want_bar))
         if bad: fails.append(f"{name}: menu bar is not half wallpaper, half white: {bad}")
         else: print(f"  ok: {name} menu bar is half wallpaper, half white")
-        dsk = [at(x, y) for y in range(mb + sc(10), dock_y - sc(40), max(1, sc(6))) for x in list(range(8, win_x - sc(8), max(1, sc(6)))) + list(range(win_x + win_w + sc(8), w - 8, max(1, sc(6))))]
-        navy = sum(1 for c in dsk if c == (0x3B, 0x6E, 0xA5))   # graphite grey, arch/arm64/wall.c (3.0.0)
-        if navy * 10 < len(dsk) * 9: fails.append(f"{name}: the desktop is not the graphite grey fill ({navy} of {len(dsk)} samples)")
-        else: print(f"  ok: {name} wallpaper is the graphite grey fill: {navy} of {len(dsk)} samples")
+        spots = [(x, y) for y in range(mb + sc(10), dock_y - sc(40), max(1, sc(6))) for x in list(range(8, win_x - sc(8), max(1, sc(6)))) + list(range(win_x + win_w + sc(8), w - 8, max(1, sc(6))))]
+        wall = (lambda x, y: PARK(x, y, w, h)) if quiet else (lambda x, y: (0x3B, 0x6E, 0xA5))   # the park on the Pi, flat blue on QEMU (wall.c)
+        navy = sum(1 for x, y in spots if at(x, y) == wall(x, y))
+        what = "the park picture" if quiet else "the flat blue fill"
+        if navy * 10 < len(spots) * 9: fails.append(f"{name}: the desktop is not {what} ({navy} of {len(spots)} samples)")
+        else: print(f"  ok: {name} wallpaper is {what}: {navy} of {len(spots)} samples")
         # The Console wears the i386 window frame (kernel/gui_paint.c gui_draw_window_frame) on the logical grid: cream
         # body, a hairline under the 30 pixel title band, three traffic lights at x+24/46/68, the name centred in ink,
         # and a white well for the log. Each dot is sampled 5 left of its centre, clear of the "x" and "-" glyphs.

@@ -81,10 +81,10 @@ try:
     o1, w1 = cores(); time.sleep(1.0); o2, w2 = cores()
     check("`cores` says 4 of 4 running and core 0 runs the kernel", "cores: 4 of 4 running" in o1 and "core 0: up, runs the kernel" in o1, o1[-400:])
     check("cores 1 to 3 kept waking: every count went up (%s then %s)" % (w1, w2), sorted(w1) == [1, 2, 3] and all(w2.get(c, 0) > w1[c] for c in w1), (o1[-300:], o2[-300:]))
-    # 8.9.0: they sleep between wake-ups. Core 0 sends one sev a desktop pass, so a second's count is a few hundred, not the
+    # 8.9.0: they sleep between wake-ups. Core 0 sends a sev at most every 10 ms, so a second's count is about a hundred, not the
     # million a second a core spinning on the timer's event stream showed on the board.
-    check("cores 1 to 3 sleep between wake-ups: under 20000 in about a second (%s)" % {c: w2.get(c, 0) - w1.get(c, 0) for c in w1},
-          w1 and all(0 < w2.get(c, 0) - w1[c] < 20000 for c in w1), (w1, w2))
+    check("cores 1 to 3 sleep between wake-ups: at most about 100 a second, under 400 in about a second (%s)" % {c: w2.get(c, 0) - w1.get(c, 0) for c in w1},
+          w1 and all(0 < w2.get(c, 0) - w1[c] < 400 for c in w1), (w1, w2))
     check("no kernel crash", "KERNEL CRASH" not in uart_of(log) and q.poll() is None, uart_of(log)[-400:])
 finally:
     q.kill(); q.wait()

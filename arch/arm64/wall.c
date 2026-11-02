@@ -12,7 +12,7 @@ static unsigned wall_rgb = 0x003B6EA5u;   /* a calm blue (Joshua: "a nice blue, 
 
 unsigned wall_px(int x, int y, int w, int h) {   /* the wallpaper's colour at screen pixel x, y of a w x h screen, 0x00RRGGBB */
     if (!(wall_rgb & WALL_PARK)) return wall_rgb;
-    unsigned px = (unsigned)x * PARK_W / (unsigned)w, py = (unsigned)y * PARK_H / (unsigned)h;
+    unsigned px = (unsigned)x * ((PARK_W << 16) / (unsigned)w) >> 16, py = (unsigned)y * PARK_H / (unsigned)h;   /* wall_span's own step, so the two agree */
     unsigned char b = park_px[(py * PARK_W + px) / 2];
     unsigned c = park_pal[px & 1 ? b & 15 : b >> 4];
     if ((y & 3) == 3) c = ((c >> 16 & 0xFF) * 4 / 5) << 16 | ((c >> 8 & 0xFF) * 4 / 5) << 8 | (c & 0xFF) * 4 / 5;   /* the scanline */

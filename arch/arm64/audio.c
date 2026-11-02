@@ -188,13 +188,27 @@ static void app_finish(void) {
     put_str("audio: app stream "); put_dec(app_fed); put_str(" frames at "); put_dec(aq_rate); put_str(" Hz, ring sum 0x"); put_hex(app_hash);
     put_str(", abs "); put_dec(app_abs); put_str(", volume "); put_dec((unsigned)volume); put_str(", played "); put_dec(app_played); put_str("\n");
 }
+/* 8.9.0: the pop at a song's start and at pause (Joshua, on the board: "only on start and pause, not during"). The PWM's
+   silence is its midpoint, half the supply, and the jack sits at the bottom while the PWM is off, so the first frame stepped
+   it up and the stop dropped it down. Now a stream rises from the bottom to the midpoint over 20 ms before the app's first
+   frame, and at its end falls back over 20 ms and rests at the bottom until the PWM stops. */
+static int fading;              /* the stream's sound is out and the fall to the bottom is queued */
+static unsigned long fade_end;  /* the frame after which the fall, and a little bottom, have played */
+static unsigned fade_n(void) { unsigned n = aq_rate / 50; return n < GUARD ? GUARD : n; }
+static unsigned fade_at(unsigned k, unsigned n, int up) {   /* frame k of n of a smoothstep (3t^2 - 2t^3) between bottom and midpoint */
+    unsigned long t = (unsigned long)(up ? k : n - k) * 1024 / n, e = (3 * t * t * 1024 - 2 * t * t * t) / (1024UL * 1024UL);   /* 0..1024 */
+    return (unsigned)(silence * e / 1024);
+}
 static void app_begin(void) {
     range = 27000000u / aq_rate;
     silence = (unsigned)(32768 * (int)range >> 16);   /* sample 0: the PWM's midpoint */
     for (unsigned i = 0; i < PCM_FRAMES * 2; i++) pcm[i] = silence;
+    unsigned n = fade_n();
+    for (unsigned k = 0; k < n; k++) pcm_put(k, fade_at(k, n, 1));   /* the rise, first thing the DMA plays */
     pcm_clean(0, PCM_FRAMES);
     app_hash = 2166136261u; app_abs = app_fed = 0;
-    pump_at = 0; pcm_wr = run0 = GUARD;
+    fading = 0;
+    pump_at = 0; pcm_wr = run0 = n;
     if (pcm_start()) { fail("app sound did not start"); aq_tail = aq_head; aq_end = 0; return; }
     app_live = 1;
 }
@@ -211,7 +225,20 @@ void audio_pump(void) {
     for (unsigned long k = from; k < done; k++) pcm_put(k, silence);   /* behind it, silence again, for its next lap */
     pcm_clean(from, done);
     pump_at = done;
-    if (aq_head == aq_tail) { if (done >= pcm_wr) app_finish(); return; }   /* all of it sent: the stream ends once the hardware has taken it */
+    if (aq_head == aq_tail) {   /* all of it sent: once the hardware has taken it, the fall to the bottom, then the stream ends */
+        if (done < pcm_wr) return;
+        if (!fading) {
+            unsigned long at = done + GUARD; unsigned n = fade_n(), rest = aq_rate / 4;
+            for (unsigned k = 0; k < n; k++) pcm_put(at + k, fade_at(k, n, 0));
+            for (unsigned k = 0; k < rest; k++) pcm_put(at + n + k, 0);   /* the bottom, until the PWM stops */
+            pcm_clean(at, at + n + rest);
+            fade_end = at + n + GUARD; fading = 1;
+            return;
+        }
+        if (done >= fade_end) app_finish();
+        return;
+    }
+    fading = 0;   /* more sound came while it fell: it carries on (a short dip, not a pop to the bottom and back) */
     if (pcm_wr < done) pcm_wr = run0 = done + GUARD;      /* it ran dry: carry on just ahead of it */
     unsigned long wr0 = pcm_wr, ahead = done + aq_rate / 8;
     while (pcm_wr < ahead && aq_head != aq_tail) {

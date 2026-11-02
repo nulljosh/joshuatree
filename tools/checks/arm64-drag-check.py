@@ -30,6 +30,8 @@ def check(name, ok, detail=""):
     print(("  ok: " if ok else "  FAIL: ") + name + ("" if ok else "  " + repr(detail)[:500]))
     if not ok: fails.append(name)
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from parkwall import park   # 8.9.0: the Pi image boots on the park picture
 WALL, RED, YELLOW, GREY, WHITE = (0x3B, 0x6E, 0xA5), (0xFF, 0x5F, 0x57), (0xFF, 0xD6, 0x4A), (0xD8, 0xD4, 0xCE), (255, 255, 255)
 
 def geom(w, h):   # main.c's numbers: scale, the window's logical rectangle, the lowest and highest places it may sit
@@ -61,14 +63,15 @@ def flat(img, x, y, w, h, colour, skip=()):   # every pixel of the rectangle is 
         for i in range(w):
             if tuple(r[i * 3:i * 3 + 3]) != colour and not any(bx <= x + i < bx + bw and by <= y + j < by + bh for bx, by, bw, bh in skip): bad += 1
     return bad
-def left_over(img, old, new, skip):   # pixels of the old rectangle outside the new one that are not wallpaper
+def left_over(img, old, new, skip, park_wall=False):   # pixels of the old rectangle outside the new one that are not wallpaper (the park picture on a Pi image, 8.9.0)
     bad = 0
     ox, oy, w, h = old; nx, ny = new[0], new[1]
     for j, r in enumerate(rows(img, ox, oy, w, h)):
         for i in range(w):
             x, y = ox + i, oy + j
             if nx <= x < nx + w and ny <= y < ny + h: continue
-            if tuple(r[i * 3:i * 3 + 3]) != WALL and not any(bx <= x < bx + bw and by <= y < by + bh for bx, by, bw, bh in skip): bad += 1
+            want = park(x, y, img[0], img[1]) if park_wall else WALL
+            if tuple(r[i * 3:i * 3 + 3]) != want and not any(bx <= x < bx + bw and by <= y < by + bh for bx, by, bw, bh in skip): bad += 1
     return bad
 def dots(img, wx, wy, s):
     return [px(img, (wx + d - 5) * s, (wy + 16) * s) for d in (24, 46, 68)]   # left of each glyph, which sits in the dot's middle
@@ -240,7 +243,7 @@ if "raspi4b" in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capt
                 img = screendump(cmd, tmp)
                 old = (wx * s, wy * s, lw * s, lh * s)
                 check("pi 1080p: the dots are at the clamped place", dots(img, nx, ny, s) == [RED, YELLOW, GREY], dots(img, nx, ny, s))
-                check("pi 1080p: the old area is flat wallpaper", left_over(img, old, (nx * s, ny * s), []) == 0, left_over(img, old, (nx * s, ny * s), []))
+                check("pi 1080p: the old area is the park wallpaper again", left_over(img, old, (nx * s, ny * s), [], True) == 0, left_over(img, old, (nx * s, ny * s), [], True))
                 well = [px(img, x, y) for y in range((ny + 40) * s, (ny + lh - 12) * s, 7) for x in range((nx + 12) * s, (nx + lw - 12) * s, 7)]
                 check("pi 1080p: the white well came along", sum(1 for c in well if c == WHITE) * 2 > len(well), len(well))
         finally:

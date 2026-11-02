@@ -63,8 +63,11 @@ static int mode;
 static unsigned cm_ctl, gpfsel4 = 0x040, pup = 0xFFFFFFFF, gpclr1, pwm_ctl = 0xDEAD, rng1, rng2, fifo_len, fifo_n, minv = ~0u, maxv, first[8], lastv;
 static unsigned long reads;
 void kputs(const char *s) { fputs(s, stdout); }
+static unsigned long dma_pos;   /* 8.9.0: the fake DMA's place in the PWM ring, in frames */
 unsigned audio_rd(unsigned long a) {
     reads++;
+    if (a == DMA_REG(0x0C)) return BUS(pcm) + (unsigned)(dma_pos % PCM_FRAMES) * 8;
+    if (a == DMA_ENABLE) return 0;
     if (a == CM_BASE + 0xA0) return (cm_ctl & 0x7F) | (mode != 1 && (cm_ctl & 0x10) ? 0x80 : 0);
     if (a == GPIO_BASE + 0x10) return gpfsel4;
     if (a == GPIO_BASE + 0xE8) return pup;
@@ -83,7 +86,7 @@ void audio_wr(unsigned long a, unsigned v) {
     else if (a == GPIO_BASE + 0xE8) pup = v;
     else if (a == GPIO_BASE + 0x2C) gpclr1 |= v;
     else if (a == PWM1_BASE + 0x00) { pwm_ctl = v; if (v & 0x40) fifo_len = 0; }
-    else if (a == PWM1_BASE + 0x04) { }
+    else if (a == PWM1_BASE + 0x04 || a == PWM1_BASE + 0x08 || a == DMA_ENABLE || a == DMA_REG(0x00) || a == DMA_REG(0x04)) { }
     else if (a == PWM1_BASE + 0x10) rng1 = v;
     else if (a == PWM1_BASE + 0x20) rng2 = v;
     else if (a == PWM1_BASE + 0x18) {
@@ -97,6 +100,22 @@ int main(int argc, char **argv) {
     mode = atoi(argv[1]);
     int r;
     if (atoi(argv[2]) >= 0) audio_set_volume(atoi(argv[2]));   /* -1: leave the default */
+    if (!strcmp(argv[3], "app")) {   /* 8.9.0: an app's clip of pure silence; what the DMA plays must rise from the bottom and fall back */
+        static unsigned char clip[3000]; memset(clip, 128, sizeof clip);
+        audio_app_queue(clip, sizeof clip, 16000, 1);
+        long first = -1, last = -1, prev = -1, jump = 0, n = 0;
+        for (int step = 0; step < 4000 && audio_busy(); step++) {
+            for (int k = 0; k < 37; k++, dma_pos++) {
+                long v = pcm[(dma_pos % PCM_FRAMES) * 2];
+                if (first < 0) first = v;
+                if (prev >= 0 && labs(v - prev) > jump) jump = labs(v - prev);
+                prev = last = v; n++;
+            }
+            audio_pump();
+        }
+        printf("RESULT mode=app first=%ld last=%ld jump=%ld range=%u live=%d played=%ld\n", first, last, jump, range, audio_busy(), n);
+        return 0;
+    }
     if (!strcmp(argv[3], "tone")) r = audio_tone(atoi(argv[4]), atoi(argv[5]));
     else if (!strcmp(argv[3], "chime")) r = audio_chime();
     else {
@@ -127,6 +146,14 @@ def run(mode, *args, vol=100):   # vol 100 keeps the FIFO numbers below at full 
     return p.stdout, dict(kv.split("=") for kv in res.group(1).split()) if res else {}
 
 
+# 8.9.0: an app's stream (Music) rises from the bottom over 20 ms and falls back before the PWM stops: no pop at start or pause
+out, d = run(0, "app")
+if d:
+    rg = int(d.get("range", 0))
+    ok = d.get("live") == "0" and int(d["first"]) <= rg // 32 and int(d["last"]) <= rg // 32 and int(d["jump"]) <= rg // 40
+    if ok: print("  ok: an app's stream starts at the bottom, rises and falls in small steps (largest %s of %d), and ends at the bottom" % (d["jump"], rg))
+    else: fails.append(f"app stream pops: {d}")
+else: fails.append(f"app stream harness said nothing: {out[-300:]!r}")
 # 7.7.0: the restart chime starts and ends on the PWM's midpoint (no step, no pop) and is loud enough to hear in between
 out, d = run(0, "chime")
 if d:
