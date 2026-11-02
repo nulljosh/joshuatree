@@ -27,5 +27,6 @@ Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with t
 21. **Spaces.** Open Calendar, then Ctrl+Right: an empty desktop, and the menu bar says Desktop 2. Open Notes there, Ctrl+Left: Calendar is back alone. Notes' dock tile takes you to Desktop 2.
 22. **Mission Control.** With two apps open, Ctrl+Up: the desktops along the top and both windows side by side. Enter or a click brings one up; a desktop chip goes there; Esc closes it.
 23. **Glass.** Settings, Display, Tab to Glass, Right twice: the menu bar turns milkier (Tinted). Left four times: Clear, the wallpaper shows through. It stays after a restart.
+24. **Shortcuts.** In the Terminal, `shortcut loud = vol 30; vol`, then `shortcut loud`: each command shows, then runs. `sam make a shortcut called night that sets volume 10`, then `shortcut night`.
 
 Steps 1 to 3 are 10.0, 4 is 9.0's touch screen; 5 to 9 are last night's fixes.
