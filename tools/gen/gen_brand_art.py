@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lay the brand mark into its PNG copies.
 
-7.10: the mark is a painted Joshua tree (docs/brand/tree.png, 1024 px on nothing), in the naturalistic gouache style
+8.0: the mark is a painted Joshua tree (docs/brand/tree.png, 1024 px on nothing), in the naturalistic gouache style
 of a wildlife album cover, replacing the crayon tree tools/gen/logo.py drew. Every copy below is that painting on the
 page; it keeps its own colours on light and dark pages alike.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Headless proof the boot splash draws the real brand mark
-(docs/brand/glyph.png via kernel/boot_mark.h, 7.10), not the old stick-figure tree
+(docs/brand/glyph.png via kernel/boot_mark.h, 8.0), not the old stick-figure tree
 primitive it replaced.
 
 Same boot + pmemsave shape as bootlogo-check.py: boots kernel.elf with
@@ -88,7 +88,7 @@ cw, ch = crop.size
 # crop. Before 2.12 this stretched the whole square viewBox (margins included) onto the tight crop,
 # which only matched while the mark happened to fill the viewBox; the 2.12 ground line moved the
 # bottom edge and that exposed it.
-# 7.10: the source is the painted tree's flat glyph (docs/brand/glyph.png, written by gen_brand_art.py). Use its
+# 8.0: the source is the painted tree's flat glyph (docs/brand/glyph.png, written by gen_brand_art.py). Use its
 # alpha channel, a coverage map comparable to the captured crop whatever colour the splash draws it in.
 ref = Image.open("docs/brand/glyph.png").convert("RGBA").split()[3]
 ref = ref.crop(ref.point(lambda v: 255 if v > 40 else 0).getbbox()).resize((cw, ch), Image.LANCZOS)

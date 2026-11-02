@@ -4,7 +4,7 @@
 
 #define MARK_GROUND 0x001C1C1E   /* 3.0.0: flat ink; the kernels draw the glyph in one colour */
 
-/* The splash: docs/brand/glyph.png, the painted tree traced flat (7.10). _acc is the part of each pixel that is the soil. */
+/* The splash: docs/brand/glyph.png, the painted tree traced flat (8.0). _acc is the part of each pixel that is the soil. */
 #define BOOT_MARK_W 160
 #define BOOT_MARK_H 160
 

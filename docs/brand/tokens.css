@@ -4,7 +4,7 @@
    a 4 px grid, one space ladder); the desktop colours are the kernel's constants, named in docs/ARCHITECTURE.md. */
 :root {
   color-scheme: light dark;
-  /* Colour: paper, ink and one terracotta, all taken from the painted tree (7.10): its paper, its darkest bark, its soil. */
+  /* Colour: paper, ink and one terracotta, all taken from the painted tree (8.0): its paper, its darkest bark, its soil. */
   --bg: #f4f3ec;        /* paper */
   --fg: #261a13;        /* ink: the painting's darkest bark */
   --sub: #66574a;       /* ink soft: secondary text */

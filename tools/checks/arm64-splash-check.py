@@ -2,7 +2,7 @@
 """The Pi's boot splash is a neutral grey screen with the flat tree glyph in one ink in the middle and a calm grey bar under it.
 
 Joshua's photo of the real boot once showed a terracotta screen and a dark blurry blob where the mark should be. The splash paints
-light grey 0xE5E5E7 and, since 7.10, the glyph (arch/arm64/splash_mark.h, from docs/brand/glyph.png) in ink 0x1C1C1E, Apple style.
+light grey 0xE5E5E7 and, since 8.0, the glyph (arch/arm64/splash_mark.h, from docs/brand/glyph.png) in ink 0x1C1C1E, Apple style.
 Boots the -DQUIET_BOOT -DSPLASH_STEP_MS=1500 build headless on QEMU's virt machine with ramfb, takes a screendump while the splash
 holds, and asserts on real pixels: the background is the grey, nothing outside the mark's box is terracotta, and the box matches
 the glyph inked on the grey at that size (mean colour difference) with no colour in it, so a torn, missing, blurred or painted mark fails.

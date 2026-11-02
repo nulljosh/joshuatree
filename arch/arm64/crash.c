@@ -173,7 +173,7 @@ static unsigned mark_lerp_n(const unsigned char *m, int n, int x0, int y0, int w
 static unsigned mark_lerp(const unsigned char *m, int x0, int y0, int wx, int wy) { return mark_lerp_n(m, MENU_MARK_W, x0, y0, wx, wy); }
 #ifdef QUIET_BOOT
 /* The splash's mark over a known flat ground written straight to the screen, so nothing depends on what was there
-   before. 7.10, Apple style: the flat glyph in one ink (splash_mark.h, 400 px coverage), each screen pixel the
+   before. 8.0, Apple style: the flat glyph in one ink (splash_mark.h, 400 px coverage), each screen pixel the
    average coverage of the stored pixels under it. */
 #include "splash_mark.h"
 void splash_mark(int cx, int cy, int T, unsigned bg) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The mascot as a PNG the ARM64 kernel decodes at run time: arch/arm64/mascot_art.h.
 
-7.10: the painted tree (docs/brand/tree.png), the brand mark, in place of the crayon mascot, at 192 x 192 RGBA on nothing:
+8.0: the painted tree (docs/brand/tree.png), the brand mark, in place of the crayon mascot, at 192 x 192 RGBA on nothing:
 96 logical pixels at the Pi's 2x scale, so it lands 1:1 at 1080p and is sampled down at 800x600. The kernel's own
 png_decode (drivers/png.h, 8-bit RGBA) reads it; the Browser's empty and error screens draw it.
 
