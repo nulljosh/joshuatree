@@ -96,6 +96,12 @@ int main(void) {
     vol = 70; settings_set_wall(0); settings_set_dock(7); repaints = 0; wall_rgb = 0; settings_load();
     assert(vol == 30 && settings_wall() == 2 && wall_rgb == 0x00923F20 && settings_dock() == 11 && repaints == 1 && settings_saved() == 1);
     repaints = 0; settings_load(); assert(repaints == 0);   /* nothing changed: no repaint */
+    {   /* 8.9.0: a file from before 8.9 (no zoom= line) keeps volume and dock but not its wallpaper: the new default shows */
+        char keep[96]; int kl = file_len; memcpy(keep, file, sizeof keep);
+        memcpy(file, "volume=40\nwall=3\ndock=9\n", 24); file_len = 24;
+        int wp = settings_wall(); settings_load(); assert(vol == 40 && settings_wall() == wp && settings_dock() == 9);
+        memcpy(file, keep, sizeof keep); file_len = kl; settings_set_dock(11);
+    }
     may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 32); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
     may = 1;
     card = 0; vol = 20; settings_save(); assert(settings_saved() == -1 && vol == 20 && settings_wall() == 2);   /* no card: said, and the choices stay */

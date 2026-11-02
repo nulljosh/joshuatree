@@ -136,7 +136,11 @@ void settings_load(void) {
     int got = fat_read_file(SET_FILE, buf, sizeof buf);
     fat_chdir("..");
     if (got <= 0) return;
+    int mag0 = mag; mag = -1;
     settings_parse(buf, (unsigned)got, &vol, &wall, &dock, &mag);
+    if (mag < 0) { mag = mag0; wall = wall_pick; }   /* 8.9.0: a file from before 8.9 (no zoom= line) keeps its volume and dock,
+                                                       but its wallpaper was the old default, so the new default (the park on
+                                                       the Pi) shows once; the next save writes zoom= and the choice sticks */
     audio_set_volume(vol);
     settings_set_dock(dock);
     settings_set_mag(mag);
