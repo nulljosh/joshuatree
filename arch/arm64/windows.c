@@ -226,12 +226,14 @@ const char *const game_names[11] = {"Mines", "Toroid", "Hamurabi", "Keyrate", "S
 int lp_mode;                       /* 4.1.2: spot_live holds the Launchpad's card, not Spotlight's bar */
 void lp_open(void);
 void lp_click(int lx, int ly);
+void mc_click(int lx, int ly);   /* keys.c */
 void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
     if (spot_live && spot_tree) { tree_click(lx, ly); return; }   /* the tree menu is up: a click is a row, or it dismisses the card */
     if (tree_bar_hit()) { spot_close(); tree_open(); return; }
-    if (spot_live && lp_mode) { lp_click(lx, ly); return; }   /* the Launchpad takes the click: a cell opens, anywhere else closes it */
+    if (spot_live && lp_mode) { lp_click(lx, ly); return; }
+    if (spot_live && mc_mode) { mc_click(lx, ly); return; }   /* 11.2.0: Mission Control takes the click */   /* the Launchpad takes the click: a cell opens, anywhere else closes it */
     if (spot_live && slot < 0) return;   /* the bar is over the windows: a raise under it would leave its saved pixels stale */
     if (slot < 0 && menubar_click((int)mouse_x, (int)mouse_y)) return;   /* a status icon in the menu bar: Settings at its section */
     int on_win = in_box(lx, ly, win_lx, win_ly, win_lw, win_lh), on_calc = calc_live && in_box(lx, ly, calc_lx, calc_ly, calc_lw, calc_lh);

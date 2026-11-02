@@ -2547,7 +2547,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (376 checks)
+### The suite (377 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2574,6 +2574,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Browser on a full heap: with 3 to 4 MiB of heap free, a small page still loads (the reply buffer shrinks to fit, 4 MiB down to 256 KiB) | `tools/checks/arm64-browser-lowmem-check.py` | once |
 | Genie on the Pi: the yellow dot minimizes Calendar's window into its dock tile over five frames or more, the desktop comes back exactly, the app keeps running, and its tile brings the window back pixel for pixel, in headless QEMU | `tools/checks/arm64-genie-check.py` | once |
 | Spaces on the Pi: Ctrl+Right and Ctrl+Left step between four desktops, an app's window stays on its own (not drawn, not clickable, still running), Cmd+Tab keeps to the desktop, and a dock tile goes to its window's desktop, in headless QEMU | `tools/checks/arm64-spaces-check.py` | once |
+| Mission Control on the Pi: Ctrl+Up shows the four desktops and this desktop's app windows as thumbnails, Enter raises one, a chip goes to its desktop, Esc or a click outside closes it and puts the screen back, in headless QEMU | `tools/checks/arm64-mission-check.py` | once |
 | Traffic lights on the Pi: the front window's dots are plain until the pointer is over them, a window behind another goes grey, and focus moves the colour, in headless QEMU | `tools/checks/arm64-traffic-check.py` | once |
 | Pi keyboard shutdown and restart: confirmed HID chords halt or reboot raspi4b, Escape cancels, busy and hidden prompts refuse (host and QEMU) | `tools/checks/arm64-power-check.py` | once |
 | ARM tree menu: click or F10 opens About, Restart, Shut Down and Log Out (pixels, keys, outside click), power rows confirm and refuse mid-answer, Log Out closes windows, raspi4b restarts and halts | `tools/checks/arm64-treemenu-check.py` | once |

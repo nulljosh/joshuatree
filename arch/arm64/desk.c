@@ -255,7 +255,8 @@ int ui_key(unsigned code) {   /* a key down, before any pane sees it: 1 if the d
     if (browser_live && ((gui_held && code == 17) || (ctrl_held && !gui_held && code == 15))) { unsigned f; if (browser_tabs(&f) > 1) return browser_key(code); }   /* 6.16.0: Cmd+W and Ctrl+Tab are Blackcomb's while it has more than one tab */
     if (gui_held && (code == 17 || code == 16)) return front_close();   /* Cmd+W closes the front window, Cmd+Q quits the front app: every window here is one app's, so both end it */
     if ((gui_held || ctrl_held) && code == 15) return app_cycle();
-    if (ctrl_held && !gui_held && (code == 105 || code == 106)) return space_step(code == 106 ? 1 : -1);   /* 11.1.0: Spaces, Ctrl+Left and Ctrl+Right */   /* Cmd+Tab, or Ctrl+Tab on a keyboard with no Cmd */
+    if (ctrl_held && !gui_held && code == 103 && !(spot_live && mc_mode)) { spot_close(); mc_open(); return 1; }   /* 11.2.0: Mission Control, Ctrl+Up */
+    if (ctrl_held && !gui_held && (code == 105 || code == 106) && !spot_live) return space_step(code == 106 ? 1 : -1);   /* 11.1.0: Spaces, Ctrl+Left and Ctrl+Right */   /* Cmd+Tab, or Ctrl+Tab on a keyboard with no Cmd */
     if (gui_held && code == 63) { reader_set(!reader_on); return 1; }   /* 10.0.0: Cmd+F5, the screen reader, as on a Mac */
     if (code == 59 || (gui_held && code == 57)) { if (spot_live) spot_close(); else spot_open(); return 1; }   /* F1 or Cmd+Space toggle, like a Mac; Ctrl/Alt+Space and a bare Space do nothing (Joshua, 2026-10-11, on the board) */
     if (code == 68 || (ctrl_held && alt_held && code == 20)) { int was = spot_live && spot_tree; spot_close(); if (!was) tree_open(); return 1; }   /* F10 or Ctrl+Option+T: the tree menu, for a board with no mouse; again closes it */

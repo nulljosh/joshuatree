@@ -73,7 +73,7 @@ void spot_open(void) {
     int s = (int)window_scale(), w = SPOT_W * s, h = spot_hmax() * s;
     spot_lx = ((int)fb_w / s - SPOT_W) / 2; spot_ly = sg(MENUBAR_H) / s + 24;
     if (!spot_buf()) { uart_puts("oom spotlight\n"); return; }
-    spot_bw = SPOT_W; spot_bh = spot_hmax(); lp_mode = 0;
+    spot_bw = SPOT_W; spot_bh = spot_hmax(); lp_mode = 0; mc_mode = 0;
     cur_hide();
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) spot_under[j * w + i] = fb[(unsigned)(spot_ly * s + j) * fb_pitch + (unsigned)(spot_lx * s + i)];
     spot_live = 1; spot_tree = 0; spot_len = 0; spot_text[0] = 0; spot_sel = 0;
@@ -90,8 +90,8 @@ void spot_close(void) {
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];
     fb_flush(x, y, w, h);
     spot_live = 0;
-    con_quiet = 1; uart_puts(spot_tree ? "treemenu close\n" : lp_mode ? "launchpad close\n" : "spotlight close\n");
-    spot_tree = 0; lp_mode = 0;
+    con_quiet = 1; uart_puts(spot_tree ? "treemenu close\n" : lp_mode ? "launchpad close\n" : mc_mode ? "mission control close\n" : "spotlight close\n");
+    spot_tree = 0; lp_mode = 0; mc_mode = 0;
     cur_show();
     if (app_front && app_shown) app_paint();   /* frames the app presented under the bar were held back */
 }
@@ -179,9 +179,95 @@ static int lp_key(unsigned code) {   /* arrows move the selection, Enter opens i
     }
     return 1;
 }
+/* 11.2.0, Mission Control (Ctrl+Up; again, or Esc, closes it): the four desktops as chips along the top, this desktop's app
+   windows as thumbnails below, as on a Mac. A click or Enter on a window brings it up, a click on a chip (or 1 to 4, or
+   Ctrl+Left and Ctrl+Right) goes to that desktop. A third card on Spotlight's machinery at the Launchpad's size, so its saved
+   pixels, spot_close and every gate an open card already closes (clicks, an app's new frames, the traffic lights) hold here.
+   ponytail: a still picture taken as it opens, app windows only (the Console stays behind the card, and Settings, Blackcomb,
+   Brick, the clock and the Calculator close, as on a desktop switch); live thumbnails when someone misses them. */
+int mc_mode;
+static int mc_n, mc_sel, mc_r[APP_SLOTS][4];
+static unsigned char mc_slot[APP_SLOTS];
+#define MC_CHIP_W 110
+#define MC_CHIP_H 26
+#define MC_TERRA 0x00b5502c
+static int mc_chip_x(int k) { return spot_lx + (LP_W - (4 * MC_CHIP_W + 3 * 10)) / 2 + k * (MC_CHIP_W + 10); }
+static int mc_chip_y(void) { return spot_ly + 14; }
+static void mc_ring(int i, unsigned c) {   /* the selection: a 3 px ring just outside the thumbnail */
+    int *r = mc_r[i], s = (int)window_scale();
+    window_rect(r[0] - 4, r[1] - 4, r[2] + 8, 3, c); window_rect(r[0] - 4, r[1] + r[3] + 1, r[2] + 8, 3, c);
+    window_rect(r[0] - 4, r[1] - 1, 3, r[3] + 2, c); window_rect(r[0] + r[2] + 1, r[1] - 1, 3, r[3] + 2, c);
+    fb_flush((r[0] - 4) * s, (r[1] - 4) * s, (r[2] + 8) * s, (r[3] + 8) * s);
+}
+void mc_open(void) {
+    if (spot_live || !fb) return;
+    int s = (int)window_scale(), w = LP_W * s, h = LP_H * s, top = sg(MENUBAR_H) / s, bot = gui_dock_band_top();
+    if (!spot_buf()) { uart_puts("oom mission control\n"); return; }
+    settings_close(); brick_close(); clock_close(); browser_close(); calc_close();
+    spot_lx = ((int)fb_w / s - LP_W) / 2; spot_ly = top + (bot - top - LP_H) / 2;
+    if (spot_ly < top + 4) spot_ly = top + 4;
+    mc_n = (int)app_zn; mc_sel = 0;
+    int ax = spot_lx + 14, ay = spot_ly + 54, aw = LP_W - 28, ah = LP_H - 68;
+    int cols = mc_n > 2 ? 2 : mc_n ? mc_n : 1, rows = mc_n > 2 ? 2 : 1, cw = aw / cols, ch = ah / rows;
+    unsigned long mark = heap_mark();
+    unsigned *th[APP_SLOTS] = {0};
+    fb_hold(); cur_hide(); cur_frozen++;   /* each window is drawn alone in the back buffer for its picture: none of it, nor the arrow, reaches the screen */
+    for (int i = 0; i < mc_n; i++) {
+        struct app *a = &apps[app_z[i]];
+        int tw = cw - 24, tt = a->lw ? tw * a->lh / a->lw : 0;
+        if (tt > ch - 24) { tt = ch - 24; tw = a->lh ? tt * a->lw / a->lh : 0; }
+        mc_slot[i] = app_z[i];
+        mc_r[i][0] = ax + i % cols * cw + (cw - tw) / 2; mc_r[i][1] = ay + i / cols * ch + (ch - tt) / 2; mc_r[i][2] = tw; mc_r[i][3] = tt;
+        if (tw > 0 && tt > 0) th[i] = kmalloc((unsigned)(tw * s * tt * s) * 4);
+        if (th[i]) app_thumb(app_z[i], th[i], tw * s, tt * s);
+    }
+    desk_redraw();   /* the desktop as it stood, then the card over it */
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) spot_under[j * w + i] = fb[(unsigned)(spot_ly * s + j) * fb_pitch + (unsigned)(spot_lx * s + i)];
+    spot_bw = LP_W; spot_bh = LP_H; spot_live = 1; mc_mode = 1; lp_mode = 0; spot_tree = 0;
+    gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, LP_W, LP_H, 0x00faf8f4, 12);
+    for (int k = 0; k < 4; k++) {
+        char t[] = "Desktop 1"; t[8] = (char)('1' + k);
+        int on = k == space_now(), x = mc_chip_x(k), y = mc_chip_y();
+        window_rect(x, y, MC_CHIP_W, MC_CHIP_H, on ? MC_TERRA : 0x00E6E1D9);
+        gui_text(t, x + (MC_CHIP_W - gui_text_width(t)) / 2, y + 5, on ? 0x00FFFFFF : 0x001C1C1E);
+    }
+    for (int i = 0; i < mc_n; i++) {
+        int *r = mc_r[i], tw = r[2] * s;
+        if (th[i]) for (int y = 0; y < r[3] * s; y++) for (int x = 0; x < tw; x++) fb[(unsigned)(r[1] * s + y) * fb_pitch + (unsigned)(r[0] * s + x)] = th[i][y * tw + x];
+        else window_rect(r[0], r[1], r[2], r[3], 0x00E6E1D9);
+    }
+    if (!mc_n) { const char *e = "No windows on this desktop"; gui_text(e, spot_lx + (LP_W - gui_text_width(e)) / 2, ay + ah / 2 - 8, 0x0075726E); }
+    heap_release(mark);
+    fb_flush(spot_lx * s, spot_ly * s, w, h);
+    if (mc_n) mc_ring(0, MC_TERRA);
+    cur_frozen--; cur_show(); fb_release();
+    con_quiet = 1; uart_puts("mission control open, desktop "); uart_dec((unsigned)space_now() + 1); uart_puts(", "); uart_dec((unsigned)mc_n); uart_puts(" windows\n");
+}
+static void mc_pick(int i) { unsigned sl = mc_slot[i]; spot_close(); ap = &apps[sl]; app_raise(); con_quiet = 1; uart_puts("mission control: "); uart_puts(ap->cur ? ap->cur->name : "?"); uart_putc('\n'); }
+static void mc_desk(int k) { spot_close(); space_switch(k); }
+void mc_click(int lx, int ly) {
+    if (lx < spot_lx || ly < spot_ly || lx >= spot_lx + LP_W || ly >= spot_ly + LP_H) { spot_close(); return; }   /* outside the card */
+    for (int k = 0; k < 4; k++) if (in_box(lx, ly, mc_chip_x(k), mc_chip_y(), MC_CHIP_W, MC_CHIP_H)) { mc_desk(k); return; }
+    for (int i = 0; i < mc_n; i++) if (in_box(lx, ly, mc_r[i][0], mc_r[i][1], mc_r[i][2], mc_r[i][3])) { mc_pick(i); return; }
+}
+static int mc_key(unsigned code) {   /* every key is the card's while it is up */
+    if (code == 1 || (ctrl_held && code == 103)) spot_close();
+    else if (ctrl_held && (code == 105 || code == 106)) mc_desk(space_now() + (code == 106 ? 1 : -1));
+    else if (code >= 2 && code <= 5) mc_desk((int)code - 2);   /* 1 to 4 */
+    else if ((code == 28 || code == 96) && mc_n) mc_pick(mc_sel);
+    else if ((code == 105 || code == 106) && mc_n > 1) {
+        mc_ring(mc_sel, 0x00faf8f4);
+        mc_sel = (mc_sel + (code == 106 ? 1 : mc_n - 1)) % mc_n;
+        mc_ring(mc_sel, MC_TERRA);
+        con_quiet = 1; uart_puts("mission control: selected "); uart_dec((unsigned)mc_sel); uart_putc('\n');
+    }
+    return 1;
+}
 int spot_key(unsigned code) {   /* a key down with the bar open: every key is Spotlight's */
     if (spot_tree) { tree_key(code); return 1; }
     if (lp_mode) return lp_key(code);
+    if (mc_mode) return mc_key(code);
     if (code == 1) spot_close();
     else if (code == 28 || code == 96) { int slot = spot_n ? spot_hits[spot_sel] : -1; spot_close(); if (slot >= 0) dock_activate(slot); }
     else if (code == 103) { if (spot_sel > 0) spot_sel--; spot_paint(); }

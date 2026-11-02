@@ -74,7 +74,27 @@ static void app_unminimize(void);
 #define SPACES 4
 static int space_cur;
 static unsigned char park_z[APP_SLOTS];
-static void space_switch(int k) {
+void desk_redraw(void) {   /* the whole desktop again: the wallpaper, the bar and the dock, the Console or Terminal, this desktop's app windows */
+    wall_repaint();
+    if (con_live) { con_live = 0; pane_open(cp); }
+    app_front = app_zn > 0;
+    if (app_front) { ap = &apps[app_z[0]]; app_repaint_all(); }
+}
+int space_now(void) { return space_cur; }
+/* 11.2.0, Mission Control's thumbnail: the slot's window drawn alone over the card's cream in the back buffer, then sampled to
+   tw by th physical pixels. The caller holds the buffer and draws the whole desktop again after (desk_redraw). */
+void app_thumb(unsigned slot, unsigned *dst, int tw, int th) {
+    struct app *keep = ap; ap = &apps[slot];
+    int s = (int)window_scale(), X = app_lx * s, Y = app_ly * s, W = app_lw * s, H = app_lh * s;
+    window_rect(app_lx, app_ly, app_lw, app_lh, 0x00faf8f4);   /* the card's cream behind it, so its round corners sit on the card */
+    app_paint();
+    for (int y = 0; y < th; y++) for (int x = 0; x < tw; x++) {
+        int sx = X + x * W / tw, sy = Y + y * H / th;
+        dst[y * tw + x] = sx >= 0 && sy >= 0 && sx < (int)fb_w && sy < (int)fb_h ? fb[(unsigned)sy * fb_pitch + (unsigned)sx] : 0x00faf8f4;
+    }
+    ap = keep;
+}
+void space_switch(int k) {
     if (k < 0 || k >= SPACES || k == space_cur || !fb) return;
     spot_close(); settings_close(); brick_close(); clock_close(); browser_close(); calc_close();
     for (unsigned z = 0; z < app_zn; z++) { struct app *a = &apps[app_z[z]]; a->min = 2; a->space = space_cur; park_z[a->slot] = (unsigned char)z; }
@@ -82,10 +102,7 @@ static void space_switch(int k) {
     space_cur = k;
     for (int z = APP_SLOTS - 1; z >= 0; z--) for (unsigned i = 0; i < APP_SLOTS; i++)
         if (apps[i].cur && apps[i].min == 2 && apps[i].space == k && park_z[i] == z) { apps[i].min = 0; app_z_front(i); }
-    wall_repaint();
-    if (con_live) { con_live = 0; pane_open(cp); }
-    app_front = app_zn > 0;
-    if (app_front) { ap = &apps[app_z[0]]; app_repaint_all(); }
+    desk_redraw();
     char t[] = "Desktop 1"; t[8] = (char)('1' + k);
     menubar_notify(t);
     con_quiet = 1; uart_puts("space "); uart_putc((char)('1' + k)); uart_putc('\n');
