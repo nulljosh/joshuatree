@@ -73,6 +73,8 @@
 #define JT_SYS_THREAD_SPAWN 407 /* 8.1.0, Pi only: (entry, stack top, arg) starts a thread in this app, returns its number or -errno; libjt/thread.h */
 #define JT_SYS_THREAD_EXIT  408 /* 8.1.0, Pi only: this thread ends; the last thread to end is the app's exit */
 #define JT_SYS_FUTEX        409 /* 8.1.0, Pi only: (0, addr, val) sleeps while *addr == val; (1, addr, n) wakes up to n sleepers */
+#define JT_SYS_SPAWN        410 /* 8.4.0, Pi only: (name, words, 0) starts another app with those words; returns its pid or -errno */
+#define JT_SYS_WAIT         411 /* 8.4.0, Pi only: (pid) waits for a child to end; returns its exit status (-1 for a fault or a kill) or -ECHILD */
 #define JT_SYS_CLIPBOARD   399 /* 1.9.28: the one system clipboard, 4 KB; see kernel/syscall.h */
 #define JT_CLIP_SET        1
 #define JT_CLIP_GET        2
@@ -282,6 +284,9 @@ static inline int jt_launch(const char *app)                      { return jt_sy
 /* 7.7.0, the Pi: open an app with ARG as its words (JT_SYS_ARGS), as Files opens a song in Music. i386 ignores ARG. */
 static inline int jt_launch_with(const char *app, const char *arg) { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (jt_arg)app, (jt_arg)arg, 0); }
 static inline int jt_args(char *buf, unsigned cap)                 { return jt_syscall(JT_SYS_ARGS, (jt_arg)buf, (jt_arg)cap, 0); }
+/* 8.4.0, the Pi: start another app with these words and get its pid; wait for it and get its exit status. */
+static inline int jt_spawn(const char *name, const char *words)      { return jt_syscall(JT_SYS_SPAWN, (jt_arg)name, (jt_arg)words, 0); }
+static inline int jt_wait(int pid)                                    { return jt_syscall(JT_SYS_WAIT, (jt_arg)pid, 0, 0); }
 static inline int jt_writefile(const char *path, const void *buf, unsigned len) { return jt_syscall(JT_SYS_WRITEFILE, (jt_arg)path, (jt_arg)buf, (jt_arg)len); }
 static inline int jt_feed(int kind, const char *arg)               { return jt_syscall(JT_SYS_FEED, (jt_arg)kind, (jt_arg)arg, 0); }
 /* Replace the system clipboard with len bytes (0 clears). Returns len, -EINVAL over JT_CLIP_MAX, -EFAULT. */

@@ -172,6 +172,7 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
     int min;                              /* 6.5.0: minimized into the dock (the yellow dot): alive, off screen, out of the z order */
     int term;                             /* 7.5.4: started by `userrun` in the Terminal: what it prints after it yields, and how it ends, go there */
     int pin, pout;                        /* 8.3.0: reads fd 0 from the pipe / writes fd 1 into it (`userrun A | userrun B`) */
+    unsigned pid, parent;                 /* 8.4.0: its process number, and the slot + 1 of the app that spawned it (0: none) */
 };
 #define APP_SLOTS 4      /* 4.0: apps that can run at once, one 32 MiB arena each, back to back above USER_BASE */
 extern struct app *ap;

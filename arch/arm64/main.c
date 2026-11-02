@@ -160,6 +160,7 @@ void exc_sync(struct frame *f) {
     crash(f);
 }
 int app_preempt(const struct frame *f, const unsigned long *fp, unsigned long spsr);   /* 8.1.0, below with the scheduler */
+static long app_spawn(unsigned long name, unsigned long words); static long app_wait(const struct frame *f, const unsigned long *fp, unsigned long pid);   /* 8.4.0 */
 static int dbg_slot; static unsigned dbg_left;   /* 7.2.0, set further down: a stepped app is never preempted */
 void exc_irq(struct frame *f, const unsigned long *fp) {   /* the timer stops after three ticks, so a core asleep in wfi can only be woken by a device */
 #ifdef FP_TEST
@@ -369,6 +370,8 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_THREAD_SPAWN 407  /* 8.1.0: threads, see th_spawn */
 #define JT_SYS_THREAD_EXIT 408
 #define JT_SYS_FUTEX 409
+#define JT_SYS_SPAWN 410        /* 8.4.0: spawn and wait, see app_spawn */
+#define JT_SYS_WAIT 411
 #define JT_SYS_TEXT2 402         /* 3.9.0: Tree Sans into a device-size window buffer (user/libjt/hires.h) */
 #define JT_SYS_CLIPBOARD 399     /* 3.10.0: copy and paste, see clip_put below */
 #define JT_CLIP_SET 1
@@ -776,6 +779,8 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             else if (n == JT_SYS_AUDIO) r = app_audio(a0, f->x[1], f->x[2]);   /* M3e */
             else if (n == JT_SYS_BRK) r = app_brk_set(a0);
             else if (n == JT_SYS_THREAD_SPAWN) r = th_spawn(a0, f->x[1], f->x[2]);   /* 8.1.0 */
+            else if (n == JT_SYS_SPAWN) r = app_spawn(a0, f->x[1]);   /* 8.4.0 */
+            else if (n == JT_SYS_WAIT) r = app_wait(f, fp, a0);
             else if (n == JT_SYS_CLIPBOARD) r = app_clip(a0, f->x[1], f->x[2]);   /* 3.10.0 */
             else if (n == JT_SYS_TASKS) {
                 if (!a0 || !user_writable(a0, 20)) r = -14;
@@ -925,6 +930,58 @@ int user_run(const struct user_app *a) {
    with a window does, leaves the desktop responsive; only an app run this way gets a window. A parked app runs again on the
    next pass that has an event for it, and every 10 ms (the generic counter, never `ticks`) in case it is animating. An app
    that loops without ever making a syscall still holds the core: preempting one needs IRQs unmasked at EL0, not done yet. */
+/* 8.4.0: apps that start apps. JT_SYS_SPAWN (name, words, 0) loads NAME (built in, or a card app by the same rule as
+   `userrun`) into a free slot with WORDS as its JT_SYS_ARGS, prints to the same place its parent does, and answers its
+   process number. JT_SYS_WAIT (pid) gives back that child's exit status once it has ended (-1 for a fault or a kill),
+   parking the caller until then (park_retry; the child's end kicks it). Each ended child is kept in `reaped` until its
+   parent waits, or a newer one needs the room. -ENOENT for a name nothing answers to, -EAGAIN with every slot taken,
+   -ECHILD for a pid that is not this app's child.
+   ponytail: eight remembered exits, the oldest dropped; a per-parent list if an app ever spawns dozens. */
+static struct { unsigned pid, parent; long status; } reaped[8];
+static void reap_note(unsigned pid, unsigned parent, unsigned long status, int killed) {
+    if (!parent) return;
+    unsigned k = 0;
+    for (unsigned i = 0; i < 8; i++) if (!reaped[i].pid) { k = i; goto put; }
+    for (unsigned i = 1; i < 8; i++) if (reaped[i].pid < reaped[k].pid) k = i;
+put:
+    reaped[k].pid = pid; reaped[k].parent = parent; reaped[k].status = killed ? -1 : (long)(int)status;
+    if (apps[parent - 1].cur) apps[parent - 1].kick = 1;
+}
+int app_start(const struct user_app *a);
+const struct user_app *user_find(const char *name, unsigned n);
+const struct user_app *card_find(const char *name, unsigned n, int allow_unsigned);
+unsigned accounts_count(void);
+void ufile_args_next(const char *s, unsigned n);
+static long app_spawn(unsigned long name, unsigned long words) {
+    char nm[16], w[65]; unsigned n = 0, wn = 0;
+    if (!app_running) return -38;
+    for (; n < 15; n++) { if (!user_in_range(name + n, 1)) return -14; nm[n] = ((const char *)name)[n]; if (!nm[n]) break; }
+    if (!n || n == 15) return -22;
+    if (words) for (; wn < 64; wn++) { if (!user_in_range(words + wn, 1)) return -14; w[wn] = ((const char *)words)[wn]; if (!w[wn]) break; }
+    w[wn] = 0;
+    struct app *me = ap;
+    const struct user_app *a = user_find(nm, n);
+    if (!a) a = card_find(nm, n, !accounts_count());   /* an unsigned card app only on a box with no accounts, as userrun without sudo */
+    if (!a) return -2;
+    ufile_args_next(w, wn);
+    int r = app_start(a);
+    ufile_args_next("", 0);
+    struct app *kid = ap;
+    ap = me;   /* app_start moved `ap` to the child's slot; the rest of this call is the parent's */
+    arena_only((int)me->slot);   /* and the loader's page-table work must not have opened another arena to it */
+    if (r == -3) return -11;
+    if (r) return -8;   /* -ENOEXEC: it would not load */
+    kid->term = me->term; kid->parent = me->slot + 1;
+    return (long)kid->pid;
+}
+static long app_wait(const struct frame *f, const unsigned long *fp, unsigned long pid) {
+    if (!app_running) return -38;
+    for (unsigned i = 0; i < 8; i++)
+        if (reaped[i].pid == pid && reaped[i].parent == ap->slot + 1) { long st = reaped[i].status; reaped[i].pid = 0; return st; }
+    for (unsigned i = 0; i < APP_SLOTS; i++)
+        if (apps[i].cur && apps[i].pid == pid && apps[i].parent == ap->slot + 1) { park_retry(f, fp); return 0; }
+    return -10;   /* -ECHILD */
+}
 void app_kill_one(const char *how);
 static void app_end(unsigned long status, const char *how) {   /* an exit, a fault or a kill: the window goes, then the pages */
     const struct user_app *a = app_cur;
@@ -933,6 +990,7 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     ufile_release();   /* M3d: its open files are written back and closed, after an exit, a fault or its red dot alike */
     audio_app_stop();  /* M3e: and its sound stops (what is already in the PWM ring plays out) */
     pipe_close();      /* 8.3.0 */
+    reap_note(ap->pid, ap->parent, status, how != 0);   /* 8.4.0: kept for the app that spawned it to wait for */
     struct app *me = ap;
     app_window_close();   /* leaves `ap` on the window now in front... */
     ap = me;              /* ...so put it back: the pages unmapped and the line printed below are this app's, not the front one's */
@@ -1017,12 +1075,13 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
     app_frame.esr = 0;                                 /* no flags to put back */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
     app_frame.elr = entry; app_sp = UB + UP_ASTACK + APP_STACK_PAGES * 4096UL;
-    app_cur = a; ap->min = 0; ap->term = 0; ap->pin = ap->pout = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
+    app_cur = a; ap->min = 0; ap->term = 0; ap->pin = ap->pout = 0; ap->parent = 0; app_kick = 1; app_qh = app_qt = 0; app_runs = 0; app_close_at = 0; user_pid++;
     if (dbg_want) {   /* 7.2.0: `debug NAME`, stepped from its first instruction */
         dbg_slot = (int)sl; dbg_left = dbg_want; dbg_n = 0;
         for (int i = 0; i < 31; i++) dbg_prev[i] = 0;
         dbg_prev[31] = app_sp;
     }
+    ap->pid = user_pid;
     uart_puts("M3c app "); uart_puts(a->name); uart_puts(" starts\n");
     return 0;
 }
