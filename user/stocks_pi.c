@@ -34,9 +34,40 @@ static char file[4096] JT_DATA;
 static int sel JT_DATA, first JT_DATA, saved JT_DATA, range JT_DATA;
 static int have[ROWS] JT_DATA, stale[ROWS] JT_DATA, price[ROWS] JT_DATA, prev[ROWS] JT_DATA, stamp[ROWS] JT_DATA;
 static int dprice[ROWS] JT_DATA, dprev[ROWS] JT_DATA, np[ROWS] JT_DATA, pts[ROWS][PTS] JT_DATA;
-static const char *const SYM[ROWS] = {"AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "NFLX"};
-static const char *const NAME[ROWS] = {"Apple Inc.", "Microsoft", "Alphabet Inc.", "Amazon.com", "Tesla Inc.", "NVIDIA", "Meta Platforms", "Netflix"};
-static const char *const RNAME[5] = {"1D", "1W", "1M", "3M", "1Y"};
+static const char *const DEF_SYM[ROWS] = {"AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "NFLX"};
+static const char *const DEF_NAME[ROWS] = {"Apple Inc.", "Microsoft", "Alphabet Inc.", "Amazon.com", "Tesla Inc.", "NVIDIA", "Meta Platforms", "Netflix"};
+/* 7.8.0: the watchlist is the person's own, up to 8 symbols in JT/WATCH.TXT (one a line). + adds one, Delete or Backspace
+   takes the selected one off; with no file it is the eight above. The kernel fetches exactly these (JT_SYS_FEED). */
+static char wsym[ROWS][12] JT_DATA, adding_buf[12] JT_DATA;
+static int nrows JT_DATA, adding JT_DATA;
+static const char *SYM_(int i) { return wsym[i]; }
+static const char *NAME_(int i) { for (int k = 0; k < ROWS; k++) { const char *a = DEF_SYM[k], *b = wsym[i]; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) return DEF_NAME[k]; } return ""; }
+#define SYM(i) SYM_(i)
+#define NAME(i) NAME_(i)
+static int sym_ok(char c) { return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-'; }
+static void watch_load(void) {
+    static char w[256] JT_DATA;
+    int n = jt_readfile("WATCH.TXT", w, sizeof w - 1);
+    nrows = 0;
+    for (int i = 0, k = 0; n > 0 && i <= n && nrows < ROWS; i++) {
+        char c = i < n ? w[i] : '\n';
+        if (c >= 'a' && c <= 'z') c -= 32;
+        if (sym_ok(c) && k < 10) wsym[nrows][k++] = c;
+        else if (k) { wsym[nrows][k] = 0; nrows++; k = 0; }
+    }
+    if (!nrows) for (; nrows < ROWS; nrows++) { int k = 0; for (; DEF_SYM[nrows][k]; k++) wsym[nrows][k] = DEF_SYM[nrows][k]; wsym[nrows][k] = 0; }
+}
+static void watch_save(void) {
+    char w[ROWS * 12]; unsigned n = 0;
+    for (int i = 0; i < nrows; i++) { for (const char *p = wsym[i]; *p; p++) w[n++] = *p; w[n++] = '\n'; }
+    if (jt_writefile("WATCH.TXT", w, n) < 0) jt_write(1, "stocks: watchlist not saved\n", 28);
+}
+static void fetch(void) {   /* the kernel gets today's quotes for this list into STOCKS.TXT */
+    char a[ROWS * 12]; int n = 0;
+    for (int i = 0; i < nrows; i++) { if (i) a[n++] = ','; for (const char *p = wsym[i]; *p; p++) a[n++] = *p; }
+    a[n] = 0;
+    if (jt_feed(1, a) < 0) jt_write(1, "stocks: no fetch\n", 17);
+}
 static int cat(char *b, int p, const char *s) { while (*s && p < 62) b[p++] = *s++; b[p] = 0; return p; }
 static int num(const char **p) {
     int v = 0;
@@ -46,17 +77,19 @@ static int num(const char **p) {
 }
 static void eol(const char **p) { while (**p && **p != '\n') (*p)++; if (**p) (*p)++; }
 static void load(void) {
+    saved = 0;
+    for (int i = 0; i < ROWS; i++) have[i] = stale[i] = np[i] = 0;
     int n = jt_readfile("STOCKS.TXT", file, sizeof file - 1);
     file[n < 0 ? 0 : n] = 0;
     const char *p = file;
     if (*p == 'r') {
-        p++; range = num(&p); sel = num(&p);
+        p++; range = num(&p); (void)num(&p);   /* the file's sel is always 0: the one on screen stays (7.8.0, after an add) */
         if (range < 0 || range >= 5) range = 0;
-        if (sel < 0 || sel >= ROWS) sel = 0;
+        if (sel < 0 || sel >= nrows) sel = 0;
         eol(&p);
         while (*p) {
             int i = num(&p);
-            if (i < 0 || i >= ROWS) { eol(&p); continue; }
+            if (i < 0 || i >= nrows) { eol(&p); continue; }
             stale[i] = num(&p); price[i] = num(&p); prev[i] = num(&p); stamp[i] = num(&p);
             dprice[i] = num(&p); dprev[i] = num(&p); np[i] = num(&p);
             if (np[i] > PTS) np[i] = PTS;
@@ -142,11 +175,11 @@ static void draw(void) {
     rect(0, 0, SIDE_W, HH, SIDEBG);
     rect(SIDE_W, 0, 1, HH, RULE);
     text("Watchlist", 20, TOP, INK, 1);
-    for (int r = 0; r < vis && first + r < ROWS; r++) {
+    for (int r = 0; r < vis && first + r < nrows; r++) {
         int i = first + r, y = TOP + 28 + r * ROW_H;
         if (i == sel) rect(8, y, SIDE_W - 16, ROW_H - 4, SELBG);
-        text(SYM[i], 20, y + 6, INK, 1);
-        text(NAME[i], 20, y + 28, MUTED, 0);
+        text(SYM(i), 20, y + 6, INK, 1);
+        text(NAME(i), 20, y + 28, MUTED, 0);
         if (!have[i]) { text("--", SIDE_W - 40, y + 6, MUTED, 0); continue; }
         unsigned col = price[i] >= prev[i] ? GREEN : RED;
         chart(118, y + 10, 60, 26, pts[i], np[i], col);
@@ -157,8 +190,8 @@ static void draw(void) {
         rect(SIDE_W - 16 - pw2, y + 26, pw2, 20, col);
         text(b, SIDE_W - 16 - pw2 + 6, y + 28, 0x00FFFFFF, 0);
     }
-    text(SYM[sel], px, TOP, MUTED, 0);
-    text(NAME[sel], px, TOP + 22, INK, 1);
+    text(SYM(sel), px, TOP, MUTED, 0);
+    text(NAME(sel), px, TOP + 22, INK, 1);
     int n = have[sel] ? np[sel] : 0, delta = 0;
     if (n) delta = pts[sel][n - 1] - pts[sel][0];
     unsigned col = delta >= 0 ? GREEN : RED;
@@ -189,14 +222,22 @@ static void draw(void) {
         } else cat(b, q, "time unknown");
         text(b, px, sy, MUTED, 0);
     } else text("Prices unavailable right now", px, sy, MUTED, 0);
-    text("Up and Down pick a symbol", px, sy + 22, MUTED, 0);
-    int ln = cat(b, cat(b, 0, "stocks: sel "), SYM[sel]); b[ln++] = '\n'; jt_write(1, b, (unsigned)ln);
+    text("+ adds a symbol, Delete takes one off", px, sy + 22, MUTED, 0);
+    if (adding) {   /* the symbol being typed, in the watchlist's own row style, under the last row */
+        int ay = TOP + 28 + (nrows - first < vis ? nrows - first : vis - 1) * ROW_H;
+        rect(8, ay, SIDE_W - 16, ROW_H - 4, SELBG);
+        int q = cat(b, 0, "Add: "); q = cat(b, q, adding_buf); cat(b, q, "_");
+        text(b, 20, ay + 16, INK, 1);
+    }
+    int ln = cat(b, cat(b, 0, "stocks: sel "), SYM(sel)); b[ln++] = '\n'; jt_write(1, b, (unsigned)ln);
 }
 
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
     if (jt_window_open_hires(&win) != 0 || !win.pixels) { jt_write(2, "stocks: no window\n", 18); jt_exit(1); }
+    watch_load();
+    fetch();
     load();
     jt_write(1, saved ? "stocks: prices\n" : "stocks: no prices\n", saved ? 15 : 18);
     draw();
@@ -213,12 +254,36 @@ void _start(int argc, char **argv) {
             if (mx < 0 || my < 0 || mx >= (int)win.width || my >= (int)win.height) break;   /* chrome X or dock; clicks inside never close */
             if (mx < SIDE_W && my >= TOP + 28) {
                 int row = (my - (TOP + 28)) / ROW_H;
-                if (first + row < ROWS && row < rows_visible()) { sel = first + row; draw(); }
+                if (first + row < nrows && row < rows_visible()) { sel = first + row; draw(); }
             }
         } else if (ev.kind == JT_EV_KEY) {
+            if (adding) {   /* 7.8.0: typing a symbol to add */
+                int n = 0; while (adding_buf[n]) n++;
+                if (ev.a == JT_KEY_ESC) { adding = 0; draw(); }
+                else if (ev.a == JT_KEY_ENTER || ev.a == '\n' || ev.a == '\r') {
+                    adding = 0;
+                    if (n && nrows < ROWS) {
+                        int k = 0; for (; adding_buf[k]; k++) wsym[nrows][k] = adding_buf[k];
+                        wsym[nrows][k] = 0; sel = nrows++;
+                        char l[32]; int q = cat(l, 0, "stocks: watch "); q = cat(l, q, adding_buf); l[q++] = '\n'; jt_write(1, l, (unsigned)q);
+                        watch_save(); fetch(); load();
+                    } else if (n) jt_write(1, "stocks: watchlist full\n", 23);
+                    draw();
+                }
+                else if ((ev.a == 8 || ev.a == 127) && n) { adding_buf[n - 1] = 0; draw(); }
+                else { int c = ev.a; if (c >= 'a' && c <= 'z') c -= 32; if (c < 128 && sym_ok((char)c) && n < 10) { adding_buf[n] = (char)c; adding_buf[n + 1] = 0; draw(); } }
+                flags = JT_POLL_PRESENT; continue;
+            }
+            if (ev.a == '+' || ev.a == '=') { adding = 1; adding_buf[0] = 0; draw(); flags = JT_POLL_PRESENT; continue; }
+            if ((ev.a == JT_KEY_DELETE || ev.a == 8 || ev.a == 127) && nrows > 1) {   /* take the selected symbol off */
+                char l[32]; int q = cat(l, 0, "stocks: unwatch "); q = cat(l, q, wsym[sel]); l[q++] = '\n'; jt_write(1, l, (unsigned)q);
+                for (int i = sel; i < nrows - 1; i++) for (int k = 0; k < 12; k++) wsym[i][k] = wsym[i + 1][k];
+                nrows--; if (sel >= nrows) sel = nrows - 1;
+                watch_save(); fetch(); load(); draw(); flags = JT_POLL_PRESENT; continue;
+            }
             if (ev.a == JT_KEY_ESC) break;
             if (ev.a == JT_KEY_UP && sel > 0) { sel--; draw(); }
-            else if (ev.a == JT_KEY_DOWN && sel < ROWS - 1) { sel++; draw(); }
+            else if (ev.a == JT_KEY_DOWN && sel < nrows - 1) { sel++; draw(); }
         }
         flags = JT_POLL_PRESENT;
     }

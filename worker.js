@@ -312,7 +312,14 @@ async function handleStocks(url) {
   const range = url.searchParams.get("range") ?? "0";
   if (!/^[0-4]$/.test(range)) return new Response("Invalid range", {status: 400});
   const [period, interval] = STOCK_RANGES[Number(range)];
-  const lines = await Promise.all(STOCK_SYMBOLS.map(async symbol => {
+  // 7.8.0: the Pi's own watchlist, up to 8 symbols (letters, digits, dot, dash); none gives the default eight
+  const asked = url.searchParams.get("symbols");
+  let symbols = STOCK_SYMBOLS;
+  if (asked !== null) {
+    symbols = asked.split(",");
+    if (!symbols.length || symbols.length > 8 || !symbols.every(s => /^[A-Z0-9][A-Z0-9.-]{0,9}$/.test(s))) return new Response("Invalid symbols", {status: 400});
+  }
+  const lines = await Promise.all(symbols.map(async symbol => {
     try {
       const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${period}&interval=${interval}`, {
         headers: {"User-Agent": "Mozilla/5.0"},

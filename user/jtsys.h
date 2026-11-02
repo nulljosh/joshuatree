@@ -94,6 +94,7 @@ struct jt_sysinfo {
 #define JT_SYS_READAT      403 /* 6.1.0, the Pi: len bytes of a file from byte off, for files too big to read whole; -ENOSYS on i386 */
 #define JT_SYS_ARGS        404 /* 6.69.0, the Pi: the words after `userrun NAME`, into a buffer; returns how many bytes. -ENOSYS on i386 */
 #define JT_SYS_WRITEFILE   405 /* 6.69.0, the Pi: a whole file from one buffer, up to 6MB, open's path rules; -ENOSYS on i386 */
+#define JT_SYS_FEED        406 /* 7.8.0, the Pi: fetch a live feed into RAM; 1 is Stocks, ARG up to 8 comma-separated symbols, read back as STOCKS.TXT. -ENOSYS on i386 */
 #define JT_SYS_TEXT        400 /* anti-aliased text for the window (389 is mkdir); see kernel/syscall.h */
 #define JT_SYS_TEXT2       402 /* ARM64 only (3.9.0): Tree Sans drawn into a hi-res window at device size; see user/libjt/hires.h. -ENOSYS on i386 */
 /* One JT_SYS_TEXT2 request, LP64 layout (the kernel reads the same offsets): x and y are device pixels (y the baseline),
@@ -278,6 +279,8 @@ static inline int jt_launch(const char *app)                      { return jt_sy
 /* 7.7.0, the Pi: open an app with ARG as its words (JT_SYS_ARGS), as Files opens a song in Music. i386 ignores ARG. */
 static inline int jt_launch_with(const char *app, const char *arg) { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (jt_arg)app, (jt_arg)arg, 0); }
 static inline int jt_args(char *buf, unsigned cap)                 { return jt_syscall(JT_SYS_ARGS, (jt_arg)buf, (jt_arg)cap, 0); }
+static inline int jt_writefile(const char *path, const void *buf, unsigned len) { return jt_syscall(JT_SYS_WRITEFILE, (jt_arg)path, (jt_arg)buf, (jt_arg)len); }
+static inline int jt_feed(int kind, const char *arg)               { return jt_syscall(JT_SYS_FEED, (jt_arg)kind, (jt_arg)arg, 0); }
 /* Replace the system clipboard with len bytes (0 clears). Returns len, -EINVAL over JT_CLIP_MAX, -EFAULT. */
 static inline int jt_clip_set(const void *buf, unsigned len)      { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_SET, (jt_arg)buf, len); }
 /* Copy out at most len bytes of the clipboard; returns bytes copied (0 when empty), -EFAULT. A short len clips the paste. */

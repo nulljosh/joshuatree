@@ -71,22 +71,31 @@ static int row(const char **pp, char **oo, const char *end, unsigned i) {
     *oo = o;
     return 1;
 }
-void feeds_stocks(void) {   /* a good reply replaces the kept quotes; a failed one leaves the last good ones */
-    if (!net_get_gateway()) { kputs("stocks: no network, no prices\n"); return; }
+/* 7.8.0: Stocks' own watchlist (JT_SYS_FEED, ufile.c has checked it), or the Worker's default eight with none. 1 when
+   a good reply was kept. */
+int feeds_stocks_for(const char *syms) {   /* a good reply replaces the kept quotes; a failed one leaves the last good ones */
+    if (!net_get_gateway()) { kputs("stocks: no network, no prices\n"); return 0; }
+    static char url[160];
+    unsigned u = 0;
+    for (const char *p = STOCKS_URL; *p && u < sizeof url - 1; p++) url[u++] = *p;
+    if (syms && *syms) { for (const char *p = "&symbols="; *p && u < sizeof url - 1; p++) url[u++] = *p; for (const char *p = syms; *p && u < sizeof url - 1; p++) url[u++] = *p; }
+    url[u] = 0;
     unsigned long mark = heap_mark();
     char *body = 0; unsigned n = 0;
-    int st = get(STOCKS_URL, &body, &n);
+    int st = get(url, &body, &n), kept = 0;
     if (st == 200 && body && n) {
         char *o = stocks_new, *end = stocks_new + sizeof stocks_new;   /* a row is at most about 420 bytes: eight fit */
         const char *p = body;
         unsigned good = 0;
         *o++ = 'r'; *o++ = ' '; *o++ = '0'; *o++ = ' '; *o++ = '0'; *o++ = '\n';
         for (unsigned i = 0; i < ROWS && *p && end - o > 480; i++) good += (unsigned)row(&p, &o, end, i);
-        if (good) { stocks_len = (unsigned)(o - stocks_new); for (unsigned k = 0; k < stocks_len; k++) stocks_txt[k] = stocks_new[k]; }
+        if (good) { stocks_len = (unsigned)(o - stocks_new); for (unsigned k = 0; k < stocks_len; k++) stocks_txt[k] = stocks_new[k]; kept = 1; }
         kputs(good ? "stocks: live prices fetched\n" : "stocks: the reply held no prices\n");
     } else kputs("stocks: could not fetch prices\n");
     heap_release(mark);
+    return kept;
 }
+void feeds_stocks(void) { feeds_stocks_for(0); }
 static char weather_txt[1024];
 static unsigned weather_len;
 void feeds_weather(void) {   /* the same: a failed fetch keeps the last good reading */
@@ -117,6 +126,5 @@ int feeds_read(const char *leaf, char *buf, unsigned cap) {
     return (int)k;
 }
 void feeds_for(const char *app) {   /* appwin.c's app_go, before an app starts: the data it reads, fetched now */
-    if (named(app, "STOCKS")) feeds_stocks();
-    else if (named(app, "WEATHER")) feeds_weather();
+    if (named(app, "WEATHER")) feeds_weather();   /* 7.8.0: Stocks asks itself (JT_SYS_FEED), with its own watchlist */
 }

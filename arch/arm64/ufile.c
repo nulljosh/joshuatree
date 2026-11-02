@@ -320,6 +320,23 @@ static long u_launch(unsigned long uname, unsigned long uarg) {
     for (unsigned i = 0; i <= PATH_MAX && (launch_arg[i] = ar[i]); i++) ;
     return 0;
 }
+/* JT_SYS_FEED (406, 7.8.0): an app asks for a live feed in RAM. 1 is Stocks with its own watchlist, up to 8 symbols of
+   capital letters, digits, dots and dashes between commas; anything else is refused before it reaches a URL. */
+int feeds_stocks_for(const char *syms);   /* feeds.c */
+static long u_feed(unsigned long kind, unsigned long uarg) {
+    char a[PATH_MAX + 1];
+    if (kind != 1) return -EINVAL;
+    long err = copy_path(uarg, a);
+    if (err) return err;
+    unsigned n = 0, commas = 0;
+    for (; a[n]; n++) {
+        char c = a[n];
+        if (c == ',') { if (!n || a[n - 1] == ',') return -EINVAL; commas++; continue; }
+        if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-')) return -EINVAL;
+    }
+    if (!n || a[n - 1] == ',' || commas > 7) return -EINVAL;
+    return feeds_stocks_for(a) ? 0 : -EIO;
+}
 int ufile_launch_take(char *name, char *arg) {   /* main.c: 1 and the request, once */
     if (!launch_name[0]) return 0;
     for (unsigned i = 0; i <= PATH_MAX; i++) { name[i] = launch_name[i]; arg[i] = launch_arg[i]; }
@@ -347,6 +364,7 @@ long ufile_syscall(unsigned long n, unsigned long a0, unsigned long a1, unsigned
     case 389: return u_mkdir(a0);
     case 390: return u_unlink(a0);
     case 396: return u_launch(a0, a1);
+    case 406: return u_feed(a0, a1);
     case 401: return u_readfile(a0, a1, a2);
     case 403: return u_readat(a0, a1);
     case 404: return u_args(a0, a1);
