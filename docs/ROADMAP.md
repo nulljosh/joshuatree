@@ -2141,14 +2141,14 @@ Updated 2026-11-01, evening Vancouver time. The loop's working notes live in `~/
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand (2026-11-02, 00:00).** 8.0.0 is out. PR 1094 (8.1 to 8.6, the Berkeley list) is in its last CI run after two fixes: the threads check waits for the exit, and a job started from the Terminal (plankc) gets 30 s before the watchdog, any other app 3. 8.9.0 is ready on `feat/heap-demand` (8.7 heap paging, 8.8 block cache, 8.9 USB sticks and the board night: the park wallpaper as the Pi's default, Picasso's line, dock zoom off, cores that sleep, the arrow up at boot, no pop at a song's start or pause); rebase it on main once 1094 merges, then push and open its PR. 8.10.0, Burrow renamed Files (same face icon), is a WIP commit on `feat/files`, stacked on 8.9: its landing tiles need retaking (`tools/landing-shots.py`) before it pushes. Board results: lag gone, park sharp, Wikipedia in Blackcomb; the restart crackle is the Pi's own boot stage (muted, no chime, still there), so next is a restart that skips the firmware. Then Blackcomb: mouse-wheel and held-key scrolling, pictures, then JavaScript; then app threads on all four cores.
+**Where things stand (2026-11-02, 01:50).** 8.6.0 is out (PR 1094). PR 1095 (8.7 to 8.9: heap paging, block cache, USB sticks, the board night) is in CI after four check fixes (config.txt under the sd check's 50 columns, Settings at its 510x420 window, the oom check on the park picture, the sleep line skipped where QEMU's wfe is a no-op). Stacked behind it, each rebased on the one before: `feat/files` (8.10.0, Burrow is Files, the landing sells the OS, and the code review's fixes: login, sign-out and shutdown paint the park picture), `feat/smp-apps` (8.11.0, app threads on all four cores) and `feat/swap` (8.12.0, swap). With swap the Berkeley list is done.
 
 **Waiting on Joshua.** The board pass (`docs/TESTING.md`): it is physical. The Bluetooth keyboard's stuck key repeat needs the board too. The 9.0 and 10.0 bumps wait on their gates (a stranger builds a Nimbus; a month as Joshua's only computer), which QEMU cannot show, so the loop ships their software as 8.x minors. The loop asks nothing else and decides design calls itself, saying what it chose here. Decided 2026-10-27: Wi-Fi passwords stay machine-wide, so the network is up before anyone signs in; apps are signed by Joshua's key and unsigned ones need an admin; the store is an `install` from the landing. Decided 2026-10-29: a card flashed without the key gets plankc unsigned, the same rule.
 
 **Next, in order.**
-1. Whatever the board shows broken.
-2. The rest of the Berkeley list: app threads on the four cores (swap waits for apps that outgrow their arena).
-3. 9.0's software QEMU can prove (USB storage first), then 10.0's (screen reader, languages, self-update with a fallback kernel, a security audit).
+1. Land 1095, then 8.10, 8.11 and 8.12 one PR at a time, each rebased on main.
+2. Whatever the board shows broken (`docs/TESTING.md`).
+3. 9.0's software QEMU can prove, then 10.0's (screen reader, languages, self-update with a fallback kernel, a security audit).
 
 Restart prompt:
 
