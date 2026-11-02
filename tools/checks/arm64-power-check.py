@@ -20,16 +20,18 @@ source = r'''
 #include <assert.h>
 #include <string.h>
 #define POWER_HOST_TEST
-static int ctrl_held, alt_held, busy, front, applied, term_p, prompts;
+static int ctrl_held, alt_held, busy, front, applied, prompts, con_quiet, dlg;
 static int ask_pending(void) { return busy; }
-static int term_front(void) { return front; }
 static void term_output(int on) { (void)on; }
+static void menubar_notify(const char *s) { (void)s; }
+void power_dialog(int off) { (void)off; dlg = 1; front = 1; }   /* 7.7.0: the confirm is a dialog, not the Terminal */
+void power_dialog_close(void) { dlg = 0; }
+int power_dialog_up(void) { return dlg && front; }
 static void uart_puts(const char *s) { if (strstr(s,"confirms")) prompts++; }
 static void spot_close(void) {}
 static void clock_close(void) {}
 static void brick_close(void) {}
 static void calc_close(void) {}
-static void pane_open(int *p) { (void)p; front=1; }
 #include "arch/arm64/power.h"
 static void power_apply(int off) { applied=off ? 1 : 2; }
 int main(void) {

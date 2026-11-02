@@ -288,6 +288,32 @@ int audio_play(const short *samples, int frames, int rate) {
     if (!samples || frames < 1 || rate < 8000 || rate > 48000) { fail("bad samples or rate"); return -1; }
     return stream(samples, frames, rate, 0);
 }
+/* 7.7.0: the restart and shut down chime, two soft bell notes (E5, then A5 over it), instead of the jack's crackle when
+   the reset cut the PWM mid-sample. Each note rises over 6 ms and fades to silence; the clip starts and ends on the
+   PWM's midpoint, so nothing steps. Sine by Bhaskara's formula, integer only. */
+#define CHIME_RATE 22050
+#define CHIME_FRAMES (CHIME_RATE * 45 / 100)
+static short chime_buf[CHIME_FRAMES * 2];
+static int chime_sin(unsigned phase) {   /* phase 0..65535 is one turn; -4096..4096 */
+    unsigned x = phase & 32767; unsigned long a = (unsigned long)x * (32768 - x);
+    int v = (int)(16UL * a * 4096 / (5UL * 32768 * 32768 - 4 * a));
+    return phase & 32768 ? -v : v;
+}
+static int chime_note(int i, int start, int len, unsigned freq) {   /* frame i of a note that starts at frame start */
+    int t = i - start, rise = CHIME_RATE * 6 / 1000;
+    if (t < 0 || t >= len) return 0;
+    int env = t < rise ? t * 1024 / rise : (len - t) * 1024 / (len - rise);   /* up over 6 ms, then down to nothing */
+    return chime_sin((unsigned)((unsigned long)t * freq * 65536 / CHIME_RATE)) * env / 1024;
+}
+int audio_chime(void) {
+    for (int i = 0; i < CHIME_FRAMES; i++) {
+        int v = chime_note(i, 0, CHIME_FRAMES, 659) + chime_note(i, CHIME_RATE * 12 / 100, CHIME_FRAMES - CHIME_RATE * 12 / 100, 880);
+        short s = (short)(v * AMP / 8192);   /* both notes at once stay under AMP */
+        chime_buf[i * 2] = chime_buf[i * 2 + 1] = s;
+    }
+    put_str("audio: chime\n");
+    return stream(chime_buf, CHIME_FRAMES, CHIME_RATE, 0);
+}
 int audio_tone(int freq_hz, int ms) {
     if (freq_hz < 20 || freq_hz > 20000 || ms < 1 || ms > 5000) { fail("tone needs 20..20000 Hz and 1..5000 ms"); return -1; }
     put_str("audio: tone "); put_dec((unsigned)freq_hz); put_str(" Hz "); put_dec((unsigned)ms); put_str(" ms\n");

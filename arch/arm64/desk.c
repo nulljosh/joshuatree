@@ -53,6 +53,14 @@ static void tree_under(int save) {   /* the screen under the card: kept before i
     if (!save) fb_flush(x, y, w, h);
 }
 static void about_center(const char *t, int y, unsigned c) { gui_text(t, spot_lx + (ABOUT_W - gui_text_width(t)) / 2, y, c); }
+/* 7.7.0: Restart and Shut Down ask in a dialog in the middle of the screen, as a Mac does, not in the Terminal. The tree
+   card's machinery holds it (spot_under, spot_tree), so a key or a click reaches power.h's power_key first. */
+#define DLG_W 300
+#define DLG_H 180
+static int tree_dlg;   /* 0, or 1 shut down, 2 restart: the card is the power dialog */
+static int dlg_btn_y(void) { return spot_ly + DLG_H - 44; }
+static int dlg_btn_w(void) { return (DLG_W - 48) / 2; }
+int power_dialog_up(void) { return spot_live && spot_tree && tree_dlg; }
 static const char *const tree_rows[4] = { "About Joshua Tree", "Restart", "Shut Down", "Log Out" };
 static int tree_ry(int r) { return spot_ly + (r ? 37 + (r - 1) * SPOT_ROW : 6); }
 int tree_bar_hit(void) {   /* the pointer is on the mark or the title, physical px like the bar's own drawing */
@@ -63,7 +71,19 @@ static void tree_paint(void) {
     int s = (int)window_scale(), w = tree_cw * s, h = tree_ch * s, x = spot_lx * s, y = spot_ly * s;
     cur_hide();
     tree_under(0);
-    if (tree_about) {   /* 7.6.0: a small window in the middle of the screen, as a Mac's About This Mac: the mark, the name, the version */
+    if (tree_dlg) {
+        const char *t = tree_dlg == 1 ? "Shut down now?" : "Restart now?", *go = tree_dlg == 1 ? "Shut Down" : "Restart";
+        gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, DLG_W, DLG_H, 0x00faf8f4, 12);
+        menu_mark_paint((spot_lx + DLG_W / 2) * s, (spot_ly + 36) * s, 44 * s, 0x001C1C1E);
+        gui_icon_text(t, spot_lx + (DLG_W - gui_icon_text_w(t, 0, s)) / 2, spot_ly + 66, 0, s, 0x001C1C1E);
+        const char *w = "Unsaved conversations will be lost.";
+        gui_text(w, spot_lx + (DLG_W - gui_text_width(w)) / 2, spot_ly + 94, 0x0075726E);
+        int by = dlg_btn_y(), bw = dlg_btn_w(), cx = spot_lx + 16, gx = cx + bw + 16;
+        gui_rounded_rect_on_wallpaper(cx, by, bw, 28, 0x00E6E1D9, 14);
+        gui_text("Cancel", cx + (bw - gui_text_width("Cancel")) / 2, by + 6, 0x001C1C1E);
+        gui_rounded_rect_on_wallpaper(gx, by, bw, 28, 0x00b5502c, 14);
+        gui_text(go, gx + (bw - gui_text_width(go)) / 2, by + 6, 0x00FFFFFF);
+    } else if (tree_about) {   /* 7.6.0: a small window in the middle of the screen, as a Mac's About This Mac: the mark, the name, the version */
         gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, ABOUT_W, ABOUT_H, 0x00faf8f4, 12);
         gui_fill_circle(spot_lx + 18, spot_ly + 16, 6, 0x00FF5F57, 0x00faf8f4);   /* the red dot: a click anywhere closes it */
         menu_mark_paint((spot_lx + ABOUT_W / 2) * s, (spot_ly + 64) * s, 72 * s, 0x001C1C1E);
@@ -87,7 +107,9 @@ static void tree_paint(void) {
     }
     fb_flush(x, y, w, h);
     cur_show();
-    con_quiet = 1; uart_puts(tree_about ? "treemenu: about\n" : "treemenu: row "); if (!tree_about) { uart_dec((unsigned)tree_sel); uart_putc('\n'); }
+    con_quiet = 1;
+    if (tree_dlg) uart_puts(tree_dlg == 1 ? "power dialog: shut down\n" : "power dialog: restart\n");
+    else { uart_puts(tree_about ? "treemenu: about\n" : "treemenu: row "); if (!tree_about) { uart_dec((unsigned)tree_sel); uart_putc('\n'); } }
 }
 void tree_open(void) {
     if (spot_live || !fb) return;
@@ -98,10 +120,24 @@ void tree_open(void) {
     tree_cw = TREE_W; tree_ch = TREE_H;
     cur_hide();
     tree_under(1);
-    spot_live = spot_tree = 1; tree_sel = 0; tree_about = 0;
+    spot_live = spot_tree = 1; tree_sel = 0; tree_about = 0; tree_dlg = 0;
     con_quiet = 1; uart_puts("treemenu open\n");
     tree_paint();
 }
+void power_dialog(int off) {   /* power.h's power_ask: the card in the middle of the screen */
+    if (!fb) return;
+    int s = (int)window_scale(), w = SPOT_W * s, h = spot_hmax() * s;   /* the buffer Spotlight sizes; DLG_W by DLG_H fits it */
+    if (spot_live) spot_close();
+    if (!spot_under) spot_under = kmalloc((unsigned)(w * h) * 4);
+    if (!spot_under) { uart_puts("oom power dialog\n"); return; }
+    tree_cw = DLG_W; tree_ch = DLG_H;
+    spot_lx = ((int)fb_w / s - DLG_W) / 2; spot_ly = ((int)fb_h / s - DLG_H) / 2 - 20;
+    cur_hide();
+    tree_under(1);
+    spot_live = spot_tree = 1; tree_about = 0; tree_dlg = off ? 1 : 2;
+    tree_paint();
+}
+void power_dialog_close(void) { if (power_dialog_up()) spot_close(); tree_dlg = 0; }
 /* Log Out closes every window; with no accounts it says so on the menu bar, with accounts the login screen (login_ui.h) comes back. */
 void tree_close_all(void) {
     power_pending = 0; if (dock_sel >= 0) dock_select(-1);
@@ -134,11 +170,17 @@ void tree_key(unsigned code) {
     else if (code == 28 || code == 96) tree_pick(tree_sel);
 }
 void tree_click(int lx, int ly) {
+    if (tree_dlg) {   /* the power dialog: Cancel or the action; anywhere else it stays, as a Mac's does */
+        int by = dlg_btn_y(), bw = dlg_btn_w(), cx = spot_lx + 16, gx = cx + bw + 16;
+        if (in_box(lx, ly, cx, by, bw, 28)) power_key(1);
+        else if (in_box(lx, ly, gx, by, bw, 28)) power_key(28);
+        return;
+    }
     if (tree_about || !in_box(lx, ly, spot_lx, spot_ly, TREE_W, 109)) { spot_close(); return; }   /* outside the card, or any click on About, dismisses */
     for (int r = 0; r < 4; r++) if (in_box(lx, ly, spot_lx + 8, tree_ry(r), TREE_W - 16, SPOT_ROW)) { tree_sel = r; tree_pick(r); return; }
 }
 void tree_hover(int lx, int ly) {
-    if (tree_about) return;
+    if (tree_about || tree_dlg) return;
     for (int r = 0; r < 4; r++) if (in_box(lx, ly, spot_lx + 8, tree_ry(r), TREE_W - 16, SPOT_ROW) && r != tree_sel) { tree_sel = r; tree_paint(); return; }
 }
 void tui_log(const char *s) { con_quiet = 1; uart_puts(s); }   /* ask.c: the chat view's "tui| ..." lines, UART only (one line, newline included) */

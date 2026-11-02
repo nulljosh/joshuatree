@@ -1,26 +1,30 @@
 /* Keyboard power controls. Only a locally confirmed chord can reach the watchdog. */
 static int power_pending;   /* 1 shutdown, 2 restart */
 static void power_apply(int off);
-static void power_message(const char *s) {
+__attribute__((unused)) static void power_message(const char *s) {   /* power_apply's lines, Terminal and UART */
     term_output(1); uart_puts(s); term_output(0);
 }
-/* The one entry the confirmed chords and the tree menu's Restart and Shut Down rows share: the Terminal comes up, a busy
-   Samantha refuses, otherwise the same Enter-confirms prompt. Nothing here touches the watchdog. */
+static void power_say(const char *s) { con_quiet = 1; uart_puts(s); }   /* 7.7.0: the UART only; the dialog is what the person sees */
+void power_dialog(int off); void power_dialog_close(void); int power_dialog_up(void);   /* desk.c: the centered confirm card */
+/* The one entry the confirmed chords and the tree menu's Restart and Shut Down rows share. 7.7.0: a dialog in the middle of
+   the screen, as on a Mac (Joshua's board test: not the Terminal), Cancel and Restart or Shut Down; Enter confirms, Escape
+   cancels. A busy Samantha refuses it on the menu bar. Nothing here touches the watchdog. */
 static void power_ask(int off) {
-    spot_close(); brick_close(); clock_close(); calc_close(); pane_open(&term_p);
-    if (ask_pending()) { power_message("Wait for Samantha to finish, then try again.\n"); return; }
+    spot_close(); brick_close(); clock_close(); calc_close();
+    if (ask_pending()) { power_say("Wait for Samantha to finish, then try again.\n"); menubar_notify("Wait for Samantha to finish"); return; }
     power_pending = off ? 1 : 2;
-    power_message(off ? "Shut down? Unsaved conversations will be lost.\n" : "Restart? Unsaved conversations will be lost.\n");
-    power_message("Enter confirms. Escape cancels.\n");
+    power_say(off ? "Shut down? Unsaved conversations will be lost.\n" : "Restart? Unsaved conversations will be lost.\n");
+    power_say("Enter confirms. Escape cancels.\n");
+    power_dialog(off);
 }
 static int power_key(unsigned code) {
     if (power_pending) {
-        if (!term_front()) { power_pending = 0; return 0; }
-        if (code == 1) { power_pending = 0; power_message("Power action cancelled.\n"); }
+        if (!power_dialog_up()) { power_pending = 0; return 0; }
+        if (code == 1) { power_pending = 0; power_dialog_close(); power_say("Power action cancelled.\n"); }
         else if (code == 28 || code == 96) {
             int off = power_pending == 1;
-            power_pending = 0;
-            if (ask_pending()) power_message("Wait for Samantha to finish, then try again.\n");
+            power_pending = 0; power_dialog_close();
+            if (ask_pending()) { power_say("Wait for Samantha to finish, then try again.\n"); menubar_notify("Wait for Samantha to finish"); }
             else power_apply(off);
         }
         return 1;
@@ -58,6 +62,11 @@ static void power_apply(int off) {
     if (flushed < 0) power_message("power: a file would not save\n");
     else { power_message("power: saved open files "); uart_dec((unsigned)flushed); uart_putc('\n'); }
 #endif
+    {   /* 7.7.0: a soft chime that ends on silence, not a crackle when the reset cuts the jack. The board only (its 54 MHz
+           counter, as the halt below tells it): QEMU's raspi4b has no audio clock, and its failed start reset the model. */
+        unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f));
+        if (f == 54000000UL && !audio_busy()) audio_chime();
+    }
     if (off) power_halt_screen();
     if (off) {
         unsigned m[] = { 32, 0, 0x00028001, 8, 8, 0, 0, 0 };   /* SD power off through VideoCore */

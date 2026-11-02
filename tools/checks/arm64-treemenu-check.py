@@ -181,17 +181,24 @@ try:
     time.sleep(0.2)
     check("any key closes About and puts the screen back where it stood", ok and region(shot(), AX, AY, AW, AH) == region(base, AX, AY, AW, AH))
 
-    # Restart by mouse, Shut Down by keys, both stop at the chords' own prompt
+    # Restart by mouse, Shut Down by keys, both stop at the chords' own confirm, the power dialog (7.7.0)
     step("treemenu open", lambda: click(*MARK))
     ok = step("Restart? Unsaved", lambda: click(CX + 60, ROW_Y[1] + 10))
-    check("clicking Restart asks the chords' question in the Terminal", ok, uart()[-300:])
-    ok = step("Power action cancelled.", lambda: keys("esc"))
-    check("Esc cancels it", ok)
+    time.sleep(0.3); dl = shot()
+    if os.environ.get("JT_POWER_SHOT"): open(os.environ["JT_POWER_SHOT"], "wb").write(b"P6\n%d %d\n255\n" % (W, H) + dl[1])
+    DX, DY = (W - 300) // 2, (H - 180) // 2 - 20   # 7.7.0: the confirm is a dialog in the middle of the screen, not the Terminal
+    BY, BW = DY + 180 - 44, (300 - 48) // 2
+    check("clicking Restart opens the power dialog in the middle: cream card, the terracotta Restart button",
+          ok and "power dialog: restart" in uart() and px(dl, DX + 10, DY + 120) == CREAM and px(dl, DX + 16 + BW + 16 + 6, BY + 14) == TERRA,
+          (px(dl, DX + 10, DY + 120), px(dl, DX + 16 + BW + 16 + 6, BY + 14)))
+    ok = step("Power action cancelled.", lambda: click(DX + 16 + BW // 2, BY + 14))
+    time.sleep(0.2)
+    check("its Cancel button cancels and puts the screen back", ok and region(shot(), DX, DY, 300, 120) == region(base, DX, DY, 300, 120))   # above the buttons: the arrow rests on Cancel
     step("treemenu open", lambda: keys("f10"))
     ok = step("Shut down? Unsaved", lambda: keys("down", "down", "ret"))
     check("Down, Down, Enter on Shut Down asks the same", ok, uart()[-300:])
     ok = step("Power action cancelled.", lambda: keys("esc"))
-    check("Esc cancels that too", ok)
+    check("Esc cancels the dialog too", ok)
     step("treemenu open", lambda: keys("f10"))
     n = len(uart())
     keys("down", "ret")
