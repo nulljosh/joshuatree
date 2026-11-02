@@ -438,7 +438,7 @@ void main(void) {
         kinput(1, 1, 1);   /* Esc closes the card */
         uart_puts(spot_live ? "treemenu: esc FAILED\n" : "treemenu: esc survived\n");
         kinput(1, 68, 1);   /* F10 opens it again */
-        for (int i = 0; i < TREEMENU_SELFTEST; i++) kinput(1, 108, 1);   /* row 1 Sleep, 2 Restart, 3 Shut Down */
+        for (int i = 0; i < (TREEMENU_SELFTEST == 3 ? 1 : TREEMENU_SELFTEST + 1); i++) kinput(1, 108, 1);   /* row 1 Sleep, 2 Restart, 3 Shut Down */
         kinput(1, 28, 1);   /* Enter on the row: Sleep, or the power prompt */
 #if TREEMENU_SELFTEST == 3
         kinput(1, 28, 0);   /* the Enter's own release must not cancel it */

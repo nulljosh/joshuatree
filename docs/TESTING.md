@@ -23,5 +23,6 @@ Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with t
 17. **Deep idle.** Leave it alone five minutes: the screen goes dark. Touch a key: it is back at once, and the Pi runs cooler while dark (`sched`, run just after, still under 60 ms).
 18. **Trackpad, if one is here.** Plug a USB precision touchpad in: the UART says `usb trackpad`. One finger moves the pointer, two scroll a page in Blackcomb, a tap clicks and a two-finger tap right-clicks. If it says `input mode refused, left a mouse`, send the pad's name: it still points, as a mouse.
 19. **Battery, if a gauge board is here.** A UPS or laptop board with a MAX17048 at I2C 0x36 on the HAT pins (Geekworm style): the menu bar shows its percent and a battery where the power symbol was; `battery: N percent` on the UART at boot. No board: the power symbol, as before.
+20. **Sleep.** Click the tree, then Sleep: the screen goes dark a second later. A key brings it back.
 
 Steps 1 to 3 are 10.0, 4 is 9.0's touch screen; 5 to 9 are last night's fixes.
