@@ -1508,7 +1508,13 @@ The dreams, not plans:
 
 ### Next
 
-The demand gate and the retail check: take a count from the "Notify me" form, price a Pi 4 kit at a normal shop, and write both here.
+The first count, 2026-11-02 (real): the waitlist holds 0 strangers (one key, our own test), the repo has 0 stars and 6 views in two weeks, and the Pi image has 4 downloads across every release. The 26 second film is on the landing; nobody has seen it. The work now is attention, not features.
+
+Who to show it to first: the people who like how it was made. One person and Claude built a whole computer, and that story fits the AI and builder crowd (X, r/ClaudeAI, AI newsletters), who also want a private assistant on a box they own, which is the Samantha box. Purist forums are a worse first stop: r/opensource banned AI-made projects on 2026-10-24 and r/ProgrammingLanguages bans them too, so say how it was made up front everywhere and never hide it. Show HN waits for account karma (refused 2026-10-11).
+
+The landing's first ask should be one any Pi 4 owner can take tonight: flash the free image. People who run it are the box's buyers.
+
+Still open: price a Pi 4 kit at a normal shop and write it here.
 
 Alongside:
 - the Bluetooth mouse clicking on the real Pi
