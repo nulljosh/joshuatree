@@ -316,10 +316,11 @@ void smp_start(void) {
         *(volatile unsigned long *)(0xd8UL + 8 * c) = (unsigned long)secondary_entry;
         __asm__ volatile ("dc civac, %0\n dsb sy\n sev" :: "r"(0xd8UL + 8 * c) : "memory");   /* the waiting core reads it with its caches off */
 #else
-        if (psci_on(c, (unsigned long)secondary_entry) != 0) { uart_puts("core "); uart_dec(c); uart_puts(" not there\n"); continue; }
+        if (psci_on(c, (unsigned long)secondary_entry) != 0) { con_quiet = 1; uart_puts("core "); uart_dec(c); uart_puts(" not there\n"); continue; }
 #endif
         unsigned long t0 = cnt_now(), lim = cnt_hz() / 5;
         while (!core_up[c] && cnt_now() - t0 < lim) { }
+        con_quiet = 1;   /* the UART's line, kept off the boot console (and so out of a crash report's last lines) */
         uart_puts("core "); uart_dec(c);
         if (core_up[c]) { uart_puts(" up, mpidr "); uart_hex(core_mpidr[c]); uart_putc('\n'); }
         else uart_puts(" did not answer\n");
@@ -413,10 +414,14 @@ unsigned long cnt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_
 static unsigned th_live(void);   /* 8.1.0: an app's threads that have not exited */
 static void wd_arm(void) { unsigned long t = cnt_hz() / 100;   /* 8.6.0: every app runs in 10 ms slices (8.1.0: those with threads) */ __asm__ volatile ("msr cntp_tval_el0, %0\n msr cntp_ctl_el0, %1\n isb" :: "r"(t), "r"(1UL)); }
 static void wd_off(void) { __asm__ volatile ("msr cntp_ctl_el0, %0\n isb" :: "r"(0UL)); }
-void wd_rearm(void) {   /* after every call: a lone thread's three seconds start again; with threads the slice runs on (a call must not
-                           buy a thread a fresh one, or one that calls often is never preempted) and only the spin count clears */
+static long wd_left;   /* 8.6.0: what was left of the slice when the app's call came in */
+void wd_pause(void) { if (wd_live) { long t; __asm__ volatile ("mrs %0, cntp_tval_el0" : "=r"(t)); wd_left = (int)t; } }
+void wd_rearm(void) {   /* after every call: the slice goes on from where the call found it, so time inside the kernel (a slow card
+                           read) is never charged to the app, and a call never buys it a fresh slice either; the spin count clears */
     if (!wd_live) return;
     ap->spin = 0;
+    unsigned long t = wd_left > 0 ? (unsigned long)wd_left : 1;
+    __asm__ volatile ("msr cntp_tval_el0, %0\n isb" :: "r"(t));
 }
 static void apps_init(void) { for (unsigned i = 0; i < APP_SLOTS; i++) { apps[i].base = USER_BASE + i * ARENA_SIZE; apps[i].l3off = i * ARENA_BLOCKS * 512; apps[i].slot = i; } }
 /* The app windows' stacking: app_z lists the slots that have a window, front first. app_top is the front one (-1 with none); outside
@@ -782,6 +787,7 @@ static void dbg_end(void) {   /* app_tick, after the stepped app's turn, however
     dbg_mdscr(0);
 }
 void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's FP registers, saved below the frame by el0_sync_entry */
+    wd_pause();   /* 8.6.0: the slice stops while the kernel works for the app; wd_rearm (vectors.S, on the way out) restarts it */
     unsigned ec = (unsigned)(f->esr >> 26);
     if (ec == 0x32) { dbg_step(f); return; }   /* 7.2.0: a software step, the debugger's */
     APP_FP_CLOBBER();

@@ -140,10 +140,10 @@ try:
     if not click(*slot_centre(3), "M3c window calendar first frame"): raise SystemExit
     out = uart()[n0:]
     check("the Calendar tile starts user/calendar.c under the scheduler and its window opens at EL0",
-          "M3c app calendar starts" in out and re.search(r"M3c svc 384 a0=0x[0-9a-f]{16} -> 0\ncalendar: ring-3 window 560x360\n", out), out[-500:])
+          "M3c app calendar starts" in out and re.search(r"M3c svc 384 a0=0x[0-9a-f]{16} -> 0\n(?:.*\n){0,8}?calendar: ring-3 window 560x360\n", out)   # 8.6.0: a slice may end between the call and the line, and the desktop's own lines land in between, out[-500:])
     check("calendar computed today from JT_SYS_TIME: 2026-03-31, a Tuesday", "calendar: today 2026-03-31 dow 2\n" in out, out[-300:])
     check("its open of EVENTS.TXT is answered now (M3d): no disk here, so -ENOENT, and load() fails quietly: no events, no fault",
-          re.search(r"M3c svc 5 a0=0x[0-9a-f]{16} -> -2\ncalendar: loaded 0\n", out) and "M3 EL0 fault" not in out, out[-300:])
+          re.search(r"M3c svc 5 a0=0x[0-9a-f]{16} -> -2\n(?:.*\n){0,8}?calendar: loaded 0\n", out) and "M3 EL0 fault" not in out, out[-300:])
     m = re.search(r"M3c window calendar (\d+)x(\d+) at (\d+),(\d+)\n", out)
     if not m: fails.append("no 'M3c window calendar WxH at X,Y' line"); raise SystemExit
     cw, ch, cx0, cy0 = map(int, m.groups())
