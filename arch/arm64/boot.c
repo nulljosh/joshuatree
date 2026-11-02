@@ -19,7 +19,33 @@ static int input_present(void) { return 1; }
 #else
 static int input_present(void) { return usb_input_count() > 0 || bt_input_live(); }
 #endif
+/* 10.1.0: deep idle's nap. Core 0 waits in wfe, woken by the timer's event stream (about every millisecond: CNTKCTL_EL1
+   EVNTI picks the counter bit) until the deadline. Polling the counter, not counting wake-ups, so a wfe that returns
+   at once (QEMU 10, or a firmware that left a fast stream on, 8.9.0) still waits the whole time, only less cheaply. */
+static void nap_ms(unsigned ms) {
+    unsigned long hz = cnt_hz(), end = cnt_now() + hz / 1000 * ms, k, n = 0;
+    while (n < 15 && (2UL << n) < hz / 1000) n++;
+    __asm__ volatile ("mrs %0, cntkctl_el1" : "=r"(k));
+    __asm__ volatile ("msr cntkctl_el1, %0\n isb" :: "r"((k & ~0xfcUL) | 4UL | (n << 4)));
+    while ((long)(end - cnt_now()) > 0) __asm__ volatile ("wfe");
+    __asm__ volatile ("msr cntkctl_el1, %0\n isb" :: "r"(k));
+}
 #include "screen_idle.h"
+#ifdef SCREEN_SELFTEST
+/* 10.1.0: the loop's passes in a second awake, then in a second asleep, then a key wakes it (arm64-screen-idle-check.py) */
+void kinput(unsigned type, unsigned code, int value);
+static void deep_selftest_tick(void) {
+    static int phase; static unsigned long t0; static unsigned passes;
+    if (phase == 3) return;
+    if (!t0) t0 = cnt_now();
+    passes++;
+    if (cnt_now() - t0 < cnt_hz()) return;
+    con_quiet = 1; uart_puts("screen: "); uart_dec(passes); uart_puts(phase ? " passes in a second asleep\n" : " passes in a second awake\n");
+    if (phase == 0) { screen_last -= SCREEN_IDLE_CS; screen_tick(); }
+    else { kinput(1, 42, 1); kinput(1, 42, 0); uart_puts(screen_asleep ? "screen: deep idle stuck\n" : "screen: deep idle selftest done\n"); phase = 2; }
+    phase++; t0 = cnt_now(); passes = 0;
+}
+#endif
 #endif
 #include "login_ui.h"   /* 4.9.0: the login screen, over everything while JT/USERS.TXT has an account and nobody has signed in */
 /* Key repeat. A USB keyboard (SET_IDLE(0)) reports only a change, so a held key sends one press and then nothing.
@@ -423,7 +449,7 @@ void main(void) {
     uart_puts("screen: input selftest done\n");
 #endif
 #endif
-#if defined(NOTES_SELFTEST) || defined(APP_BOOT)
+#if defined(NOTES_SELFTEST) || defined(APP_BOOT) || defined(SCREEN_SELFTEST)
     usb_ok |= !inputs;   /* QEMU's raspi4b has no USB to find: the loop runs anyway, for notes_tick's made-up keys */
 #endif
     if (usb_ok || inputs) {
@@ -452,7 +478,11 @@ void main(void) {
 #endif
 #ifdef PI_BUILD
         (void)step;
-        for (;;) {   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) {   /* awake, the Pi spins and polls; with the screen asleep and nothing working, each pass naps first (10.1.0) */
+            screen_nap(ask_pending() || brick_live || apps_live() || audio_busy() || browser_busy() || reader_waiting() || bt_input_live());   /* a Bluetooth keyboard or mouse: its reports come over the UART, so full speed (bt_busy() stays true with no chip at all) */
+#ifdef SCREEN_SELFTEST
+            deep_selftest_tick();
+#endif
             TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(reader_tick()); TIMED(update_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
