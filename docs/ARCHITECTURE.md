@@ -3014,15 +3014,15 @@ The video's outline: one verify script, a deploy gate, enforced guardrails, a te
 Measured by `tools/bench.sh`; `--write` refreshes the block below, the README table and the landing page.
 
 <!-- benchdoc:start -->
-The kernel boots headless in QEMU on this Mac, runs `kernel/bench.c` and prints the numbers over serial. Run `tools/bench.sh` yourself; the numbers move with the host. Version 3.0.0, 2026-10-11.
+The kernel boots headless in QEMU on this Mac, runs `kernel/bench.c` and prints the numbers over serial. Run `tools/bench.sh` yourself; the numbers move with the host. Version 9.0.0, 2026-11-02.
 
 | Benchmark | Result |
 |---|---|
-| boot_to_shell | 260 ms |
-| heap_alloc_free | 172 ns/op |
-| memcpy | 756 MB/s |
-| context_switch | 3233 ns/switch |
-| disk_read | 9674 KB/s |
+| boot_to_shell | 270 ms |
+| heap_alloc_free | 225 ns/op |
+| memcpy | 769 MB/s |
+| context_switch | 3236 ns/switch |
+| disk_read | 10253 KB/s |
 
 boot_to_shell is timer ticks from the first interrupt to the shell prompt.
 heap_alloc_free is one kmalloc plus one kfree, averaged over 20,000.

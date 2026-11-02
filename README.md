@@ -42,11 +42,11 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 <!-- bench:start -->
 | Benchmark | Result |
 |---|---|
-| Boot to shell | 260 ms |
-| Alloc + free | 172 ns/op |
-| memcpy | 756 MB/s |
-| Context switch | 3233 ns/switch |
-| Disk read | 9674 KB/s |
+| Boot to shell | 270 ms |
+| Alloc + free | 225 ns/op |
+| memcpy | 769 MB/s |
+| Context switch | 3236 ns/switch |
+| Disk read | 10253 KB/s |
 <!-- bench:end -->
 
 ## Docs
