@@ -57,8 +57,7 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 **Now: 9.0, the kit.**
 
 **The Berkeley list** (Joshua, 2026-11-01: "are we missing anything" from Berkeley's CS162 lectures). What the course covers that Joshua Tree still lacks, in order, before 10.0:
-- [ ] [Fable] Swap: heap pages pushed out to the card when memory runs low, and read back on their next touch (lectures 15 to 17). Pages loaded on first touch came first, in 8.7.0; copy on write waits for a fork, which spawn does not need.
-- [ ] [Fable] A block cache, and writes that survive a pulled plug: a small journal in front of FAT so a cut mid-write leaves the old file or the new one, never a torn one (lectures 19 to 22). Check: cut QEMU at every write of a save and fsck the card.
+- [ ] [Fable] Swap, later: each app has a fixed 32 MiB of RAM, so nothing runs low to push out yet (decided 2026-11-01). It comes with apps that can grow past their arena. Pages loaded on first touch came first, in 8.7.0; copy on write waits for a fork, which spawn does not need.
 - [ ] [Fable] App threads on all four cores. The cores are up and idle since 8.2.0; next they take app threads, which needs a lock in the futex call and in the scheduler's thread list.
 Left out on purpose: distributed file systems, key value stores and Chord (lectures 25 and 26); a desktop does not need them.
 
@@ -1016,6 +1015,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **8.8.0 (2026-11-01)**: A block cache. fat.c reads the same table and folder sectors over and over, and now the last 128 it touched come from memory. It writes through, so every write is on the card when the call returns and 4.13.0's crash safety (new data first, one sector flips the entry, `fat_recover` at mount) is unchanged; that already met the Berkeley list's "writes that survive a pulled plug". `disk` in the Terminal counts. Check: `arm64-diskcache-check.py` (repeated reads cost the card nothing, and a file written just before QEMU is killed is on the card).
 - **8.7.0 (2026-11-01)**: Heap pages on first touch. `brk` only moves the top now, and each heap page is mapped and zeroed the first time the app, or the kernel working for it, touches it, so an app that asks for 8 MiB and uses 12 KiB costs three pages. Check: `arm64-heap-check.py` (six pages touched out of an 8 MiB heap, the kernel's own first touch, and a re-grown page reading zero).
 - **8.6.0 (2026-11-01)**: The desktop comes first. Every app now runs in 10 ms slices, not only an app with threads: a busy app that never yields used to keep the core until the 3 s watchdog, freezing the pointer and the sound; now the desktop's loop runs between any two of its turns, and the watchdog still stops an app that makes no call for 3 s. `sched` in the Terminal says the longest one app held the core. Check: `arm64-sched-check.py` (a busy app is cut off, finishes with the right sum, and never holds the core over 60 ms). 8.1.0 to 8.6.0 ship as one release, so 8.6.0 is the tag.
 - **8.5.0 (2026-11-01)**: Sockets for apps. `jt_connect(host, port)` opens a TCP connection to a name or an address, and the app reads, writes and closes it as fd 100, so an app can speak any protocol, not only fetch a page with `http_get`. It is the kernel's one TCP stream, so one socket at a time, and a read with nothing yet lets the desktop go on. Check: `arm64-sock-check.py` (a line to a server on the Mac and its answer back, and plain errors for a dead port or a bad name).
@@ -2139,13 +2139,13 @@ Updated 2026-11-01, evening Vancouver time. The loop's working notes live in `~/
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand.** 8.0.0, Build things, is in (with Bluetooth in Settings folded in from 7.9). 8.1.0 brings threads, locks and condition variables to Pi apps, the first item of the Berkeley list, 8.2.0 wakes the other three cores, 8.3.0 adds pipes between apps 8.4.0 lets an app spawn and wait for another, 8.5.0 gives apps sockets, 8.6.0 puts the desktop ahead of any busy app, and 8.7.0 maps heap pages only when they are first touched. 7.6 onward has not run on the board yet.
+**Where things stand.** 8.0.0, Build things, is in (with Bluetooth in Settings folded in from 7.9). 8.1.0 brings threads, locks and condition variables to Pi apps, the first item of the Berkeley list, 8.2.0 wakes the other three cores, 8.3.0 adds pipes between apps 8.4.0 lets an app spawn and wait for another, 8.5.0 gives apps sockets, 8.6.0 puts the desktop ahead of any busy app, 8.7.0 maps heap pages only when they are first touched, and 8.8.0 adds a block cache. 7.6 onward has not run on the board yet.
 
 **Waiting on Joshua.** The board pass (`docs/TESTING.md`): it is physical. The Bluetooth keyboard's stuck key repeat needs the board too. The 9.0 and 10.0 bumps wait on their gates (a stranger builds a Nimbus; a month as Joshua's only computer), which QEMU cannot show, so the loop ships their software as 8.x minors. The loop asks nothing else and decides design calls itself, saying what it chose here. Decided 2026-10-27: Wi-Fi passwords stay machine-wide, so the network is up before anyone signs in; apps are signed by Joshua's key and unsigned ones need an admin; the store is an `install` from the landing. Decided 2026-10-29: a card flashed without the key gets plankc unsigned, the same rule.
 
 **Next, in order.**
 1. Whatever the board shows broken.
-2. The rest of the Berkeley list: swap, the journal, then app threads on the four cores.
+2. The rest of the Berkeley list: app threads on the four cores (swap waits for apps that outgrow their arena).
 3. 9.0's software QEMU can prove (USB storage first), then 10.0's (screen reader, languages, self-update with a fallback kernel, a security audit).
 
 Restart prompt:

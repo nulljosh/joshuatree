@@ -222,21 +222,50 @@ int emmc_write(unsigned lba, unsigned count, const void *buf) { return vblk_span
 static unsigned part_start, part_blocks;   /* in card blocks */
 static unsigned part_reserved, part_fsinfo;   /* the boot sectors fat.c never writes, and the one it may (FAT32's FSInfo) */
 static int mounted;
+/* 8.8.0: a block cache. fat.c reads the same FAT and folder sectors over and over (every open walks the path, every
+   cluster step reads the table), and a card read is the slow part. 128 sectors (64 KiB) are kept, the least recently used
+   one replaced. It is write-through: a write goes to the card first and only then into the cache, so the order 4.13.0's
+   crash safety rests on (data, then the one folder sector that flips the entry, then the frees) is the card's order still,
+   and a pulled plug loses nothing the cache held. sd_mount empties it, since the card may have changed. Only fat.c's
+   sectors go through it; boot.c's raw sdtest writes past the partition's end, outside it. `disk` in the Terminal counts. */
+#define BC_N 128
+static struct { unsigned lba, used; int ok; unsigned char d[512]; } bc[BC_N];
+static unsigned bc_clock, bc_hits, bc_reads, bc_writes;
+static int bc_find(unsigned lba) { for (int i = 0; i < BC_N; i++) if (bc[i].ok && bc[i].lba == lba) return i; return -1; }
+static int bc_slot(void) { int k = 0; for (int i = 0; i < BC_N; i++) { if (!bc[i].ok) return i; if (bc[i].used < bc[k].used) k = i; } return k; }
+static void bc_put(unsigned lba, const unsigned char *d) {
+    int i = bc_find(lba); if (i < 0) i = bc_slot();
+    bc[i].lba = lba; bc[i].ok = 1; bc[i].used = ++bc_clock;
+    for (int k = 0; k < 512; k++) bc[i].d[k] = d[k];
+}
+void disk_cache_stats(unsigned *hits, unsigned *reads, unsigned *writes) { *hits = bc_hits; *reads = bc_reads; *writes = bc_writes; }
 int blockdev_read_sector(unsigned int lba, void *buf) {   /* fat.c's only way to the card: sector numbers inside the partition */
     if (lba >= part_blocks) { kputs("sd refused block "); kdec(lba); kputs(", past the end of the partition\n"); return 0; }
-    return emmc_read(part_start + lba, 1, buf);
+    unsigned char *o = buf;
+    int i = bc_find(lba);
+    if (i >= 0) { bc[i].used = ++bc_clock; for (int k = 0; k < 512; k++) o[k] = bc[i].d[k]; bc_hits++; return 1; }
+    bc_reads++;
+    if (!emmc_read(part_start + lba, 1, buf)) return 0;
+    bc_put(lba, o);
+    return 1;
 }
 int blockdev_write_sector(unsigned int lba, const void *buf) {   /* the same bound, and never the boot sector or its backup */
     if (lba >= part_blocks || (lba < part_reserved && lba != part_fsinfo)) {
         kputs("sd refused write to block "); kdec(lba); kputs(lba >= part_blocks ? ", past the end of the partition\n" : ", a boot sector\n");
         return 0;
     }
-    return emmc_write(part_start + lba, 1, buf);
+    bc_writes++;
+    int i = bc_find(lba);
+    if (i >= 0) bc[i].ok = 0;   /* whatever happens on the card, the cache never holds a sector it did not take */
+    if (!emmc_write(part_start + lba, 1, buf)) return 0;
+    bc_put(lba, buf);
+    return 1;
 }
 static unsigned rd32(const unsigned char *p) { return p[0] | p[1] << 8 | p[2] << 16 | (unsigned)p[3] << 24; }
 int sd_mount(void) {
     static unsigned char b[1024];
     mounted = 0; part_blocks = 0; part_reserved = 0xFFFFFFFFu;
+    for (int i = 0; i < BC_N; i++) bc[i].ok = 0;   /* 8.8.0: a new mount, perhaps a new card: nothing cached is trusted */
     if (!emmc_init() || !emmc_read(0, 1, b)) return 0;
     if (b[510] != 0x55 || b[511] != 0xAA) { kputs("sd no partition table\n"); return 0; }
     unsigned start = 0, size = 0;

@@ -2094,6 +2094,8 @@ Sockets (8.5.0, the Pi only). `jt_connect(host, port)` is call 412: `sock_connec
 
 Demand paging for the heap (8.7.0). `JT_SYS_BRK` only moves the heap's top. A heap page is mapped (EL0 read-write, never executable) and zeroed the first time it is touched: by the app, through the data abort in `exc_el0_sync` (a translation fault inside `[heap base, top)` goes to `heap_fault` and the instruction runs again), or by the kernel on the app's behalf, since `user_in_range` and `user_writable`, the gates every system call passes user memory through, fault the span in first (`heap_fault_span`; a kernel access to an unmapped page would be the kernel's own fault). Shrinking unmaps, so a page that comes back is zeroed again. The app's end line says how many heap pages it touched. Copy on write needs fork, which Joshua Tree does not have (spawn loads a fresh app); swap to the card is next. Check: `arm64-heap-check.py`.
 
+The block cache (8.8.0). `blockdev_read_sector` and `blockdev_write_sector` in `emmc.c`, fat.c's only way to the card, keep 128 sectors (64 KiB), the least recently used one replaced. It is write-through: a write goes to the card first and only then into the cache, so the order 4.13.0's crash safety rests on is still the card's order and a pulled plug loses nothing the cache held. `sd_mount` empties it. `disk` in the Terminal counts sectors from the cache, sectors read from the card and sectors written. Check: `arm64-diskcache-check.py`.
+
 ## Threat model
 
 Written before the auth code. A login prompt on top of no real privilege boundary would protect nothing. So this page is honest about what "protects" means here.
@@ -2519,7 +2521,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (360 checks)
+### The suite (361 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2826,6 +2828,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Sockets (8.5.0): a card app connects to a TCP server on the host, writes a line and reads the server's capitalised answer through fd 100, a write after close is -EBADF, a dead port is -ECONNREFUSED and a bad name -EHOSTUNREACH (skips where the tools are missing) | `tools/checks/arm64-sock-check.py` | retry |
 | The desktop comes first (8.6.0): a single-threaded card app that computes for seconds without yielding is cut off at least ten times, finishes with the right sum, and `sched` says no app held the core longer than 60 ms in a turn (skips where the tools are missing) | `tools/checks/arm64-sched-check.py` | retry |
 | Demand paging (8.7.0): a card app asks for an 8 MiB heap and touches six pages, one first touched by the kernel storing through a pointer for it; what it wrote reads back, untouched and re-grown pages read 0, and the kernel counts exactly 6 heap pages, not 2048 (skips where the tools are missing) | `tools/checks/arm64-heap-check.py` | retry |
+| The block cache (8.8.0): five repeated cats read nothing more from the card and the cache answers them; a file written just before QEMU is killed is on the card with its bytes; a second boot reads both files (skips where the tools are missing) | `tools/checks/arm64-diskcache-check.py` | retry |
 | Signed apps (6.54.0): with a throwaway key built in and two accounts on the card, a signed app runs for a non-admin, an unsigned one only under an admin's sudo (and then in Spotlight), and one with a flipped byte, another key's signature or a copied name never, sudo or not (skips where the tools are missing) | `tools/checks/arm64-appsig-check.py` | retry |
 | The app store (6.55.0): with a throwaway key and a stub store, install fetches a signed app into JT/APPS (byte for byte) and userrun runs it; a changed image, a missing signature, an app the store lacks and a built-in name are refused and nothing is written (skips where the tools are missing) | `tools/checks/arm64-store-check.py` | retry |
 | Plank on the box (6.57.0): twelve of Plank's own examples (printing, floats, strings, lists, dicts, structs, enums, closures, optionals, try and catch) built for the Pi by tools/plankapp.sh over user/pklibc each print exactly their .out file when run from the card, and the store's Slide, written in Plank, opens its window, slides tiles and closes (6.58.0), and fib and fizzbuzz built by plankc, the compiler written in Plank, with no LLVM IR, print theirs too (6.62.0), as do primes and plankc's string, list, struct, optional, dict and error tests on its runtime written in Plank, against plank.py's output (6.63.0 to 6.68.0) (skips without Plank and uv; CI pins Plank on this shard) | `tools/checks/arm64-plank-check.py` | retry |
