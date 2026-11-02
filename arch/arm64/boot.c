@@ -355,6 +355,13 @@ void main(void) {
     splash_finish();
 #endif
     login_show();   /* login_ui.h: with an account on the card the desktop waits behind the login screen; with none this does nothing */
+#ifdef PI_BUILD
+    {   /* 8.9.0: with a mouse paired, the arrow is on screen from the start. A Bluetooth mouse sleeps until it is moved, so it
+           reconnects a few seconds in; before, the arrow only appeared then (Joshua: "you need to wiggle the mouse"). */
+        int bt_has_pairing(void);
+        if (bt_has_pairing()) { cur_wanted = 1; cur_show(); }
+    }
+#endif
 #ifdef NOTICE_SELFTEST
     menubar_notify("Note kept in memory");
 #endif

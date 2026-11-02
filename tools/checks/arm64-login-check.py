@@ -178,7 +178,7 @@ class Session:
         self.q.wait()
 
 
-WALL, INK = (0x6E, 0x6E, 0x6E), (0x14, 0x13, 0x11)
+WALL, INK = (0x3B, 0x6E, 0xA5), (0x14, 0x13, 0x11)
 def desktop_up(sh):   # the menu bar is on screen: some pixel of the top rows is not the bare wallpaper (the login screen is wallpaper and one card)
     w, h, _ = sh; return any(Session.px(sh, x, y) != WALL for y in range(0, 20, 3) for x in range(0, w, 5))
 def accent_in_bar(sh):

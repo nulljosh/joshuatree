@@ -531,7 +531,7 @@ try:
     up = S.uart()
     check("quiet boot: the desktop is NOT drawn before the login card (`M1c fb ok` comes after the sign-in)", "M1c fb ok" not in up and "login: desktop up" not in up, up[-400:])
     sh = S.shot(); w, h, d = sh
-    bare = all(d[(y * w + x) * 3:(y * w + x) * 3 + 3] == bytes((0x6E, 0x6E, 0x6E)) for y in range(0, 20, 3) for x in range(0, w, 7))
+    bare = all(d[(y * w + x) * 3:(y * w + x) * 3 + 3] == bytes((0x3B, 0x6E, 0xA5)) for y in range(0, 20, 3) for x in range(0, w, 7))
     cx, cy = (w - 300) // 2, (h - 244) // 2 - 8
     cream = d[((cy + 120) * w + cx + 8) * 3:((cy + 120) * w + cx + 8) * 3 + 3]
     check("... and the screen shows the cream login card (%s at its edge) on the bare wallpaper, no menu bar" % cream.hex(), bare and cream == bytes((0xFA, 0xF8, 0xF4)))
@@ -540,7 +540,7 @@ try:
     after = S.uart()[n:]
     check("... after the sign-in the desktop is drawn for the first time (`M1c fb ok`), with the menu bar", ok and "M1c fb ok" in after, after[-300:])
     time.sleep(0.5); sh = S.shot(); w, h, d = sh
-    check("... the screendump has the menu bar", any(d[(y * w + x) * 3:(y * w + x) * 3 + 3] != bytes((0x6E, 0x6E, 0x6E)) for y in range(0, 20, 3) for x in range(0, w, 7)))
+    check("... the screendump has the menu bar", any(d[(y * w + x) * 3:(y * w + x) * 3 + 3] != bytes((0x3B, 0x6E, 0xA5)) for y in range(0, 20, 3) for x in range(0, w, 7)))
 except SystemExit:
     pass
 finally:

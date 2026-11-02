@@ -60,9 +60,13 @@ static int wait_flag(unsigned long reg, unsigned mask, unsigned want) {   /* unt
     for (unsigned i = 0; i < SPIN; i++) if ((RD(reg) & mask) == want) return 1;
     return 0;
 }
-static void hw_close(void) {   /* pins back to inputs, PWM and its clock off: the jack goes quiet. Safe to call twice. */
+static void hw_close(void) {   /* PWM and its clock off, the pins pulled down: the jack goes quiet. Safe to call twice. */
     WR(PWM1_BASE + 0x00, 0);
-    WR(GPIO_BASE + 0x10, RD(GPIO_BASE + 0x10) & ~0x3Fu);   /* GPIO 40 and 41 only; bits 6 to 8 (GPIO 42) are left as they are */
+    WR(GPIO_BASE + 0x10, RD(GPIO_BASE + 0x10) & ~0x3Fu);   /* GPIO 40 and 41 inputs; bits 6 to 8 (GPIO 42) are left as they are */
+    /* 8.9.0, the crackle through a restart: the watchdog reset turns the pins back to inputs, but the pull register keeps
+       what hw_open wrote. With no pull they floated through the seconds of the firmware's bootloader. Pulled down they
+       stay quiet until the next sound. */
+    WR(GPIO_BASE + 0xE8, (RD(GPIO_BASE + 0xE8) & ~0x000F0000u) | 0x000A0000u);
     WR(CM_BASE + 0xA0, CM_PW | (RD(CM_BASE + 0xA0) & 0x6F));
 }
 static int hw_open(void) {
@@ -77,7 +81,7 @@ static int hw_open(void) {
     WR(PWM1_BASE + 0x10, range); WR(PWM1_BASE + 0x20, range);
     WR(PWM1_BASE + 0x00, 0x40);                                /* CLRF1: empty the FIFO */
     WR(PWM1_BASE + 0x00, 0x2121);                              /* both channels on, both fed from the FIFO */
-    WR(GPIO_BASE + 0xE8, RD(GPIO_BASE + 0xE8) & ~0x0FF0000u);  /* no pull on pins 40 and 41 */
+    WR(GPIO_BASE + 0xE8, RD(GPIO_BASE + 0xE8) & ~0x000F0000u);  /* no pull on pins 40 and 41 only (the old mask took 42 and 43 too) */
     WR(GPIO_BASE + 0x10, (RD(GPIO_BASE + 0x10) & ~0x3Fu) | 0x24u);   /* GPIO 40 and 41 to alt 0 = PWM1 channels 0 and 1 */
     return 0;
 }
@@ -184,13 +188,27 @@ static void app_finish(void) {
     put_str("audio: app stream "); put_dec(app_fed); put_str(" frames at "); put_dec(aq_rate); put_str(" Hz, ring sum 0x"); put_hex(app_hash);
     put_str(", abs "); put_dec(app_abs); put_str(", volume "); put_dec((unsigned)volume); put_str(", played "); put_dec(app_played); put_str("\n");
 }
+/* 8.9.0: the pop at a song's start and at pause (Joshua, on the board: "only on start and pause, not during"). The PWM's
+   silence is its midpoint, half the supply, and the jack sits at the bottom while the PWM is off, so the first frame stepped
+   it up and the stop dropped it down. Now a stream rises from the bottom to the midpoint over 20 ms before the app's first
+   frame, and at its end falls back over 20 ms and rests at the bottom until the PWM stops. */
+static int fading;              /* the stream's sound is out and the fall to the bottom is queued */
+static unsigned long fade_end;  /* the frame after which the fall, and a little bottom, have played */
+static unsigned fade_n(void) { unsigned n = aq_rate / 50; return n < GUARD ? GUARD : n; }
+static unsigned fade_at(unsigned k, unsigned n, int up) {   /* frame k of n of a smoothstep (3t^2 - 2t^3) between bottom and midpoint */
+    unsigned long t = (unsigned long)(up ? k : n - k) * 1024 / n, e = (3 * t * t * 1024 - 2 * t * t * t) / (1024UL * 1024UL);   /* 0..1024 */
+    return (unsigned)(silence * e / 1024);
+}
 static void app_begin(void) {
     range = 27000000u / aq_rate;
     silence = (unsigned)(32768 * (int)range >> 16);   /* sample 0: the PWM's midpoint */
     for (unsigned i = 0; i < PCM_FRAMES * 2; i++) pcm[i] = silence;
+    unsigned n = fade_n();
+    for (unsigned k = 0; k < n; k++) pcm_put(k, fade_at(k, n, 1));   /* the rise, first thing the DMA plays */
     pcm_clean(0, PCM_FRAMES);
     app_hash = 2166136261u; app_abs = app_fed = 0;
-    pump_at = 0; pcm_wr = run0 = GUARD;
+    fading = 0;
+    pump_at = 0; pcm_wr = run0 = n + GUARD;   /* the rise, then GUARD frames of silence, then the sound */
     if (pcm_start()) { fail("app sound did not start"); aq_tail = aq_head; aq_end = 0; return; }
     app_live = 1;
 }
@@ -207,7 +225,20 @@ void audio_pump(void) {
     for (unsigned long k = from; k < done; k++) pcm_put(k, silence);   /* behind it, silence again, for its next lap */
     pcm_clean(from, done);
     pump_at = done;
-    if (aq_head == aq_tail) { if (done >= pcm_wr) app_finish(); return; }   /* all of it sent: the stream ends once the hardware has taken it */
+    if (aq_head == aq_tail) {   /* all of it sent: once the hardware has taken it, the fall to the bottom, then the stream ends */
+        if (done < pcm_wr) return;
+        if (!fading) {
+            unsigned long at = done + GUARD; unsigned n = fade_n(), rest = aq_rate / 4;
+            for (unsigned k = 0; k < n; k++) pcm_put(at + k, fade_at(k, n, 0));
+            for (unsigned k = 0; k < rest; k++) pcm_put(at + n + k, 0);   /* the bottom, until the PWM stops */
+            pcm_clean(at, at + n + rest);
+            fade_end = at + n + GUARD; fading = 1;
+            return;
+        }
+        if (done >= fade_end) app_finish();
+        return;
+    }
+    fading = 0;   /* more sound came while it fell: it carries on (a short dip, not a pop to the bottom and back) */
     if (pcm_wr < done) pcm_wr = run0 = done + GUARD;      /* it ran dry: carry on just ahead of it */
     unsigned long wr0 = pcm_wr, ahead = done + aq_rate / 8;
     while (pcm_wr < ahead && aq_head != aq_tail) {
@@ -249,6 +280,7 @@ static int drain(void) {   /* the ring into the sink, a frame at a time */
 }
 
 /* Push `frames` frames through the ring from `src` (stereo) or, when src is 0, a triangle wave of `freq` Hz. */
+static int ramp_out;   /* 8.9.0: the chime: end on a fade from the midpoint down to the pin's off level (stream, below) */
 static int stream(const short *src, int frames, int rate, int freq) {
     unsigned phase = 0, step = freq ? (unsigned)(((unsigned long)freq << 32) / (unsigned)rate) : 0;
     int bad = 0;
@@ -269,6 +301,22 @@ static int stream(const short *src, int frames, int rate, int freq) {
             ring_push(l, r); i++;
         }
         bad = drain();
+    }
+    /* 8.9.0: the crack after the chime (Joshua, on the board: "the crackle happens after the nice chime") was hw_close
+       dropping the pin from the PWM's midpoint, half the supply, to off in one step. A clip that asks for it ends on a
+       quarter second's smooth slide (3t^2 - 2t^3) from the midpoint to the bottom, raw, past the volume, so the pin is
+       already at the level hw_close leaves it at. */
+    if (!bad && ramp_out) {
+        int n = rate / 4;
+        for (int k = 0; k < n && !bad; ) {
+            while (k < n && ring_count < RING_FRAMES) {
+                long t = (long)(k + 1) * 1024 / n, e = (3 * t * t * 1024 - 2 * t * t * t) / (1024L * 1024L);   /* 0..1024 */
+                short v = (short)(-32768L * e / 1024);
+                ring[ring_head * 2] = ring[ring_head * 2 + 1] = v;
+                ring_head = (ring_head + 1) % RING_FRAMES; ring_count++; k++;
+            }
+            bad = drain();
+        }
     }
     if (!bad && hw_finish()) bad = -1;
     hw_close();
@@ -306,13 +354,17 @@ static int chime_note(int i, int start, int len, unsigned freq) {   /* frame i o
     return chime_sin((unsigned)((unsigned long)t * freq * 65536 / CHIME_RATE)) * env / 1024;
 }
 int audio_chime(void) {
+    if (!volume) { put_str("audio: chime skipped, muted\n"); return 0; }   /* 8.9.0: muted means no chime, and the jack is never touched before a restart */
     for (int i = 0; i < CHIME_FRAMES; i++) {
         int v = chime_note(i, 0, CHIME_FRAMES, 659) + chime_note(i, CHIME_RATE * 12 / 100, CHIME_FRAMES - CHIME_RATE * 12 / 100, 880);
         short s = (short)(v * AMP / 8192);   /* both notes at once stay under AMP */
         chime_buf[i * 2] = chime_buf[i * 2 + 1] = s;
     }
     put_str("audio: chime\n");
-    return stream(chime_buf, CHIME_FRAMES, CHIME_RATE, 0);
+    ramp_out = 1;
+    int r = stream(chime_buf, CHIME_FRAMES, CHIME_RATE, 0);
+    ramp_out = 0;
+    return r;
 }
 int audio_tone(int freq_hz, int ms) {
     if (freq_hz < 20 || freq_hz > 20000 || ms < 1 || ms > 5000) { fail("tone needs 20..20000 Hz and 1..5000 ms"); return -1; }

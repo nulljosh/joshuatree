@@ -561,29 +561,14 @@ static void menubar_keep(void) {   /* the bare right half of the bar, kept for m
     int W = (int)fb_w;
     if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) mb_save[y * (W - mb_x0) + (x - mb_x0)] = fb[(unsigned)y * fb_pitch + (unsigned)x];
 }
-static void desktop_chrome(int band_y) {   /* the mark, the title, the status icons and the quiet line above the dock */
+static void desktop_chrome(void) {   /* the mark, the title, the status icons and the quiet line above the dock */
     int W = (int)fb_w, H = (int)fb_h, mb = sg(MENUBAR_H);
     if (text_ok) {
         menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
         text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
         if (current_user[0]) text_draw(1, current_user, sg(40) + text_width(1, "Joshua Tree", sg(130)) + sg(14), (mb + sg(8)) / 2, sg(130), fb_color(0x00B5502C), fb, fb_pitch, W, H);   /* 4.9.0: who is signed in, after the title */
         menubar_wifi(mb_wifi < 0 ? 1 : mb_wifi);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
-        /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
-           of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
-        const char *thanks = "Seduce. Vilify. Ignore.";
-        int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 7 * ar / 2 - gapx) / 2, ty = band_y - sc(4);
-        text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
-        {   /* a small bitten apple after the line: apple_mask scaled to 3.5 ar square, 4x4 samples a pixel, onto the flat fill */
-            int S = 7 * ar / 2, x0 = tx + tw + gapx, y0 = ty - sc(4) + ar - S; unsigned ink = fb_color(0x00f0f4f8);
-            for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
-                int sum = 0;
-                for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) sum += apple_mask[((y * 4 + j) * APPLE_N / (S * 4)) * APPLE_N + (x * 4 + i) * APPLE_N / (S * 4)];
-                unsigned al = (unsigned)sum / 16, d = fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)], out = 0;
-                if (!al) continue;
-                for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * al + ((d >> b) & 0xFF) * (255 - al)) / 255) << b;
-                fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)] = out;
-            }
-        }
+        tribute_paint();   /* pointer.c: the one copy of the line above the dock */
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
 }
 void dock_mag_reserve(void);   /* crash.c */
@@ -613,7 +598,6 @@ void fb_desktop(void) {
     if (!text_early) text_ok = text_init();               /* before the window (its title); the deferred boot did it already for the login card */
     text_early = 0;
     dock_paint();                                         /* the i386 dock, while only the wallpaper is under it */
-    int band_y = gui_dock_band_top() * (int)window_scale();   /* the top of the dock's band, room for a hover label */
     /* Slice 3: the Console wears the i386 window frame (gui_paint.c): rounded cream body on the wallpaper, traffic
        lights, centred name, a hairline under the title band. Its content well is white for the log. */
     int s = (int)window_scale(), lx = win_x / s, ly = win_y / s, lw = win_w / s, lh = win_h / s;
@@ -647,7 +631,7 @@ void fb_desktop(void) {
 #ifndef QUIET_BOOT
     console_frame();
 #endif
-    desktop_chrome(band_y);
+    desktop_chrome();
     con_layout(win_x, win_y, win_w, win_h);
     {   /* keep the log inside the frame's white well: under the title band's hairline, clear of the cream margins */
         int wx = (lx + 8) * s, wy = (ly + 30) * s + 2 * s, wr = (lx + lw - 8) * s, wb = (ly + lh - 8) * s;
@@ -669,13 +653,13 @@ void fb_desktop(void) {
        design system's dark fill at three corners, not the old 0x203040 fallback). Grey and white read the same either
        byte order; the rule and the fill are checked in fb_color order. */
 #ifdef QUIET_BOOT
-    unsigned well = fb_color(wall_get());   /* no window was drawn: the spot where its well would end is bare wallpaper */
+    unsigned well = fb_color(wall_px((int)fb_w / 2, (ly + lh - 8) * s - 2, W, H));   /* no window was drawn: the spot where its well would end is bare wallpaper */
 #else
     unsigned well = 0x00ffffff;
 #endif
     int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == well && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
-    ok = ok && wall_ok && w0 == fb_color(wall_get()) && w1 == w0 && w2 == w0;
+    ok = ok && wall_ok && w0 == fb_color(wall_px(50, sc(300), W, H)) && w1 == fb_color(wall_px(fb_w - 50, H - sc(8), W, H)) && w2 == fb_color(wall_px(fb_w - 50, mb + sc(40), W, H));
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
     desktop_up = 1;
 #ifdef QUIET_BOOT
@@ -730,14 +714,14 @@ void fb_desktop(void) {
    refilled with the new colour (a window closed later must not paint the old one back); the hover band is forgotten so its next
    copy is taken from the new dock. Whatever window was open is drawn again on top. */
 void wall_repaint(void) {
-    int W = (int)fb_w, H = (int)fb_h, s = (int)window_scale();
+    int W = (int)fb_w, H = (int)fb_h;
     cur_hide();
     wall_paint(fb, fb_pitch, W, H, fb_swap);
     menubar_base();
     menubar_keep();
     dock_band = 0; hover_slot = -1; dock_sel = -1; dock_mag_forget();
     dock_paint();
-    desktop_chrome(gui_dock_band_top() * s);
+    desktop_chrome();
     fb_flush(0, 0, W, H);
     cur_show();
 }

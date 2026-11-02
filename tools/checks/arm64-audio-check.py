@@ -60,11 +60,14 @@ HARNESS = r'''
 #define PI_BUILD
 #include "arch/arm64/audio.c"
 static int mode;
-static unsigned cm_ctl, gpfsel4 = 0x040, pup = 0xFFFFFFFF, pwm_ctl = 0xDEAD, rng1, rng2, fifo_len, fifo_n, minv = ~0u, maxv, first[8], lastv;
+static unsigned cm_ctl, gpfsel4 = 0x040, pup = 0xFFFFFFFF, gpclr1, pwm_ctl = 0xDEAD, rng1, rng2, fifo_len, fifo_n, minv = ~0u, maxv, first[8], lastv;
 static unsigned long reads;
 void kputs(const char *s) { fputs(s, stdout); }
+static unsigned long dma_pos;   /* 8.9.0: the fake DMA's place in the PWM ring, in frames */
 unsigned audio_rd(unsigned long a) {
     reads++;
+    if (a == DMA_REG(0x0C)) return BUS(pcm) + (unsigned)(dma_pos % PCM_FRAMES) * 8;
+    if (a == DMA_ENABLE) return 0;
     if (a == CM_BASE + 0xA0) return (cm_ctl & 0x7F) | (mode != 1 && (cm_ctl & 0x10) ? 0x80 : 0);
     if (a == GPIO_BASE + 0x10) return gpfsel4;
     if (a == GPIO_BASE + 0xE8) return pup;
@@ -81,8 +84,9 @@ void audio_wr(unsigned long a, unsigned v) {
     else if (a == CM_BASE + 0xA4) { if (v >> 24 != 0x5A) exit(4); }
     else if (a == GPIO_BASE + 0x10) gpfsel4 = v;
     else if (a == GPIO_BASE + 0xE8) pup = v;
+    else if (a == GPIO_BASE + 0x2C) gpclr1 |= v;
     else if (a == PWM1_BASE + 0x00) { pwm_ctl = v; if (v & 0x40) fifo_len = 0; }
-    else if (a == PWM1_BASE + 0x04) { }
+    else if (a == PWM1_BASE + 0x04 || a == PWM1_BASE + 0x08 || a == DMA_ENABLE || a == DMA_REG(0x00) || a == DMA_REG(0x04)) { }
     else if (a == PWM1_BASE + 0x10) rng1 = v;
     else if (a == PWM1_BASE + 0x20) rng2 = v;
     else if (a == PWM1_BASE + 0x18) {
@@ -96,14 +100,30 @@ int main(int argc, char **argv) {
     mode = atoi(argv[1]);
     int r;
     if (atoi(argv[2]) >= 0) audio_set_volume(atoi(argv[2]));   /* -1: leave the default */
+    if (!strcmp(argv[3], "app")) {   /* 8.9.0: an app's clip of pure silence; what the DMA plays must rise from the bottom and fall back */
+        static unsigned char clip[3000]; memset(clip, 128, sizeof clip);
+        audio_app_queue(clip, sizeof clip, 16000, 1);
+        long first = -1, last = -1, prev = -1, jump = 0, n = 0;
+        for (int step = 0; step < 4000 && audio_busy(); step++) {
+            for (int k = 0; k < 37; k++, dma_pos++) {
+                long v = pcm[(dma_pos % PCM_FRAMES) * 2];
+                if (first < 0) first = v;
+                if (prev >= 0 && labs(v - prev) > jump) jump = labs(v - prev);
+                prev = last = v; n++;
+            }
+            audio_pump();
+        }
+        printf("RESULT mode=app first=%ld last=%ld jump=%ld range=%u live=%d played=%ld\n", first, last, jump, range, audio_busy(), n);
+        return 0;
+    }
     if (!strcmp(argv[3], "tone")) r = audio_tone(atoi(argv[4]), atoi(argv[5]));
     else if (!strcmp(argv[3], "chime")) r = audio_chime();
     else {
         static const short s[6] = {-32768, 32767, 0, 0, 100, -100};
         r = audio_play(s, 3, 44100);
     }
-    printf("RESULT ret=%d fifo=%u min=%u max=%u range=%u reads=%lu ctl=%x low=%x pin42=%x clk=%x first=%u,%u,%u,%u,%u,%u last=%u\n",
-           r, fifo_n, minv, maxv, rng1, reads, pwm_ctl, gpfsel4 & 0x3F, gpfsel4 & 0x1C0, cm_ctl & 0x10,
+    printf("RESULT ret=%d fifo=%u min=%u max=%u range=%u reads=%lu ctl=%x low=%x pin42=%x clk=%x pull=%x pull42=%x clr=%x first=%u,%u,%u,%u,%u,%u last=%u\n",
+           r, fifo_n, minv, maxv, rng1, reads, pwm_ctl, gpfsel4 & 0x3F, gpfsel4 & 0x1C0, cm_ctl & 0x10, (pup >> 16) & 0xF, (pup >> 20) & 0xFF, gpclr1,
            first[0], first[1], first[2], first[3], first[4], first[5], lastv);
     return 0;
 }
@@ -126,11 +146,19 @@ def run(mode, *args, vol=100):   # vol 100 keeps the FIFO numbers below at full 
     return p.stdout, dict(kv.split("=") for kv in res.group(1).split()) if res else {}
 
 
+# 8.9.0: an app's stream (Music) rises from the bottom over 20 ms and falls back before the PWM stops: no pop at start or pause
+out, d = run(0, "app")
+if d:
+    rg = int(d.get("range", 0))
+    ok = d.get("live") == "0" and int(d["first"]) <= rg // 32 and int(d["last"]) <= rg // 32 and int(d["jump"]) <= rg // 40
+    if ok: print("  ok: an app's stream starts at the bottom, rises and falls in small steps (largest %s of %d), and ends at the bottom" % (d["jump"], rg))
+    else: fails.append(f"app stream pops: {d}")
+else: fails.append(f"app stream harness said nothing: {out[-300:]!r}")
 # 7.7.0: the restart chime starts and ends on the PWM's midpoint (no step, no pop) and is loud enough to hear in between
 out, d = run(0, "chime")
 if d:
     mid = int(d.get("range", 0)) // 2
-    ok = d.get("ret") == "0" and "audio: chime" in out and abs(int(d["first"].split(",")[0]) - mid) <= 2 and abs(int(d["last"]) - mid) <= 2 \
+    ok = d.get("ret") == "0" and "audio: chime" in out and abs(int(d["first"].split(",")[0]) - mid) <= 2 and int(d["last"]) <= 2 \
         and int(d["max"]) - int(d["min"]) > int(d["range"]) // 8
     if ok: print("  ok: the restart chime starts and ends on the PWM midpoint, with a real note between")
     else: fails.append(f"chime: ends or swing wrong {d}")
@@ -140,7 +168,9 @@ if f"audio: {frames} frames, ring sum 0x{h:08x}," not in out: fails.append(f"hos
 if f"audio: played {frames} frames" not in out: fails.append("host tone did not report playing every frame")
 if d.get("ret") != "0" or d.get("fifo") != str(frames * 2): fails.append(f"host tone: ret/fifo wrong {d}")
 if d.get("range") != "612" or int(d.get("max", 0)) > 612: fails.append(f"host tone: PWM range or sample scale wrong {d}")
-if d.get("ctl") != "0" or d.get("low") != "0" or d.get("clk") != "0": fails.append(f"host tone left the PWM, pins or clock on {d}")
+if d.get("ctl") != "0" or d.get("low") != "0" or d.get("clk") != "0": fails.append(f"host tone left the PWM or clock on, or the pins not inputs {d}")
+# 8.9.0, the crackle through a restart: the pins end pulled down (the pull survives the watchdog reset), and 42 and 43 keep theirs
+if d.get("pull") != "a" or d.get("pull42") != "ff": fails.append(f"host tone left GPIO 40 and 41 without their pull-down, or touched 42 and 43's {d}")
 if d.get("pin42") != "40": fails.append(f"host tone changed GPIO 42's function bits {d}")
 if int(d.get("reads", 1 << 30)) > 600000: fails.append(f"host tone polled too much {d}")
 if not fails: print(f"  ok: a 440 Hz tone of {frames} frames reaches the FIFO in order, ring sum 0x{h:08x} matches the Python tone, pins and clock end off, pin 42 untouched")
@@ -164,7 +194,7 @@ for mode, why in ((1, "clock will not start"), (2, "PWM FIFO stays full"), (3, "
     out, d = run(mode, "tone", 440, 20)
     lines = [l for l in out.splitlines() if l.startswith("audio: ") and why in l]
     if d.get("ret") != "-1" or len(lines) != 1: fails.append(f"host mode {mode}: wanted -1 and one {why!r} line, got {d} {out!r}")
-    elif d.get("ctl") != "0" or d.get("low") != "0" or d.get("clk") != "0": fails.append(f"host mode {mode}: hardware left on {d}")
+    elif d.get("ctl") != "0" or d.get("low") != "0" or d.get("pull") != "a" or d.get("clk") != "0": fails.append(f"host mode {mode}: hardware left on {d}")
     elif int(d["reads"]) > 6_000_000: fails.append(f"host mode {mode}: too many polls, the wait is not bounded {d}")
     else: print(f"  ok: {why}: returns -1 with one line after {d['reads']} polls and the hardware is switched off")
 out, d = run(0, "tone", 5, 100)

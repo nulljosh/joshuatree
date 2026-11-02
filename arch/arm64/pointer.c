@@ -61,29 +61,16 @@ int calc_lx, calc_ly, calc_lw, calc_lh;   /* its frame on the logical grid, set 
 void wall_fill(int x, int y, int w, int h);
 void tribute_paint(void) {   /* the line over the dock, drawn on the flat wallpaper at boot and again after a window leaves near it */
     int W = (int)fb_w, H = (int)fb_h, band_y = gui_dock_band_top() * (int)window_scale();
-    /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
-       of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
-    const char *thanks = "Seduce. Vilify. Ignore.";
-    int ar = sc(6), gapx = sc(7), tw = text_width(2, thanks, sc(110)), tx = (W - tw - 7 * ar / 2 - gapx) / 2, ty = band_y - sc(4);
+    const char *thanks = TRIBUTE_LINE;   /* kmain.h; Picasso since 8.9 (Joshua's ask), the apple went with Jobs */
+    int ar = sc(6), tw = text_width(2, thanks, sc(110)), tx = (W - tw) / 2, ty = band_y - sc(4);
     {   int bx = tx - 4, by = ty - sc(4) + ar - 7 * ar / 2 - 2;   /* the line's whole box back to flat wallpaper first: a repaint over half of it would blend the edges twice */
-        wall_fill(bx, by, tx + tw + gapx + 7 * ar / 2 + 4 - bx, band_y + sc(6) - by);   /* down past the descenders: the line's own pixels, nothing of the hover band's label capsule above the tiles */
+        wall_fill(bx, by, tw + 8, band_y + sc(6) - by);   /* down past the descenders: the line's own pixels, nothing of the hover band's label capsule above the tiles */
     }
     text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
-    {   /* a small bitten apple after the line: apple_mask scaled to 3.5 ar square, 4x4 samples a pixel, onto the flat fill */
-        int S = 7 * ar / 2, x0 = tx + tw + gapx, y0 = ty - sc(4) + ar - S; unsigned ink = fb_color(0x00f0f4f8);
-        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
-            int sum = 0;
-            for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) sum += apple_mask[((y * 4 + j) * APPLE_N / (S * 4)) * APPLE_N + (x * 4 + i) * APPLE_N / (S * 4)];
-            unsigned al = (unsigned)sum / 16, d = fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)], out = 0;
-            if (!al) continue;
-            for (int b = 0; b <= 16; b += 8) out |= ((((ink >> b) & 0xFF) * al + ((d >> b) & 0xFF) * (255 - al)) / 255) << b;
-            fb[(unsigned)(y0 + y) * fb_pitch + (unsigned)(x0 + x)] = out;
-        }
-    }
 }
-void wall_fill(int x, int y, int w, int h) {   /* physical px: the flat wallpaper colour (wall.c); there is no picture to save, so a window can leave from anywhere */
-    unsigned c = fb_color(wall_get());
-    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = c;
+void wall_fill(int x, int y, int w, int h) {   /* physical px: the wallpaper there (wall.c works out any pixel), so a window can leave from anywhere */
+    if (w <= 0) return;
+    for (int j = 0; j < h; j++) wall_span(fb + (unsigned)(y + j) * fb_pitch + (unsigned)x, x, y + j, w, (int)fb_w, (int)fb_h, fb_swap);
 }
 void wall_minus(int ox, int oy, int ow, int oh, int nx, int ny, int nw, int nh) {   /* physical px: wallpaper over the old rectangle except where the new one is */
     for (int j = 0; j < oh; j++) {

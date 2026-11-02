@@ -71,8 +71,9 @@ try:
     time.sleep(0.5)
     command("screendump", filename=os.path.join(tmp, "pane.ppm"))
     img = Image.open(os.path.join(tmp, "pane.ppm")).convert("RGB")
-    img.crop((150, 100, 650, 450)).save(os.path.join(tmp, "pane.png"))
-    WX, WY = 150, 100; cx, cy = WX + 8 + 150 + 16, WY + 74 + 24
+    WX, WY = (img.width - 510) // 2, 36   # 8.9.0: Settings opens at its own 510 wide, 36 down (settings_ui.h SET_WIN_W)
+    img.crop((WX, WY, WX + 510, WY + 420)).save(os.path.join(tmp, "pane.png"))
+    cx, cy = WX + 8 + 150 + 16, WY + 74 + 24
     rows_white = [img.getpixel((cx + 200, cy + 15 + r * 30)) == (255, 255, 255) for r in range(3)]
     check("the card of three heard networks is drawn", all(rows_white) and img.getpixel((cx + 200, cy + 15 + 3 * 30)) != (255, 255, 255), rows_white)
     n = len(uart()); key("r")

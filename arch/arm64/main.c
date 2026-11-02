@@ -4,7 +4,6 @@
    prints on the mini UART instead, on the same header pins: the PL011 belongs to the Bluetooth radio (bt.c). */
 #include "kmain.h"   /* the platform addresses, and what main.c shares with the parts cut out of it (boot.c, virtio.c): declared once, checked here */
 #include "bt.h"
-#include "apple_mask.h"
 #include "appsig.h"   /* 6.54.0: NAME.SIG */
 #include "uimg.h"   /* 6.51.0: the image check, shared with tools/fuzz-host/fuzz_uimg.c */
 #define UART_DR   (UART_BASE + 0x00)
@@ -287,7 +286,8 @@ void mmu_on_core(void) {   /* core 0 from mmu_init; since 8.2.0 cores 1 to 3 too
    then counts: one pass a wake-up, and core 0 sends one (sev) every desktop pass. They run nothing of the kernel's yet, so no
    locks are needed so far; the next step gives them app threads, and the futex call must take a lock first (th_futex).
    `cores` in the Terminal shows them. */
-volatile unsigned long core_runs[4];
+volatile unsigned long core_runs[4 * 8] __attribute__((aligned(64)));   /* 8.9.0: core c's count at [c * 8], a cache line each: the three
+   cores bumping one shared line slowed core 0's desktop (Joshua's drag lag on the board) */
 volatile unsigned long core_mpidr[4];
 volatile int core_up[4];
 void core_main(unsigned long core) {
@@ -299,7 +299,11 @@ void core_main(unsigned long core) {
     __asm__ volatile ("dmb ish" ::: "memory");
     core_up[core] = 1;
     __asm__ volatile ("dsb ish\n sev" ::: "memory");
-    for (;;) { core_runs[core]++; __asm__ volatile ("wfe"); }
+    /* 8.9.0: no timer event stream. The firmware can leave CNTKCTL_EL1's EVNTEN on, and then wfe returns about a million
+       times a second (the board said 242 million wake-ups in minutes): a spinning core, not a sleeping one. Now only core
+       0's sev, once a desktop pass, wakes it. */
+    { unsigned long k; __asm__ volatile ("mrs %0, cntkctl_el1" : "=r"(k)); __asm__ volatile ("msr cntkctl_el1, %0\n isb" :: "r"(k & ~4UL)); }
+    for (;;) { core_runs[core * 8]++; __asm__ volatile ("wfe"); }
 }
 extern char secondary_entry[];
 static long psci_on(unsigned long mpidr, unsigned long entry) {
@@ -467,12 +471,36 @@ void ufile_release(void);                 /* ...every descriptor the app left op
 extern unsigned ufile_owner;              /* 4.0: whose descriptors the file calls mean: 0 the boot self-test, else app slot + 1 */
 void ufile_mkdirs(const char *path);      /* ...folders inside JT/ an app expects */
 static unsigned long heap_len(void) { return app_brk ? app_brk - (UB + UP_HEAP) : 0; }   /* M3e: the heap below its top */
-int user_in_range(unsigned long a, unsigned long n) {   /* memory the program may have the kernel read: the M3a code and stack pages, and the loaded app's whole window, stack and heap */
+/* 8.7.0: demand paging for the heap. JT_SYS_BRK only moves the top; a heap page is mapped (EL0 read-write, never executable)
+   and zeroed the first time the app touches it, from the data abort (exc_el0_sync), or the first time the kernel is about to
+   read or write it for the app (user_in_range and user_writable fault the span in first, since a kernel access to an
+   unmapped page would be the kernel's own fault). An app that asks for 8 MiB and uses 12 KiB costs three pages. */
+static int heap_fault(unsigned long va) {   /* 1 when va is in the heap and its page is mapped now */
+    if (va < UB + UP_HEAP || va >= (app_brk ? app_brk : UB + UP_HEAP)) return 0;
+    unsigned long pg = va & ~4095UL, *e = &l3[ap->l3off + ((pg - UB) >> 12)];
+    if (*e) return 1;
+    const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
+    *e = pg | PAGE | AP_EL0_RW | PXN | UXN;
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    for (unsigned long v = pg; v < pg + 4096; v += 8) *(unsigned long *)v = 0;   /* no earlier app's bytes */
+    ap->heap_pages++;
+    return 1;
+}
+static void heap_fault_span(unsigned long a, unsigned long n) {
+    unsigned long lo = UB + UP_HEAP, hi = app_brk ? app_brk : lo;
+    if (!n || a >= hi || a + n <= lo || a + n < a) return;
+    if (a < lo) { n -= lo - a; a = lo; }
+    if (a + n > hi) n = hi - a;
+    for (unsigned long v = a & ~4095UL; v < a + n; v += 4096) heap_fault(v);
+}
+int user_in_range(unsigned long a, unsigned long n) {
+    heap_fault_span(a, n);   /* memory the program may have the kernel read: the M3a code and stack pages, and the loaded app's whole window, stack and heap */
     return span(a, n, UB + UP_CODE, 4096) || span(a, n, UB + UP_STACK, 4096)
         || span(a, n, UB + UP_APP, app_len) || span(a, n, UB + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0)
         || span(a, n, UB + UP_WIN, app_wbytes) || span(a, n, UB + UP_HEAP, heap_len());
 }
 int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may store into for the program: data, zeroed pool, stacks and heap, never code (read-only at EL1 too: a store there would be a kernel fault) */
+    heap_fault_span(a, n);
     return span(a, n, UB + UP_STACK, 4096) || span(a, n, UB + UP_APP + app_code, app_len - app_code)
         || span(a, n, UB + UP_ASTACK, app_len ? APP_STACK_PAGES * 4096UL : 0) || span(a, n, UB + UP_WIN, app_wbytes)
         || span(a, n, UB + UP_HEAP, heap_len());
@@ -488,10 +516,11 @@ static long app_brk_set(unsigned long want) {
     if (!want) return (long)top;
     if (want < base || want > UB + UP_WIN) return -22;   /* the heap stops where the window buffer starts */
     unsigned long have = (top + 4095) & ~4095UL, need = (want + 4095) & ~4095UL;
-    for (unsigned long v = have; v < need; v += 4096) l3[ap->l3off + ((v - UB) >> 12)] = v | PAGE | AP_EL0_RW | PXN | UXN;
+    (void)PAGE; (void)AP_EL0_RW; (void)PXN; (void)UXN;   /* 8.7.0: growing maps nothing; heap_fault maps a page when it is first touched */
     for (unsigned long v = need; v < have; v += 4096) l3[ap->l3off + ((v - UB) >> 12)] = 0;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
-    for (unsigned long v = have; v < need; v += 8) *(unsigned long *)v = 0;
+    if (want > top && (top & 4095) && l3[ap->l3off + ((top - UB) >> 12)])   /* the old top's own page is mapped: bytes past the old top read zero again */
+        for (unsigned long v = top; v < (want < ((top + 4095) & ~4095UL) ? want : ((top + 4095) & ~4095UL)); v++) *(unsigned char *)v = 0;
     app_brk = want;
     return (long)want;
 }
@@ -847,8 +876,9 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
         }
         return;
     }
-    user_faulted = 1;
     unsigned long far; __asm__ volatile ("mrs %0, far_el1" : "=r"(far));
+    if (ec == 0x24 && (f->esr & 0x3c) == 0x04 && heap_fault(far)) return;   /* 8.7.0: a heap page's first touch: mapped now, the access runs again */
+    user_faulted = 1;
     if (ec == 0x24) {
         unsigned dfsc = (unsigned)(f->esr & 0x3f);
         uart_puts("M3 EL0 fault: data abort, ");
@@ -1051,7 +1081,8 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     app_window_close();   /* leaves `ap` on the window now in front... */
     ap = me;              /* ...so put it back: the pages unmapped and the line printed below are this app's, not the front one's */
     app_unmap();
-    if (me->preempts) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" was cut off "); uart_dec(me->preempts); uart_puts(" times\n"); }   /* 8.1.0: arm64-threads-check.py reads it */
+    if (me->preempts) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" was cut off "); uart_dec(me->preempts); uart_puts(" times\n"); }
+    if (me->heap_pages) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" touched "); uart_dec(me->heap_pages); uart_puts(" heap pages\n"); }   /* 8.7.0 */   /* 8.1.0: arm64-threads-check.py reads it */
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
     uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times\n");
@@ -1074,7 +1105,11 @@ void ufile_args_next(const char *s, unsigned n);
 int app_dock(const char *name);                  /* appwin.c */
 unsigned long sched_worst;   /* 8.6.0: `sched` in the Terminal reads it and starts again */
 void app_tick(void) {   /* every app with something to do gets its turn: it runs until it yields, exits or faults, and a fault ends that app alone */
-    __asm__ volatile ("sev");   /* 8.2.0: one wake-up for cores 1 to 3 each desktop pass (core_main counts them) */
+    {   /* 8.2.0: a wake-up for cores 1 to 3 (core_main counts them). 8.9.0: at most every 10 ms, not every pass: on the board
+           the desktop's loop spins, and a sev each pass woke them 59 million times in minutes. */
+        static unsigned long last_sev;
+        if (cnt_now() - last_sev >= cnt_hz() / 100) { last_sev = cnt_now(); __asm__ volatile ("sev"); }
+    }
     {   static char nm[65], arg[65];   /* 7.7.0: an app asked for another (Files opens a song in Music): opened here, between turns */
         if (ufile_launch_take(nm, arg)) {
             unsigned n = 0; while (arg[n]) n++;
@@ -1128,7 +1163,7 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
     if (a->name[0] == 'b' && a->name[1] == 'o' && a->name[2] == 'o' && a->name[3] == 'k' && a->name[4] == 's' && !a->name[5])
         ufile_mkdirs("BOOKS");         /* 2.66: Books' library, JT/BOOKS/, the books the card ships with and the ones dropped there */
     for (unsigned i = 0; i < APP_THREADS; i++) ap->th[i].state = TH_FREE;   /* 8.1.0: one thread to start with */
-    ap->tcur = 0; ap->th[0].state = TH_READY; ap->preempts = ap->spin = 0;
+    ap->tcur = 0; ap->th[0].state = TH_READY; ap->preempts = ap->spin = 0; ap->heap_pages = 0;
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
     app_frame.esr = 0;                                 /* no flags to put back */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */

@@ -1,19 +1,19 @@
 # Board testing
 
-What to try on the real Pi, most important first. Flash the card first (card in the Mac, `tools/flash-pi.sh`): it carries main, 7.2.0 or later. Stop at the first failure and send the step number with a photo. The long version of each step, with the lines to expect, is [7.0 board day](GUIDE.md#70-board-day).
+What to try on the real Pi, most important first. Flash the card first (card in the Mac, `tools/flash-pi.sh`): it carries main, 8.9.0 or later. Stop at the first failure and send the step number with a photo. The long version of each step, with the lines to expect, is [7.0 board day](GUIDE.md#70-board-day).
 
-1. **Wi-Fi.** In the Terminal, `wifi` says it joined and lists networks. Then Settings, Wi-Fi: press R (it says "Looked again."), pick your phone's hotspot, type its password, Enter. "Joining..." then "Joined." in about 15 seconds, no restart. Switch back to home the same way.
-2. **Web.** `browse en.wikipedia.org/wiki/Raspberry_Pi`, then the same page in Blackcomb (Spotlight, `blackcomb`). Text first, then the pictures one by one while the window still scrolls. Try a news site and a page with a form.
-3. **Mail.** `mail login imap.mail.me.com YOUR-APPLE-ID` with an app password (appleid.apple.com, App-Specific Passwords). `mail`, `mail 1`, the Mail tile, then reply to yourself with two lines (Shift+Enter between them).
-4. **Calendar.** Make a "JT test" calendar on the Mac first. `calendar caldav https://caldav.icloud.com/ YOUR-APPLE-ID`, `calendar use N`, add a day and `calendar sync`: it shows on the Mac. Delete it on the Mac, open Calendar on the Pi: gone. Then close Calendar, add a day on the Mac, leave the Pi alone for a minute: it is there when you open Calendar.
-5. **Bluetooth keyboard.** Keep the wired keyboard plugged in for this one. Put the Bluetooth keyboard in pairing mode, `bt scan`, then `bt pair NAME`. Type the six digits it shows on the Bluetooth keyboard, then Enter: "bt: keyboard ready", and it types in the Terminal. It must be a Bluetooth LE keyboard (Logitech's are); Apple's Magic Keyboard is not supported. Pairing it replaces a paired Bluetooth mouse.
-6. **Sign in.** Time from Enter at the login screen to the desktop, in seconds.
-7. **Tabs and history.** In Blackcomb, Cmd+T shows a tab strip; two letters of a visited page in the address bar offer it; Top Sites shows a site after two visits.
-8. **Write a program on the Pi.** In the Terminal, with `sudo` in front of each `userrun` since the Pi has accounts: `userrun plankc build CODE.PK` (the editor, built on the Pi), then `userrun code HI.PK`. Type `fn main() {`, Enter, `  print("hi")`, Enter, `}`, then Esc to save. `userrun plankc build HI.PK`, wait for `plankc: wrote APPS/HI.APP` and `userrun plankc: exit 0` (it builds in the background, about a minute), then `userrun hi` prints hi. No Mac in any of it.
-9. **Step a program.** `debug hello 6` in the Terminal. Six `step` lines, each with a `+` number, eight letters and digits, and sometimes `x0=` and the like; then `registers:`, two `at sp` rows and hello's own lines. A freeze here is the board's own debug setup, which QEMU cannot show: send a photo.
+Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with the tree glyph; pairing the mouse from Settings, and it comes back after a restart with a wiggle; the restart dialog; Notes kept through a restart; `cores` says 4 of 4; the blue wallpaper and the Picasso line. A pink speckle on light colours was a loose HDMI plug. The crackle on restart is the Pi's own boot stage: muted, with no chime, it still crackles (Joshua's video), so the fix is a restart that skips the firmware, not the sound driver.
 
-10. **Dock magnify.** Settings, Dock, Magnify: step it to Small, then rest the pointer on a dock tile. It grows a little; on Large it grows more; on Off it does not grow at all.
+1. **The park wallpaper.** Boot: Joshua Tree at dusk, dithered, with fine scanlines, sharp at 1080p. Drag a window across it: what it leaves behind is the picture again, no blocks of flat colour.
+2. **The lag.** Drag a window with another one open, and sweep the pointer along the dock. Compare with last night: cores 1 to 3 now sleep, so it should feel lighter. `cores` run twice a minute apart: each count goes up by hundreds, not millions.
+3. **Dock zoom is off.** Sweep the pointer along the dock: no tile grows. Settings, Dock, Magnify: Small turns it on; put it back to Off.
+4. **Settings fits its window.** Every section at 1080p: nothing past the right edge or under the buttons; Display lists Park as a wallpaper.
+5. **USB stick.** A FAT32 stick in a USB port: `stick ls` lists it, `stick cat NAME` shows a text file, `stick copy NAME` puts it in JT/ and `cat jt/NAME` reads it back.
+6. **The Berkeley list.** `sched` says the longest turn is under 60 ms after a minute of normal use. `userrun hello | userrun hello` runs without a hang.
+7. **Wi-Fi.** Settings, Wi-Fi: R looks again, pick the phone's hotspot, type its password: "Joined." in about 15 seconds. Switch back to home.
+8. **Web.** `browse en.wikipedia.org/wiki/Raspberry_Pi`, then the same page in Blackcomb. Text first, then the pictures one by one.
+9. **Mail and Calendar.** `mail login imap.mail.me.com YOUR-APPLE-ID` with an app password, `mail`, `mail 1`. `calendar caldav https://caldav.icloud.com/ YOUR-APPLE-ID`, add a day, `calendar sync`: it shows on the Mac.
+10. **Write a program on the Pi.** `sudo userrun plankc build CODE.PK`, then `sudo userrun code HI.PK`; type a `main` that prints hi, Esc to save, build it, `userrun hi` prints hi.
+11. **Bluetooth keyboard.** Settings, Bluetooth, S, its number, type the six digits it shows: it types in the Terminal.
 
-11. **Since the last card (7.5 to 7.9).** Click the gear just before the Trash: Settings opens. Go to Bluetooth, turn your mouse on to pair, Look for devices, press its number: it pairs and moves the pointer. Move the mouse fast across the dock and drag a window: both keep up with your hand. Open Stocks and Weather on Wi-Fi: real prices with today's date, your own city's forecast. In Stocks press +, type a symbol, Enter: it joins the list with a price; Delete takes the selected one off. Open Files, Music, double-click a .wav: Music opens and plays it. The tree menu's About is a window in the middle. Restart from the tree menu: a dialog asks (Cancel or Restart), then a soft two-note chime, no crackle from the jack.
-
-Steps 1 to 7 are 7.0's. Steps 8 and 9 are 8.0's, so a miss there does not hold 7.0 back.
+Steps 1 to 5 are tonight's fixes.

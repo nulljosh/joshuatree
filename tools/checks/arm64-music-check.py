@@ -135,12 +135,24 @@ def streams_of(text): return [m.groups() for m in re.finditer(r"audio: app strea
 def heard_ok(words, data, silence):
     pairs = list(zip(words[0::2], words[1::2]))
     if any(l != r for l, r in pairs): return "left and right differ"
+    # 8.9.0: a stream starts at the bottom and rises to silence (the PWM's midpoint) over 20 ms, and after the sound falls back
+    # to the bottom and rests there, so the jack never steps (the pop Joshua heard at start and pause)
+    if not pairs or pairs[0][0] > silence // 32: return "it does not start at the bottom (first word %s)" % (pairs[0][0] if pairs else None)
     i = 0
+    while i < len(pairs) and pairs[i][0] < silence:
+        if i and pairs[i][0] < pairs[i - 1][0]: return "the rise goes down at frame %d" % i
+        i += 1
     while i < len(pairs) and pairs[i][0] == silence: i += 1
     want = [word(b) for b in data]
     got = [l for l, _ in pairs[i:i + len(want)]]
     if got != want: return "the sound after the leading silence is not the queued bytes in order (first difference at %s)" % next((k for k, (a, b) in enumerate(zip(got, want)) if a != b), len(got))
-    if any(l != silence for l, _ in pairs[i + len(want):]): return "something other than silence after the sound"
+    j = i + len(want)
+    while j < len(pairs) and pairs[j][0] == silence: j += 1
+    while j < len(pairs) and pairs[j][0] > silence // 32:
+        if pairs[j][0] > pairs[j - 1][0]: return "the fall goes up at frame %d" % j
+        j += 1
+    if any(l > silence // 32 for l, _ in pairs[j:]): return "something other than the bottom after the fall"
+    if j == len(pairs) and pairs[-1][0] > silence // 32: return "the stream stopped before it fell to the bottom"
     return ""
 N = 20000
 data = [28 + (i * 7) % 200 for i in range(N)]
@@ -153,7 +165,7 @@ if d:
     check("DMA channel 5 enabled and started (CS active, priorities 8), PWM1's DMA requests on at 7 words (DMAC 0x80000707), and the CPU "
           "never wrote the FIFO itself", d["en"] == "20" and d["cs"] == "%x" % ((1 << 28) | (8 << 20) | (8 << 16) | 1) and d["dmac"] == "80000707" and d["fifo"] == "0", d)
     why = heard_ok(words, data, int(d["silence"]))
-    check("what the DMA took: silence, then all %d queued bytes as PWM words (range 3375, volume 70) in order, then silence" % N, not why and len(words) > 2 * N, why)
+    check("what the DMA took: a rise from the bottom, silence, then all %d queued bytes as PWM words (range 3375, volume 70) in order, then a fall to the bottom" % N, not why and len(words) > 2 * N, why)
     h, a = app_sum(bytes(data), 70)
     check("the stream's line: %d frames fed and played, its sums the bytes' own" % N, st and st[0][0] == str(N) and st[0][5] == str(N) and st[0][2] == "%08x" % h and st[0][3] == str(a), st)
     check("at its end the channel is reset, DMA requests and the PWM are off, GPIO 40 and 41 are inputs again and GPIO 42's bits are as they were",
@@ -163,8 +175,8 @@ if d and st:
     fed, played = int(st[0][0]), int(st[0][5])
     why = heard_ok(words, data[:fed], int(d["silence"]))
     check("stop part way: what was queued goes, the %d frames already in the PWM ring play out (%d played) and nothing after them; "
-          "the stream ends in at most an eighth of a second more" % (fed, played),
-          0 < fed < N and played == fed and not why and int(d["pumps"]) - 40 <= (8000 // 8 + 64) // 37 + 2, (why, st, d.get("pumps")))
+          "the stream ends in at most an eighth of a second more, plus the 20 ms fall (8.9.0)" % (fed, played),
+          0 < fed < N and played == fed and not why and int(d["pumps"]) - 40 <= (8000 // 8 + 64) // 37 + 2 + (2 * 64 + 8000 // 50) // 37 + 1, (why, st, d.get("pumps")))
 else: check("host stop run", False, (p.returncode, p.stderr[-300:], p.stdout[-300:]))
 
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True)

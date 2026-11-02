@@ -69,30 +69,40 @@ int sudo_may_write(void) { return may; }
 #define dock_scale_pct dock_scale_pct
 #include "arch/arm64/settings.c"
 int main(void) {
+#ifdef PI_BUILD   /* 8.9.0: the Pi's own defaults: dock zoom off, the park picture */
+    assert(settings_mag() == 0 && settings_wall() == 4);
+    puts("PASS: pi defaults"); return 0;
+#endif
     char out[64]; unsigned n = settings_format(out, 70, 0, 7, 2);
-    assert(n == 30 && !memcmp(out, "volume=70\nwall=0\ndock=7\nmag=2\n", 30));
-    n = settings_format(out, 100, 3, 25, 0); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\nmag=0\n", n));
+    assert(n == 31 && !memcmp(out, "volume=70\nwall=0\ndock=7\nzoom=2\n", 31));
+    n = settings_format(out, 100, 3, 25, 0); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\nzoom=0\n", n));
     int v = 1, w = 1, d = 7, m = 2; const char *t;
     t = "volume=40\nwall=3\ndock=12\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 40 && w == 3 && d == 12);
-    v = 1; w = 1; d = 7; t = "volume=101\nwall=4\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
+    v = 1; w = 1; d = 7; t = "volume=101\nwall=5\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
     t = "volume=26\nwall=1\ndock=26\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 26 && w == 1 && d == 7);
     t = "volume=12345\nvolume\n=5\nwall=x\nwall=\ndock=9z\nvolumes=5\n"; v = 1; w = 1; d = 7; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
     t = "volume=55\r\nwall=3\r\ndock=20"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 55 && w == 3 && d == 20);   /* CRLF, and no final newline */
     t = "dock=5"; settings_parse(t, 6, &v, &w, &d, &m); assert(d == 5);
     t = "dock=55"; settings_parse(t, 6, &v, &w, &d, &m); assert(d == 5);   /* cut at 6 bytes: 5 and a stray byte, taken as 5, never read past n */
     settings_parse("", 0, &v, &w, &d, &m);
-    t = "mag=1\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);
-    t = "mag=3\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);   /* 7.4.0: out of range, kept */
+    t = "zoom=1\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);
+    t = "zoom=3\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);   /* 7.4.0: out of range, kept */
     settings_set_mag(-1); assert(settings_mag() == 0); settings_set_mag(9); assert(settings_mag() == 2 && !strcmp(settings_mag_name(1), "Small"));
-    assert(settings_walls() == 4 && !strcmp(settings_wall_name(0), "Grey") && settings_wall_rgb(0) == 0x006E6E6Eu && !strcmp(settings_wall_name(1), "Terracotta") && settings_wall_rgb(1) == 0x00B5502Cu && settings_wall_rgb(3) == 0x00141311u);
-    settings_set_wall(-1); assert(settings_wall() == 3 && wall_rgb == 0x00141311); settings_set_wall(4); assert(settings_wall() == 0 && wall_rgb == 0x006E6E6E);
+    assert(settings_walls() == 5 && !strcmp(settings_wall_name(4), "Park") && settings_wall_rgb(4) == 0x00EC9E76u && !strcmp(settings_wall_name(0), "Blue") && settings_wall_rgb(0) == 0x003B6EA5u && !strcmp(settings_wall_name(1), "Terracotta") && settings_wall_rgb(1) == 0x00B5502Cu && settings_wall_rgb(3) == 0x00141311u);
+    settings_set_wall(-1); assert(settings_wall() == 4 && wall_rgb == 0x01000000); settings_set_wall(5); assert(settings_wall() == 0 && wall_rgb == 0x003B6EA5);
     settings_set_dock(2); assert(settings_dock() == 5); settings_set_dock(99); assert(settings_dock() == 25); settings_set_dock(7);
     vol = 30; settings_set_wall(2); settings_set_dock(11); settings_save();
-    assert(settings_saved() == 1 && file_len == 31 && !memcmp(file, "volume=30\nwall=2\ndock=11\nmag=2\n", 31));
+    assert(settings_saved() == 1 && file_len == 32 && !memcmp(file, "volume=30\nwall=2\ndock=11\nzoom=2\n", 32));
     vol = 70; settings_set_wall(0); settings_set_dock(7); repaints = 0; wall_rgb = 0; settings_load();
     assert(vol == 30 && settings_wall() == 2 && wall_rgb == 0x00923F20 && settings_dock() == 11 && repaints == 1 && settings_saved() == 1);
     repaints = 0; settings_load(); assert(repaints == 0);   /* nothing changed: no repaint */
-    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 31); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
+    {   /* 8.9.0: a file from before 8.9 (no zoom= line) keeps volume and dock but not its wallpaper: the new default shows */
+        char keep[96]; int kl = file_len; memcpy(keep, file, sizeof keep);
+        memcpy(file, "volume=40\nwall=3\ndock=9\n", 24); file_len = 24;
+        int wp = settings_wall(); settings_load(); assert(vol == 40 && settings_wall() == wp && settings_dock() == 9);
+        memcpy(file, keep, sizeof keep); file_len = kl; settings_set_dock(11);
+    }
+    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 32); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
     may = 1;
     card = 0; vol = 20; settings_save(); assert(settings_saved() == -1 && vol == 20 && settings_wall() == 2);   /* no card: said, and the choices stay */
     file_len = -1; card = 1; vol = 70; settings_load(); assert(vol == 70);                                         /* no file: nothing changes */
@@ -117,6 +127,16 @@ with tempfile.TemporaryDirectory(prefix="jt-settings-") as tmp:
     if cc.returncode == 0:
         r = subprocess.run([exe], capture_output=True, text=True, timeout=30)
         check("settings.c: text, parsing, load, save and no card", r.returncode == 0 and "PASS" in r.stdout, r.stdout + r.stderr)
+    # 8.9.0: the Pi image starts with dock zoom off and the park wallpaper. Built from pi-settings.o and pi-wall.o (with
+    # PI_BUILD); before, the Pi linked the QEMU objects and the zoom stayed on (Joshua: "remove the grow animation by default").
+    pexe = os.path.join(tmp, "tpi")
+    cc = subprocess.run(["clang", "-std=gnu11", "-DPI_BUILD", "-Wall", "-Wextra", "-Werror", "-Wno-unused-function", "-I", root, "-I", os.path.join(root, "arch/arm64"), src, "-o", pexe], capture_output=True, text=True)
+    r = subprocess.run([pexe], capture_output=True, text=True, timeout=30) if cc.returncode == 0 else None
+    mk = open(os.path.join(root, "arch/arm64/Makefile")).read()
+    pisd = re.search(r"^PISDOBJ = (.*)$", mk, re.M); pilink = re.search(r"^pi-kernel8.elf: (.*)$", mk, re.M)
+    check("on the Pi, dock zoom is off and the park picture is the wallpaper, and the Pi image links those objects",
+          r is not None and "PASS: pi defaults" in r.stdout and pisd and "pi-settings.o" in pisd.group(1).split() and pilink and "pi-wall.o" in pilink.group(1).split(),
+          (cc.stderr[-300:], r and r.stdout + r.stderr))
 
 # ---- 2. the desktop ----
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
@@ -132,7 +152,8 @@ if mt("mmd", "::JT").returncode: print("FAIL: mtools could not make JT/ on the c
 
 W, H = 800, 600
 WX, WY, WW, WH = (W - 500) // 2, 100, 500, 350      # the window: the Console's rectangle (fb_desktop)
-GREY = (0x6e, 0x6e, 0x6e)
+SX, SY = (W - 510) // 2, 36                            # 8.9.0: Settings' own window (settings_ui.h SET_WIN_W 510, at y 36)
+GREY = (0x3B, 0x6E, 0xA5)
 ACCENT, CLAY, INK, TERRA, RED, GLYPH = (0xb5, 0x50, 0x2c), (0x92, 0x3f, 0x20), (0x14, 0x13, 0x11), (0xb5, 0x50, 0x2c), (0xff, 0x5f, 0x57), (0xfa, 0xf8, 0xf4)
 def bar(c): return tuple(((v >> 1) & 0x7f) + 0x80 for v in c)    # the menu bar over a wallpaper colour: half itself, half white
 fails_boot = []
@@ -232,17 +253,17 @@ try:
     check("Enter opens Settings in About", S.wait_for("settings open\n", 6, n) and S.wait_for("settings section 0 About\n", 6, n), S.uart()[n:][-300:])
     time.sleep(0.4)
     a = S.shot()
-    check("the window has its red close dot", px(a, WX + 19, WY + 16) == RED, px(a, WX + 19, WY + 16))
+    check("the window has its red close dot", px(a, SX + 19, SY + 16) == RED, px(a, SX + 19, SY + 16))
     tiles = []
     for i in range(8):
-        tb = box(a, WX + 20, WY + 40 + i * 30, 18, 18)
+        tb = box(a, SX + 20, SY + 40 + i * 30, 18, 18)
         tiles.append(tb)
     terra = [sum(1 for p in tb if p == ACCENT) for tb in tiles]
     glyph = [sum(1 for p in tb if sum(abs(p[k] - GLYPH[k]) for k in range(3)) < 40) for tb in tiles]
     check("each of the eight sidebar tiles is terracotta with a glyph on it (%s accent, %s glyph pixels)" % (terra, glyph),
           all(t > 100 for t in terra) and all(g > 5 for g in glyph), (terra, glyph))
     check("no two glyphs are the same picture", len({tuple(tb) for tb in tiles}) == 8)
-    check("the Settings title is in the sidebar's neighbour: About, Version, Board, Memory, Wi-Fi, Power rows draw (the card is white)", px(a, WX + 8 + 150 + 16 + 5, WY + 74 + 5) == (255, 255, 255))
+    check("the Settings title is in the sidebar's neighbour: About, Version, Board, Memory, Wi-Fi, Power rows draw (the card is white)", px(a, SX + 8 + 150 + 16 + 5, SY + 74 + 5) == (255, 255, 255))
     # ---- sections ----
     names = ["Display", "Sound", "Dock", "Date and Time", "Users", "Wi-Fi", "Bluetooth"]
     keep_dir = os.environ.get("JT_SETTINGS_SHOTS")   # a folder: one png of every section, for looking at
@@ -261,10 +282,10 @@ try:
     check("Right again: wallpaper 2, Clay", S.press("right", "settings wall 2 Clay\n"))
     check("... and it is saved", S.wait_for("settings saved\n", 6))
     spots = [(30, 300), (770, 300), (60, 560), (100, 90)]
-    c = S.settle(lambda i: all(px(i, x, y) == CLAY for x, y in spots) and px(i, WX + 19, WY + 16) == RED)
+    c = S.settle(lambda i: all(px(i, x, y) == CLAY for x, y in spots) and px(i, SX + 19, SY + 16) == RED)
     check("the whole desktop is Clay: wallpaper at four places", all(px(c, x, y) == CLAY for x, y in spots), [px(c, x, y) for x, y in spots])
     check("the menu bar was blended again over the new colour (half Clay, half white)", px(c, 300, 8) == bar(CLAY), (px(c, 300, 8), bar(CLAY)))
-    check("the window is back on top of the new desktop and the dock is whole (its cream tray, not Clay)", px(c, WX + 19, WY + 16) == RED and px(c, W // 2, H - 60) not in (CLAY, TERRA), (px(c, WX + 19, WY + 16), px(c, W // 2, H - 60)))
+    check("the window is back on top of the new desktop and the dock is whole (its cream tray, not Clay)", px(c, SX + 19, SY + 16) == RED and px(c, W // 2, H - 60) not in (CLAY, TERRA), (px(c, SX + 19, SY + 16), px(c, W // 2, H - 60)))
     check("Right again: wallpaper 3, Ink", S.press("right", "settings wall 3 Ink\n"))
     d = S.settle(lambda i: all(px(i, x, y) == INK for x, y in spots))
     check("Ink everywhere the wallpaper shows", all(px(d, x, y) == INK for x, y in spots), [px(d, x, y) for x, y in spots])
@@ -289,7 +310,7 @@ try:
     # ---- the menu bar's icons ----
     check("a click on the speaker opens Settings in Sound", S.click(mid(1), 12, "settings section 2 Sound\n") and S.wait_for("menubar click sound\n", 2))
     time.sleep(0.5)
-    cx, cy = WX + 8 + 150 + 16, WY + 74
+    cx, cy = SX + 8 + 150 + 16, SY + 74
     plus, minus = (cx + 312 - 14 - 8, cy + 15), (cx + 312 - 14 - 16 - 16 - 6 - 70 - 6 + 8, cy + 15)
     sp_before = S.shot()
     check("Sound: + raises the volume to 80", S.click(*plus, "settings volume 80\n"))
@@ -312,13 +333,13 @@ try:
     check("a click on the power symbol opens About", S.click(mid(0), 12, "settings section 0 About\n") and S.wait_for("menubar click power\n", 2))
     check("the Wi-Fi fan opens About too", S.click(mid(2), 12, "menubar click wifi\n"))
     check("the clock opens Date and Time", S.click(mid(3), 12, "settings section 4 Date and Time\n") and S.wait_for("menubar click clock\n", 2))
-    check("a click on a sidebar row (Dock) selects it", S.click(WX + 60, WY + 40 + 3 * 30 + 6, "settings section 3 Dock\n"))
+    check("a click on a sidebar row (Dock) selects it", S.click(SX + 60, SY + 40 + 3 * 30 + 6, "settings section 3 Dock\n"))
     time.sleep(0.3)
     check("the Dock + button steps the tile size to 8", S.click(cx + 312 - 14 - 8, cy + 15, "settings dock 8\n"))
     check("7.4.0: the Magnify - button steps Large to Small", S.click(cx + 312 - 14 - 16 - 98 + 8, cy + 30 + 15, "settings magnify 1 Small\n"))
     check("every change was saved", S.uart().count("settings saved\n") >= 12, S.uart().count("settings saved\n"))
     # the sound page, for the screenshot
-    S.click(WX + 60, WY + 40 + 2 * 30 + 6, "settings section 2 Sound\n"); time.sleep(0.5)
+    S.click(SX + 60, SY + 40 + 2 * 30 + 6, "settings section 2 Sound\n"); time.sleep(0.5)
     S.click(*plus, "settings volume 20\n"); time.sleep(0.5)
     shot = S.shot()
     keep = os.environ.get("JT_SETTINGS_SHOT")
@@ -339,7 +360,7 @@ finally:
 # ---- the card: what the first boot left, and a second boot on the same card ----
 r = mt("mtype", "::JT/SETTINGS.TXT")
 text = r.stdout.decode(errors="replace")
-check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\nmag=1\n", text)
+check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\nzoom=1\n", text)
 S = Session("b")
 try:
     if not S.wait_for("M2 input ready", 60) or not S.wait_for("settings loaded", 30):

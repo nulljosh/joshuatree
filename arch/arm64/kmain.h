@@ -121,6 +121,8 @@ unsigned int window_scale(void);
 int ask_pending(void);
 int calc_type(int ch);
 unsigned wall_get(void);
+unsigned wall_px(int x, int y, int w, int h);
+void wall_span(unsigned *dst, int x, int y, int n, int w, int h, int swap);   /* 8.9.0: a row of it, in the screen's byte order */   /* 8.9.0: the wallpaper at a screen pixel (the park picture or a flat colour) */
 extern unsigned int boot_el;
 int brick_key(unsigned code, unsigned value);
 void brick_tick(void);
@@ -151,6 +153,7 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
         int state;                        /* TH_FREE, TH_READY, TH_WAIT (asleep on a futex word, at wait) */
         unsigned long wait;
     } th[APP_THREADS];
+    unsigned heap_pages;                  /* 8.7.0: heap pages it has touched, each mapped on its first touch */
     unsigned tcur, preempts, spin, cut;   /* cut: its last turn ended at a slice, not by its own yield (8.6.0) */        /* the thread being run; slices taken from its threads; slices since any of them made a call */
     unsigned long last, wbytes;
     int hi;                               /* 3.9.0: the window buffer is device size (scale 2, the app asked for it) */
@@ -317,8 +320,7 @@ void win_move_to(int nx, int ny);
 extern unsigned long fp_spin(volatile unsigned *t, unsigned want);
 void uart_hex(unsigned long v);
 void splash_mark(int cx, int cy, int T, unsigned bg);
-#define APPLE_N 48   /* apple_mask.h: the bitten apple after the tribute line, one copy in main.c */
-extern const unsigned char apple_mask[APPLE_N * APPLE_N];
+#define TRIBUTE_LINE "Great artists steal. Picasso"   /* the quiet line above the dock (pointer.c tribute_paint) */
 #define app_close_at (ap->close_at)
 void term_output(int on);
 #define BUSY (1u << 3)

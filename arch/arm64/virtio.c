@@ -10,7 +10,7 @@ void *kmalloc(unsigned int n);
    USB through xHCI and Ethernet through the Genet MAC instead (M4). ---- */
 #ifndef PI_BUILD
 #define VIRTIO_BASE 0x0A000000UL
-#define VQ 16
+#define VQ 64   /* 8.9.0: 16 was four keystrokes (down, sync, up, sync each): a desktop pass that ran long dropped what was typed under it (QEMU discards an event with no buffer lent); virtio-input offers 64 */
 struct vq_desc { unsigned long addr; unsigned len; unsigned short flags, next; };
 struct vq_avail { unsigned short flags, idx, ring[VQ], used_event; };
 struct vq_used { unsigned short flags, idx; struct { unsigned id, len; } ring[VQ]; unsigned short avail_event; };

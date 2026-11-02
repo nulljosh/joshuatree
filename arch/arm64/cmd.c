@@ -44,7 +44,7 @@ void cmd_dec(unsigned v) { char t[11]; unsigned n = 10; t[n] = 0; do t[--n] = (c
 
 void power_run(int off);                                   /* main.c: the confirmed power action, refused while Samantha answers */
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
-                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), userrun A | userrun B (A's output is B's input), cores, sched, debug NAME [STEPS] (run an app one instruction at a time: where it is, the instruction, the registers that changed, then its registers and stack), install NAME (an app from the store), "
+                           "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), userrun A | userrun B (A's output is B's input), cores, sched, disk, stick [ls|cat NAME|copy NAME] (a USB stick), debug NAME [STEPS] (run an app one instruction at a time: where it is, the instruction, the registers that changed, then its registers and stack), install NAME (an app from the store), "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
                            "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), reboot, shutdown, help.";
 static unsigned ls_count;
@@ -593,18 +593,57 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         if (k < n && q[k] == '.') { jt_command(q + 6, n - 6, 0); return; }
         cmd_out("write: use write NAME.EXT TEXT\n"); return;
     }
+    if (word_is(q, n, "stick") || is(q, n, "stick")) {   /* 8.9.0: a USB stick: stick ls, stick cat NAME, stick copy NAME (into JT/) */
+        int stick_begin(void); void stick_end(void); unsigned long usb_disk_blocks(void); void *kmalloc(unsigned int n);
+        const char *r = q + 5; unsigned m = n > 5 ? n - 5 : 0;
+        while (m && *r == ' ') { r++; m--; }
+        char verb[8], name[16]; unsigned u = word(r, m, verb, sizeof verb); r += u; m -= u;
+        while (m && *r == ' ') { r++; m--; }
+        word(r, m, name, sizeof name);
+        int ls = !verb[0] || (verb[0] == 'l' && verb[1] == 's' && !verb[2]);
+        int cat = verb[0] == 'c' && verb[1] == 'a' && verb[2] == 't' && !verb[3], copy = verb[0] == 'c' && verb[1] == 'o' && verb[2] == 'p' && verb[3] == 'y' && !verb[4];
+        if (!ls && !cat && !copy) { cmd_out("stick ls, stick cat NAME, stick copy NAME (into JT/ on the card)\n"); return; }
+        if ((cat || copy) && !name[0]) { cmd_out("stick: which file? stick ls lists them\n"); return; }
+        if (copy && accounts_count() && !priv("stick copy")) return;   /* a write to JT/, an admin's, like write */
+        if (!usb_disk_blocks()) { cmd_out("stick: no USB stick\n"); return; }
+        static unsigned char *sbuf; const unsigned SMAX = 256 * 1024;
+        if (!sbuf) sbuf = kmalloc(SMAX);
+        if (!sbuf || !stick_begin()) { cmd_out("stick: no FAT partition on it\n"); return; }
+        int got = 0;
+        if (ls) { ls_count = 0; fat_list(ls_one); if (!ls_count) cmd_out("stick: empty\n"); }
+        else got = fat_read_file(name, sbuf, SMAX);
+        stick_end();
+        if (ls) return;
+        if (got < 0) { cmd_out("stick: no file "); cmd_out(name); cmd_out(" on the stick\n"); return; }
+        if (cat) {
+            static char t[4097]; unsigned k = (unsigned)got < 4096 ? (unsigned)got : 4096;
+            for (unsigned i = 0; i < k; i++) t[i] = (char)sbuf[i];
+            t[k] = 0; cmd_out(t); if (k && t[k - 1] != '\n') cmd_out("\n");
+            return;
+        }
+        if ((unsigned)got >= SMAX) { cmd_out("stick: that file is over 256 KB, too big to copy yet\n"); return; }
+        int w = sd_write(name, sbuf, (unsigned)got);
+        if (w == 1) { cmd_out("stick: copied "); cmd_out(name); cmd_out(" to JT/, "); cmd_dec((unsigned)got); cmd_out(" bytes\n"); }
+        else cmd_out(w < 0 ? "stick: that name is not allowed in JT/\n" : "stick: the card would not take it\n");
+        return;
+    }
+    if (word_is(q, n, "disk")) {   /* 8.8.0: the block cache's counts since boot */
+        void disk_cache_stats(unsigned *, unsigned *, unsigned *); unsigned h, r, w; disk_cache_stats(&h, &r, &w);
+        cmd_out("disk: "); cmd_dec(h); cmd_out(" sectors from the cache, "); cmd_dec(r); cmd_out(" read from the card, "); cmd_dec(w); cmd_out(" written through\n");
+        return;
+    }
     if (word_is(q, n, "sched")) {   /* 8.6.0: the longest one app held the core in a turn since the last time this was asked */
         extern unsigned long sched_worst; unsigned long cnt_hz(void);
         cmd_out("sched: the longest turn an app took was "); cmd_dec((unsigned)(sched_worst * 1000 / cnt_hz())); cmd_out(" ms; every app runs in 10 ms slices, the desktop between them\n");
         sched_worst = 0; return;
     }
     if (word_is(q, n, "cores")) {   /* 8.2.0: which of the four cores are up, and how often each has woken */
-        extern volatile unsigned long core_runs[4], core_mpidr[4]; extern volatile int core_up[4]; unsigned cores_count(void);
+        extern volatile unsigned long core_runs[4 * 8], core_mpidr[4]; extern volatile int core_up[4]; unsigned cores_count(void);
         cmd_out("cores: "); cmd_dec(cores_count()); cmd_out(" of 4 running\n");
         for (int c = 0; c < 4; c++) {
             cmd_out("core "); cmd_dec((unsigned)c);
             if (!core_up[c]) { cmd_out(": asleep\n"); continue; }
-            cmd_out(c ? ": up, woken " : ": up, runs the kernel"); if (c) cmd_dec((unsigned)core_runs[c]);
+            cmd_out(c ? ": up, woken " : ": up, runs the kernel"); if (c) cmd_dec((unsigned)core_runs[c * 8]);
             cmd_out(c ? " times\n" : "\n");
         }
         return;

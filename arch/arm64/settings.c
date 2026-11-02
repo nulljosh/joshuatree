@@ -1,5 +1,5 @@
 /* The Pi's Settings, the part that is not drawing: what the choices are, the file they live in, and loading it at boot.
-   JT/SETTINGS.TXT holds four lines, `volume=70`, `wall=0`, `dock=7` and `mag=2` (7.4.0: the dock's magnify, 0 off, 1 small, 2 large), the same key=value shape the i386 SETTINGS.TXT uses.
+   JT/SETTINGS.TXT holds four lines, `volume=70`, `wall=0`, `dock=7` and `zoom=0` (7.4.0: the dock's magnify, 0 off, 1 small, 2 large; 8.9.0 renamed it from mag and made off the default), the same key=value shape the i386 SETTINGS.TXT uses.
    With accounts (6.0) the wallpaper is each person's own: ~/WALL.TXT holds `wall=N`, and the card's is the login screen's.
    A missing, short or hand-edited file is never an error: every value is range-checked and a bad line is ignored. With no
    card the choices live in memory until the next boot and the screen says so. main.c draws the window (settings_ui.h);
@@ -19,14 +19,24 @@ int home_in(const char *dir, int make);
 int home_save(const char *name, const void *data, unsigned len);
 
 #define SET_FILE "SETTINGS.TXT"
-#define SET_WALLS 4
+#define SET_WALLS 5
 #define SET_DOCK_MIN 5
 #define SET_DOCK_MAX 25
 static const struct { const char *name; unsigned rgb; } walls[SET_WALLS] = {
-    { "Grey", 0x006E6E6Eu }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u } };
-static int wall_pick;                 /* index into walls */
+    { "Blue", 0x003B6EA5u }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u },
+    { "Park", 0x01000000u } };   /* 8.9.0: the picture, Joshua Tree at dusk (wall.c's WALL_PARK); the Pi's default */
+#ifdef PI_BUILD
+static int wall_pick = 4;             /* index into walls: the park picture on the Pi (8.9.0) */
+#else
+static int wall_pick;                 /* index into walls: the flat blue on QEMU, which the checks read */
+#endif
 static int saved_state;               /* 0 not yet saved, 1 on the card, 2 only the wallpaper (yours), -1 no card or the card refused it, -2 not an admin */
-static int card_wall;                 /* JT/SETTINGS.TXT's wallpaper: the login screen's, and anyone's with no ~/WALL.TXT */
+#ifdef PI_BUILD
+static int card_wall = 4;
+#else
+static int card_wall;
+#endif
+                                      /* card_wall: JT/SETTINGS.TXT's wallpaper: the login screen's, and anyone's with no ~/WALL.TXT */
 #define WALL_FILE "WALL.TXT"          /* 6.0, Yours: each person's wallpaper, `wall=N`, in their own home folder */
 
 const char *settings_version(void) {
@@ -38,10 +48,17 @@ const char *settings_version(void) {
 }
 int settings_wall(void) { return wall_pick; }
 const char *settings_wall_name(int i) { return i >= 0 && i < SET_WALLS ? walls[i].name : ""; }
-unsigned settings_wall_rgb(int i) { return i >= 0 && i < SET_WALLS ? walls[i].rgb : walls[0].rgb; }
+unsigned settings_wall_rgb(int i) { unsigned c = i >= 0 && i < SET_WALLS ? walls[i].rgb : walls[0].rgb; return c & 0x01000000u ? 0x00EC9E76u : c; }   /* the picture's swatch: its horizon */
 int settings_walls(void) { return SET_WALLS; }
 void settings_set_wall(int i) { wall_pick = ((i % SET_WALLS) + SET_WALLS) % SET_WALLS; wall_set(walls[wall_pick].rgb); }
-int dock_mag = 2;                     /* 7.4.0: crash.c's magnify, an index into mags */
+#ifndef DOCK_ZOOM
+#ifdef PI_BUILD
+#define DOCK_ZOOM 0   /* 8.9.0: off on the Pi unless chosen in Settings (Joshua: "disable zoom") */
+#else
+#define DOCK_ZOOM 2   /* QEMU builds keep it on, so the magnify checks (dockmag, genie, ptrburst, traffic, calendar) still see it */
+#endif
+#endif
+int dock_mag = DOCK_ZOOM;             /* 7.4.0: crash.c's magnify, an index into mags */
 static const char *const mags[3] = { "Off", "Small", "Large" };
 int settings_dock(void) { return dock_scale_pct; }
 void settings_set_dock(int pct) { dock_scale_pct = pct < SET_DOCK_MIN ? SET_DOCK_MIN : pct > SET_DOCK_MAX ? SET_DOCK_MAX : pct; }
@@ -67,7 +84,7 @@ void settings_parse(const char *t, unsigned n, int *vol, int *wall, int *dock, i
                 if (key_is(t + i, k - i, "volume") && x <= 100) *vol = (int)x;
                 else if (key_is(t + i, k - i, "wall") && x < SET_WALLS) *wall = (int)x;
                 else if (key_is(t + i, k - i, "dock") && x >= SET_DOCK_MIN && x <= SET_DOCK_MAX) *dock = (int)x;
-                else if (key_is(t + i, k - i, "mag") && x <= 2) *mag = (int)x;
+                else if (key_is(t + i, k - i, "zoom") && x <= 2) *mag = (int)x;
             }
         }
         while (i < n && t[i] != '\n') i++;
@@ -76,7 +93,7 @@ void settings_parse(const char *t, unsigned n, int *vol, int *wall, int *dock, i
 }
 unsigned settings_format(char *out, int vol, int wall, int dock, int mag) {
     unsigned n = 0;
-    const char *keys[4] = { "volume=", "wall=", "dock=", "mag=" };
+    const char *keys[4] = { "volume=", "wall=", "dock=", "zoom=" };   /* 8.9.0: zoom, not mag, so a card saved with the old mag=2 starts with it off */
     int vals[4] = { vol, wall, dock, mag };
     for (int r = 0; r < 4; r++) {
         for (const char *p = keys[r]; *p; p++) out[n++] = *p;
@@ -119,7 +136,11 @@ void settings_load(void) {
     int got = fat_read_file(SET_FILE, buf, sizeof buf);
     fat_chdir("..");
     if (got <= 0) return;
+    int mag0 = mag; mag = -1;
     settings_parse(buf, (unsigned)got, &vol, &wall, &dock, &mag);
+    if (mag < 0) { mag = mag0; wall = wall_pick; }   /* 8.9.0: a file from before 8.9 (no zoom= line) keeps its volume and dock,
+                                                       but its wallpaper was the old default, so the new default (the park on
+                                                       the Pi) shows once; the next save writes zoom= and the choice sticks */
     audio_set_volume(vol);
     settings_set_dock(dock);
     settings_set_mag(mag);

@@ -25,7 +25,8 @@ arch = os.path.join(root, "arch/arm64")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
     print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
 fails = []
-SPL, WALL, INK, DIM = (0xE5, 0xE5, 0xE7), (0x6E, 0x6E, 0x6E), (0x1C, 0x1C, 0x1E), (0x90, 0x90, 0x90)
+SPL, WALL, INK, DIM = (0xE5, 0xE5, 0xE7), (0x3B, 0x6E, 0xA5), (0x1C, 0x1C, 0x1E), (0x90, 0x90, 0x90)
+BAR_TINT = ((WALL[2] + 255) // 2) - ((WALL[0] + 255) // 2)   # 8.9.0: the bar is half wallpaper, half white, so with the blue wallpaper it is blue by this much; a blue fan is bluer still
 
 
 def geom(w, h):
@@ -124,7 +125,7 @@ try:
             else: print(f"  ok: after boot the Console's whole rectangle is flat graphite grey ({len(area)} samples)")
             if px(img, W // 2, 26 * H // 540 - 1) != (0xBD, 0xB8, 0xB0): fails.append("the menu bar's closing rule is missing: no desktop")
             dump(img, uart); f_ = fan(img, uart)
-            grey = sum(1 for c in f_ if c == DIM); blue = sum(1 for c in f_ if c[2] > c[0] + 4); ink = sum(1 for c in f_ if max(c) < 0x50)
+            grey = sum(1 for c in f_ if c == DIM); blue = sum(1 for c in f_ if c[2] - c[0] > BAR_TINT + 4); ink = sum(1 for c in f_ if max(c) < 0x50)
             ink = sum(1 for c in f_ if c == INK)
             grey = dim_runs(img, uart)
             if ink < 10 or grey or blue: fails.append(f"not joined, the fan should still be flat ink 0x1C1C1E: {ink} ink pixels, {grey} grey run pixels, {blue} bluish")
@@ -217,7 +218,7 @@ try:
         try:
             time.sleep(0.5)
             img = screendump(cmd, tmp); dump(img, uart); f_ = fan(img, uart)
-            ink = sum(1 for c in f_ if c == INK); grey = dim_runs(img, uart); blue = sum(1 for c in f_ if c[2] > c[0] + 4)
+            ink = sum(1 for c in f_ if c == INK); grey = dim_runs(img, uart); blue = sum(1 for c in f_ if c[2] - c[0] > BAR_TINT + 4)
             if ink < 10 or grey or blue: fails.append(f"joined, the fan should be flat ink 0x1C1C1E: {ink} ink pixels, {grey} grey, {blue} bluish")
             else: print(f"  ok: joined, the Wi-Fi fan is flat ink, the clock's ({ink} solid pixels, no grey, none blue)")
         finally:

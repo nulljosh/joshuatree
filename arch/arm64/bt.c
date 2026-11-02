@@ -933,6 +933,7 @@ void bt_poll(void) {
 }
 
 int bt_starting(void) { return st == STARTING; }
+int bt_has_pairing(void) { struct btp r; return pair_load(&r); }   /* 8.9.0: a saved mouse, so boot shows the arrow before it reconnects */
 int bt_input_live(void) { return st == MOUSE; }   /* 7.5.3: a connected Bluetooth mouse can wake the screen */
 int bt_busy(void) { return st == STARTING || st == SCANNING || st == PAIRING || st == MOUSE || st == RETRY; }
 int bt_settling(void) { return st == STARTING || st == SCANNING || st == PAIRING || st == RETRY; }   /* 6.87.0: the radio's own deadlines are running (a connected mouse is not) */

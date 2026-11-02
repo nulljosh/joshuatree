@@ -154,6 +154,7 @@ static unsigned cmd_cc, cmd_slot, ctl_cc;
 static void hid_report(struct hidfn *f, unsigned len);
 static void queue_intr(struct usbdev *d, struct hidfn *f);
 static int uac_event(unsigned slot, unsigned dci, unsigned cc, unsigned resid);
+static int msc_event(unsigned slot, unsigned dci, unsigned cc, unsigned resid);
 static int handle_events(void) {   /* everything the controller has posted; returns how many */
     int n = 0;
     for (;;) {
@@ -171,6 +172,7 @@ static int handle_events(void) {   /* everything the controller has posted; retu
                 if (!d->used || d->slot != slot) continue;
                 if (dci == 1) { ctl_done = 1; ctl_cc = cc; continue; }
                 if (uac_event(slot, dci, cc, st & 0xFFFFFF)) continue;
+                if (msc_event(slot, dci, cc, st & 0xFFFFFF)) continue;
                 for (unsigned j = 0; j < d->nfn; j++) {
                     struct hidfn *f = &d->fn[j];
                     if (!f->kind || f->dci != dci) continue;
@@ -333,8 +335,10 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
 
 /* Take a device away: its children first, then the controller forgets its slot. Memory is not given back (a bump heap). */
 static void uac_gone(unsigned slot);
+static void msc_gone(unsigned slot);
 static void remove_dev(struct usbdev *d) {
     uac_gone(d->slot);
+    msc_gone(d->slot);
     for (unsigned i = 0; i < MAX_DEV; i++)
         if (devs[i].used && &devs[i] != d && devs[i].phub == d->slot) remove_dev(&devs[i]);
     for (unsigned j = 0; j < d->nfn; j++) if (d->fn[j].kind) { if (d->fn[j].kind == 1) nkbd--; else if (d->fn[j].kind == 2) nmouse--; d->fn[j].kind = 0; }
@@ -587,6 +591,94 @@ int usb_spk_tone(int freq, int ms) {   /* a USB speaker plays a square wave; 0 s
     return 0;
 }
 
+/* ---- 8.9.0: USB mass storage, bulk-only transport (class 8, subclass 6 SCSI, protocol 0x50), one stick at a time.
+   Each command is a 31-byte CBW on the bulk OUT endpoint, an optional data stage, and a 13-byte CSW on bulk IN, each a
+   Normal TRB waited for in turn (msc_event). READ CAPACITY(10) at plug-in gives the size; READ(10) and WRITE(10) move one
+   512-byte sector. emmc.c points fat.c at it for `stick` in the Terminal (usb_disk_read, usb_disk_write). A stick that
+   answers a command badly is dropped, not retried.
+   ponytail: one sector a command; several at once when copying big files matters. */
+static struct { int on; unsigned slot, din, dout, tag, blocks, bsize; struct ring rin, rout; unsigned char *buf; int done; unsigned cc, resid; } msc;
+static int msc_event(unsigned slot, unsigned dci, unsigned cc, unsigned resid) {
+    if (!msc.on || slot != msc.slot || (dci != msc.din && dci != msc.dout)) return 0;
+    msc.done = 1; msc.cc = cc; msc.resid = resid;
+    return 1;
+}
+static int msc_xfer(int in, unsigned char *p, unsigned n) {   /* one bulk transfer, waited for; 1 when it completed */
+    struct ring *r = in ? &msc.rin : &msc.rout;
+    dma_sync(p, n);
+    msc.done = 0;
+    ring_push(r, lo32(p), hi32(p), n, (TRB_NORMAL << 10) | TRB_IOC | (in ? TRB_ISP : 0));
+    doorbell(msc.slot, in ? msc.din : msc.dout);
+    if (!wait_flag(&msc.done, 2000)) { kputs("usb disk timeout\n"); return 0; }
+    dma_sync(p, n);
+    return msc.cc == 1 || msc.cc == 13;
+}
+static int msc_cmd(const unsigned char *cdb, unsigned cl, int in, unsigned n) {   /* the data (n bytes) in or out of msc.buf + 64 */
+    unsigned char *w = msc.buf;
+    for (unsigned i = 0; i < 31; i++) w[i] = 0;
+    w[0] = 'U'; w[1] = 'S'; w[2] = 'B'; w[3] = 'C';
+    unsigned t = ++msc.tag;
+    w[4] = (unsigned char)t; w[5] = (unsigned char)(t >> 8); w[6] = (unsigned char)(t >> 16); w[7] = (unsigned char)(t >> 24);
+    w[8] = (unsigned char)n; w[9] = (unsigned char)(n >> 8); w[10] = (unsigned char)(n >> 16); w[11] = (unsigned char)(n >> 24);
+    w[12] = in ? 0x80 : 0; w[14] = (unsigned char)cl;
+    for (unsigned i = 0; i < cl; i++) w[15 + i] = cdb[i];
+    if (!msc_xfer(0, w, 31)) return 0;
+    if (n && !msc_xfer(in, msc.buf + 64, n)) return 0;
+    unsigned char *c = msc.buf + 32;
+    if (!msc_xfer(1, c, 13)) return 0;
+    return c[0] == 'U' && c[1] == 'S' && c[2] == 'B' && c[3] == 'S' && (c[4] | c[5] << 8 | c[6] << 16 | (unsigned)c[7] << 24) == t && c[12] == 0;
+}
+static void msc_start(struct usbdev *d, unsigned in_ep, unsigned out_ep, unsigned mps, unsigned vid, unsigned pid) {
+    if (msc.on) { kputs("usb disk: one stick at a time, this one is left alone\n"); return; }
+    msc.din = 2 * (in_ep & 0xF) + 1; msc.dout = 2 * (out_ep & 0xF);
+    if (!msc.buf) msc.buf = dma_alloc(64 + 512, 64);
+    if (!msc.buf || !ring_init(&msc.rin) || !ring_init(&msc.rout)) return;
+    clear_in(d);
+    unsigned dcis[2] = { msc.dout, msc.din }; struct ring *rs[2] = { &msc.rout, &msc.rin }; unsigned entries = 1;
+    for (unsigned k = 0; k < 2; k++) {
+        volatile unsigned *e = ctx(d->in_ctx, dcis[k] + 1);
+        e[0] = 0;
+        e[1] = 3u << 1 | (k ? 6u : 2u) << 3 | mps << 16;     /* 3 retries, bulk OUT (2) or bulk IN (6) */
+        e[2] = lo32(rs[k]->t) | 1; e[3] = hi32(rs[k]->t);
+        e[4] = 512;
+        if (dcis[k] > entries) entries = dcis[k];
+    }
+    ctx(d->in_ctx, 0)[1] = 1 | 1u << msc.dout | 1u << msc.din;
+    fill_slot(d, ctx(d->in_ctx, 1), entries);
+    dma_sync(d->in_ctx, 33 * csz);
+    if (!command(lo32(d->in_ctx), hi32(d->in_ctx), (TRB_CONFIGURE_EP << 10) | d->slot << 24)) {
+        kputs("usb disk configure endpoint FAIL, code "); kdec(cmd_cc); kputs("\n"); return;
+    }
+    d->entries = entries;
+    msc.slot = d->slot; msc.on = 1; msc.tag = 0;
+    static const unsigned char tur[6] = { 0x00 }, cap10[10] = { 0x25 };
+    for (unsigned k = 0; k < 5 && !msc_cmd(tur, 6, 0, 0); k++) mdelay(100);   /* a stick may want a moment after reset */
+    if (!msc_cmd(cap10, 10, 1, 8)) { kputs("usb disk: no answer to READ CAPACITY, left alone\n"); msc.on = 0; return; }
+    unsigned char *c = msc.buf + 64;
+    msc.blocks = ((unsigned)c[0] << 24 | c[1] << 16 | c[2] << 8 | c[3]) + 1; msc.bsize = (unsigned)c[4] << 24 | c[5] << 16 | c[6] << 8 | c[7];
+    if (msc.bsize != 512) { kputs("usb disk: sectors of "); kdec(msc.bsize); kputs(" bytes, only 512 is read\n"); msc.on = 0; return; }
+    kputs("usb disk addr "); kdec(d->slot); kputs(" port "); print_where(d); kputs(" "); kputs(speed_name(d->speed)); kputs(" ");
+    kx(vid); kputs(":"); kx(pid); kputs(" "); kdec(msc.blocks / 2048); kputs(" MB\n");
+}
+static void msc_gone(unsigned slot) { if (msc.on && msc.slot == slot) { msc.on = 0; kputs("usb disk removed\n"); } }
+unsigned long usb_disk_blocks(void) { return msc.on ? msc.blocks : 0; }
+static int msc_rw(unsigned lba, unsigned char *p, int write) {
+    if (!msc.on || lba >= msc.blocks) return 0;
+    unsigned char cdb[10] = { write ? 0x2A : 0x28, 0, (unsigned char)(lba >> 24), (unsigned char)(lba >> 16), (unsigned char)(lba >> 8), (unsigned char)lba, 0, 0, 1, 0 };
+    if (write) for (unsigned i = 0; i < 512; i++) msc.buf[64 + i] = p[i];
+    if (!msc_cmd(cdb, 10, !write, 512)) return 0;
+    if (!write) for (unsigned i = 0; i < 512; i++) p[i] = msc.buf[64 + i];
+    return 1;
+}
+int usb_disk_read(unsigned lba, unsigned count, void *buf) {
+    for (unsigned k = 0; k < count; k++) if (!msc_rw(lba + k, (unsigned char *)buf + 512UL * k, 0)) return 0;
+    return 1;
+}
+int usb_disk_write(unsigned lba, unsigned count, const void *buf) {
+    for (unsigned k = 0; k < count; k++) if (!msc_rw(lba + k, (unsigned char *)buf + 512UL * k, 1)) return 0;
+    return 1;
+}
+
 static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsigned speed, struct usbdev *parent, unsigned parent_port) {
     if (depth > 5) return;
     struct usbdev *d = 0;
@@ -637,11 +729,13 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
     unsigned nc = 0, want = 0, c_if = 0, c_proto = 0, has_kbd = 0, has_other = 0;
     struct audcand ac[2] = { { 0 }, { 0 } };               /* the best audio stream each way: [0] in (a microphone), [1] out */
     unsigned a_on = 0, a_good = 0, a_if = 0, a_alt = 0, a_rate = 0, a_ch = 0;
+    unsigned m_on = 0, m_in = 0, m_out = 0, m_mps = 0;   /* 8.9.0: a mass storage interface and its two bulk endpoints */
     for (unsigned i = 0; i + 2 <= total && b[i] >= 2 && i + b[i] <= total; i += b[i]) {
         if (b[i + 1] == 4 && b[i] >= 9) {   /* interface: number, alternate, class, subclass, protocol at 2, 3, 5, 6, 7 */
             c_if = b[i + 2]; c_proto = b[i + 7]; want = 0;
             a_on = b[i + 5] == 1 && b[i + 6] == 2 && b[i + 3] != 0; a_good = 0; a_if = b[i + 2]; a_alt = b[i + 3];   /* an audio streaming interface, alternate 1 or more */
             if (b[i + 5] == 9) is_hub = 1;
+            m_on = b[i + 3] == 0 && b[i + 5] == 8 && b[i + 6] == 6 && b[i + 7] == 0x50;
             if (b[i + 3] == 0 && b[i + 5] == 3) {
                 if (b[i + 6] == 1 && (b[i + 7] == 1 || b[i + 7] == 2)) { want = 1; if (b[i + 7] == 1) has_kbd = 1; }
                 else if (has_kbd && !has_other) { want = 1; c_proto = 3; has_other = 1; }   /* a Mac-style top row: media keys */
@@ -664,6 +758,9 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
             if (!ac[dir].found || score > ac[dir].score) {
                 ac[dir] = (struct audcand){ 1, score, a_if, a_alt, b[i + 2], (b[i + 4] | b[i + 5] << 8) & 0x7FF, b[i + 6], a_rate, a_ch };
             }
+        } else if (b[i + 1] == 5 && m_on && b[i] >= 7 && (b[i + 3] & 3) == 2) {   /* a bulk endpoint of the mass storage interface */
+            if (b[i + 2] & 0x80) m_in = b[i + 2]; else m_out = b[i + 2];
+            m_mps = (b[i + 4] | b[i + 5] << 8) & 0x7FF;
         } else if (b[i + 1] == 5 && want && b[i] >= 7 && (b[i + 2] & 0x80) && (b[i + 3] & 3) == 3 && nc < MAX_FN) {   /* interrupt IN endpoint */
             cand[nc].kind = c_proto; cand[nc].iface = c_if; cand[nc].addr = b[i + 2];
             cand[nc].mps = (b[i + 4] | b[i + 5] << 8) & 0x7FF; cand[nc].interval = b[i + 6];
@@ -678,6 +775,7 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
         return;
     }
     d->entries = 1;
+    if (!nc && m_in && m_out) { msc_start(d, m_in, m_out, m_mps ? m_mps : 512, vid, pid); return; }
     if (!nc && !ac[0].found && !ac[1].found) {
         kputs("usb other addr "); kdec(d->slot); kputs(" port "); print_where(d); kputs(" "); kputs(speed_name(speed)); kputs(" ");
         kx(vid); kputs(":"); kx(pid); kputs("\n");
