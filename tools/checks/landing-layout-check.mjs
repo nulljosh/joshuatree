@@ -46,7 +46,7 @@ const realApps = names.filter(n => !['Apps', 'Trash', 'Settings', 'Compose'].inc
 console.log(`APPS[] has ${realApps} real apps`);
 
 const overlap = (a, b) => a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5;
-const KEY = ['Joshua Tree by the numbers', 'Meet Samantha', 'Apps built in', 'Protected apps', 'Dev kit waitlist'];
+const KEY = ['Joshua Tree by the numbers', 'Apps built in', 'Protected apps', 'Dev kit waitlist'];
 const realNames = names.filter(n => !['Apps', 'Trash', 'Settings', 'Compose'].includes(n));
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
