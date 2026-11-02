@@ -2546,12 +2546,14 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (372 checks)
+### The suite (374 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
 | ARM menu notices: bounded messages, expiry, pixels and input | `tools/checks/arm64-notice-check.py` | once |
-| Pi screen sleep: idle deadline, wrap, active apps, refused mailbox requests and keyboard/mouse wake | `tools/checks/arm64-screen-idle-check.py` | once |
+| Pi screen sleep and deep idle (10.1.0): idle deadline, wrap, active apps, refused mailbox requests, keyboard/mouse wake, and 50 loop passes a second asleep | `tools/checks/arm64-screen-idle-check.py` | once |
+| Trackpad (10.2.0): one finger moves the pointer, two scroll, a tap clicks left and a two-finger tap right, on the host and through QEMU virtio-multitouch | `tools/checks/arm64-trackpad-check.py` | once |
+| Battery (10.3.0): a MAX17048 gauge read over the Pi's own I2C driver (an EEPROM stands in for it on QEMU raspi4b), none without one, and the menu bar shows it | `tools/checks/arm64-battery-check.py` | once |
 | Brick on ARM: collision rules, lives and win under sanitizers; keyboard/mouse play, timed animation, pause, restart, Spotlight and close in QEMU | `tools/checks/arm64-brick-check.py` | once |
 | Spotlight on ARM lists every app including the Calculator and Settings on an empty query, typing calc shows it and Enter opens the window, in headless QEMU | `tools/checks/arm64-spotlight-check.py` | once |
 | Accounts on the Pi: accounts.c under sanitizers (add, check, refusals, corrupt files, failed writes, PBKDF2 vectors); in headless QEMU adduser, users and deluser work, the password never shows or reaches the UART, and JT/USERS.TXT is a real PBKDF2 record that survives a reboot | `tools/checks/arm64-accounts-check.py` | once |

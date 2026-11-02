@@ -58,7 +58,7 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 
 **Shipped: 10.0, Daily driver** (10.0.0, 2026-11-02, on Joshua's word: "loop all night until v10, then ship it"): a screen reader (9.1.0), twelve languages (9.2.0), Software Update, signed only and with a fallback kernel (9.3.0), and a security audit against the threat model (10.0.0). Still open: a month as Joshua's only computer, the reader beyond the dock, apps in the other languages, and the tryboot flag on the board.
 
-**Now: 11.0.** Next up is the "11 to 20" list under Version plan below.
+**Now: 11.0, a laptop.** Shipped in 10.1.0: deep idle (the screen asleep, the loop naps), the trackpad gestures (one finger points, two scroll, tap to click, through QEMU multitouch) and the battery (a MAX17048 gauge over I2C, its percent in the menu bar). Still open, and the slice that cuts 11.0.0: USB precision touchpads feeding the same gestures. Then a Sleep row and lid close, and the gauge on a real board. After 11: 12 to 15 (Joshua, 2026-11-02: "do v12-15").
 
 **The Berkeley list is done** (Joshua, 2026-11-01: "are we missing anything" from Berkeley's CS162 lectures). Threads and locks (8.1.0), four cores (8.2.0), pipes (8.3.0), spawn and wait (8.4.0), sockets (8.5.0), fair 10 ms turns (8.6.0), paging on first touch (8.7.0), a block cache (8.8.0), app threads on all four cores (8.11.0) and swap (8.12.0). Copy on write still waits for a fork, which spawn does not need.
 Left out on purpose: distributed file systems, key value stores and Chord (lectures 25 and 26); a desktop does not need them.
@@ -610,7 +610,7 @@ The OS stays free. Monetization is custom hardware built to run it. Everything t
 - [ ] [Sonnet] Saving on real PCs stated plainly: today only old IDE disks work.
 - [ ] [Fable] User profiles and sign-in done properly: login screen at boot, a home folder and settings per person, passwords stored hashed and never in the clear, lock screen, an admin level for risky actions (issue #28). Accounts exist today; this is the pass that makes them trustworthy.
 - [ ] [Fable] Sound on real PCs: an AC97 or Intel HD Audio driver next to the Sound Blaster one (1.6.9), which only exists in emulators.
-- [ ] [Sonnet] Laptop basics: battery level, trackpad, lid close.
+- [ ] [Sonnet] Laptop basics: battery level (10.1.0), trackpad (10.1.0, USB precision pads next), lid close.
 - [ ] [Joshua] One real PC booted from the USB stick, keyboard and mouse working, photographed. The USB image and non-emulator graphics are only proven in QEMU so far.
 - [ ] [Fable] Install to disk from the USB stick.
 - [x] [Fable] Wi-Fi. Shipped on the Pi (`wifi.c`, joined on the board 2026-11-01).
@@ -694,7 +694,7 @@ The Mac apps and menu bar pieces this OS still lacks, listed so they can be pick
 - [ ] [Sonnet] App Store.
 - [ ] [Sonnet] Podcasts.
 - [ ] [Sonnet] Control Center in the menu bar.
-- [ ] [Sonnet] Battery status in the menu bar.
+- [x] [Sonnet] Battery status in the menu bar (10.1.0).
 - [ ] [Sonnet] Focus in the menu bar.
 
 ## Tests and the loop
@@ -1017,6 +1017,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **10.1.0 (2026-11-02)**: Laptop basics, the first slices of 11.0. Deep idle: with the screen asleep and nothing working, the Pi's loop naps 20 ms a pass, 50 passes a second instead of 194 thousand. The trackpad: `trackpad.h` turns multitouch fingers into pointer moves, natural two-finger scroll, tap to click and a two-finger right click. The battery: an I2C driver on the HAT pins reads a MAX17048 gauge, and the menu bar shows its percent. Checks: `arm64-screen-idle-check.py`, `arm64-trackpad-check.py`, `arm64-battery-check.py`.
 - **10.0.1 (2026-11-02)**: The 10 teaser on the landing, above the tour: a 20 second wordless film of real screens building to a big 10 (spec `docs/hardware/ad/ten.json`). Check: `landing-layout-check.mjs` (Want one? still carries the ad video).
 - **10.0.0 (2026-11-02)**: Daily driver. A security audit against the threat model (docs/ARCHITECTURE.md, "The 10.0 audit") covered self-update, languages, USB touch, the reader, swap and the 8.x syscalls, and fixed two things in self-update: the update window's button now needs an admin, and an older release is never offered. With 9.1 to 9.3, this is 10.0. Check: `arm64-update-check.py` (an older release is never offered).
 - **9.3.0 (2026-11-02)**: Software Update, the third of 10.0, as in `docs/brand/v10/update.webp`. `update` in the Terminal asks the newest release what is out and opens a window with the version, what is new and Update and Restart. The Pi fetches the kernel and its signature, writes nothing unless it is signed by Joshua's key (under a name no app can have), and stages it beside the kernel that works with the firmware's tryboot, so one boot tries it. Once the new kernel has run 20 seconds it becomes the kernel; if it never gets there, the old one starts on the next power-on, drops the update and says so. A dev card, whose kernel carries the relay key, is refused and flashed instead. Each release's signature is added on the Mac (`tools/update-sign.sh`). The tryboot flag itself needs the board. Check: `arm64-update-check.py` (a stub release, a bad signature, the fallback and the commit across three boots).
