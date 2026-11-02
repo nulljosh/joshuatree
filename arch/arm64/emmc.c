@@ -218,6 +218,14 @@ int emmc_read(unsigned lba, unsigned count, void *buf) { return vblk_span(lba, c
 int emmc_write(unsigned lba, unsigned count, const void *buf) { return vblk_span(lba, count, (unsigned char *)buf, 1); }
 #endif
 
+/* ---- 8.9.0: which disk fat.c reads. The card, except inside stick_begin and stick_end, when it is a USB stick
+   (xhci.c's mass storage). The Terminal's `stick` commands switch, do their work and switch back in one go, so nothing
+   else in the kernel ever writes while the stick is the disk. ---- */
+static int src_usb;
+unsigned long usb_disk_blocks(void); int usb_disk_read(unsigned lba, unsigned count, void *buf); int usb_disk_write(unsigned lba, unsigned count, const void *buf);
+static int dev_read(unsigned lba, unsigned count, void *buf) { return src_usb ? usb_disk_read(lba, count, buf) : emmc_read(lba, count, buf); }
+static int dev_write(unsigned lba, unsigned count, const void *buf) { return src_usb ? usb_disk_write(lba, count, buf) : emmc_write(lba, count, buf); }
+
 /* ---- The FAT partition, as drivers/fat.c's block device ---- */
 static unsigned part_start, part_blocks;   /* in card blocks */
 static unsigned part_reserved, part_fsinfo;   /* the boot sectors fat.c never writes, and the one it may (FAT32's FSInfo) */
@@ -245,7 +253,7 @@ int blockdev_read_sector(unsigned int lba, void *buf) {   /* fat.c's only way to
     int i = bc_find(lba);
     if (i >= 0) { bc[i].used = ++bc_clock; for (int k = 0; k < 512; k++) o[k] = bc[i].d[k]; bc_hits++; return 1; }
     bc_reads++;
-    if (!emmc_read(part_start + lba, 1, buf)) return 0;
+    if (!dev_read(part_start + lba, 1, buf)) return 0;
     bc_put(lba, o);
     return 1;
 }
@@ -257,7 +265,7 @@ int blockdev_write_sector(unsigned int lba, const void *buf) {   /* the same bou
     bc_writes++;
     int i = bc_find(lba);
     if (i >= 0) bc[i].ok = 0;   /* whatever happens on the card, the cache never holds a sector it did not take */
-    if (!emmc_write(part_start + lba, 1, buf)) return 0;
+    if (!dev_write(part_start + lba, 1, buf)) return 0;
     bc_put(lba, buf);
     return 1;
 }
@@ -266,16 +274,19 @@ int sd_mount(void) {
     static unsigned char b[1024];
     mounted = 0; part_blocks = 0; part_reserved = 0xFFFFFFFFu;
     for (int i = 0; i < BC_N; i++) bc[i].ok = 0;   /* 8.8.0: a new mount, perhaps a new card: nothing cached is trusted */
-    if (!emmc_init() || !emmc_read(0, 1, b)) return 0;
-    if (b[510] != 0x55 || b[511] != 0xAA) { kputs("sd no partition table\n"); return 0; }
+    unsigned long nb = src_usb ? usb_disk_blocks() : 0;
+    if (!(src_usb ? nb != 0 : emmc_init()) || !dev_read(0, 1, b)) return 0;
+    if (!src_usb) nb = blocks;
+    const char *who = src_usb ? "usb disk " : "sd ";
+    if (b[510] != 0x55 || b[511] != 0xAA) { kputs(who); kputs("no partition table\n"); return 0; }
     unsigned start = 0, size = 0;
     for (unsigned i = 0; i < 4 && !size; i++) {   /* the first FAT partition: 0x0B and 0x0C are FAT32, 0x04, 0x06 and 0x0E FAT16 */
         const unsigned char *e = b + 446 + 16 * i;
         if (e[4] == 0x0B || e[4] == 0x0C || e[4] == 0x04 || e[4] == 0x06 || e[4] == 0x0E) { start = rd32(e + 8); size = rd32(e + 12); }
     }
-    if (!size) { kputs("sd no FAT partition\n"); return 0; }
-    if (start >= blocks || size > blocks - start) { kputs("sd FAIL partition runs past the card\n"); return 0; }
-    if (!emmc_read(start, 2, b)) return 0;        /* its boot sector and the block after it in one CMD18 */
+    if (!size) { kputs(who); kputs("no FAT partition\n"); return 0; }
+    if (start >= nb || size > nb - start) { kputs(who); kputs("FAIL partition runs past the disk\n"); return 0; }
+    if (!dev_read(start, 2, b)) return 0;        /* its boot sector and the block after it in one CMD18 */
     if (b[510] != 0x55 || b[511] != 0xAA) { kputs("sd FAIL boot sector\n"); return 0; }
     int f32 = !(b[22] | b[23]);
     if (f32 && b[48] == 1 && !b[49] && rd32(b + 512) != 0x41615252) { kputs("sd FAIL second block of a CMD18 (no FSInfo)\n"); return 0; }
@@ -285,11 +296,19 @@ int sd_mount(void) {
     if (!part_fsinfo) part_fsinfo = 0xFFFFFFFFu;  /* sector 0 is the boot sector, never FSInfo */
     if (!fat_mount()) { part_blocks = 0; kputs("sd FAIL fat mount\n"); return 0; }
     mounted = 1;
-    kputs("sd "); kputs(f32 ? "fat32" : "fat16"); kputs(" partition at block "); kdec(start);
-    kputs(", "); kdec(size / 2048); kputs(" MB, writes go in JT/\n");
+    kputs(who); kputs(f32 ? "fat32" : "fat16"); kputs(" partition at block "); kdec(start);
+    kputs(", "); kdec(size / 2048); kputs(src_usb ? " MB\n" : " MB, writes go in JT/\n");
     return 1;
 }
 int sd_ready(void) { return mounted; }
+int stick_begin(void) {   /* fat.c on the USB stick's first FAT partition, at its root; 0 with no stick or no FAT on it */
+    if (!usb_disk_blocks()) return 0;
+    src_usb = 1;
+    if (sd_mount()) return 1;
+    src_usb = 0; sd_mount();
+    return 0;
+}
+void stick_end(void) { src_usb = 0; sd_mount(); }   /* back to the card, mounted afresh */
 
 /* ---- The OS's own files: JT/NAME, never a file the firmware needs ---- */
 static int lc(int c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }
