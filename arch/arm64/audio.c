@@ -60,12 +60,13 @@ static int wait_flag(unsigned long reg, unsigned mask, unsigned want) {   /* unt
     for (unsigned i = 0; i < SPIN; i++) if ((RD(reg) & mask) == want) return 1;
     return 0;
 }
-static void hw_close(void) {   /* PWM and its clock off, the pins held low: the jack goes quiet. Safe to call twice. */
+static void hw_close(void) {   /* PWM and its clock off, the pins pulled down: the jack goes quiet. Safe to call twice. */
     WR(PWM1_BASE + 0x00, 0);
-    /* 8.9.0: the crackle after the chime until the reset (Joshua, on the board) was GPIO 40 and 41 left as inputs with no
-       pull (hw_open takes the pulls off), floating, so the amp played whatever they picked up. Driven low they are still. */
-    WR(GPIO_BASE + 0x2C, 3u << 8);                                     /* GPCLR1: 40 and 41 low */
-    WR(GPIO_BASE + 0x10, (RD(GPIO_BASE + 0x10) & ~0x3Fu) | 0x09u);     /* GPIO 40 and 41 outputs; bits 6 to 8 (GPIO 42) are left as they are */
+    WR(GPIO_BASE + 0x10, RD(GPIO_BASE + 0x10) & ~0x3Fu);   /* GPIO 40 and 41 inputs; bits 6 to 8 (GPIO 42) are left as they are */
+    /* 8.9.0, the crackle through a restart: the watchdog reset turns the pins back to inputs, but the pull register keeps
+       what hw_open wrote. With no pull they floated through the seconds of the firmware's bootloader. Pulled down they
+       stay quiet until the next sound. */
+    WR(GPIO_BASE + 0xE8, (RD(GPIO_BASE + 0xE8) & ~0x000F0000u) | 0x000A0000u);
     WR(CM_BASE + 0xA0, CM_PW | (RD(CM_BASE + 0xA0) & 0x6F));
 }
 static int hw_open(void) {
@@ -80,7 +81,7 @@ static int hw_open(void) {
     WR(PWM1_BASE + 0x10, range); WR(PWM1_BASE + 0x20, range);
     WR(PWM1_BASE + 0x00, 0x40);                                /* CLRF1: empty the FIFO */
     WR(PWM1_BASE + 0x00, 0x2121);                              /* both channels on, both fed from the FIFO */
-    WR(GPIO_BASE + 0xE8, RD(GPIO_BASE + 0xE8) & ~0x0FF0000u);  /* no pull on pins 40 and 41 */
+    WR(GPIO_BASE + 0xE8, RD(GPIO_BASE + 0xE8) & ~0x000F0000u);  /* no pull on pins 40 and 41 only (the old mask took 42 and 43 too) */
     WR(GPIO_BASE + 0x10, (RD(GPIO_BASE + 0x10) & ~0x3Fu) | 0x24u);   /* GPIO 40 and 41 to alt 0 = PWM1 channels 0 and 1 */
     return 0;
 }
