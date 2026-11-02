@@ -35,7 +35,7 @@ PORT_A, PORT_B = 4511, 4512
 
 # Same geometry iconlight-check.py / dockhover-check.py use for this boot
 # config (960x540 @2x, dock_scale_pct 7, GUI_ICON_COUNT 11).
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 247, 469, 2
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 226, 469, 2
 PITCH = DOCK_ICON + DOCK_GAP
 CAL_SLOT = 3  # Apps, Files, Mail, Calendar
 TILE_X0 = (SLOT0_X + CAL_SLOT * PITCH) * SCALE

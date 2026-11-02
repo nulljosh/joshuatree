@@ -419,12 +419,12 @@ class Boot:
         self.key("ret")
     def close(self): self.q.kill(); self.q.wait()
 
-# The dock's geometry, as in arm64-mouse-check.py (kernel/dock_geom.c and fb_init): Trash (not ported yet, so its click still opens the Console) is slot 10.
+# The dock's geometry, as in arm64-mouse-check.py (kernel/dock_geom.c and fb_init): Trash (not ported yet, so its click still opens the Console) is slot 11 (7.8.0: Settings sits at 10).
 # It was Stocks (slot 9) until 3.9.0 ported Stocks to EL0 (arm64-stocks-check.py); at 800x600 each half-move onto slot 10 is 120 px, inside a report's signed byte.
 def slot_centre(w, h, slot):
     s = 2 if h >= 1080 else 1; lw, lh = w // s, h // s
-    icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 10 * 6) // 11))
-    dock_w = 11 * icon + 10 * 6 + 2 * 10; x0 = (lw - dock_w) // 2; y0 = lh - icon - 2 * 10 - 24
+    icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 11 * 6) // 12))
+    dock_w = 12 * icon + 11 * 6 + 2 * 10; x0 = (lw - dock_w) // 2; y0 = lh - icon - 2 * 10 - 24
     return (x0 + 10 + slot * (icon + 6) + icon // 2) * s, (y0 + 10 + icon // 2) * s
 
 fails = []
@@ -491,7 +491,7 @@ try:
         check("ramfb gives the desktop a screen", bool(size), size)
         W, Hh = size or (800, 600)
         x0, y0 = W // 2, Hh // 2
-        tx, ty = slot_centre(W, Hh, 10)
+        tx, ty = slot_centre(W, Hh, 11)
         dx, dy = tx - x0, ty - y0
         hx, hy = dx // 2, dy // 2
         mid = (x0 + hx, y0 + hy)
@@ -522,7 +522,7 @@ try:
               not b.fake.problems, b.fake.problems)
         check("first report: the pointer moves by its deltas", b.wait_for("mouse %d,%d\n" % mid, 15), b.uart()[-400:])
         check("second report (with a wheel byte): onto the Trash tile", b.wait_for("mouse %d,%d\n" % (tx, ty), 10), b.uart()[-400:])
-        check("the hover label follows it", b.wait_for("M1d hover 10 Trash", 10), b.uart()[-400:])
+        check("the hover label follows it", b.wait_for("M1d hover 11 Trash", 10), b.uart()[-400:])
         check("third report: the left button goes down", b.wait_for("key 272 down", 10), b.uart()[-400:])
         check("the click lands on the dock: Trash opens the Console", b.wait_for("dock Trash: not on ARM yet", 10), b.uart()[-400:])
         check("fourth report: the button comes up", b.wait_for("key 272 up", 10), b.uart()[-400:])

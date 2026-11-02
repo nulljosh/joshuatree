@@ -266,7 +266,7 @@ extern int settings_live;
 #define SPOT_FINDER (GUI_ICON_COUNT + 6)  /* 3.14.0: the Finder, user/finder.c at EL0; the dock has no Finder tile, so Spotlight and Samantha's open reach it */
 int spot_hmax(void);
 int spot_key(unsigned code);
-#define SPOT_LAST (GUI_ICON_COUNT + 18)   /* 4.24.0: the games end the list (game_names, windows.c); 4.25.0 added Chess, 6.1.0 Movies */
+#define SPOT_LAST (GUI_ICON_COUNT + 17)   /* 4.24.0: the games end the list (game_names, windows.c); 4.25.0 added Chess, 6.1.0 Movies */
 #define SPOT_CARD0 (SPOT_LAST + 1)   /* 6.53.0: Spotlight's rows past the table are the apps in JT/APPS (keys.c card_disp), never the Launchpad's */
 #define CARD_MAX 8
 extern int spot_lx;
@@ -349,11 +349,12 @@ unsigned long heap_mark(void);
 void heap_release(unsigned long m);
 extern int lp_mode;
 #define SPOT_BOOKS (GUI_ICON_COUNT + 4)   /* 2.66: Books, the same: Spotlight only, not on the dock */
-#define SPOT_BROWSER (GUI_ICON_COUNT + 3) /* the Browser is in Spotlight only too: the dock's 11 slots stay as they are */
+#define SPOT_BROWSER (GUI_ICON_COUNT + 3) /* the Browser is in Spotlight only too: not on the dock */
 #define SPOT_CALC (GUI_ICON_COUNT + 5)    /* 3.7.5: the Calculator, in Spotlight too (its dock tile is Apps); opens the calc window */
-#define SPOT_GAME0 (GUI_ICON_COUNT + 8)   /* 3.19.0: Mines, Toroid, Hamurabi and Keyrate (4.24.0: then Solitaire, Paddle, Bricks, Depths, Snake), the unchanged user/NAME.c at EL0, Spotlight only */
+#define SPOT_GAME0 (GUI_ICON_COUNT + 7)   /* 3.19.0: Mines, Toroid, Hamurabi and Keyrate (4.24.0: then Solitaire, Paddle, Bricks, Depths, Snake), the unchanged user/NAME.c at EL0, Spotlight only */
 #define SPOT_MUSIC (GUI_ICON_COUNT + 2)   /* M3e: Music is in Spotlight (and the app table) but not on the dock, a decision */
-#define SPOT_SETTINGS (GUI_ICON_COUNT + 7) /* 3.13.0: Settings, in Spotlight and the menu bar's status icons; the dock keeps its 11 tiles */
+#define DOCK_SETTINGS (GUI_ICON_COUNT - 2) /* 7.8.0: Settings' own dock tile, just before the Trash (Joshua, board test) */
+#define SPOT_SETTINGS DOCK_SETTINGS       /* 3.13.0: Settings in Spotlight and the menu bar's status icons; 7.8.0 it is the dock slot, listed once */
 extern const struct user_app user_apps[];
 void lp_click(int lx, int ly);
 void lp_open(void);

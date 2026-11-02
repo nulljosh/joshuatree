@@ -39,7 +39,7 @@ LOG = "/tmp/jt-ring3window-serial.log"
 DUMP = "/tmp/jt-ring3window.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
+DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 226
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 W0_CLOSE = (94, 56)     # window 0: gui_multiwin_geom slot 0, x=70,y=40

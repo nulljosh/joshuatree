@@ -95,6 +95,7 @@ ART = {
     37: "chess",
     38: "apps",
     39: "trash",
+    40: "settings",
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by

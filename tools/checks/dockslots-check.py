@@ -10,7 +10,7 @@ import glob, os, re, sys
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 k = open("kernel/kernel.c").read()
 labels = re.findall(r'\{"([^"]+)",', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", k, re.S).group(1))
-sym = {"GUI_APPS_FOLDER": labels.index("Apps"), "GUI_TRASH": labels.index("Trash")}
+sym = {"GUI_APPS_FOLDER": labels.index("Apps"), "GUI_TRASH": labels.index("Trash"), "GUI_SETTINGS": labels.index("Settings")}
 order = [labels[sym[t] if t in sym else int(t)]
          for t in re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", open("kernel/gui_paint.h").read()).group(1).replace(" ", "").split(",")]
 slot = {n.upper(): i for i, n in enumerate(order)}
@@ -33,12 +33,12 @@ for f in sorted(glob.glob("tools/checks/*")) + ["landing/v86/embed.js"]:
         if m and int(m.group(1)) != len(order): bad.append(f"{f}: dockSlotPos count = {m.group(1)}, the dock has {len(order)} tiles")
 # tools/qa_demo_drive.py derives its dock from kernel.c at run time; prove the
 # derivation still yields this order and a first-slot x the pixel checks agree
-# with (they click SLOT0_X = 247, the tile spans 246..283).
+# with (they click SLOT0_X = 226, the tile spans 225..262; 7.8.0 Settings made it 12 tiles).
 src = open("tools/qa_demo_drive.py").read()
 geo = {"__file__": os.path.abspath("tools/qa_demo_drive.py"), "re": re, "os": os}
 exec(src[src.index("LOGICAL_W"):src.index("def move")], geo)
 if geo["DOCK"] != order: bad.append(f"tools/qa_demo_drive.py: derived dock {geo['DOCK']} != {order}")
-if not 246 <= geo["SLOT0_X"] <= 248: bad.append(f"tools/qa_demo_drive.py: SLOT0_X {geo['SLOT0_X']}, tiles start at 246")
+if not 225 <= geo["SLOT0_X"] <= 227: bad.append(f"tools/qa_demo_drive.py: SLOT0_X {geo['SLOT0_X']}, tiles start at 225")
 qc = re.search(r"QCODE = (\{.*?\})", src)
 if not qc or eval(qc.group(1)).get(".") != "dot": bad.append("tools/qa_demo_drive.py: type_text must map '.' to the dot qcode")
 print("dock order:", order)

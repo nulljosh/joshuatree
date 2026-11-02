@@ -38,7 +38,7 @@ def geom(w, h):   # main.c's numbers: scale, the window's logical rectangle, the
     lw, lh = sc(500) // s, sc(350) // s
     lx, ly = (w - sc(500)) // 2 // s, sc(100) // s
     lgh = h // s
-    icon = max(16, min(lgh * 7 // 100, (min(740, w // s - 40) - 2 * 10 - 10 * 6) // 11))
+    icon = max(16, min(lgh * 7 // 100, (min(740, w // s - 40) - 2 * 10 - 11 * 6) // 12))
     band_top = lgh - icon - 2 * 10 - 24 - 24
     top = (26 * h // 540) // s + 8
     return s, lx, ly, lw, lh, top, band_top - 22 - lh, w // s - lw, band_top

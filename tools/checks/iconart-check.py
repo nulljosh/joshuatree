@@ -38,10 +38,10 @@ PORT = free_port()
 # Same geometry dockhover-check.py / iconhalo-check.py already derived and
 # verified for this exact 960x540@2x boot config (dock_scale_pct 7,
 # GUI_ICON_COUNT 11). Update these together if dock geometry changes.
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 247, 469, 2
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 226, 469, 2
 PITCH = DOCK_ICON + DOCK_GAP
 # GUI_DOCK_DEFAULT order.
-SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
+SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"]
 SVGS = ["apps", "burrow", "mail", "calendar", "notes", "reminders", "terminal", "chat", "weather", "stocks", "trash"]
 COLS = range(20, 54)
 BANDS = (range(3, 8), range(64, 70))

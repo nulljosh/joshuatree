@@ -36,7 +36,7 @@ art_vars = re.findall(r"(icon_art_\w+),", re.search(r"ICON_ART\[\d+\] = \{(.*?)\
 dock_order = re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", open(os.path.join(root, "kernel/gui_paint.h")).read()).group(1).replace(" ", "").split(",")
 k = open(os.path.join(root, "kernel/kernel.c")).read()
 apps = re.findall(r'\{"([^\"]+)"', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", k, re.S).group(1))
-symbols = {"GUI_APPS_FOLDER": apps.index("Apps"), "GUI_TRASH": apps.index("Trash")}
+symbols = {"GUI_APPS_FOLDER": apps.index("Apps"), "GUI_TRASH": apps.index("Trash"), "GUI_SETTINGS": apps.index("Settings")}
 def _slot(t): return symbols[t] if t in symbols else int(t)
 DOCK_ART = [art_vars[_slot(t)] for t in dock_order]
 DOCK_NAMES = [apps[_slot(t)] for t in dock_order]
@@ -115,8 +115,8 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         # The dock is the i386 desktop's own (kernel/gui_paint.c, kernel/dock_geom.c): a 1080p screen is the 960x540
         # grid at scale 2, a smaller one scale 1. Same layout math as dock_geom.c, dock_scale_pct 7, 11 icons.
         s2 = 2 if h >= 1080 else 1; lw, lh = w // s2, h // s2
-        icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 10 * 6) // 11))
-        dock_w = 11 * icon + 10 * 6 + 2 * 10; dock_x0 = (lw - dock_w) // 2; dock_y0 = lh - icon - 2 * 10 - 24
+        icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 11 * 6) // 12))
+        dock_w = 12 * icon + 11 * 6 + 2 * 10; dock_x0 = (lw - dock_w) // 2; dock_y0 = lh - icon - 2 * 10 - 24
         dock_y = (dock_y0 - 24) * s2                                 # the top of the dock's band: the tribute sits above it
         win = [tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3]) for y in range(win_y + sc(32), win_y + win_h - sc(14)) for x in range(win_x + sc(8), win_x + win_w - sc(4))]
         ink = sum(1 for c in win if max(c) < 0x90)                  # dark text pixels

@@ -38,7 +38,7 @@ def check(name, ok, detail=""):
 W, H, S = 1920, 1080, 2
 def sc(v): return v * H // 600
 LGH = H // S
-ICON = max(16, min(LGH * 7 // 100, (min(740, W // S - 40) - 2 * 10 - 10 * 6) // 11))
+ICON = max(16, min(LGH * 7 // 100, (min(740, W // S - 40) - 2 * 10 - 11 * 6) // 12))
 BAND_TOP = LGH - ICON - 2 * 10 - 24 - 24
 WIN = ((W - sc(500)) // 2 // S, sc(100) // S, sc(500) // S, sc(350) // S)   # the Console, Terminal, Clock, Brick and Browser rectangle, logical
 YTOP, YBOT, XRIGHT = (26 * H // 540) // S + 8, BAND_TOP - 22 - WIN[3], W // S - WIN[2]
@@ -122,7 +122,7 @@ try:
         ok = wait_for(expect, 12, n); time.sleep(0.6); return ok
     def dot(r): move_to((r[0] + 24) * S, (r[1] + 16) * S); click()   # the red dot of a window rectangle (logical)
     def arrow(): return [(pos[0] - 2, pos[1] - 2, 13 * S + 6, 19 * S + 6)]
-    DOCK_X0 = (W // S - (11 * ICON + 10 * 6 + 2 * 10)) // 2; DOCK_Y0 = LGH - ICON - 2 * 10 - 24
+    DOCK_X0 = (W // S - (12 * ICON + 11 * 6 + 2 * 10)) // 2; DOCK_Y0 = LGH - ICON - 2 * 10 - 24
     # 4.1.2: the Apps tile is the Launchpad, so the Calculator comes from Spotlight
     def park(): move_to(W - 60, H // 2 + 40)
 

@@ -29,13 +29,13 @@ FB = 0xfd000000; W, H = 1920, 1080
 PORT = free_port()
 LW, LH, SC = 960, 540, 2
 BAR_H = 26
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 247, 487
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 226, 487
 PITCH = DOCK_ICON + DOCK_GAP
 CLOSE_X, CLOSE_Y = 94, 56
 APPS_CLOSE = (80, 46)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
-SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
+SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):

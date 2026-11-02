@@ -97,7 +97,7 @@ try:
         W, H = screendump(cmd, tmp)[:2]
         S = 2 if H >= 1080 else 1
         lw_, lh_ = W // S, H // S
-        icon = max(16, min(lh_ * 7 // 100, (min(740, lw_ - 40) - 2 * 10 - 10 * 6) // 11))
+        icon = max(16, min(lh_ * 7 // 100, (min(740, lw_ - 40) - 2 * 10 - 11 * 6) // 12))
         BAND = lh_ - icon - 2 * 10 - 24 - 24
         TOP, BOTTOM, SW = (26 * H // 540) // S + 8, BAND - 22, lw_
         pos = [W // 2, H // 2]

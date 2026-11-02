@@ -28,8 +28,8 @@ if subprocess.run(["make", "-C", arch], capture_output=True).returncode:
 fails = []
 
 W, H = 800, 600                                            # scale 1, the same dock math as the focus check
-icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 10 * 6) // 11))
-dock_x0, dock_y0 = (W - (11 * icon + 10 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
+icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 11 * 6) // 12))
+dock_x0, dock_y0 = (W - (12 * icon + 11 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
 def slot_centre(slot): return dock_x0 + 10 + slot * (icon + 6) + icon // 2, dock_y0 + 10 + icon // 2
 CREAM, RED = (0xfa, 0xf8, 0xf4), (0xff, 0x5f, 0x57)
 CARD_W, CARD_H, PAD, TOP, CW, CH, COLS, N = 646, 430, 22, 20, 86, 78, 7, 29   # 4.24.0: the five games made 27, seven across; 4.25.0 Chess made 28; 6.1.0 Movies 29, a fifth row

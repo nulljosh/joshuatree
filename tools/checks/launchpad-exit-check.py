@@ -23,7 +23,7 @@ from scratch import scratch_dir
 LOG = os.path.join(scratch_dir("launchpad-exit"), "serial.log")
 PORT = free_port()
 LOGICAL_W, LOGICAL_H = 960, 540
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 247, 487
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 226, 487
 APPS_X = SLOT0_X + DOCK_ICON // 2
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))

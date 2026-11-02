@@ -62,7 +62,7 @@ LOGICAL_W, LOGICAL_H = 960, 540
 # Stocks. Icon size is the 960x540, dock_scale_pct 7 default (37 px).
 _k = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "kernel", "kernel.c")).read()
 _labels = re.findall(r'\{"([^"]+)",', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", _k, re.S).group(1))
-_sym = {"GUI_APPS_FOLDER": _labels.index("Apps"), "GUI_TRASH": _labels.index("Trash")}
+_sym = {"GUI_APPS_FOLDER": _labels.index("Apps"), "GUI_TRASH": _labels.index("Trash"), "GUI_SETTINGS": _labels.index("Settings")}
 DOCK = [_labels[_sym[t] if t in _sym else int(t)]
         for t in re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "kernel", "gui_paint.h")).read()).group(1).replace(" ", "").split(",")]
 DOCK_ICON, DOCK_GAP, DOCK_PAD = 37, 6, 10

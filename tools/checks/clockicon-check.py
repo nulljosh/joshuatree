@@ -26,7 +26,7 @@ from PIL import Image
 W, H = 1920, 1080
 FB = 0xfd000000
 LOGICAL_W, LOGICAL_H = 960, 540
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 247, 487
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 226, 487
 PITCH = DOCK_ICON + DOCK_GAP
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))

@@ -255,7 +255,7 @@ def dock_icon():
 def dock_order():
     k = text("kernel/kernel.c")
     labels = re.findall(r'\{"([^"]+)",', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", k, re.S).group(1))
-    sym = {"GUI_APPS_FOLDER": labels.index("Apps"), "GUI_TRASH": labels.index("Trash")}
+    sym = {"GUI_APPS_FOLDER": labels.index("Apps"), "GUI_TRASH": labels.index("Trash"), "GUI_SETTINGS": labels.index("Settings")}
     raw = re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", text("kernel/gui_paint.h")).group(1).replace(" ", "").split(",")
     return ", ".join(labels[sym[t] if t in sym else int(t)] for t in raw)
 
