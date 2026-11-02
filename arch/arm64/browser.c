@@ -1132,17 +1132,19 @@ static void file_name(const char *url, char out[13]) {
 #define HW_CAP (HW_MAX * 900)
 static char hw_buf[HW_CAP], hw_new[HW_CAP];
 int sd_ready(void); int sd_enter_jt(int make); int fat_read_file(const char *name, void *buf, unsigned bufsize); void fat_cwd_set(unsigned int cluster); int fat_chdir(const char *name);
-static int hw_read(void) {   /* the file into hw_buf: its length, 0 when there is none */
+static int here_read(const char *name, char *buf, unsigned cap) {   /* name, where an app's files live, into buf: its length, 0 when there is none */
     int got = -1; char path[96], *leaf;
     if (!sd_ready() || !sd_enter_jt(0)) return 0;
     if (home_active()) {
-        if (home_expand("~/" HW_FILE, path, sizeof path) > 0 && home_walk(path, 1, &leaf) == 1) { got = fat_read_file(leaf, hw_buf, HW_CAP - 1); home_back(); }
+        char tilde[24] = "~/"; scopy(tilde + 2, name, slen(name), sizeof tilde - 2);
+        if (home_expand(tilde, path, sizeof path) > 0 && home_walk(path, 1, &leaf) == 1) { got = fat_read_file(leaf, buf, cap - 1); home_back(); }
         fat_cwd_set(0);
-    } else { got = fat_read_file(HW_FILE, hw_buf, HW_CAP - 1); fat_chdir(".."); }
+    } else { got = fat_read_file(name, buf, cap - 1); fat_chdir(".."); }
     if (got < 0) got = 0;
-    hw_buf[got] = 0;
+    buf[got] = 0;
     return got;
 }
+static int hw_read(void) { return here_read(HW_FILE, hw_buf, HW_CAP); }
 static int hw_save(const char *d, unsigned n) { return save_here(HW_FILE, d, n); }
 static unsigned hw_field(const char *l, unsigned ln, unsigned k, const char **f) {   /* field k of a line: its length */
     unsigned i = 0; for (unsigned t = 0; t < k; t++) { while (i < ln && l[i] != '\t') i++; if (i < ln) i++; }
@@ -1369,7 +1371,94 @@ static void tab_take(unsigned t) {   /* tab t in front: its history back, its pa
     if (hn) { char url[URL_MAX]; scopy(url, hist[hi], slen(hist[hi]), URL_MAX); show(url, 0); }
     else loads++;
 }
-static int tab_command(const char *q, unsigned n) {   /* tab new, tab N, tab close, tabs */
+/* 12.0: tab groups, as in Safari. `tab group save NAME` keeps the open tabs' pages under NAME in TABGROUP.TXT, where an
+   app's files live, one line a tab ("NAME\tURL"); `tab group NAME` swaps the open tabs for that group's; `tab groups`
+   lists them; `tab group rm NAME` drops one. A name is 1 to 12 of a-z, 0-9 and -, typed in any case. */
+#define TG_FILE "TABGROUP.TXT"
+#define TG_CAP 4096
+static char tg_buf[TG_CAP], tg_new[TG_CAP];
+static int tg_arg(const char *q, unsigned n, unsigned s, char *nm) {   /* the name after s into nm, lower case: 1 when it is a good one */
+    while (s < n && q[s] == ' ') s++;
+    unsigned k = 0;
+    for (; s < n && k < 12; s++, k++) nm[k] = (char)(q[s] >= 'A' && q[s] <= 'Z' ? q[s] + 32 : q[s]);
+    nm[k] = 0;
+    if (s != n || !k) return 0;
+    for (unsigned i = 0; i < k; i++) if (!((nm[i] >= 'a' && nm[i] <= 'z') || (nm[i] >= '0' && nm[i] <= '9') || nm[i] == '-')) return 0;
+    return 1;
+}
+static int tg_is(const char *l, unsigned ln, const char *nm) { unsigned k = slen(nm); return ln > k && l[k] == '\t' && starts(l, nm); }
+static unsigned tg_drop(unsigned got, const char *nm, unsigned *dropped) {   /* every line but nm's, into tg_new: its length */
+    unsigned o = 0; *dropped = 0;
+    for (unsigned i = 0; i < got;) {
+        unsigned e = i; while (e < got && tg_buf[e] != '\n') e++;
+        if (tg_is(tg_buf + i, e - i, nm)) (*dropped)++;
+        else if (e > i) { for (unsigned k = i; k < e; k++) tg_new[o++] = tg_buf[k]; tg_new[o++] = '\n'; }
+        i = e + 1;
+    }
+    return o;
+}
+static int group_command(const char *q, unsigned n) {
+    char nm[13]; unsigned dropped;
+    if (word(q, n, "tab groups")) {
+        unsigned got = (unsigned)here_read(TG_FILE, tg_buf, TG_CAP), shown = 0, run = 0; char last[13] = "";
+        for (unsigned i = 0; i <= got;) {   /* a group's lines sit together (save writes them in one go): each name once, with its count */
+            unsigned e = i; while (e < got && tg_buf[e] != '\n') e++;
+            unsigned t = i; while (t < e && tg_buf[t] != '\t') t++;
+            int line = t < e && t - i <= 12, same = line && last[0] && tg_is(tg_buf + i, e - i, last);
+            if (last[0] && !same) { kputs("  "); kputs(last); kputs(", "); kdec(run); kputs(run == 1 ? " tab\n" : " tabs\n"); shown++; last[0] = 0; }
+            if (line && !same) { scopy(last, tg_buf + i, t - i, sizeof last); run = 0; }
+            if (line) run++;
+            i = e + 1;
+        }
+        if (!shown) kputs("browser: no tab groups\n");
+        return 1;
+    }
+    if (n > 15 && starts(q, "tab group save ")) {
+        if (!tg_arg(q, n, 15, nm)) { kputs("browser: a group name is 1 to 12 of a-z, 0-9 and -\n"); return 1; }
+        tab_keep();
+        unsigned o = tg_drop((unsigned)here_read(TG_FILE, tg_buf, TG_CAP), nm, &dropped), saved = 0;
+        for (unsigned t = 0; t < ntabs; t++) {
+            if (!tabs[t].hn) continue;   /* an empty tab has no page to keep */
+            const char *u = tabs[t].hist[tabs[t].hi]; unsigned un = slen(u), nn = slen(nm);
+            if (o + nn + un + 2 > TG_CAP) { kputs("browser: tab groups full, remove one first\n"); return 1; }
+            for (unsigned k = 0; k < nn; k++) tg_new[o++] = nm[k];
+            tg_new[o++] = '\t'; for (unsigned k = 0; k < un; k++) tg_new[o++] = u[k]; tg_new[o++] = '\n';
+            saved++;
+        }
+        if (!saved) { kputs("browser: no pages open to keep\n"); return 1; }
+        if (!save_here(TG_FILE, tg_new, o)) { kputs("browser: could not save the group\n"); return 1; }
+        kputs("browser: group "); kputs(nm); kputs(" saved, "); kdec(saved); kputs(saved == 1 ? " tab\n" : " tabs\n");
+        return 1;
+    }
+    if (n > 13 && starts(q, "tab group rm ")) {
+        if (!tg_arg(q, n, 13, nm)) { kputs("browser: no such group\n"); return 1; }
+        unsigned o = tg_drop((unsigned)here_read(TG_FILE, tg_buf, TG_CAP), nm, &dropped);
+        if (!dropped) { kputs("browser: no such group\n"); return 1; }
+        if (!save_here(TG_FILE, tg_new, o)) { kputs("browser: could not save the groups\n"); return 1; }
+        kputs("browser: group "); kputs(nm); kputs(" removed\n");
+        return 1;
+    }
+    if (n > 10 && starts(q, "tab group ")) {
+        if (!tg_arg(q, n, 10, nm)) { kputs("browser: no such group\n"); return 1; }
+        unsigned got = (unsigned)here_read(TG_FILE, tg_buf, TG_CAP), k = 0;
+        static char urls[TAB_MAX][URL_MAX];
+        for (unsigned i = 0; i < got && k < TAB_MAX;) {
+            unsigned e = i; while (e < got && tg_buf[e] != '\n') e++;
+            unsigned u = i + slen(nm) + 1;
+            if (tg_is(tg_buf + i, e - i, nm) && e - u < URL_MAX) { scopy(urls[k], tg_buf + u, e - u, URL_MAX); k++; }
+            i = e + 1;
+        }
+        if (!k) { kputs("browser: no such group\n"); return 1; }
+        for (unsigned t = 0; t < k; t++) { scopy(tabs[t].hist[0], urls[t], slen(urls[t]), URL_MAX); tabs[t].hn = 1; tabs[t].hi = 0; tabs[t].label[0] = 0; }
+        ntabs = k;
+        kputs("browser: group "); kputs(nm); kputs(", "); kdec(k); kputs(k == 1 ? " tab\n" : " tabs\n");
+        tab_take(0);
+        return 1;
+    }
+    return 0;
+}
+static int tab_command(const char *q, unsigned n) {   /* tab new, tab N, tab close, tabs, and the groups */
+    if (group_command(q, n)) return 1;
     if (word(q, n, "tabs")) {
         tab_keep();
         for (unsigned t = 0; t < ntabs; t++) {
