@@ -40,7 +40,7 @@ Where it is going, what shipped, and the story so far.
 
 A freestanding kernel for i386 and the Raspberry Pi 4, no libc. This is the forward plan; what shipped is in the [Shipped log](#shipped-log) and the [releases](https://github.com/nulljosh/joshuatree/releases).
 
-**Latest**: 8.0: Build things. Write an app on the Pi or the Mac and run it, with a new painted mark and an Apple-style boot.
+**Latest**: 9.0: The kit. Build Nimbus from the guide, and Joshua Tree fills its screen, takes its touch and reads a USB stick.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -54,7 +54,9 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 
 **Shipped: 8.0, Build things** (8.0.0, 2026-11-01): apps from the card, signed and installed from the store (6.51.0 to 6.59.0), Samantha writing apps and building them on the Pi (6.59.0, 6.94.0), plankc rebuilding itself on the Pi (6.71.0), Code, the editor (6.98.0), the SDK page, `landing/sdk.html` (7.1.0), and `debug`, which steps an app (7.2.0). The gate: someone other than Joshua followed the SDK page on a fresh clone and ran their own apps (Claude, on Joshua's ask, in QEMU; the board run is still his). The graphical debugger (breakpoints, a step key, memory in a window) stays on the list below.
 
-**Now: 9.0, the kit.**
+**Shipped: 9.0, The kit** (9.0.0, 2026-11-02, on Joshua's word: "loop all night until v10, then ship it"): USB sticks (8.9.0), every kit screen at its own pixels (8.13.0), USB touch panels as an absolute pointer and the step-by-step Nimbus guide (9.0.0), with all four cores and swap from the Berkeley list underneath. Still physical, so still open: a stranger building one from the guide, the GPU (V3D) and the camera, none of which QEMU can show.
+
+**Now: 10.0, daily driver.** A screen reader, languages, self-update with a fallback kernel and a security audit against the threat model.
 
 **The Berkeley list is done** (Joshua, 2026-11-01: "are we missing anything" from Berkeley's CS162 lectures). Threads and locks (8.1.0), four cores (8.2.0), pipes (8.3.0), spawn and wait (8.4.0), sockets (8.5.0), fair 10 ms turns (8.6.0), paging on first touch (8.7.0), a block cache (8.8.0), app threads on all four cores (8.11.0) and swap (8.12.0). Copy on write still waits for a fork, which spawn does not need.
 Left out on purpose: distributed file systems, key value stores and Chord (lectures 25 and 26); a desktop does not need them.
@@ -1013,6 +1015,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **9.0.0 (2026-11-02)**: The kit. A touch panel on USB (the kit's HDMI screens send their touch that way) is read from its own report descriptor as an absolute pointer: a tap is a click where the finger is. The guide gains Build a Nimbus, step by step, seven steps from buying the parts to the first boot, and a check keeps it true to the repo. With USB sticks (8.9.0) and the kit's screens (8.13.0) the software half of 9.0 is in; the GPU, the camera and a stranger's build need the board. Checks: `arm64-touch-check.py` (a usb-tablet on qemu-xhci taps two dock tiles), `guide-nimbus-check.py`.
 - **8.13.0 (2026-11-02)**: The kit's screens, the first of 9.0. The Pi takes any panel from 720x480 up at its own pixels, so the 7 inch DSI touch screen (800x480), the 8 inch HDMI ones (1024x600, 1280x800) and Touch Display 2 standing up (720x1280) are no longer an 800x600 picture the firmware stretches; 2x scaling needs a wide screen as well as a tall one. Check: `arm64-screens-check.py` (raspi4b at five sizes).
 - **8.12.0 (2026-11-02)**: Swap, the last of the Berkeley list. A heap page now takes a frame from one pool every app shares (32 MiB after the four arenas); when the pool is full the page mapped longest ago goes to JT/SWAP.BIN on the card, and its next touch reads it back. A buffer the kernel is about to read stays in for that call. `mem` in the Terminal shows the pool and the traffic. Check: `arm64-swap-check.py` (a 4 MiB heap through a 64-page pool, every page and a file round trip intact).
 - **8.11.0 (2026-11-02)**: An app's threads run on all four cores. Cores 1 to 3 take ready threads of the app in front for 10 ms slices of their own timers; core 0 still owns the kernel, so any call or fault on another core is rewound and asked again on core 0. The futex calls a contended `jt_mutex` lives on are answered where they happen, under one scheduler lock (`th_lk`). `cores` counts each core's app slices. Check: `arm64-smp-threads-check.py` (three threads on `-smp 4` keep a locked count exact and run on cores above 0; built with `SMP_APPS_OFF` they stay on core 0).

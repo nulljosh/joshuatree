@@ -125,10 +125,12 @@ static unsigned long *dcbaa;
 #define MAX_FN 4
 struct hidfn {
     unsigned kind;                                 /* 1 boot keyboard, 2 boot mouse, 3 a keyboard's other HID interface
-                                                      (media keys); 0 means not running */
+                                                      (media keys), 4 a touch screen or tablet (8.14.0); 0 means not running */
     unsigned dci, mps, iface, reqlen;
     struct ring intr;
     unsigned char *buf, last[8];
+    int rid, xo, xb, yo, yb, bo;                    /* 8.14.0, kind 4: its report ID (0 none), X and Y's bit offset and width, the touch bit (-1 none) */
+    unsigned xmax, ymax;                           /* ...and X and Y's logical maximum */
 };
 struct usbdev {
     unsigned used, slot, speed, route, root_port, depth;
@@ -303,9 +305,62 @@ void hid_media(const unsigned char *r, unsigned len) {   /* exported for main.c 
     unsigned code = u == 0x70 || u == 0x221 ? 59 : u == 0x6F ? 60 : u == 0xEA ? 114 : u == 0xE9 ? 115 : u == 0xE2 ? 113 : 0;
     if (code) { kinput(1, code, 1); kinput(1, code, 0); kinput(0, 0, 0); }
 }
+/* 8.14.0: a touch screen (the kit's HDMI panels send their touch over USB) or a tablet: a HID interface that is neither a
+   boot keyboard nor a boot mouse, whose report descriptor has an absolute X and Y on the Generic Desktop page. hid_layout reads
+   that descriptor once (short items only: usage page, usages and their range, logical maximum, report size, count and ID, and
+   Input); hid_abs then turns each report into the same absolute pointer events the virtio tablet sends (kinput type 3, 0 to
+   32767 across the screen) and the tip switch, or button 1, into the left button. */
+static unsigned bits_at(const unsigned char *r, unsigned len, int off, int n) {
+    unsigned v = 0;
+    for (int i = 0; i < n && i < 32; i++) { unsigned b = (unsigned)(off + i); if (b / 8 < len && (r[b / 8] >> (b % 8)) & 1) v |= 1u << i; }
+    return v;
+}
+static int hid_layout(struct hidfn *f, const unsigned char *d, unsigned n) {   /* 1 when it is an absolute pointer */
+    unsigned page = 0, size = 0, count = 0, rid = 0, lmax = 0, nu = 0, umin = 0, has_min = 0, u[16];
+    int bit = 0;
+    f->xo = f->yo = f->bo = -1; f->rid = 0;
+    for (unsigned i = 0; i < n; ) {
+        unsigned b = d[i];
+        if (b == 0xFE) { i += 3 + (i + 1 < n ? d[i + 1] : 0); continue; }   /* a long item: skipped */
+        unsigned sz = b & 3; if (sz == 3) sz = 4;
+        unsigned v = 0;
+        for (unsigned k = 0; k < sz && i + 1 + k < n; k++) v |= (unsigned)d[i + 1 + k] << (8 * k);
+        i += 1 + sz;
+        switch (b & 0xFC) {
+        case 0x04: page = v; break;                                        /* usage page */
+        case 0x74: size = v; break;                                        /* report size */
+        case 0x94: count = v; break;                                       /* report count */
+        case 0x84: rid = v; bit = 0; break;                                /* report ID: offsets start again */
+        case 0x24: lmax = v; break;                                        /* logical maximum */
+        case 0x08: if (nu < 16) u[nu++] = sz == 4 ? v : page << 16 | v; break;   /* usage */
+        case 0x18: umin = v; has_min = 1; break;                           /* usage minimum */
+        case 0x80:                                                         /* input */
+            for (unsigned c = 0; c < count && c < 64; c++) {
+                unsigned us = c < nu ? u[c] : has_min ? (page << 16 | (umin + c)) : nu ? u[nu - 1] : 0;
+                if (!(v & 1) && f->xo < 0 && us == (1u << 16 | 0x30) && !(v & 4)) { f->xo = bit; f->xb = (int)size; f->xmax = lmax; f->rid = (int)rid; }
+                if (!(v & 1) && f->yo < 0 && us == (1u << 16 | 0x31) && !(v & 4)) { f->yo = bit; f->yb = (int)size; f->ymax = lmax; }
+                if (!(v & 1) && f->bo < 0 && (us == (0x0Du << 16 | 0x42) || us == (9u << 16 | 1))) f->bo = bit;   /* tip switch, or button 1 */
+                bit += (int)size;
+            }
+            nu = 0; has_min = 0; break;
+        case 0xA0: case 0xB0: case 0xC0: nu = 0; has_min = 0; break;      /* collection, feature, end: the locals are spent */
+        }
+    }
+    return f->xo >= 0 && f->yo >= 0 && f->xmax && f->ymax;
+}
+static void hid_abs(struct hidfn *f, const unsigned char *r, unsigned len) {
+    if (f->rid) { if (!len || r[0] != f->rid) return; r++; len--; }
+    unsigned x = bits_at(r, len, f->xo, f->xb), y = bits_at(r, len, f->yo, f->yb);
+    if (x > f->xmax) x = f->xmax;
+    if (y > f->ymax) y = f->ymax;
+    kinput(3, 0, (int)(x * 32767u / f->xmax)); kinput(3, 1, (int)(y * 32767u / f->ymax));
+    if (f->bo >= 0) { unsigned down = bits_at(r, len, f->bo, 1); if (down != f->last[0]) kinput(1, 272, (int)down); f->last[0] = (unsigned char)down; }
+    kinput(0, 0, 0);
+}
 static void hid_report(struct hidfn *f, unsigned len) {
     dma_sync(f->buf, 64);
     unsigned char *r = f->buf, *p = f->last;
+    if (f->kind == 4) { hid_abs(f, r, len); return; }
     if (f->kind != 2) key_raw(r, len, f->kind);
     if (f->kind == 1) hid_kbd(r, len, p);
     else if (f->kind == 3) hid_media(r, len);
@@ -341,7 +396,7 @@ static void remove_dev(struct usbdev *d) {
     msc_gone(d->slot);
     for (unsigned i = 0; i < MAX_DEV; i++)
         if (devs[i].used && &devs[i] != d && devs[i].phub == d->slot) remove_dev(&devs[i]);
-    for (unsigned j = 0; j < d->nfn; j++) if (d->fn[j].kind) { if (d->fn[j].kind == 1) nkbd--; else if (d->fn[j].kind == 2) nmouse--; d->fn[j].kind = 0; }
+    for (unsigned j = 0; j < d->nfn; j++) if (d->fn[j].kind) { if (d->fn[j].kind == 1) nkbd--; else if (d->fn[j].kind == 2 || d->fn[j].kind == 4) nmouse--; d->fn[j].kind = 0; }
     command(0, 0, (TRB_DISABLE_SLOT << 10) | d->slot << 24);
     dcbaa[d->slot] = 0; dma_sync(&dcbaa[d->slot], 8);
     d->used = 0;
@@ -725,22 +780,24 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
     unsigned cfg_value = b[5], is_hub = dev_class == 9;
     /* Walk the configuration: every HID boot interface (subclass 1, protocol 1 keyboard or 2 mouse) of the first
        alternate setting, on any interface number, with its interrupt IN endpoint. Other HID interfaces are only reported. */
-    struct { unsigned kind, iface, addr, mps, interval; } cand[MAX_FN];
-    unsigned nc = 0, want = 0, c_if = 0, c_proto = 0, has_kbd = 0, has_other = 0;
+    struct { unsigned kind, iface, addr, mps, interval, rdlen; } cand[MAX_FN];
+    unsigned nc = 0, want = 0, c_if = 0, c_proto = 0, has_kbd = 0, has_other = 0, c_rdlen = 0;
     struct audcand ac[2] = { { 0 }, { 0 } };               /* the best audio stream each way: [0] in (a microphone), [1] out */
     unsigned a_on = 0, a_good = 0, a_if = 0, a_alt = 0, a_rate = 0, a_ch = 0;
     unsigned m_on = 0, m_in = 0, m_out = 0, m_mps = 0;   /* 8.9.0: a mass storage interface and its two bulk endpoints */
     for (unsigned i = 0; i + 2 <= total && b[i] >= 2 && i + b[i] <= total; i += b[i]) {
         if (b[i + 1] == 4 && b[i] >= 9) {   /* interface: number, alternate, class, subclass, protocol at 2, 3, 5, 6, 7 */
-            c_if = b[i + 2]; c_proto = b[i + 7]; want = 0;
+            c_if = b[i + 2]; c_proto = b[i + 7]; want = 0; c_rdlen = 0;
             a_on = b[i + 5] == 1 && b[i + 6] == 2 && b[i + 3] != 0; a_good = 0; a_if = b[i + 2]; a_alt = b[i + 3];   /* an audio streaming interface, alternate 1 or more */
             if (b[i + 5] == 9) is_hub = 1;
             m_on = b[i + 3] == 0 && b[i + 5] == 8 && b[i + 6] == 6 && b[i + 7] == 0x50;
             if (b[i + 3] == 0 && b[i + 5] == 3) {
                 if (b[i + 6] == 1 && (b[i + 7] == 1 || b[i + 7] == 2)) { want = 1; if (b[i + 7] == 1) has_kbd = 1; }
                 else if (has_kbd && !has_other) { want = 1; c_proto = 3; has_other = 1; }   /* a Mac-style top row: media keys */
-                else { kputs("usb hid if "); kdec(c_if); kputs(" sub "); kdec(b[i + 6]); kputs(" proto "); kdec(b[i + 7]); kputs("\n"); }
+                else { want = 1; c_proto = 4; }   /* 8.14.0: maybe a touch screen; its report descriptor decides, after the configure */
             }
+        } else if (b[i + 1] == 0x21 && b[i] >= 9 && want) {   /* 8.14.0: the HID descriptor: how long its report descriptor is */
+            c_rdlen = b[i + 7] | b[i + 8] << 8;
         } else if (b[i + 1] == 0x24 && a_on && b[i] >= 8 && b[i + 2] == 2 && b[i + 3] == 1) {   /* FORMAT_TYPE_I: channels, bytes a sample, bits, rates */
             unsigned nf = b[i + 7], ok48 = 0, ok44 = 0;
             if (nf == 0 && b[i] >= 14) {
@@ -763,7 +820,7 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
             m_mps = (b[i + 4] | b[i + 5] << 8) & 0x7FF;
         } else if (b[i + 1] == 5 && want && b[i] >= 7 && (b[i + 2] & 0x80) && (b[i + 3] & 3) == 3 && nc < MAX_FN) {   /* interrupt IN endpoint */
             cand[nc].kind = c_proto; cand[nc].iface = c_if; cand[nc].addr = b[i + 2];
-            cand[nc].mps = (b[i + 4] | b[i + 5] << 8) & 0x7FF; cand[nc].interval = b[i + 6];
+            cand[nc].mps = (b[i + 4] | b[i + 5] << 8) & 0x7FF; cand[nc].interval = b[i + 6]; cand[nc].rdlen = c_rdlen;
             nc++; want = 0;
         }
     }
@@ -810,13 +867,20 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
     d->nfn = nc; d->entries = entries;
     for (unsigned k = 0; k < nc; k++) {
         struct hidfn *f = &d->fn[k];
-        if (cand[k].kind != 3 && !control(d, 0x21, 0x0B, 0, f->iface, 0, 0)) {   /* SET_PROTOCOL(boot) */
+        if (cand[k].kind == 4) {   /* 8.14.0: no boot protocol for a touch screen; its own report layout, read once */
+            unsigned dl = cand[k].rdlen;   /* from its HID descriptor, read in the walk above */
+            if (!dl || dl > 256) dl = 256;
+            if (!control(d, 0x81, 6, 0x2200, f->iface, dl, ubuf) || !hid_layout(f, ubuf, dl)) {
+                kputs("usb hid if "); kdec(f->iface); kputs(": no absolute pointer, left alone\n"); continue;
+            }
+        }
+        else if (cand[k].kind != 3 && !control(d, 0x21, 0x0B, 0, f->iface, 0, 0)) {   /* SET_PROTOCOL(boot) */
             kputs("usb set protocol refused if "); kdec(f->iface); kputs("\n");   /* reports may then carry a report ID */
         }
         control(d, 0x21, 0x0A, 0, f->iface, 0, 0);          /* SET_IDLE(0): report only on change; a stall here is fine */
         f->kind = cand[k].kind;
-        if (f->kind == 1) nkbd++; else if (f->kind == 2) nmouse++;
-        kputs(f->kind == 1 ? "usb kbd" : f->kind == 2 ? "usb mouse" : "usb media"); kputs(" addr "); kdec(d->slot);
+        if (f->kind == 1) nkbd++; else if (f->kind == 2 || f->kind == 4) nmouse++;
+        kputs(f->kind == 1 ? "usb kbd" : f->kind == 2 ? "usb mouse" : f->kind == 4 ? "usb touch" : "usb media"); kputs(" addr "); kdec(d->slot);
         kputs(" port "); print_where(d); kputs(" "); kputs(speed_name(speed)); kputs(" "); kx(vid); kputs(":"); kx(pid);
         kputs(" if "); kdec(f->iface); kputs(" ep "); kx(cand[k].addr); kputs("\n");
         queue_intr(d, f);

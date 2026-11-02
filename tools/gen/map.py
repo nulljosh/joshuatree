@@ -109,7 +109,8 @@ pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi'
       ('Wi-Fi switch', 'no restart', 0), ('Mail', 'IMAP, reply', 0), ('CalDAV', 'syncs when idle', 0),
       ('BT keyboard', 'LE, passkey', 0), ('Settings', 'wallpaper, sound', 1), ('Build apps', 'plankc on the Pi', 1),
       ('Live data', 'stocks, weather', 0), ('Settings tile', 'in the dock', 1),
-      ('Park wallpaper', 'Joshua Tree at dusk', 1), ('Four cores', '4 of 4 up', 1), ('Wikipedia', 'in Blackcomb', 1), ('USB stick', 'ls, cat, copy', 0)]
+      ('Park wallpaper', 'Joshua Tree at dusk', 1), ('Four cores', '4 of 4 up', 1), ('Wikipedia', 'in Blackcomb', 1), ('USB stick', 'ls, cat, copy', 0),
+      ('Kit screens', '800x480 to 1080p', 0), ('Touch', 'USB touch panels', 0), ('GPU', 'V3D, board only', 0), ('Camera', 'board only', 0)]
 pw = (IW - 3 * S[16]) / 4
 for i, (a, b, done) in enumerate(pi):
     box(M + (i % 4) * (pw + S[16]), y + (i // 4) * (48 + S[8]), pw, 48, a, b, 'new' if done else 'todo')

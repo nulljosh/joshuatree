@@ -1255,6 +1255,20 @@ uv run --with build123d --with shapely python docs/hardware/nimbus_blueprint.py 
 uv run --with build123d --with shapely --with trimesh python docs/hardware/nimbus_pack.py docs/hardware   # the print pack
 ```
 
+### Build a Nimbus, step by step
+
+For someone who has never built one. Plan an afternoon for the build and a day for the print. Stop at the first step that goes wrong and ask (trommatic@icloud.com).
+
+1. **Buy the parts.** Everything is in `docs/hardware/nimbus/pack/bom.csv`, with Vancouver stores in the Shopping list section. The ones that matter most: a Raspberry Pi 4 Model B, an 8 inch class 16:9 HDMI panel (touch if you want it), a right-angle micro-HDMI cable, a 5 V 3 A USB-C supply and a 16 GB or larger microSD card.
+2. **Measure the panel.** With digital calipers, measure the panel's outline, its lit area and its thickness. If they differ from the stand-ins at the top of `docs/hardware/nimbus_cad.py`, change them there and make the pack again (the last command in the Nimbus section). The script refuses to write a part that no longer fits.
+3. **Print.** The three parts are `docs/hardware/nimbus/pack/front_shell.stl`, `back_cover.stl` and `ground_inlay.stl`; layer, walls, infill and how each lies on the bed are in `docs/hardware/nimbus/pack/print-sheet.csv`. Print the front shell alone first and drop the panel in: it should sit flush. A print shop can take `docs/hardware/nimbus/pack/print-shop.pdf` as it is.
+4. **Put it together.** Six drawings in `docs/hardware/nimbus/pack/assembly/`, in order: glue the glass to the ledge, seat the display, screw the Pi down (four M2.5 x 6), fit the back ports, close the case (two M3 x 12 from underneath), press the terracotta mark into its groove. The 1:1 blueprint (`docs/hardware/nimbus/pack/nimbus-blueprint-1to1-A3.pdf`) lets you hold a part against the paper to check it. No heat-set inserts are needed: the screws cut their own threads. No fan either: a vent slot in the foot and the open shell behind the Pi cool it.
+5. **Make the card.** On a Mac with the repo cloned and clang, ld.lld and qemu installed (`brew install llvm lld qemu`), put the card in and run `tools/flash-pi.sh /Volumes/NAME`. It builds the kernel, fetches the Pi's five firmware files and copies them over; it never formats the card. The card goes in the slot in Nimbus's chin.
+6. **First boot.** Plug the supply into the back. In under ten seconds: the tree on black, then the desktop at the panel's own size (800x480, 1024x600, 1280x800 or 1080p all fill the screen since 8.13.0), the menu bar on top and the dock along the bottom. A USB keyboard and mouse work at once; Wi-Fi and Bluetooth are in Settings.
+7. **If the screen stays black.** Check the micro-HDMI is in the port next to the power (HDMI 0). Still black: the serial cable (the Wire the serial cable section) shows where the boot stopped; send that text.
+
+`tools/checks/guide-nimbus-check.py` keeps this chapter honest: every file and command it names must exist, every part in `bom.csv` must be named here or in the Shopping list section, and the screen sizes must match the ones `tools/checks/arm64-screens-check.py` boots.
+
 ## Samantha box
 
 A 7 inch screen, a Raspberry Pi 4B, a round speaker and a mic hole in one printable box. Samantha lives in it.
