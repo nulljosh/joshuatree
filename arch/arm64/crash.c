@@ -254,8 +254,8 @@ void cal_overlay(unsigned *tile, int pw, int today) {
     char day[3]; int n = 0;
     if (d >= 10) day[n++] = '0' + d / 10;
     day[n++] = '0' + d % 10; day[n] = 0;
-    for (int y = pw * 49 / 128; y < pw * 103 / 128; y++)
-        for (int x = pw * 24 / 128; x < pw * 104 / 128; x++) tile[y * pw + x] = 0x00F3F3F6;
+    for (int y = pw * 50 / 128; y < pw * 116 / 128; y++)   /* 7.8.0: the page under the edge-to-edge band, as the PC clears it (clockicon.c) */
+        for (int x = pw * 12 / 128; x < pw * 116 / 128; x++) tile[y * pw + x] = 0x00F8F8FA;
     int month_size = pw * 16 / 10, day_size = pw * 38 / 10;
     text_draw(1, months[mo], (pw - text_width(1, months[mo], month_size)) / 2,
               pw * 44 / 128, month_size, 0x00FFFFFF, tile, pw, pw, pw);
