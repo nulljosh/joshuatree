@@ -96,6 +96,7 @@ ART = {
     38: "apps",
     39: "trash",
     40: "settings",
+    41: "photos",   # 12.0: Photos on the Pi, its Spotlight and Launchpad art; no APPS row on i386
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by
