@@ -2893,6 +2893,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Chess | `tools/checks/chess-core-check.py`, `tools/checks/ring3-chess-check.py` |
 | Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appsig-fuzz-check.sh`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-appboot-check.py`, `tools/checks/arm64-appsig-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-cardapp-check.py`, `tools/checks/arm64-finder-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-samapp-check.py`, `tools/checks/arm64-sambuild-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/arm64-store-check.py`, `tools/checks/arm64-watchdog-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | `tools/checks/arm64-launchpad-check.py` |
+| Settings | `tools/checks/arm64-model-check.py`, `tools/checks/arm64-settings-check.py`, `tools/checks/arm64-spotlight-check.py`, `tools/checks/arm64-users-check.py`, `tools/checks/arm64-wifi-pane-check.py`, `tools/checks/location-check.py`, `tools/checks/settingsclick-check.sh`, `tools/checks/walldemo-regression-check.py` |
 
 Apps with no check yet: none.
 <!-- testing:end -->
