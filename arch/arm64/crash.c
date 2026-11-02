@@ -407,7 +407,16 @@ void dock_unmagnify(void) {
     if (arrow) cur_show();
 }
 void dock_magnify_now(int mx, int slot) { mag_skip_in = 1; dock_magnify(mx, slot); mag_skip_in = 0; }   /* after a click on a tile: no second grow-in */
-void dock_mag_tick(void) { if (mag_on && mag_amt < 1000) dock_magnify(mag_mx, mag_slot); }   /* 6.4.0: the grow-in, from the main loop */
+/* 8.9.0: at most one magnified frame each 33 ms. Each frame puts the whole band back and scales every grown tile, and a
+   mouse sends a report every few milliseconds, so on the board (1080p) the frames queued up behind each other and the
+   whole machine stalled while the pointer was on the dock (Joshua, 2026-11-01). A move inside the 33 ms is kept and
+   drawn by the main loop's next tick. */
+static int mag_pend, mag_pend_mx, mag_pend_slot;
+static unsigned long mag_last;
+void dock_mag_tick(void) {   /* 6.4.0: the grow-in, from the main loop; 8.9.0: and the move that was held back */
+    if (!mag_on) return;
+    if (mag_amt < 1000 || (mag_pend && mag_ms() - mag_last >= 33)) dock_magnify(mag_pend ? mag_pend_mx : mag_mx, mag_pend ? mag_pend_slot : mag_slot);
+}
 /* 7.6.0: what the magnifying dock keeps, taken once when the desktop is first drawn (dock_mag_reserve), never from
    inside dock_magnify. The heap has no free, only marks: a buffer first taken while a mark was held (voice mode's
    vm_mark across loop passes, a `sam` reply's) was freed by its release and then written again as the dock's. So the
@@ -441,6 +450,8 @@ static unsigned *mag_tile_at(int i, int pw) {   /* the slot's resting tile, scal
     return mag_tile[i];
 }
 void dock_magnify(int mx, int slot) {
+    if (mag_on && mag_amt == 1000 && mag_ms() - mag_last < 33) { mag_pend = 1; mag_pend_mx = mx; mag_pend_slot = slot; return; }   /* 8.9.0 */
+    mag_pend = 0; mag_last = mag_ms();
     int sc = (int)window_scale(), size = DOCK_ICON, step = DOCK_ICON + DOCK_GAP, y0 = gui_dock_y0();
     int top = (y0 - MAG_ROOM) * sc, rows = (int)fb_h - top, cy_bottom = y0 + DOCK_PAD + size;
     if (top < 0 || !fb) return;

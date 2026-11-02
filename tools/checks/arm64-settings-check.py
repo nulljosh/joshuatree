@@ -70,8 +70,8 @@ int sudo_may_write(void) { return may; }
 #include "arch/arm64/settings.c"
 int main(void) {
     char out[64]; unsigned n = settings_format(out, 70, 0, 7, 2);
-    assert(n == 30 && !memcmp(out, "volume=70\nwall=0\ndock=7\nmag=2\n", 30));
-    n = settings_format(out, 100, 3, 25, 0); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\nmag=0\n", n));
+    assert(n == 31 && !memcmp(out, "volume=70\nwall=0\ndock=7\nzoom=2\n", 31));
+    n = settings_format(out, 100, 3, 25, 0); assert(!memcmp(out, "volume=100\nwall=3\ndock=25\nzoom=0\n", n));
     int v = 1, w = 1, d = 7, m = 2; const char *t;
     t = "volume=40\nwall=3\ndock=12\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 40 && w == 3 && d == 12);
     v = 1; w = 1; d = 7; t = "volume=101\nwall=4\ndock=4\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(v == 1 && w == 1 && d == 7);
@@ -81,14 +81,14 @@ int main(void) {
     t = "dock=5"; settings_parse(t, 6, &v, &w, &d, &m); assert(d == 5);
     t = "dock=55"; settings_parse(t, 6, &v, &w, &d, &m); assert(d == 5);   /* cut at 6 bytes: 5 and a stray byte, taken as 5, never read past n */
     settings_parse("", 0, &v, &w, &d, &m);
-    t = "mag=1\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);
-    t = "mag=3\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);   /* 7.4.0: out of range, kept */
+    t = "zoom=1\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);
+    t = "zoom=3\n"; settings_parse(t, (unsigned)strlen(t), &v, &w, &d, &m); assert(m == 1);   /* 7.4.0: out of range, kept */
     settings_set_mag(-1); assert(settings_mag() == 0); settings_set_mag(9); assert(settings_mag() == 2 && !strcmp(settings_mag_name(1), "Small"));
     assert(settings_walls() == 4 && !strcmp(settings_wall_name(0), "Grey") && settings_wall_rgb(0) == 0x006E6E6Eu && !strcmp(settings_wall_name(1), "Terracotta") && settings_wall_rgb(1) == 0x00B5502Cu && settings_wall_rgb(3) == 0x00141311u);
     settings_set_wall(-1); assert(settings_wall() == 3 && wall_rgb == 0x00141311); settings_set_wall(4); assert(settings_wall() == 0 && wall_rgb == 0x006E6E6E);
     settings_set_dock(2); assert(settings_dock() == 5); settings_set_dock(99); assert(settings_dock() == 25); settings_set_dock(7);
     vol = 30; settings_set_wall(2); settings_set_dock(11); settings_save();
-    assert(settings_saved() == 1 && file_len == 31 && !memcmp(file, "volume=30\nwall=2\ndock=11\nmag=2\n", 31));
+    assert(settings_saved() == 1 && file_len == 32 && !memcmp(file, "volume=30\nwall=2\ndock=11\nzoom=2\n", 32));
     vol = 70; settings_set_wall(0); settings_set_dock(7); repaints = 0; wall_rgb = 0; settings_load();
     assert(vol == 30 && settings_wall() == 2 && wall_rgb == 0x00923F20 && settings_dock() == 11 && repaints == 1 && settings_saved() == 1);
     repaints = 0; settings_load(); assert(repaints == 0);   /* nothing changed: no repaint */
@@ -339,7 +339,7 @@ finally:
 # ---- the card: what the first boot left, and a second boot on the same card ----
 r = mt("mtype", "::JT/SETTINGS.TXT")
 text = r.stdout.decode(errors="replace")
-check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\nmag=1\n", text)
+check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\nzoom=1\n", text)
 S = Session("b")
 try:
     if not S.wait_for("M2 input ready", 60) or not S.wait_for("settings loaded", 30):

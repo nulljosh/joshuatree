@@ -1,5 +1,5 @@
 /* The Pi's Settings, the part that is not drawing: what the choices are, the file they live in, and loading it at boot.
-   JT/SETTINGS.TXT holds four lines, `volume=70`, `wall=0`, `dock=7` and `mag=2` (7.4.0: the dock's magnify, 0 off, 1 small, 2 large), the same key=value shape the i386 SETTINGS.TXT uses.
+   JT/SETTINGS.TXT holds four lines, `volume=70`, `wall=0`, `dock=7` and `zoom=0` (7.4.0: the dock's magnify, 0 off, 1 small, 2 large; 8.9.0 renamed it from mag and made off the default), the same key=value shape the i386 SETTINGS.TXT uses.
    With accounts (6.0) the wallpaper is each person's own: ~/WALL.TXT holds `wall=N`, and the card's is the login screen's.
    A missing, short or hand-edited file is never an error: every value is range-checked and a bad line is ignored. With no
    card the choices live in memory until the next boot and the screen says so. main.c draws the window (settings_ui.h);
@@ -41,7 +41,7 @@ const char *settings_wall_name(int i) { return i >= 0 && i < SET_WALLS ? walls[i
 unsigned settings_wall_rgb(int i) { return i >= 0 && i < SET_WALLS ? walls[i].rgb : walls[0].rgb; }
 int settings_walls(void) { return SET_WALLS; }
 void settings_set_wall(int i) { wall_pick = ((i % SET_WALLS) + SET_WALLS) % SET_WALLS; wall_set(walls[wall_pick].rgb); }
-int dock_mag = 2;                     /* 7.4.0: crash.c's magnify, an index into mags */
+int dock_mag = 0;                     /* 7.4.0: crash.c's magnify, an index into mags; 8.9.0: off unless chosen (Joshua: "disable zoom") */
 static const char *const mags[3] = { "Off", "Small", "Large" };
 int settings_dock(void) { return dock_scale_pct; }
 void settings_set_dock(int pct) { dock_scale_pct = pct < SET_DOCK_MIN ? SET_DOCK_MIN : pct > SET_DOCK_MAX ? SET_DOCK_MAX : pct; }
@@ -67,7 +67,7 @@ void settings_parse(const char *t, unsigned n, int *vol, int *wall, int *dock, i
                 if (key_is(t + i, k - i, "volume") && x <= 100) *vol = (int)x;
                 else if (key_is(t + i, k - i, "wall") && x < SET_WALLS) *wall = (int)x;
                 else if (key_is(t + i, k - i, "dock") && x >= SET_DOCK_MIN && x <= SET_DOCK_MAX) *dock = (int)x;
-                else if (key_is(t + i, k - i, "mag") && x <= 2) *mag = (int)x;
+                else if (key_is(t + i, k - i, "zoom") && x <= 2) *mag = (int)x;
             }
         }
         while (i < n && t[i] != '\n') i++;
@@ -76,7 +76,7 @@ void settings_parse(const char *t, unsigned n, int *vol, int *wall, int *dock, i
 }
 unsigned settings_format(char *out, int vol, int wall, int dock, int mag) {
     unsigned n = 0;
-    const char *keys[4] = { "volume=", "wall=", "dock=", "mag=" };
+    const char *keys[4] = { "volume=", "wall=", "dock=", "zoom=" };   /* 8.9.0: zoom, not mag, so a card saved with the old mag=2 starts with it off */
     int vals[4] = { vol, wall, dock, mag };
     for (int r = 0; r < 4; r++) {
         for (const char *p = keys[r]; *p; p++) out[n++] = *p;

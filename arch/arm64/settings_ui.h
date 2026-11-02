@@ -29,6 +29,9 @@ static int dock_pct_boot = 7;   /* the dock size this boot drew; a changed size 
 #define SET_SB_W 150            /* the sidebar, inside the frame's 8 pixel margin */
 #define SET_ROW_H 30
 #define SET_CARD_W 312
+#define SET_WIN_W (8 + SET_SB_W + 16 + SET_CARD_W + 24)   /* 8.9.0: the window Settings opens at, its own, roomy enough for */
+#define SET_WIN_H 420                                       /* the Bluetooth list, its buttons and the hint under them */
+static int set_rect[4];   /* the Terminal's rectangle while Settings is open */
 #define SET_INK 0x001C1C1E
 #define SET_HINT 0x0075726E
 #define SET_ACCENT 0x00B5502C
@@ -192,6 +195,13 @@ void settings_open(int sec) {
     brick_close(); calc_close(); browser_close(); clock_close(); app_kill("closed for Settings");
     set_con = con_live;
     console_close();
+    /* 8.9.0: Settings has its own size. It used to take the Terminal's rectangle, so a Terminal made smaller (or the
+       Pi's 1080p grid) left the cards and the buttons spilling past the window's edge (Joshua's board photo,
+       2026-11-01). The Terminal's rectangle is kept and put back on close. */
+    set_rect[0] = win_lx; set_rect[1] = win_ly; set_rect[2] = win_lw; set_rect[3] = win_lh;
+    { int s = (int)window_scale(), lw = (int)fb_w / s, lh = (int)fb_h / s;
+      win_lw = SET_WIN_W < lw - 16 ? SET_WIN_W : lw - 16; win_lh = SET_WIN_H < lh - 120 ? SET_WIN_H : lh - 120;
+      win_lx = (lw - win_lw) / 2; win_ly = 36; }
     settings_live = 1;
     set_log("open", -1, 0);
     set_section(sec);
@@ -203,6 +213,7 @@ void settings_close(void) {
     cur_hide();
     wall_fill(x, y, w, h);
     fb_flush(x, y, w, h);
+    win_lx = set_rect[0]; win_ly = set_rect[1]; win_lw = set_rect[2]; win_lh = set_rect[3];   /* 8.9.0: the Terminal's own again */
     set_log("closed", -1, 0);
     if (set_con) { con_live = 0; pane_open(cp); }
     cur_show();
