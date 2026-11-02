@@ -6,6 +6,7 @@ is up, and counts the wake-ups core 0 sends every desktop pass.
    Terminal says 4 of 4 running, and run twice a second apart, every one of cores 1 to 3 has woken more times.
 2. QEMU virt with one CPU: the boot says cores 1 to 3 are not there and carries on to the desktop (no crash).
 3. The Pi image on QEMU's raspi4b (the spin table at 0xe0, 0xe8 and 0xf0, as the real firmware leaves it): all three come up.
+Each core's count is on its own cache line, and the timer's event stream is off, so they sleep (8.9.0).
 Discriminating: take smp_start out of desk.c and no core comes up (1, 3); leave mmu_on_core out of core_main and a core
 never says it is up (its writes sit below the caches); drop the sev in app_tick and the counts stop moving (1).
 A timing check (four threads in a quarter of the time) would flake on shared CI runners, so this proves each core ran instead.
@@ -80,6 +81,10 @@ try:
     o1, w1 = cores(); time.sleep(1.0); o2, w2 = cores()
     check("`cores` says 4 of 4 running and core 0 runs the kernel", "cores: 4 of 4 running" in o1 and "core 0: up, runs the kernel" in o1, o1[-400:])
     check("cores 1 to 3 kept waking: every count went up (%s then %s)" % (w1, w2), sorted(w1) == [1, 2, 3] and all(w2.get(c, 0) > w1[c] for c in w1), (o1[-300:], o2[-300:]))
+    # 8.9.0: they sleep between wake-ups. Core 0 sends one sev a desktop pass, so a second's count is a few hundred, not the
+    # million a second a core spinning on the timer's event stream showed on the board.
+    check("cores 1 to 3 sleep between wake-ups: under 20000 in about a second (%s)" % {c: w2.get(c, 0) - w1.get(c, 0) for c in w1},
+          w1 and all(0 < w2.get(c, 0) - w1[c] < 20000 for c in w1), (w1, w2))
     check("no kernel crash", "KERNEL CRASH" not in uart_of(log) and q.poll() is None, uart_of(log)[-400:])
 finally:
     q.kill(); q.wait()

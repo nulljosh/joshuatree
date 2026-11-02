@@ -286,7 +286,8 @@ void mmu_on_core(void) {   /* core 0 from mmu_init; since 8.2.0 cores 1 to 3 too
    then counts: one pass a wake-up, and core 0 sends one (sev) every desktop pass. They run nothing of the kernel's yet, so no
    locks are needed so far; the next step gives them app threads, and the futex call must take a lock first (th_futex).
    `cores` in the Terminal shows them. */
-volatile unsigned long core_runs[4];
+volatile unsigned long core_runs[4 * 8] __attribute__((aligned(64)));   /* 8.9.0: core c's count at [c * 8], a cache line each: the three
+   cores bumping one shared line slowed core 0's desktop (Joshua's drag lag on the board) */
 volatile unsigned long core_mpidr[4];
 volatile int core_up[4];
 void core_main(unsigned long core) {
@@ -298,7 +299,11 @@ void core_main(unsigned long core) {
     __asm__ volatile ("dmb ish" ::: "memory");
     core_up[core] = 1;
     __asm__ volatile ("dsb ish\n sev" ::: "memory");
-    for (;;) { core_runs[core]++; __asm__ volatile ("wfe"); }
+    /* 8.9.0: no timer event stream. The firmware can leave CNTKCTL_EL1's EVNTEN on, and then wfe returns about a million
+       times a second (the board said 242 million wake-ups in minutes): a spinning core, not a sleeping one. Now only core
+       0's sev, once a desktop pass, wakes it. */
+    { unsigned long k; __asm__ volatile ("mrs %0, cntkctl_el1" : "=r"(k)); __asm__ volatile ("msr cntkctl_el1, %0\n isb" :: "r"(k & ~4UL)); }
+    for (;;) { core_runs[core * 8]++; __asm__ volatile ("wfe"); }
 }
 extern char secondary_entry[];
 static long psci_on(unsigned long mpidr, unsigned long entry) {
