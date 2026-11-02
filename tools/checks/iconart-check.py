@@ -42,7 +42,7 @@ DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 226, 469, 2
 PITCH = DOCK_ICON + DOCK_GAP
 # GUI_DOCK_DEFAULT order.
 SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"]
-SVGS = ["apps", "burrow", "mail", "calendar", "notes", "reminders", "terminal", "chat", "weather", "stocks", "trash"]
+SVGS = ["apps", "burrow", "mail", "calendar", "notes", "reminders", "terminal", "chat", "weather", "stocks", "settings", "trash"]
 COLS = range(20, 54)
 BANDS = (range(3, 8), range(64, 70))
 TOL = 8
@@ -50,7 +50,7 @@ TOL = 8
 # edge to edge), so only its right, tile-coloured half is sampled.
 FULL_BLEED = {"Burrow": range(42, 54)}
 # 7.7.0: Calendar is a page edge to edge, a terracotta band over its top rows, so only a white strip under the band is sampled.
-OWN_BANDS = {"Calendar": (range(31, 36),)}
+OWN_BANDS = {"Calendar": (range(29, 33),)}   # under the band, above the live day number (clockicon.c)
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
