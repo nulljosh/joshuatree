@@ -152,7 +152,7 @@ try:
     b.close(); b = None
 
     b = Boot(False)
-    n0 = open_finder(b, "burrow")   # slot 1 is the dock's Files tile, the file window: it opens Finder too
+    n0 = open_finder(b, "files")   # slot 1 is the dock's Files tile, the file window: it opens Finder too
     check("with no card Finder says it is showing what is built in", b.wait_for("finder: builtin\n", 10, n0), b.uart()[n0:][-300:])
     m = re.search(r"M3c window finder (\d+)x(\d+) at (\d+),(\d+)\n", b.uart()[n0:])
     if m:
