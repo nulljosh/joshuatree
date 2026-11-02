@@ -289,6 +289,7 @@ void main(void) {
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
     accounts_load();           /* accounts.c: JT/USERS.TXT, the names `users` lists */
     sudo_load();               /* sudo.c: JT/SUDOERS.TXT, who may sudo */
+    { void lang_load(void); lang_load(); }   /* 9.2.0: JT/LANG.TXT, the language the desktop draws in */
     settings_load();           /* settings.c: JT/SETTINGS.TXT, before the Pi's desktop is first painted (the splash waits) */
     SPLASH(2, "sd");
 #ifdef SD_SELFTEST   /* the sd builds (arm64-sd-check.py) run the Terminal's own commands at boot on the check's card */

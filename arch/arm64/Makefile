@@ -152,8 +152,8 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
-PISDOBJ = pi-emmc.o fat.o ufile.o pi-settings.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
+SDOBJ = emmc.o fat.o ufile.o settings.o lang.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
+PISDOBJ = pi-emmc.o fat.o ufile.o pi-settings.o lang.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c home.h emmc.h ../../drivers/fat.h

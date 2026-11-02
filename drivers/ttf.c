@@ -243,6 +243,8 @@ void ttf_free_glyph(ttf_glyph_t *g) {
     if (g && g->coverage) { kfree(g->coverage); g->coverage = 0; }
 }
 
+int ttf_has(ttf_font_t *font, unsigned int codepoint) { return font && stbtt_FindGlyphIndex(&font->info, (int)codepoint) != 0; }
+
 int ttf_advance(ttf_font_t *font, unsigned int codepoint, float px_size) {
     if (!font) return 0;
     float scale = stbtt_ScaleForMappingEmToPixels(&font->info, px_size);

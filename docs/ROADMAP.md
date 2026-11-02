@@ -913,7 +913,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 - **11 to 20: a family of machines**
   - 11 A laptop: battery, suspend, trackpad
-  - 12 Wi-Fi
+  - 12 macOS 27 Golden Gate parity (Joshua, 2026-11-02: "bridge those gaps for v12"; Wi-Fi, the old 12, shipped in 7.0): GPU compositing and a glass slider, Spaces and Mission Control, Samantha as a system-wide assistant that writes Shortcuts, tab grouping in Blackcomb, Photos edits, parental controls.
   - 13 Bluetooth: headphones, keyboards
   - 14 Graphics acceleration on the reference board
   - 15 An ARM port, the second chip family
@@ -1015,6 +1015,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **9.2.0 (2026-11-02)**: Twelve languages, the second of 10.0. Settings has a Language page, as in `docs/brand/v10/language.webp`: English, Español, Français, Deutsch, Português, Italiano, Tiếng Việt, 日本語, 中文, 한국어, हिन्दी and Ελληνικά, each in its own words. The pick is kept on the card (JT/LANG.TXT) and Settings, the dock's labels, the screen reader's line and the menu bar follow it at once; Samantha is asked to answer in it. Text on the Pi is now UTF-8, falling back character by character to Inter and Noto faces cut to the words used (about 60 KB). Hindi is shaped ahead of time with HarfBuzz, since the kernel does no shaping. Apps, the Terminal and Settings' other pages are still English. Checks: `arm64-lang-check.py` (Español kept across a reboot, the reader in Spanish and Japanese), `lang-fonts-check.py`.
 - **9.1.0 (2026-11-02)**: A screen reader, the first of 10.0. Cmd+F5 (or `reader on` in the Terminal) turns it on and the menu bar says Screen reader on. The arrows along the dock are read out, "Notes, app, 5 of 12. Press Return to open.", in a caption centred over the dock, and once the focus rests for 600 ms Samantha's voice reads the line through the relay, so a run of arrows speaks only the last. Without a relay token the caption is all there is. Windows and their controls are not read yet. Check: `arm64-reader-check.py` (three quick arrows give three lines and one spoken, Mail).
 - **9.0.0 (2026-11-02)**: The kit. A touch panel on USB (the kit's HDMI screens send their touch that way) is read from its own report descriptor as an absolute pointer: a tap is a click where the finger is. The guide gains Build a Nimbus, step by step, seven steps from buying the parts to the first boot, and a check keeps it true to the repo. With USB sticks (8.9.0) and the kit's screens (8.13.0) the software half of 9.0 is in; the GPU, the camera and a stranger's build need the board. Checks: `arm64-touch-check.py` (a usb-tablet on qemu-xhci taps two dock tiles), `guide-nimbus-check.py`.
 - **8.13.0 (2026-11-02)**: The kit's screens, the first of 9.0. The Pi takes any panel from 720x480 up at its own pixels, so the 7 inch DSI touch screen (800x480), the 8 inch HDMI ones (1024x600, 1280x800) and Touch Display 2 standing up (720x1280) are no longer an 800x600 picture the firmware stretches; 2x scaling needs a wide screen as well as a tall one. Check: `arm64-screens-check.py` (raspi4b at five sizes).

@@ -9,11 +9,33 @@ void heap_release(unsigned long mark);
 void uart_puts(const char *s);
 
 static ttf_font_t *face[3];   /* 0 mono, 1 sans bold, 2 sans */
+#include "world_font.h"           /* 9.2.0: the faces past Latin-1, for lang.c's words (tools/gen/gen_world_font.py) */
+#define WORLD_N (int)(sizeof world_faces / sizeof world_faces[0])
+static ttf_font_t *world[WORLD_N];
+
+/* 9.2.0: one character of UTF-8. A byte that does not start a whole sequence is taken as Latin-1, as every string was before. */
+static unsigned utf8_next(const char **sp) {
+    const unsigned char *s = (const unsigned char *)*sp;
+    unsigned c = s[0], n = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC2 ? 1 : 0;
+    for (unsigned i = 1; i <= n; i++) if ((s[i] & 0xC0) != 0x80) n = 0;
+    if (!n) { *sp += 1; return c; }
+    unsigned cp = c & (0x3F >> n);
+    for (unsigned i = 1; i <= n; i++) cp = cp << 6 | (s[i] & 0x3F);
+    *sp += n + 1;
+    return cp;
+}
+static ttf_font_t *face_for(int which, unsigned cp) {   /* the face asked for, else the first world face with the glyph */
+    if (cp < 0x100 || ttf_has(face[which], cp)) return face[which];
+    for (int i = 0; i < WORLD_N; i++) if (ttf_has(world[i], cp)) return world[i];
+    return face[which];
+}
 
 int text_init(void) {
     face[0] = ttf_load_face(TTF_FACE_MONO);
     face[1] = ttf_load_face(TTF_FACE_SANS_BOLD);
     face[2] = ttf_load_face(TTF_FACE_SANS);
+    for (int i = 0; i < WORLD_N; i++) world[i] = ttf_load(world_faces[i]);
+    { extern void lang_selftest(void) __attribute__((weak)); if (lang_selftest) lang_selftest(); }   /* lang.c, where it is linked */
     int ok = (face[0] != 0) + (face[1] != 0) + (face[2] != 0);   /* 4.27.0: the i386 boot's "fonts N of N ok" line, for the Pi's three faces */
     char line[] = "fonts 0 of 3 ok\n"; line[6] = (char)('0' + ok);
     uart_puts(line);
@@ -26,10 +48,11 @@ int text_draw(int which, const char *s, int x, int baseline, int px10, unsigned 
     ttf_font_t *f = face[which];
     if (!f) return x;
     float px = (float)px10 / 10.0f;
-    for (; *s; s++) {
+    while (*s) {
+        unsigned cp = utf8_next(&s);
         unsigned long m = heap_mark();
         ttf_glyph_t g;
-        if (ttf_glyph(f, (unsigned char)*s, px, &g) == 0) {
+        if (ttf_glyph(face_for(which, cp), cp, px, &g) == 0) {
             for (int j = 0; j < g.height; j++) {
                 int yy = baseline + g.yoff + j;
                 if (yy < 0 || yy >= h) continue;
@@ -53,10 +76,16 @@ int text_draw(int which, const char *s, int x, int baseline, int px10, unsigned 
     return x;
 }
 
+int text_chars(const char *s) { int n = 0; while (*s) { utf8_next(&s); n++; } return n; }   /* 9.2.0: characters, not bytes */
+int text_covers(const char *s) {   /* 9.2.0: every character of s has a glyph in Tree Sans or a world face */
+    while (*s) { unsigned cp = utf8_next(&s); if (cp >= 0x100 && !ttf_has(face_for(2, cp), cp)) return 0; }
+    return 1;
+}
+
 int text_width(int which, const char *s, int px10) {   /* pen advance of a whole string, for centring */
     ttf_font_t *f = face[which];
     int w = 0;
-    if (f) for (; *s; s++) w += ttf_advance(f, (unsigned char)*s, (float)px10 / 10.0f);
+    if (f) while (*s) { unsigned cp = utf8_next(&s); w += ttf_advance(face_for(which, cp), cp, (float)px10 / 10.0f); }
     return w;
 }
 

@@ -20,10 +20,10 @@ unsigned wall_get(void);
 void menubar_wifi(int state);
 void desktop_wall_changed(void);
 
-enum { SET_ABOUT, SET_DISPLAY, SET_SOUND, SET_DOCK, SET_TIME, SET_USERS, SET_WIFI, SET_BT, SET_SECTIONS };
+enum { SET_ABOUT, SET_DISPLAY, SET_SOUND, SET_DOCK, SET_TIME, SET_USERS, SET_WIFI, SET_BT, SET_LANG, SET_SECTIONS };
 enum { SK_INFO, SK_STEP, SK_TOGGLE };
-static const char *const set_names[SET_SECTIONS] = { "About", "Display", "Sound", "Dock", "Date and Time", "Users", "Wi-Fi", "Bluetooth" };
-static const int set_glyph[SET_SECTIONS] = { GL_ABOUT, GL_DISPLAY, GL_SOUND, GL_DOCK, GL_CLOCK, GL_USER, GL_WIFI, GL_BT };
+static const char *const set_names[SET_SECTIONS] = { "About", "Display", "Sound", "Dock", "Date and Time", "Users", "Wi-Fi", "Bluetooth", "Language" };   /* the UART's names; the window draws tr(S_SEC0 + i) */
+static const int set_glyph[SET_SECTIONS] = { GL_ABOUT, GL_DISPLAY, GL_SOUND, GL_DOCK, GL_CLOCK, GL_USER, GL_WIFI, GL_BT, GL_GLOBE };
 static int set_sec, set_row, set_con, set_minute = -1;
 static int dock_pct_boot = 7;   /* the dock size this boot drew; a changed size shows from the next one */
 #define SET_SB_W 150            /* the sidebar, inside the frame's 8 pixel margin */
@@ -39,17 +39,17 @@ static int set_rect[4];   /* the Terminal's rectangle while Settings is open */
 static void s_cat(char *b, const char *s) { unsigned n = 0; while (b[n]) n++; for (; *s && n < 39; s++) b[n++] = *s; b[n] = 0; }
 static void s_num(char *b, unsigned v) { char d[11], t[12]; int n = 0, k = 0; do { d[n++] = (char)('0' + v % 10); v /= 10; } while (v); while (n) t[k++] = d[--n]; t[k] = 0; s_cat(b, t); }
 static int us_rows(void);
-static int set_rows(int sec) { static const char n[SET_SECTIONS] = { 5, 2, 3, 3, 4, 0, 0, 0 }; return sec == SET_USERS ? us_rows() : n[sec]; }
+static int set_rows(int sec) { static const char n[SET_SECTIONS] = { 5, 2, 3, 3, 4, 0, 0, 0, 0 }; return sec == SET_USERS ? us_rows() : n[sec]; }
 static const char *set_label(int sec, int r) {
     static const char *const l[SET_SECTIONS][5] = { { "Version", "Board", "Memory", "Wi-Fi", "Power" }, { "Wallpaper", "Screen" },
-        { "Volume", "Mute", "Output" }, { "Tile size", "Magnify", "Tiles" }, { "Time", "Date", "Time zone", "Source" }, { "" }, { "" }, { "" } };
+        { "Volume", "Mute", "Output" }, { "Tile size", "Magnify", "Tiles" }, { "Time", "Date", "Time zone", "Source" }, { "" }, { "" }, { "" }, { "" } };
     return l[sec][r];
 }
 static int set_kind(int sec, int r) {
     if ((r == 0 && (sec == SET_DISPLAY || sec == SET_SOUND || sec == SET_DOCK)) || (sec == SET_DOCK && r == 1)) return SK_STEP;
     return sec == SET_SOUND && r == 1 ? SK_TOGGLE : SK_INFO;
 }
-static int set_first_row(int sec) { if (sec == SET_USERS || sec == SET_WIFI || sec == SET_BT) return -1; for (int r = 0; r < set_rows(sec); r++) if (set_kind(sec, r) != SK_INFO) return r; return -1; }
+static int set_first_row(int sec) { if (sec == SET_USERS || sec == SET_WIFI || sec == SET_BT || sec == SET_LANG) return -1; for (int r = 0; r < set_rows(sec); r++) if (set_kind(sec, r) != SK_INFO) return r; return -1; }
 static int set_next_row(int sec, int from) {   /* Tab: the next row that can be changed, wrapping; -1 when the section has none */
     for (int i = 1; i <= set_rows(sec); i++) { int r = (from + i + set_rows(sec)) % set_rows(sec); if (set_kind(sec, r) != SK_INFO) return r; }
     return -1;
@@ -113,6 +113,7 @@ static int wf_secret(void);   /* wifi_ui.h: its password field is open */
 #include "users_ui.h"
 #include "wifi_ui.h"
 #include "bt_ui.h"
+#include "lang_ui.h"
 static void set_card(int *cx, int *cy) { *cx = win_lx + 8 + SET_SB_W + 16; *cy = win_ly + 74; }
 static void set_step_box(int cx, int ry, int plus, int *x, int *y) {   /* the - and + buttons: 16 pixel squares either side of a 70 pixel value */
     *x = cx + SET_CARD_W - 14 - 16 - (plus ? 0 : 16 + 6 + 70 + 6); *y = ry + 7;
@@ -121,7 +122,7 @@ void set_paint(void) {
     int s = (int)window_scale(), wx = win_lx, wy = win_ly, ww = win_lw, wh = win_lh, cx, cy;
     set_card(&cx, &cy);
     cur_hide();
-    gui_draw_window_frame(wx, wy, ww, wh, "Settings");
+    gui_draw_window_frame(wx, wy, ww, wh, tr(S_SETTINGS));
     window_rect(wx + 8, wy + 30, ww - 16, wh - 38, 0x00faf8f4);
     window_rect(wx + 8, wy + 30, SET_SB_W, wh - 38, 0x00F0EAE1);
     window_rect(wx + 8 + SET_SB_W, wy + 30, 1, wh - 38, 0x00DDD5C8);
@@ -130,12 +131,13 @@ void set_paint(void) {
         if (i == set_sec) gui_rounded_rect_on_wallpaper(wx + 14, y - 4, SET_SB_W - 12, 26, 0x00E2D9C9, 7);
         gui_rounded_rect_on_wallpaper(wx + 20, y, 18, 18, SET_ACCENT, 5);
         glyph_paint(set_glyph[i], 2, (wx + 22) * s, (y + 2) * s, 14 * s, 0x00FAF8F4);
-        gui_text(set_names[i], wx + 46, y + 1, SET_INK);
+        gui_text(tr(S_SEC0 + i), wx + 46, y + 1, SET_INK);
     }
-    gui_icon_text(set_sec == SET_USERS ? us_title() : set_names[set_sec], cx, wy + 38, 1, s, SET_INK);
+    gui_icon_text(set_sec == SET_USERS ? us_title() : tr(S_SEC0 + set_sec), cx, wy + 38, 1, s, SET_INK);
     if (set_sec == SET_USERS) { us_paint(cx, cy, wy, wh); fb_flush(wx * s, wy * s, ww * s, wh * s); cur_show(); return; }
     if (set_sec == SET_WIFI) { wf_paint(cx, cy, wy, wh); fb_flush(wx * s, wy * s, ww * s, wh * s); cur_show(); return; }
     if (set_sec == SET_BT) { bp_paint(cx, cy, wy, wh); fb_flush(wx * s, wy * s, ww * s, wh * s); cur_show(); return; }
+    if (set_sec == SET_LANG) { lg_paint(cx, cy, wy, wh); fb_flush(wx * s, wy * s, ww * s, wh * s); cur_show(); return; }
     int n = set_rows(set_sec);
     gui_rounded_rect_on_wallpaper(cx, cy, SET_CARD_W, n * SET_ROW_H, 0x00FFFFFF, 10);
     for (int r = 0; r < n; r++) {
@@ -251,7 +253,8 @@ int settings_key(unsigned code) {   /* a key down with Settings in front: every 
     else if (set_sec == SET_USERS && (code == 28 || code == 96 || code == 57 || code == 106)) us_enter();
     else if (set_sec == SET_WIFI && (code == 28 || code == 96 || code == 57 || code == 106 || code == 15)) wf_enter();
     else if (set_sec == SET_WIFI && code == 19) wf_rescan();   /* 6.88.0: R */
-    else if (set_sec == SET_BT && bp_key(code)) {}   /* 7.8.0: S looks, 1 to 9 or Enter pairs, F forgets */
+    else if (set_sec == SET_BT && bp_key(code)) {}
+    else if (set_sec == SET_LANG && lg_key(code)) {}   /* 9.2.0: Left and Right pick a language */   /* 7.8.0: S looks, 1 to 9 or Enter pairs, F forgets */
     else if (code == 103 || code == 108) set_section(set_sec + (code == 108 ? 1 : -1));
     else if ((code == 105 || code == 106) && set_row >= 0) set_adjust(set_row, code == 106 ? 1 : -1);
     else if ((code == 57 || code == 28 || code == 96) && set_row >= 0 && set_kind(set_sec, set_row) == SK_TOGGLE) set_adjust(set_row, 1);
@@ -268,6 +271,7 @@ void settings_click(int lx, int ly) {   /* a click inside the window (the close 
     if (set_sec == SET_USERS) { us_click(lx, ly, cx, cy); return; }
     if (set_sec == SET_WIFI) { wf_click(lx, ly, cx, cy); return; }
     if (set_sec == SET_BT) { bp_click(lx, ly, cx, cy); return; }
+    if (set_sec == SET_LANG) { lg_click(lx, ly, cx, cy); return; }
     for (int r = 0; r < set_rows(set_sec); r++) {
         int ry = cy + r * SET_ROW_H, kind = set_kind(set_sec, r);
         if (ly < ry || ly >= ry + SET_ROW_H || lx < cx || lx >= cx + SET_CARD_W) continue;

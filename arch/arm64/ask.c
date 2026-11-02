@@ -24,6 +24,7 @@
    slash commands and the relay behave alike; her output is captured into the history instead of the Terminal's log. Esc or
    /quit goes back to the shell (after her answer, when one is in flight). Every drawn line is also written to the UART as
    `tui| ...` so a headless check reads the screen. */
+#include "lang.h"
 #include "../../drivers/net.h"
 #include "../../drivers/http.h"
 #include "tls.h"
@@ -830,6 +831,11 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
     /* The relay puts this field in Samantha's system text (never changes the question), 240 characters at most. It is the one
        place the Pi can ask for a short answer without touching relay.py, and the persona lines stay the relay's own. */
     for (const char *p = ". Reply in one or two sentences unless asked for detail."; *p; p++) body[b++] = *p;
+    if (lang_cur) {   /* 9.2.0: the language picked in Settings, so she answers in it */
+        for (const char *p = " Answer in "; *p; p++) body[b++] = *p;
+        for (const char *p = lang_english(lang_cur); *p; p++) body[b++] = *p;
+        body[b++] = '.';
+    }
     for (unsigned i = 0; i < PLUGIN_N; i++) {   /* then "; [[nimble QUESTION]] web answer with sources": the relay passes 240 characters of this field to the model, so a row that would not fit whole is left out */
         const char *parts[] = {"; [[", plugins[i].name, " ", plugins[i].arg, "]] ", plugins[i].help};
         unsigned len = 0;

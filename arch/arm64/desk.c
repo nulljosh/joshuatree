@@ -1,6 +1,7 @@
 /* desk.c: cut out of main.c (the god-file split). The tree menu, the menu bar and its clock, the boot splash and the desktop's first paint. Built as part of main.o (the Makefile's MAINSRC) with
    main.c's own flags; what it shares with main.c is declared in kmain.h. */
 #include "kmain.h"
+#include "lang.h"
 int ask_busy(void);   /* ask.c: a `sam` request is queued or waiting on the relay */
 #include "power.h"
 #ifdef POWER_FILE_TEST   /* the power check's output catcher: what a Terminal command printed, searched for a word */
@@ -433,8 +434,8 @@ void menubar_wifi(int state) {
         fb_rect(cx0 - sg(1), iy + isz - sg(2), cw + sg(2), sg(2), t);
     }
     if (reader_on && !notice.text[0]) {   /* 10.0.0: the screen reader's mark, in words, left of the status icons */
-        int rx = (mb_mic ? wx - sg(12) - isz : wx) - sg(16), tw = text_width(2, "Screen reader on", sg(120));
-        text_draw(2, "Screen reader on", rx - tw, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, rx, H);
+        int rx = (mb_mic ? wx - sg(12) - isz : wx) - sg(16), tw = text_width(2, tr(S_READER_ON), sg(120));
+        text_draw(2, tr(S_READER_ON), rx - tw, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, rx, H);
     }
     mb_hit[0][0] = wx - sg(5); mb_hit[0][1] = wx + isz + sg(5);         /* power */
     mb_hit[1][0] = sx - sg(5); mb_hit[1][1] = sx + isz + sg(5);         /* sound */
@@ -481,14 +482,14 @@ void menubar_notify(const char *message) {
 static int reader_slot = -1;
 static unsigned reader_at;
 unsigned ticks(void);   /* clock.c, 100 Hz */
-static unsigned rd_put(char *b, unsigned n, const char *s) { while (*s && n < 95) b[n++] = *s++; b[n] = 0; return n; }
+static unsigned rd_put(char *b, unsigned n, const char *s) { while (*s && n < 190) b[n++] = *s++; b[n] = 0; return n; }
 static unsigned rd_num(char *b, unsigned n, int v) { if (v >= 10) b[n++] = (char)('0' + v / 10); b[n++] = (char)('0' + v % 10); b[n] = 0; return n; }
 const char *reader_line(int slot) {
-    static char b[96];
-    unsigned n = rd_put(b, 0, dock_names[slot]);
-    n = rd_put(b, n, slot == GUI_ICON_COUNT - 1 ? ", " : ", app, ");
-    n = rd_num(b, n, slot + 1); n = rd_put(b, n, " of "); n = rd_num(b, n, GUI_ICON_COUNT);
-    rd_put(b, n, ". Press Return to open.");
+    static char b[192];   /* 9.2.0: in the picked language (lang.c), UTF-8 */
+    unsigned n = rd_put(b, 0, tr(S_DOCK0 + slot));
+    if (slot != GUI_ICON_COUNT - 1) { n = rd_put(b, n, ", "); n = rd_put(b, n, tr(S_APP)); }
+    n = rd_put(b, n, ", "); n = rd_num(b, n, slot + 1); n = rd_put(b, n, " "); n = rd_put(b, n, tr(S_OF)); n = rd_put(b, n, " "); n = rd_num(b, n, GUI_ICON_COUNT);
+    n = rd_put(b, n, ". "); rd_put(b, n, tr(S_RETURN));
     return b;
 }
 void reader_set(int on) {
