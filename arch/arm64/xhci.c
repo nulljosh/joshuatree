@@ -123,14 +123,17 @@ static unsigned long *dcbaa;
    and a mouse and more); each has its own interrupt IN endpoint, ring and report buffer. ---- */
 #define MAX_DEV 16
 #define MAX_FN 4
+#include "ptp.h"   /* 11.0.0: USB precision touchpads */
 struct hidfn {
     unsigned kind;                                 /* 1 boot keyboard, 2 boot mouse, 3 a keyboard's other HID interface
-                                                      (media keys), 4 a touch screen or tablet (8.14.0); 0 means not running */
+                                                      (media keys), 4 a touch screen or tablet (8.14.0), 5 a precision touchpad (11.0.0);
+                                                      0 means not running */
     unsigned dci, mps, iface, reqlen;
     struct ring intr;
     unsigned char *buf, last[8];
     int rid, xo, xb, yo, yb, bo;                    /* 8.14.0, kind 4: its report ID (0 none), X and Y's bit offset and width, the touch bit (-1 none) */
     unsigned xmax, ymax;                           /* ...and X and Y's logical maximum */
+    struct ptp ptp;                                /* 11.0.0, kind 5: where each finger is in its report */
 };
 struct usbdev {
     unsigned used, slot, speed, route, root_port, depth;
@@ -361,6 +364,7 @@ static void hid_report(struct hidfn *f, unsigned len) {
     dma_sync(f->buf, 64);
     unsigned char *r = f->buf, *p = f->last;
     if (f->kind == 4) { hid_abs(f, r, len); return; }
+    if (f->kind == 5) { ptp_report(&f->ptp, r, len); return; }   /* fingers, as multitouch slots: trackpad.h makes them a mouse */
     if (f->kind != 2) key_raw(r, len, f->kind);
     if (f->kind == 1) hid_kbd(r, len, p);
     else if (f->kind == 3) hid_media(r, len);
@@ -396,7 +400,7 @@ static void remove_dev(struct usbdev *d) {
     msc_gone(d->slot);
     for (unsigned i = 0; i < MAX_DEV; i++)
         if (devs[i].used && &devs[i] != d && devs[i].phub == d->slot) remove_dev(&devs[i]);
-    for (unsigned j = 0; j < d->nfn; j++) if (d->fn[j].kind) { if (d->fn[j].kind == 1) nkbd--; else if (d->fn[j].kind == 2 || d->fn[j].kind == 4) nmouse--; d->fn[j].kind = 0; }
+    for (unsigned j = 0; j < d->nfn; j++) if (d->fn[j].kind) { if (d->fn[j].kind == 1) nkbd--; else if (d->fn[j].kind == 2 || d->fn[j].kind >= 4) nmouse--; d->fn[j].kind = 0; }
     command(0, 0, (TRB_DISABLE_SLOT << 10) | d->slot << 24);
     dcbaa[d->slot] = 0; dma_sync(&dcbaa[d->slot], 8);
     d->used = 0;
@@ -867,20 +871,32 @@ static void enumerate(unsigned root_port, unsigned route, unsigned depth, unsign
     d->nfn = nc; d->entries = entries;
     for (unsigned k = 0; k < nc; k++) {
         struct hidfn *f = &d->fn[k];
-        if (cand[k].kind == 4) {   /* 8.14.0: no boot protocol for a touch screen; its own report layout, read once */
+        int ptp = 0;
+        if (cand[k].kind == 4 || cand[k].kind == 2) {   /* 8.14.0: no boot protocol for a touch screen; its own report layout, read once */
+            static unsigned char *rd;   /* 11.0.0: a touchpad's descriptor runs past ubuf's 256 bytes (a finger collection is about 40) */
+            if (!rd) rd = dma_alloc(1024, 64);
             unsigned dl = cand[k].rdlen;   /* from its HID descriptor, read in the walk above */
-            if (!dl || dl > 256) dl = 256;
-            if (!control(d, 0x81, 6, 0x2200, f->iface, dl, ubuf) || !hid_layout(f, ubuf, dl)) {
+            if (!dl || dl > 1024) dl = 1024;
+            int got = rd && control(d, 0x81, 6, 0x2200, f->iface, dl, rd);
+            if (got && ptp_layout(&f->ptp, rd, dl)) {   /* 11.0.0: a precision touchpad, a boot mouse until told otherwise */
+                ptp = 1;
+                if (f->ptp.has_mode) {   /* SET_REPORT(Feature, Input Mode = 3): fingers, not the mouse it starts as */
+                    rd[0] = (unsigned char)f->ptp.mode_rid; rd[1] = 3;
+                    if (!control(d, 0x21, 0x09, 0x0300u | (unsigned)f->ptp.mode_rid, f->iface, f->ptp.mode_rid ? 2 : 1, f->ptp.mode_rid ? rd : rd + 1))
+                        { kputs("usb trackpad if "); kdec(f->iface); kputs(": input mode refused, left a mouse\n"); ptp = 0; }
+                }
+            }
+            if (!ptp && cand[k].kind == 4 && (!got || !hid_layout(f, rd, dl))) {
                 kputs("usb hid if "); kdec(f->iface); kputs(": no absolute pointer, left alone\n"); continue;
             }
         }
-        else if (cand[k].kind != 3 && !control(d, 0x21, 0x0B, 0, f->iface, 0, 0)) {   /* SET_PROTOCOL(boot) */
+        if (!ptp && cand[k].kind != 4 && cand[k].kind != 3 && !control(d, 0x21, 0x0B, 0, f->iface, 0, 0)) {   /* SET_PROTOCOL(boot); a touchpad stays in report protocol */
             kputs("usb set protocol refused if "); kdec(f->iface); kputs("\n");   /* reports may then carry a report ID */
         }
         control(d, 0x21, 0x0A, 0, f->iface, 0, 0);          /* SET_IDLE(0): report only on change; a stall here is fine */
-        f->kind = cand[k].kind;
-        if (f->kind == 1) nkbd++; else if (f->kind == 2 || f->kind == 4) nmouse++;
-        kputs(f->kind == 1 ? "usb kbd" : f->kind == 2 ? "usb mouse" : f->kind == 4 ? "usb touch" : "usb media"); kputs(" addr "); kdec(d->slot);
+        f->kind = ptp ? 5 : cand[k].kind;
+        if (f->kind == 1) nkbd++; else if (f->kind == 2 || f->kind >= 4) nmouse++;
+        kputs(f->kind == 1 ? "usb kbd" : f->kind == 2 ? "usb mouse" : f->kind == 4 ? "usb touch" : f->kind == 5 ? "usb trackpad" : "usb media"); kputs(" addr "); kdec(d->slot);
         kputs(" port "); print_where(d); kputs(" "); kputs(speed_name(speed)); kputs(" "); kx(vid); kputs(":"); kx(pid);
         kputs(" if "); kdec(f->iface); kputs(" ep "); kx(cand[k].addr); kputs("\n");
         queue_intr(d, f);
