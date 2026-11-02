@@ -593,6 +593,17 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         if (k < n && q[k] == '.') { jt_command(q + 6, n - 6, 0); return; }
         cmd_out("write: use write NAME.EXT TEXT\n"); return;
     }
+    if (word_is(q, n, "cores")) {   /* 8.2.0: which of the four cores are up, and how often each has woken */
+        extern volatile unsigned long core_runs[4], core_mpidr[4]; extern volatile int core_up[4]; unsigned cores_count(void);
+        cmd_out("cores: "); cmd_dec(cores_count()); cmd_out(" of 4 running\n");
+        for (int c = 0; c < 4; c++) {
+            cmd_out("core "); cmd_dec((unsigned)c);
+            if (!core_up[c]) { cmd_out(": asleep\n"); continue; }
+            cmd_out(c ? ": up, woken " : ": up, runs the kernel"); if (c) cmd_dec((unsigned)core_runs[c]);
+            cmd_out(c ? " times\n" : "\n");
+        }
+        return;
+    }
     if (word_is(q, n, "users")) { users_command(); return; }
     if (word_is(q, n, "admins")) { admins_command(); return; }
     if (word_is(q, n, "sudo")) { sudo_command(q, 0); return; }

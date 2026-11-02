@@ -242,6 +242,8 @@ void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects; 0
    memory (strongly ordered, no caching, no unaligned access). QEMU's virt keeps its devices in the first GiB and RAM in
    the second; a Pi 4 has RAM from 0 and its peripherals in the last GiB. */
 static void apps_init(void);
+void mmu_on_core(void);
+unsigned long cnt_now(void); unsigned long cnt_hz(void);
 static void mmu_init(void) {
     const unsigned long NORMAL = 0x1UL | (1UL << 2) /* attr 1 */ | (3UL << 8) /* inner shareable */ | (1UL << 10) /* access flag */ | (1UL << 54) /* EL0 may not execute it: only the user code page can */;
     const unsigned long DEVICE = 0x1UL | (0UL << 2) /* attr 0 */ | (1UL << 10) | (1UL << 53) | (1UL << 54);   /* never executable */
@@ -267,6 +269,9 @@ static void mmu_init(void) {
     for (int i = 0; i < APP_SLOTS * ARENA_BLOCKS * 512; i++) l3[i] = 0;
     for (int k = 0; k < APP_SLOTS * ARENA_BLOCKS; k++) l2[((USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21) + k] = (unsigned long)(l3 + k * 512) | 3;
     l1[RAM_GIB] = (unsigned long)l2 | 3;
+    mmu_on_core();
+}
+void mmu_on_core(void) {   /* core 0 from mmu_init; since 8.2.0 cores 1 to 3 too, on the same tables */
     unsigned long mair = (0xFFUL << 8) | 0x00UL;                       /* attr 1 normal write-back, attr 0 device-nGnRnE */
     unsigned long tcr = 25UL | (1UL << 8) | (1UL << 10) | (3UL << 12) | (1UL << 23) | (2UL << 32);   /* 39-bit VA, 4 KiB pages, write-back, TTBR1 off, 40-bit PA */
     unsigned long sctlr;
@@ -275,6 +280,51 @@ static void mmu_init(void) {
     sctlr |= (1UL << 0) | (1UL << 2) | (1UL << 12);                   /* MMU, data cache, instruction cache */
     __asm__ volatile ("msr sctlr_el1, %0\n isb" :: "r"(sctlr) : "memory");
 }
+/* 8.2.0: all four cores. Core 0 runs the kernel as before; smp_start wakes cores 1 to 3 at start.S's secondary_entry, by
+   PSCI CPU_ON on QEMU's virt machine (hvc, or smc when we were given EL2) and by the spin table on a Pi (the firmware's stub
+   watches 0xd8 + 8 * core and jumps to whatever lands there). Each turns the MMU on with core 0's tables, says it is up, and
+   then counts: one pass a wake-up, and core 0 sends one (sev) every desktop pass. They run nothing of the kernel's yet, so no
+   locks are needed so far; the next step gives them app threads, and the futex call must take a lock first (th_futex).
+   `cores` in the Terminal shows them. */
+volatile unsigned long core_runs[4];
+volatile unsigned long core_mpidr[4];
+volatile int core_up[4];
+void core_main(unsigned long core) {
+    mmu_on_core();
+    __asm__ volatile ("msr vbar_el1, %0\n isb" :: "r"(vectors));
+    unsigned long m; __asm__ volatile ("mrs %0, mpidr_el1" : "=r"(m));
+    core &= 3;
+    core_mpidr[core] = m & 0xFFFFFF;
+    __asm__ volatile ("dmb ish" ::: "memory");
+    core_up[core] = 1;
+    __asm__ volatile ("dsb ish\n sev" ::: "memory");
+    for (;;) { core_runs[core]++; __asm__ volatile ("wfe"); }
+}
+extern char secondary_entry[];
+static long psci_on(unsigned long mpidr, unsigned long entry) {
+    register unsigned long x0 __asm__("x0") = 0xC4000003UL, x1 __asm__("x1") = mpidr, x2 __asm__("x2") = entry, x3 __asm__("x3") = 0;
+    if (boot_el == 2) __asm__ volatile ("smc #0" : "+r"(x0) : "r"(x1), "r"(x2), "r"(x3) : "memory");
+    else __asm__ volatile ("hvc #0" : "+r"(x0) : "r"(x1), "r"(x2), "r"(x3) : "memory");
+    return (long)x0;
+}
+void smp_start(void) {
+    core_up[0] = 1;
+    { unsigned long m; __asm__ volatile ("mrs %0, mpidr_el1" : "=r"(m)); core_mpidr[0] = m & 0xFFFFFF; }
+    for (unsigned c = 1; c < 4; c++) {
+#ifdef PI_BUILD
+        *(volatile unsigned long *)(0xd8UL + 8 * c) = (unsigned long)secondary_entry;
+        __asm__ volatile ("dc civac, %0\n dsb sy\n sev" :: "r"(0xd8UL + 8 * c) : "memory");   /* the waiting core reads it with its caches off */
+#else
+        if (psci_on(c, (unsigned long)secondary_entry) != 0) { uart_puts("core "); uart_dec(c); uart_puts(" not there\n"); continue; }
+#endif
+        unsigned long t0 = cnt_now(), lim = cnt_hz() / 5;
+        while (!core_up[c] && cnt_now() - t0 < lim) { }
+        uart_puts("core "); uart_dec(c);
+        if (core_up[c]) { uart_puts(" up, mpidr "); uart_hex(core_mpidr[c]); uart_putc('\n'); }
+        else uart_puts(" did not answer\n");
+    }
+}
+unsigned cores_count(void) { unsigned n = 0; for (int c = 0; c < 4; c++) n += core_up[c] != 0; return n; }
 void kfree(void *p) { (void)p; }   /* a bump heap never frees; text.c rolls the heap back instead (heap_mark, heap_release) */
 unsigned long heap_mark(void) { return heap_next; }
 void heap_release(unsigned long m) { heap_next = m; }
@@ -867,6 +917,7 @@ int ufile_launch_take(char *name, char *arg);   /* ufile.c */
 void ufile_args_next(const char *s, unsigned n);
 int app_dock(const char *name);                  /* appwin.c */
 void app_tick(void) {   /* every app with something to do gets its turn: it runs until it yields, exits or faults, and a fault ends that app alone */
+    __asm__ volatile ("sev");   /* 8.2.0: one wake-up for cores 1 to 3 each desktop pass (core_main counts them) */
     {   static char nm[65], arg[65];   /* 7.7.0: an app asked for another (Files opens a song in Music): opened here, between turns */
         if (ufile_launch_take(nm, arg)) {
             unsigned n = 0; while (arg[n]) n++;
