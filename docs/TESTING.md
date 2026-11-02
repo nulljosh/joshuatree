@@ -25,5 +25,6 @@ Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with t
 19. **Battery, if a gauge board is here.** A UPS or laptop board with a MAX17048 at I2C 0x36 on the HAT pins (Geekworm style): the menu bar shows its percent and a battery where the power symbol was; `battery: N percent` on the UART at boot. No board: the power symbol, as before.
 20. **Sleep.** Click the tree, then Sleep: the screen goes dark a second later. A key brings it back.
 21. **Spaces.** Open Calendar, then Ctrl+Right: an empty desktop, and the menu bar says Desktop 2. Open Notes there, Ctrl+Left: Calendar is back alone. Notes' dock tile takes you to Desktop 2.
+22. **Mission Control.** With two apps open, Ctrl+Up: the desktops along the top and both windows side by side. Enter or a click brings one up; a desktop chip goes there; Esc closes it.
 
 Steps 1 to 3 are 10.0, 4 is 9.0's touch screen; 5 to 9 are last night's fixes.

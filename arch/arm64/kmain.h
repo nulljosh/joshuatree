@@ -259,6 +259,12 @@ extern int fb_swap;
 int front_close(void);
 int app_cycle(void);
 int space_step(int d);   /* appwin.c, 11.1.0: Spaces, Ctrl+Left and Ctrl+Right */
+void space_switch(int k);
+int space_now(void);
+void desk_redraw(void);
+void app_thumb(unsigned slot, unsigned *dst, int tw, int th);
+void mc_open(void);      /* keys.c, 11.2.0: Mission Control, Ctrl+Up */
+extern int mc_mode;
 #define GICC(o) REG(GICC_BASE + (o))
 extern unsigned long heap_next;
 extern unsigned heap_oom;
