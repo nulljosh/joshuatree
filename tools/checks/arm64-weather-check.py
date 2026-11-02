@@ -43,8 +43,8 @@ def check(name, ok, detail=""):
     if not ok: fails.append(name)
 
 W, H = 800, 600
-icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 10 * 6) // 11))
-dock_x0, dock_y0 = (W - (11 * icon + 10 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
+icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 11 * 6) // 12))
+dock_x0, dock_y0 = (W - (12 * icon + 11 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
 def slot_centre(slot): return dock_x0 + 10 + slot * (icon + 6) + icon // 2, dock_y0 + 10 + icon // 2
 BG, CARD, ACCENT, RED = (0xf5, 0xf0, 0xeb), (0xec, 0xe5, 0xdc), (0xb5, 0x50, 0x2c), (0xff, 0x5f, 0x57)
 

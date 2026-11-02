@@ -254,8 +254,8 @@ void cal_overlay(unsigned *tile, int pw, int today) {
     char day[3]; int n = 0;
     if (d >= 10) day[n++] = '0' + d / 10;
     day[n++] = '0' + d % 10; day[n] = 0;
-    for (int y = pw * 49 / 128; y < pw * 103 / 128; y++)
-        for (int x = pw * 24 / 128; x < pw * 104 / 128; x++) tile[y * pw + x] = 0x00F3F3F6;
+    for (int y = pw * 50 / 128; y < pw * 116 / 128; y++)   /* 7.8.0: the page under the edge-to-edge band, as the PC clears it (clockicon.c) */
+        for (int x = pw * 12 / 128; x < pw * 116 / 128; x++) tile[y * pw + x] = 0x00F8F8FA;
     int month_size = pw * 16 / 10, day_size = pw * 38 / 10;
     text_draw(1, months[mo], (pw - text_width(1, months[mo], month_size)) / 2,
               pw * 44 / 128, month_size, 0x00FFFFFF, tile, pw, pw, pw);
@@ -293,7 +293,7 @@ void dock_paint(void) {
    moving to another slot or to none puts the plain band back before the next label; nothing is allocated until then.
    The pointer drives it (slice 4, below); the dockhover test build calls it once at boot. Names follow APPS[] in
    kernel/kernel.c for GUI_DOCK_DEFAULT_ORDER (arm64-m1c-check.py compares them). */
-const char *const dock_names[GUI_ICON_COUNT] = {"Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"};
+const char *const dock_names[GUI_ICON_COUNT] = {"Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"};
 unsigned *dock_band, *dock_mem;   /* dock_mem is the band copy's memory, taken at boot like the Browser's buffer so no mark's release can rewind over it */
 int cur_on;           /* slice 4: the pointer's arrow is on the screen */
 void cur_hide(void);

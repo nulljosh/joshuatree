@@ -68,7 +68,7 @@ DISK = "/tmp/jt-qa-test.img"
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
+DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 226
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 # Window 0 (first opened): gui_multiwin_geom slot_index==0, x=70,y=40 -- the
@@ -90,7 +90,7 @@ INK = (0x1C, 0x1C, 0x1E)
 # (130,100)) and Files shows its flat (250,248,246) background, so it tells
 # which of the two is on top.
 NOTES_PROBE = (500, 199)
-SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
+SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):

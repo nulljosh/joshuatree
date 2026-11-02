@@ -538,7 +538,7 @@ Shortened on 2026-10-12: the per-version board test lists and the dated log of i
 
 The Pi runs the same user programs as the PC, built for its processor. Each runs in user mode, in its own window, and cannot touch the kernel or another app.
 
-- From the dock: Finder (the Burrow tile), Mail, Calendar, Notes, Reminders, Terminal, Samantha (the Terminal with `sam ` typed), Weather and Stocks.
+- From the dock: Finder (the Burrow tile), Mail, Calendar, Notes, Reminders, Terminal, Samantha (the Terminal with `sam ` typed), Weather, Stocks and Settings (a gear, just before the Trash: wallpaper, sound, the dock's size and magnify).
 - From Spotlight (F1) or the Launchpad (the Apps tile): all of those, plus Music, Books, the Browser, the Calculator, Settings, Clock, Brick and the ten games (Mines, Toroid, Hamurapi, Keyrate, Solitaire, Paddle, Bricks, Depths, Snake, Chess). With nothing typed, Spotlight shows its first 20; typing finds the rest.
 - The Launchpad is a cream card in the middle of the screen, seven across. Click one, or move with the arrow keys and press Enter. Esc or a click outside closes it.
 - F2 opens the Terminal. The Trash tile has no ARM app yet and says so.

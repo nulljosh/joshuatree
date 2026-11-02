@@ -1027,7 +1027,7 @@ No text, letters or wordmarks, so `ICON_TEXT_ELEMENTS = 0`. That includes Calend
 
 The house accent is terracotta, `ACCENT = #b5502c`, the landing page's accent and the colour of the Music, Movies and Hamurapi tiles. The one deliberate exception is Patois, which keeps its own sky blue, `LEXLY_BLUE = #2E86DE`, because that is the colour of its store icon.
 
-Fleet icons are the `FLEET_ICONS = 10` apps imported from their own repos (Samantha's became an authored symbol, her glasses, in 7.7.0). They keep their own tile colour and their own picture. They must still share the squircle, the anti-aliased edge, the top lip and the glyph margin. They do not get the tile falloff, so a fleet tile is flat. The importer clips each one to the squircle and lays the lip on it. The checks measure the squircle and the edge on all `ICON_FILES = 41` icons, but the glyph margin only on the `MARGIN_TILES = 28` that carry the shared tile header (`restyle_icons.py` writes it, and the importer writes Samantha's, whose portrait sits in an 88 unit disc so it keeps the margins). A fleet icon's margin is held by eye, and the roadmap lists the fleet icons that still fall short.
+Fleet icons are the `FLEET_ICONS = 10` apps imported from their own repos (Samantha's became an authored symbol, her glasses, in 7.7.0). They keep their own tile colour and their own picture. They must still share the squircle, the anti-aliased edge, the top lip and the glyph margin. They do not get the tile falloff, so a fleet tile is flat. The importer clips each one to the squircle and lays the lip on it. The checks measure the squircle and the edge on all `ICON_FILES = 42` icons, but the glyph margin only on the `MARGIN_TILES = 29` that carry the shared tile header (`restyle_icons.py` writes it, and the importer writes Samantha's, whose portrait sits in an 88 unit disc so it keeps the margins). A fleet icon's margin is held by eye, and the roadmap lists the fleet icons that still fall short.
 
 ### Type
 
@@ -1087,7 +1087,7 @@ On the Pi's desktop every window drags and resizes the same way.
 - A window grows no further than the sides of the screen and the strip above the dock.
 - The frame is the same one throughout, with its 18 pixel corner and nothing added. The content lays itself out again for the new size.
 
-The dock holds `DOCK_SLOTS = 11` tiles in this order: `DOCK_ORDER = Apps, Burrow, Mail, Calendar, Notes, Reminders, Terminal, Samantha, Weather, Stocks, Trash`. Portfolio mode swaps in the fleet.
+The dock holds `DOCK_SLOTS = 12` tiles in this order: `DOCK_ORDER = Apps, Burrow, Mail, Calendar, Notes, Reminders, Terminal, Samantha, Weather, Stocks, Settings, Trash`. Settings (7.8.0) is a tile like Apps and Trash, not an app: `GUI_SETTINGS` 40 in `APPS[]`, opening the i386 Settings window and, on the Pi, `settings_open` (`DOCK_SETTINGS`, the same slot Spotlight and the menu bar use, so it is listed once). Its art is a gear on graphite (`restyle_icons.py`). Portfolio mode swaps in the fleet.
 
 The dock's size and edges:
 - A tile is `dock_scale_pct = 7` percent of the screen height, so `DOCK_ICON = 37` pixels on the desktop.
@@ -2893,6 +2893,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Chess | `tools/checks/chess-core-check.py`, `tools/checks/ring3-chess-check.py` |
 | Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appsig-fuzz-check.sh`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-appboot-check.py`, `tools/checks/arm64-appsig-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-cardapp-check.py`, `tools/checks/arm64-finder-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-samapp-check.py`, `tools/checks/arm64-sambuild-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/arm64-store-check.py`, `tools/checks/arm64-watchdog-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | `tools/checks/arm64-launchpad-check.py` |
+| Settings | `tools/checks/arm64-model-check.py`, `tools/checks/arm64-settings-check.py`, `tools/checks/arm64-spotlight-check.py`, `tools/checks/arm64-users-check.py`, `tools/checks/arm64-wifi-pane-check.py`, `tools/checks/location-check.py`, `tools/checks/settingsclick-check.sh`, `tools/checks/walldemo-regression-check.py` |
 
 Apps with no check yet: none.
 <!-- testing:end -->

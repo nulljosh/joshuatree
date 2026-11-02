@@ -27,6 +27,7 @@
 #include "kheap.h"
 #include "task.h"
 #include "settings_ui.h"
+#include "appview.h"
 
 /* v47 (0.47.0): a real Settings screen, not a hidden shell command. Two
    rows, each a live toggle/stepper that writes through settings_save()
@@ -427,6 +428,10 @@ void gui_launch_settings(void){
                detail pane's own toggle/stepper logic below -- clicking
                "Assistant" should show Assistant's rows, not also step
                whatever row happened to be selected in General. */
+            if (k == KEY_CLICK && gui_app_windowed) {   /* 7.8.0: from its dock tile it is a window; its red light closes it, as every dock window's does */
+                int fx = app_cursor_x - (app_win_x + 24), fy = app_cursor_y - (app_win_y + 16);   /* the frame's red light (gui_draw_window_frame) */
+                if (fx * fx + fy * fy <= 8 * 8) return;
+            }
             if (k == KEY_CLICK) {
                 mouse_get_absolute(&app_cursor_x, &app_cursor_y, ww, wh);
                 int sidebar_hit = settings_sidebar_at(app_cursor_x, app_cursor_y);

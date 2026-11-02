@@ -31,7 +31,7 @@ DUMP = os.path.join(ARTIFACTS, "framebuffer.raw")
 FB = 0xfd000000; W, H = 1920, 1080
 SOCKET = os.path.join(ARTIFACTS, "qmp.sock")
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
+DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 226
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 FILES_SLOT, NOTES_SLOT = 1, 4  # GUI_DOCK_DEFAULT: slot0 is the Apps folder, then Files(icon0), Mail, Calendar, Notes(icon3) in order; 1.9.20 gave Notes compositor hooks so it replaces Weather as the second window

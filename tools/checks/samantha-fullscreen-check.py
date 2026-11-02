@@ -63,7 +63,7 @@ subprocess.run(["make", "-s", "kernel.elf"], check=True, stdout=subprocess.DEVNU
 SHOTS = os.environ.get("SAMANTHA_SHOTS")   # a directory: serve her real portrait and save PNGs of each state
 if SHOTS: os.makedirs(SHOTS, exist_ok=True)
 FB = 0xfd000000
-SLOT_X, SLOT_PITCH, ICON_ROW_Y, DOCK_ICON, SAMANTHA_SLOT, WEATHER_SLOT = 247, 43, 487, 37, 7, 8   # dock slot 0, pitch, logical (menubar-persist-check.py)
+SLOT_X, SLOT_PITCH, ICON_ROW_Y, DOCK_ICON, SAMANTHA_SLOT, WEATHER_SLOT = 226, 43, 487, 37, 7, 8   # dock slot 0, pitch, logical (menubar-persist-check.py)
 DOCK_COLOUR = (0xEF, 0xEB, 0xE4)
 VM_MARGIN, VM_PH, PANEL_MAX = 16, 46, 640   # user/samantha.c
 QMP = free_port()

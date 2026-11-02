@@ -319,9 +319,9 @@ try:
         img_home.save(HOME_PNG)
         GUI_BG = (0xFA, 0xF8, 0xF6)
 
-        def not_bg(px, x, y, bg=GUI_BG, tol=16):
-            for dx in range(-6, 7, 3):
-                for dy in range(-6, 7, 3):
+        def not_bg(px, x, y, bg=GUI_BG, tol=16):   # 7.8: +-18, the whole tile; Calendar's middle is its plain white page
+            for dx in range(-18, 19, 3):
+                for dy in range(-18, 19, 3):
                     p = px[(x + dx) * SC + 1, (y + dy) * SC + 1]
                     if any(abs(p[i] - bg[i]) > tol for i in range(3)):
                         return True

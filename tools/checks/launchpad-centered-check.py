@@ -41,9 +41,9 @@ CONFIGS = [((1920, 1080), []), ((1920, 1080), ["portfolio"]), ((2000, 1124), ["r
 
 
 def dock_geometry(lw, lh):
-    """gui_dock_icon / gui_dock_x0 / gui_dock_y0 for 11 tiles at the default 7 percent scale."""
-    icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 10 * 6) // 11))
-    w = 11 * icon + 10 * 6 + 2 * 10
+    """gui_dock_icon / gui_dock_x0 / gui_dock_y0 for 12 tiles at the default 7 percent scale."""
+    icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 11 * 6) // 12))
+    w = 12 * icon + 11 * 6 + 2 * 10
     return icon, (lw - w) // 2, lh - icon - 2 * 10 - 24
 
 

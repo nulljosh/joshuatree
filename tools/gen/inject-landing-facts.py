@@ -66,7 +66,7 @@ def count_apps():
     labels = re.findall(r'\{"([^"]*)",', m[1])
     if not labels:
         raise ValueError("APPS table parsed with no names")
-    real = [l for l in labels if l not in ("Apps", "Trash", "Compose")]
+    real = [l for l in labels if l not in ("Apps", "Trash", "Settings", "Compose")]
     return len(real)
 
 

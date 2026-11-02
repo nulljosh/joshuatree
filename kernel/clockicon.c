@@ -59,6 +59,28 @@ int gui_clock_tick(int *seen){
     return changed;
 }
 /* Live overlays drawn over a cached tile: Clock's hands. Calendar is a plain picture, no live date. */
+void gui_icon_text(const char *s, int lx, int ly, int face, int mul, unsigned int fg);   /* uitext.c */
+int gui_icon_text_w(const char *s, int face, int mul);
+/* 7.8.0: the Calendar tile shows today, month on its terracotta band and the day on the page, as the Pi's does
+   (arch/arm64/crash.c cal_overlay). The PC has a battery clock, so the date is always there (Joshua: "needs to show the
+   date"). The page under the number is cleared first: the art's day squares sit there.
+   ponytail: drawn at every tile paint, not on the stroke of midnight; the next dock repaint brings the new day. */
+static void gui_calendar_date(int cx_center, int cy_bottom, int size){
+    static const char *const months[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
+    u8 h, m, wd, dom, mon;
+    cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
+    int d = (dom & 0x0F) + (dom >> 4) * 10, mo = (mon & 0x0F) + (mon >> 4) * 10;
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return;   /* no sane clock: the plain page, never a made-up date */
+    char day[3]; int n = 0;
+    if (d >= 10) day[n++] = (char)('0' + d / 10);
+    day[n++] = (char)('0' + d % 10); day[n] = 0;
+    int sc = (int)window_scale(), pw = size * sc, x = (cx_center - size / 2) * sc, y = (cy_bottom - size) * sc;
+    window_fill_rect_phys(x + pw * 12 / 128, y + pw * 50 / 128, pw * 104 / 128, pw * 66 / 128, 0x00F8F8FA);
+    int lx = cx_center - size / 2, ly = cy_bottom - size;
+    gui_icon_text(months[mo - 1], lx + (size - gui_icon_text_w(months[mo - 1], 0, 1)) / 2, ly + size * 14 / 128, 0, 1, 0x00FFFFFF);
+    gui_icon_text(day, lx + (size - gui_icon_text_w(day, 3, 1)) / 2, ly + size * 60 / 128, 3, 1, 0x001C1C1E);
+}
 void gui_icon_overlay(int icon, int cx_center, int cy_bottom, int size){
     if (icon == 23) gui_clock_draw_hands(cx_center, cy_bottom, size);
+    if (icon == GUI_CALENDAR && size >= 24) gui_calendar_date(cx_center, cy_bottom, size);
 }

@@ -955,6 +955,7 @@ const struct app APPS[GUI_APP_COUNT] = {
        stubs" failure). DOCK_TRAY_COLOR is the real, intended value. */
     [GUI_APPS_FOLDER] = {"Apps",  DOCK_TRAY_COLOR, gui_icon_apps,  gui_launch_apps,  0, 0},
     [GUI_TRASH]       = {"Trash", DOCK_TRAY_COLOR, gui_icon_trash, gui_launch_trash, 0, 0},
+    [GUI_SETTINGS]    = {"Settings", DOCK_TRAY_COLOR, gui_icon_apps, gui_launch_settings, 0, 0},   /* 7.8.0: authored art (art/icons/settings.svg) covers the icon */
 };
 
 /* A loop (octagon approximating a circle, 8 capsule segments) for the

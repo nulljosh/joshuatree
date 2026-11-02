@@ -1,27 +1,22 @@
 #!/usr/bin/env python3
-"""Headless proof that the dock's Calendar tile is a calendar picture -- a
-page with a terracotta binding bar on top and a grid of day squares -- and
-that it never draws a date, a dash or any other text over it.
+"""Headless proof that the dock's Calendar tile shows today's date (7.8.0, Joshua: "needs to
+show the date"): the month in white on its terracotta band and the day in dark ink on the
+page (kernel/clockicon.c gui_calendar_date, the PC's battery clock).
 
-History. v0.89.x drew the live month and day over a blank page
-(gui_calendar_face). The Pi has no clock, so it got the "date unknown"
-face instead: a red bar and one ink dash on a cream tile, which Joshua's
-real-board photo showed as a half-drawn icon (2026-10). The tile is now
-authored art only (tools/gen/restyle_icons.py "calendar" ->
-art/icons/calendar.svg -> kernel/icon_art.h), the same on i386 and the Pi.
+History. v0.89.x drew the live date; then, because the Pi had no clock, the tile became
+authored art only and this check forbade any text on it. The Pi now draws the date once
+network time is in (arch/arm64/crash.c cal_overlay) and the PC always has its clock, so the
+date is back on both.
 
 Two boots, two different QEMU -rtc base= dates (Feb 3 and Nov 28), so a
 live overlay coming back would show up as the tile changing with the date.
 QMP ports 4511/4512, inside this project's reserved 4511-4519 range.
 
 The oracle, on the dock's Calendar tile (slot 3; 960x540 @2x, 74 physical px):
-  1. the tile is the same in both boots (at most SAME_MAX pixels differ);
-  2. the top band carries the terracotta binding bar (ACCENT_TOP_MIN px);
-  3. the lower band carries a grid of grey day squares (GREY_MIN px, and at
-     least GRID_COLS separate grey runs across one row of squares);
-  4. no dark ink anywhere in the tile (INK_MAX), so no numerals or dashes.
-Confirmed discriminating: the previous kernel (blank page + live date)
-fails every one of the five asserts below.
+  1. the two boots differ (DATE_MIN pixels): a different month and day are drawn;
+  2. the top band is terracotta (ACCENT_TOP_MIN px) and carries white month letters (MONTH_MIN);
+  3. each boot has a dark day number (DAY_INK_MIN px).
+Discriminating: take the overlay out of gui_icon_overlay and 1, 2's month and 3 fail.
 
 Usage: tools/checks/calicon-check.py   (from the repo root, after make kernel.elf)
 """
@@ -35,7 +30,7 @@ PORT_A, PORT_B = 4511, 4512
 
 # Same geometry iconlight-check.py / dockhover-check.py use for this boot
 # config (960x540 @2x, dock_scale_pct 7, GUI_ICON_COUNT 11).
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 247, 469, 2
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 226, 469, 2
 PITCH = DOCK_ICON + DOCK_GAP
 CAL_SLOT = 3  # Apps, Files, Mail, Calendar
 TILE_X0 = (SLOT0_X + CAL_SLOT * PITCH) * SCALE
@@ -106,7 +101,9 @@ def boot_and_dump(rtc_base, port):
     return Image.frombytes("RGBA", (W, H), open(dump, "rb").read(), "raw", "BGRA").convert("RGB")
 
 
-SAME_MAX = 4
+DATE_MIN = 40       # 7.8.0: the two dates draw different months and days
+MONTH_MIN = 15
+DAY_INK_MIN = 30
 ACCENT_TOP_MIN = 300
 GREY_MIN = 600
 GRID_COLS = 4
@@ -128,22 +125,14 @@ a, b = tile(img_feb), tile(img_nov)
 
 same = sum(1 for k in a if max(abs(x - y) for x, y in zip(a[k], b[k])) > 8)
 top = sum(1 for (i, j), c in b.items() if j < TILE_W * 0.36 and accent(c))
-low = {k: c for k, c in b.items() if k[1] > TILE_W * 0.38 and k[1] < TILE_W * 0.95}   # 7.7.0: the page runs edge to edge, the squares sit low
-greys = sum(1 for c in low.values() if grey(c))
-row = int(TILE_W * 0.89)  # 7.7.0: through the row of day squares under the edge-to-edge band
-runs, prev = 0, False
-for i in range(TILE_W):
-    g = grey(b[(i, row)]) or accent(b[(i, row)])
-    if g and not prev: runs += 1
-    prev = g
-inks = sum(1 for c in list(a.values()) + list(b.values()) if ink(c))
+ink_a = sum(1 for c in a.values() if ink(c)); ink_b = sum(1 for c in b.items() if ink(c[1]))
+white_top = sum(1 for (i, j), c in b.items() if j < TILE_W * 0.36 and min(c) > 230)   # the month, white on the band
 
 fail = 0
-for ok, msg in ((same <= SAME_MAX, "tile pixels that change between Feb 3 and Nov 28: %d (need <= %d)" % (same, SAME_MAX)),
-                (top >= ACCENT_TOP_MIN, "terracotta binding-bar pixels in the top band: %d (need >= %d)" % (top, ACCENT_TOP_MIN)),
-                (greys >= GREY_MIN, "grey day-square pixels in the lower band: %d (need >= %d)" % (greys, GREY_MIN)),
-                (runs >= GRID_COLS, "day squares across row y=%d: %d (need >= %d)" % (row, runs, GRID_COLS)),
-                (inks <= INK_MAX, "dark ink pixels (text, dashes) in the tile: %d (need <= %d)" % (inks, INK_MAX))):
+for ok, msg in ((same >= DATE_MIN, "tile pixels that change between Feb 3 and Nov 28: %d (need >= %d, the date is drawn)" % (same, DATE_MIN)),
+                (top >= ACCENT_TOP_MIN, "terracotta band pixels in the top band: %d (need >= %d)" % (top, ACCENT_TOP_MIN)),
+                (white_top >= MONTH_MIN, "white month pixels on the band: %d (need >= %d)" % (white_top, MONTH_MIN)),
+                (min(ink_a, ink_b) >= DAY_INK_MIN, "dark day-number pixels: %d and %d (need >= %d each)" % (ink_a, ink_b, DAY_INK_MIN))):
     print(("ok:   " if ok else "FAIL: ") + msg)
     fail |= not ok
 if fail:

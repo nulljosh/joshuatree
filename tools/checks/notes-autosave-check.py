@@ -37,7 +37,7 @@ from jtvm import VM, make_disk, disk_files, SCALE
 TEXT = 'saved by the timer'
 CLOSE_X, CLOSE_Y = 94, 56            # the dock-opened window's red dot, logical px (appclose-check.py)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
-DOCK_NOTES_X, DOCK_ROW_Y = 247 + 4 * 43 + 18, 487   # dock slot 4 (appclose-check.py: SLOT0_X, pitch 43, icon row)
+DOCK_NOTES_X, DOCK_ROW_Y = 226 + 4 * 43 + 18, 487   # dock slot 4 (appclose-check.py: SLOT0_X, pitch 43, icon row)
 VIEW_X, VIEW_Y, TEXT_X, TEXT_Y = 78, 72, 56, 34     # the window's viewport, and where line one's glyphs start
 work = Path(tempfile.mkdtemp(prefix='jt-notesautosave-'))
 disk = work / 'disk.img'

@@ -36,7 +36,7 @@ OUT = (984, 462)                    # 820x385 * 0.6, same ratio
 DESKTOP_PX, DESKTOP_RGB = (480, 511), (0xEF, 0xEB, 0xE4)
 
 # kernel.c GUI_DOCK_DEFAULT: Apps,Files,Mail,Calendar,Notes,Reminders,Terminal,Chat,Weather,Stocks,Trash
-SLOT0_X, PITCH, ICON, DOCK_Y = 247, 43, 37, 487
+SLOT0_X, PITCH, ICON, DOCK_Y = 226, 43, 37, 487
 SLOT = {"files": 1, "calendar": 3, "notes": 4, "terminal": 6, "chat": 7, "weather": 8, "stocks": 9}
 # Fleet apps live in the Apps folder, not the dock. They boot with `open=<app>` (the flag the ring3 checks
 # use) and no NIC at all, so each one draws its built-in offline samples and no tile depends on the network.

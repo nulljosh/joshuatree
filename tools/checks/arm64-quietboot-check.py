@@ -30,8 +30,8 @@ SPL, WALL, INK, DIM = (0xE5, 0xE5, 0xE7), (0x6E, 0x6E, 0x6E), (0x1C, 0x1C, 0x1E)
 
 def geom(w, h):
     s = 2 if h >= 1080 else 1; lw, lh = w // s, h // s
-    icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 10 * 6) // 11))
-    dock_w = 11 * icon + 10 * 6 + 2 * 10; x0 = (lw - dock_w) // 2; y0 = lh - icon - 2 * 10 - 24
+    icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 11 * 6) // 12))
+    dock_w = 12 * icon + 11 * 6 + 2 * 10; x0 = (lw - dock_w) // 2; y0 = lh - icon - 2 * 10 - 24
     return s, icon, x0, y0
 
 
@@ -141,7 +141,7 @@ try:
             def click():
                 cmd("input-send-event", events=[{"type": "btn", "data": {"down": True, "button": "left"}}])
                 cmd("input-send-event", events=[{"type": "btn", "data": {"down": False, "button": "left"}}])
-            mx, my = slot_centre(W, H, 10)
+            mx, my = slot_centre(W, H, 11)   # 7.8: Trash is the twelfth tile, Settings sits before it
             if not move_to(mx, my): fails.append("could not move onto the Trash tile")
             else:
                 click()

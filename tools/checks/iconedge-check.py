@@ -16,7 +16,7 @@ from freeport import free_port
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/jt-iconedge"
 LOG = "/tmp/jt-iconedge-serial.log"; DUMP = "/tmp/jt-iconedge.raw"
 FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE, SLOTS = 37, 6, 247, 469, 2, 11
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE, SLOTS = 37, 6, 226, 469, 2, 12
 PITCH = DOCK_ICON + DOCK_GAP
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -103,7 +103,7 @@ print(f"total {total}")
 # tools/gen/restyle_icons.py says the same thing next to LIFT. Re-measured on
 # a real capture after that pass rather than argued: still 0 of 95 pixels
 # under 240, the same result as before it.
-TRASH_SLOT = 10
+TRASH_SLOT = 11
 TRASH_ROWS, TRASH_COLS = range(52, 57), range(30, 45)  # 2px inside the rim each side: the AA edge column is not a rib
 x0 = (SLOT0_X + TRASH_SLOT * PITCH) * SCALE; y0 = ICON_TOP_Y * SCALE
 bad = [(x, y, lum(img.getpixel((x0 + x, y0 + y)))) for y in TRASH_ROWS for x in TRASH_COLS

@@ -27,8 +27,8 @@ def check(name, ok, detail=""):
     if not ok: fails.append(name)
 
 W, H = 800, 600
-icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 10 * 6) // 11))
-dock_x0, dock_y0 = (W - (11 * icon + 10 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
+icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 11 * 6) // 12))
+dock_x0, dock_y0 = (W - (12 * icon + 11 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
 def slot_centre(slot): return dock_x0 + 10 + slot * (icon + 6) + icon // 2, dock_y0 + 10 + icon // 2
 Y_TOP, Y_BOT = 30, dock_y0 - 50   # below the menu bar (its clock ticks), above the dock and the magnify room
 PARK = (W - 40, 60)

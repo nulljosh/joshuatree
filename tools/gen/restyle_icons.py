@@ -187,14 +187,13 @@ DOCK = {
                       for y, c in ((38, "#0A84FF"), (64, "#FF453A"), (90, "#FF9F0A")))),
 
     # Terminal: a dark screen with a white prompt, set in an aluminium tile.
-    "terminal": ("#EEEEF1", "#D2D3D8",
-                 lg("screen", (0, "#3A3A40"), (1, "#1A1A1D")),
+    # Terminal: 7.8.0, the screen is the whole tile, edge to edge (Joshua: "should fill the box"), the prompt on it.
+    "terminal": ("#3A3A40", "#1A1A1D",
+                 "",
                  """
-      <rect x="16" y="20" width="96" height="80" rx="11" fill="url(#screen)"/>
-      <rect x="18" y="21" width="92" height="1.6" rx="0.8" fill="#FFFFFF" opacity="0.16"/>
-      <g fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M36 46 L52 59 L36 72"/>
-        <path d="M61 76 H84"/>
+      <g fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M32 42 L52 59 L32 76"/>
+        <path d="M62 82 H92"/>
       </g>"""),
 
     # Chat (Samantha): 7.7.0, a symbol of her, not her portrait (Joshua: "just a symbol of her, simple"). Her round
@@ -233,6 +232,14 @@ DOCK = {
       </g>
       <path d="M18 86 L36 72 L50 79 L66 55 L80 63 L96 38 L110 45 V100 H18 Z" fill="url(#area)"/>
       <path d="M18 86 L36 72 L50 79 L66 55 L80 63 L96 38 L110 45" fill="none" stroke="#34DA4F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>"""),
+
+    # Settings (7.8.0): a light gear, eight teeth around a ring, on a graphite tile, as macOS draws it.
+    "settings": ("#8E9198", "#63666D",
+                 lg("gear", (0, "#FFFFFF"), (1, "#D9DBE0")),
+                 '<g fill="url(#gear)">'
+                 + "".join('<rect x="55" y="23" width="18" height="16" rx="3.5" transform="rotate(%d 64 62)"/>' % (45 * i) for i in range(8))
+                 + '<circle cx="64" cy="62" r="30"/></g>'
+                 '<circle cx="64" cy="62" r="13" fill="#63666D"/>'),
 
     # Trash: a white can with grey lid and ribs, on a light metal tile. The
     # flat white base band at y 87-98 is load-bearing: iconedge-check.py

@@ -35,7 +35,7 @@ REST, MID, END = "/tmp/jt-dockhover-rest.raw", "/tmp/jt-dockhover-mid.raw", "/tm
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICONS = 37, 6, 247, 11
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICONS = 37, 6, 226, 11
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487      # inside the normal-size tile
 LIFTED_Y = 455        # above a normal tile's top (469), inside a magnified+lifted one (450..)

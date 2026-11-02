@@ -51,7 +51,7 @@ DUMP = "/tmp/jt-baseline.raw"
 LOG = "/tmp/jt-baseline-serial.log"
 FB = 0xfd000000; W, H = 1920, 1080
 LOGICAL_W, LOGICAL_H = 960, 540
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 247, 487
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 226, 487
 
 # Row 2 (the Apps folder's default scroll offset, dock slot 0, window
 # opened at gui_launch_from_dock's fixed x=56,y=30 -- deterministic every

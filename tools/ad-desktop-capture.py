@@ -3,7 +3,7 @@ from PIL import Image
 REPO=os.path.dirname(os.path.dirname(os.path.abspath(__file__))); os.chdir(REPO); os.makedirs("/tmp/jt-loop/ad7cap",exist_ok=True)
 OUT="/tmp/jt-loop/ad7cap"; LOG=OUT+"/serial.log"; DUMP=OUT+"/fb.raw"
 FB=0xfd000000; W,H=1920,1080; PORT=4476; LW,LH,SC=960,540,2
-SLOT0_X,PITCH,ICON,DOCK_Y=247,43,37,487
+SLOT0_X,PITCH,ICON,DOCK_Y=226,43,37,487
 q=subprocess.Popen(["qemu-system-i386","-kernel","kernel.elf","-display","none","-vga","std","-qmp",f"tcp:127.0.0.1:{PORT},server,nowait","-serial","file:"+LOG,"-net","nic,model=rtl8139","-net","user"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 try:
     s=None

@@ -70,7 +70,7 @@ cmd({"execute": "qmp_capabilities"})
 time.sleep(3.0)
 
 LOGICAL_W, LOGICAL_H = 960, 540
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247  # same dock constants as appclose-check.py
+DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 226  # same dock constants as appclose-check.py
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 MAIL_SLOT = 2  # Apps,Files,Mail,Calendar,Notes,Reminders,...  (1.9.9: Reminders is a ring-3 program now, 1.9.12: Calendar too; Mail is the multi-window app driven here)

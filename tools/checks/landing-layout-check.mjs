@@ -6,7 +6,7 @@
 //   2. Every app count the page states (the facts row, the closing line,
 //      the progress lede, the progress chart's caption and aria-label) is
 //      the same number, and it equals the real apps in kernel/kernel.c's
-//      APPS[] table (everything except Apps, Trash and Mail Compose).
+//      APPS[] table (everything except Apps, Trash, Settings and Mail Compose).
 //   3. The "See the desktop" link has a real theme color, not
 //      the browser's default link blue or the body text color. 2.11.1: the hero
 //      boots into Samantha by default, so the secondary link under the demo is
@@ -42,12 +42,12 @@ const kernel = await readFile(new URL('../../kernel/kernel.c', import.meta.url),
 const table = kernel.match(/struct app APPS\[GUI_APP_COUNT\]\s*=\s*\{([\s\S]*?)\n\};/);
 if (!table) { console.log('FAIL: could not find the APPS table in kernel/kernel.c'); process.exit(1); }
 const names = [...table[1].matchAll(/\{"([^"]*)",/g)].map(m => m[1]);
-const realApps = names.filter(n => !['Apps', 'Trash', 'Compose'].includes(n)).length;
+const realApps = names.filter(n => !['Apps', 'Trash', 'Settings', 'Compose'].includes(n)).length;
 console.log(`APPS[] has ${realApps} real apps`);
 
 const overlap = (a, b) => a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5;
 const KEY = ['Joshua Tree by the numbers', 'Meet Samantha', 'Apps built in', 'Protected apps', 'Dev kit waitlist'];
-const realNames = names.filter(n => !['Apps', 'Trash', 'Compose'].includes(n));
+const realNames = names.filter(n => !['Apps', 'Trash', 'Settings', 'Compose'].includes(n));
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 try {

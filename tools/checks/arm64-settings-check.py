@@ -325,6 +325,11 @@ try:
     if keep:
         os.makedirs(os.path.dirname(keep), exist_ok=True); png(shot, keep); print("  (screenshot kept at %s)" % keep)
     S.press("esc", "settings closed\n")
+    # 7.8.0: Settings has its own dock tile, just before the Trash (Joshua, board test)
+    icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 11 * 6) // 12))
+    dx0, dy0 = (W - (12 * icon + 11 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
+    check("7.8.0: the Settings tile in the dock opens Settings", S.click(dx0 + 10 + 10 * (icon + 6) + icon // 2, dy0 + 10 + icon // 2, "settings open\n"), S.uart()[-300:])
+    S.press("esc", "settings closed\n")
     check("no fault, no crash", "KERNEL CRASH" not in S.uart() and "M1c fb FAIL" not in S.uart() and "oom" not in S.uart(), S.uart()[-300:])
 except SystemExit:
     pass
@@ -344,11 +349,11 @@ try:
     g = S.shot()
     check("and the desktop is Clay without opening anything (the card was read after the desktop was drawn, which repainted it)", px(g, 30, 300) == CLAY and px(g, 400, 8) == bar(CLAY), (px(g, 30, 300), px(g, 400, 8)))
     check("the Console is whole after the repaint (its white well)", px(g, WX + 200, WY + 200) == (255, 255, 255), px(g, WX + 200, WY + 200))
-    # 7.4.0: Small, loaded from the card, grows the tile under the pointer to 1.3 times, not 1.6 (dock 8: 48 px tiles from x 96, y 508)
+    # 7.4.0: Small, loaded from the card, grows the tile under the pointer to 1.3 times, not 1.6 (dock 8: 48 px tiles from x 79, y 508; slot 5 is centred at x 373)
     n = len(S.uart())
-    S.cmd("input-send-event", events=[{"type": "abs", "data": {"axis": "x", "value": int(400.5 * 32768 / W)}}, {"type": "abs", "data": {"axis": "y", "value": int(542.5 * 32768 / H)}}])
+    S.cmd("input-send-event", events=[{"type": "abs", "data": {"axis": "x", "value": int(373.5 * 32768 / W)}}, {"type": "abs", "data": {"axis": "y", "value": int(542.5 * 32768 / H)}}])
     S.wait_for("dock magnify 5 size", 4, n); time.sleep(0.4)
-    S.cmd("input-send-event", events=[{"type": "abs", "data": {"axis": "x", "value": int(401.5 * 32768 / W)}}, {"type": "abs", "data": {"axis": "y", "value": int(542.5 * 32768 / H)}}]); time.sleep(0.4)   # a nudge: the grown-in frame logs
+    S.cmd("input-send-event", events=[{"type": "abs", "data": {"axis": "x", "value": int(374.5 * 32768 / W)}}, {"type": "abs", "data": {"axis": "y", "value": int(542.5 * 32768 / H)}}]); time.sleep(0.4)   # a nudge: the grown-in frame logs
     sizes = [int(x) for x in re.findall(r"dock magnify 5 size (\d+) of 48", S.uart()[n:])]
     check("a small magnify: the hovered tile grows past 48 but stays at 1.3 times", bool(sizes) and 48 < sizes[-1] <= 48 * 13 // 10, (sizes, S.uart()[n:][-300:]))
 except SystemExit:

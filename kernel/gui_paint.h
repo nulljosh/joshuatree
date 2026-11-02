@@ -7,12 +7,13 @@
    gui_wallpaper_sample, which each build provides. */
 
 /* The default dock, slot by slot: the Apps folder, Burrow, Mail, Calendar,
-   Notes, Reminders, Terminal, Chat, Weather, Stocks, Trash. Indices are
+   Notes, Reminders, Terminal, Chat, Weather, Stocks, Settings, Trash. Indices are
    APPS[] and ICON_ART[] slots. */
 #define GUI_APPS_FOLDER 38 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       39
+#define GUI_SETTINGS    40 /* 7.8.0: not an app either: the dock tile that opens Settings (Joshua, board test) */
 #define GUI_CALENDAR     2 /* APPS[] slot whose tile gets the live date face, gui_calendar_face */
-#define GUI_DOCK_DEFAULT_ORDER {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 18, GUI_TRASH}
+#define GUI_DOCK_DEFAULT_ORDER {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 18, GUI_SETTINGS, GUI_TRASH}
 
 /* Channel-wise average and t/max interpolation of two 0x00RRGGBB colours. */
 unsigned int gui_blend(unsigned int a, unsigned int b);

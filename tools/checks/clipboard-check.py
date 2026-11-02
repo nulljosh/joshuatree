@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from jtvm import VM
 
-TERM_X, DOCK_Y = 523, 487   # Terminal's dock tile (slot 6: x0 247 + 6 * 43 + 18)
+TERM_X, DOCK_Y = 523, 487   # Terminal's dock tile (slot 6: x0 226 + 6 * 43 + 18)
 TERM_ROOM = 95              # user/terminal.c LINE_MAX 95: the input holds 95 chars
 
 
@@ -91,7 +91,7 @@ try:
     # 3: an over-long clipboard truncates at the Terminal's own room.
     # Notes is behind the Terminal now; its dock tile (slot 4) brings it forward.
     long_text = 'x' * (TERM_ROOM + 21)
-    vm.move(247 + 4 * 43 + 18, DOCK_Y)
+    vm.move(226 + 4 * 43 + 18, DOCK_Y)
     time.sleep(0.4)
     vm.click()
     time.sleep(1.2)
