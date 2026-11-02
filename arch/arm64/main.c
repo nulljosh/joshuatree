@@ -372,6 +372,8 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_FUTEX 409
 #define JT_SYS_SPAWN 410        /* 8.4.0: spawn and wait, see app_spawn */
 #define JT_SYS_WAIT 411
+#define JT_SYS_CONNECT 412      /* 8.5.0: a TCP socket, see sock_connect */
+#define JT_SYS_CLOSE 6
 #define JT_SYS_TEXT2 402         /* 3.9.0: Tree Sans into a device-size window buffer (user/libjt/hires.h) */
 #define JT_SYS_CLIPBOARD 399     /* 3.10.0: copy and paste, see clip_put below */
 #define JT_CLIP_SET 1
@@ -604,6 +606,49 @@ static void pipe_close(void) {   /* from app_end: this app's end of the pipe goe
     if (ap->pin && pipe0.r == (int)ap->slot + 1) { pipe0.r = 0; if (pipe0.w) apps[pipe0.w - 1].kick = 1; }
     ap->pin = ap->pout = 0;
 }
+/* 8.5.0: a socket for an app. JT_SYS_CONNECT (host, port) opens a TCP connection to a name or a dotted address and answers
+   fd 100; JT_SYS_WRITE, JT_SYS_READ and JT_SYS_CLOSE on fd 100 are that connection. It is net.c's one TCP stream, the same
+   one the Browser and TLS use, so it is one socket at a time for the whole box, and when the kernel takes the stream for a
+   page the app's next call gets -ECONNRESET (its port is gone: tcp_stream_port). A read with nothing yet parks the thread
+   (park_retry) so the desktop keeps going; 0 is the other end closing. -EBUSY with another app's socket open,
+   -EHOSTUNREACH when the name does not resolve or the network is not up, -ECONNREFUSED when nobody answers on that port.
+   ponytail: the one stream net.c has; a table of streams when two apps need the network at once. */
+#define SOCK_FD 100
+int http_resolve_host(const char *host, unsigned int *ip);
+int tcp_open(unsigned int dest_ip, unsigned short dest_port); int tcp_write(const void *data, unsigned int len);
+int tcp_read(void *buf, unsigned int max, unsigned int timeout_ticks); void tcp_close(void); unsigned tcp_stream_port(void);
+static unsigned sock_slot, sock_port;   /* the owner's slot + 1 (0: no socket), and its stream's local port */
+static int sock_mine(void) { return sock_slot == ap->slot + 1 && sock_port && tcp_stream_port() == sock_port; }
+static long sock_connect(unsigned long host, unsigned long port) {
+    char h[64]; unsigned n = 0;
+    if (!app_running) return -38;
+    for (; n < 63; n++) { if (!user_in_range(host + n, 1)) return -14; h[n] = ((const char *)host)[n]; if (!h[n]) break; }
+    if (!n || n == 63 || !port || port > 65535) return -22;
+    if (sock_slot && sock_slot != ap->slot + 1 && apps[sock_slot - 1].cur) return -16;   /* -EBUSY */
+    if (sock_slot == ap->slot + 1 && sock_mine()) tcp_close();
+    sock_slot = 0;
+    unsigned ip;
+    if (!http_resolve_host(h, &ip)) return -113;   /* -EHOSTUNREACH */
+    if (!tcp_open(ip, (unsigned short)port)) return -111;   /* -ECONNREFUSED: a reset, or no answer */
+    sock_slot = ap->slot + 1; sock_port = tcp_stream_port();
+    return SOCK_FD;
+}
+static long sock_call(const struct frame *f, const unsigned long *fp, unsigned long n) {
+    unsigned long p = f->x[1], len = f->x[2];
+    if (n == JT_SYS_CLOSE) { if (sock_mine()) tcp_close(); if (sock_slot == ap->slot + 1) sock_slot = 0; return 0; }
+    if (sock_slot != ap->slot + 1) return -9;   /* -EBADF: no socket of its own */
+    if (!sock_mine()) return -104;              /* -ECONNRESET: the kernel took the stream */
+    if (n == JT_SYS_READ) {
+        if (!user_writable(p, len)) return -14;
+        if (!len) return 0;
+        int r = tcp_read((void *)p, len > 1460 ? 1460 : (unsigned)len, 1);
+        if (r >= 0) return r;   /* bytes, or 0 when the other end closed */
+        park_retry(f, fp);      /* nothing yet: ask again on a later pass */
+    }
+    if (!user_in_range(p, len)) return -14;
+    return tcp_write((const void *)p, (unsigned)len) ? (long)len : -104;
+}
+static void sock_drop(void) { if (sock_slot == ap->slot + 1) { if (sock_mine()) tcp_close(); sock_slot = 0; } }   /* from app_end */
 static void th_exit(unsigned long status) {   /* JT_SYS_THREAD_EXIT: this thread ends; the last one to end is the app's exit */
     app_th.state = TH_FREE;
     if (!th_live()) leave_user(status);
@@ -743,6 +788,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
     if (ec == 0x15) {   /* svc from EL0 */
         unsigned long n = f->x[8], a0 = f->x[0];
         if (a0 == 1 && ap->pout && (n == SYS_WRITE || n == JT_SYS_WRITE)) { f->x[0] = (unsigned long)pipe_write(f, fp, f->x[1], f->x[2]); return; }   /* 8.3.0 */
+        if (a0 == SOCK_FD && (n == SYS_WRITE || n == JT_SYS_WRITE || n == JT_SYS_READ || n == JT_SYS_CLOSE)) { f->x[0] = (unsigned long)sock_call(f, fp, n == SYS_WRITE ? JT_SYS_WRITE : n); return; }   /* 8.5.0 */
         if (a0 == 0 && ap->pin && n == JT_SYS_READ) { f->x[0] = (unsigned long)pipe_read(f, fp, f->x[1], f->x[2]); return; }
         if (n == JT_SYS_WRITE && a0 != 1 && a0 != 2) f->x[0] = (unsigned long)ufile_syscall(n, a0, f->x[1], f->x[2]);   /* M3d: a file from open (fd 0 is -EBADF there) */
         else if (n == SYS_WRITE || n == JT_SYS_WRITE) {
@@ -781,6 +827,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             else if (n == JT_SYS_THREAD_SPAWN) r = th_spawn(a0, f->x[1], f->x[2]);   /* 8.1.0 */
             else if (n == JT_SYS_SPAWN) r = app_spawn(a0, f->x[1]);   /* 8.4.0 */
             else if (n == JT_SYS_WAIT) r = app_wait(f, fp, a0);
+            else if (n == JT_SYS_CONNECT) r = sock_connect(a0, f->x[1]);   /* 8.5.0 */
             else if (n == JT_SYS_CLIPBOARD) r = app_clip(a0, f->x[1], f->x[2]);   /* 3.10.0 */
             else if (n == JT_SYS_TASKS) {
                 if (!a0 || !user_writable(a0, 20)) r = -14;
@@ -990,6 +1037,7 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     ufile_release();   /* M3d: its open files are written back and closed, after an exit, a fault or its red dot alike */
     audio_app_stop();  /* M3e: and its sound stops (what is already in the PWM ring plays out) */
     pipe_close();      /* 8.3.0 */
+    sock_drop();       /* 8.5.0 */
     reap_note(ap->pid, ap->parent, status, how != 0);   /* 8.4.0: kept for the app that spawned it to wait for */
     struct app *me = ap;
     app_window_close();   /* leaves `ap` on the window now in front... */

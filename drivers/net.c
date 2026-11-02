@@ -1109,6 +1109,7 @@ int tcp_read(void *buf, u32 max, u32 timeout_ticks) {
     net_err = NET_ERR_REPLY_TIMEOUT;
     return -1;
 }
+unsigned tcp_stream_port(void) { return st.open ? st.lport : 0; }   /* 8.5.0: which stream is open, so an app can tell its socket was taken */
 void tcp_close(void) {
     if (!st.open) return;
     tcp_send_segment(st.ip, st.mac, st.lport, st.rport, st.seq, st.ack, TCP_FIN | TCP_ACK, 0, 0);   /* best effort, like tcp_get */

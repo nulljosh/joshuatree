@@ -2071,7 +2071,7 @@ with Tree Sans at the face's 1x size times the scale times `pct` / 100, face 0 b
 layout. -EINVAL when the window is not hi-res, -EFAULT for a request, string or advance array outside the app's memory.
 i386 has no 402: it answers -ENOSYS and its apps never call it.
 
-Threads (8.1.0) and processes (8.4.0), the Pi only; i386 answers -ENOSYS. `user/libjt/thread.h` wraps 407 to 409, with the locks; `jt_spawn` and `jt_wait` in `user/jtsys.h` wrap 410 and 411.
+Threads (8.1.0) and processes (8.4.0), the Pi only; i386 answers -ENOSYS. `user/libjt/thread.h` wraps 407 to 409, with the locks; `jt_spawn`, `jt_wait` and `jt_connect` in `user/jtsys.h` wrap 410 to 412.
 
 | # | Name | x0 | x1 | x2 | Returns |
 |---|---|---|---|---|---|
@@ -2080,6 +2080,7 @@ Threads (8.1.0) and processes (8.4.0), the Pi only; i386 answers -ENOSYS. `user/
 | 409 | `futex` | 0 wait, 1 wake | `int *` word, 4-byte aligned, writable | wait: the value it must still hold; wake: how many | wait: 0 once woken, -EAGAIN when the word had already changed; wake: how many woke |
 | 410 | `spawn` | `const char *name` | `const char *words`, or 0 | 0 | the child's pid, or -ENOENT, -EAGAIN, -ENOEXEC, -EFAULT |
 | 411 | `wait` | pid | 0 | 0 | the child's exit status (-1 for a fault or a kill), or -ECHILD |
+| 412 | `connect` | `const char *host`, a name or a dotted address | port | 0 | fd 100, or -EBUSY, -EHOSTUNREACH, -ECONNREFUSED, -EFAULT, -EINVAL |
 
 An app has up to four threads, each with its own registers, pc, stack and FP block (`struct thread` in `arch/arm64/kmain.h`). With more than one, the watchdog's timer becomes a 10 ms slice (`app_preempt`): at its end the thread is parked, NZCV flags and all (kept in the frame's esr word, which `resume_user` puts back), the exclusive monitor is cleared, and the next ready thread runs on the desktop's next pass. A call never restarts the slice, or a thread that calls often would never be cut off; it only clears the spin count, and 300 slices with no call from any thread is the watchdog's three seconds. The kernel holds no locks for an app: `jt_mutex` (Drepper's three-state futex mutex) and `jt_cond` (a sequence word) are ldaxr and stlxr loops in the app, since the A72 has no LSE atomics. The compare and sleep in `futex` is atomic only because there is one core and the kernel runs with IRQs masked; the four-core change must lock it. Check: `arm64-threads-check.py`.
 
@@ -2088,6 +2089,8 @@ Four cores (8.2.0). Core 0 runs the kernel; `smp_start` (main.c, called from `m1
 Pipes (8.3.0). `userrun A [WORDS] | userrun B [WORDS]` in the Terminal (`cmd.c`) calls `userrun_pipe`, which starts B with `pin` set, then A with `pout` (one at a time, since a card app is read into one shared buffer). A's writes to fd 1 and B's reads from fd 0 go through `pipe0`, a 4 KiB ring in `main.c`, instead of the console and the file calls. A write of up to 4 KiB goes in whole or waits (POSIX's PIPE_BUF rule), so a line is never split; a write that must wait and a read from an empty pipe park the thread with its pc back on the `svc` (`park_retry`), so it asks again when it next runs, and the other end kicks it when there is room or data. `app_end` closes the app's end (`pipe_close`): a read then gets 0, the end, and a write gets -EPIPE. One pipe at a time. Check: `arm64-pipe-check.py`.
 
 Spawn and wait (8.4.0, the Pi only; i386 answers -ENOSYS). `jt_spawn(name, words)` is call 410: `app_spawn` copies the name and up to 64 bytes of words out of the app, finds the app as `userrun` does (an unsigned card app only on a box with no accounts), loads it into a free slot with the words as its JT_SYS_ARGS, gives it the parent's Terminal, puts `ap` back on the parent and answers the child's pid. `jt_wait(pid)` is call 411: a child that has ended gives its exit status (-1 for a fault or a kill) from `reaped`, eight remembered exits that `app_end` fills through `reap_note`; a child still running parks the caller with `park_retry`, and its end kicks the parent. -ENOENT for a name nothing answers to, -EAGAIN with every slot taken, -ENOEXEC when it would not load, -ECHILD for a pid that is not the caller's child. Check: `arm64-spawn-check.py`.
+
+Sockets (8.5.0, the Pi only). `jt_connect(host, port)` is call 412: `sock_connect` resolves a name or a dotted address (`http_resolve_host`) and opens net.c's one TCP stream, answering fd 100; `JT_SYS_WRITE`, `JT_SYS_READ` and `JT_SYS_CLOSE` on fd 100 go to `sock_call` before the file calls see them. A read with nothing yet parks the thread (`park_retry`) so the desktop keeps going, and 0 is the other end closing. The stream is the one the Browser and TLS use, so it is one socket at a time for the box: another app gets -EBUSY, and when the kernel takes the stream for a page the owner's next call gets -ECONNRESET (`tcp_stream_port` no longer matches). -EHOSTUNREACH when a name does not resolve or the network is not up, -ECONNREFUSED when nobody answers. `app_end` closes an app's socket (`sock_drop`). Check: `arm64-sock-check.py`.
 
 ## Threat model
 
@@ -2514,7 +2517,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (357 checks)
+### The suite (358 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2817,6 +2820,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Four cores (8.2.0): on QEMU virt with -smp 4 cores 1 to 3 come up through PSCI, each with its own MPIDR, and `cores` in the Terminal shows each one's wake-up count climbing; with one CPU the boot says they are not there and carries on; the Pi image on raspi4b brings all three up through the spin table (skips where the tools are missing) | `tools/checks/arm64-smp-check.py` | retry |
 | Pipes (8.3.0): `userrun gen | `tools/checks/arm64-pipe-check.py` | retry |
 | Spawn and wait (8.4.0): a card app spawns kids with words and waits for each exit status, two at once in the other order, a fault reported as -1, -ENOENT for no such app and -ECHILD for a stranger's pid, every kid's line in the Terminal before the parent's summary (skips where the tools are missing) | `tools/checks/arm64-spawn-check.py` | retry |
+| Sockets (8.5.0): a card app connects to a TCP server on the host, writes a line and reads the server's capitalised answer through fd 100, a write after close is -EBADF, a dead port is -ECONNREFUSED and a bad name -EHOSTUNREACH (skips where the tools are missing) | `tools/checks/arm64-sock-check.py` | retry |
 | Signed apps (6.54.0): with a throwaway key built in and two accounts on the card, a signed app runs for a non-admin, an unsigned one only under an admin's sudo (and then in Spotlight), and one with a flipped byte, another key's signature or a copied name never, sudo or not (skips where the tools are missing) | `tools/checks/arm64-appsig-check.py` | retry |
 | The app store (6.55.0): with a throwaway key and a stub store, install fetches a signed app into JT/APPS (byte for byte) and userrun runs it; a changed image, a missing signature, an app the store lacks and a built-in name are refused and nothing is written (skips where the tools are missing) | `tools/checks/arm64-store-check.py` | retry |
 | Plank on the box (6.57.0): twelve of Plank's own examples (printing, floats, strings, lists, dicts, structs, enums, closures, optionals, try and catch) built for the Pi by tools/plankapp.sh over user/pklibc each print exactly their .out file when run from the card, and the store's Slide, written in Plank, opens its window, slides tiles and closes (6.58.0), and fib and fizzbuzz built by plankc, the compiler written in Plank, with no LLVM IR, print theirs too (6.62.0), as do primes and plankc's string, list, struct, optional, dict and error tests on its runtime written in Plank, against plank.py's output (6.63.0 to 6.68.0) (skips without Plank and uv; CI pins Plank on this shard) | `tools/checks/arm64-plank-check.py` | retry |

@@ -57,7 +57,6 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 **Now: 9.0, the kit.**
 
 **The Berkeley list** (Joshua, 2026-11-01: "are we missing anything" from Berkeley's CS162 lectures). What the course covers that Joshua Tree still lacks, in order, before 10.0:
-- [ ] [Fable] Sockets for apps, so an app talks TCP itself instead of only `http_get` (lectures 5 and 24).
 - [ ] [Fable] Priorities in the scheduler, so a busy app never makes the pointer or the sound stutter (lectures 10 to 12).
 - [ ] [Fable] Memory the way the course teaches it: pages loaded when first touched, copy on write, and pages pushed out to the card when memory runs low (lectures 13 to 17).
 - [ ] [Fable] A block cache, and writes that survive a pulled plug: a small journal in front of FAT so a cut mid-write leaves the old file or the new one, never a torn one (lectures 19 to 22). Check: cut QEMU at every write of a save and fsck the card.
@@ -1018,6 +1017,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **8.5.0 (2026-11-01)**: Sockets for apps. `jt_connect(host, port)` opens a TCP connection to a name or an address, and the app reads, writes and closes it as fd 100, so an app can speak any protocol, not only fetch a page with `http_get`. It is the kernel's one TCP stream, so one socket at a time, and a read with nothing yet lets the desktop go on. Check: `arm64-sock-check.py` (a line to a server on the Mac and its answer back, and plain errors for a dead port or a bad name).
 - **8.4.0 (2026-11-01)**: Apps start apps. `jt_spawn(name, words)` starts another app with those words and answers its process number; `jt_wait(pid)` waits for it and answers its exit status, or -1 when it faulted. Its lines go to the same Terminal as its parent's. With 8.3.0's pipes this is lectures 4 and 5 of the Berkeley list done. Check: `arm64-spawn-check.py` (a kid's status, two kids waited in the other order, a faulting kid, and plain errors for a bad name or pid).
 - **8.3.0 (2026-11-01)**: Pipes. `userrun A | userrun B` in the Terminal sends what A writes into B's input through a 4 KiB pipe in the kernel. A write that fits goes in whole or waits for room, a read waits for data, and each end sees the other end close: B reads the end, A gets -EPIPE. Check: `arm64-pipe-check.py` (600 lines through the pipe, in order, and -EPIPE when the reader quits early).
 - **8.2.0 (2026-11-01)**: All four of the Pi's cores are up. Until now cores 1 to 3 slept from power on; core 0 now wakes them, by PSCI on QEMU and by the spin table the Pi's firmware leaves them on, and each turns on the MMU with core 0's tables and counts the wake-ups core 0 sends every desktop pass. `cores` in the Terminal lists them. They run no kernel code yet; app threads move onto them next. Check: `arm64-smp-check.py` (QEMU virt with four CPUs and with one, and the Pi image on raspi4b, every core by its MPIDR).
@@ -2138,13 +2138,13 @@ Updated 2026-11-01, evening Vancouver time. The loop's working notes live in `~/
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand.** 8.0.0, Build things, is in (with Bluetooth in Settings folded in from 7.9). 8.1.0 brings threads, locks and condition variables to Pi apps, the first item of the Berkeley list, 8.2.0 wakes the other three cores, 8.3.0 adds pipes between apps and 8.4.0 lets an app spawn and wait for another. 7.6 onward has not run on the board yet.
+**Where things stand.** 8.0.0, Build things, is in (with Bluetooth in Settings folded in from 7.9). 8.1.0 brings threads, locks and condition variables to Pi apps, the first item of the Berkeley list, 8.2.0 wakes the other three cores, 8.3.0 adds pipes between apps 8.4.0 lets an app spawn and wait for another, and 8.5.0 gives apps sockets. 7.6 onward has not run on the board yet.
 
 **Waiting on Joshua.** The board pass (`docs/TESTING.md`): it is physical. The Bluetooth keyboard's stuck key repeat needs the board too. The 9.0 and 10.0 bumps wait on their gates (a stranger builds a Nimbus; a month as Joshua's only computer), which QEMU cannot show, so the loop ships their software as 8.x minors. The loop asks nothing else and decides design calls itself, saying what it chose here. Decided 2026-10-27: Wi-Fi passwords stay machine-wide, so the network is up before anyone signs in; apps are signed by Joshua's key and unsigned ones need an admin; the store is an `install` from the landing. Decided 2026-10-29: a card flashed without the key gets plankc unsigned, the same rule.
 
 **Next, in order.**
 1. Whatever the board shows broken.
-2. The rest of the Berkeley list: sockets, priorities, paging, the journal, then app threads on the four cores.
+2. The rest of the Berkeley list: priorities, paging, the journal, then app threads on the four cores.
 3. 9.0's software QEMU can prove (USB storage first), then 10.0's (screen reader, languages, self-update with a fallback kernel, a security audit).
 
 Restart prompt:

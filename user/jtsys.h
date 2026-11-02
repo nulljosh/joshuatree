@@ -75,6 +75,8 @@
 #define JT_SYS_FUTEX        409 /* 8.1.0, Pi only: (0, addr, val) sleeps while *addr == val; (1, addr, n) wakes up to n sleepers */
 #define JT_SYS_SPAWN        410 /* 8.4.0, Pi only: (name, words, 0) starts another app with those words; returns its pid or -errno */
 #define JT_SYS_WAIT         411 /* 8.4.0, Pi only: (pid) waits for a child to end; returns its exit status (-1 for a fault or a kill) or -ECHILD */
+#define JT_SYS_CONNECT      412 /* 8.5.0, Pi only: (host, port) opens a TCP connection; returns fd 100 for read, write and close, or -errno */
+#define JT_SOCK_FD          100
 #define JT_SYS_CLIPBOARD   399 /* 1.9.28: the one system clipboard, 4 KB; see kernel/syscall.h */
 #define JT_CLIP_SET        1
 #define JT_CLIP_GET        2
@@ -287,6 +289,8 @@ static inline int jt_args(char *buf, unsigned cap)                 { return jt_s
 /* 8.4.0, the Pi: start another app with these words and get its pid; wait for it and get its exit status. */
 static inline int jt_spawn(const char *name, const char *words)      { return jt_syscall(JT_SYS_SPAWN, (jt_arg)name, (jt_arg)words, 0); }
 static inline int jt_wait(int pid)                                    { return jt_syscall(JT_SYS_WAIT, (jt_arg)pid, 0, 0); }
+/* 8.5.0, the Pi: a TCP connection to a name or a dotted address; read, write and close fd JT_SOCK_FD. One at a time. */
+static inline int jt_connect(const char *host, int port)              { return jt_syscall(JT_SYS_CONNECT, (jt_arg)host, (jt_arg)port, 0); }
 static inline int jt_writefile(const char *path, const void *buf, unsigned len) { return jt_syscall(JT_SYS_WRITEFILE, (jt_arg)path, (jt_arg)buf, (jt_arg)len); }
 static inline int jt_feed(int kind, const char *arg)               { return jt_syscall(JT_SYS_FEED, (jt_arg)kind, (jt_arg)arg, 0); }
 /* Replace the system clipboard with len bytes (0 clears). Returns len, -EINVAL over JT_CLIP_MAX, -EFAULT. */
