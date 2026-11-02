@@ -50,7 +50,7 @@ static void login_paint(void) {
     int s = (int)window_scale(), W = (int)fb_w, H = (int)fb_h;
     int cx = (W / s - LG_W) / 2, cy = (H / s - LG_H) / 2 - 8;
     cur_hide();
-    fb_rect((cx - 6) * s, (cy - 6) * s, (LG_W + 12) * s, (LG_H + 12) * s, wall_get());   /* wipe the last card, the corners included */
+    wall_fill((cx - 6) * s, (cy - 6) * s, (LG_W + 12) * s, (LG_H + 12) * s);   /* wipe the last card, the corners included (the park picture or a flat colour) */
     gui_rounded_rect_on_wallpaper(cx, cy, LG_W, LG_H, 0x00faf8f4, 14);
     menu_mark_paint(W / 2, (cy + 44) * s, sg(48), LG_INK);
     lg_centred("Joshua Tree", cy + 72, 1, LG_INK);
@@ -84,7 +84,7 @@ static void login_show(void) {
     login_live = 1;
     cur_hide();
     settings_user_wall();                                 /* nobody is signed in: the card's wallpaper, not the last person's */
-    fb_rect(0, 0, (int)fb_w, (int)fb_h, wall_get());
+    wall_paint(fb, fb_pitch, (int)fb_w, (int)fb_h, fb_swap);
     fb_flush(0, 0, (int)fb_w, (int)fb_h);
     login_paint();
     con_quiet = 1; uart_puts("login: screen up\n");

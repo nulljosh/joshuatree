@@ -95,7 +95,7 @@ function dockSlotPos(slot) {
   const cy = LOGICAL_H - marginBot - pad - Math.floor(icon / 2);
   return [x0 + slot * (icon + gap), cy];
 }
-const CHAT_SLOT = 7; // GUI_DOCK_DEFAULT order in kernel.c: Apps,Burrow,Mail,Calendar,Notes,Reminders,Terminal,Samantha,Weather,Stocks,Trash (0-indexed dock tiles)
+const CHAT_SLOT = 7; // GUI_DOCK_DEFAULT order in kernel.c: Apps,Files,Mail,Calendar,Notes,Reminders,Terminal,Samantha,Weather,Stocks,Trash (0-indexed dock tiles)
 const [CHAT_X, CHAT_Y] = dockSlotPos(CHAT_SLOT);
 
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.txt': 'text/plain', '.elf': 'application/octet-stream' };

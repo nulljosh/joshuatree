@@ -284,7 +284,7 @@ void dock_paint(void) {
    moving to another slot or to none puts the plain band back before the next label; nothing is allocated until then.
    The pointer drives it (slice 4, below); the dockhover test build calls it once at boot. Names follow APPS[] in
    kernel/kernel.c for GUI_DOCK_DEFAULT_ORDER (arm64-m1c-check.py compares them). */
-const char *const dock_names[GUI_ICON_COUNT] = {"Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"};
+const char *const dock_names[GUI_ICON_COUNT] = {"Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Settings", "Trash"};
 unsigned *dock_band, *dock_mem;   /* dock_mem is the band copy's memory, taken at boot like the Browser's buffer so no mark's release can rewind over it */
 int cur_on;           /* slice 4: the pointer's arrow is on the screen */
 void cur_hide(void);

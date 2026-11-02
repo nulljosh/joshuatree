@@ -9,17 +9,17 @@
 ![release](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/release.yml?branch=main&label=release)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A small operating system, written from scratch, that runs on a Raspberry Pi 4, in an emulator on a Mac and in your browser. It has its own windows, dock, sound, internet and 38 apps, from Notes and a Terminal to a web browser, mail and live Weather, plus a few games. Its compiler is its own too: Plank's, written in Plank, rebuilds itself on the Pi with nothing from outside. Samantha, the assistant from [Turing](https://github.com/nulljosh/turing), runs on it: she answers, works the machine and writes apps. The internet work for 7.0 and talking to her through a USB mic are next on the real board.
+A small operating system, written from scratch, that runs on a Raspberry Pi 4, in an emulator on a Mac and in your browser. It has its own windows, dock, sound, internet and 38 apps, from Notes and a Terminal to a web browser, mail and live Weather, plus a few games. Its compiler is its own too: Plank's, written in Plank, rebuilds itself on the Pi with nothing from outside.
 
 <img src="landing/shots/desktop-apps.webp" width="100%" alt="The Joshua Tree desktop with the Terminal and live Weather open, and running-app dots in the dock">
 
 <p>
-  <img src="landing/shots/samantha-chat.webp" width="32%" alt="Samantha">
-  <img src="landing/shots/app-files.webp" width="32%" alt="Burrow, the file browser">
+  <img src="landing/shots/app-files.webp" width="32%" alt="Files, the file browser">
   <img src="landing/shots/app-notes.webp" width="32%" alt="Notes">
   <img src="landing/shots/app-terminal.webp" width="32%" alt="Terminal running uptime, mem and ls">
   <img src="landing/shots/app-weather.webp" width="32%" alt="Weather, live">
   <img src="landing/shots/app-stocks.webp" width="32%" alt="Stocks, live quotes and a chart">
+  <img src="landing/shots/app-calendar.webp" width="32%" alt="Calendar">
 </p>
 
 ## Try it

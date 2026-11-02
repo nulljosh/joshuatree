@@ -30,7 +30,7 @@ CLOSE_SPOTS = ((94, 56), (34, 56), (24, 24))   # (24,24): Samantha's red dot, sh
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-23, then Apps folder, then Trash)
-APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
+APPS = ["Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
         "Scrounge", "Keyrate", "Bookrank", "Quotes", "Patois", "Toroid", "Thinkpond",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity"]

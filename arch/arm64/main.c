@@ -506,21 +506,19 @@ int user_writable(unsigned long a, unsigned long n) {   /* memory the kernel may
         || span(a, n, UB + UP_HEAP, heap_len());
 }
 /* M3e: JT_SYS_BRK with i386's semantics (docs/ARCHITECTURE.md, kernel/brk.c): 0 reads the top, a fresh app's is the heap's
-   base; any other value sets it, to the byte. Pages between the old and new top (rounded up to whole pages) are mapped EL0
-   read-write and never executable, then zeroed, so no earlier app's bytes are ever seen; shrinking unmaps them. A top below
+   base; any other value sets it, to the byte. Growing maps nothing (8.7.0): heap_fault maps and zeroes each page on its first
+   touch, so no earlier app's bytes are ever seen; shrinking unmaps the pages past the new top. A top below
    the base or past the arena's end is -EINVAL and nothing moves. The memory is the arena's own (identity mapped, 14 MiB),
    so there is nothing to run out of below that cap. app_unmap drops the whole heap when the app ends. */
 static long app_brk_set(unsigned long want) {
-    const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
     unsigned long base = UB + UP_HEAP, top = app_brk ? app_brk : base;
     if (!want) return (long)top;
     if (want < base || want > UB + UP_WIN) return -22;   /* the heap stops where the window buffer starts */
     unsigned long have = (top + 4095) & ~4095UL, need = (want + 4095) & ~4095UL;
-    (void)PAGE; (void)AP_EL0_RW; (void)PXN; (void)UXN;   /* 8.7.0: growing maps nothing; heap_fault maps a page when it is first touched */
     for (unsigned long v = need; v < have; v += 4096) l3[ap->l3off + ((v - UB) >> 12)] = 0;
     __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
     if (want > top && (top & 4095) && l3[ap->l3off + ((top - UB) >> 12)])   /* the old top's own page is mapped: bytes past the old top read zero again */
-        for (unsigned long v = top; v < (want < ((top + 4095) & ~4095UL) ? want : ((top + 4095) & ~4095UL)); v++) *(unsigned char *)v = 0;
+        for (unsigned long v = top, end = want < have ? want : have; v < end; v++) *(unsigned char *)v = 0;
     app_brk = want;
     return (long)want;
 }
@@ -1081,8 +1079,8 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     app_window_close();   /* leaves `ap` on the window now in front... */
     ap = me;              /* ...so put it back: the pages unmapped and the line printed below are this app's, not the front one's */
     app_unmap();
-    if (me->preempts) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" was cut off "); uart_dec(me->preempts); uart_puts(" times\n"); }
-    if (me->heap_pages) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" touched "); uart_dec(me->heap_pages); uart_puts(" heap pages\n"); }   /* 8.7.0 */   /* 8.1.0: arm64-threads-check.py reads it */
+    if (me->preempts) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" was cut off "); uart_dec(me->preempts); uart_puts(" times\n"); }   /* 8.1.0: arm64-threads-check.py reads it */
+    if (me->heap_pages) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" touched "); uart_dec(me->heap_pages); uart_puts(" heap pages\n"); }   /* 8.7.0: arm64-heap-check.py reads it */
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
     uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times\n");

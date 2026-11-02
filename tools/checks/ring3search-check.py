@@ -210,7 +210,7 @@ def ramfs_boot(cmd):
     print(f"ramfs listing: {listed} entries")
     if listed is None or listed < 2:
         fails.append(f"expected README.TXT and NOTES.TXT in the ramfs listing, got {listed}")
-    if "dirs 1" not in serial():  # ramfs_seed_demo_docs() seeds one real folder for the tour's Burrow scene
+    if "dirs 1" not in serial():  # ramfs_seed_demo_docs() seeds one real folder for the tour's Files scene
         fails.append("ramfs has exactly the one seeded demo folder but the listing did not report it")
     time.sleep(0.5)
 

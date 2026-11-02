@@ -1691,14 +1691,14 @@ if (typeof document !== "undefined") (function () {
   // just "click the dock tile, type or arrow around, press Escape". Escape
   // closes a window, a click inside one never does (user/*.c poll loops), so
   // runSoloApp ends every scene with a real Escape. Dock slots follow
-  // GUI_DOCK_DEFAULT in kernel.c: Apps, Burrow, Mail, Calendar, Notes,
+  // GUI_DOCK_DEFAULT in kernel.c: Apps, Files, Mail, Calendar, Notes,
   // Reminders, Terminal, Samantha, Weather, Stocks, Trash. The other 17 apps
   // live in the Apps folder and get a short beat each (APPS_FOLDER_TOUR).
   var DOWN2 = downKeys(2);
   function downKeys(n) { var c = []; for (var i = 0; i < n; i++) c = c.concat([0xE0, 0x50, 0xE0, 0xD0]); return c; }
   var ENTER_KEY = { type: 'raw', codes: [13], speed: 80 };
   var ESC_KEY = { type: 'raw', codes: [27], speed: 80 };
-  var BURROW_APP = { name: 'Burrow', slot: 1, dwell: 6500, script: [
+  var BURROW_APP = { name: 'Files', slot: 1, dwell: 6500, script: [
     { type: 'wait', ms: 700 },
     // no arrow walk: Burrow lists folders first, so the cursor already sits on the demo's DOCS folder (kernel.c seeds it with two files)
     ENTER_KEY, // open the folder under the cursor
@@ -1787,7 +1787,7 @@ if (typeof document !== "undefined") (function () {
   // capable and keeps the exact same add-a-reminder script the old
   // sequential entry used, just now run while a second window (Files) is
   // genuinely open alongside it, not before/after it.
-  var MW_FILES = { name: 'Burrow', slot: 1 };
+  var MW_FILES = { name: 'Files', slot: 1 };
   var MW_WEATHER = { name: 'Weather', slot: 8 };
   var MW_REMINDERS = { name: 'Reminders', slot: 5, script: [
     { type: 'keys', text: 'a', speed: 200 },
@@ -2157,7 +2157,7 @@ if (typeof document !== "undefined") (function () {
   // H1 just named instead of cycling through unrelated captions underneath
   // it. Direct request: the two headings should read as one thought.
   var APP_CAPTION = {
-    'Burrow': 'Real FAT16, real reads and writes',
+    'Files': 'Real FAT16, real reads and writes',
     'Weather': 'Live data over its own network stack',
     'Mail': 'A real mailbox on a real filesystem',
     'Calendar': 'Real events, persisted across reboots',

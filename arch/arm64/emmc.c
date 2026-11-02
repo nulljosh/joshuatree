@@ -274,9 +274,9 @@ int sd_mount(void) {
     static unsigned char b[1024];
     mounted = 0; part_blocks = 0; part_reserved = 0xFFFFFFFFu;
     for (int i = 0; i < BC_N; i++) bc[i].ok = 0;   /* 8.8.0: a new mount, perhaps a new card: nothing cached is trusted */
-    unsigned long nb = src_usb ? usb_disk_blocks() : 0;
-    if (!(src_usb ? nb != 0 : emmc_init()) || !dev_read(0, 1, b)) return 0;
-    if (!src_usb) nb = blocks;
+    if (src_usb ? !usb_disk_blocks() : !emmc_init()) return 0;
+    unsigned long nb = src_usb ? usb_disk_blocks() : blocks;   /* the disk's size in 512-byte blocks */
+    if (!dev_read(0, 1, b)) return 0;
     const char *who = src_usb ? "usb disk " : "sd ";
     if (b[510] != 0x55 || b[511] != 0xAA) { kputs(who); kputs("no partition table\n"); return 0; }
     unsigned start = 0, size = 0;

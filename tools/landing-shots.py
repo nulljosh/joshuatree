@@ -31,13 +31,13 @@ LOG = "/tmp/jt-landingshots-serial.log"; DUMP = "/tmp/jt-landingshots.raw"
 FB = 0xfd000000; W, H = 1920, 1080; PORT = 4458
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 WIN = (70, 40, 820, 385)            # logical x, y, w, h
-WIN_OF = {"chat": (70, 90, 820, 385)}   # her full-screen view: lips and chin in, the glass panel (y=478) out
+WIN_OF = {}   # per-tile crop overrides (none now)
 OUT = (984, 462)                    # 820x385 * 0.6, same ratio
 DESKTOP_PX, DESKTOP_RGB = (480, 511), (0xEF, 0xEB, 0xE4)
 
 # kernel.c GUI_DOCK_DEFAULT: Apps,Files,Mail,Calendar,Notes,Reminders,Terminal,Chat,Weather,Stocks,Trash
 SLOT0_X, PITCH, ICON, DOCK_Y = 226, 43, 37, 487
-SLOT = {"files": 1, "calendar": 3, "notes": 4, "terminal": 6, "chat": 7, "weather": 8, "stocks": 9}
+SLOT = {"files": 1, "calendar": 3, "notes": 4, "terminal": 6, "weather": 8, "stocks": 9}
 # Fleet apps live in the Apps folder, not the dock. They boot with `open=<app>` (the flag the ring3 checks
 # use) and no NIC at all, so each one draws its built-in offline samples and no tile depends on the network.
 FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
@@ -54,7 +54,7 @@ FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
          "snake": ("snak", "snake: ring-3 window", "snake: first apple"),
          "chess": ("ches", "chess: ring-3 window", "chess: new game")}   # Windgate: offline by design; Space starts it and the shot lands mid in-breath
 FILE = {"bookrank": "app-bookrank", "tonchi": "app-tonchi", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
-        "hamurabi": "app-hamurapi", "windgate": "app-windgate", "panes": "app-panes", "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
+        "hamurabi": "app-hamurapi", "windgate": "app-windgate", "panes": "app-panes", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
         "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks", "desktop-apps": "desktop-apps",
         "solitaire": "app-solitaire", "paddle": "app-paddle", "bricks": "app-bricks", "depths": "app-depths", "snake": "app-snake", "chess": "app-chess"}
 

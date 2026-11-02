@@ -11,7 +11,7 @@ holding JT/HELLO.TXT, JT/DOCUMENTS/{NOTE.TXT, SUB/INNER.TXT}, JT/MUSIC/ALPHA.WAV
     Music through JT_SYS_LAUNCH_REQUEST ("launch music MUSIC/ALPHA.WAV"), Music starts that song ("music: opened
     ALPHA.WAV"), and Esc closes Music;
   - Esc closes it ("finder: closed", exit 0).
-A second boot with no card: Spotlight's Burrow (the dock's tile, slot 1) opens Finder, which says "finder: builtin" and lists the built-in apps with a plain note.
+A second boot with no card: Spotlight's Files (the dock's tile, slot 1) opens Finder, which says "finder: builtin" and lists the built-in apps with a plain note.
 No EL0 fault, no KERNEL CRASH. FINDER_SHOT=path.png keeps a screendump of the window of the list (needs sips or magick).
 Skips (exit 0) when clang, ld.lld, qemu-system-aarch64 or mtools is missing.
 Usage: tools/checks/arm64-finder-check.py   (from the repo root)
@@ -152,7 +152,7 @@ try:
     b.close(); b = None
 
     b = Boot(False)
-    n0 = open_finder(b, "burrow")   # slot 1 is the dock's Burrow tile, the file window: it opens Finder too
+    n0 = open_finder(b, "files")   # slot 1 is the dock's Files tile, the file window: it opens Finder too
     check("with no card Finder says it is showing what is built in", b.wait_for("finder: builtin\n", 10, n0), b.uart()[n0:][-300:])
     m = re.search(r"M3c window finder (\d+)x(\d+) at (\d+),(\d+)\n", b.uart()[n0:])
     if m:

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Burrow never cuts a file name short (2.6.30). Joshua: "File names are being cut off."
+"""Files never cuts a file name short (2.6.30). Joshua: "File names are being cut off."
 
 Icon view used to chop a label at 76 px with no sign it had been chopped, so a
 12 character FAT name lost its end. Now a long name wraps onto a second line.
 
 Boots headless with a FAT16 image holding a short file (A.TXT) and a long one
-(LONGNAME.TXT), opens Burrow, switches to icon view (key 2) and looks at the
+(LONGNAME.TXT), opens Files, switches to icon view (key 2) and looks at the
 two tiles' label lines:
 
   1. the short name has dark text on line one and nothing on line two;
@@ -98,7 +98,7 @@ fails = []
 try:
     time.sleep(5.0)
     move(SLOT0_X + BURROW_SLOT * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.5)
-    if not wait("burrow: ring-3 window", 20): fails.append("Burrow never opened its window")
+    if not wait("burrow: ring-3 window", 20): fails.append("Files never opened its window")
     key("2"); time.sleep(0.8)
     img = frame()
     if os.environ.get("BURROW_LABELS_SHOT"):
@@ -121,4 +121,4 @@ finally:
     except subprocess.TimeoutExpired: q.kill()
 if fails:
     print("FAIL:"); [print("  - " + x) for x in fails]; sys.exit(1)
-print("PASS: Burrow icon view keeps a short name on one line and wraps a long one onto a second line instead of cutting it")
+print("PASS: Files icon view keeps a short name on one line and wraps a long one onto a second line instead of cutting it")

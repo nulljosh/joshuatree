@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Burrow: the Files app was renamed. Its icon was a kit fox, then (2.7.2) one bold two-tone folder, then (2.26.0) the burrow doorway as a
+"""Files (8.10.0, Joshua: "rename Burrow to Files or something simple"; it was Files before 2.26.0, then Burrow). The icon stays the face.
+Burrow: the Files app was renamed then. Its icon was a kit fox, then (2.7.2) one bold two-tone folder, then (2.26.0) the burrow doorway as a
 two-tone face, then (2.26.0, final) a full-bleed Finder-style tile split light/dark with two dots and a smile, no ears or fur.
 
 What this proves, from the real sources (no QEMU, so it is fast):
@@ -47,12 +48,12 @@ kernel = read("kernel/kernel.c")
 m = re.search(r"const struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", kernel, re.S)
 names = re.findall(r'/\*\s*\d+\s*\*/\s*\{"([^"]+)"', m.group(1))
 check(len(names) >= 24, "APPS table parsed (%d rows)" % len(names))
-check(names[0] == "Burrow", "APPS[0] is %r, want 'Burrow'" % names[0])
-check("Files" not in names, "no APPS row is named 'Files'")
+check(names[0] == "Files", "APPS[0] is %r, want 'Files'" % names[0])
+check("Burrow" not in names, "no APPS row is named 'Burrow' any more")
 menu = re.search(r'"About Joshua Tree",([^}]*?)"Shut Down"', read("kernel/menu.c"), re.S).group(1)   # the Apple menu's rows, kernel/menu.c since 4.20.10
-check('"Burrow"' in menu and '"Files"' not in menu, "menu-bar list says Burrow, not Files")
-check(re.search(r'\{"Burrow",\s*user_burrow,\s*USER_BURROW_LEN,\s*USER_BURROW_CLEN,\s*USER_BURROW_SUM,\s*"BURROW\.BIN"\}', read("kernel/ring3app.c")) is not None,
-      "RING3_APPS has the Burrow row (BURROW.BIN)")
+check('"Files"' in menu and '"Burrow"' not in menu, "menu-bar list says Files, not Burrow")
+check(re.search(r'\{"Files",\s*user_burrow,\s*USER_BURROW_LEN,\s*USER_BURROW_CLEN,\s*USER_BURROW_SUM,\s*"BURROW\.BIN"\}', read("kernel/ring3app.c")) is not None,
+      "RING3_APPS has the Files row (BURROW.BIN, the file name kept)")
 check(not os.path.exists(os.path.join(ROOT, "kernel/files.h")), "the in-kernel kernel/files.h is gone")
 check("burrow: ring-3 window" in read("user/burrow.c"), "user/burrow.c identifies itself as burrow")
 
@@ -144,5 +145,5 @@ check(not os.path.exists(os.path.join(ROOT, "art/icons/files.svg")), "old art/ic
 r = subprocess.run([sys.executable, os.path.join(ROOT, "tools/gen/gen_icon_art.py"), "--check"], capture_output=True, text=True)
 check(r.returncode == 0, "kernel/icon_art.h matches the SVGs")
 
-print("FAIL: %d problem(s)" % len(fails) if fails else "PASS: Burrow rename, aliases and icon art all hold")
+print("FAIL: %d problem(s)" % len(fails) if fails else "PASS: Files rename, aliases and icon art all hold")
 sys.exit(1 if fails else 0)

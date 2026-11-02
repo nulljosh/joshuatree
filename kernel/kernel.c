@@ -906,7 +906,7 @@ again:
    window list all key off it), so a new app is one row here plus one
    bump of GUI_APP_COUNT/GUI_APPS_FOLDER/GUI_TRASH above. */
 const struct app APPS[GUI_APP_COUNT] = {
-    /*  0 */ {"Burrow",     0x00707070, gui_icon_folder,     burrow_ring3_open,     0, 0}, /* ring 3 (user/burrow.c), a compositor window */
+    /*  0 */ {"Files",     0x00707070, gui_icon_folder,     burrow_ring3_open,     0, 0}, /* ring 3 (user/burrow.c), a compositor window */
     /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       mail_ring3_open,       0, 0}, /* ring 3 (user/mail.c), a compositor window */
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   calendar_ring3_open,   0, 0}, /* 1.9.12: ring 3 (user/calendar.c) */
     /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      notes_ring3_open,      0, 0}, /* ring 3 (user/notes.c), a compositor window */

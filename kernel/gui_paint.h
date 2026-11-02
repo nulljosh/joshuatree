@@ -6,7 +6,7 @@
    They draw through window.h's physical-pixel calls and the platform's
    gui_wallpaper_sample, which each build provides. */
 
-/* The default dock, slot by slot: the Apps folder, Burrow, Mail, Calendar,
+/* The default dock, slot by slot: the Apps folder, Files, Mail, Calendar,
    Notes, Reminders, Terminal, Chat, Weather, Stocks, Settings, Trash. Indices are
    APPS[] and ICON_ART[] slots. */
 #define GUI_APPS_FOLDER 38 /* not an app: the dock tile that opens the folder */

@@ -698,7 +698,7 @@ static void civil(unsigned days, int *y, int *m, int *d) {
 }
 
 static const char *const APPNAME[] = {
-    "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Scrounge", "Keyrate",
+    "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Scrounge", "Keyrate",
     "Bookrank", "Quotes", "Patois", "Toroid", "Thinkpond", "Fieldbook", "Contacts", "Calculator",
     "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Clock", "Music", "Movies", "Hamurapi", "Airwell", "Panes", "Claude",
 };
@@ -751,7 +751,7 @@ static int match_app(const char *arg) {
             if (!*w) break;
         }
     for (const char *w = b; ; w++) {
-        if ((w == b || *(w - 1) == ' ') && (word_prefix_ci("files", w) || word_prefix_ci("file browser", w))) return 0;
+        if ((w == b || *(w - 1) == ' ') && (word_prefix_ci("files", w) || word_prefix_ci("file browser", w) || word_prefix_ci("burrow", w))) return 0;   /* 8.10.0: Burrow is Files again; the old name still opens it */
         if (!*w) break;
     }
     return -1;

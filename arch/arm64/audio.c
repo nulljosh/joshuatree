@@ -47,6 +47,10 @@ static void hash_short(short s) {
     sum_hash = (sum_hash ^ ((unsigned)s >> 8 & 0xFF)) * 16777619u;
 }
 static short scale(short s) { return (short)((int)s * volume / 100); }   /* toward zero, never past the input: the PWM range cannot be exceeded */
+static unsigned long smooth1024(unsigned long k, unsigned long n) {   /* 8.9.0: frame k of n along a smoothstep (3t^2 - 2t^3), 0..1024 */
+    unsigned long t = k * 1024 / n;
+    return (3 * t * t * 1024 - 2 * t * t * t) / (1024UL * 1024UL);
+}
 static void ring_push(short l, short r) {
     l = scale(l); r = scale(r);
     sum_abs += (unsigned)(l < 0 ? -l : l) + (unsigned)(r < 0 ? -r : r);
@@ -194,10 +198,10 @@ static void app_finish(void) {
    frame, and at its end falls back over 20 ms and rests at the bottom until the PWM stops. */
 static int fading;              /* the stream's sound is out and the fall to the bottom is queued */
 static unsigned long fade_end;  /* the frame after which the fall, and a little bottom, have played */
+static unsigned long fade_stop; /* the frame after the last one the fall wrote: the bottom it queued ends here */
 static unsigned fade_n(void) { unsigned n = aq_rate / 50; return n < GUARD ? GUARD : n; }
-static unsigned fade_at(unsigned k, unsigned n, int up) {   /* frame k of n of a smoothstep (3t^2 - 2t^3) between bottom and midpoint */
-    unsigned long t = (unsigned long)(up ? k : n - k) * 1024 / n, e = (3 * t * t * 1024 - 2 * t * t * t) / (1024UL * 1024UL);   /* 0..1024 */
-    return (unsigned)(silence * e / 1024);
+static unsigned fade_at(unsigned k, unsigned n, int up) {   /* frame k of n between bottom and midpoint */
+    return (unsigned)(silence * smooth1024(up ? k : n - k, n) / 1024);
 }
 static void app_begin(void) {
     range = 27000000u / aq_rate;
@@ -231,14 +235,18 @@ void audio_pump(void) {
             unsigned long at = done + GUARD; unsigned n = fade_n(), rest = aq_rate / 4;
             for (unsigned k = 0; k < n; k++) pcm_put(at + k, fade_at(k, n, 0));
             for (unsigned k = 0; k < rest; k++) pcm_put(at + n + k, 0);   /* the bottom, until the PWM stops */
-            pcm_clean(at, at + n + rest);
-            fade_end = at + n + GUARD; fading = 1;
+            fade_stop = at + n + rest; fade_end = at + n + GUARD; fading = 1;
+            pcm_clean(at, fade_stop);
             return;
         }
         if (done >= fade_end) app_finish();
         return;
     }
-    fading = 0;   /* more sound came while it fell: it carries on (a short dip, not a pop to the bottom and back) */
+    if (fading) {   /* more sound came while it fell: it carries on (a short dip, not a pop to the bottom and back) */
+        unsigned long from = done + GUARD;   /* the queued fall and bottom ahead go back to silence, or a later run dry would play them */
+        if (from < fade_stop) { for (unsigned long k = from; k < fade_stop; k++) pcm_put(k, silence); pcm_clean(from, fade_stop); }
+        fading = 0;
+    }
     if (pcm_wr < done) pcm_wr = run0 = done + GUARD;      /* it ran dry: carry on just ahead of it */
     unsigned long wr0 = pcm_wr, ahead = done + aq_rate / 8;
     while (pcm_wr < ahead && aq_head != aq_tail) {
@@ -279,9 +287,9 @@ static int drain(void) {   /* the ring into the sink, a frame at a time */
     return 0;
 }
 
-/* Push `frames` frames through the ring from `src` (stereo) or, when src is 0, a triangle wave of `freq` Hz. */
-static int ramp_out;   /* 8.9.0: the chime: end on a fade from the midpoint down to the pin's off level (stream, below) */
-static int stream(const short *src, int frames, int rate, int freq) {
+/* Push `frames` frames through the ring from `src` (stereo) or, when src is 0, a triangle wave of `freq` Hz. With
+   `ramp_out` (8.9.0, the chime) it ends on a fade from the midpoint down to the pin's off level (below). */
+static int stream(const short *src, int frames, int rate, int freq, int ramp_out) {
     unsigned phase = 0, step = freq ? (unsigned)(((unsigned long)freq << 32) / (unsigned)rate) : 0;
     int bad = 0;
     if (audio_busy()) { fail("busy, an app is playing"); return -1; }   /* M3e: the PWM is the app's until its stream ends */
@@ -310,8 +318,7 @@ static int stream(const short *src, int frames, int rate, int freq) {
         int n = rate / 4;
         for (int k = 0; k < n && !bad; ) {
             while (k < n && ring_count < RING_FRAMES) {
-                long t = (long)(k + 1) * 1024 / n, e = (3 * t * t * 1024 - 2 * t * t * t) / (1024L * 1024L);   /* 0..1024 */
-                short v = (short)(-32768L * e / 1024);
+                short v = (short)(-32768L * (long)smooth1024((unsigned long)k + 1, (unsigned long)n) / 1024);
                 ring[ring_head * 2] = ring[ring_head * 2 + 1] = v;
                 ring_head = (ring_head + 1) % RING_FRAMES; ring_count++; k++;
             }
@@ -334,7 +341,7 @@ static int stream(const short *src, int frames, int rate, int freq) {
 
 int audio_play(const short *samples, int frames, int rate) {
     if (!samples || frames < 1 || rate < 8000 || rate > 48000) { fail("bad samples or rate"); return -1; }
-    return stream(samples, frames, rate, 0);
+    return stream(samples, frames, rate, 0, 0);
 }
 /* 7.7.0: the restart and shut down chime, two soft bell notes (E5, then A5 over it), instead of the jack's crackle when
    the reset cut the PWM mid-sample. Each note rises over 6 ms and fades to silence; the clip starts and ends on the
@@ -361,13 +368,10 @@ int audio_chime(void) {
         chime_buf[i * 2] = chime_buf[i * 2 + 1] = s;
     }
     put_str("audio: chime\n");
-    ramp_out = 1;
-    int r = stream(chime_buf, CHIME_FRAMES, CHIME_RATE, 0);
-    ramp_out = 0;
-    return r;
+    return stream(chime_buf, CHIME_FRAMES, CHIME_RATE, 0, 1);
 }
 int audio_tone(int freq_hz, int ms) {
     if (freq_hz < 20 || freq_hz > 20000 || ms < 1 || ms > 5000) { fail("tone needs 20..20000 Hz and 1..5000 ms"); return -1; }
     put_str("audio: tone "); put_dec((unsigned)freq_hz); put_str(" Hz "); put_dec((unsigned)ms); put_str(" ms\n");
-    return stream(0, (int)((long)TONE_RATE * ms / 1000), TONE_RATE, freq_hz);
+    return stream(0, (int)((long)TONE_RATE * ms / 1000), TONE_RATE, freq_hz, 0);
 }

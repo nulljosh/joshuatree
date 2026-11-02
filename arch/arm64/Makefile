@@ -137,7 +137,7 @@ inflate.o: ../../drivers/inflate.c
 	$(CC) $(SHARED) -c $< -o $@
 jpeg.o: ../../drivers/jpeg.c ../../drivers/jpeg.h   # 6.14.0: Blackcomb's inline JPEGs (Movies has its own ring-3 copy)
 	$(CC) $(SHARED) -c $< -o $@
-wall.o: wall.c park_wall.h ../../kernel/wall_sat.h
+wall.o: wall.c park_wall.h
 	$(CC) $(SHARED) -c $< -o $@
 pi-wall.o: wall.c park_wall.h   # 8.9.0: the Pi starts on the park picture
 	$(CC) $(SHARED) -DPI_BUILD -c $< -o $@

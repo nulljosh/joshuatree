@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Burrow runs as a real ring-3 process (user/burrow.c, RING3_APPS row 20),
+"""Files runs as a real ring-3 process (user/burrow.c, RING3_APPS row 20),
 the Files app that used to be kernel/files.h.
 
-Boots headless with a fresh FAT16 image holding DOCS/HELLO.TXT, opens Burrow
+Boots headless with a fresh FAT16 image holding DOCS/HELLO.TXT, opens Files
 from the dock as a compositor window and checks:
 
   1. the launch ("ring3app: launching BURROW.BIN at ring 3"), the window
@@ -30,7 +30,7 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 226
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-BURROW_SLOT = 1   # GUI_DOCK_DEFAULT: {Apps, Burrow, Mail, ...}
+BURROW_SLOT = 1   # GUI_DOCK_DEFAULT: {Apps, Files, Mail, ...}
 CLOSE_X, CLOSE_Y = 94, 56
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 VIEW_X, VIEW_Y = 78, 72   # gui_launch_from_dock: viewport at (x+8, y+32)
@@ -128,9 +128,9 @@ def tile_has_glyph(img, index=0):
 try:
     time.sleep(5.0)
     b.open_burrow()
-    if not b.wait("ring3app: launching BURROW.BIN at ring 3", 20): fails.append("Burrow was never launched as a ring-3 program from the dock")
+    if not b.wait("ring3app: launching BURROW.BIN at ring 3", 20): fails.append("Files was never launched as a ring-3 program from the dock")
     if not b.wait("syscall: window opened for ring-3 task", 10): fails.append("SYS_WINDOW_OPEN never succeeded from ring 3")
-    if not b.wait("burrow: ring-3 window", 10): fails.append("Burrow never announced its window")
+    if not b.wait("burrow: ring-3 window", 10): fails.append("Files never announced its window")
     root = b.serial().count("burrow: cwd= n=")
     if root < 1: fails.append("no root listing marker (burrow: cwd= n=N)")
     time.sleep(0.5)
@@ -143,8 +143,8 @@ try:
     if not b.wait("burrow: cwd= n=", 8, root + 1): fails.append("Backspace did not go back to the root")
     exits = b.serial().count("BURROW.BIN exited 0")
     b.keys("esc")
-    if not b.wait("BURROW.BIN exited 0", 8, exits + 1): fails.append("Burrow did not exit 0 on Esc")
-    if not b.wait("syscall: window released, task gone", 5): fails.append("Burrow did not release its window on Esc")
+    if not b.wait("BURROW.BIN exited 0", 8, exits + 1): fails.append("Files did not exit 0 on Esc")
+    if not b.wait("syscall: window released, task gone", 5): fails.append("Files did not release its window on Esc")
     b.move(*PARK); time.sleep(0.5)
     for _ in range(100):
         if not near(b.pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): break
@@ -158,7 +158,7 @@ try:
     for _ in range(40):
         time.sleep(0.1)
         if near(b.pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): opened = True; break
-    if not opened: fails.append("Mail did not open from the dock after Burrow closed: desktop not responsive")
+    if not opened: fails.append("Mail did not open from the dock after Files closed: desktop not responsive")
     b.keys("esc"); time.sleep(0.5)
 finally:
     try: cmd({"execute": "quit"})
@@ -172,4 +172,4 @@ if fails:
     for x in fails: print("  - " + x)
     print("--- serial tail ---"); print(b.serial()[-1500:])
     sys.exit(1)
-print("PASS: Burrow ran at ring 3 with its own window, drew the folder grid, Enter entered DOCS and Backspace came back, Esc closed it, and the desktop stayed alive")
+print("PASS: Files ran at ring 3 with its own window, drew the folder grid, Enter entered DOCS and Backspace came back, Esc closed it, and the desktop stayed alive")
