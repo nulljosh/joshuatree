@@ -1394,6 +1394,8 @@ Who the kit is for (nobody has bought one yet):
 - students (an OS small enough to read end to end)
 - small teams that want a private assistant on a box they own, with their own AI key
 
+The realistic play (2026-11-02). Owning a computer does not make someone a buyer. To most people a $500 box without their apps, streaming or Office is a downgrade from the laptop they have. The buyers are the people above, a guess of about 1 in 1,000, not 1 in 10. So 2,000 boxes a year ($1M) means finding them worldwide, online, not in one town: a town of 20,000 would be 10% of everyone. The first proof is the demand gate below.
+
 ### The price and the unit economics
 
 One kit, $500 USD. It has to cover parts, the hours to build and test each box, and upkeep after the sale. A hobby price covers parts only.
@@ -1507,7 +1509,13 @@ The dreams, not plans:
 
 ### Next
 
-The demand gate and the retail check: take a count from the "Notify me" form, price a Pi 4 kit at a normal shop, and write both here.
+The first count, 2026-11-02 (real): the waitlist holds 0 strangers (one key, our own test), the repo has 0 stars and 6 views in two weeks, and the Pi image has 4 downloads across every release. The 26 second film is on the landing; nobody has seen it. The work now is attention, not features.
+
+Who to show it to first: the people who like how it was made. One person and Claude built a whole computer, and that story fits the AI and builder crowd (X, r/ClaudeAI, AI newsletters), who also want a private assistant on a box they own, which is the Samantha box. Purist forums are a worse first stop: r/opensource banned AI-made projects on 2026-10-24 and r/ProgrammingLanguages bans them too, so say how it was made up front everywhere and never hide it. Show HN waits for account karma (refused 2026-10-11).
+
+The landing's first ask should be one any Pi 4 owner can take tonight: flash the free image. People who run it are the box's buyers.
+
+Still open: price a Pi 4 kit at a normal shop and write it here.
 
 Alongside:
 - the Bluetooth mouse clicking on the real Pi
