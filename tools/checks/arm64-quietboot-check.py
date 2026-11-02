@@ -141,7 +141,7 @@ try:
             def click():
                 cmd("input-send-event", events=[{"type": "btn", "data": {"down": True, "button": "left"}}])
                 cmd("input-send-event", events=[{"type": "btn", "data": {"down": False, "button": "left"}}])
-            mx, my = slot_centre(W, H, 10)
+            mx, my = slot_centre(W, H, 11)   # 7.8: Trash is the twelfth tile, Settings sits before it
             if not move_to(mx, my): fails.append("could not move onto the Trash tile")
             else:
                 click()
