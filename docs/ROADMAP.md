@@ -2147,23 +2147,23 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-11-01, evening Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-11-02, early morning Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand (2026-11-02, 02:30).** 8.6.0 is out. PR 1095 (8.7 to 8.9) is in CI after the CI fixes (virtio input queues lend 64 buffers: CI dropped typed keys). Stacked behind it, each on the one before: `feat/files` (8.10.0), `feat/smp-apps` (8.11.0, threads on four cores), `feat/swap` (8.12.0, swap: the Berkeley list is done), `feat/touch` (8.13.0 the kit's screens, then 9.0.0: touch panels and the Nimbus guide; on the card since 02:20). `feat/reader` has the benchmark refresh and is where 10.0 starts: the screen reader (the dock's arrow-key focus already exists in keys.c dock_select; a caption over the dock, `reader` in the Terminal and Cmd+F5, the relay's voice after focus rests), then languages (twelve, per docs/brand/v10/language.webp), self-update with a fallback kernel (Pi 4 tryboot), the security audit, then 10.0.0 and a flash.
+**Where things stand (2026-11-02, 04:00).** 10.0.0 is on main (#1097, with 8.11 to 9.2 in it): apps on all four cores, swap, the kit's screens and touch, the screen reader, twelve languages, and signed self-update with a fallback kernel, after a security audit and a code review whose fixes went in with it. The overnight loop that got here is done.
 
-**Waiting on Joshua.** The board pass (`docs/TESTING.md`): it is physical. The Bluetooth keyboard's stuck key repeat needs the board too. The majors are Joshua's call, and he made it (2026-11-02: "loop all night until v10, then ship it"): 9.0.0 and 10.0.0 are cut when their software ships and is checked in QEMU. The physical halves of their gates (a stranger builds a Nimbus from the guide; a month as Joshua's only computer), the GPU and the camera stay open as board work.
+**Waiting on Joshua.** Signing 10.0's kernel with `tools/update-sign.sh` on his Mac (the app key never leaves it), so a Pi's `update` offers the release. The board pass (`docs/TESTING.md`), with 10.0 flashed when the card is in. The physical halves of 9.0 and 10.0 (a stranger builds a Nimbus from the guide; a month as Joshua's only computer), the GPU and the camera stay open as board work.
 
 **Next, in order.**
-1. Land 1095, then 8.10, 8.11 and 8.12 one PR at a time, each rebased on main.
-2. Whatever the board shows broken (`docs/TESTING.md`).
-3. 9.0's software QEMU can prove, then 10.0's (screen reader, languages, self-update with a fallback kernel, a security audit).
+1. Whatever the board shows broken (`docs/TESTING.md`).
+2. The doc trim: the Shipped log to a line per major (the release notes keep the rest), the 2026-10-03 Pickup to its open items, ARCHITECTURE's history-titled sections in the present tense.
+3. 11.0's list (Now: 11.0, above), then 12's macOS 27 parity.
 
 Restart prompt:
 
 ```
-/loop overnight Joshua Tree run, nonstop until 10.0.0 ships (Joshua 2026-11-02: loop all night until v10, then ship it). Order: (1) land PR 1095 (8.9), then feat/files (8.10), feat/smp-apps (8.11), feat/swap (8.12), one PR at a time, each rebased on main; (2) 9.0 kit software QEMU can prove: display modes for the 8 inch HDMI and 7 inch DSI screens, touch as an absolute pointer, the Nimbus build guide with a check that keeps it in step, then cut 9.0.0; (3) 10.0: screen reader, languages, self-update with a fallback kernel, a security audit against the threat model, then cut 10.0.0. The GPU (V3D) and the camera need the board: say so, never fake them. Rules: every feature gets a check in tools/checks wired into ci-suite.sh that fails when the fix is reverted; run touched checks locally one QEMU at a time, then the pre-push hook, push, gh pr create, gh pr merge --auto --squash; one PR open at a time, build the next branch while CI runs; on a red CI read the job log and fix, never retry blind; regenerate generated files on conflict; bump VERSION and the shipped log each PR; update the Loop handoff in docs/ROADMAP.md each merge; no new .md files; never flash the card unless Joshua says card in; keys never printed; replies to Joshua are 1 line TLDRs
+/loop Joshua Tree after 10.0: (1) whatever the board pass in docs/TESTING.md shows broken; (2) the doc trim: ROADMAP's Shipped log to one line per major, the 2026-10-03 Pickup to its open items, ARCHITECTURE's history-titled sections in the present tense, with the doc checks run by hand since a prose-only PR skips the suite; (3) 11.0's list in ROADMAP, then 12's macOS 27 parity. The GPU (V3D) and the camera need the board: say so, never fake them. Rules: every feature gets a check in tools/checks wired into ci-suite.sh that fails when the fix is reverted; run touched checks locally one QEMU at a time, then the pre-push hook, push, gh pr create, gh pr merge --auto --squash; one PR open at a time; on a red CI read the job log and fix, never retry blind; regenerate generated files on conflict; bump VERSION and the shipped log each code PR; update the Loop handoff in docs/ROADMAP.md each merge; no new .md files; never flash the card unless Joshua says card in; keys never printed; replies to Joshua are 1 line TLDRs
 ```
 
 Rules kept:
