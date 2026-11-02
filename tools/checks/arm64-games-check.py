@@ -109,9 +109,9 @@ try:
         a = shot(app + "-a")
         for _ in range(3): key(move, 60)
         time.sleep(.6); b = shot(app + "-b")
-        end = time.time() + 4   # 6.26.0: a loaded CI runner can draw late (paddle: w changed nothing, 2026-10-26); keep pressing and looking
+        end = time.time() + 10   # 6.26.0: a loaded CI runner can draw late (paddle: w changed nothing, 2026-10-26, and again with 4 s on 2026-11-01); keep pressing and looking
         while win(a) == win(b) and time.time() < end: key(move, 60); time.sleep(.5); b = shot(app + "-b")
-        assert win(a) != win(b), app + ": " + move + " changed nothing"
+        assert win(a) != win(b), app + ": " + move + " changed nothing\n" + uart()[-1200:]
         keep(app, b); close(app)
     open_app("chess", "chess")                      # 4.25.0: a typed e2e4, then the computer's answer
     a = shot("chess-a"); n = len(uart())
