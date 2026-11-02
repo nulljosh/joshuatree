@@ -87,15 +87,15 @@ y = chain(y, [('plankc', 'Plank, in Plank'), ('On the Pi', 'compiles itself'), (
 y = note(y + S[8], 'Checked on every pull request. The kernel is still C, built on a Mac.') + S[32]
 
 # 8.1 to 8.11: what Berkeley's CS162 teaches that the kernel lacked, one minor each (docs/ROADMAP.md, the Berkeley list).
-y = sec(y, 'stack', 'The operating systems course (8.1 to 8.11)')
+y = sec(y, 'stack', 'The operating systems course (8.1 to 8.12)')
 os_ = [('Threads', 'locks, wait, signal', 1), ('Four cores', 'all up, all used', 1), ('Pipes', 'one app into the next', 1), ('Spawn', 'and wait', 1),
        ('Sockets', 'TCP for apps', 1), ('Fair turns', '10 ms slices', 1), ('Paging', 'on first touch', 1), ('Block cache', 'for the card', 1),
-       ('Swap', 'when apps outgrow RAM', 0)]
+       ('Swap', 'heap pages to the card', 1)]
 ow = (IW - 3 * S[16]) / 4
 for i, (a, b, done) in enumerate(os_):
     box(M + (i % 4) * (ow + S[16]), y + (i // 4) * (48 + S[8]), ow, 48, a, b, 'core' if done else 'todo')
 y += ((len(os_) + 3) // 4) * (48 + S[8])
-y = note(y, 'Solid: built and checked in QEMU on every pull request. Dashed: still to come.') + S[32]
+y = note(y, 'Built and checked in QEMU on every pull request.') + S[32]
 
 # The Pi, on the real board. Solid = seen working on the board (docs/ROADMAP.md); dashed = proven in QEMU only.
 y = sec(y, 'chip', 'The Pi, on the real board')

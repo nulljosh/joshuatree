@@ -635,6 +635,12 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         cmd_out("sched: the longest turn an app took was "); cmd_dec((unsigned)(sched_worst * 1000 / cnt_hz())); cmd_out(" ms; every app runs in 10 ms slices, the desktop between them\n");
         sched_worst = 0; return;
     }
+    if (word_is(q, n, "mem")) {   /* 8.12.0: the heap's frame pool and the swap file */
+        extern unsigned pool_in; extern unsigned long swap_outs, swap_ins; unsigned swap_pool_pages(void);
+        cmd_out("mem: "); cmd_dec(pool_in); cmd_out(" of "); cmd_dec(swap_pool_pages()); cmd_out(" heap pages in RAM, ");
+        cmd_dec((unsigned)swap_outs); cmd_out(" sent to the card, "); cmd_dec((unsigned)swap_ins); cmd_out(" read back\n");
+        return;
+    }
     if (word_is(q, n, "cores")) {   /* 8.2.0: which of the four cores are up, and how often each has woken */
         extern volatile unsigned long core_runs[4 * 8], core_jobs[4 * 8], core_mpidr[4]; extern volatile int core_up[4]; unsigned cores_count(void);
         cmd_out("cores: "); cmd_dec(cores_count()); cmd_out(" of 4 running\n");

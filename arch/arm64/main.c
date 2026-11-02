@@ -589,16 +589,90 @@ static unsigned long heap_len(void) { return app_brk ? app_brk - (UB + UP_HEAP) 
 /* 8.7.0: demand paging for the heap. JT_SYS_BRK only moves the top; a heap page is mapped (EL0 read-write, never executable)
    and zeroed the first time the app touches it, from the data abort (exc_el0_sync), or the first time the kernel is about to
    read or write it for the app (user_in_range and user_writable fault the span in first, since a kernel access to an
-   unmapped page would be the kernel's own fault). An app that asks for 8 MiB and uses 12 KiB costs three pages. */
+   unmapped page would be the kernel's own fault). An app that asks for 8 MiB and uses 12 KiB costs three pages.
+   8.12.0: swap. A heap page no longer sits on its own address: it gets a frame from one pool every app shares (SWAP_POOL_PAGES,
+   32 MiB right after the four arenas). When the pool is full the page mapped longest ago goes to JT/SWAP.BIN on the card and its
+   entry keeps the file slot (bit 1 set, bit 0 clear: not valid), so its next touch reads it back into a frame. The entry is
+   cleared and the TLB flushed on every core before the frame is copied out, so a thread on core 1 to 3 faults and asks core 0
+   rather than writing into a page on its way out. The pages a call is about to hand the kernel are pinned until the next call
+   (heap_fault_span), so faulting in a buffer never pushes out the start of the same buffer. */
+#ifndef SWAP_POOL_PAGES
+#define SWAP_POOL_PAGES 8192u   /* 32 MiB; the swap check builds 64 */
+#endif
+#ifndef SWAP_FILE_PAGES
+#define SWAP_FILE_PAGES 8192u   /* JT/SWAP.BIN: 32 MiB, made the first time a page goes out */
+#endif
+#define SWAP_BASE (USER_BASE + APP_SLOTS * ARENA_SIZE)
+static struct { unsigned char slot1; unsigned pg; } frame_of[SWAP_POOL_PAGES];   /* who has frame f: app slot + 1 (0 free) and its arena page */
+static unsigned pool_hand; unsigned pool_in;            /* the oldest frame to look at next; frames in use (`mem`) */
+static unsigned char swap_used[SWAP_FILE_PAGES / 8];
+static int swap_ready;                                   /* JT/SWAP.BIN is there: 1, could not be made: -1 */
+static struct { unsigned slot; unsigned long lo, hi; } pin[4]; static unsigned pins;   /* this call's spans */
+unsigned long swap_outs, swap_ins;                       /* `mem` in the Terminal */
+unsigned swap_pool_pages(void) { return SWAP_POOL_PAGES; }
+int sd_ready(void); int sd_enter_jt(int make); unsigned int fat_cwd_get(void); void fat_cwd_set(unsigned int cluster);
+int fat_read_at(const char *name, unsigned int off, void *buf, unsigned int len); int fat_write_at(const char *name, unsigned int off, const void *buf, unsigned int len);
+int fat_write_file(const char *name, const void *data, unsigned int len); int fat_delete(const char *name);
+static int swap_io(unsigned slot, void *frame, int out) {   /* one page to or from the file; 1 when it moved */
+    unsigned cwd = fat_cwd_get(); int ok = 0;
+    if (sd_ready() && sd_enter_jt(1)) {
+        if (!swap_ready) { fat_delete("SWAP.BIN"); swap_ready = fat_write_file("SWAP.BIN", 0, SWAP_FILE_PAGES * 4096u) ? 1 : -1; }   /* fresh each boot: last boot's pages are nobody's */
+        if (swap_ready == 1) ok = (out ? fat_write_at("SWAP.BIN", slot * 4096u, frame, 4096) : fat_read_at("SWAP.BIN", slot * 4096u, frame, 4096)) == 4096;
+    }
+    fat_cwd_set(cwd);
+    return ok;
+}
+static int pinned(unsigned slot1, unsigned pg) {
+    unsigned long va = apps[slot1 - 1].base + ((unsigned long)pg << 12);
+    for (unsigned i = 0; i < pins; i++) if (pin[i].slot + 1 == slot1 && va + 4096 > pin[i].lo && va < pin[i].hi) return 1;
+    return 0;
+}
+static long pool_take(void) {   /* a free frame, pushing the oldest unpinned page out to the card when there is none; -1 when it cannot */
+    for (unsigned k = 0; k < SWAP_POOL_PAGES; k++) {
+        unsigned f = pool_hand; pool_hand = (pool_hand + 1) % SWAP_POOL_PAGES;
+        if (!frame_of[f].slot1) return f;
+        if (pool_in < SWAP_POOL_PAGES || pinned(frame_of[f].slot1, frame_of[f].pg)) continue;
+        unsigned slot = 0; while (slot < SWAP_FILE_PAGES && swap_used[slot / 8] & 1u << (slot % 8)) slot++;
+        if (slot == SWAP_FILE_PAGES) return -1;   /* the swap file is full too: out of memory */
+        unsigned long *e = &l3[apps[frame_of[f].slot1 - 1].l3off + frame_of[f].pg];
+        unsigned long was = *e;
+        *e = 0;
+        __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");   /* no core writes it from here on */
+        if (!swap_io(slot, (void *)(SWAP_BASE + (unsigned long)f * 4096), 1)) {   /* no card, or it would not take the page: it stays */
+            *e = was; __asm__ volatile ("dsb ishst" ::: "memory"); return -1;
+        }
+        swap_used[slot / 8] |= (unsigned char)(1u << (slot % 8));
+        *e = ((unsigned long)slot << 12) | 2;   /* out on the card, at this slot */
+        __asm__ volatile ("dsb ishst" ::: "memory");
+        frame_of[f].slot1 = 0; pool_in--; swap_outs++;
+        return f;
+    }
+    return -1;
+}
+static void heap_drop(unsigned long *e) {   /* an entry going away (brk shrinks, the app ends): its frame or its slot is free again */
+    if (*e & 1) { unsigned long f = ((*e & 0xFFFFFFFFF000UL) - SWAP_BASE) >> 12; if (f < SWAP_POOL_PAGES && frame_of[f].slot1) { frame_of[f].slot1 = 0; pool_in--; } }
+    else if (*e & 2) { unsigned slot = (unsigned)(*e >> 12); if (slot < SWAP_FILE_PAGES) swap_used[slot / 8] &= (unsigned char)~(1u << (slot % 8)); }
+    *e = 0;
+}
 static int heap_fault(unsigned long va) {   /* 1 when va is in the heap and its page is mapped now */
     if (va < UB + UP_HEAP || va >= (app_brk ? app_brk : UB + UP_HEAP)) return 0;
     unsigned long pg = va & ~4095UL, *e = &l3[ap->l3off + ((pg - UB) >> 12)];
-    if (*e) return 1;
+    if (*e & 1) return 1;
+    long f = pool_take();
+    if (f < 0) { uart_puts("M3c swap: out of memory\n"); return 0; }
+    unsigned long frame = SWAP_BASE + (unsigned long)f * 4096;
+    if (*e & 2) {   /* it was pushed out: read it back */
+        unsigned slot = (unsigned)(*e >> 12);
+        if (!swap_io(slot, (void *)frame, 0)) return 0;
+        swap_used[slot / 8] &= (unsigned char)~(1u << (slot % 8)); swap_ins++;
+    } else {
+        for (unsigned long v = frame; v < frame + 4096; v += 8) *(unsigned long *)v = 0;   /* no earlier app's bytes */
+        ap->heap_pages++;
+    }
+    frame_of[f].slot1 = (unsigned char)(ap->slot + 1); frame_of[f].pg = (unsigned)((pg - UB) >> 12); pool_in++;
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
-    *e = pg | PAGE | AP_EL0_RW | PXN | UXN;
-    __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
-    for (unsigned long v = pg; v < pg + 4096; v += 8) *(unsigned long *)v = 0;   /* no earlier app's bytes */
-    ap->heap_pages++;
+    *e = frame | PAGE | AP_EL0_RW | PXN | UXN;
+    __asm__ volatile ("dsb ishst\n isb" ::: "memory");   /* invalid to valid: nothing cached to flush */
     return 1;
 }
 static void heap_fault_span(unsigned long a, unsigned long n) {
@@ -606,6 +680,7 @@ static void heap_fault_span(unsigned long a, unsigned long n) {
     if (!n || a >= hi || a + n <= lo || a + n < a) return;
     if (a < lo) { n -= lo - a; a = lo; }
     if (a + n > hi) n = hi - a;
+    if (pins < 4) { pin[pins].slot = ap->slot; pin[pins].lo = a; pin[pins].hi = a + n; pins++; }   /* 8.12.0: kept in until the next call */
     for (unsigned long v = a & ~4095UL; v < a + n; v += 4096) heap_fault(v);
 }
 int user_in_range(unsigned long a, unsigned long n) {
@@ -630,7 +705,7 @@ static long app_brk_set(unsigned long want) {
     if (!want) return (long)top;
     if (want < base || want > UB + UP_WIN) return -22;   /* the heap stops where the window buffer starts */
     unsigned long have = (top + 4095) & ~4095UL, need = (want + 4095) & ~4095UL;
-    for (unsigned long v = need; v < have; v += 4096) l3[ap->l3off + ((v - UB) >> 12)] = 0;
+    for (unsigned long v = need; v < have; v += 4096) heap_drop(&l3[ap->l3off + ((v - UB) >> 12)]);   /* 8.12.0: frames and swap slots back */
     __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
     if (want > top && (top & 4095) && l3[ap->l3off + ((top - UB) >> 12)])   /* the old top's own page is mapped: bytes past the old top read zero again */
         for (unsigned long v = top, end = want < have ? want : have; v < end; v++) *(unsigned char *)v = 0;
@@ -943,6 +1018,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
     if (core_id()) core_trap(f, fp, 0);   /* 8.11.0: a thread on core 1 to 3, before anything here reads core 0's state */
 #endif
     wd_pause();   /* 8.6.0: the slice stops while the kernel works for the app; wd_rearm (vectors.S, on the way out) restarts it */
+    pins = 0;     /* 8.12.0: the last call's buffers may go out again */
     unsigned ec = (unsigned)(f->esr >> 26);
     if (ec == 0x32) { dbg_step(f); return; }   /* 7.2.0: a software step, the debugger's */
     APP_FP_CLOBBER();
@@ -1083,7 +1159,10 @@ const struct user_app *user_find(const char *name, unsigned n) {
 }
 static void app_unmap(void) {   /* its pages, its stack, its window buffer and (M3e) its heap */
     app_len = app_code = app_img = app_wbytes = app_brk = 0; app_hi = 0;
-    for (unsigned long i = UP_APP >> 12; i < ARENA_BLOCKS * 512; i++) l3[ap->l3off + i] = 0;
+    for (unsigned long i = UP_APP >> 12; i < ARENA_BLOCKS * 512; i++) {
+        unsigned long *e = &l3[ap->l3off + i];
+        if (i >= (UP_HEAP >> 12) && i < (UP_WIN >> 12)) heap_drop(e); else *e = 0;   /* 8.12.0: the heap's frames and swap slots back */
+    }
     __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
 }
 unsigned long user_load(const struct user_app *a) {
