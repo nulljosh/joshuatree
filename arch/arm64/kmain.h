@@ -141,7 +141,7 @@ extern int splash_on;
 void splash_step(int n, const char *name);
 struct frame { unsigned long x[31]; unsigned long elr, esr; };
 #define APP_THREADS 4   /* 8.1.0: threads per app */
-enum { TH_FREE, TH_READY, TH_WAIT };   /* what vectors.S saved */
+enum { TH_FREE, TH_READY, TH_WAIT, TH_CORE };   /* TH_CORE (8.11.0): running on core 1, 2 or 3 now (main.c core_pick) */
 struct user_app { const char *name, *start, *end; };   /* userapps.S: one row per program, ended by a zero name */
 #define APP_EVQ 16
 struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app_* names below are macros onto `ap`, the slot being run or shown */
@@ -152,6 +152,7 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
         unsigned long sp;
         int state;                        /* TH_FREE, TH_READY, TH_WAIT (asleep on a futex word, at wait) */
         unsigned long wait;
+        int k0;                           /* 8.11.0: it trapped on core 1 to 3 and is rewound to ask core 0 again: only core 0 takes it */
     } th[APP_THREADS];
     unsigned heap_pages;                  /* 8.7.0: heap pages it has touched, each mapped on its first touch */
     unsigned tcur, preempts, spin, cut;   /* cut: its last turn ended at a slice, not by its own yield (8.6.0) */        /* the thread being run; slices taken from its threads; slices since any of them made a call */
@@ -176,6 +177,7 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
     int term;                             /* 7.5.4: started by `userrun` in the Terminal: what it prints after it yields, and how it ends, go there */
     int pin, pout;                        /* 8.3.0: reads fd 0 from the pipe / writes fd 1 into it (`userrun A | userrun B`) */
     unsigned pid, parent;                 /* 8.4.0: its process number, and the slot + 1 of the app that spawned it (0: none) */
+    unsigned on;                          /* 8.11.0: the cores its threads ran on, a bit each, said when it ends */
 };
 #define APP_SLOTS 4      /* 4.0: apps that can run at once, one 32 MiB arena each, back to back above USER_BASE */
 extern struct app *ap;

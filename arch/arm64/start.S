@@ -88,6 +88,7 @@ sec_el1:
 
 .section .bss
 .balign 16
+.global core_stacks
 core_stacks: .skip 0x10000       /* 16 KiB each for cores 1 to 3 (the first 16 KiB, core 0's slot, goes unused) */
 .section .data
 .global boot_el

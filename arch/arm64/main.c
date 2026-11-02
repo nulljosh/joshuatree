@@ -143,6 +143,11 @@ unsigned long timer_step;
 #define GICD(o) REG(GICD_BASE + (o))
 #define GICC(o) REG(GICC_BASE + (o))
 #define TIMER_INTID 30   /* the EL1 physical timer, a private interrupt on every GIC */
+static unsigned core_id(void) { unsigned long m; __asm__ volatile ("mrs %0, mpidr_el1" : "=r"(m)); return (unsigned)(m & 3); }   /* 8.11.0 */
+#if !defined(FP_NOSAVE) && !defined(SMP_APPS_OFF)
+#define SMP_APPS 1   /* 8.11.0: app threads run on cores 1 to 3 too (core_pick); FP_NOSAVE's irq_entry keeps no FP block to park one with */
+#endif
+void core_trap(struct frame *f, const unsigned long *fp, int irq) __attribute__((noreturn));
 static volatile int wd_live;           /* 4.5: an app is inside resume_user with the watchdog armed */
 static void wd_kill(void) __attribute__((noreturn));
 
@@ -162,6 +167,9 @@ int app_preempt(const struct frame *f, const unsigned long *fp, unsigned long sp
 static long app_spawn(unsigned long name, unsigned long words); static long app_wait(const struct frame *f, const unsigned long *fp, unsigned long pid);   /* 8.4.0 */
 static int dbg_slot; static unsigned dbg_left;   /* 7.2.0, set further down: a stepped app is never preempted */
 void exc_irq(struct frame *f, const unsigned long *fp) {   /* the timer stops after three ticks, so a core asleep in wfi can only be woken by a device */
+#ifdef SMP_APPS
+    if (core_id()) core_trap(f, fp, 1);   /* 8.11.0: on cores 1 to 3 only an app thread's slice end or core 0's SGI */
+#endif
 #ifdef FP_TEST
     fp_clobber();
 #endif
@@ -284,12 +292,13 @@ void mmu_on_core(void) {   /* core 0 from mmu_init; since 8.2.0 cores 1 to 3 too
    PSCI CPU_ON on QEMU's virt machine (hvc, or smc when we were given EL2) and by the spin table on a Pi (the firmware's stub
    watches 0xd8 + 8 * core and jumps to whatever lands there). Each turns the MMU on with core 0's tables, says it is up, and
    then counts: one pass a wake-up, and core 0 sends one (sev) every desktop pass. They run nothing of the kernel's yet, so no
-   locks are needed so far; the next step gives them app threads, and the futex call must take a lock first (th_futex).
-   `cores` in the Terminal shows them. */
+   locks were needed then; since 8.11.0 they run app threads (core_pick, below with the scheduler). `cores` in the Terminal
+   shows them. */
 volatile unsigned long core_runs[4 * 8] __attribute__((aligned(64)));   /* 8.9.0: core c's count at [c * 8], a cache line each: the three
    cores bumping one shared line slowed core 0's desktop (Joshua's drag lag on the board) */
 volatile unsigned long core_mpidr[4];
 volatile int core_up[4];
+void core_loop(unsigned long c) __attribute__((noreturn));
 void core_main(unsigned long core) {
     mmu_on_core();
     __asm__ volatile ("msr vbar_el1, %0\n isb" :: "r"(vectors));
@@ -303,7 +312,13 @@ void core_main(unsigned long core) {
        times a second (the board said 242 million wake-ups in minutes): a spinning core, not a sleeping one. Now only core
        0's sev, once a desktop pass, wakes it. */
     { unsigned long k; __asm__ volatile ("mrs %0, cntkctl_el1" : "=r"(k)); __asm__ volatile ("msr cntkctl_el1, %0\n isb" :: "r"(k & ~4UL)); }
-    for (;;) { core_runs[core * 8]++; __asm__ volatile ("wfe"); }
+#ifdef SMP_APPS
+    *(volatile unsigned char *)(GICD_BASE + 0x400 + TIMER_INTID) = 0x80;   /* 8.11.0: this core's slice timer and SGI 0 (cores_stop), */
+    *(volatile unsigned char *)(GICD_BASE + 0x400) = 0x80;                 /* banked per core in the distributor */
+    GICD(0x100) = (1u << TIMER_INTID) | 1u;
+    GICC(0x004) = 0xFF; GICC(0x000) = 1;
+#endif
+    core_loop(core);
 }
 extern char secondary_entry[];
 static long psci_on(unsigned long mpidr, unsigned long entry) {
@@ -434,14 +449,114 @@ int app_top = -1;
 /* 4.4: an app reaches only its own arena. Every level-2 entry of the other slots carries APTable=01 (bit 61): EL0 may not
    touch anything under it, while EL1 (the compositor reading their window buffers, a syscall copying for them) still can.
    Set before each switch into EL0. -1 until the first switch: the boot self-tests run in slot 0 with nothing else loaded.
-   ponytail: one tlbi vmalle1 per switch; ASIDs, one per slot, when four busy apps make that show up in a profile. */
+   ponytail: one tlbi vmalle1is per switch; ASIDs, one per slot, when four busy apps make that show up in a profile. */
 static int el0_slot = -1;
+/* 8.11.0: app threads on all four cores. Core 0 still owns the kernel; cores 1 to 3 run only app code at EL0. core_pick gives a
+   core a ready thread of the app whose arena is open (el0_slot), never the one core 0 runs (tcur), for a 10 ms slice of the
+   core's own timer. Whatever it traps on goes back to core 0: core_trap keeps its registers, rewinds a call to its svc so it
+   asks again there, and marks it k0, a thread only core 0 takes. Two calls are answered on the spot, since a contended
+   jt_mutex lives on them: JT_SYS_FUTEX (core_futex) and a yield. th_lk guards every thread's state, on every core. Before the
+   open arena changes or an app ends, cores_stop takes the threads back (an SGI ends their slices at once) and cores_go lets the
+   cores pick again. */
+static volatile unsigned th_lk;
+static void th_lock(void) { unsigned t; __asm__ volatile ("1: ldaxr %w0, [%1]\n cbnz %w0, 1b\n stxr %w0, %w2, [%1]\n cbnz %w0, 1b" : "=&r"(t) : "r"(&th_lk), "r"(1u) : "memory"); }
+static void th_unlock(void) { __asm__ volatile ("stlr wzr, [%0]" :: "r"(&th_lk) : "memory"); }
+extern char core_stacks[];   /* start.S: core c's 16 KiB stack ends c * 16 KiB in */
+#define CORE_TOP(c) ((unsigned long)core_stacks + ((unsigned long)(c) << 14))
+void core_run(unsigned long top, const struct frame *f, unsigned long sp, const unsigned long *fp) __attribute__((noreturn));   /* vectors.S */
+void core_reenter(unsigned long sp, unsigned long core) __attribute__((noreturn));
+static struct thread *volatile core_thr[4];   /* the thread core c runs, 0 while it waits */
+static struct app *core_app[4];
+static volatile int cores_hold;               /* core 0 is changing what the cores may run: they pick nothing */
+volatile unsigned long core_jobs[4 * 8] __attribute__((aligned(64)));   /* slices core c ran, at [c * 8], for `cores` */
+static int cores_busy(void) { return core_thr[1] || core_thr[2] || core_thr[3]; }
+static void cores_stop(void) {   /* core 0: when this returns no thread runs on cores 1 to 3, and none starts until cores_go */
+    th_lock(); cores_hold++; int busy = cores_busy(); th_unlock();
+    if (!busy) return;
+    GICD(0xF00) = 0xEu << 16;   /* SGI 0 to cores 1 to 3: their slices end now */
+    do { th_lock(); busy = cores_busy(); th_unlock(); } while (busy);
+}
+static void cores_go(void) { th_lock(); cores_hold--; th_unlock(); __asm__ volatile ("sev"); }
+static void core_pick(unsigned c) {
+#ifdef SMP_APPS
+    struct thread *t = 0;
+    th_lock();
+    if (!cores_hold && el0_slot >= 0) {
+        struct app *a = &apps[el0_slot];
+        if (a->cur && !((int)a->slot == dbg_slot && dbg_left))   /* a stepped app stays on core 0 */
+            for (unsigned k = 0; k < APP_THREADS && !t; k++)
+                if (k != a->tcur && a->th[k].state == TH_READY && !a->th[k].k0) t = &a->th[k];
+        if (t) { t->state = TH_CORE; core_thr[c] = t; core_app[c] = a; a->on |= 1u << c; }
+    }
+    th_unlock();
+    if (!t) return;
+    core_jobs[c * 8]++;
+    wd_arm();   /* this core's own timer: the slice */
+    core_run(CORE_TOP(c), &t->frame, t->sp, t->fp);
+#else
+    (void)c;
+#endif
+}
+void core_loop(unsigned long c) { for (;;) { core_pick((unsigned)c); core_runs[c * 8]++; __asm__ volatile ("wfe"); } }
+/* JT_SYS_FUTEX from thread t on core c, answered there: 1 with the answer in x0 (it runs on), 0 asleep (the core is free),
+   -1 core 0's to answer (a word on a page not mapped yet, which only core 0 maps, or not the app's to write) */
+static int core_futex(unsigned c, struct app *a, struct thread *t) {
+    unsigned long op = t->frame.x[0], addr = t->frame.x[1], val = t->frame.x[2], off = addr - a->base;
+    if ((addr & 3) || addr < a->base || off >= ARENA_SIZE) { t->frame.x[0] = (unsigned long)-14; return 1; }
+    unsigned long e = l3[a->l3off + (off >> 12)];
+    if (!(e & 1) || (e & (3UL << 6)) != (1UL << 6)) return -1;
+    if (op > 1) { t->frame.x[0] = (unsigned long)-22; return 1; }
+    th_lock();
+    if (op == 1) {
+        unsigned long n = 0;
+        for (unsigned i = 0; i < APP_THREADS && n < val; i++)
+            if (a->th[i].state == TH_WAIT && a->th[i].wait == addr) { a->th[i].state = TH_READY; n++; }
+        th_unlock();
+        if (n) { a->kick = 1; __asm__ volatile ("sev"); }
+        t->frame.x[0] = n;
+        return 1;
+    }
+    if (*(volatile unsigned *)addr != (unsigned)val) { th_unlock(); t->frame.x[0] = (unsigned long)-11; return 1; }
+    t->frame.x[0] = 0; t->state = TH_WAIT; t->wait = addr; core_thr[c] = 0;
+    th_unlock();
+    return 0;
+}
+void core_trap(struct frame *f, const unsigned long *fp, int irq) {   /* from exc_el0_sync and exc_irq on cores 1 to 3 */
+    unsigned c = core_id();
+    unsigned long top = CORE_TOP(c);
+    if (irq) {   /* the slice's end or cores_stop's SGI: either way the thread goes back on the list */
+        unsigned iar = GICC(0x0C);
+        __asm__ volatile ("msr cntp_ctl_el0, %0" :: "r"(0UL));
+        if ((iar & 0x3FF) < 1020) GICC(0x10) = iar;
+    }
+    struct thread *t = core_thr[c]; struct app *a = core_app[c];
+    if (!t) core_reenter(top, c);
+    unsigned long spsr; __asm__ volatile ("mrs %0, spsr_el1" : "=r"(spsr));
+    for (int i = 0; i < 31; i++) t->frame.x[i] = f->x[i];
+    t->frame.elr = f->elr; t->frame.esr = spsr;   /* esr keeps the NZCV flags, as th_save does */
+    for (int i = 0; i < 66; i++) t->fp[i] = fp[i];
+    __asm__ volatile ("mrs %0, sp_el0\n clrex" : "=r"(t->sp) :: "memory");
+    int k0 = 0;
+    if (!irq) {
+        unsigned ec = (unsigned)(f->esr >> 26); unsigned long n = f->x[8];
+        int r = ec == 0x15 && n == JT_SYS_FUTEX ? core_futex(c, a, t) : -1;
+        if (r == 1) core_run(top, &t->frame, t->sp, t->fp);   /* answered: on with the rest of its slice */
+        if (r == 0) core_reenter(top, c);                   /* asleep */
+        if (ec == 0x15 && n == JT_SYS_SCHED_YIELD) t->frame.x[0] = 0;
+        else { k0 = 1; if (ec == 0x15) t->frame.elr -= 4; }   /* any other call, or a fault: core 0's, the svc or the access runs again there */
+    }
+    th_lock(); t->k0 = k0; t->state = TH_READY; core_thr[c] = 0; th_unlock();
+    if (k0) a->kick = 1;
+    core_reenter(top, c);
+}
 void arena_only(int slot) {
     if (slot == el0_slot) return;
+    cores_stop();   /* 8.11.0: no other core runs the old app's threads past here */
     unsigned long *e = &l2[(USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21];
     for (int k = 0; k < APP_SLOTS * ARENA_BLOCKS; k++) e[k] = k / ARENA_BLOCKS == slot ? e[k] & ~(1UL << 61) : e[k] | (1UL << 61);
-    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
     el0_slot = slot;
+    cores_go();
 }
 unsigned char app_z[APP_SLOTS];
 unsigned app_zn;
@@ -481,7 +596,7 @@ static int heap_fault(unsigned long va) {   /* 1 when va is in the heap and its 
     if (*e) return 1;
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10), AP_EL0_RW = 1UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
     *e = pg | PAGE | AP_EL0_RW | PXN | UXN;
-    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
     for (unsigned long v = pg; v < pg + 4096; v += 8) *(unsigned long *)v = 0;   /* no earlier app's bytes */
     ap->heap_pages++;
     return 1;
@@ -516,7 +631,7 @@ static long app_brk_set(unsigned long want) {
     if (want < base || want > UB + UP_WIN) return -22;   /* the heap stops where the window buffer starts */
     unsigned long have = (top + 4095) & ~4095UL, need = (want + 4095) & ~4095UL;
     for (unsigned long v = need; v < have; v += 4096) l3[ap->l3off + ((v - UB) >> 12)] = 0;
-    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
     if (want > top && (top & 4095) && l3[ap->l3off + ((top - UB) >> 12)])   /* the old top's own page is mapped: bytes past the old top read zero again */
         for (unsigned long v = top, end = want < have ? want : have; v < end; v++) *(unsigned char *)v = 0;
     app_brk = want;
@@ -538,10 +653,12 @@ static void th_save(const struct frame *f, const unsigned long *fp, unsigned lon
     __asm__ volatile ("mrs %0, sp_el0" : "=r"(app_sp));
 }
 static void th_next(void) {   /* the next ready thread after this one takes the core, run soon; with none other ready, tcur stays */
+    th_lock();   /* 8.11.0: cores 1 to 3 pick from the same list */
     for (unsigned k = 1; k <= APP_THREADS; k++) {
         unsigned i = (ap->tcur + k) % APP_THREADS;
-        if (ap->th[i].state == TH_READY) { if (i != ap->tcur) app_kick = 1; ap->tcur = i; return; }
+        if (ap->th[i].state == TH_READY) { if (i != ap->tcur) app_kick = 1; ap->tcur = i; break; }
     }
+    th_unlock();
 }
 static unsigned long spsr_now(void) { unsigned long v; __asm__ volatile ("mrs %0, spsr_el1" : "=r"(v)); return v; }
 static void app_park(const struct frame *f, const unsigned long *fp) {
@@ -573,7 +690,8 @@ static long th_spawn(unsigned long entry, unsigned long sp, unsigned long arg) {
         if (t->state != TH_FREE) continue;
         for (int k = 0; k < 31; k++) t->frame.x[k] = 0;
         for (int k = 0; k < 66; k++) t->fp[k] = 0;
-        t->frame.x[0] = arg; t->frame.elr = entry; t->frame.esr = 0; t->sp = sp; t->wait = 0; t->state = TH_READY;
+        t->frame.x[0] = arg; t->frame.elr = entry; t->frame.esr = 0; t->sp = sp; t->wait = 0; t->k0 = 0;
+        th_lock(); t->state = TH_READY; th_unlock(); __asm__ volatile ("sev");   /* 8.11.0: last, so a core that takes it finds it whole */
         wd_arm();   /* two threads now: the slice starts */
         return (long)i;
     }
@@ -585,17 +703,22 @@ static long th_futex(const struct frame *f, const unsigned long *fp) {   /* JT_S
     if ((addr & 3) || !user_writable(addr, 4)) return -14;
     if (op == 1) {
         long n = 0;
+        th_lock();
         for (unsigned i = 0; i < APP_THREADS && (unsigned long)n < val; i++)
             if (ap->th[i].state == TH_WAIT && ap->th[i].wait == addr) { ap->th[i].state = TH_READY; n++; }
+        th_unlock();
+        if (n) __asm__ volatile ("sev");   /* 8.11.0: a core waiting in wfe may take it */
         return n;
     }
     if (op) return -22;
-    /* ponytail: the compare and the sleep are one step only because there is one core and the kernel runs with IRQs masked.
-       The four-core change needs a lock here (and in the wake above). */
-    if (*(volatile unsigned *)addr != (unsigned)val) return -11;   /* it changed already: -EAGAIN, the caller looks again */
+    /* 8.11.0: saved first, then the compare and the sleep are one step under th_lk, so a wake from another core is never lost
+       and the thread it wakes never runs from a stale frame */
     th_save(f, fp, spsr_now());
+    th_lock();
+    if (*(volatile unsigned *)addr != (unsigned)val) { th_unlock(); return -11; }   /* it changed already: -EAGAIN, the caller looks again */
     app_frame.x[0] = 0;
     app_th.state = TH_WAIT; app_th.wait = addr;
+    th_unlock();
     th_next();
     app_parked = 1;
     leave_user(0);
@@ -816,6 +939,9 @@ static void dbg_end(void) {   /* app_tick, after the stepped app's turn, however
     dbg_mdscr(0);
 }
 void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's FP registers, saved below the frame by el0_sync_entry */
+#ifdef SMP_APPS
+    if (core_id()) core_trap(f, fp, 0);   /* 8.11.0: a thread on core 1 to 3, before anything here reads core 0's state */
+#endif
     wd_pause();   /* 8.6.0: the slice stops while the kernel works for the app; wd_rearm (vectors.S, on the way out) restarts it */
     unsigned ec = (unsigned)(f->esr >> 26);
     if (ec == 0x32) { dbg_step(f); return; }   /* 7.2.0: a software step, the debugger's */
@@ -900,7 +1026,7 @@ void user_init(const char *img, unsigned long len) {
     l3[UP_CODE >> 12] = (UB + UP_CODE) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable for now, so the kernel can copy the program in */
     l3[UP_STACK >> 12] = (UB + UP_STACK) | PAGE | AP_EL0_RW | PXN | UXN;
     l3[UP_KERN >> 12] = (UB + UP_KERN) | PAGE | PXN | UXN;               /* AP=00: EL1 only */
-    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
     char *code = (char *)(UB + UP_CODE);
     for (unsigned long i = 0; i < len; i++) code[i] = img[i];
     const char *secret = "KERNEL-ONLY-SECRET";
@@ -909,7 +1035,7 @@ void user_init(const char *img, unsigned long len) {
         __asm__ volatile ("dc cvau, %0" :: "r"(a) : "memory");
     __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
     l3[UP_CODE >> 12] = (UB + UP_CODE) | PAGE | AP_RO | PXN;             /* now read-only for everyone, executable by EL0 only */
-    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
 }
 
 /* ---- M3c: the app loader ----
@@ -958,7 +1084,7 @@ const struct user_app *user_find(const char *name, unsigned n) {
 static void app_unmap(void) {   /* its pages, its stack, its window buffer and (M3e) its heap */
     app_len = app_code = app_img = app_wbytes = app_brk = 0; app_hi = 0;
     for (unsigned long i = UP_APP >> 12; i < ARENA_BLOCKS * 512; i++) l3[ap->l3off + i] = 0;
-    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
 }
 unsigned long user_load(const struct user_app *a) {
     const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);
@@ -973,7 +1099,7 @@ unsigned long user_load(const struct user_app *a) {
     app_unmap();
     for (unsigned long i = 0; i < pages; i++) l3[ap->l3off + (UP_APP >> 12) + i] = (UB + UP_APP + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable while the kernel fills it in */
     for (unsigned long i = 0; i < APP_STACK_PAGES; i++) l3[ap->l3off + (UP_ASTACK >> 12) + i] = (UB + UP_ASTACK + i * 4096) | PAGE | AP_EL0_RW | PXN | UXN;
-    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
     for (unsigned long i = 0; i < pages * 512; i++) ((unsigned long *)base)[i] = 0;   /* a stale program's bytes never reach this one */
     for (unsigned long i = 0; i < APP_STACK_PAGES * 512; i++) ((unsigned long *)(UB + UP_ASTACK))[i] = 0;
     for (unsigned long i = 0; i < len; i++) base[i] = a->start[i];
@@ -984,7 +1110,7 @@ unsigned long user_load(const struct user_app *a) {
     for (unsigned long p = (unsigned long)base & ~63UL; p < (unsigned long)base + code_end; p += 64) __asm__ volatile ("dc cvau, %0" :: "r"(p) : "memory");
     __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
     for (unsigned long i = 0; i < code_end / 4096; i++) l3[ap->l3off + (UP_APP >> 12) + i] = (UB + UP_APP + i * 4096) | PAGE | AP_RO | PXN;   /* code: read-only, EL0 may execute */
-    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory");
     app_len = pages * 4096; app_code = code_end; app_img = len;
     uart_puts("M3c load "); uart_puts(a->name); uart_puts(": "); uart_dec((unsigned)len); uart_puts(" bytes, ");
     uart_dec(code_end / 4096); uart_puts(" code pages, "); uart_dec((unsigned)((rela_e - rela_s) / 24)); uart_puts(" relocations, code ");
@@ -1068,6 +1194,7 @@ static long app_wait(const struct frame *f, const unsigned long *fp, unsigned lo
 void app_kill_one(const char *how);
 static void app_end(unsigned long status, const char *how) {   /* an exit, a fault or a kill: the window goes, then the pages */
     const struct user_app *a = app_cur;
+    cores_stop();   /* 8.11.0: its threads on cores 1 to 3 come back first */
     app_cur = 0; app_parked = app_kick = 0; app_close_at = 0; user_status = status;
     ufile_owner = ap->slot + 1;
     ufile_release();   /* M3d: its open files are written back and closed, after an exit, a fault or its red dot alike */
@@ -1080,6 +1207,7 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     ap = me;              /* ...so put it back: the pages unmapped and the line printed below are this app's, not the front one's */
     app_unmap();
     if (me->preempts) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" was cut off "); uart_dec(me->preempts); uart_puts(" times\n"); }   /* 8.1.0: arm64-threads-check.py reads it */
+    if (me->on & ~1u) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" ran on cores"); for (unsigned c = 0; c < 4; c++) if (me->on & 1u << c) { uart_putc(' '); uart_dec(c); } uart_putc('\n'); }   /* 8.11.0: arm64-smp-threads-check.py reads it */
     if (me->heap_pages) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" touched "); uart_dec(me->heap_pages); uart_puts(" heap pages\n"); }   /* 8.7.0: arm64-heap-check.py reads it */
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
@@ -1092,6 +1220,7 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
         if (!was) { term_output(0); ask_redraw(); }
     }
     me->term = 0;
+    cores_go();
 }
 void app_kill_one(const char *how) { if (app_cur && !app_running) app_end((unsigned long)-1, how); }
 void app_kill(const char *how) {   /* every app ends: a kernel-drawn window is opening where the apps' windows were */
@@ -1119,11 +1248,13 @@ void app_tick(void) {   /* every app with something to do gets its turn: it runs
     }
     for (unsigned i = 0; i < APP_SLOTS; i++) {
         ap = &apps[i];
-        if (!app_cur || app_running || app_th.state != TH_READY) continue;   /* 8.1.0: every thread asleep on a futex: nothing to run */
+        if (!app_cur || app_running) continue;
+        if (app_th.state != TH_READY) th_next();   /* 8.11.0: its thread sleeps or runs on another core: any other ready one */
+        if (app_th.state != TH_READY) continue;   /* 8.1.0: every thread asleep on a futex: nothing to run */
         unsigned long now = cnt_now();
         if (app_close_at && now > app_close_at) { app_kill_one("closed by its red dot"); continue; }   /* it never read the close click */
         if (!app_kick && now - app_last < cnt_hz() / 100) continue;
-        app_kick = 0; app_last = now; app_runs++;
+        app_kick = 0; app_last = now; app_runs++; app_th.k0 = 0; ap->on |= 1;
         app_parked = 0; user_faulted = 0; app_running = 1; ufile_owner = ap->slot + 1; ap->cut = 0;
         APP_FP_CLOBBER();
         arena_only((int)ap->slot);
@@ -1160,8 +1291,8 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
         ufile_mkdirs("MUSIC");         /* M3e: Music's library, JT/MUSIC/, there for songs dropped onto the card from a Mac */
     if (a->name[0] == 'b' && a->name[1] == 'o' && a->name[2] == 'o' && a->name[3] == 'k' && a->name[4] == 's' && !a->name[5])
         ufile_mkdirs("BOOKS");         /* 2.66: Books' library, JT/BOOKS/, the books the card ships with and the ones dropped there */
-    for (unsigned i = 0; i < APP_THREADS; i++) ap->th[i].state = TH_FREE;   /* 8.1.0: one thread to start with */
-    ap->tcur = 0; ap->th[0].state = TH_READY; ap->preempts = ap->spin = 0; ap->heap_pages = 0;
+    for (unsigned i = 0; i < APP_THREADS; i++) { ap->th[i].state = TH_FREE; ap->th[i].k0 = 0; }   /* 8.1.0: one thread to start with */
+    ap->tcur = 0; ap->th[0].state = TH_READY; ap->preempts = ap->spin = 0; ap->heap_pages = 0; ap->on = 0;
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
     app_frame.esr = 0;                                 /* no flags to put back */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */

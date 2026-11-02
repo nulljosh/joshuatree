@@ -31,7 +31,7 @@
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token), but only when
 # JT_WIFI_DEV=1 (tools/flash-pi.sh) or CLAUDE_RELAY_TOKEN_FILE is set explicitly (the checks); a release build has neither.
 JT_VERSION := $(shell tr -d '\n' < ../../VERSION)   # the tree menu's About line (main.c)
-CC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -O2 -Wall -Wextra -DJT_VERSION='"$(JT_VERSION)"'
+CC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -O2 -Wall -Wextra -DJT_VERSION='"$(JT_VERSION)"' $(KFLAGS)
 # ttf.c, text.c and libc.c are the one part that uses floating point (the TrueType rasterizer), so they skip
 # -mgeneral-regs-only; start.S turns the FPU on at EL1. Everything else stays integer-only.
 FPCC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -fno-math-errno -fno-builtin -O2 -Wall -Wextra -Wno-unused-parameter

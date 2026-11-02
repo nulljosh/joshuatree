@@ -71,7 +71,7 @@ try:
     key("f2")
     check("F2 opens the Terminal", wait_for(q, log, "terminal open", 10), uart_of(log)[-300:])
     time.sleep(0.5)
-    WOKE = re.compile(r"^core (\d): up, woken (\d+) times$", re.M)
+    WOKE = re.compile(r"^core (\d): up, woken (\d+) times(?:, ran \d+ app slices)?$", re.M)   # 8.11.0 adds the slices
     def cores():
         n = len(uart_of(log))
         for ch in "cores": key(ch)
