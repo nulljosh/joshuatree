@@ -946,6 +946,30 @@ static int has(const char *name, const char *w, unsigned wn) {   /* name contain
     return 0;
 }
 
+/* 7.8.0: Settings' Bluetooth page (bt_ui.h) reads the radio through these and acts through bt_command, as the Terminal does. */
+const char *bt_state_word(void) {
+    switch (st) {
+    case OFF: case NO_RADIO: return "No radio";
+    case STARTING: return "Starting";
+    case SCANNING: return "Looking...";
+    case PAIRING: return reconn ? "Reconnecting" : "Pairing";
+    case MOUSE: return is_kb ? "Keyboard connected" : "Mouse connected";
+    case RETRY: return "Looking for the saved device";
+    case FAILED: return "Not working";
+    default: return "Ready";
+    }
+}
+const char *bt_peer_name(void) { return st == MOUSE || st == PAIRING ? peer_name : ""; }
+unsigned bt_list(const char **name, const char **near, unsigned max) {   /* the last scan's rows, in `bt pair N` order */
+    unsigned n = nshown < max ? nshown : max;
+    for (unsigned r = 0; r < n; r++) {
+        unsigned k = shown[r]; const char *w = kind_word(k);
+        name[r] = dev[k].name[0] ? dev[k].name : w ? w : "Unknown device";
+        near[r] = near_word(dev[k].rssi);
+    }
+    return n;
+}
+unsigned bt_sig(void) { return (unsigned)st * 4096u + nshown * 64u + (unsigned)(peer_name[0] & 63); }   /* changes when the page should repaint */
 int bt_command(const char *q, unsigned n) {
     if (n < 2 || q[0] != 'b' || q[1] != 't' || (n > 2 && q[2] != ' ')) return 0;
     unsigned i = 2; while (i < n && q[i] == ' ') i++;

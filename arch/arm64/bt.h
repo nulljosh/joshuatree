@@ -10,4 +10,8 @@ int bt_busy(void);
 int bt_settling(void);                       /* 6.87.0: bring-up, a scan, pairing or reconnect tries: not the time for a slow idle job */                           /* 1 while bring-up, a scan or the mouse needs the loop to keep turning */
 int bt_starting(void);                       /* 1 while the radio is still loading its patch, the boot splash waits for it */
 int bt_command(const char *q, unsigned n);   /* cmd.c: `bt`, `bt scan`, `bt pair [NAME]`, `bt reconnect`, `bt forget`; 1 when the line was one */
+const char *bt_state_word(void);              /* 7.8.0, Settings' Bluetooth page: the radio's state in a word or three */
+const char *bt_peer_name(void);              /* the connected or dialled device's name, "" with none */
+unsigned bt_list(const char **name, const char **near, unsigned max);   /* the last scan's rows, numbered as `bt pair N` takes them */
+unsigned bt_sig(void);                       /* changes whenever the page above should be drawn again */
 #endif

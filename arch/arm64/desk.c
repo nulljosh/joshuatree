@@ -486,6 +486,7 @@ void menubar_tick(void) {   /* the poll loop calls this; it redraws only when th
     }
     cal_tick();
     clock_tick();
+    bp_tick();   /* 7.8.0: Settings' Bluetooth page follows the radio */
     if (settings_live && !spot_live && set_sec == SET_TIME && cal_utc() / 60 != (unsigned long)set_minute) set_paint();   /* the Date and Time page follows the minute */
     unsigned long u = net_clock_utc();
     if (!u || mb_wifi < 0) return;
