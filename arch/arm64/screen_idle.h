@@ -20,3 +20,15 @@ static void screen_tick(void) {
         uart_puts("screen: asleep\n");
     } else uart_puts("screen: blank refused\n");
 }
+/* 10.1.0, deep idle: the Pi's loop spins flat out, thousands of passes a second, for a screen nobody is looking at.
+   Once the screen sleeps, each pass first naps NAP_MS, so the whole machine runs at about 50 passes a second. USB is
+   still polled every pass (the only wake path), so a key or a click still wakes it, 20 ms late at worst. Not while
+   something is working (busy: a question, a sound, an app, a download), which keeps its full speed. The Pi 4 has no
+   suspend to RAM; this is as deep as it goes without one. */
+#define NAP_MS 20
+static unsigned nap_count;
+static void screen_nap(int busy) {
+    if (!screen_asleep || busy) return;
+    nap_count++;
+    nap_ms(NAP_MS);
+}

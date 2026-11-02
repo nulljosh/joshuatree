@@ -264,7 +264,7 @@ MAINSRC = main.c virtio.c boot.c desk.c keys.c windows.c appwin.c pointer.c cras
 # Each rule sets MAINFLAGS_PART (a target-specific variable, so flags holding commas, like APP_NAME=a,b,c, survive)
 # and runs MAINLINK.
 MAINLINK = set -e; for f in $(MAINSRC); do $(CC) $(MAINFLAGS_PART) -c $$f -o $@.$${f%.c}.o; done; ld.lld -r -o $@ $(patsubst %.c,$@.%.o,$(MAINSRC))
-MAINDEP = ../../VERSION virtio.h kmain.h settings_ui.h users_ui.h login_ui.h login.h sudo.h glyphs.h screen_idle.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+MAINDEP = ../../VERSION virtio.h kmain.h settings_ui.h users_ui.h login_ui.h login.h sudo.h glyphs.h screen_idle.h trackpad.h battery.h bt.h notice.h brick.h brick_ui.h browser_ui.h mascot_art.h face_art.h power.h clock_ui.h audio.h ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: MAINFLAGS_PART = $(MAINFLAGS)
 main.o: $(MAINSRC) $(MAINDEP)
 	$(MAINLINK)

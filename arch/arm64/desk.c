@@ -444,6 +444,7 @@ void menubar_mic(int on) {   /* ask.c: voice mode started or ended; the bar is r
     if (!fb || !text_ok) return;
     cur_hide(); menubar_wifi(mb_wifi); cur_show();
 }
+#include "battery.h"
 void menubar_wifi(int state) {
     mb_wifi = state;   /* kept even before the desktop exists (the boot splash), so its first paint shows the right fan */
     if (!fb || !text_ok || login_live) return;   /* the login screen is over the bar: wall_repaint draws it again when it goes */
@@ -481,16 +482,29 @@ void menubar_wifi(int state) {
        any of them, the fan and the clock too, opens Settings at its section (menubar_click). */
     int isz = sg(16), sx = ox - R - sg(14) - isz, wx = sx - sg(12) - isz, iy = (mb - 1 - isz) / 2, vol = audio_volume();
     glyph_paint(GL_SOUND, vol == 0 ? 0 : vol <= 50 ? 1 : 2, sx, iy, isz, WIFI_INK);   /* ink at every volume: the waves say the level, not a grey */
-    glyph_paint(GL_POWER, 0, wx, iy, isz, WIFI_INK);
+    int lx = wx;   /* the left edge of the status icons: the mic and the reader's mark go left of it */
+    if (bat_pct < 0) glyph_paint(GL_POWER, 0, wx, iy, isz, WIFI_INK);
+    else {   /* 10.3.0: a battery in the power symbol's place, filled to the charge (terracotta at 20 and under), its percent to the left */
+        int k = sg(1) > 1 ? sg(1) : 1, bw = isz - sg(3), bh = isz / 2, by = iy + (isz - bh) / 2;
+        unsigned ink = fb_color(WIFI_INK);
+        fb_rect(wx, by, bw, k, ink); fb_rect(wx, by + bh - k, bw, k, ink); fb_rect(wx, by, k, bh, ink); fb_rect(wx + bw - k, by, k, bh, ink);
+        fb_rect(wx + bw, by + bh / 3, sg(2), bh - 2 * (bh / 3), ink);   /* the nub */
+        int fw = (bw - 4 * k) * bat_pct / 100;
+        if (fw > 0) fb_rect(wx + 2 * k, by + 2 * k, fw, bh - 4 * k, bat_pct <= 20 ? fb_color(0x00B5502C) : ink);
+        char pc[6]; unsigned n = 0; if (bat_pct >= 100) pc[n++] = '1'; if (bat_pct >= 10) pc[n++] = (char)('0' + bat_pct / 10 % 10); pc[n++] = (char)('0' + bat_pct % 10); pc[n++] = '%'; pc[n] = 0;
+        int tw = text_width(2, pc, sg(120));
+        lx = wx - sg(6) - tw;
+        text_draw(2, pc, lx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
+    }
     if (mb_mic) {   /* voice mode is listening (ask.c): a terracotta microphone left of the power symbol, a capsule on a stem */
-        int mx = wx - sg(12) - isz, cw = isz * 2 / 5, ch = isz * 3 / 5, cx0 = mx + (isz - cw) / 2;
+        int mx = lx - sg(12) - isz, cw = isz * 2 / 5, ch = isz * 3 / 5, cx0 = mx + (isz - cw) / 2;
         unsigned t = fb_color(0x00B5502C);
         fb_rect(cx0, iy, cw, ch, t);
         fb_rect(mx + isz / 2 - sg(1), iy + ch, sg(2), isz - ch - sg(2), t);
         fb_rect(cx0 - sg(1), iy + isz - sg(2), cw + sg(2), sg(2), t);
     }
     if (reader_on && !notice.text[0]) {   /* 10.0.0: the screen reader's mark, in words, left of the status icons */
-        int rx = (mb_mic ? wx - sg(12) - isz : wx) - sg(16), tw = text_width(2, tr(S_READER_ON), sg(120));
+        int rx = (mb_mic ? lx - sg(12) - isz : lx) - sg(16), tw = text_width(2, tr(S_READER_ON), sg(120));
         text_draw(2, tr(S_READER_ON), rx - tw, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, rx, H);
     }
     mb_hit[0][0] = wx - sg(5); mb_hit[0][1] = wx + isz + sg(5);         /* power */
@@ -591,7 +605,23 @@ static void cal_tick(void) {   /* the day has changed (or the clock just arrived
     if (h >= 0) dock_hover(h);
     uart_puts("calendar tile redrawn\n");
 }
+void battery_tick(void) {   /* 10.3.0: the gauge, now and then once a minute; the bar is redrawn when the percent moves */
+#ifdef PI_BUILD
+    static unsigned next; static int said;
+    unsigned now = notice_now();
+    if (said && (int)(now - next) < 0) return;
+    next = now + 6000;
+    int mv = 0, p = bat_read(&mv);
+    if (said && p == bat_pct) return;
+    bat_pct = p; bat_mv = mv; said = 1;
+    con_quiet = 1;
+    if (p < 0) uart_puts("battery: none\n");
+    else { uart_puts("battery: "); uart_dec((unsigned)p); uart_puts(" percent, "); uart_dec((unsigned)mv); uart_puts(" mV\n"); }
+    if (fb && text_ok && !splash_on) { cur_hide(); menubar_wifi(mb_wifi); cur_show(); }   /* at boot the splash is up: fb_desktop paints it later */
+#endif
+}
 void menubar_tick(void) {   /* the poll loop calls this; it redraws only when the minute has changed */
+    battery_tick();
     if (notice_expire(&notice, notice_now())) {
         cur_hide(); menubar_wifi(mb_wifi); cur_show();
         uart_puts("notice cleared\n");

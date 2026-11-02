@@ -61,7 +61,7 @@ static void vq_kick(struct vq *v) { __asm__ volatile ("dsb sy" ::: "memory"); VR
 
 /* Keyboard and mouse: one event queue each, lent 8-byte buffers the device fills with Linux evdev events. Both devices
    speak the same events, so one driver serves both. */
-#define MAX_INPUT 2
+#define MAX_INPUT 3   /* 10.2.0: a keyboard, a tablet and a trackpad (virtio-multitouch) */
 static void gic_enable(unsigned id) {   /* a shared peripheral: on, priority, sent to core 0 */
     *(volatile unsigned char *)(GICD_BASE + 0x400 + id) = 0x80;
     *(volatile unsigned char *)(GICD_BASE + 0x800 + id) = 1;

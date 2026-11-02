@@ -18,6 +18,8 @@ static unsigned notice_now(void) { return now; }
 static int ask_pending(void) { return busy; }
 static int screen_blank(unsigned blank) { calls++; last_blank=blank; return accepted; }
 static void uart_puts(const char *s) { (void)s; }
+static unsigned naps;
+static void nap_ms(unsigned ms) { assert(ms == 20); naps++; }
 #include "screen_idle.h"
 int main(void) {
     screen_activity(); now=29999; screen_tick(); assert(!calls && !screen_asleep);
@@ -40,6 +42,10 @@ int main(void) {
     input_ok=0; now=0x7520u+90000u; screen_tick(); assert(calls==8 && !screen_asleep);
     input_ok=1; now+=29999; screen_tick(); assert(calls==8);
     now+=1; screen_tick(); assert(calls==9 && screen_asleep);
+    /* 10.1.0 deep idle: asleep and idle naps every pass; busy, or awake, never */
+    screen_nap(0); screen_nap(0); assert(naps==2 && nap_count==2);
+    screen_nap(1); assert(naps==2);
+    screen_activity(); assert(!screen_asleep); screen_nap(0); assert(naps==2);
 }
 '''
 header = (ROOT/'arch/arm64/screen_idle.h').read_text()
@@ -52,7 +58,8 @@ def host_check(text):
 assert host_check(header).returncode == 0, 'idle/wake state check failed'
 assert host_check(header.replace('screen_asleep = 0;', 'screen_asleep = 1;')).returncode != 0, 'broken-wake control passed'
 assert host_check(header.replace(' || !input_present()', '')).returncode != 0, 'sleeps-with-no-input control passed'
-print('PASS: five-minute boundary, activity reset, wrap, active apps, refused requests and broken-wake control',flush=True)
+assert host_check(header.replace('if (!screen_asleep || busy) return;', '(void)busy; if (!screen_asleep) return;')).returncode != 0, 'naps-while-busy control passed'
+print('PASS: five-minute boundary, activity reset, wrap, active apps, refused requests, broken-wake control, and deep idle naps only asleep and idle',flush=True)
 subprocess.run(['make','-s','-C',str(ROOT/'arch/arm64'),'screen-kernel8.img'],check=True)
 log, sock = TMP/'uart', TMP/'qmp'
 q = subprocess.Popen(['qemu-system-aarch64','-machine','raspi4b','-display','none',
@@ -63,12 +70,21 @@ try:
     deadline = time.monotonic()+45
     while time.monotonic() < deadline:
         out = log.read_text(errors='replace') if log.exists() else ''
-        if 'screen: input selftest done' in out: break
+        if 'screen: deep idle selftest done' in out or 'screen: deep idle stuck' in out: break
         assert q.poll() is None, 'QEMU exited before the screen test'
         time.sleep(.1)
     else: raise AssertionError('screen selftest timed out: '+out[-600:])
     events = [line for line in out.splitlines() if line.startswith('screen:')]
-    assert events == ['screen: asleep','screen: awake','screen: asleep','screen: awake','screen: input selftest done'], events
+    assert events[:5] == ['screen: asleep','screen: awake','screen: asleep','screen: awake','screen: input selftest done'], events
+    # 10.1.0: a second of the loop awake (spinning), then asleep (napping 20 ms a pass), then a key wakes it.
+    # The nap waits on the counter, so the asleep count holds even where QEMU's wfe does not halt (10.x on CI).
+    import re
+    awake = int(re.search(r'screen: (\d+) passes in a second awake', out).group(1))
+    asleep = int(re.search(r'screen: (\d+) passes in a second asleep', out).group(1))
+    assert asleep <= 55, 'deep idle: %d passes in a second asleep, want about 50 (20 ms naps)' % asleep
+    assert awake > 2 * asleep, 'awake (%d) should spin well past asleep (%d)' % (awake, asleep)
+    assert 'screen: deep idle selftest done' in out, 'a key did not wake deep idle: ' + out[-400:]
+    print('PASS: deep idle: %d loop passes a second awake, %d asleep, and a key wakes it' % (awake, asleep), flush=True)
     assert 'key 42 down' in out and 'key 42 up' in out and 'mouse ' in out, 'wake swallowed input'
     s = socket.socket(socket.AF_UNIX); s.settimeout(10); s.connect(str(sock)); f=s.makefile('rw'); f.readline()
     def command(name, args=None):

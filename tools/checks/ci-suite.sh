@@ -65,7 +65,9 @@ cd "$(dirname "$0")/../.."
 manifest() {
 cat <<'EOF'
 once |8|ARM menu notices: bounded messages, expiry, pixels and input|python3 ./tools/checks/arm64-notice-check.py
-once |8|Pi screen sleep: idle deadline, wrap, active apps, refused mailbox requests and keyboard/mouse wake|python3 ./tools/checks/arm64-screen-idle-check.py
+once |8|Pi screen sleep and deep idle (10.1.0): idle deadline, wrap, active apps, refused mailbox requests, keyboard/mouse wake, and 50 loop passes a second asleep|python3 ./tools/checks/arm64-screen-idle-check.py
+once |10|Trackpad (10.2.0): one finger moves the pointer, two scroll, a tap clicks left and a two-finger tap right, on the host and through QEMU virtio-multitouch|python3 ./tools/checks/arm64-trackpad-check.py
+once |9|Battery (10.3.0): a MAX17048 gauge read over the Pi's own I2C driver (an EEPROM stands in for it on QEMU raspi4b), none without one, and the menu bar shows it|python3 ./tools/checks/arm64-battery-check.py
 once |9|Brick on ARM: collision rules, lives and win under sanitizers; keyboard/mouse play, timed animation, pause, restart, Spotlight and close in QEMU|python3 ./tools/checks/arm64-brick-check.py
 once |8|Spotlight on ARM lists every app including the Calculator and Settings on an empty query, typing calc shows it and Enter opens the window, in headless QEMU|python3 ./tools/checks/arm64-spotlight-check.py
 once |10|Accounts on the Pi: accounts.c under sanitizers (add, check, refusals, corrupt files, failed writes, PBKDF2 vectors); in headless QEMU adduser, users and deluser work, the password never shows or reaches the UART, and JT/USERS.TXT is a real PBKDF2 record that survives a reboot|python3 ./tools/checks/arm64-accounts-check.py

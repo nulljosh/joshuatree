@@ -234,7 +234,9 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/libjt/osk.c`, `user/libjt/osk.h` | The phone on-screen keyboard for ring-3 apps. Five rows of 40 px at the window bottom (digits, three letter rows with backspace, then space, enter and done), drawn with the antialiased text face. `jt_osk_draw` paints it, `jt_osk_hit` turns a click into a key code (done answers Esc), `jt_osk_height` is what an app subtracts from its text area. The launcher passes `phone` as argv[1] when the kernel booted in phone mode; Notes is the first user. |
 | `user/libjt/aafont.h` | Generated glyph atlas behind `text.c`: 4-bit coverage bitmaps of DejaVu Sans, rendered from the kernel's own font data. Rebuilt by the Makefile when the font or the generator changes. |
 | `tools/gen/gen_user_text.c` | Host program that bakes `user/libjt/aafont.h` through `drivers/ttf.c`, so ring-3 text and in-kernel text share one rasterizer and one font. |
-| `arch/arm64/screen_idle.h` | Pi display idle timer: blank HDMI after five minutes, keep active Brick and assistant requests awake, resume on keyboard or mouse without stopping apps or USB polling. Mailbox failures retain the previous state. |
+| `arch/arm64/screen_idle.h` | Pi display idle timer: blank HDMI after five minutes, keep active Brick and assistant requests awake, resume on keyboard or mouse without stopping apps or USB polling. Mailbox failures retain the previous state. Deep idle (10.1.0): while the screen sleeps and nothing works, each loop pass naps 20 ms in wfe, about 50 passes a second instead of thousands. |
+| `arch/arm64/trackpad.h` | The trackpad (10.2.0): multitouch slots in, mouse events out. One finger moves the pointer, two scroll naturally, a tap clicks left, a two-finger tap right. Fed by virtio-multitouch in QEMU. |
+| `arch/arm64/battery.h` | The battery (10.3.0): a small I2C driver on BSC1 (GPIO 2 and 3) reads a MAX17048 fuel gauge at 0x36 once a minute; the menu bar shows its percent and a battery in the power symbol's place. |
 | `arch/arm64/notice.h` | One bounded menu message; a newer one replaces it and it expires after four seconds, including timer wrap. |
 | `arch/arm64/brick.h`, `arch/arm64/brick_ui.h`, `tools/checks/arm64-brick-check.py` | Original brick-breaker rules and ARM window: 32 bricks, three lives, arrows or mouse, pause and restart. Hardware-counter animation; host physics and QEMU input/pixel checks. |
 | `arch/arm64/ufile.c` (`ufile_sync`), `arch/arm64/power.h` (`power_halt_screen`), `arch/arm64/main.c` (`POWER_FILE_TEST`) | 4.16.0 power safety. `power_apply` calls `ufile_sync` first, which writes every open descriptor with unwritten bytes to the card (Notes mid-save), then a shutdown paints the safe-to-unplug screen. On the board (54 MHz counter) it then stays on that screen; under QEMU the watchdog halts the model. `reboot`, `shutdown`, the chords and the tree menu rows all end here, and none asks for sudo. The `powerfile` and `powernoflush` builds drive it: a file left unsaved, `reboot`, read back, `shutdown`; the second build skips the flush and must lose the file. |
@@ -2544,12 +2546,14 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (372 checks)
+### The suite (374 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
 | ARM menu notices: bounded messages, expiry, pixels and input | `tools/checks/arm64-notice-check.py` | once |
-| Pi screen sleep: idle deadline, wrap, active apps, refused mailbox requests and keyboard/mouse wake | `tools/checks/arm64-screen-idle-check.py` | once |
+| Pi screen sleep and deep idle (10.1.0): idle deadline, wrap, active apps, refused mailbox requests, keyboard/mouse wake, and 50 loop passes a second asleep | `tools/checks/arm64-screen-idle-check.py` | once |
+| Trackpad (10.2.0): one finger moves the pointer, two scroll, a tap clicks left and a two-finger tap right, on the host and through QEMU virtio-multitouch | `tools/checks/arm64-trackpad-check.py` | once |
+| Battery (10.3.0): a MAX17048 gauge read over the Pi's own I2C driver (an EEPROM stands in for it on QEMU raspi4b), none without one, and the menu bar shows it | `tools/checks/arm64-battery-check.py` | once |
 | Brick on ARM: collision rules, lives and win under sanitizers; keyboard/mouse play, timed animation, pause, restart, Spotlight and close in QEMU | `tools/checks/arm64-brick-check.py` | once |
 | Spotlight on ARM lists every app including the Calculator and Settings on an empty query, typing calc shows it and Enter opens the window, in headless QEMU | `tools/checks/arm64-spotlight-check.py` | once |
 | Accounts on the Pi: accounts.c under sanitizers (add, check, refusals, corrupt files, failed writes, PBKDF2 vectors); in headless QEMU adduser, users and deluser work, the password never shows or reaches the UART, and JT/USERS.TXT is a real PBKDF2 record that survives a reboot | `tools/checks/arm64-accounts-check.py` | once |
