@@ -2121,13 +2121,13 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-10-29, morning Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-11-01, evening Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand.** Main is 7.5.0. 7.0.0 is cut, and the card Joshua has carries 7.0.1. 8.0 is nearly in: apps from the card, signed and installed from the store, Samantha's apps built on the Pi, plankc rebuilding itself there and building 31 of Plank's 33 examples, Code the editor, the SDK page (7.1.0) and `debug` (7.2.0). None of 6.11 onward has run on the board yet.
+**Where things stand.** Main is 7.10.0: Settings in the dock (7.8), Bluetooth pairing from Settings (7.9), and the painted Joshua tree mark with a flat Apple-style boot screen (7.10), which is the refreshed logo 8.0 ships with. Everything 8.0 needs is in: apps from the card, signed and installed from the store, Samantha's apps built on the Pi, plankc rebuilding itself there, Code the editor, the SDK page (7.1.0) and `debug` (7.2.0). The 27 inch board pass ran 7.5; 7.6 onward has not run on the board yet.
 
-**Waiting on Joshua.** The board pass (`docs/TESTING.md`): it is physical. The loop asks nothing else and decides design calls itself, saying what it chose here. Decided 2026-10-27: Wi-Fi passwords stay machine-wide, so the network is up before anyone signs in; apps are signed by Joshua's key and unsigned ones need an admin; the store is an `install` from the landing. Decided 2026-10-29: a card flashed without the key gets plankc unsigned, the same rule.
+**Waiting on Joshua.** The board pass (`docs/TESTING.md`): it is physical. The Bluetooth keyboard's stuck key repeat needs the board too. The loop asks nothing else and decides design calls itself, saying what it chose here. Decided 2026-10-27: Wi-Fi passwords stay machine-wide, so the network is up before anyone signs in; apps are signed by Joshua's key and unsigned ones need an admin; the store is an `install` from the landing. Decided 2026-10-29: a card flashed without the key gets plankc unsigned, the same rule.
 
 **Next, in order.**
 1. Whatever the board shows broken.
