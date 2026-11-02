@@ -493,9 +493,11 @@ try:
         x0, y0 = W // 2, Hh // 2
         tx, ty = slot_centre(W, Hh, 11)
         dx, dy = tx - x0, ty - y0
-        hx, hy = dx // 2, dy // 2
-        mid = (x0 + hx, y0 + hy)
-        b.fake.reports = [bytes([0, hx & 255, hy & 255]), bytes([0, (dx - hx) & 255, (dy - hy) & 255, 1]),   # the second with a wheel byte
+        fx, fy = dx // 3, dy // 3   # 7.8.0: the Trash moved to slot 11, 264 px away: three moves, each inside a report's signed byte
+        first = (x0 + fx, y0 + fy)
+        hx, hy = (dx - fx) // 2, (dy - fy) // 2
+        mid = (first[0] + hx, first[1] + hy)
+        b.fake.reports = [bytes([0, fx & 255, fy & 255]), bytes([0, hx & 255, hy & 255]), bytes([0, (dx - fx - hx) & 255, (dy - fy - hy) & 255, 1]),   # the third with a wheel byte
                           b"\x01\x00\x00", b"\x00\x00\x00"]
         b.type("bt pair")
         check("bt pair picks the mouse by name", b.wait_for("bt: connecting to Microsoft Bluetooth Mouse", 10), b.uart()[-400:])
@@ -520,12 +522,13 @@ try:
         check("ACL flow control: never more packets in flight than the radio's one credit", b.fake.max_out == 1, b.fake.max_out)
         check("the fake mouse found nothing wrong (c1 of the kernel's Mrand, s1 in Start Encryption, every packet)",
               not b.fake.problems, b.fake.problems)
-        check("first report: the pointer moves by its deltas", b.wait_for("mouse %d,%d\n" % mid, 15), b.uart()[-400:])
-        check("second report (with a wheel byte): onto the Trash tile", b.wait_for("mouse %d,%d\n" % (tx, ty), 10), b.uart()[-400:])
+        check("first report: the pointer moves by its deltas", b.wait_for("mouse %d,%d\n" % first, 15), b.uart()[-400:])
+        check("second report: and again", b.wait_for("mouse %d,%d\n" % mid, 10), b.uart()[-400:])
+        check("third report (with a wheel byte): onto the Trash tile", b.wait_for("mouse %d,%d\n" % (tx, ty), 10), b.uart()[-400:])
         check("the hover label follows it", b.wait_for("M1d hover 11 Trash", 10), b.uart()[-400:])
-        check("third report: the left button goes down", b.wait_for("key 272 down", 10), b.uart()[-400:])
+        check("fourth report: the left button goes down", b.wait_for("key 272 down", 10), b.uart()[-400:])
         check("the click lands on the dock: Trash opens the Console", b.wait_for("dock Trash: not on ARM yet", 10), b.uart()[-400:])
-        check("fourth report: the button comes up", b.wait_for("key 272 up", 10), b.uart()[-400:])
+        check("fifth report: the button comes up", b.wait_for("key 272 up", 10), b.uart()[-400:])
         check("F2 brings the Terminal back in front of the Console", b.terminal(2), b.uart()[-300:])
         b.type("bt")
         check("bt says the mouse is ready, by name", b.wait_for("bt: mouse ready, Microsoft Bluetooth Mouse", 10), b.uart()[-400:])
