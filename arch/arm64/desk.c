@@ -714,7 +714,7 @@ void fb_desktop(void) {
    refilled with the new colour (a window closed later must not paint the old one back); the hover band is forgotten so its next
    copy is taken from the new dock. Whatever window was open is drawn again on top. */
 void wall_repaint(void) {
-    int W = (int)fb_w, H = (int)fb_h, s = (int)window_scale();
+    int W = (int)fb_w, H = (int)fb_h;
     cur_hide();
     wall_paint(fb, fb_pitch, W, H, fb_swap);
     menubar_base();

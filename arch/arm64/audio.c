@@ -60,9 +60,12 @@ static int wait_flag(unsigned long reg, unsigned mask, unsigned want) {   /* unt
     for (unsigned i = 0; i < SPIN; i++) if ((RD(reg) & mask) == want) return 1;
     return 0;
 }
-static void hw_close(void) {   /* pins back to inputs, PWM and its clock off: the jack goes quiet. Safe to call twice. */
+static void hw_close(void) {   /* PWM and its clock off, the pins held low: the jack goes quiet. Safe to call twice. */
     WR(PWM1_BASE + 0x00, 0);
-    WR(GPIO_BASE + 0x10, RD(GPIO_BASE + 0x10) & ~0x3Fu);   /* GPIO 40 and 41 only; bits 6 to 8 (GPIO 42) are left as they are */
+    /* 8.9.0: the crackle after the chime until the reset (Joshua, on the board) was GPIO 40 and 41 left as inputs with no
+       pull (hw_open takes the pulls off), floating, so the amp played whatever they picked up. Driven low they are still. */
+    WR(GPIO_BASE + 0x2C, 3u << 8);                                     /* GPCLR1: 40 and 41 low */
+    WR(GPIO_BASE + 0x10, (RD(GPIO_BASE + 0x10) & ~0x3Fu) | 0x09u);     /* GPIO 40 and 41 outputs; bits 6 to 8 (GPIO 42) are left as they are */
     WR(CM_BASE + 0xA0, CM_PW | (RD(CM_BASE + 0xA0) & 0x6F));
 }
 static int hw_open(void) {
