@@ -1585,7 +1585,9 @@ static void fb_copy(int x, int y, int w, int h) {   /* clipped already */
     }
     __asm__ volatile ("dsb sy" ::: "memory");
 }
+int saver_hold;   /* 13.4.0: screen_idle.h's saver is on the scanout; drawing goes on in fb and shows when it ends */
 void fb_flush(int x, int y, int w, int h) {
+    if (saver_hold) return;
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
     if (x + w > (int)fb_w) w = (int)fb_w - x;

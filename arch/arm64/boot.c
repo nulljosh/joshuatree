@@ -41,7 +41,7 @@ static void deep_selftest_tick(void) {
     passes++;
     if (cnt_now() - t0 < cnt_hz()) return;
     con_quiet = 1; uart_puts("screen: "); uart_dec(passes); uart_puts(phase ? " passes in a second asleep\n" : " passes in a second awake\n");
-    if (phase == 0) { screen_last -= SCREEN_IDLE_CS; screen_tick(); }
+    if (phase == 0) { screen_force_idle(); }
     else { kinput(1, 42, 1); kinput(1, 42, 0); uart_puts(screen_asleep ? "screen: deep idle stuck\n" : "screen: deep idle selftest done\n"); phase = 2; }
     phase++; t0 = cnt_now(); passes = 0;
 }
@@ -457,9 +457,9 @@ void main(void) {
 #ifdef PI_BUILD
     screen_last = notice_now();
 #ifdef SCREEN_SELFTEST
-    screen_last -= SCREEN_IDLE_CS; screen_tick();
+    screen_force_idle();
     kinput(1, 42, 1); kinput(1, 42, 0);
-    screen_last -= SCREEN_IDLE_CS; screen_tick();
+    screen_force_idle();
     kinput(2, 0, 1); kinput(0, 0, 0);
     uart_puts("screen: input selftest done\n");
 #endif

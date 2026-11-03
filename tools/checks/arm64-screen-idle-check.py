@@ -20,6 +20,15 @@ static int screen_blank(unsigned blank) { calls++; last_blank=blank; return acce
 static void uart_puts(const char *s) { (void)s; }
 static unsigned naps;
 static void nap_ms(unsigned ms) { assert(ms == 20); naps++; }
+/* 13.4.0: the Energy Saver's wait, and what its saver draws with */
+static unsigned sleep_cs = 30000; unsigned settings_sleep_cs(void) { return sleep_cs; }
+int saver_hold; static unsigned A[64], B[64], *fb, *fb_scan, fb_pitch = 8, fb_w = 8, fb_h = 8, flushes; static int text_ok;
+static void fb_flush(int x, int y, int w, int h) { (void)x; (void)y; (void)w; (void)h; if (!saver_hold) flushes++; }
+static unsigned long cal_utc(void) { return 0; }
+static void clock_local(unsigned long u, unsigned *a, unsigned *b, unsigned *c, unsigned *d) { (void)u; *a = *b = *c = *d = 0; }
+static int sg(int v) { return v; } static unsigned fb_color(unsigned c) { return c; }
+static int text_width(int w, const char *s, int p) { (void)w; (void)s; return p; }
+static int text_draw(int w, const char *s, int x, int y, int p, unsigned c, unsigned *f, unsigned pi, int W, int H) { (void)w; (void)s; (void)x; (void)y; (void)p; (void)c; (void)f; (void)pi; (void)W; (void)H; return 0; }
 #include "screen_idle.h"
 int main(void) {
     screen_activity(); now=29999; screen_tick(); assert(!calls && !screen_asleep);
@@ -46,6 +55,15 @@ int main(void) {
     screen_nap(0); screen_nap(0); assert(naps==2 && nap_count==2);
     screen_nap(1); assert(naps==2);
     screen_activity(); assert(!screen_asleep); screen_nap(0); assert(naps==2);
+    /* 13.4.0 Energy Saver: a back buffer and a separate scanout get the saver first, on the scanout only, then dark */
+    fb = A; fb_scan = B; for (int i = 0; i < 64; i++) A[i] = B[i] = 7;
+    sleep_cs = 6000; now = 1000000; screen_activity(); unsigned c0 = calls;
+    now += 5999; screen_tick(); assert(!saver_on && calls == c0);
+    now += 1; screen_tick(); assert(saver_on && saver_hold && calls == c0 && !screen_asleep && B[0] == 0 && A[0] == 7);
+    now += SAVER_CS - 1; screen_tick(); assert(saver_on && calls == c0);
+    now += 1; screen_tick(); assert(calls == c0 + 1 && screen_asleep);
+    unsigned f0 = flushes; screen_activity(); assert(!saver_on && !saver_hold && !screen_asleep && flushes == f0 + 1);
+    sleep_cs = 0; now += 10000000; screen_tick(); assert(!saver_on && !screen_asleep);   /* Never */
 }
 '''
 header = (ROOT/'arch/arm64/screen_idle.h').read_text()
@@ -75,7 +93,9 @@ try:
         time.sleep(.1)
     else: raise AssertionError('screen selftest timed out: '+out[-600:])
     events = [line for line in out.splitlines() if line.startswith('screen:')]
-    assert events[:5] == ['screen: asleep','screen: awake','screen: asleep','screen: awake','screen: input selftest done'], events
+    # 13.4.0 Energy Saver: the saver comes first, on the scanout, then the HDMI goes dark; a wake takes both back
+    cycle = ['screen: saver on','screen: asleep','screen: saver off','screen: awake']
+    assert events[:9] == cycle + cycle + ['screen: input selftest done'], events
     # 10.1.0: a second of the loop awake (spinning), then asleep (napping 20 ms a pass), then a key wakes it.
     # The nap waits on the counter, so the asleep count holds even where QEMU's wfe does not halt (10.x on CI).
     import re

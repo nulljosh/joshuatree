@@ -7,7 +7,7 @@ typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32; 
 #define NBUF (MAXREF + 1)
 
 struct sps { int ok, id, log2_max_fn, poc_type, log2_max_poc, dpo_zero, num_ref, mbw, mbh, crop[4]; };
-struct pps { int ok, id, sps, nref_def, qp, cqp_off, deblock_ctl, cip, bfpo, cabac; };
+struct pps { int ok, id, sps, nref_def, qp, cqp_off, deblock_ctl, cip, bfpo, cabac, wp; };
 struct frame { u8 *y, *u, *v; int fn, ref, lt, ltidx, picnum; };   /* ref: 0 unused, 1 short, 2 long */
 struct mb {
     u8 type, qp, qpc, skip;    /* type: 0 not decoded, 1 I4x4, 2 I16x16, 3 inter, 4 PCM */
@@ -34,6 +34,7 @@ struct h264 {
     int stype, nal_ref, idr, fn, qp, nref, dbidc, dba, dbb, mmco_adaptive, mmco5, lt_ref, cabac_idc, last_dqp;
     u32 crng, coff; struct bs *cs; u8 cst[460];   /* CABAC's engine and contexts */
     int list[MAXREF + 1];   /* buffer per reference index, one spare for 8.2.4.3.1 */
+    int wp_on, lwd, cwd, lw[MAXREF][2], cwt[MAXREF][2][2];   /* explicit weighted prediction (7.3.3.2): weight, offset per reference */
     int mmco[64][3], nmmco;
     const char *err;
 };
@@ -323,11 +324,14 @@ static int luma_q(const u8 *p, int st, int w, int h, int x, int y, int fx, int f
     #undef Hh
     #undef J
 }
-static void mc(struct h264 *d, int cur, int bx, int by, int bw, int bh, int refbuf, const short *mv) {   /* bx, by, bw, bh in luma samples within the MB */
+static int wgt(int v, int w, int o, int logwd) { return clip1(logwd >= 1 ? ((v * w + (1 << (logwd - 1))) >> logwd) + o : v * w + o); }   /* 8.4.2.3.2 */
+static void mc(struct h264 *d, int cur, int bx, int by, int bw, int bh, int refbuf, const short *mv, int ref) {   /* bx, by, bw, bh in luma samples within the MB */
     const struct frame *r = &d->buf[refbuf]; struct frame *f = &d->buf[d->cur];
+    int wp = d->wp_on && ref >= 0 && ref < MAXREF;
     int mx = cur % d->mbw * 16 + bx, my = cur / d->mbw * 16 + by;
     for (int y = 0; y < bh; y++) for (int x = 0; x < bw; x++)
-        f->y[(my + y) * d->w + mx + x] = (u8)luma_q(r->y, d->w, d->w, d->h, mx + x + (mv[0] >> 2), my + y + (mv[1] >> 2), mv[0] & 3, mv[1] & 3);
+        { int v = luma_q(r->y, d->w, d->w, d->h, mx + x + (mv[0] >> 2), my + y + (mv[1] >> 2), mv[0] & 3, mv[1] & 3);
+          f->y[(my + y) * d->w + mx + x] = (u8)(wp ? wgt(v, d->lw[ref][0], d->lw[ref][1], d->lwd) : v); }
     int cx = mx / 2, cy = my / 2, fx = mv[0] & 7, fy = mv[1] & 7;
     for (int c = 0; c < 2; c++) {
         const u8 *rp = c ? r->v : r->u; u8 *dp = c ? f->v : f->u;
@@ -335,7 +339,8 @@ static void mc(struct h264 *d, int cur, int bx, int by, int bw, int bh, int refb
             int xi = cx + x + (mv[0] >> 3), yi = cy + y + (mv[1] >> 3);
             int A = pix(rp, d->cw, d->cw, d->ch, xi, yi), Bv = pix(rp, d->cw, d->cw, d->ch, xi + 1, yi);
             int C = pix(rp, d->cw, d->cw, d->ch, xi, yi + 1), D = pix(rp, d->cw, d->cw, d->ch, xi + 1, yi + 1);
-            dp[(cy + y) * d->cw + cx + x] = (u8)(((8 - fx) * (8 - fy) * A + fx * (8 - fy) * Bv + (8 - fx) * fy * C + fx * fy * D + 32) >> 6);
+            int v = ((8 - fx) * (8 - fy) * A + fx * (8 - fy) * Bv + (8 - fx) * fy * C + fx * fy * D + 32) >> 6;
+            dp[(cy + y) * d->cw + cx + x] = (u8)(wp ? wgt(v, d->cwt[ref][c][0], d->cwt[ref][c][1], d->cwd) : v);
         }
     }
 }
@@ -476,7 +481,7 @@ static void mb_skip(struct h264 *d, int cur) {
     m->type = 3; m->skip = 1; skip_mv(d, cur, mv);
     set_part(m, 0, 0, 4, 4, 0, d->list[0], mv);
     m->qp = (u8)d->qp; m->qpc = (u8)qpc_of(d, d->qp);
-    mc(d, cur, 0, 0, 16, 16, d->list[0], mv);
+    mc(d, cur, 0, 0, 16, 16, d->list[0], mv, 0);
 }
 static void mb_pcm(struct h264 *d, struct bs *s, int cur) {
     struct mb *m = &d->mbs[cur];
@@ -492,7 +497,7 @@ static void mb_recon(struct h264 *d, int cur, struct mbd *x) {
     struct mb *m = &d->mbs[cur];
     u8 *base = d->buf[d->cur].y + cur / d->mbw * 16 * d->w + cur % d->mbw * 16;
     if (x->i16) pred_block(d, cur, base, d->w, 16, x->i16mode, 0);
-    if (!x->intra) for (int r = 0; r < 16; r++) mc(d, cur, (r & 3) * 4, (r >> 2) * 4, 4, 4, m->refbuf[r], m->mv[r]);
+    if (!x->intra) for (int r = 0; r < 16; r++) mc(d, cur, (r & 3) * 4, (r >> 2) * 4, 4, 4, m->refbuf[r], m->mv[r], m->ref[r]);
     else {
         int mx = cur % d->mbw * 8, my = cur / d->mbw * 8;
         pred_block(d, cur, d->buf[d->cur].u + my * d->cw + mx, d->cw, 8, x->cmode, 1);
@@ -592,7 +597,7 @@ static int parse_pps(struct h264 *d, struct bs *s) {
     p->bfpo = (int)u1(s);
     if (ue(s)) return fail(d, "slice groups are not supported");
     p->nref_def = (int)ue(s) + 1; ue(s);
-    if (u1(s) || rb(s, 2)) return fail(d, "weighted prediction is not supported");
+    p->wp = (int)u1(s); rb(s, 2);   /* weighted_bipred_idc: B slices are refused anyway */
     p->qp = 26 + se(s); se(s);
     p->cqp_off = se(s);
     p->deblock_ctl = (int)u1(s); p->cip = (int)u1(s);
@@ -707,7 +712,18 @@ static int slice(struct h264 *d, struct bs *s, int nal_type, int nal_ref) {
     if (d->s->poc_type == 1 && !d->s->dpo_zero) { se(s); if (d->p->bfpo) se(s); }
     d->nref = d->p->nref_def;
     if (st == 0) { if (u1(s)) d->nref = (int)ue(s) + 1; if (d->nref > MAXREF) return fail(d, "too many references"); }
+    d->wp_on = 0;
     if (st == 0) { build_list(d); if (modify_list(d, s) < 0) return -1; for (int i = 0; i < d->nref; i++) if (d->list[i] == d->cur || !d->buf[d->list[i]].ref) return fail(d, "a reference picture is missing"); }
+    if (st == 0 && d->p->wp) {   /* pred_weight_table (7.3.3.2) */
+        d->wp_on = 1; d->lwd = (int)ue(s); d->cwd = (int)ue(s);
+        if (d->lwd > 7 || d->cwd > 7) return fail(d, "bad weight denominator");
+        for (int i = 0; i < d->nref; i++) {
+            d->lw[i][0] = 1 << d->lwd; d->lw[i][1] = 0;
+            if (u1(s)) { d->lw[i][0] = se(s); d->lw[i][1] = se(s); }
+            for (int c = 0; c < 2; c++) { d->cwt[i][c][0] = 1 << d->cwd; d->cwt[i][c][1] = 0; }
+            if (u1(s)) for (int c = 0; c < 2; c++) { d->cwt[i][c][0] = se(s); d->cwt[i][c][1] = se(s); }
+        }
+    }
     d->mmco_adaptive = 0; d->nmmco = 0; d->lt_ref = 0;
     if (nal_ref) {
         if (d->idr) { u1(s); d->lt_ref = (int)u1(s); }

@@ -7,7 +7,7 @@
 
 #define MP4_OK        0
 #define MP4_E_FORMAT -1   /* no moov in the buffer, or a box runs past it */
-#define MP4_E_EMPTY  -2   /* no H.264 video track */
+#define MP4_E_EMPTY  -2   /* neither an H.264 video track nor an AAC sound track */
 
 #define MP4_VIDEO 1
 #define MP4_AUDIO 2
@@ -21,6 +21,7 @@ struct mp4_track {
     const uint8_t *stsz, *stco, *stsc, *stts;   /* the tables' payloads, past version and flags */
     uint32_t stsz_len, stco_len, stsc_len, stts_len;
     int co64;
+    uint32_t skip;                    /* the edit list's media_time: samples at the start to drop (an encoder's warm-up) */
 };
 struct mp4 { struct mp4_track video, audio; };
 

@@ -95,6 +95,15 @@ static void trak(const uint8_t *tk, uint32_t tn, struct mp4 *m, int *bad) {
         if (!es || !esds_asc(es, l, &c)) return;
         c.kind = MP4_AUDIO;
     }
+    /* edts/elst (8.6.6): the first edit's media_time is where the track really starts */
+    const uint8_t *el = path(tk, tn, (const char *const[]){"edts", "elst", 0}, &l, bad);
+    if (el && l >= 8 && be32(el + 4) >= 1) {
+        int v1 = el[0] == 1;
+        if (l >= 8 + (v1 ? 20u : 12u)) {
+            uint32_t mt = v1 ? be32(el + 8 + 12) : be32(el + 8 + 4);   /* 64-bit media_time: its low word */
+            if (mt != 0xFFFFFFFFu && (!v1 || !be32(el + 8 + 8))) c.skip = mt;
+        }
+    }
     *t = c;
 }
 
@@ -111,7 +120,7 @@ int mp4_open(struct mp4 *m, const uint8_t *buf, uint32_t len) {
         p = tk + tn;
     }
     if (bad) return MP4_E_FORMAT;
-    return m->video.kind ? MP4_OK : MP4_E_EMPTY;
+    return m->video.kind || m->audio.kind ? MP4_OK : MP4_E_EMPTY;
 }
 
 void mp4_iter_init(struct mp4_iter *it, const struct mp4_track *t) { *it = (struct mp4_iter){0}; it->t = t; it->chunk = (uint32_t)-1; }
