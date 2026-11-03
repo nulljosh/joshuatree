@@ -274,7 +274,11 @@ static int fetch_once(const char *url, char *raw, unsigned max) {
         if (n > 96) { kputs("browser: spotify command too long\n"); return -1; }   /* yt_post's request holds about 100 bytes of body */
         kputs("browser: spotify "); kputs(c); kputs("\n");
         int got = spotify_page(c, n, raw + h, max - h, &status);
-        if (got <= 0 || status != 200) { kputs("browser: spotify service "); kputs(got < 0 ? "not reachable\n" : "refused\n"); return -1; }
+        if (got <= 0 || status != 200) {   /* spotify.py says why in one short line (no login, no device, bad command) */
+            kputs("browser: spotify service "); kputs(got < 0 ? "not reachable" : "refused");
+            if (got > 0) { char why[81]; int i = 0; for (; i < got && i < 80 && raw[h + i] >= ' ' && raw[h + i] < 127; i++) why[i] = raw[h + i]; why[i] = 0; kputs(": "); kputs(why); }
+            kputs("\n"); return -1;
+        }
         for (unsigned i = 0; i < h; i++) raw[i] = head[i];
         raw[h + (unsigned)got] = 0;
         kputs("browser: http 200\n");
@@ -776,7 +780,7 @@ static void to_text(const char *h, unsigned n) {
                         unsigned s = k + 4; char q = tag[s]; unsigned z;
                         if (q == '"' || q == '\'') { s++; z = s; while (z < tn && tag[z] != q) z++; } else { z = s; while (z < tn && tag[z] != ' ' && tag[z] != '\n' && tag[z] != '\t') z++; if (z == tn && z > s && tag[z - 1] == '/') z--; }   /* <img src=x/> */
                         resolve(tag + s, z - s, img_url[nimg]);
-                        if (img_url[nimg][0]) {
+                        if (starts(img_url[nimg], "http://") || starts(img_url[nimg], "https://")) {   /* 13.3.1: an <img src="spotify:next"> would press a button just by loading */
                             if (o && text[o - 1] != '\n') o = put(text, o, '\n');
                             o = put(text, o, BR_IMG); o = put(text, o, (char)(0x10 + nimg++)); o = put(text, o, '\n'); space = 1;
                         }
@@ -1407,7 +1411,8 @@ static void show(const char *url, int push) {
         if (push) {   /* a new page: it follows the one on screen, anything after that is forgotten */
             if (hn && hi + 1 < hn) hn = hi + 1;
             if (hn == HIST_MAX) { for (unsigned k = 1; k < HIST_MAX; k++) scopy(hist[k - 1], hist[k], slen(hist[k]), URL_MAX); hn--; }
-            scopy(hist[hn], cur, slen(cur), URL_MAX); hi = hn++;
+            if (starts(cur, "spotify:")) scopy(hist[hn], "spotify:", 8, URL_MAX); else scopy(hist[hn], cur, slen(cur), URL_MAX);   /* 13.3.1: a press is not kept to replay */
+            hi = hn++;
         }
         loads++;
         hist_add();   /* 6.27.0 */
@@ -1457,6 +1462,7 @@ static void submit(unsigned f) {
         o = urlenc(query, o, sizeof query, fields[k].kind == 5 ? fields[k].opt_v[fields[k].sel] : fval(k));
     }
     query[o] = 0;
+    if (starts(forms[f].action, "spotify:")) { kputs("browser: a form cannot send a spotify: command\n"); return; }   /* 13.3.1: only a link the user picks */
     char url[URL_MAX]; scopy(url, forms[f].action, slen(forms[f].action), URL_MAX);
     kputs(forms[f].post ? "browser: post " : "browser: get "); kputs(url); kputs("\n");
     if (forms[f].post) { post_body = query; post_len = o; }
@@ -1686,7 +1692,8 @@ int browse_command(const char *q, unsigned n) {
     }
     if (word(q, n, "reload")) {
         if (!cur[0]) { kputs("browser: no page, browse URL first\n"); return 1; }
-        char url[URL_MAX]; scopy(url, cur, slen(cur), URL_MAX);
+        char url[URL_MAX];
+        if (starts(cur, "spotify:")) scopy(url, "spotify:", 8, URL_MAX); else scopy(url, cur, slen(cur), URL_MAX);   /* 13.3.1: reload asks again, never presses again */
         show(url, 0);
         return 1;
     }

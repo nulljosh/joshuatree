@@ -8,7 +8,8 @@ spotify.py runs with --fixture (a saved /v1/me/player reply, so no network and n
 link (Prev) and Enter follows it: `browser: spotify prev`, a second page. The token never appears on the UART.
 
 Discriminating: drop the spotify: branch in browser.c's fetch and the address is a bare host (https://spotify:), which fails;
-drop spotify: from resolve() and the Prev link resolves against nothing and never goes out.
+drop spotify: from resolve() and the Prev link resolves against nothing and never goes out; keep the full spotify:prev in
+history and F5 or Back presses Prev again.
 
 Usage: tools/checks/arm64-spotify-check.py   (from the repo root)
 """
@@ -88,6 +89,10 @@ try:
     n = len(uart()); key("tab"); wait_for("browser: selected link 1", 10, n); key("ret")
     check("its Prev link is another spotify: command", wait_for("browser: spotify prev", 20, n), uart()[n:][-400:])
     check("which comes back as a page too", wait_for("browser: http 200", 20, n), uart()[n:][-400:])
+    n = len(uart()); key("f5")
+    check("reload asks for now again, it never presses Prev twice", wait_for("browser: spotify now", 20, n) and "browser: spotify prev" not in uart()[n:], uart()[n:][-400:])
+    n = len(uart()); key("alt", "left")
+    check("and Back replays now, not a command", wait_for("browser: spotify now", 20, n) and "browser: spotify prev" not in uart()[n:], uart()[n:][-400:])
     check("the token never appears on the UART", TOKEN not in uart())
 except SystemExit:
     pass
