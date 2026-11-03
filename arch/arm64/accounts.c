@@ -172,8 +172,8 @@ int accounts_check(const char *name, const char *pass) {
 }
 int accounts_has(const char *name) { return find(name) >= 0; }
 int accounts_protected(const char *name) {   /* the two account files, whatever the case: a file command must not touch them */
-    static const char *const files[] = { "USERS.TXT", "SUDOERS.TXT", "WIFI.TXT", "LIMITS.TXT" };   /* 6.22.0: WIFI.TXT holds the network key; 12.0 LIMITS.TXT, set only by `limits` */
-    for (unsigned f = 0; f < 4; f++) {
+    static const char *const files[] = { "USERS.TXT", "SUDOERS.TXT", "WIFI.TXT", "LIMITS.TXT", "BTPAIR.BIN", "BTLINK.BIN" };   /* 6.22.0: WIFI.TXT holds the network key; 12.0 LIMITS.TXT, set only by `limits`; 12.1 the Bluetooth keys */
+    for (unsigned f = 0; f < 6; f++) {
         const char *a = name, *b = files[f];
         while (*a && *b && (*a >= 'a' && *a <= 'z' ? *a - 32 : *a) == *b) { a++; b++; }
         if (!*a && !*b) return 1;
