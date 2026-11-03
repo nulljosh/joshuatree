@@ -144,6 +144,38 @@ static int cres(struct h264 *d, int cat, int max, int inc, int *out) {
     return n;
 }
 
+/* the 8x8 block's coefficients (ctxBlockCat 5, frame): no coded_block_flag in 4:2:0, Table 9-43's context map */
+static const u8 sig8[63] = {0,1,2,3,4,5,5,4,4,3,3,4,4,4,5,5,4,4,4,4,3,3,6,7,7,7,8,9,10,9,8,7,7,6,11,12,13,11,6,7,8,9,14,10,9,8,6,11,
+    12,13,11,6,9,14,10,9,11,12,13,11,14,10,12};
+static const u8 last8[63] = {0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8};
+static int cres8(struct h264 *d, int *out) {
+    for (int i = 0; i < 64; i++) out[i] = 0;
+    u8 sig[64] = {0}; int last = -1;
+    for (int i = 0; i < 63; i++)
+        if (cdec(d, 402 + sig8[i])) { sig[i] = 1; if (cdec(d, 417 + last8[i])) { last = i; break; } }
+    if (last < 0) { last = 63; sig[63] = 1; }
+    int eq1 = 0, gt1 = 0, n = 0;
+    for (int i = last; i >= 0; i--) {
+        if (!sig[i]) continue;
+        int v = 0;
+        if (cdec(d, 426 + (gt1 ? 0 : (1 + eq1 < 4 ? 1 + eq1 : 4)))) {
+            int ck = 426 + 5 + (gt1 < 4 ? gt1 : 4);
+            v = 1;
+            while (v < 14 && cdec(d, ck)) v++;
+            if (v == 14) { int k = 0; while (cbyp(d)) { v += 1 << k; if (++k > 24) break; } while (k--) v += cbyp(d) << k; }
+        }
+        int lv = v + 1;
+        if (lv == 1) eq1++; else gt1++;
+        out[i] = cbyp(d) ? -lv : lv;
+        n++;
+    }
+    return n;
+}
+static int c_t8(struct h264 *d, int cur) {   /* transform_size_8x8_flag, ctx 399 + neighbours that used it */
+    struct mb *A = nbA(d, cur), *B = nbB(d, cur);
+    return cdec(d, 399 + (A && A->t8) + (B && B->t8));
+}
+
 static int c_intra_modes(struct h264 *d, int cur, i8 *modes) {   /* the same prediction as intra_modes, CABAC bins */
     int mx = cur % d->mbw, my = cur / d->mbw;
     for (int b = 0; b < 16; b++) {
@@ -195,15 +227,23 @@ static int macroblock_cabac(struct h264 *d, int cur) {
     if (intra) {
         m->type = x.i16 ? 2 : 1;
         for (int i = 0; i < 16; i++) m->ref[i] = -1;
-        if (!x.i16) { c_intra_modes(d, cur, x.modes); for (int i = 0; i < 16; i++) m->i4[i] = x.modes[i]; }
-        else x.i16mode = (t - 1) % 4;
+        if (!x.i16 && d->p->t8mode) m->t8 = (u8)c_t8(d, cur);
+        if (!x.i16 && m->t8) for (int b8 = 0; b8 < 4; b8++) {
+            int prev = cdec(d, 68), rem = 0;
+            if (!prev) { rem = cdec(d, 69); rem |= cdec(d, 69) << 1; rem |= cdec(d, 69) << 2; }
+            int pm = pred_mode8(d, cur, b8, x.modes);
+            set_mode8(x.modes, b8, prev ? pm : rem < pm ? rem : rem + 1);
+        }
+        else if (!x.i16) c_intra_modes(d, cur, x.modes);
+        if (!x.i16) for (int i = 0; i < 16; i++) m->i4[i] = x.modes[i];
+        if (x.i16) x.i16mode = (t - 1) % 4;
         struct mb *A = nbA(d, cur), *B = nbB(d, cur);
         int inc = (A && (A->type == 1 || A->type == 2) && A->cmode) + (B && (B->type == 1 || B->type == 2) && B->cmode);
         x.cmode = 0;
         if (cdec(d, 64 + inc)) { x.cmode = 1; if (cdec(d, 67)) { x.cmode = 2; if (cdec(d, 67)) x.cmode = 3; } }
         m->cmode = (u8)x.cmode;
     } else {
-        m->type = 3;
+        m->type = 3; x.no_sub8 = 1;
         int nr = d->nref;
         if (t < 3) {
             int np = t == 0 ? 1 : 2, refs[2] = {0, 0};
@@ -224,6 +264,7 @@ static int macroblock_cabac(struct h264 *d, int cur) {
         } else {
             int sub[4], refs[4];
             for (int i = 0; i < 4; i++) { if (cdec(d, 21)) sub[i] = 0; else if (!cdec(d, 22)) sub[i] = 1; else sub[i] = cdec(d, 23) ? 2 : 3; }
+            x.no_sub8 = !sub[0] && !sub[1] && !sub[2] && !sub[3];
             for (int i = 0; i < 4; i++) {
                 int bx = (i & 1) * 2, by = (i >> 1) * 2;
                 refs[i] = nr > 1 ? c_ref(d, cur, bx, by) : 0;
@@ -247,6 +288,7 @@ static int macroblock_cabac(struct h264 *d, int cur) {
     if (!x.i16) x.cbp = c_cbp(d, cur);
     else x.cbp = ((t - 1) / 4 % 3) << 4 | (t >= 13 ? 15 : 0);
     m->cbp = (u8)x.cbp;
+    if (!intra && (x.cbp & 15) && d->p->t8mode && x.no_sub8) m->t8 = (u8)c_t8(d, cur);
     int dqp = 0;
     if (x.cbp || x.i16) {   /* mb_qp_delta: unary of the mapped value (9.3.2.7) */
         int k = 0;
@@ -255,14 +297,20 @@ static int macroblock_cabac(struct h264 *d, int cur) {
         d->qp = (d->qp + dqp + 52) % 52;
     }
     d->last_dqp = dqp;
-    m->qp = (u8)d->qp; m->qpc = (u8)qpc_of(d, d->qp);
+    m->qp = (u8)d->qp; m->qpc = (u8)qpc_of(d, d->qp); m->qpc2 = (u8)qpc2_of(d, d->qp);
     int sc[16];
     if (x.i16) {
         int n = cres(d, 0, 16, cbf_inc(d, cur, 0, 0, 0, 0, 1), sc);
         if (n) m->dcf |= 1;
         for (int i = 0; i < 16; i++) x.dc[zz[i]] = sc[i];
     }
-    for (int b = 0; b < 16; b++) {
+    if (m->t8) for (int b8 = 0; b8 < 4; b8++) {   /* 8x8 blocks: coef holds 4 blocks of 64, raster */
+        if (!((x.cbp & 15) >> b8 & 1)) continue;
+        int sc8[64], n = cres8(d, sc8);
+        for (int i = 0; i < 64; i++) x.coef[b8 * 64 + zz8[i]] = sc8[i];
+        for (int k = 0; k < 4; k++) { int bb = b8 * 4 + k; m->nnz[blk_y[bb] * 4 + blk_x[bb]] = (u8)n; }
+    }
+    else for (int b = 0; b < 16; b++) {
         int x4 = blk_x[b], y4 = blk_y[b], r = y4 * 4 + x4, *o = x.coef + r * 16;
         if (!((x.cbp & 15) >> (b >> 2) & 1)) continue;
         int n = cres(d, x.i16 ? 1 : 2, x.i16 ? 15 : 16, cbf_inc(d, cur, x.i16 ? 1 : 2, x4, y4, 0, intra), sc);

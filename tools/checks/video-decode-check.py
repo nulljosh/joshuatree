@@ -5,6 +5,7 @@ ffmpeg makes three clips and decodes them for reference; our code must match:
   1. H.264 Constrained Baseline (CAVLC), 640x360 (cropped from 368), rotating content, four reference frames, deblocking:
      every frame byte for byte.
   2. H.264 Main profile with CABAC and no B frames, the shape of YouTube's 360p file: every frame byte for byte.
+  2b. High profile without B frames: the 8x8 transform, intra 8x8, CAVLC and CABAC, the default scaling matrices.
   3. AAC-LC stereo at 44.1 kHz, a chord with noise: within one sample step of ffmpeg everywhere, over 60 dB, once the
      edit list's encoder warm-up (1024 samples) is dropped, as ffmpeg drops it.
 mp4.c's sample tables feed all three. Skips (exit 0) when clang or ffmpeg is missing.
@@ -88,6 +89,8 @@ def video(name, args, w, h):
 
 video("baseline", ["-profile:v", "baseline", "-x264-params", "ref=4"], 640, 360)
 video("main-cabac", ["-profile:v", "main", "-bf", "0", "-x264-params", "ref=3"], 640, 360)
+video("high-cabac", ["-profile:v", "high", "-bf", "0"], 640, 360)                                  # 8x8 transform and intra 8x8
+video("high-cavlc-matrices", ["-profile:v", "high", "-bf", "0", "-coder", "0", "-x264-params", "cqm=jvt"], 320, 240)   # scaling matrices
 
 clip, ours, ref = TMP / "sound.mp4", TMP / "sound.ours", TMP / "sound.ref"
 ff("-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-f", "lavfi", "-i", "sine=frequency=659:sample_rate=44100",
@@ -103,4 +106,4 @@ snr = 10 * math.log10(sig / max(err, 1))
 check("AAC-LC stereo: %.1f s, %.1f dB against ffmpeg, never more than %d apart" % (n / 2 / 44100, snr, worst),
       out.returncode == 0 and abs(len(a) - len(b)) <= 4096 and snr > 60 and worst <= 1, out.stdout)
 if fails: print("FAIL: %d of the video decode checks failed" % len(fails)); sys.exit(1)
-print("PASS: our MP4 reader, H.264 (Baseline and Main with CABAC) and AAC-LC decoders match ffmpeg on fresh clips", flush=True)
+print("PASS: our MP4 reader, H.264 (Baseline, Main with CABAC, High without B frames) and AAC-LC decoders match ffmpeg on fresh clips", flush=True)

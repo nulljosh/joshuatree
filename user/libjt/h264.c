@@ -6,11 +6,12 @@ typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32; 
 #define MAXREF 16
 #define NBUF (MAXREF + 1)
 
-struct sps { int ok, id, log2_max_fn, poc_type, log2_max_poc, dpo_zero, num_ref, mbw, mbh, crop[4]; };
-struct pps { int ok, id, sps, nref_def, qp, cqp_off, deblock_ctl, cip, bfpo, cabac, wp; };
+struct sps { int ok, id, log2_max_fn, poc_type, log2_max_poc, dpo_zero, num_ref, mbw, mbh, crop[4], d8inf, has_sl; u8 sl[8][64]; };
+struct pps { int ok, id, sps, nref_def, qp, cqp_off, deblock_ctl, cip, bfpo, cabac, wp, t8mode, cqp_off2, own_sl; u8 sl[8][64]; };
 struct frame { u8 *y, *u, *v; int fn, ref, lt, ltidx, picnum; };   /* ref: 0 unused, 1 short, 2 long */
 struct mb {
-    u8 type, qp, qpc, skip;    /* type: 0 not decoded, 1 I4x4, 2 I16x16, 3 inter, 4 PCM */
+    u8 type, qp, qpc, skip;    /* type: 0 not decoded, 1 I4x4 (or I8x8 with t8), 2 I16x16, 3 inter, 4 PCM */
+    u8 qpc2, t8;               /* High: Cr's QP (second_chroma_qp_index_offset) and transform_size_8x8_flag */
     u8 cbp, cmode, dcf;        /* CABAC's neighbour context: coded_block_pattern, intra chroma mode, DC coded flags (luma, Cb, Cr) */
     u8 mvd[16][2];             /* |mvd| per 4x4, capped */
     u16 slice;
@@ -34,6 +35,7 @@ struct h264 {
     int stype, nal_ref, idr, fn, qp, nref, dbidc, dba, dbb, mmco_adaptive, mmco5, lt_ref, cabac_idc, last_dqp;
     u32 crng, coff; struct bs *cs; u8 cst[460];   /* CABAC's engine and contexts */
     int list[MAXREF + 1];   /* buffer per reference index, one spare for 8.2.4.3.1 */
+    int w4[6][16], w8[2][64];   /* the slice's scaling matrices, raster order (High; flat 16 otherwise) */
     int wp_on, lwd, cwd, lw[MAXREF][2], cwt[MAXREF][2][2];   /* explicit weighted prediction (7.3.3.2): weight, offset per reference */
     int mmco[64][3], nmmco;
     const char *err;
@@ -369,11 +371,56 @@ static void set_part(struct mb *m, int x4, int y4, int w4, int h4, int ref, int 
 }
 
 /* ---- residual and reconstruction ---- */
-static int dq(int c, int qp, int r) { return c * norm[qp % 6][cls(r)] * (1 << (qp / 6)); }
+/* 8.5.12.1 with the scaling matrix w (16 everywhere for a stream without one: then this is c * norm << qp/6) */
+static int dq(int c, int qp, int r, int w) {
+    int ls = w * norm[qp % 6][cls(r)];
+    return qp >= 24 ? c * ls * (1 << (qp / 6 - 4)) : (c * ls + (1 << (3 - qp / 6))) >> (4 - qp / 6);
+}
+static const u8 zz8[64] = {0,1,8,16,9,2,3,10,17,24,32,25,18,11,4,5,12,19,26,33,40,48,41,34,27,20,13,6,7,14,21,28,
+    35,42,49,56,57,50,43,36,29,22,15,23,30,37,44,51,58,59,52,45,38,31,39,46,53,60,61,54,47,55,62,63};
+static const u8 norm8[6][6] = {{20,18,32,19,25,24},{22,19,35,21,28,26},{26,23,42,24,33,31},{28,25,45,26,35,33},{32,28,51,30,40,38},{36,32,58,34,46,43}};
+static int cls8(int r) {
+    int i = r >> 3, j = r & 7;
+    if (!(i & 3) && !(j & 3)) return 0;
+    if ((i & 1) && (j & 1)) return 1;
+    if ((i & 3) == 2 && (j & 3) == 2) return 2;
+    if ((!(i & 3) && (j & 1)) || ((i & 1) && !(j & 3))) return 3;
+    if ((!(i & 3) && (j & 3) == 2) || ((i & 3) == 2 && !(j & 3))) return 4;
+    return 5;
+}
+static int dq8(int c, int qp, int r, int w) {   /* 8.5.13.1 */
+    int ls = w * norm8[qp % 6][cls8(r)];
+    return qp >= 36 ? c * ls * (1 << (qp / 6 - 6)) : (c * ls + (1 << (5 - qp / 6))) >> (6 - qp / 6);
+}
+static void idct8_add(u8 *dst, int stride, int *d) {   /* 8.5.13.2 */
+    int t[64];
+    for (int pass = 0; pass < 2; pass++) for (int k = 0; k < 8; k++) {
+        int v[8];
+        for (int i = 0; i < 8; i++) v[i] = pass ? t[i * 8 + k] : d[k * 8 + i];
+        int a0 = v[0] + v[4], a4 = v[0] - v[4], a2 = (v[2] >> 1) - v[6], a6 = v[2] + (v[6] >> 1);
+        int b0 = a0 + a6, b2 = a4 + a2, b4 = a4 - a2, b6 = a0 - a6;
+        int a1 = -v[3] + v[5] - v[7] - (v[7] >> 1), a3 = v[1] + v[7] - v[3] - (v[3] >> 1);
+        int a5 = -v[1] + v[7] + v[5] + (v[5] >> 1), a7 = v[3] + v[5] + v[1] + (v[1] >> 1);
+        int b1 = a1 + (a7 >> 2), b7 = a7 - (a1 >> 2), b3 = a3 + (a5 >> 2), b5 = (a3 >> 2) - a5;
+        int o[8] = {b0 + b7, b2 + b5, b4 + b3, b6 + b1, b6 - b1, b4 - b3, b2 - b5, b0 - b7};
+        for (int i = 0; i < 8; i++) { if (pass) dst[i * stride + k] = clip1(dst[i * stride + k] + ((o[i] + 32) >> 6)); else t[k * 8 + i] = o[i]; }
+    }
+}
 
 static int luma_residual(struct h264 *d, struct bs *s, int cur, int cbp, int i16, int *coef /* 16x16 raster per block */, int *dc) {
     struct mb *m = &d->mbs[cur];
     int sc[16];
+    if (m->t8) {   /* 7.3.5.3.2: an 8x8 block is four 4x4 CAVLC blocks, interleaved; coef holds 4 blocks of 64, raster */
+        for (int i = 0; i < 256; i++) coef[i] = 0;
+        for (int b = 0; b < 16; b++) {
+            int x4 = blk_x[b], y4 = blk_y[b], r = y4 * 4 + x4, b8 = b >> 2, k = b & 3;
+            if (!(cbp & (1 << b8))) { m->nnz[r] = 0; continue; }
+            int n = cavlc(s, nc_luma(d, cur, x4, y4), 16, sc); if (n < 0) return -1;
+            m->nnz[r] = (u8)n;
+            for (int i = 0; i < 16; i++) coef[b8 * 64 + zz8[4 * i + k]] = sc[i];
+        }
+        return 0;
+    }
     if (i16) {
         int n = cavlc(s, nc_luma(d, cur, 0, 0), 16, sc); if (n < 0) return -1;
         for (int i = 0; i < 16; i++) dc[zz[i]] = sc[i];
@@ -391,13 +438,26 @@ static int luma_residual(struct h264 *d, struct bs *s, int cur, int cbp, int i16
     }
     return 0;
 }
-static void luma_recon(struct h264 *d, int cur, int qp, int i16, int *coef, int *dc, int i4modes, const i8 *modes) {
+static void pred8(struct h264 *d, int cur, u8 *dst, int st, int b8, int mode);
+static void luma_recon(struct h264 *d, int cur, int qp, int i16, int *coef, int *dc, int i4modes, const i8 *modes, int intra) {
     u8 *base = d->buf[d->cur].y + cur / d->mbw * 16 * d->w + cur % d->mbw * 16;
+    const int *w = d->w4[intra ? 0 : 3];
+    if (d->mbs[cur].t8) {   /* 8x8 transform: four blocks, intra 8x8 predicted first when it is one */
+        const int *w8 = d->w8[intra ? 0 : 1];
+        for (int b8 = 0; b8 < 4; b8++) {
+            u8 *dst = base + (b8 >> 1) * 8 * d->w + (b8 & 1) * 8;
+            if (i4modes) pred8(d, cur, dst, d->w, b8, modes[(b8 >> 1) * 8 + (b8 & 1) * 2]);
+            int dd[64], any = 0, *o = coef + b8 * 64;
+            for (int i = 0; i < 64; i++) { dd[i] = o[i] ? dq8(o[i], qp, i, w8[i]) : 0; any |= dd[i]; }
+            if (any) idct8_add(dst, d->w, dd);
+        }
+        return;
+    }
     if (i16) {   /* 8.5.10: the DC Hadamard */
         int t[16], f[16];
         for (int i = 0; i < 4; i++) { int *c = dc + 4 * i; t[4*i] = c[0]+c[1]+c[2]+c[3]; t[4*i+1] = c[0]+c[1]-c[2]-c[3]; t[4*i+2] = c[0]-c[1]-c[2]+c[3]; t[4*i+3] = c[0]-c[1]+c[2]-c[3]; }
         for (int j = 0; j < 4; j++) { f[j] = t[j]+t[4+j]+t[8+j]+t[12+j]; f[4+j] = t[j]+t[4+j]-t[8+j]-t[12+j]; f[8+j] = t[j]-t[4+j]-t[8+j]+t[12+j]; f[12+j] = t[j]-t[4+j]+t[8+j]-t[12+j]; }
-        int ls = 16 * norm[qp % 6][0];
+        int ls = w[0] * norm[qp % 6][0];
         for (int i = 0; i < 16; i++) {
             int v = qp >= 36 ? f[i] * ls * (1 << (qp / 6 - 6)) : (f[i] * ls + (1 << (5 - qp / 6))) >> (6 - qp / 6);
             coef[i * 16] = v;   /* block (raster i)'s DC, already scaled */
@@ -407,12 +467,12 @@ static void luma_recon(struct h264 *d, int cur, int qp, int i16, int *coef, int 
         int x4 = blk_x[b], y4 = blk_y[b], r = y4 * 4 + x4, *o = coef + r * 16, dd[16];
         u8 *dst = base + y4 * 4 * d->w + x4 * 4;
         if (i4modes) pred4(d, cur, dst, d->w, x4, y4, modes[r]);
-        for (int i = 0; i < 16; i++) dd[i] = i16 && !i ? o[0] : dq(o[i], qp, i);
+        for (int i = 0; i < 16; i++) dd[i] = i16 && !i ? o[0] : dq(o[i], qp, i, w[i]);
         int any = 0; for (int i = 0; i < 16; i++) any |= dd[i];
         if (any) idct_add(dst, d->w, dd);
     }
 }
-struct mbd { int intra, i16, i16mode, cmode, cbp; i8 modes[16]; int coef[256], dc[16], dcc[2][4], ac[2][4][16]; };
+struct mbd { int intra, i16, i16mode, cmode, cbp, no_sub8; i8 modes[16]; int coef[256], dc[16], dcc[2][4], ac[2][4][16]; };
 static int chroma_cavlc(struct h264 *d, struct bs *s, int cur, struct mbd *x) {
     struct mb *m = &d->mbs[cur]; int sc[16], cbpc = x->cbp >> 4;
     if (cbpc) for (int c = 0; c < 2; c++) { if (cavlc(s, -1, 4, x->dcc[c]) < 0) return -1; }
@@ -423,20 +483,92 @@ static int chroma_cavlc(struct h264 *d, struct bs *s, int cur, struct mbd *x) {
     }
     return 0;
 }
-static void chroma_recon(struct h264 *d, int cur, struct mbd *x, int qpc) {
+static void chroma_recon(struct h264 *d, int cur, struct mbd *x, int qpc0) {
     int mx = cur % d->mbw * 8, my = cur / d->mbw * 8;
     for (int c = 0; c < 2; c++) {
+        int qpc = c ? d->mbs[cur].qpc2 : qpc0;
+        const int *w = d->w4[(x->intra ? 1 : 4) + c];
         int *k = x->dcc[c], f[4] = {k[0] + k[1] + k[2] + k[3], k[0] - k[1] + k[2] - k[3], k[0] + k[1] - k[2] - k[3], k[0] - k[1] - k[2] + k[3]};
         u8 *p = (c ? d->buf[d->cur].v : d->buf[d->cur].u) + my * d->cw + mx;
         for (int b = 0; b < 4; b++) {
             int dd[16];
-            dd[0] = (f[b] * 16 * norm[qpc % 6][0] * (1 << (qpc / 6))) >> 5;
-            for (int i = 1; i < 16; i++) dd[i] = dq(x->ac[c][b][i], qpc, i);
+            dd[0] = (f[b] * w[0] * norm[qpc % 6][0] * (1 << (qpc / 6))) >> 5;
+            for (int i = 1; i < 16; i++) dd[i] = dq(x->ac[c][b][i], qpc, i, w[i]);
             int any = 0; for (int i = 0; i < 16; i++) any |= dd[i];
             if (any) idct_add(p + (b >> 1) * 4 * d->cw + (b & 1) * 4, d->cw, dd);
         }
     }
 }
+
+/* ---- intra 8x8 (8.3.2) ---- */
+static void pred8(struct h264 *d, int cur, u8 *dst, int st, int b8, int mode) {
+    int mx = cur % d->mbw, my = cur / d->mbw, x8 = b8 & 1, y8 = b8 >> 1;
+    int L = x8 ? 1 : intra_ok(d, cur, mx - 1, my), T = y8 ? 1 : intra_ok(d, cur, mx, my - 1);
+    int TL = x8 && y8 ? 1 : x8 ? T : y8 ? L : intra_ok(d, cur, mx - 1, my - 1);
+    int TR = b8 == 0 ? T : b8 == 1 ? intra_ok(d, cur, mx + 1, my - 1) : b8 == 2;
+    int t[16], l[8], tl = TL ? dst[-st - 1] : 0, ft[16], fl[8], ftl = 0;
+    for (int i = 0; i < 8; i++) { t[i] = T ? dst[-st + i] : 0; l[i] = L ? dst[i * st - 1] : 0; }
+    for (int i = 8; i < 16; i++) t[i] = TR ? dst[-st + i] : t[7];
+    if (T) {   /* 8.3.2.2.1: the reference samples, filtered */
+        ft[0] = TL ? (tl + 2 * t[0] + t[1] + 2) >> 2 : (3 * t[0] + t[1] + 2) >> 2;
+        for (int i = 1; i < 15; i++) ft[i] = (t[i - 1] + 2 * t[i] + t[i + 1] + 2) >> 2;
+        ft[15] = (t[14] + 3 * t[15] + 2) >> 2;
+    }
+    if (TL) ftl = T && L ? (t[0] + 2 * tl + l[0] + 2) >> 2 : T ? (3 * tl + t[0] + 2) >> 2 : L ? (3 * tl + l[0] + 2) >> 2 : tl;
+    if (L) {
+        fl[0] = TL ? (tl + 2 * l[0] + l[1] + 2) >> 2 : (3 * l[0] + l[1] + 2) >> 2;
+        for (int i = 1; i < 7; i++) fl[i] = (l[i - 1] + 2 * l[i] + l[i + 1] + 2) >> 2;
+        fl[7] = (l[6] + 3 * l[7] + 2) >> 2;
+    }
+    #define PT(i) ((i) < 0 ? ftl : ft[i])
+    #define PL(i) ((i) < 0 ? ftl : fl[i])
+    for (int y = 0; y < 8; y++) for (int x = 0; x < 8; x++) {
+        int v;
+        switch (mode) {
+        case 0: v = ft[x]; break;
+        case 1: v = fl[y]; break;
+        case 2: { int sm = 0; if (T && L) { for (int i = 0; i < 8; i++) sm += ft[i] + fl[i]; v = (sm + 8) >> 4; }
+                  else if (L) { for (int i = 0; i < 8; i++) sm += fl[i]; v = (sm + 4) >> 3; }
+                  else if (T) { for (int i = 0; i < 8; i++) sm += ft[i]; v = (sm + 4) >> 3; } else v = 128; } break;
+        case 3: v = x == 7 && y == 7 ? (ft[14] + 3 * ft[15] + 2) >> 2 : (ft[x + y] + 2 * ft[x + y + 1] + ft[x + y + 2] + 2) >> 2; break;
+        case 4: v = x > y ? (PT(x - y - 2) + 2 * PT(x - y - 1) + ft[x - y] + 2) >> 2 : x < y ? (PL(y - x - 2) + 2 * PL(y - x - 1) + fl[y - x] + 2) >> 2
+                          : (ft[0] + 2 * ftl + fl[0] + 2) >> 2; break;
+        case 5: { int z = 2 * x - y;
+            if (z >= 0 && !(z & 1)) v = (PT(x - (y >> 1) - 1) + ft[x - (y >> 1)] + 1) >> 1;
+            else if (z >= 0) v = (PT(x - (y >> 1) - 2) + 2 * PT(x - (y >> 1) - 1) + ft[x - (y >> 1)] + 2) >> 2;
+            else if (z == -1) v = (fl[0] + 2 * ftl + ft[0] + 2) >> 2;
+            else v = (PL(y - 2 * x - 1) + 2 * PL(y - 2 * x - 2) + PL(y - 2 * x - 3) + 2) >> 2; } break;
+        case 6: { int z = 2 * y - x;
+            if (z >= 0 && !(z & 1)) v = (PL(y - (x >> 1) - 1) + fl[y - (x >> 1)] + 1) >> 1;
+            else if (z >= 0) v = (PL(y - (x >> 1) - 2) + 2 * PL(y - (x >> 1) - 1) + fl[y - (x >> 1)] + 2) >> 2;
+            else if (z == -1) v = (fl[0] + 2 * ftl + ft[0] + 2) >> 2;
+            else v = (PT(x - 2 * y - 1) + 2 * PT(x - 2 * y - 2) + PT(x - 2 * y - 3) + 2) >> 2; } break;
+        case 7: v = !(y & 1) ? (ft[x + (y >> 1)] + ft[x + (y >> 1) + 1] + 1) >> 1 : (ft[x + (y >> 1)] + 2 * ft[x + (y >> 1) + 1] + ft[x + (y >> 1) + 2] + 2) >> 2; break;
+        default: { int z = x + 2 * y;
+            if (z < 13 && !(z & 1)) v = (fl[y + (x >> 1)] + fl[y + (x >> 1) + 1] + 1) >> 1;
+            else if (z < 13) v = (fl[y + (x >> 1)] + 2 * fl[y + (x >> 1) + 1] + fl[y + (x >> 1) + 2 > 7 ? 7 : y + (x >> 1) + 2] + 2) >> 2;
+            else if (z == 13) v = (fl[6] + 3 * fl[7] + 2) >> 2;
+            else v = fl[7]; } break;
+        }
+        dst[y * st + x] = (u8)v;
+    }
+    #undef PT
+    #undef PL
+}
+/* 8.3.2.1: an 8x8 block's predicted mode from its neighbours; flags and rem as the 4x4 ones are read */
+static int pred_mode8(struct h264 *d, int cur, int b8, const i8 *modes) {
+    int mx = cur % d->mbw, my = cur / d->mbw, x8 = b8 & 1, y8 = b8 >> 1;
+    struct mb *A = x8 ? &d->mbs[cur] : mb_ok(d, mx - 1, my, cur) ? &d->mbs[cur - 1] : 0;
+    struct mb *B = y8 ? &d->mbs[cur] : mb_ok(d, mx, my - 1, cur) ? &d->mbs[cur - d->mbw] : 0;
+    if (!A || !B || (d->p->cip && (A->type == 3 || B->type == 3))) return 2;
+    int bA = x8 ? b8 - 1 : b8 + 1, bB = y8 ? b8 - 2 : b8 + 2;
+    int nA = bA * 4 + 1, nB = bB * 4 + 2;   /* a 4x4 neighbour's block: n = 1 for A, 2 for B (8-72) */
+    int rA = blk_y[nA] * 4 + blk_x[nA], rB = blk_y[nB] * 4 + blk_x[nB];
+    int ma = A->type == 1 ? (A == &d->mbs[cur] ? modes[rA] : A->i4[rA]) : 2;
+    int mb_ = B->type == 1 ? (B == &d->mbs[cur] ? modes[rB] : B->i4[rB]) : 2;
+    return ma < mb_ ? ma : mb_;
+}
+static void set_mode8(i8 *modes, int b8, int mode) { for (int y = 0; y < 2; y++) for (int x = 0; x < 2; x++) modes[((b8 >> 1) * 2 + y) * 4 + (b8 & 1) * 2 + x] = (i8)mode; }
 
 /* ---- one macroblock (7.3.5) ---- */
 static int intra_modes(struct h264 *d, struct bs *s, int cur, i8 *modes) {
@@ -472,15 +604,16 @@ static void mb_begin(struct h264 *d, int cur) {
     for (int i = 0; i < 16; i++) { m->ref[i] = -2; m->nnz[i] = 0; m->i4[i] = 2; m->mv[i][0] = m->mv[i][1] = 0; m->refbuf[i] = -1; m->mvd[i][0] = m->mvd[i][1] = 0; }
     for (int c = 0; c < 2; c++) for (int i = 0; i < 4; i++) m->nnzc[c][i] = 0;
     m->slice = (u16)d->slice_num; m->dbidc = (i8)d->dbidc; m->dba = (i8)d->dba; m->dbb = (i8)d->dbb;
-    m->skip = 0; m->cbp = 0; m->cmode = 0; m->dcf = 0;
+    m->skip = 0; m->cbp = 0; m->cmode = 0; m->dcf = 0; m->t8 = 0;
 }
 static int qpc_of(const struct h264 *d, int qp) { int q = qp + d->p->cqp_off; return qpc_tab[q < 0 ? 0 : q > 51 ? 51 : q]; }
+static int qpc2_of(const struct h264 *d, int qp) { int q = qp + d->p->cqp_off2; return qpc_tab[q < 0 ? 0 : q > 51 ? 51 : q]; }
 static void mb_skip(struct h264 *d, int cur) {
     struct mb *m = &d->mbs[cur]; short mv[2];
     mb_begin(d, cur);
     m->type = 3; m->skip = 1; skip_mv(d, cur, mv);
     set_part(m, 0, 0, 4, 4, 0, d->list[0], mv);
-    m->qp = (u8)d->qp; m->qpc = (u8)qpc_of(d, d->qp);
+    m->qp = (u8)d->qp; m->qpc = (u8)qpc_of(d, d->qp); m->qpc2 = (u8)qpc2_of(d, d->qp);
     mc(d, cur, 0, 0, 16, 16, d->list[0], mv, 0);
 }
 static void mb_pcm(struct h264 *d, struct bs *s, int cur) {
@@ -489,7 +622,7 @@ static void mb_pcm(struct h264 *d, struct bs *s, int cur) {
     u8 *y = d->buf[d->cur].y + cur / d->mbw * 16 * d->w + cur % d->mbw * 16;
     for (int i = 0; i < 256; i++) y[(i >> 4) * d->w + (i & 15)] = (u8)rb(s, 8);
     for (int c = 0; c < 2; c++) { u8 *p = (c ? d->buf[d->cur].v : d->buf[d->cur].u) + cur / d->mbw * 8 * d->cw + cur % d->mbw * 8; for (int i = 0; i < 64; i++) p[(i >> 3) * d->cw + (i & 7)] = (u8)rb(s, 8); }
-    m->type = 4; m->qp = 0; m->qpc = (u8)qpc_of(d, 0); m->cbp = 0x2f; m->dcf = 7;
+    m->type = 4; m->qp = 0; m->qpc = (u8)qpc_of(d, 0); m->qpc2 = (u8)qpc2_of(d, 0); m->cbp = 0x2f; m->dcf = 7;
     for (int i = 0; i < 16; i++) { m->nnz[i] = 16; m->ref[i] = -1; }
     for (int c = 0; c < 2; c++) for (int i = 0; i < 4; i++) m->nnzc[c][i] = 16;
 }
@@ -503,7 +636,7 @@ static void mb_recon(struct h264 *d, int cur, struct mbd *x) {
         pred_block(d, cur, d->buf[d->cur].u + my * d->cw + mx, d->cw, 8, x->cmode, 1);
         pred_block(d, cur, d->buf[d->cur].v + my * d->cw + mx, d->cw, 8, x->cmode, 1);
     }
-    luma_recon(d, cur, m->qp, x->i16, x->coef, x->dc, x->intra && !x->i16, x->modes);
+    luma_recon(d, cur, m->qp, x->i16, x->coef, x->dc, x->intra && !x->i16, x->modes, x->intra);
     chroma_recon(d, cur, x, m->qpc);
 }
 static void mbd_clear(struct mbd *x) { unsigned char *p = (unsigned char *)x; for (unsigned i = 0; i < sizeof *x; i++) p[i] = 0; }
@@ -521,11 +654,17 @@ static int macroblock(struct h264 *d, struct bs *s, int cur, int skip) {
     if (intra) {
         m->type = x.i16 ? 2 : 1;
         for (int i = 0; i < 16; i++) m->ref[i] = -1;
-        if (!x.i16) { intra_modes(d, s, cur, x.modes); for (int i = 0; i < 16; i++) m->i4[i] = x.modes[i]; }
-        else x.i16mode = (t - 1) % 4;
+        if (!x.i16 && d->p->t8mode) m->t8 = (u8)u1(s);
+        if (!x.i16 && m->t8) for (int b8 = 0; b8 < 4; b8++) {
+            int prev = (int)u1(s), rem = prev ? 0 : (int)rb(s, 3), pm = pred_mode8(d, cur, b8, x.modes);
+            set_mode8(x.modes, b8, prev ? pm : rem < pm ? rem : rem + 1);
+        }
+        else if (!x.i16) intra_modes(d, s, cur, x.modes);
+        if (!x.i16) for (int i = 0; i < 16; i++) m->i4[i] = x.modes[i];
+        if (x.i16) x.i16mode = (t - 1) % 4;
         x.cmode = (int)ue(s); if (x.cmode > 3) return fail(d, "bad chroma mode");
     } else {
-        m->type = 3;
+        m->type = 3; x.no_sub8 = 1;
         int nparts = t == 0 ? 1 : t < 3 ? 2 : 4, refs[4] = {0, 0, 0, 0};
         int nr = d->nref;
         if (t < 3) {
@@ -540,6 +679,7 @@ static int macroblock(struct h264 *d, struct bs *s, int cur, int skip) {
         } else {
             int sub[4];
             for (int i = 0; i < 4; i++) { sub[i] = (int)ue(s); if (sub[i] > 3) return fail(d, "bad sub_mb_type"); }
+            x.no_sub8 = !sub[0] && !sub[1] && !sub[2] && !sub[3];
             for (int i = 0; i < 4; i++) refs[i] = t == 4 || nr <= 1 ? 0 : nr == 2 ? !u1(s) : (int)ue(s);
             for (int i = 0; i < 4; i++) {
                 if (refs[i] >= nr) return fail(d, "bad ref");
@@ -557,8 +697,9 @@ static int macroblock(struct h264 *d, struct bs *s, int cur, int skip) {
     if (!x.i16) { u32 k = ue(s); if (k > 47) return fail(d, "bad cbp"); x.cbp = intra ? cbp_intra[k] : cbp_inter[k]; }
     else x.cbp = ((t - 1) / 4 % 3) << 4 | (t >= 13 ? 15 : 0);
     m->cbp = (u8)x.cbp;
+    if (!intra && (x.cbp & 15) && d->p->t8mode && x.no_sub8) m->t8 = (u8)u1(s);
     if (x.cbp || x.i16) d->qp = (d->qp + se(s) + 52) % 52;
-    m->qp = (u8)d->qp; m->qpc = (u8)qpc_of(d, d->qp);
+    m->qp = (u8)d->qp; m->qpc = (u8)qpc_of(d, d->qp); m->qpc2 = (u8)qpc2_of(d, d->qp);
     if (luma_residual(d, s, cur, x.cbp & 15, x.i16, x.coef, x.dc) < 0) return fail(d, "bad luma residual");
     if (chroma_cavlc(d, s, cur, &x) < 0) return fail(d, "bad chroma residual");
     mb_recon(d, cur, &x);
@@ -568,12 +709,46 @@ static int macroblock(struct h264 *d, struct bs *s, int cur, int skip) {
 #include "h264_cabac.c"
 
 /* ---- parameter sets (7.3.2) ---- */
+static const u8 def4[2][16] = {{6,13,13,20,20,20,28,28,28,28,32,32,32,37,37,42}, {10,14,14,20,20,20,24,24,24,24,27,27,27,30,30,34}};   /* Table 7-3 */
+static const u8 def8[2][64] = {   /* Table 7-4 */
+    {6,10,10,13,11,13,16,16,16,16,18,18,18,18,18,23,23,23,23,23,23,25,25,25,25,25,25,25,27,27,27,27,27,27,27,27,29,29,29,29,29,29,29,31,31,31,31,31,31,33,33,33,33,33,36,36,36,36,38,38,38,40,40,42},
+    {9,13,13,15,13,15,17,17,17,17,19,19,19,19,19,21,21,21,21,21,21,22,22,22,22,22,22,22,24,24,24,24,24,24,24,24,25,25,25,25,25,25,25,27,27,27,27,27,27,28,28,28,28,28,30,30,30,30,32,32,32,33,33,35}};
+static void def_list(u8 *l, int i) { int n = i < 6 ? 16 : 64; for (int k = 0; k < n; k++) l[k] = i < 6 ? def4[i >= 3][k] : def8[i == 7][k]; }
+/* scaling lists 0..n-1 (7.3.2.1.1.1) with fall-back rule A (seq: the defaults) or B (pic: the sequence's lists) */
+static void scaling_lists(struct bs *s, u8 sl[8][64], int n, const u8 (*seq)[64]) {
+    for (int i = 0; i < n; i++) {
+        int sz = i < 6 ? 16 : 64;
+        if (!u1(s)) {
+            if (i == 0 || i == 3 || i >= 6) { if (seq) for (int k = 0; k < 64; k++) sl[i][k] = seq[i][k]; else def_list(sl[i], i); }
+            else for (int k = 0; k < 64; k++) sl[i][k] = sl[i - 1][k];
+            continue;
+        }
+        int last = 8, next = 8, deflt = 0;
+        for (int j = 0; j < sz; j++) {
+            if (next) { next = (last + se(s) + 256) % 256; if (!j && !next) { deflt = 1; break; } }
+            sl[i][j] = (u8)(next ? next : last); last = sl[i][j];
+        }
+        if (deflt) def_list(sl[i], i);
+    }
+}
+static void flat_lists(u8 sl[8][64]) { for (int i = 0; i < 8; i++) for (int k = 0; k < 64; k++) sl[i][k] = 16; }
+static void set_scaling(struct h264 *d) {   /* the slice's matrices, zig-zag to raster */
+    const u8 (*sl)[64] = d->p->own_sl ? d->p->sl : d->s->sl;
+    for (int i = 0; i < 6; i++) for (int k = 0; k < 16; k++) d->w4[i][zz[k]] = sl[i][k];
+    for (int i = 0; i < 2; i++) for (int k = 0; k < 64; k++) d->w8[i][zz8[k]] = sl[6 + i][k];
+}
 static int parse_sps(struct h264 *d, struct bs *s) {
     int prof = (int)rb(s, 8); rb(s, 16);
     u32 id = ue(s); if (id > 31) return fail(d, "bad sps id");
     struct sps *p = &d->sps[id];
-    if (prof == 100 || prof == 110 || prof == 122 || prof == 244 || prof == 44 || prof == 83 || prof == 86 || prof == 118 || prof == 128) return fail(d, "High profile is not supported yet");
     p->id = (int)id;
+    flat_lists(p->sl); p->has_sl = 0;
+    if (prof == 100 || prof == 110 || prof == 122 || prof == 244 || prof == 44 || prof == 83 || prof == 86 || prof == 118 || prof == 128 || prof == 138 || prof == 139 || prof == 134 || prof == 135) {
+        if (ue(s) != 1) return fail(d, "only 4:2:0 video is supported");
+        if (ue(s) || ue(s)) return fail(d, "only 8-bit video is supported");
+        if (u1(s)) return fail(d, "lossless video is not supported");
+        if (u1(s)) { scaling_lists(s, p->sl, 8, 0); p->has_sl = 1; }
+    }
     p->log2_max_fn = (int)ue(s) + 4;
     p->poc_type = (int)ue(s);
     if (p->poc_type == 0) p->log2_max_poc = (int)ue(s) + 4;
@@ -582,7 +757,7 @@ static int parse_sps(struct h264 *d, struct bs *s) {
     u1(s);
     p->mbw = (int)ue(s) + 1; p->mbh = (int)ue(s) + 1;
     if (!u1(s)) return fail(d, "interlaced streams are not supported");
-    u1(s);
+    p->d8inf = (int)u1(s);
     p->crop[0] = p->crop[1] = p->crop[2] = p->crop[3] = 0;
     if (u1(s)) for (int i = 0; i < 4; i++) p->crop[i] = (int)ue(s) * 2;
     if (p->mbw > 128 || p->mbh > 72) return fail(d, "picture too big");
@@ -602,6 +777,18 @@ static int parse_pps(struct h264 *d, struct bs *s) {
     p->cqp_off = se(s);
     p->deblock_ctl = (int)u1(s); p->cip = (int)u1(s);
     if (u1(s)) return fail(d, "redundant pictures are not supported");
+    p->t8mode = 0; p->cqp_off2 = p->cqp_off; p->own_sl = 0;
+    if (more_data(s)) {   /* High's tail: the 8x8 transform, the picture's own matrices, Cr's own QP offset */
+        p->t8mode = (int)u1(s);
+        if (u1(s)) {
+            if (!d->sps[p->sps].ok) return fail(d, "pps before its sps");
+            for (int i = 0; i < 8; i++) for (int k = 0; k < 64; k++) p->sl[i][k] = d->sps[p->sps].sl[i][k];
+            /* fall-back rule A (the defaults) when the sequence has no matrices, B (the sequence's) when it has */
+            scaling_lists(s, p->sl, 6 + 2 * p->t8mode, d->sps[p->sps].has_sl ? (const u8 (*)[64])d->sps[p->sps].sl : 0);
+            p->own_sl = 1;
+        }
+        p->cqp_off2 = se(s);
+    }
     p->ok = 1;
     return 0;
 }
@@ -695,6 +882,7 @@ static int slice(struct h264 *d, struct bs *s, int nal_type, int nal_ref) {
     u32 pid = ue(s); if (pid > 255 || !d->pps[pid].ok || !d->sps[d->pps[pid].sps].ok) return fail(d, "slice before its parameter sets");
     d->p = &d->pps[pid]; d->s = &d->sps[d->p->sps];
     if (setup(d, d->s) < 0) return -1;
+    set_scaling(d);
     d->maxfn = 1 << d->s->log2_max_fn;
     int fn = (int)rb(s, d->s->log2_max_fn);
     if (!d->decoded) {   /* the first slice of a picture: a free buffer */
@@ -809,10 +997,15 @@ static void filt(u8 *q0p, int step, int bs, int qpav, int fa, int fb, int chroma
     if (aq < be && small) { q0p[0] = (u8)((p1 + 2 * p0 + 2 * q0 + 2 * q1 + q2 + 4) >> 3); q0p[step] = (u8)((p0 + q0 + q1 + q2 + 2) >> 2); q0p[2 * step] = (u8)((2 * q3 + 3 * q2 + q1 + q0 + p0 + 4) >> 3); }
     else q0p[0] = (u8)((2 * q1 + q0 + p1 + 2) >> 2);
 }
+static int nz(const struct mb *m, int r) {   /* coefficients in the transform block holding 4x4 r: its 8x8 when the MB used 8x8 */
+    if (!m->t8) return m->nnz[r];
+    int b = (r >> 3) * 8 + (r & 2);
+    return m->nnz[b] | m->nnz[b + 1] | m->nnz[b + 4] | m->nnz[b + 5];
+}
 static int bstr(const struct h264 *d, const struct mb *p, int rp, const struct mb *q, int rq, int mbedge) {
     int pi = p->type != 3, qi = q->type != 3;
     if (pi || qi) return mbedge ? 4 : 3;
-    if (p->nnz[rp] || q->nnz[rq]) return 2;
+    if (nz(p, rp) || nz(q, rq)) return 2;
     if (p->refbuf[rp] != q->refbuf[rq]) return 1;
     (void)d;
     return iabs(p->mv[rp][0] - q->mv[rq][0]) >= 4 || iabs(p->mv[rp][1] - q->mv[rq][1]) >= 4;
@@ -832,6 +1025,7 @@ static void deblock(struct h264 *d) {
                     n = &d->mbs[ny * d->mbw + nx];
                     if (m->dbidc == 2 && n->slice != m->slice) continue;
                 }
+                if ((e & 1) && m->t8) continue;   /* an 8x8 transform has no edges at 4 and 12 */
                 int bs[4];
                 for (int k = 0; k < 4; k++) {
                     int rq = dir ? e * 4 + k : k * 4 + e, rp = dir ? (e ? (e - 1) * 4 + k : 12 + k) : (e ? k * 4 + e - 1 : k * 4 + 3);
@@ -844,8 +1038,8 @@ static void deblock(struct h264 *d) {
                     filt(q, dir ? d->w : 1, bs[i >> 2], qpav, m->dba, m->dbb, 0);
                 }
                 if (e & 1) continue;   /* chroma edges at luma 0 and 8 */
-                int cq = (n->qpc + m->qpc + 1) >> 1;
                 for (int c = 0; c < 2; c++) {
+                    int cq = c ? (n->qpc2 + m->qpc2 + 1) >> 1 : (n->qpc + m->qpc + 1) >> 1;
                     u8 *pl = c ? f->v : f->u;
                     for (int i = 0; i < 8; i++) {
                         int b = bs[i >> 1];
