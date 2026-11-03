@@ -13,7 +13,7 @@
  * Seek and pause both stop the audio, wait for the queue to go idle (the kernel resets `played` then),
  * and requeue from the chunk and sample that match the target time.
  *
- * Draw: the frame is decoded with jpeg_decode_scaled (shrink only, at most 256 wide), then nearest
+ * Draw: the frame is decoded with jpeg_decode_scaled (shrink only, at most 320 wide), then nearest
  * scaled into a letterboxed rectangle. `f` hides the controls and letterboxes into the whole window
  * (there is no syscall to resize the window itself).
  *
@@ -325,7 +325,7 @@ indexed:
     dur_ms = nv * (us / 1000u) + nv * (us % 1000u) / 1000u;
 
     /* decode size: never above the source, never above what the decoder's row buffer holds */
-    dw = av.width < 256 ? av.width : 256;
+    dw = av.width < 320 ? av.width : 320;   /* 12.0: 320, jpeg_decode_scaled's most (it was 256) */
     dh = av.height * dw / av.width;
     if (dh > 256) { dh = 256; dw = av.width * dh / av.height; }
     if (!dw) dw = 1;
