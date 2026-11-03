@@ -20,7 +20,13 @@ not from btc.c. A FAT32 card (sdcard.py) is the virtio disk. Three boots on one 
      the saved key; no IO Capability exchange is needed; `connected`. `bt` shows the saved device.
   3. forgotten: the headphones answer Authentication Complete 0x06 (key missing): the pairing is forgotten (BTLINK.BIN
      gone) and the link hung up with Disconnect.
-Discriminating: answer every Link Key Request with the negative reply and boot 2's Link Key Reply never comes.
+  4. keyboard (12.2): `bt find`, `bt connect 2` pairs the keyboard the same way, then, because its Class of Device says
+     peripheral, HID over L2CAP: a Connection Request on the signalling channel (CID 1) for PSM 0x11 (control), the
+     keyboard's Information Request answered "not supported", a Configuration Request each way (ours asks MTU 672), then
+     PSM 0x13 (interrupt) the same, then SET_PROTOCOL boot (0x70) on control: `bt: keyboard ready`. Two boot reports on
+     interrupt (DATA Input 0xA1, report ID 1: H down, then nothing held) type `key 35 down` and `key 35 up`.
+Discriminating: answer every Link Key Request with the negative reply and boot 2's Link Key Reply never comes; drop the
+interrupt channel's reports in btc.c's on_data and boot 4 never types the H.
 Skips (exit 0) without clang, ld.lld, qemu-system-aarch64 or mtools, or a QEMU that builds no second PL011.
 Usage: tools/checks/arm64-btclassic-check.py   (from the repo root)
 """
@@ -59,6 +65,8 @@ class Fake(threading.Thread):
     def __init__(self, path, mode):
         super().__init__(daemon=True)
         self.mode, self.log, self.problems = mode, [], []
+        self.peer = KEYB if mode == "keyboard" else HEAD
+        self.sig, self.chan, self.ctrl_data = [], {}, []   # signalling commands from the kernel; PSM -> (kernel CID, our CID)
         self.srv = socket.socket(socket.AF_UNIX); self.srv.bind(path); self.srv.listen(1); self.srv.settimeout(60)
     def run(self):
         try: self.c, _ = self.srv.accept()
@@ -76,7 +84,8 @@ class Fake(threading.Thread):
                     self.answer(op, p)
                 elif buf[0] == 2:
                     if len(buf) < 5 or len(buf) < 5 + struct.unpack("<H", buf[3:5])[0]: break
-                    buf = buf[5 + struct.unpack("<H", buf[3:5])[0]:]
+                    hdr, n = struct.unpack("<HH", buf[1:5]); data = buf[5:5 + n]; buf = buf[5 + n:]
+                    self.on_acl(hdr, data)
                 else: self.problems.append("stray byte %02x" % buf[0]); buf = buf[1:]
     def send(self, b):
         time.sleep(0.03)
@@ -85,9 +94,39 @@ class Fake(threading.Thread):
     def event(self, code, body): self.send(bytes([4, code, len(body)]) + body)
     def complete(self, op, ret=b"\x00"): self.event(0x0E, b"\x01" + u16(op) + ret)
     def status(self, op, st=0): self.event(0x0F, bytes([st, 1]) + u16(op))
+    def l2(self, cid, payload):   # one L2CAP frame to the kernel, a start packet on our handle
+        f = struct.pack("<HH", len(payload), cid) + payload
+        self.send(b"\x02" + struct.pack("<HH", HANDLE | 0x2000, len(f)) + f)
+    def on_acl(self, hdr, data):
+        if hdr & 0xFFF != HANDLE or hdr >> 12 & 3 != 2 or len(data) < 4: self.problems.append("ACL not a start on our handle: %04x" % hdr); return
+        n, cid = struct.unpack("<HH", data[:4]); p = data[4:4 + n]
+        self.event(0x13, b"\x01" + u16(HANDLE) + u16(1))   # Number of Completed Packets: that buffer is free again
+        if cid == 1: self.on_sig(p); return
+        if cid == 0x0070:
+            self.ctrl_data.append(p)
+            if p == b"\x70":   # SET_PROTOCOL boot: HANDSHAKE success, then H down and up on interrupt
+                self.l2(self.chan[0x11][0], b"\x00")
+                intr = self.chan[0x13][0]
+                self.l2(intr, b"\xa1\x01\x00\x00\x0b\x00\x00\x00\x00\x00"); time.sleep(0.2)
+                self.l2(intr, b"\xa1\x01" + bytes(8))
+    def on_sig(self, p):
+        code, ident, ln = p[0], p[1], p[2] | p[3] << 8; d = p[4:4 + ln]
+        self.sig.append((code, d))
+        if code == 0x02:   # Connection Request: PSM, the kernel's CID
+            psm, scid = struct.unpack("<HH", d[:4]); ours = 0x0070 if psm == 0x11 else 0x0071
+            self.chan[psm] = (scid, ours)
+            if psm == 0x11: self.l2(1, b"\x0a\x40\x02\x00\x02\x00")   # its own Information Request first (extended features)
+            self.l2(1, bytes([0x03, ident, 8, 0]) + struct.pack("<HHHH", ours, scid, 0, 0))
+            self.l2(1, bytes([0x04, 0x41 + len(self.chan), 8, 0]) + struct.pack("<HH", scid, 0) + b"\x01\x02\xa0\x02")
+        elif code == 0x04:   # the kernel's Configuration Request: must name our CID
+            dcid = struct.unpack("<H", d[:2])[0]
+            k = [scid for scid, ours in self.chan.values() if ours == dcid]
+            if not k: self.problems.append("Configuration Request for CID %04x" % dcid); return
+            self.l2(1, bytes([0x05, ident, 6, 0]) + struct.pack("<HHH", k[0], 0, 0))
     def answer(self, op, p):
         self.log.append((op, p))
         if op == 0x1001: self.complete(op, bytes([0, 9, 0, 0, 9, 0x0F, 0, 0x19, 0x61])); return
+        if op == 0x1005: self.complete(op, b"\x00" + u16(1021) + b"\x40" + u16(2) + u16(8)); return   # two ACL buffers: credits must come back
         if op == OP_INQUIRY:
             self.status(op)
             eir = bytes([14, 0x09]) + b"JT Headphones"
@@ -99,18 +138,18 @@ class Fake(threading.Thread):
             self.event(EV_CONN_COMPLETE, b"\x00" + u16(HANDLE) + p[:6] + b"\x01\x00"); return
         if op == OP_AUTH_REQUESTED:
             self.status(op)
-            self.event(EV_LINK_KEY_REQ, HEAD); return
+            self.event(EV_LINK_KEY_REQ, self.peer); return
         if op == OP_LINK_KEY_NEG:
             self.complete(op, b"\x00" + p[:6])
-            self.event(EV_IO_CAPA_REQ, HEAD); return
+            self.event(EV_IO_CAPA_REQ, self.peer); return
         if op == OP_IO_CAP_REPLY:
             self.complete(op, b"\x00" + p[:6])
-            self.event(EV_IO_CAPA_REPLY, HEAD + b"\x03\x00\x04")
-            self.event(EV_USER_CONFIRM, HEAD + struct.pack("<I", 123456)); return
+            self.event(EV_IO_CAPA_REPLY, self.peer + b"\x03\x00\x04")
+            self.event(EV_USER_CONFIRM, self.peer + struct.pack("<I", 123456)); return
         if op == OP_USER_CONFIRM:
             self.complete(op, b"\x00" + p[:6])
-            self.event(EV_SSP_COMPLETE, b"\x00" + HEAD)
-            self.event(EV_LINK_KEY_NOTIFY, HEAD + KEY + b"\x04")
+            self.event(EV_SSP_COMPLETE, b"\x00" + self.peer)
+            self.event(EV_LINK_KEY_NOTIFY, self.peer + KEY + b"\x04")
             self.event(EV_AUTH_COMPLETE, b"\x00" + u16(HANDLE)); return
         if op == OP_LINK_KEY_REPLY:
             self.complete(op, b"\x00" + p[:6])
@@ -234,5 +273,23 @@ try:
 finally: b.close()
 check("and BTLINK.BIN is gone from the card", link_file(card) is None)
 
+b = Boot("keyboard", "keyboard", card)
+try:
+    b.wait_for("bt: ready", 30); b.key("f2"); b.wait_for("terminal open", 10)
+    b.run("bt find", "bt: bt connect 1 pairs number 1", 20)
+    ok, out = b.run("bt connect 2", "bt: keyboard ready", 25)
+    check("bt connect 2 pairs the keyboard and opens its HID channels", ok and "keyboard connected" in out, (out[-500:], b.fake.sig))
+    reqs = [(c, d) for c, d in b.fake.sig if c == 0x02]
+    check("Connection Requests for PSM 0x11 (control) then 0x13 (interrupt), from CIDs 0x40 and 0x41",
+          [struct.unpack("<HH", d[:4]) for c, d in reqs] == [(0x11, 0x40), (0x13, 0x41)], reqs)
+    cfg = [d for c, d in b.fake.sig if c == 0x04]
+    check("a Configuration Request on each channel, to the keyboard's CID, MTU 672",
+          cfg == [struct.pack("<HH", 0x70, 0) + b"\x01\x02\xa0\x02", struct.pack("<HH", 0x71, 0) + b"\x01\x02\xa0\x02"], cfg)
+    check("the keyboard's Information Request is answered not supported", (0x0B, b"\x02\x00\x01\x00") in b.fake.sig, b.fake.sig)
+    check("SET_PROTOCOL boot on control", b.fake.ctrl_data[:1] == [b"\x70"], b.fake.ctrl_data)
+    check("its boot reports type H: key 35 down, then up", b.wait_for("key 35 down", 5) and b.wait_for("key 35 up", 5), b.uart()[-600:])
+    check("the fake keyboard saw nothing malformed", not b.fake.problems, b.fake.problems)
+finally: b.close()
+
 if fails: print("FAIL: " + "; ".join(fails)); sys.exit(1)
-print("PASS: bt find lists classic headphones and keyboards by name and kind, bt connect pairs with Secure Simple Pairing and keeps the link key in JT/BTLINK.BIN, a later bt connect uses it, and a key the device forgot is erased")
+print("PASS: bt find lists classic headphones and keyboards by name and kind, bt connect pairs with Secure Simple Pairing and keeps the link key in JT/BTLINK.BIN, a later bt connect uses it, a key the device forgot is erased, and a classic keyboard opens HID control and interrupt over L2CAP in boot protocol and types")

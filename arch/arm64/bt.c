@@ -621,7 +621,7 @@ static void on_sig(const unsigned char *p, unsigned n) {   /* LE signalling: cod
 static unsigned char l2[80]; static unsigned l2n, l2want;
 static void on_acl(const unsigned char *p, unsigned n) {
     acl_in++;
-    if (n < 4) return;
+    if (n < 4 || btc_acl(p, n)) return;   /* 12.2: the classic link's own */
     unsigned h = (p[0] | p[1] << 8u) & 0xFFF, pb = p[1] >> 4 & 3, len = p[2] | p[3] << 8u;
     if (!conn || h != handle || 4 + len > n) return;
     if (pb != 1) { l2n = 0; l2want = len >= 4 ? 4 + (p[4] | p[5] << 8u) : 0; }   /* a start */
@@ -915,11 +915,17 @@ void bt_init(void) {
 }
 
 void bt_hci_cmd(unsigned op, const unsigned char *p, unsigned n) { send_cmd(op, p, n, 0); }   /* btc.c, only when the slot is free */
+int bt_tx(const unsigned char *b, unsigned n) {   /* btc.c: one whole H4 packet behind what is queued; 0 when there is no room */
+    unsigned char *q = tx_room(n);
+    if (!q) return 0;
+    for (unsigned i = 0; i < n; i++) q[i] = b[i];
+    pump(); return 1;
+}
 int bt_radio_ready(void) { return st == READY || st == SCANNING || st == PAIRING || st == MOUSE || st == RETRY; }
 void bt_poll(void) {
     int le = st == STARTING || st == SCANNING || st == PAIRING || st == MOUSE || st == RETRY;
     if (!le && !(st == READY && btc_busy())) return;
-    acl_flush();
+    acl_flush(); btc_flush();
     for (unsigned k = 0; k < 512 && !(U(FR) & RXFE); k++) {
         unsigned d = U(DR);
         if (d & 0xF00) rx_err++;          /* framing, parity, break or overrun */
