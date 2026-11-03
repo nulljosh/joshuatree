@@ -1189,6 +1189,7 @@ static int dl_exists(const char *path) {
     home_back();
     return r >= 0;
 }
+int store_from_page(const char *url, const char *img, unsigned il);   /* store.c */
 static int dl_save(const char *name, const void *d, unsigned n, char saved[13]) {
     char dir[96]; unsigned dn;
     if (home_active()) { if (home_expand("~/DOWNLOAD", dir, sizeof dir) <= 0) return 0; }
@@ -1394,7 +1395,8 @@ static void show(const char *url, int push) {
     if (body && (want_file || (hb > 0 && header_has(raw, (unsigned)hb, "content-type:", "/") && !header_has(raw, (unsigned)hb, "content-type:", "text/") && !header_has(raw, (unsigned)hb, "content-type:", "html")))) {   /* xhtml is a page too */
         char name[13]; file_name(cur, name);
         int st = http_status_of(raw, (unsigned)got);
-        if (st != 200) { kputs("browser: not saved, the server said "); kdec((unsigned)st); kputs("\n"); }
+        if (st == 200 && store_from_page(cur, body, blen)) ;   /* 13.4.0: a signed app installs, an unsigned one is dropped */
+        else if (st != 200) { kputs("browser: not saved, the server said "); kdec((unsigned)st); kputs("\n"); }
         else {
             char saved[13]; int r = dl_save(name, body, blen, saved);
             if (r == 1) { kputs("browser: saved "); kputs(saved); kputs(", "); kdec(blen); kputs(home_active() ? " bytes in your DOWNLOAD folder\n" : " bytes in JT/DOWNLOAD\n"); }
