@@ -36,6 +36,5 @@ Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with t
 30. **The GPU.** In the Terminal, `gpu`: it says the reset is lifted, the V3D clock in MHz, that it is reading the ident, then `gpu: V3D 4.2, 1 core, MMU, ...` and `gpu: ready`. Any other line (refused, no bridge, did not answer, did not identify), send it word for word. If it freezes, send the last line on the screen: it names the step. Then drag a window: the desktop still works.
 31. **Heat and the fan.** Fan's red wire on pin 4, black on pin 6 (the outer row, 2nd and 3rd pins from the end away from the USB ports): it spins at power on. In the Terminal, `temp`: around 40 to 60 C with the fan, and it says the chip slows down at 85.0 C.
 32. **Energy Saver.** Settings, Display, Screen saver after: set 1 minute. Leave it: the time appears small on black and jumps every 10 s; five minutes later the screen goes dark. Move the mouse: the desktop comes back as it was. Restart: the 1 minute is still there.
-33. **Video in Blackcomb, no Mac.** Blackcomb, type `https://download.samplelib.com/mp4/sample-5s.mp4` and press Enter: it plays in the page with sound. Space pauses and plays on. If it says it is not an H.264 MP4, or stutters, send the line.
 
 Steps 1 to 3 are 10.0, 4 is 9.0's touch screen; 5 to 9 are last night's fixes.
