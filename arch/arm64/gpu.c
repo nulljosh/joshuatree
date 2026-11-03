@@ -4,12 +4,13 @@
    The sequence is Linux's, from the Pi 4's own device tree (bcm2711-rpi.dtsi: the PM block's "v3d" clock is firmware
    clock 5) and drivers/pmdomain/bcm/bcm2835-power.c (bcm2835_asb_power_on for BCM2835_POWER_DOMAIN_GRAFX_V3D; on a 2711
    the firmware keeps the GRAFX power switch on, so there is no power switch step):
-     1. the firmware turns clock 5 on at its top rate (mailbox tags 0x00038001 and 0x00038002, the rate from 0x00030004),
-        after one off and on so the reset sees clocks, as Linux's 1 us pulse does;
-     2. the bridge at 0x7ec11000 ("rpivid_asb") must say "brdg" (0x62726467) in its ID register, or this is not a 2711;
-     3. PM_GRAFX gets V3DRSTN (bit 6), written with the PM password 0x5a000000;
-     4. the bridge's master then slave port leave stop (bit 0 cleared) and must drop ACK (bit 1) within a millisecond;
-     5. only then are the hub's and core 0's ident registers read: version = IDENT1 bits 3:0 * 10 + bits 7:4 (v3d_drv.c),
+     1. the bridge at 0x7ec11000 ("rpivid_asb") must say "brdg" (0x62726467) in its ID register, or this is not a 2711;
+     2. the firmware turns clock 5 on, then off (mailbox tag 0x00038001; its top rate asked first with 0x00030004), so the
+        reset sees clocks, as Linux's 1 us pulse does;
+     3. with the clock off, PM_GRAFX gets V3DRSTN (bit 6), written with the PM password 0x5a000000;
+     4. the clock goes on again at its top rate (0x00038001, 0x00038002);
+     5. the bridge's master then slave port leave stop (bit 0 cleared) and must drop ACK (bit 1) within a millisecond;
+     6. only then are the hub's and core 0's ident registers read: version = IDENT1 bits 3:0 * 10 + bits 7:4 (v3d_drv.c),
         42 on a 2711.
    A refused tag or a silent bridge stops the sequence before any V3D register is read, since a read of an unclocked
    block can hang the bus. The registers are v3d_regs.h's. QEMU's virt has no V3D and says so. */
@@ -17,6 +18,7 @@
 #include "kmain.h"
 #define GR(a) REG(a)
 #define GW(a, v) (REG(a) = (v))
+#define GPU_FLUSH() do { if (fb) fb_flush(0, 0, (int)fb_w, (int)fb_h); } while (0)
 __attribute__((unused)) static unsigned long gpu_now(void) { unsigned long c; __asm__ volatile ("isb\n mrs %0, cntpct_el0" : "=r"(c)); return c; }
 __attribute__((unused)) static unsigned long gpu_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f)); return f ? f : 54000000; }
 #endif
@@ -63,24 +65,32 @@ static void ga(const char *s) { while (*s && gn < sizeof gl - 1) gl[gn++] = *s++
 static void gd(unsigned v) { char t[12]; int i = 0; do t[i++] = (char)('0' + v % 10); while (v /= 10); while (i) { char c[2] = { t[--i], 0 }; ga(c); } }
 static void gx(unsigned v) { ga("0x"); for (int s = 28; s >= 0; s -= 4) { char c[2] = { "0123456789abcdef"[(v >> s) & 15], 0 }; ga(c); } }
 
-/* The bring-up; each step's line goes to say. Returns 1 when the GPU answered. */
+/* The bring-up; each step's line goes to say, and to the screen at once: if a step hangs the bus on a board, the last line
+   shown names it. Returns 1 when the GPU answered. */
+static void (*gsay)(const char *);
+static void show(const char *s) { gsay(s); GPU_FLUSH(); }
+static void showl(void) { ga("\n"); show(gl); gn = 0; }
 int gpu_bringup(void (*say)(const char *)) {
-    if (gpu_up) { say("gpu: V3D already up\n"); return 1; }
+    gsay = say; gn = 0;
+    if (gpu_up) { show("gpu: V3D already up\n"); return 1; }
+    unsigned id = GR(GPU_ASB + GPU_ASB_ID);   /* Linux reads it at probe, before any clock */
+    if (id != GPU_BRDG) { ga("gpu: no V3D bridge (id "); gx(id); ga(")"); showl(); return 0; }
     unsigned max = 0, got = 0;
-    if (!gpu_clock(GPU_TAG_MAX_RATE, 0, &max) || !max) { say("gpu: the firmware refused the V3D clock\n"); return 0; }
-    if (!gpu_clock(GPU_TAG_CLK_STATE, 1, &got) || !gpu_clock(GPU_TAG_CLK_STATE, 0, &got) ||
-        !gpu_clock(GPU_TAG_CLK_STATE, 1, &got) || !gpu_clock(GPU_TAG_CLK_RATE, max, &got)) { say("gpu: the firmware refused the V3D clock\n"); return 0; }
-    gn = 0; ga("gpu: V3D clock "); gd(got / 1000000); ga(" MHz\n"); say(gl);
-    unsigned id = GR(GPU_ASB + GPU_ASB_ID);
-    if (id != GPU_BRDG) { gn = 0; ga("gpu: no V3D bridge (id "); gx(id); ga(")\n"); say(gl); return 0; }
-    GW(GPU_PM_GRAFX, GPU_PM_PASSWORD | (GR(GPU_PM_GRAFX) & 0x00ffffffu) | GPU_PM_V3DRSTN);
-    if (!gpu_asb_on(GPU_ASB + GPU_ASB_M) || !gpu_asb_on(GPU_ASB + GPU_ASB_S)) { say("gpu: the V3D bridge did not answer\n"); return 0; }
+    if (!gpu_clock(GPU_TAG_MAX_RATE, 0, &max) || !max || !gpu_clock(GPU_TAG_CLK_STATE, 1, &got) || !gpu_clock(GPU_TAG_CLK_STATE, 0, &got)) {
+        show("gpu: the firmware refused the V3D clock\n"); return 0;
+    }
+    ga("gpu: lifting the V3D reset (PM_GRAFX "); gx(GR(GPU_PM_GRAFX)); ga(")"); showl();
+    GW(GPU_PM_GRAFX, GPU_PM_PASSWORD | (GR(GPU_PM_GRAFX) & 0x00ffffffu) | GPU_PM_V3DRSTN);   /* with the clock off, as Linux */
+    if (!gpu_clock(GPU_TAG_CLK_STATE, 1, &got) || !gpu_clock(GPU_TAG_CLK_RATE, max, &got)) { show("gpu: the firmware refused the V3D clock\n"); return 0; }
+    ga("gpu: V3D clock "); gd(got / 1000000); ga(" MHz, opening the bridge"); showl();
+    if (!gpu_asb_on(GPU_ASB + GPU_ASB_M) || !gpu_asb_on(GPU_ASB + GPU_ASB_S)) { show("gpu: the V3D bridge did not answer\n"); return 0; }
+    show("gpu: reading the V3D ident\n");
     unsigned i1 = GR(GPU_HUB + 0x0c), i2 = GR(GPU_HUB + 0x10), c0 = GR(GPU_CORE0 + 0x00), v = gpu_ver(i1);
-    if (v < 40 || v > 79) { gn = 0; ga("gpu: V3D did not identify (hub ident1 "); gx(i1); ga(")\n"); say(gl); return 0; }
-    gn = 0; ga("gpu: V3D "); gd(v / 10); ga("."); gd(v % 10); ga(", "); gd((i1 >> 8) & 15); ga((i1 >> 8 & 15) == 1 ? " core, " : " cores, ");
-    ga(i2 & (1u << 8) ? "MMU, " : "no MMU, "); ga("L3 cache "); gd(i2 & 255); ga(" KB, core ident "); gx(c0); ga("\n"); say(gl);
+    if (v < 40 || v > 79) { ga("gpu: V3D did not identify (hub ident1 "); gx(i1); ga(")"); showl(); return 0; }
+    ga("gpu: V3D "); gd(v / 10); ga("."); gd(v % 10); ga(", "); gd((i1 >> 8) & 15); ga((i1 >> 8 & 15) == 1 ? " core, " : " cores, ");
+    ga(i2 & (1u << 8) ? "MMU, " : "no MMU, "); ga("L3 cache "); gd(i2 & 255); ga(" KB, core ident "); gx(c0); showl();
     gpu_up = 1;
-    say("gpu: ready\n");
+    show("gpu: ready\n");
     return 1;
 }
 #endif
