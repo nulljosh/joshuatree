@@ -2173,23 +2173,25 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-11-02, afternoon Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-11-03, evening Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand (2026-11-02, afternoon).** 11.0.0, a laptop, is on main: deep idle, trackpad gestures from QEMU multitouch and USB precision touchpads, a MAX17048 battery gauge in the menu bar, and Sleep in the tree menu. 10.0.0 before it brought the screen reader, twelve languages and signed self-update. Lid close is the one 11.0 item left. 12.0.0 finished macOS 27 parity: Spaces, Mission Control, the Glass slider, Shortcuts, Blackcomb tab groups, Photos and parental controls. 13.0.0 brought classic Bluetooth: headphones, speakers and keyboards.
+**Where things stand (2026-11-03, evening).** 13.3.1 is on main: a Spotify remote on the Mac, and Blackcomb opens `spotify:` addresses as a page. PR 1120 (13.4.0, install a signed app from a web download through the same signature and admin gate as the installer) is waiting on CI with auto-merge on. Branch `v14/gpu-clear` is 13.4.1: the V3D's first real job, a 64x64 tile clear read back, not yet rebased onto #1120's base. Branches `v13/spotify-ap`, `v13/spotify-key` and `v13/spotify-meta` are 13.4.2 to 13.4.4, each stacked on the last: the Spotify protocol in C for the Pi, host-checked against a fake access point. Earlier: 13.2.0 brought the Pi 4's V3D graphics chip up by hand, verified on the board; 13.1.0 added Spaces, Mission Control, Shortcuts, Blackcomb tab groups and classic Bluetooth; 11.0 is the laptop release; 12.0 finished macOS 27 parity.
 
-**Waiting on Joshua.** Signing 11.0's kernel with `tools/update-sign.sh` on his Mac (the app key never leaves it), so a Pi's `update` offers the release. The board pass (`docs/TESTING.md`), with 11.0 flashed when the card is in. The physical halves of 9.0 and 10.0 (a stranger builds a Nimbus from the guide; a month as Joshua's only computer), the GPU and the camera stay open as board work.
+**Parked: Spotify on the Pi.** Joshua has no Spotify Premium, and the audio key comes back as error 0001 without it. The Web API remote in `spotify.py` needs Premium too. The protocol code still merges; the live playback check waits for a Premium account.
+
+**Waiting on Joshua.** The board pass (`docs/TESTING.md`) with the card flashed when he says card in. The GPU and the camera need the board, so say so, never fake them. The 14.0 cut is a MAJOR and his call. The physical halves of 9.0 and 10.0 (a stranger builds a Nimbus from the guide; a month as Joshua's only computer) stay open as board work.
 
 **Next, in order.**
-1. Whatever the board shows broken (`docs/TESTING.md`).
-2. The doc trim: the Shipped log to a line per major (the release notes keep the rest), the 2026-10-03 Pickup to its open items, ARCHITECTURE's history-titled sections in the present tense.
-3. 14.0, graphics acceleration on V3D (Now: 14.0, above); then 15.
+1. Finish the merge chain, one PR at a time: #1120 (13.4.0) lands on auto-merge; then `v14/gpu-clear` (13.4.1) rebased with `git rebase --onto origin/main d00812df`; then the Spotify protocol branches 13.4.2, 13.4.3 and 13.4.4; last, ogg-vorbis at 13.5.0.
+2. Browser download-to-install for signed bundles.
+3. 14.0 graphics acceleration prep (V3D). The 14.0 cut waits for Joshua.
 
 Restart prompt:
 
 ```
-/loop Joshua Tree after 10.0: (1) whatever the board pass in docs/TESTING.md shows broken; (2) the doc trim: ROADMAP's Shipped log to one line per major, the 2026-10-03 Pickup to its open items, ARCHITECTURE's history-titled sections in the present tense, with the doc checks run by hand since a prose-only PR skips the suite; (3) 12's macOS 27 parity in ROADMAP (Spaces, Mission Control, the Glass slider and Shortcuts are in; next Blackcomb tab groups), then 13 to 15. The GPU (V3D) and the camera need the board: say so, never fake them. Rules: every feature gets a check in tools/checks wired into ci-suite.sh that fails when the fix is reverted; run touched checks locally one QEMU at a time, then the pre-push hook, push, gh pr create, gh pr merge --auto --squash; one PR open at a time; on a red CI read the job log and fix, never retry blind; regenerate generated files on conflict; bump VERSION and the shipped log each code PR; update the Loop handoff in docs/ROADMAP.md each merge; no new .md files; never flash the card unless Joshua says card in; keys never printed; replies to Joshua are 1 line TLDRs
+/loop Work Joshua Tree nonstop from ~/Documents/Code/joshuatree/docs/ROADMAP.md: finish the merge chain (jt-gpu 13.4.1, spotify-ap/key/meta, ogg-vorbis 13.5.0), then browser download-to-install for signed bundles, then 14.0 graphics acceleration prep (the 14.0 cut is Joshua's call). Spotify Pi playback is parked (no Premium). One task per branch, draft PRs, run targeted checks locally first.
 ```
 
 Rules kept:
@@ -2198,6 +2200,7 @@ Rules kept:
 - No keys on the public card. Flash only the dev card, and only when Joshua says it is in.
 - Every X.0.0 ships a refreshed logo and UI.
 - No number in landing or ad copy without a source (the $35 Pi price was wrong).
+- Keys and tokens never printed or committed. They live in `~/.config/joshuatree/`, `~/.claude-relay-token` and `~/.claude-relay-spotify*.json`.
 
 ## Samantha reset postmortem
 
