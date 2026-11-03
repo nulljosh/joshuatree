@@ -292,7 +292,7 @@ extern int settings_live;
 #define SPOT_FINDER (GUI_ICON_COUNT + 6)  /* 3.14.0: the Finder, user/finder.c at EL0; the dock has no Finder tile, so Spotlight and Samantha's open reach it */
 int spot_hmax(void);
 int spot_key(unsigned code);
-#define SPOT_LAST (GUI_ICON_COUNT + 17)   /* 4.24.0: the games end the list (game_names, windows.c); 4.25.0 added Chess, 6.1.0 Movies */
+#define SPOT_LAST (GUI_ICON_COUNT + 18)   /* 4.24.0: the games end the list (game_names, windows.c); 4.25.0 added Chess, 6.1.0 Movies, 12.0 Photos */
 #define SPOT_CARD0 (SPOT_LAST + 1)   /* 6.53.0: Spotlight's rows past the table are the apps in JT/APPS (keys.c card_disp), never the Launchpad's */
 #define CARD_MAX 8
 extern int spot_lx;
@@ -444,7 +444,7 @@ extern int off_on;
 extern int con_to_term;
 extern int face_mouth;
 extern const char *const dock_names[GUI_ICON_COUNT];   /* crash.c */
-extern const char *const game_names[11];
+extern const char *const game_names[12];
 #define DOCK_BAND_LIFT 6   /* logical px of the hover band copy above band_top (crash.c dock_band_y) */
 int dock_band_y(void);
 int dock_mag_on(void); int dock_mag_zone(int lx, int ly); void dock_magnify(int mx, int slot); void dock_unmagnify(void); void dock_mag_forget(void); void dock_mag_tick(void); void dock_magnify_now(int mx, int slot);   /* crash.c, 6.3.0 and 6.4.0 */               /* windows.c */

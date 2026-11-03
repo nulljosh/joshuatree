@@ -34,6 +34,7 @@
     app snake
     app chess
     app movies
+    app photos
 
 /* M3c part 2: loop, the scheduler's test program, made by hand in the same image format: one code page, then the trailer
    { "JTU1", 4096 bytes of code, an empty relocation list }. It asks for its window, then yields forever: it never polls,
@@ -130,6 +131,7 @@ fpkeep_img_end:
 .Lname_snake: .asciz "snake"
 .Lname_chess: .asciz "chess"
 .Lname_movies: .asciz "movies"
+.Lname_photos: .asciz "photos"
 .Lname_loop:     .asciz "loop"
 .Lname_fpkeep:   .asciz "fpkeep"
 
@@ -157,6 +159,7 @@ user_apps:
     .quad .Lname_snake, snake_img, snake_img_end
     .quad .Lname_chess, chess_img, chess_img_end
     .quad .Lname_movies, movies_img, movies_img_end
+    .quad .Lname_photos, photos_img, photos_img_end
     .quad .Lname_loop, loop_img, loop_img_end
     .quad .Lname_fpkeep, fpkeep_img, fpkeep_img_end
     .quad 0, 0, 0
