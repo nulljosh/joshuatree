@@ -127,6 +127,7 @@ void pane_draw(void) {   /* the frame, the well and the newest lines of cp, in t
     fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
 }
 void pane_open(struct pane *p) {   /* the Console or the Terminal in front, its newest lines in view */
+    { extern int limits_cleared; int limits_app_ok(const char *app); if (p == &term_p && !limits_cleared && !limits_app_ok("Terminal")) return; }   /* 12.0: parental controls */
     int raise = con_live && cp == p;   /* already open, behind the Calculator: bring it up and give it the keys */
     if (raise && !calc_front && !app_front) return;
     if (!fb) { cp = p; uart_puts(p == &term_p ? "terminal open\n" : "console open\n"); return; }   /* no screen: the keys still follow */

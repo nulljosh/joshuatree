@@ -1260,7 +1260,9 @@ static void history_command(const char *q, unsigned n) {   /* q is what follows 
     kputs("browser: "); kdec(shown); kputs(shown == 1 ? " page\n" : " pages\n");
 }
 
+int limits_web_ok(void);   /* limits.c (12.0): parental controls' web=0 */
 static void show(const char *url, int push) {
+    if (!limits_web_ok()) { kputs("browser: the web is off for this account\n"); return; }
     unsigned long mark = heap_mark();
     char vid[12];
     if (yt_id(url, vid) && has(url, "play=1")) { yt_play(vid); heap_release(mark); return; }   /* 6.10.0: not a page, the clip */
