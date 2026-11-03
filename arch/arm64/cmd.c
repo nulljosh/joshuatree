@@ -9,6 +9,7 @@
 #include "emmc.h"
 #include "accounts.h"
 #include "sudo.h"
+#include "limits.h"
 #include "login.h"
 #include "home.h"
 #include "snap.h"
@@ -507,6 +508,33 @@ static void sudo_command(const char *q, unsigned n) {   /* q is the line after "
     for (unsigned i = 0; i < n; i++) pw_cmd[i] = q[i];
     pw_ask(PW_SUDO, "[sudo] password for ", current_user);
 }
+/* 12.0, parental controls: `limits` lists them; `limits NAME apps A,B` (or all), `limits NAME hours F-T` (or any), `limits NAME
+   web off` (or on) and `limits NAME clear` set them, under sudo. limits.c keeps JT/LIMITS.TXT and does the refusing. */
+static void limits_command(const char *q, unsigned n) {
+    char name[ACC_NAME_MAX + 2], field[8], value[LIM_APPS_MAX + 2], line[ACC_NAME_MAX + LIM_APPS_MAX + 40];
+    unsigned u = word(q, n, name, sizeof name); while (u < n && q[u] == ' ') u++;
+    unsigned v = u + word(q + u, n - u, field, sizeof field); while (v < n && q[v] == ' ') v++;
+    unsigned w = v + word(q + v, n - v, value, sizeof value); while (w < n && q[w] == ' ') w++;
+    if (!name[0]) {
+        unsigned i = 0;
+        for (; limits_line(i, line, sizeof line); i++) { cmd_out("limits: "); cmd_out(line); cmd_out("\n"); }
+        if (!i) cmd_out("limits: nobody is limited\n");
+        return;
+    }
+    int clear = eq_(field, "clear");
+    if (w != n || !field[0] || (!clear && !value[0]) || (clear && value[0])) { cmd_out("limits: use limits NAME apps A,B | hours F-T | web on|off | clear\n"); return; }
+    if (!priv("limits")) return;
+    int r = limits_set(name, field, value);
+    if (r == ACC_E_NOUSER) { cmd_out("limits: no such account\n"); return; }
+    if (r == LIM_E_ADMIN) { cmd_out("limits: "); cmd_out(name); cmd_out(" is an admin, and admins are never limited\n"); return; }
+    if (r == LIM_E_VALUE) { cmd_out("limits: apps takes names with commas or all, hours takes F-T or any, web takes on or off\n"); return; }
+    if (r) { cmd_out("limits: not saved, the card refused it\n"); return; }
+    for (unsigned i = 0; limits_line(i, line, sizeof line); i++) {
+        unsigned k = 0; while (name[k] && line[k] == name[k]) k++;
+        if (!name[k] && (line[k] == ' ' || !line[k])) { cmd_out("limits: "); cmd_out(line); cmd_out("\n"); return; }
+    }
+    cmd_out("limits: "); cmd_out(name); cmd_out(" is not limited\n");
+}
 static void passwd_command(const char *q, unsigned n) {   /* passwd, passwd NAME; under sudo passwd NAME resets without the old one */
     char name[ACC_NAME_MAX + 2];
     unsigned used = word(q, n, name, sizeof name);
@@ -670,6 +698,8 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (n == 3 && q[0] == 's' && q[1] == 'a' && q[2] == 'm') { sam_command(q + 3, 0); return; }
     if (is(q, n, "sam")) { sam_command(q + 4, n - 4); return; }
     if (n == 4 && q[0] == 'h' && q[1] == 'e' && q[2] == 'l' && q[3] == 'p') { say_wrapped("", help, sizeof help - 1); return; }
+    if (word_is(q, n, "limits")) { limits_command(q, 0); return; }
+    if (is(q, n, "limits")) { limits_command(q + 7, n - 7); return; }
     if (word_is(q, n, "shortcut")) { shortcut_command(q, 0); return; }
     if (is(q, n, "shortcut")) { shortcut_command(q + 9, n - 9); return; }
     if ((n == 2 && q[0] == 'l' && q[1] == 's') || is(q, n, "ls")) {

@@ -544,6 +544,14 @@ int menubar_click(int x, int y) {
     }
     return 0;
 }
+int limits_hour(void) {   /* 12.0, limits.c: the local hour, -1 while the network has not told us the time */
+#ifdef LIMITS_FAKE_HOUR
+    return LIMITS_FAKE_HOUR;   /* the parental controls check's build: a fixed hour, so the hours rule can be seen without a network */
+#else
+    unsigned long u = net_clock_utc(); if (!u) return -1;
+    unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd); return (int)h;
+#endif
+}
 void menubar_notify(const char *message) {
     notice_set(&notice, message, notice_now());
     if (login_live) { uart_puts("notice: "); uart_puts(notice.text); uart_putc('\n'); return; }
@@ -962,7 +970,13 @@ void m1_selftest(void) {
 }
 
 /* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock, Brick, Browser, Settings, Weather and Stocks are available; other names return 0. */
-int app_open_name(const char *name) {
+static int app_open_name_go(const char *name);
+int app_open_name(const char *name) {   /* 12.0: Samantha's [[open]] goes through parental controls too; a refusal counts as handled */
+    int limits_app_ok(const char *app); extern int limits_cleared;
+    if (!limits_app_ok(name)) return 1;
+    limits_cleared++; int r = app_open_name_go(name); limits_cleared--; return r;
+}
+static int app_open_name_go(const char *name) {
     if ((name[0] | 32) == 'r' && (name[1] | 32) == 'e' && (name[2] | 32) == 'm' && (name[3] | 32) == 'i' && (name[4] | 32) == 'n' && (name[5] | 32) == 'd' && (name[6] | 32) == 'e' && (name[7] | 32) == 'r' && (name[8] | 32) == 's' && !name[9]) return app_dock("Reminders");   /* 3.17.0: [[open Reminders]] */
     if ((name[0] | 32) == 'm' && (name[1] | 32) == 'a' && (name[2] | 32) == 'i' && (name[3] | 32) == 'l' && !name[4]) { dock_activate(2); return 1; }   /* 3.15.0: the Mail tile */
     static const char *const openable[] = {"calculator", "console", "clock", "brick", "browser", "settings", "weather", "stocks"};

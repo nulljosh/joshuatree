@@ -30,5 +30,7 @@ Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with t
 24. **Shortcuts.** In the Terminal, `shortcut loud = vol 30; vol`, then `shortcut loud`: each command shows, then runs. `sam make a shortcut called night that sets volume 10`, then `shortcut night`.
 25. **Tab groups.** In the Terminal, `browse en.wikipedia.org`, `tab new`, `browse duckduckgo.com`, then `tab group save work`. `tab close`, then `tab group work`: both tabs come back. Restart and `tab group work` again.
 26. **Photos.** Put two `.JPG` files in a `PHOTOS` folder on the card. Spotlight, Photos: both show in the grid. Enter, then r, b and +: it turns, goes black and white and lighter. Restart: the edits are still there, and 0 puts it back.
+27. **YouTube.** With `tools/claude-relay/yt.py --lan ...` running on the Mac, Blackcomb, `youtube.com/watch?v=QW29Ly55Kvs`, Enter, Tab, Enter: Drake's Plot Twist plays in Movies, the whole 3:16.
+28. **Parental controls.** As an admin, `adduser kid kidpass`, then `sudo limits kid apps notes,calculator` and `sudo limits kid web off`. Log out and sign in as kid: Notes opens, Mines says it is not allowed in the menu bar, Blackcomb does not open.
 
 Steps 1 to 3 are 10.0, 4 is 9.0's touch screen; 5 to 9 are last night's fixes.

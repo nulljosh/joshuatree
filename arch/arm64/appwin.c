@@ -232,6 +232,7 @@ int app_cycle(void) {   /* Cmd+Tab or Ctrl+Tab: the app window furthest back com
 }
 void feeds_for(const char *app);   /* feeds.c */
 static int app_go(const struct user_app *a) {
+    { extern int limits_cleared; int limits_app_ok(const char *app); if (!limits_cleared && !limits_app_ok(a->name)) return 0; }   /* 12.0: parental controls, for starts that skipped the dock */
     feeds_for(a->name);   /* 7.6.0: Stocks' quotes and Weather's reading, fetched as it opens */
     if (app_start(a) == -3 && app_zn) {   /* every slot is taken: the window furthest back closes for it, files written back */
         ap = &apps[app_z[app_zn - 1]];

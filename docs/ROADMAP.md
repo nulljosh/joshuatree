@@ -40,7 +40,7 @@ Where it is going, what shipped, and the story so far.
 
 A freestanding kernel for i386 and the Raspberry Pi 4, no libc. This is the forward plan; what shipped is in the [Shipped log](#shipped-log) and the [releases](https://github.com/nulljosh/joshuatree/releases).
 
-**Latest**: 11.0: A laptop. Trackpad gestures, a battery in the menu bar, and Sleep that lets the Pi rest.
+**Latest**: 12.0: macOS parity. Spaces, Mission Control, Shortcuts, tab groups, Photos and parental controls.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -58,7 +58,9 @@ The near-term queue. The topic sections below keep the longer plan, and shipped 
 
 **Shipped: 10.0, Daily driver** (10.0.0, 2026-11-02, on Joshua's word: "loop all night until v10, then ship it"): a screen reader (9.1.0), twelve languages (9.2.0), Software Update, signed only and with a fallback kernel (9.3.0), and a security audit against the threat model (10.0.0). Still open: a month as Joshua's only computer, the reader beyond the dock, apps in the other languages, and the tryboot flag on the board.
 
-**Now: 12.0, macOS 27 parity** (Joshua, 2026-11-02: "do v12-15"). Shipped in 11.1.0: Spaces (four desktops, Ctrl+Left and Ctrl+Right); in 11.2.0: Mission Control (Ctrl+Up); in 11.3.0: the Glass slider (Settings, Display); in 11.4.0: Shortcuts that Samantha can write; in 11.5.0: Blackcomb tab groups; in 11.6.0: Photos, with edits that never touch the file. GPU compositing waits for 14's V3D. Next parental controls, and a glass slider on GPU compositing with 14. After it: 13 Bluetooth headphones and keyboards, 14 graphics acceleration, 15 a second chip family. Still open from 11.0: lid close, and the gauge and a USB touchpad on a real board.
+**Shipped: 12.0, macOS 27 parity** (12.0.0, 2026-11-02, on Joshua's word: "do v12-15"): Spaces (11.1.0), Mission Control (11.2.0), the Glass slider (11.3.0), Shortcuts that Samantha writes (11.4.0), Blackcomb tab groups (11.5.0), Photos with edits that never touch the file (11.6.0) and parental controls (12.0.0), with whole YouTube videos on the side. GPU compositing, and the glass on it, wait for 14's V3D. Still open from 11.0: lid close, and the gauge and a USB touchpad on a real board.
+
+**Now: 13.0, Bluetooth audio and keyboards** (Joshua, 2026-11-02: "do v12-15"). Headphones and speakers over Bluetooth, and Bluetooth keyboards and mice, on the Pi's own radio. After it: 14 graphics acceleration (V3D), 15 a second chip family.
 
 **The Berkeley list is done** (Joshua, 2026-11-01: "are we missing anything" from Berkeley's CS162 lectures). Threads and locks (8.1.0), four cores (8.2.0), pipes (8.3.0), spawn and wait (8.4.0), sockets (8.5.0), fair 10 ms turns (8.6.0), paging on first touch (8.7.0), a block cache (8.8.0), app threads on all four cores (8.11.0) and swap (8.12.0). Copy on write still waits for a fork, which spawn does not need.
 Left out on purpose: distributed file systems, key value stores and Chord (lectures 25 and 26); a desktop does not need them.
@@ -1015,6 +1017,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
 
 One line per version. The full release notes live in the GitHub releases and `git log`; the longer write-ups of each step are in the last commit before the docs merge (`git show 35aa01cb:docs/roadmap-done.md`).
 
+- **12.0.0 (2026-11-02)**: Parental controls, which finish 12.0. As in Screen Time, an admin limits another account with `sudo limits NAME apps A,B`, `hours F-T` and `web off` (and `all`, `any`, `on` and `clear` to undo), kept in `JT/LIMITS.TXT`, a protected file. Every way an app starts (the dock, Spotlight, the Launchpad, Samantha's open, the Terminal key and a ring-3 start) asks first; a refused app says why in the menu bar and never starts, Blackcomb loads nothing with the web off, the hours follow the Pi's clock, and admins are never limited. Check: `arm64-limits-check.py`. Also in 12.0.0, YouTube plays whole songs, sharper. The Mac's video service fits the whole video into the 12 MB the Pi can take by lowering the bitrate across its full length, instead of cutting the end off (Drake's Plot Twist was 2:48 of 3:16, now all of it), and short videos come 320 wide, the most Movies decodes, instead of 256. It cuts a video short only when the bitrate would be too low to watch. Check: `yt-fit-check.py`.
 - **11.6.0 (2026-11-02)**: Photos on the Pi. Put `.JPG` or `.PNG` files in a `PHOTOS` folder in Files: Spotlight or Launchpad opens them as a grid, Enter shows one full size, Left and Right move between them. Edits never touch the photo, as in Apple's Photos: r turns it a quarter, b makes it black and white, + and - change the light, 0 reverts; they live in `PHOTOEDT.TXT` and show in the grid too. Check: `arm64-photos-check.py`.
 - **11.5.1 (2026-11-02)**: The landing's film is new: 30 seconds, 179 hard cuts of real 1080p screens from the Pi build (every app, live Weather, Stocks and a Wikipedia page in Blackcomb), cut on the beat of an original piano score, ending on the name (`landing/joshua-tree-ad-v11.mp4`). It replaces the 7.0 tour. Check: `check-refs.sh` and the landing checks.
 - **11.5.0 (2026-11-02)**: Blackcomb tab groups, as in Safari. `tab group save NAME` keeps the open tabs' pages under a name in `TABGROUP.TXT`, where an app's files live (one line a tab); saving again rewrites the group. `tab group NAME` swaps the open tabs for that group's, `tab groups` lists them and `tab group rm NAME` drops one. A shortcut can open a group (`shortcut work = tab group work`). Check: `arm64-tabgroups-check.py`.
@@ -2167,14 +2170,14 @@ Updated 2026-11-02, afternoon Vancouver time. The loop's working notes live in `
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Where things stand (2026-11-02, afternoon).** 11.0.0, a laptop, is on main: deep idle, trackpad gestures from QEMU multitouch and USB precision touchpads, a MAX17048 battery gauge in the menu bar, and Sleep in the tree menu. 10.0.0 before it brought the screen reader, twelve languages and signed self-update. Lid close is the one 11.0 item left. 11.1.0 to 11.6.0 brought most of 12.0: Spaces, Mission Control, the Glass slider, Shortcuts, Blackcomb tab groups and Photos.
+**Where things stand (2026-11-02, afternoon).** 11.0.0, a laptop, is on main: deep idle, trackpad gestures from QEMU multitouch and USB precision touchpads, a MAX17048 battery gauge in the menu bar, and Sleep in the tree menu. 10.0.0 before it brought the screen reader, twelve languages and signed self-update. Lid close is the one 11.0 item left. 12.0.0 finished macOS 27 parity: Spaces, Mission Control, the Glass slider, Shortcuts, Blackcomb tab groups, Photos and parental controls.
 
 **Waiting on Joshua.** Signing 11.0's kernel with `tools/update-sign.sh` on his Mac (the app key never leaves it), so a Pi's `update` offers the release. The board pass (`docs/TESTING.md`), with 11.0 flashed when the card is in. The physical halves of 9.0 and 10.0 (a stranger builds a Nimbus from the guide; a month as Joshua's only computer), the GPU and the camera stay open as board work.
 
 **Next, in order.**
 1. Whatever the board shows broken (`docs/TESTING.md`).
 2. The doc trim: the Shipped log to a line per major (the release notes keep the rest), the 2026-10-03 Pickup to its open items, ARCHITECTURE's history-titled sections in the present tense.
-3. 12's macOS 27 parity (Now: 12.0, above): parental controls next, which finish 12.0; then 13 to 15.
+3. 13.0, Bluetooth headphones and keyboards (Now: 13.0, above); then 14 and 15.
 
 Restart prompt:
 

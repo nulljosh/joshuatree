@@ -7,8 +7,9 @@ YouTube's own pages are JavaScript, which Blackcomb does not run, so the Pi asks
     body: an 11 character video id ([A-Za-z0-9_-])
     200 text/html: a plain page with the title, the channel, the length, the description and a Play link
     POST /api/yt/avi     same token; body: the id, a space, and the most bytes the Pi can take (6.10.0)
-    200 video/x-msvideo: the video as a clip Movies plays (motion JPEG 256 wide at 12 fps, 8-bit 11 kHz mono sound),
-        cut short when the whole of it would not fit (X-Seconds says how much is in it)
+    200 video/x-msvideo: the video as a clip Movies plays (motion JPEG 320 or 256 wide at 12 fps, 8-bit 11 kHz mono sound),
+        the whole video at the bitrate the Pi's bytes allow, cut short only when that would be too low to watch
+        (X-Seconds says how much is in it)
     400 not a video id   401 no or wrong token   404 other path   405 not POST   502 yt-dlp or ffmpeg failed
 
 The facts come from yt-dlp (`brew install yt-dlp`), run with the id as one argument, never through a shell. --fixture FILE
@@ -48,28 +49,42 @@ def page(vid, d):
 
 
 def clip(vid, cap):
-    """The video as a Movies clip of at most cap bytes: one pass, then a shorter one if it came out too big."""
+    """The video as a Movies clip of at most cap bytes: yt-dlp fetches it, fit() makes the clip."""
     with tempfile.TemporaryDirectory() as d:
-        src, out = os.path.join(d, "v.mp4"), os.path.join(d, "v.avi")
+        src = os.path.join(d, "v.mp4")
         r = subprocess.run(["yt-dlp", "-q", "--no-playlist", "--no-warnings", "-f", "18/best[height<=360][ext=mp4]/best[height<=360]", "-o", src, "--", vid],
                            capture_output=True, text=True, timeout=300)
         if r.returncode or not os.path.exists(src): raise RuntimeError((r.stderr or "yt-dlp failed").strip()[-300:])
+        return fit(src, cap)
+
+
+def fit(src, cap):
+    """A video file as a Movies clip of at most cap bytes, and how many seconds of it are in the clip.
+
+    12.0: the whole video, not the first minutes. The bitrate is what the cap allows across its full length (the
+    sound is 11025 bytes a second), 320 wide (Movies' most) when that is generous, else 256. Only below FLOOR,
+    where motion JPEG turns to mush, is the clip cut short instead. tools/checks/yt-fit-check.py runs this."""
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "v.avi")
         def encode(seconds=None):
             cmd = ["ffmpeg", "-loglevel", "error", "-y", "-i", src] + (["-t", "%.1f" % seconds] if seconds else []) + [
-                   "-vf", "scale=256:-2,fps=12", "-c:v", "mjpeg", "-q:v", "9", "-pix_fmt", "yuvj420p",
+                   "-vf", "scale=%d:-2,fps=12" % width, "-c:v", "mjpeg", "-b:v", str(video_bps), "-qmin", "2", "-qmax", "31", "-pix_fmt", "yuvj420p",
                    "-c:a", "pcm_u8", "-ar", "11025", "-ac", "1", "-f", "avi", out]
             e = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
             if e.returncode: raise RuntimeError("ffmpeg: " + e.stderr.strip()[-300:])
             return os.path.getsize(out)
         p = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", src], capture_output=True, text=True)
         dur = float(p.stdout.strip() or 0)
-        size, seconds = encode(), dur
+        FLOOR, AUDIO_BPS = 150_000, 11025 * 8
+        budget = int(cap * 8 * 0.9 / dur) - AUDIO_BPS if dur else 2_000_000
+        width, video_bps, seconds = (320 if budget >= 900_000 else 256), max(budget, FLOOR), None
+        if dur and budget < FLOOR: seconds = cap * 8 * 0.9 / (FLOOR + AUDIO_BPS)
+        size = encode(seconds); seconds = seconds or dur
         if size > cap and dur:
-            seconds = dur * cap / size * 0.92
+            seconds = seconds * cap / size * 0.92
             size = encode(seconds)
         if size > cap: raise RuntimeError("the clip is %d bytes, over the %d the Pi can take" % (size, cap))
         return open(out, "rb").read(), seconds
-
 
 class Handler(http.server.BaseHTTPRequestHandler):
     token = ""; fixture = None; fixture_avi = None

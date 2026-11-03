@@ -286,7 +286,14 @@ void pointer_click(void) {   /* the left button went down */
 const char *dock_app_name(int slot) {   /* the EL0 app a slot starts, by its user_apps name; 0 for the kernel-drawn ones */
     return slot == SPOT_MUSIC ? "Music" : slot == SPOT_BOOKS ? "Books" : slot == SPOT_FINDER || slot == 1 ? "Finder" : slot >= SPOT_GAME0 ? game_names[slot - SPOT_GAME0] : dock_names[slot];
 }
-void dock_activate(int slot) {   /* a dock tile, from a click, a dock key, Spotlight or the Launchpad; slot 0, Apps, is the Launchpad (it was the Calculator until 4.1.2: the first desktop slice had no Launchpad, so the Apps tile opened the one app there was) */
+int limits_app_ok(const char *app);   /* limits.c (12.0) */
+int limits_cleared;   /* 12.0: set while an app the limits already allowed is starting, so app_go and pane_open do not ask again */
+static void dock_activate_go(int slot);
+void dock_activate(int slot) {   /* 12.0: parental controls first (slot 0, the Launchpad, is never limited), then the tile */
+    if (slot && !limits_app_ok(spot_name(slot))) return;
+    limits_cleared++; dock_activate_go(slot); limits_cleared--;
+}
+static void dock_activate_go(int slot) {   /* a dock tile, from a click, a dock key, Spotlight or the Launchpad; slot 0, Apps, is the Launchpad (it was the Calculator until 4.1.2: the first desktop slice had no Launchpad, so the Apps tile opened the one app there was) */
     dock_unmagnify();   /* 6.3.0: whatever opens saves the plain dock under it, never the grown one */
     if (slot == 0) { lp_open(); return; }
     if (slot == SPOT_CALC) { calc_open(); return; }

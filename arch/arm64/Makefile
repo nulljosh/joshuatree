@@ -157,8 +157,8 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o settings.o lang.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
-PISDOBJ = pi-emmc.o fat.o ufile.o pi-settings.o lang.o auth_kdf.o accounts.o login.o sudo.o home.o snap.o keychain.o
+SDOBJ = emmc.o fat.o ufile.o settings.o lang.o auth_kdf.o accounts.o login.o sudo.o limits.o home.o snap.o keychain.o
+PISDOBJ = pi-emmc.o fat.o ufile.o pi-settings.o lang.o auth_kdf.o accounts.o login.o sudo.o limits.o home.o snap.o keychain.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c home.h emmc.h ../../drivers/fat.h
@@ -180,6 +180,9 @@ login.o: login.c login.h accounts.h
 	$(SDCC) -c $< -o $@
 # Admins and sudo (4.10.0): JT/SUDOERS.TXT, the password check and the five minutes it is remembered.
 sudo.o: sudo.c sudo.h accounts.h login.h emmc.h ../../drivers/fat.h
+	$(SDCC) -c $< -o $@
+# Parental controls (12.0): JT/LIMITS.TXT, which apps, hours and web an admin allows another account.
+limits.o: limits.c limits.h accounts.h sudo.h login.h emmc.h ../../drivers/fat.h
 	$(SDCC) -c $< -o $@
 # Home folders (4.11.0): JT/HOME/<name>, where apps, ~ and Samantha's save put a signed-in person's files.
 home.o: home.c home.h accounts.h sudo.h login.h emmc.h ../../drivers/fat.h

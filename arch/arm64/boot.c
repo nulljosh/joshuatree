@@ -322,6 +322,7 @@ void main(void) {
     sd_mount();                /* emmc.c: the SD card's FAT partition for ls and cat; one `sd ...` line, every wait bounded */
     accounts_load();           /* accounts.c: JT/USERS.TXT, the names `users` lists */
     sudo_load();               /* sudo.c: JT/SUDOERS.TXT, who may sudo */
+    { void limits_load(void); limits_load(); }   /* limits.c (12.0): JT/LIMITS.TXT, parental controls; after sudo, which says who is an admin */
     { void lang_load(void); lang_load(); void update_boot(void); update_boot(); void reader_load(void); reader_load(); }   /* 9.3.0: a staged update, committed or dropped (update.c) */   /* 9.2.0: JT/LANG.TXT, the language the desktop draws in */
     settings_load();           /* settings.c: JT/SETTINGS.TXT, before the Pi's desktop is first painted (the splash waits) */
     SPLASH(2, "sd");
