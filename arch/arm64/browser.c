@@ -1020,7 +1020,12 @@ unsigned int ticks(void);   /* ip.c, 100 a second */
 #define VID_FRAMES 8192
 void audio_app_status(unsigned st[7]); void audio_app_stop(void); int audio_busy(void);
 int audio_app_queue(const unsigned char *pcm, unsigned len, unsigned rate, int end);
-static unsigned char vbuf[VID_MAX];
+/* 13.1.0: on the heap, not in .bss: 8 MiB of .bss moved the kernel's end past 64 MiB and the EL0 arena with it. Taken once,
+   VID_MAX down to 1 MiB, before show()'s heap mark so a page's release never hands it back; the bump heap keeps it. */
+static unsigned char *vbuf; static unsigned vcap;
+static void vid_reserve(void) {
+    for (unsigned c = VID_MAX; !vbuf && c >= (1u << 20); c >>= 1) if ((vbuf = kmalloc(c))) vcap = c;
+}
 static struct avi vid_avi;
 static const unsigned char *vfr[VID_FRAMES]; static unsigned vfr_n[VID_FRAMES], nvfr;   /* the video frames, in order */
 static int vplaying, vpaused, vdone;
@@ -1057,7 +1062,8 @@ static void vid_feed(void) {   /* top the app stream up from the audio chunks, a
 static void yt_play(const char *vid) {
     vid_stop();
     kputs("browser: making the video\n");
-    int status, got = yt_avi(vid, VID_MAX, (char *)vbuf, &status);
+    if (!vbuf) { kputs("browser: out of memory for the video\n"); return; }
+    int status, got = yt_avi(vid, vcap, (char *)vbuf, &status);
     if (got <= 0 || status != 200) { kputs("browser: video service "); kputs(got < 0 ? "not reachable\n" : "refused\n"); return; }
     if (avi_open(&vid_avi, vbuf, (unsigned)got) != AVI_OK) { kputs("browser: the video could not be read\n"); return; }
     struct avi_chunk c; nvfr = 0;
@@ -1349,9 +1355,11 @@ static void history_command(const char *q, unsigned n) {   /* q is what follows 
 int limits_web_ok(void);   /* limits.c (12.0): parental controls' web=0 */
 static void show(const char *url, int push) {
     if (!limits_web_ok()) { kputs("browser: the web is off for this account\n"); return; }
-    unsigned long mark = heap_mark();
     char vid[12];
-    if (yt_id(url, vid) && has(url, "play=1")) { yt_play(vid); heap_release(mark); return; }   /* 6.10.0: not a page, the clip; 13.1.0 in the page */
+    int play = yt_id(url, vid) && has(url, "play=1");
+    if (play) vid_reserve();
+    unsigned long mark = heap_mark();
+    if (play) { yt_play(vid); heap_release(mark); return; }   /* 6.10.0: not a page, the clip; 13.1.0 in the page */
     vid_stop();
     unsigned cap; char *raw = raw_alloc(&cap);
     if (!raw) { kputs("browser: out of memory\n"); heap_release(mark); return; }
