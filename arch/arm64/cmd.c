@@ -802,6 +802,8 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (word_is(q, n, "reboot") || word_is(q, n, "restart")) { power_run(0); return; }     /* typing it is the confirmation the chord asks for */
     if (word_is(q, n, "shutdown") || word_is(q, n, "poweroff")) { power_run(1); return; }
     if (bt_command(q, n)) return;
+    { int gpu_command(const char *q, unsigned n); if (gpu_command(q, n)) return; }
+    { int heat_command(const char *q, unsigned n); if (heat_command(q, n)) return; }   /* 13.3.0: heat.c, how hot the chip is */   /* 13.2.0: gpu.c, the V3D brought up by hand */
     if (beep_command(q, n)) return;
     if (mic_command(q, n)) return;
     if (vol_command(q, n)) return;

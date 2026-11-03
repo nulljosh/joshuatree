@@ -967,6 +967,12 @@ void m1_selftest(void) {
     uart_puts("CRASHTEST: storing to unmapped memory\n");
     *(volatile unsigned long *)0x300000000UL = 1;
 #endif
+#ifdef GPU_TEST   /* arm64-gpu-check.py: QEMU has no keyboard on raspi4b, so this image types `gpu` once the screen is up */
+    { int gpu_bringup(void (*say)(const char *)); gpu_bringup(uart_puts); }
+#endif
+#ifdef HEAT_TEST   /* arm64-heat-check.py: the same for `temp` */
+    { const char *heat_line(void); uart_puts(heat_line()); }
+#endif
 }
 
 /* ask.c's agent loop: [[open APP]] opens a dock app by name. Calculator, Console, Clock, Brick, Browser, Settings, Weather and Stocks are available; other names return 0. */

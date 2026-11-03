@@ -1467,10 +1467,15 @@ static int yt_post(const char *path, const char *body, unsigned blen, char *out,
     for (unsigned i = 0; i < blen && k < sizeof req; i++) req[k++] = body[i];
     for (int i = 0; i < 64; i++) token[i] = 0;
 #if defined(PI_BUILD) || CLAUDE_TLS
-    if (!relay_ip && relay_open() < 0) n = -1;
+    if (!relay_ip) relay_open();
+    unsigned ip = relay_ip; unsigned short port = relay_port;
+    /* 13.3.0: no relay answered (on the board another server held the relay's port), so the video service alone, at the
+       address the card was built with: it needs no relay running beside it */
+    if (!ip) { port = CLAUDE_PORT; if (!CLAUDE_HOST[0] || !http_resolve_host(CLAUDE_HOST, &ip)) ip = 0; }
+    if (!ip) n = -1;
     else {
         if (relay_ip) tcp_close();
-        n = tls_connect_private(relay_ip, (unsigned short)(relay_port + 2), RELAY_NAME) < 0 || tls_handshake() < 0 ? -1
+        n = tls_connect_private(ip, (unsigned short)(port + 2), RELAY_NAME) < 0 || tls_handshake() < 0 ? -1
             : tls_exchange_timeout(req, k, out, max - 1, ticks);
     }
 #else

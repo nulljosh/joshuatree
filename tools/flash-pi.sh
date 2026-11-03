@@ -40,6 +40,10 @@ echo "flashing $CARD"
 # a TLS_TA anchor, 2.46.0): without this the Terminal says "TLS failed" however well the relay runs. docs/GUIDE.md.
 CA="${JT_RELAY_CA:-$HOME/.config/joshuatree/relay-tls/ca.pem}"
 [ -f "$CA" ] && export TLS_TA="$CA"
+# The relay and the video service run on this Mac: without its LAN address the card is built for QEMU's 10.0.2.2 and
+# Blackcomb says "video service not reachable" (2026-11-02, the first Drake on the board).
+[ -n "${CLAUDE_RELAY_HOST:-}" ] || export CLAUDE_RELAY_HOST="$(ipconfig getifaddr en0 || ipconfig getifaddr en1)"
+echo "relay and video service at $CLAUDE_RELAY_HOST"
 JT_WIFI_DEV=1 make -B -C arch/arm64 pi >/dev/null   # JT_WIFI_DEV: this card joins our network; release builds never carry it   # -B: the Makefile does not track headers
 
 FW="${FLASH_PI_FW:-build/pifw}"
