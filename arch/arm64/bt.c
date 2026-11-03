@@ -49,6 +49,7 @@
    `bt status` shows the last report's first 8 bytes (motion data) and its length.
    tools/checks/arm64-bt-check.py puts a fake controller and a fake mouse on it. */
 #include "bt.h"
+#include "btc.h"
 #include "rng.h"
 #include "bearssl_block.h"
 #include "btpair.h"
@@ -191,7 +192,7 @@ static void ux_baud(unsigned baud) {   /* off, last byte out, the new divisor, L
     U(LCRH) = 0x70;                      /* 8 bits, no parity, FIFOs on */
     U(CR) = CR_ON;
 }
-static unsigned char txb[640]; static unsigned txn, txi;
+static unsigned char txb[4096];   /* 13.0: room for SBC packets behind the rest */ static unsigned txn, txi;
 static void pump(void) { while (txi < txn && !(U(FR) & TXFF)) U(DR) = txb[txi++]; }
 static unsigned char *tx_room(unsigned n) {   /* room for a packet of n bytes at the end of the queue, or 0 */
     if (txi == txn) txi = txn = 0;
@@ -620,7 +621,7 @@ static void on_sig(const unsigned char *p, unsigned n) {   /* LE signalling: cod
 static unsigned char l2[80]; static unsigned l2n, l2want;
 static void on_acl(const unsigned char *p, unsigned n) {
     acl_in++;
-    if (n < 4) return;
+    if (n < 4 || btc_acl(p, n)) return;   /* 12.2: the classic link's own */
     unsigned h = (p[0] | p[1] << 8u) & 0xFFF, pb = p[1] >> 4 & 3, len = p[2] | p[3] << 8u;
     if (!conn || h != handle || 4 + len > n) return;
     if (pb != 1) { l2n = 0; l2want = len >= 4 ? 4 + (p[4] | p[5] << 8u) : 0; }   /* a start */
@@ -668,15 +669,16 @@ static void disconnected(const unsigned char *p, unsigned n) {   /* Disconnectio
 /* ---- H4 in: a packet-type byte, a header, the body. Anything else is skipped a byte at a time until it lines up. ---- */
 static unsigned char rx[260]; static unsigned rxn, rxneed, rxtype, rxhdr;
 static void on_event(unsigned code, const unsigned char *p, unsigned n) {
+    if (code != 0x0E && code != 0x0F) btc_event(code, p, n);   /* 12.1: classic events, each checked against btc's own link */
     if (code == 0x0E && n >= 3 && want && (unsigned)(p[1] | p[2] << 8) == want) {        /* Command Complete: count, opcode, returns */
         want = 0;
-        if (!by_step) return;                    /* a link command (LE Connection Update, Disconnect): nothing waits on it */
+        if (!by_step) { btc_done(p[1] | p[2] << 8u, p + 3, n - 3); return; }   /* a link command (LE Connection Update, Disconnect) or btc's */
         retn = n - 3 < sizeof ret ? n - 3 : sizeof ret;
         for (unsigned i = 0; i < retn; i++) ret[i] = p[3 + i];
         until = 0;                               /* answered: the next step may run at once */
     } else if (code == 0x0F && n >= 4 && want && (unsigned)(p[2] | p[3] << 8) == want) { /* Command Status: status, count, opcode */
         want = 0;
-        if (!by_step) return;
+        if (!by_step) { btc_done(p[2] | p[3] << 8u, p, 1); return; }
         ret[0] = p[0]; retn = 1; until = 0;
     } else if (code == 0x3E && n >= 2 && p[0] == 0x02 && st == SCANNING) adv_reports(p + 1, n - 1);
     else if (code == 0x3E && n >= 2 && p[0] == 0x01) connected(p + 1, n - 1);
@@ -912,9 +914,18 @@ void bt_init(void) {
 #endif
 }
 
+void bt_hci_cmd(unsigned op, const unsigned char *p, unsigned n) { send_cmd(op, p, n, 0); }   /* btc.c, only when the slot is free */
+int bt_tx(const unsigned char *b, unsigned n) {   /* btc.c: one whole H4 packet behind what is queued; 0 when there is no room */
+    unsigned char *q = tx_room(n);
+    if (!q) return 0;
+    for (unsigned i = 0; i < n; i++) q[i] = b[i];
+    pump(); return 1;
+}
+int bt_radio_ready(void) { return st == READY || st == SCANNING || st == PAIRING || st == MOUSE || st == RETRY; }
 void bt_poll(void) {
-    if (st != STARTING && st != SCANNING && st != PAIRING && st != MOUSE && st != RETRY) return;
-    acl_flush();
+    int le = st == STARTING || st == SCANNING || st == PAIRING || st == MOUSE || st == RETRY;
+    if (!le && !(st == READY && btc_busy())) return;
+    acl_flush(); btc_flush();
     for (unsigned k = 0; k < 512 && !(U(FR) & RXFE); k++) {
         unsigned d = U(DR);
         if (d & 0xF00) rx_err++;          /* framing, parity, break or overrun */
@@ -927,7 +938,8 @@ void bt_poll(void) {
         send_cmd(op, pend_p, pend_n, 0);
         return;
     }
-    if (now() < until) return;
+    if (st != STARTING && btc_poll()) return;   /* a classic command waited for the slot */
+    if (!le || now() < until) return;
     if (st == RETRY) { rc_try(); return; }
     step();
 }
@@ -935,7 +947,7 @@ void bt_poll(void) {
 int bt_starting(void) { return st == STARTING; }
 int bt_has_pairing(void) { struct btp r; return pair_load(&r); }   /* 8.9.0: a saved mouse, so boot shows the arrow before it reconnects */
 int bt_input_live(void) { return st == MOUSE; }   /* 7.5.3: a connected Bluetooth mouse can wake the screen */
-int bt_busy(void) { return st == STARTING || st == SCANNING || st == PAIRING || st == MOUSE || st == RETRY; }
+int bt_busy(void) { return st == STARTING || st == SCANNING || st == PAIRING || st == MOUSE || st == RETRY || (st == READY && btc_busy()); }
 int bt_settling(void) { return st == STARTING || st == SCANNING || st == PAIRING || st == RETRY; }   /* 6.87.0: the radio's own deadlines are running (a connected mouse is not) */
 
 static int has(const char *name, const char *w, unsigned wn) {   /* name contains the wn letters of w, any case */
@@ -977,7 +989,8 @@ int bt_command(const char *q, unsigned n) {
     int scan = n - i == 4 && q[i] == 's' && q[i + 1] == 'c' && q[i + 2] == 'a' && q[i + 3] == 'n';
     int pair = n - i >= 4 && q[i] == 'p' && q[i + 1] == 'a' && q[i + 2] == 'i' && q[i + 3] == 'r' && (n - i == 4 || q[i + 4] == ' ');
     int forget = n - i == 6 && has(q + i, "forget", 6), again = n - i == 9 && has(q + i, "reconnect", 9), status = n - i == 6 && has(q + i, "status", 6);
-    if (i < n && !scan && !pair && !forget && !again && !status) { put("bt: try bt, bt status, bt scan, bt pair, bt reconnect or bt forget"); say_now(); return 1; }
+    if (i < n && !scan && !pair && !forget && !again && !status && btc_command(q + i, n - i)) return 1;   /* 12.1: bt find, bt connect, bt disconnect */
+    if (i < n && !scan && !pair && !forget && !again && !status) { put("bt: try bt, bt status, bt scan, bt pair, bt reconnect, bt forget, bt find or bt connect"); say_now(); return 1; }
     if (st == RETRY && (scan || pair || forget)) { rc_on = 0; st = READY; until = FOREVER; wifi_release(); }   /* the pause between tries ends */
     if (forget) {   /* the card's record only; a link that is up stays up */
         rc_on = 0;   /* a try in flight is the last */
@@ -1050,6 +1063,7 @@ int bt_command(const char *q, unsigned n) {
       }
       if (rc_err[0]) { put("bt: last error: "); put(rc_err); say_now(); }
       wipe(&r, sizeof r); }
+    btc_status();
     if ((st == READY || st == MOUSE) && (acl_in || rx_err || rx_junk)) {
         put("bt: acl in "); put_dec((int)acl_in); put(", rx errors "); put_dec((int)rx_err); put(", stray bytes "); put_dec((int)rx_junk); say_now();
     }

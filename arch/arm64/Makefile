@@ -298,10 +298,14 @@ pi-xhci.o: xhci.c
 # one); with no file at all the radio runs its own ROM firmware. bt_fw.S is rewritten only when the path or the file's
 # presence changes. Pairing's AES-128 is BearSSL's aes_ct, pulled from the same --start-lib objects tls.c uses.
 BT_HCD ?= ../../build/bt-fw/BCM4345C0.hcd
-bt.o: bt.c bt.h rng.h btpair.h emmc.h ../../drivers/fat.h
+bt.o: bt.c bt.h btc.h rng.h btpair.h emmc.h ../../drivers/fat.h
 	$(CC) -I$(BSSL)/inc -c $< -o $@
-pi-bt.o: bt.c bt.h rng.h btpair.h emmc.h ../../drivers/fat.h
+pi-bt.o: bt.c bt.h btc.h rng.h btpair.h emmc.h ../../drivers/fat.h
 	$(CC) -DPI_BUILD $(PICON) -I$(BSSL)/inc -c $< -o $@
+btc.o: btc.c btc.h sbc.h emmc.h ../../drivers/fat.h
+	$(CC) -c $< -o $@
+sbc.o: sbc.c sbc.h
+	$(CC) -c $< -o $@
 bt-fw:
 	cd ../.. && tools/bt-fw.sh
 bt_fw.S: bt_fw_gen.sh FORCE
@@ -316,12 +320,12 @@ PICON = -DCONSOLE_MINI_UART
 pi-main.o: MAINFLAGS_PART = -DPI_BUILD $(PICON) $(if $(filter 1,$(JT_KEY_DEBUG)),-DKEY_DEBUG)
 pi-main.o: $(MAINSRC) $(MAINDEP)
 	$(MAINLINK)
-kernel8.elf: start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
-pi-kernel8.elf: pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
+kernel8.elf: start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o btc.o sbc.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o $(USEROBJ) main.o pci.o xhci.o wifi.o bt.o btc.o sbc.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
+pi-kernel8.elf: pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o btc.o sbc.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o btc.o sbc.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o $(USEROBJ) pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o btc.o sbc.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(LLMOBJ)
 pi: wifi-fw bt-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
@@ -333,12 +337,12 @@ $(1)-pi-main.o: $(MAINSRC) $(MAINDEP)
 	$$(MAINLINK)
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
-$(1)-kernel8.elf: start.o $(1)-vectors.o $(USEROBJ) $(1)-main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o $(USEROBJ) $(1)-main.o pci.o xhci.o wifi.o bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
-$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(3) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
+$(1)-kernel8.elf: start.o $(1)-vectors.o $(USEROBJ) $(1)-main.o pci.o xhci.o wifi.o bt.o btc.o sbc.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o $(USEROBJ) $(1)-main.o pci.o xhci.o wifi.o bt.o btc.o sbc.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(SDOBJ) audio.o ask.o png.o jpeg.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
+$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o btc.o sbc.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETOBJ)) pi-rng.o $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o btc.o sbc.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
 $(1)-kernel8.img: $(1)-pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o $(USEROBJ) $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o pi-bt.o btc.o sbc.o bt_fw.o ttf.o text.o libc.o calc.o cmd.o $(PISDOBJ) pi-audio.o pi-ask.o png.o jpeg.o inflate.o pi-wall.o $(GUIOBJ) $(filter-out rng.o,$(NETLD)) pi-rng.o $(3) $(LLMOBJ)
 endef
 fptest.o: fptest.c
 	$(FPCC) -c $< -o $@

@@ -32,5 +32,6 @@ Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with t
 26. **Photos.** Put two `.JPG` files in a `PHOTOS` folder on the card. Spotlight, Photos: both show in the grid. Enter, then r, b and +: it turns, goes black and white and lighter. Restart: the edits are still there, and 0 puts it back.
 27. **YouTube.** With `tools/claude-relay/yt.py --lan ...` running on the Mac, Blackcomb, `youtube.com/watch?v=QW29Ly55Kvs`, Enter, Tab, Enter: Drake's Plot Twist plays in Movies, the whole 3:16.
 28. **Parental controls.** As an admin, `adduser kid kidpass`, then `sudo limits kid apps notes,calculator` and `sudo limits kid web off`. Log out and sign in as kid: Notes opens, Mines says it is not allowed in the menu bar, Blackcomb does not open.
+29. **Bluetooth headphones and keyboards.** Put headphones in pairing mode. In the Terminal, `bt find`: they show by name as headphones. `bt connect 1`: `ready to play`. Open Music and play a song: it comes out of the headphones, with no stutter (if it stutters, note it: the UART's speed is the suspect). Then a Bluetooth keyboard in pairing mode, `bt find`, `bt connect N`: `ready`, and it types in the Terminal.
 
 Steps 1 to 3 are 10.0, 4 is 9.0's touch screen; 5 to 9 are last night's fixes.
