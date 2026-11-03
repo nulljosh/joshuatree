@@ -570,22 +570,26 @@ void browser_go(const char *url) {   /* 6.32.0: open Blackcomb on a page, as typ
     br_run(cmd);
 }
 int browser_image_tick(void); int browser_images_pending(void);   /* browser.c, 6.86.0 */
-int browser_busy(void) { return browser_live && browser_images_pending(); }   /* the desktop loop keeps passing while images wait */
+int browser_video_tick(void); int browser_video_playing(void); void browser_video_pause(void); void browser_video_stop(void); int browser_video_on(void);   /* browser.c, 13.1.0 */
+int browser_busy(void) { return browser_live && (browser_images_pending() || browser_video_playing()); }   /* the desktop loop keeps passing while images wait */
 void browser_tick(void) {   /* 6.86.0: one more of the page's images, then the well again; the last one logs where each was drawn */
     if (!browser_live) return;
     int r = browser_image_tick();
+    if (!r && browser_video_tick()) r = 1;   /* 13.1.0: the video's next frame */
     if (!r || spot_live || login_live || calc_front) return;   /* under Spotlight, the lock or the Calculator: the next paint has it */
     br_wk_w = -1; br_wrap(); browser_paint(r == 2);
 }
 void browser_close(void) {
     if (!browser_live) return;
     browser_live = br_edit = 0;
+    browser_video_stop();
     con_live = 1; console_close(); pane_open(cp);
     uart_puts("browser closed\n");
 }
 int browser_key(unsigned code) {   /* a key down with the Browser in front and Spotlight closed; always the Browser's */
     if (alt_held && (code == 105 || code == 106)) { br_nav(code == 106); return 1; }          /* Alt+Left, Alt+Right */
     if (code == 63 || (ctrl_held && code == 19)) { br_nav(2); return 1; }                      /* F5, Ctrl+R */
+    if (code == 57 && !br_edit && !br_field && browser_video_on()) { browser_video_pause(); return 1; }   /* 13.1.0: Space pauses the video and plays it on */
     if (ctrl_held && code == 32) { br_star(); return 1; }                                      /* Ctrl+D, the star */
     if (ctrl_held && code == 38) { br_field = 0; br_edit = 1; br_addr_n = 0; br_addr[0] = 0; browser_paint(0); return 1; }   /* Ctrl+L */
     int page = br_rows() > 1 ? br_rows() - 1 : 1;

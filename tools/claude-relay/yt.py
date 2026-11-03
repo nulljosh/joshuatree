@@ -44,7 +44,7 @@ def page(vid, d):
     paras = "".join("<p>%s</p>" % html.escape(p) for p in desc.split("\n") if p.strip())
     title = html.escape(d.get("title") or vid)
     return ("<html><head><title>%s</title></head><body><h1>%s</h1><p>%s</p>"
-            "<p><a href=\"https://www.youtube.com/watch?v=%s&amp;play=1\">Play in Movies</a></p>%s</body></html>"
+            "<p><a href=\"https://www.youtube.com/watch?v=%s&amp;play=1\">Play</a></p>%s</body></html>"
             % (title, title, html.escape(who), vid, paras))
 
 
