@@ -23,6 +23,7 @@ void *kmalloc(unsigned int n) { return malloc(n ? n : 1); }
 int yt_page(const char *vid, char *out, unsigned max, int *status) { (void)vid; (void)out; (void)max; *status = 0; return -1; }
 int yt_avi(const char *vid, unsigned cap, char *out, int *status) { (void)vid; (void)cap; (void)out; *status = 0; return -1; }
 int home_active(void) { return 0; }
+int limits_web_ok(void) { return 1; }   /* 12.0: limits.c, nobody limited here */
 int home_save(const char *name, const void *data, unsigned len) { (void)name; (void)data; (void)len; return 1; }
 int sd_write(const char *name, const void *data, unsigned len) { (void)name; (void)data; (void)len; return 1; }
 int app_dock(const char *name) { (void)name; return 0; }
