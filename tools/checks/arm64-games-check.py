@@ -62,9 +62,12 @@ try:
         n = len(uart()); key("ret")
         wait("M3c app %s starts" % app, after=n); wait("M3c window %s first frame" % app, after=n); time.sleep(.5)
     def close(app):
+        n = len(uart())   # once: a slow CI runner can print the exit after the next Esc went out, so look back to the first
         for _ in range(6):   # Hamurabi takes an Esc per screen on its way back to the title
-            n = len(uart()); key("esc"); time.sleep(.3)
+            key("esc"); time.sleep(.3)
             if "M3c app %s exit 0" % app in uart()[n:]: return
+        time.sleep(2)
+        if "M3c app %s exit 0" % app in uart()[n:]: return
         raise AssertionError(app + " did not close on Esc\n" + uart()[-600:])
     command("qmp_capabilities")
 

@@ -450,7 +450,8 @@ static void br_load(void) {   /* Enter in the address bar */
     }
     if (!br_addr_n) return;
     char cmd[260]; unsigned n = 0;
-    int scheme = br_has(br_addr, "://") || (br_addr_n >= 5 && br_addr[0] == 'm' && br_addr[1] == 'a' && br_addr[2] == 'i' && br_addr[3] == 'l' && br_addr[4] == ':'), space = br_has(br_addr, " "), dot = br_has(br_addr, ".");   /* 6.29.0: mail: is an address */
+    int scheme = br_has(br_addr, "://") || (br_addr_n >= 5 && br_addr[0] == 'm' && br_addr[1] == 'a' && br_addr[2] == 'i' && br_addr[3] == 'l' && br_addr[4] == ':')
+               || (br_addr_n >= 8 && br_addr[0] == 's' && br_addr[1] == 'p' && br_addr[2] == 'o' && br_addr[3] == 't' && br_addr[4] == 'i' && br_addr[5] == 'f' && br_addr[6] == 'y' && br_addr[7] == ':'), space = br_has(br_addr, " "), dot = br_has(br_addr, ".");   /* 6.29.0: mail: is an address */
     for (const char *p = "browse "; *p; p++) cmd[n++] = *p;
     if (!scheme && dot && !space) for (const char *p = "https://"; *p; p++) cmd[n++] = *p;
     if (scheme || (dot && !space)) for (unsigned i = 0; i < br_addr_n && n < sizeof cmd - 1; i++) cmd[n++] = br_addr[i];

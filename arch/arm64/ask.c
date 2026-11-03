@@ -1452,7 +1452,7 @@ static void hear_post(const short *pcm, unsigned got, char *raw) {   /* the samp
    (tools/claude-relay/yt.py, the relay's port plus two, the same token and on the Pi the same TLS name). yt_post sends one
    POST there: the body comes back in out, *status is the HTTP status, the result its length or -1 with no answer.
    /api/yt/page is a plain page about the video (6.9.0); /api/yt/avi the video itself as a Movies clip (6.10.0). */
-static int yt_post(const char *path, const char *body, unsigned blen, char *out, unsigned max, int *status, unsigned ticks) {
+static int yt_post(const char *path, const char *body, unsigned blen, char *out, unsigned max, int *status, unsigned ticks, unsigned off) {   /* off: the relay's port plus off (yt.py 2, spotify.py 3) */
     static char token[64], req[320];
     for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
     token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
@@ -1470,12 +1470,12 @@ static int yt_post(const char *path, const char *body, unsigned blen, char *out,
     if (!relay_ip && relay_open() < 0) n = -1;
     else {
         if (relay_ip) tcp_close();
-        n = tls_connect_private(relay_ip, (unsigned short)(relay_port + 2), RELAY_NAME) < 0 || tls_handshake() < 0 ? -1
+        n = tls_connect_private(relay_ip, (unsigned short)(relay_port + off), RELAY_NAME) < 0 || tls_handshake() < 0 ? -1
             : tls_exchange_timeout(req, k, out, max - 1, ticks);
     }
 #else
     unsigned ip;
-    n = http_resolve_host(CLAUDE_HOST, &ip) ? tcp_get_timeout(ip, (unsigned short)(CLAUDE_PORT + 2), req, k, out, max - 1, ticks) : -1;
+    n = http_resolve_host(CLAUDE_HOST, &ip) ? tcp_get_timeout(ip, (unsigned short)(CLAUDE_PORT + off), req, k, out, max - 1, ticks) : -1;
 #endif
     for (unsigned i = 0; i < k; i++) ((volatile char *)req)[i] = 0;
     if (n > 0) {
@@ -1486,14 +1486,17 @@ static int yt_post(const char *path, const char *body, unsigned blen, char *out,
     }
     return n;
 }
-int yt_page(const char *vid, char *out, unsigned max, int *status) { return yt_post("/api/yt/page", vid, 11, out, max, status, ASK_TICKS); }
+int yt_page(const char *vid, char *out, unsigned max, int *status) { return yt_post("/api/yt/page", vid, 11, out, max, status, ASK_TICKS, 2); }
+/* 13.3.1: Spotify in Blackcomb. A spotify: address is one command for tools/claude-relay/spotify.py (port plus three):
+   now, play [URI], pause, next, prev or search WORDS; the reply is the remote as a page. */
+int spotify_page(const char *cmd, unsigned n, char *out, unsigned max, int *status) { return yt_post("/api/spotify/page", cmd, n, out, max, status, ASK_TICKS, 3); }
 int yt_avi(const char *vid, unsigned cap, char *out, int *status) {   /* the clip, made to fit cap bytes; up to two minutes for yt-dlp and ffmpeg */
     char body[24]; unsigned k = 0, dn = 0, max = cap; char d[10];
     for (int i = 0; i < 11; i++) body[k++] = vid[i];
     body[k++] = ' ';
     do { d[dn++] = (char)('0' + cap % 10); cap /= 10; } while (cap);
     while (dn) body[k++] = d[--dn];
-    return yt_post("/api/yt/avi", body, k, out, max + 1, status, 12000);   /* 120 s at 100 ticks a second */
+    return yt_post("/api/yt/avi", body, k, out, max + 1, status, 12000, 2);   /* 120 s at 100 ticks a second */
 }
 /* Voice mode (docs/ROADMAP.md, Joshua 2026-10-07): double-tap Space and hold the second tap; release to send. The two taps
    are swallowed once the hold is confirmed (a quick double tap stays two spaces). While held: "voice: listening" on the

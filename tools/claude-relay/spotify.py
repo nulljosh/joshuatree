@@ -8,17 +8,17 @@ the Spotify app on the Mac (or any device on the account), because Spotify's own
     400 no such command   401 no or wrong token   404 other path   405 not POST   502 Spotify refused (the text says why)
 
 One-time login (opens the browser once, keeps a refresh token in ~/.claude-relay-spotify.json, mode 600):
-    python3 tools/claude-relay/spotify.py --login CLIENT_ID      (the app's redirect URI must be http://127.0.0.1:8768/callback)
+    python3 tools/claude-relay/spotify.py --login CLIENT_ID      (the app's redirect URI must be http://127.0.0.1:8770/callback)
 Then, as with yt.py:
-    python3 tools/claude-relay/spotify.py --token-file ~/.claude-relay-token      (port 8769, loopback: QEMU)
+    python3 tools/claude-relay/spotify.py --token-file ~/.claude-relay-token      (port 8768, loopback: QEMU)
     python3 tools/claude-relay/spotify.py --lan --token-file ... --tls-cert ... --tls-key ...            (the Pi)
 --fixture FILE answers every command from a saved /v1/me/player reply (and a search reply under "search"), for the checks.
 """
 import argparse, hmac, html, http.server, json, os, re, shutil, ssl, sys, time, urllib.parse, urllib.request, urllib.error
-import base64, hashlib, secrets, webbrowser
+import base64, hashlib, secrets, threading, webbrowser
 
-DEFAULT_PORT = 8769   # the relay's port plus three (stt.py +1, yt.py +2); the login callback uses 8768
-CALLBACK = "http://127.0.0.1:8768/callback"
+DEFAULT_PORT = 8768   # the relay's port plus three (stt.py +1, yt.py +2), the port the Pi dials; the login callback is 8770
+CALLBACK = "http://127.0.0.1:8770/callback"
 STORE = os.path.expanduser("~/.claude-relay-spotify.json")
 SCOPE = "user-read-playback-state user-modify-playback-state"
 URI = re.compile(r"spotify:(track|album|playlist|artist):[A-Za-z0-9]{22}")
@@ -41,29 +41,37 @@ def login(client_id):
         def do_GET(self):
             got.update(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query))
             self.send_response(200); self.send_header("Content-Type", "text/plain"); self.end_headers(); self.wfile.write(b"Spotify linked. Close this tab.")
-    srv = http.server.HTTPServer(("127.0.0.1", 8768), H)
+    srv = http.server.HTTPServer(("127.0.0.1", 8770), H)
     url = "https://accounts.spotify.com/authorize?" + urllib.parse.urlencode(dict(
         client_id=client_id, response_type="code", redirect_uri=CALLBACK, scope=SCOPE, code_challenge_method="S256", code_challenge=challenge))
     print("open this if the browser does not:", url); webbrowser.open(url)
     while "code" not in got and "error" not in got: srv.handle_request()
     if "code" not in got: sys.exit("spotify: login refused: %s" % got["error"][0])
     t = token_call(grant_type="authorization_code", code=got["code"][0], redirect_uri=CALLBACK, client_id=client_id, code_verifier=verifier)
-    fd = os.open(STORE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f: json.dump({"client_id": client_id, "refresh_token": t["refresh_token"]}, f)
+    save({"client_id": client_id, "refresh_token": t["refresh_token"]})
     print("spotify: linked, refresh token in", STORE)
 
 
+def save(s):
+    """Writes the store whole or not at all, mode 600: a crash mid-write never leaves half a refresh token."""
+    tmp = STORE + ".tmp"
+    with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f: json.dump(s, f)
+    os.replace(tmp, STORE)
+
+
 class Api:
-    """The Web API with one cached access token; refreshes a minute early."""
-    def __init__(self): self.access, self.until = "", 0
+    """The Web API with one cached access token; refreshes a minute early, one thread at a time (a rotated refresh token
+    spent twice is a dead login)."""
+    def __init__(self): self.access, self.until, self.lock = "", 0, threading.Lock()
     def bearer(self):
-        if time.time() > self.until - 60:
-            s = json.load(open(STORE))
-            t = token_call(grant_type="refresh_token", refresh_token=s["refresh_token"], client_id=s["client_id"])
-            self.access, self.until = t["access_token"], time.time() + t["expires_in"]
-            if t.get("refresh_token"):   # Spotify may rotate it
-                s["refresh_token"] = t["refresh_token"]; json.dump(s, open(STORE, "w"))
-        return self.access
+        with self.lock:
+            if time.time() > self.until - 60:
+                with open(STORE) as f: s = json.load(f)
+                t = token_call(grant_type="refresh_token", refresh_token=s["refresh_token"], client_id=s["client_id"])
+                self.access, self.until = t["access_token"], time.time() + t["expires_in"]
+                if t.get("refresh_token"):   # Spotify may rotate it
+                    s["refresh_token"] = t["refresh_token"]; save(s)
+            return self.access
     def call(self, method, path, body=None):
         req = urllib.request.Request("https://api.spotify.com/v1" + path, json.dumps(body).encode() if body else None, method=method,
                                      headers={"Authorization": "Bearer " + self.bearer(), "Content-Type": "application/json"})
@@ -103,18 +111,19 @@ def page(now, found):
     """The remote as a page Blackcomb reads: what is playing, the four controls, and any search hits."""
     item = (now or {}).get("item") or {}
     title = html.escape(item.get("name") or "Nothing playing")
-    who = ", ".join(a["name"] for a in item.get("artists", [])) + (" - " + item["album"]["name"] if item.get("album") else "")
+    who = ", ".join(a.get("name", "") for a in item.get("artists") or []) + (" - " + (item["album"].get("name") or "") if item.get("album") else "")
     state = "Playing" if (now or {}).get("is_playing") else "Paused"
     dev = ((now or {}).get("device") or {}).get("name")
     bar = " | ".join('<a href="spotify:%s">%s</a>' % (c, c.capitalize()) for c in ("prev", "pause" if state == "Playing" else "play", "next"))
-    rows = "".join('<li><a href="spotify:play %s">%s</a> - %s</li>' % (t["uri"], html.escape(t["name"]), html.escape(", ".join(a["name"] for a in t["artists"])))
-                   for t in ((found or {}).get("tracks") or {}).get("items", []))
+    rows = "".join('<li><a href="spotify:play %s">%s</a> - %s</li>' % (html.escape(t["uri"]), html.escape(t.get("name") or ""),
+                   html.escape(", ".join(a.get("name", "") for a in t.get("artists") or [])))
+                   for t in ((found or {}).get("tracks") or {}).get("items") or [] if URI.fullmatch(t.get("uri") or ""))
     return ("<html><head><title>Spotify</title></head><body><h1>%s</h1><p>%s</p><p>%s%s</p><p>%s</p>%s</body></html>"
             % (title, html.escape(who), state, " on " + html.escape(dev) if dev else "", bar, "<h2>Results</h2><ul>%s</ul>" % rows if rows else ""))
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    token = ""; fixture = None; api = None
+    token = ""; fixture = None; api = None; timeout = 20   # a stalled client (or TLS handshake) frees its thread
     def log_message(self, fmt, *a): sys.stderr.write("spotify %s %s\n" % (self.address_string(), fmt % a))
     def reply(self, status, text, kind="text/plain"):
         body = text.encode("utf-8", "replace")
@@ -128,9 +137,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         cmd = parse(self.rfile.read(n).decode("utf-8", "replace")) if 0 < n <= 200 else None
         if not cmd: return self.reply(400, "now, play [URI], pause, next, prev, or search WORDS")
-        try: now, found = run(*cmd, self.api, self.fixture)
+        try: text = page(*run(*cmd, self.api, self.fixture))
         except Exception as e: return self.reply(502, "%s" % e)
-        self.reply(200, page(now, found), "text/html")
+        self.reply(200, text, "text/html")
 
 
 def main():
@@ -157,7 +166,7 @@ def main():
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(os.path.expanduser(a.tls_cert), os.path.expanduser(a.tls_key))
-        srv.socket = context.wrap_socket(srv.socket, server_side=True)
+        srv.socket = context.wrap_socket(srv.socket, server_side=True, do_handshake_on_connect=False)   # handshake in the handler's thread, not accept()
     print("spotify: listening on %s:%d%s" % (a.bind, a.port, ", fixture " + a.fixture if a.fixture else ""), flush=True)
     try: srv.serve_forever()
     except KeyboardInterrupt: pass
