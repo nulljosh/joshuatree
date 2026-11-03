@@ -115,7 +115,7 @@ static int parse_url(const char *u, struct url *o) {
 static void resolve(const char *href, unsigned n, char *out) {
     out[0] = 0;
     if (!n || href[0] == '#' || starts(href, "mailto:") || starts(href, "javascript:")) return;
-    if (starts(href, "http://") || starts(href, "https://") || starts(href, "mail:")) { scopy(out, href, n, URL_MAX); return; }   /* 6.29.0: mail: pages too */
+    if (starts(href, "http://") || starts(href, "https://") || starts(href, "mail:") || starts(href, "spotify:")) { scopy(out, href, n, URL_MAX); return; }   /* 6.29.0: mail: pages too; 13.3.1 spotify: */
     struct url b; if (!parse_url(cur, &b)) return;
     unsigned o = 0;
     const char *pre = b.tls ? "https://" : "http://";
@@ -141,6 +141,7 @@ static void resolve(const char *href, unsigned n, char *out) {
    URL, or -1 after printing why. */
 /* 6.9.0: a YouTube address names a video (watch?v=, youtu.be/, shorts/): its 11 character id into vid, 1; else 0. */
 int yt_page(const char *vid, char *out, unsigned max, int *status);   /* ask.c */
+int spotify_page(const char *cmd, unsigned n, char *out, unsigned max, int *status);   /* ask.c, 13.3.1 */
 static int yt_id(const char *u, char vid[12]) {
     if (starts(u, "https://")) u += 8; else if (starts(u, "http://")) u += 7; else return 0;
     if (starts(u, "www.")) u += 4; else if (starts(u, "m.")) u += 2;
@@ -264,6 +265,19 @@ static int fetch_once(const char *url, char *raw, unsigned max) {
         int got = mail_page(url, raw + h, max - h - 1);
         for (unsigned i = 0; i < h; i++) raw[i] = head[i];
         raw[h + (unsigned)got] = 0;
+        return (int)h + got;
+    }
+    if (starts(url, "spotify:")) {   /* 13.3.1: the Spotify remote, from the Mac's spotify.py; a bare spotify: is "now" */
+        static const char head[] = "HTTP/1.0 200 OK\r\n\r\n";
+        unsigned h = sizeof head - 1, n = slen(url + 8); int status;
+        const char *c = n ? url + 8 : "now"; if (!n) n = 3;
+        if (n > 96) { kputs("browser: spotify command too long\n"); return -1; }   /* yt_post's request holds about 100 bytes of body */
+        kputs("browser: spotify "); kputs(c); kputs("\n");
+        int got = spotify_page(c, n, raw + h, max - h, &status);
+        if (got <= 0 || status != 200) { kputs("browser: spotify service "); kputs(got < 0 ? "not reachable\n" : "refused\n"); return -1; }
+        for (unsigned i = 0; i < h; i++) raw[i] = head[i];
+        raw[h + (unsigned)got] = 0;
+        kputs("browser: http 200\n");
         return (int)h + got;
     }
     if (yt_id(url, vid)) {   /* the page about the video, from the Mac's video service, behind a header show() can skip */
@@ -1244,7 +1258,7 @@ static unsigned hw_field(const char *l, unsigned ln, unsigned k, const char **f)
     *f = l + i; return e - i;
 }
 static void hist_add(void) {
-    if (!cur[0] || starts(cur, "mail:")) return;   /* a mail message is not a page you visited */
+    if (!cur[0] || starts(cur, "mail:") || starts(cur, "spotify:")) return;   /* a mail message is not a page you visited; a spotify: press is an action (13.3.1) */
     int got = hw_read(); unsigned o = 0, count = 1, kept = 1;
     for (unsigned i = 0; i < (unsigned)got;) {   /* this address's old line: its count, and it is dropped */
         unsigned e = i; while (e < (unsigned)got && hw_buf[e] != '\n') e++;
@@ -1593,7 +1607,7 @@ int browse_command(const char *q, unsigned n) {
         unsigned s = 7; while (s < n && q[s] == ' ') s++;
         if (n - s >= URL_MAX) { kputs("browser: url too long\n"); return 1; }
         char url[URL_MAX]; scopy(url, q + s, n - s, URL_MAX);
-        if (!starts(url, "http://") && !starts(url, "https://") && !starts(url, "mail:")) {   /* a bare host: https (6.29.0: mail: is its own) */
+        if (!starts(url, "http://") && !starts(url, "https://") && !starts(url, "mail:") && !starts(url, "spotify:")) {   /* a bare host: https (6.29.0: mail: is its own, 13.3.1 spotify:) */
             char full[URL_MAX]; unsigned o = 0;
             for (const char *p = "https://"; *p; p++) full[o++] = *p;
             for (unsigned i = 0; url[i] && o < URL_MAX - 1; i++) full[o++] = url[i];

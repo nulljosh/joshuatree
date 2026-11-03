@@ -2553,7 +2553,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (386 checks)
+### The suite (387 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2586,6 +2586,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Parental controls on the Pi: an admin limits another account's apps, hours and web with sudo limits, kept in JT/LIMITS.TXT; the limited account is refused the rest, cannot lift a limit or write the file, and admins are never limited, in headless QEMU | `tools/checks/arm64-limits-check.py` | once |
 | YouTube clips are the whole video: yt.py fits a video into the Pi's bytes by bitrate across its full length, 320 wide when generous, cut only below a watchable floor, on generated videos with no network (static) | `tools/checks/yt-fit-check.py` | once |
 | Spotify remote on the Mac: spotify.py renders now playing, Play/Pause links and search hits from a saved Web API reply (HTML escaped), and refuses a wrong token, a bad command or URI, a GET and another path, with no network or account | `tools/checks/spotify-check.py` | once |
+| Spotify in Blackcomb: a spotify: address sends one command to spotify.py (a saved Web API reply) and shows the remote as a page whose Prev link sends the next command, with the token kept off the UART, in headless QEMU | `tools/checks/arm64-spotify-check.py` | once |
 | SBC encoder: A2DP's codec in fixed point, its frames read back by ffmpeg's own SBC decoder as the 1000 and 440 Hz tones that went in, above 20 dB SNR, every frame a valid CRC-8, on a generated tone with no network (static) | `tools/checks/sbc-encode-check.py` | once |
 | Tab groups on the Pi: tab group save NAME keeps the open tabs in JT/TABGROUP.TXT, saving again rewrites the group, tab group NAME swaps them in, rm drops one, bad names and unknown groups are refused, and a second boot brings a group back from the card, in headless QEMU | `tools/checks/arm64-tabgroups-check.py` | once |
 | Photos on the Pi: the PHOTOS folder as a grid, one full size, a quarter turn, black and white and light kept in PHOTOEDT.TXT across a restart and reverted with 0, the photo itself never rewritten, in headless QEMU | `tools/checks/arm64-photos-check.py` | once |
