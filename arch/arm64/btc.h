@@ -9,4 +9,7 @@ int btc_busy(void);                                             /* a find, a con
 int btc_acl(const unsigned char *p, unsigned n);                /* bt.c: an ACL packet, 1 when it was the classic link's */
 void btc_flush(void);                                           /* bt.c's loop: ACL packets waiting for the radio's buffers */
 void btc_status(void);                                          /* bt.c's `bt`: the saved classic device */
+int btc_audio_live(void);                                      /* 13.0: headphones ready to play */
+int btc_audio_room(void);                                      /* a frame fits */
+void btc_audio(const short *pcm);                               /* audio.c: 128 stereo frames at 44.1 kHz */
 #endif

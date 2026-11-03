@@ -216,7 +216,51 @@ static void app_begin(void) {
     if (pcm_start()) { fail("app sound did not start"); aq_tail = aq_head; aq_end = 0; return; }
     app_live = 1;
 }
+/* 13.0: with Bluetooth headphones ready (btc.c), an app's sound goes to them instead of the jack, while no jack stream
+   is already running. The generic counter paces it: 44.1 kHz stereo frames, a tenth of a second ahead of the clock, made
+   from the app's ring by stepping through it at its own rate (each output frame takes the byte under it, so 8000 Hz
+   repeats each byte about five times), with the master volume, 128 frames at a time into btc_audio, which makes them SBC,
+   only while btc has room: a radio that falls behind slows the clock instead of losing sound.
+   `played` counts the app's bytes taken; the stream's line ends ", bluetooth". */
+#ifndef AUDIO_HOST_TEST
+int btc_audio_live(void); int btc_audio_room(void); void btc_audio(const short *pcm);
+static unsigned long bt_now(void) { unsigned long c; __asm__ volatile ("isb\n mrs %0, cntpct_el0" : "=r"(c)); return c; }
+static unsigned long bt_hz(void) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f)); return f ? f : 54000000; }
+#else
+static int btc_audio_live(void) { return 0; }
+static int btc_audio_room(void) { return 0; }
+static void btc_audio(const short *pcm) { (void)pcm; }
+static unsigned long bt_now(void) { return 0; }
+static unsigned long bt_hz(void) { return 1; }
+#endif
+static int bt_run; static unsigned long bt_t0, bt_out; static unsigned bt_frac;
+static void bt_pump(void) {
+    if (aq_head == aq_tail) {
+        if (bt_run && (aq_end || (bt_now() - bt_t0) * 44100 / bt_hz() >= bt_out)) {   /* all of it out, and heard */
+            bt_run = 0; aq_end = 0;
+            put_str("audio: app stream "); put_dec(app_fed); put_str(" frames at "); put_dec(aq_rate); put_str(" Hz, ring sum 0x"); put_hex(app_hash);
+            put_str(", abs "); put_dec(app_abs); put_str(", volume "); put_dec((unsigned)volume); put_str(", played "); put_dec(app_played); put_str(", bluetooth\n");
+        }
+        return;
+    }
+    if (!bt_run) { bt_run = 1; bt_t0 = bt_now(); bt_out = 0; bt_frac = 0; app_hash = 2166136261u; app_abs = app_fed = 0; }
+    unsigned long due = (bt_now() - bt_t0) * 44100 / bt_hz() + 4410;
+    while (bt_out + 128 <= due && aq_head != aq_tail && btc_audio_room()) {
+        short blk[256];
+        for (unsigned i = 0; i < 128; i++) {
+            short v = aq_head != aq_tail ? scale((short)(((int)aq[aq_tail % AQ_SIZE] - 128) * 256)) : 0;
+            blk[2 * i] = blk[2 * i + 1] = v;
+            for (bt_frac += aq_rate; bt_frac >= 44100 && aq_head != aq_tail; bt_frac -= 44100) {
+                aq_tail++; app_fed++; app_played++;
+                app_abs += 2u * (unsigned)(v < 0 ? -v : v); app_hash = fnv_short(fnv_short(app_hash, v), v);
+            }
+        }
+        btc_audio(blk); bt_out += 128;
+    }
+    if (due > bt_out + 22050) bt_t0 += (due - bt_out - 4410) * bt_hz() / 44100;   /* the radio fell half a second behind: the clock waits for it, no sound is dropped */
+}
 void audio_pump(void) {
+    if (!app_live && (bt_run || btc_audio_live())) { bt_pump(); return; }
     if (!app_live) {
         unsigned queued = aq_head - aq_tail;
         if (queued < 1024 && !(aq_end && queued)) return;   /* as on i386: start at 1 KB, or at once with the clip's last bytes */
@@ -274,10 +318,10 @@ int audio_app_queue(const unsigned char *p, unsigned len, unsigned rate, int end
 void audio_app_status(unsigned st[7]) {   /* struct jt_audio_status: version, size, playing, queued, space, rate, played */
     audio_pump();
     unsigned q = aq_head - aq_tail;
-    st[0] = 1; st[1] = 28; st[2] = app_live || q; st[3] = q; st[4] = AQ_SIZE - q; st[5] = aq_rate; st[6] = app_played;
+    st[0] = 1; st[1] = 28; st[2] = app_live || bt_run || q; st[3] = q; st[4] = AQ_SIZE - q; st[5] = aq_rate; st[6] = app_played;
 }
 void audio_app_stop(void) { aq_tail = aq_head; aq_end = 0; }   /* what is queued goes; what is in the PWM ring plays out */
-int audio_busy(void) { return app_live || aq_head != aq_tail; }
+int audio_busy(void) { return app_live || bt_run || aq_head != aq_tail; }
 
 static int drain(void) {   /* the ring into the sink, a frame at a time */
     while (ring_count) {

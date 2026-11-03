@@ -18,6 +18,7 @@
    (Authentication Complete 0x05 or 0x06) is erased. Every wait has a deadline on the generic timer; no key is ever printed.
    `bt disconnect` hangs up. 12.2 adds the HID channels on this link, 13.0 audio. */
 #include "btc.h"
+#include "sbc.h"
 #include "emmc.h"
 #include "../../drivers/fat.h"
 
@@ -40,10 +41,12 @@ static unsigned sent;                    /* the opcode of ours in flight, 0 when
 static unsigned handle;
 static unsigned char peer[6], peer_cod[3], peer_psrm; static char peer_name[32];
 static unsigned char saved_addr[6]; static int has_saved;
-static void hid_open(unsigned c); static void let_go(void); void btc_flush(void);
-static unsigned credits, hs;   /* 12.2: the radio's classic ACL buffers free; the HID channels' stage */
+static void ch_open(unsigned c); static void let_go(void); void btc_flush(void);
+static unsigned credits, hs, as, acl_max = 1021;   /* 12.2: the radio's classic ACL buffers free and their size; the HID channels' stage; 13.0 AVDTP's (1 discover .. 7 streaming) */
 #define AQ 6
 static unsigned char aq[AQ][40], aqn[AQ]; static unsigned aqh, aqt;
+#define MQ 4   /* SBC packets waiting: audio.c's tenth of a second ahead is about 3.4 of them */
+static unsigned char mq[MQ][1024]; static unsigned mqn[MQ], mqh, mqt;   /* 13.0: SBC packets, below */
 
 static unsigned long now(void) { unsigned long t; __asm__ volatile ("isb\n mrs %0, cntpct_el0" : "=r"(t)); return t; }
 static unsigned long ms(unsigned n) { unsigned long f; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(f)); return (f ? f : 54000000) / 1000 * n; }
@@ -145,6 +148,7 @@ static void fail(const char *msg, int code) {
     put(msg); if (code >= 0) { put(", status "); put_hex((unsigned)code); } say();
     if (st >= PAIRING || (st == CONNECTING && handle)) q_handle(0x0406, 0x13, 1);   /* Disconnect: we ended it */
     if (hs) { let_go(); hs = 0; }
+    as = 0;
     st = IDLE; until = 0; term = 0;
 }
 
@@ -197,7 +201,7 @@ int btc_command(const char *q, unsigned n) {   /* q is what follows "bt " */
 void btc_done(unsigned op, const unsigned char *r, unsigned n) {   /* Command Complete or Command Status for a command of ours */
     if (!sent || op != sent) return;
     sent = 0;
-    if (op == 0x1005 && n >= 6 && !r[0]) { credits = r[4] | r[5] << 8u; return; }   /* status, ACL length, SCO length, ACL packets */
+    if (op == 0x1005 && n >= 6 && !r[0]) { credits = r[4] | r[5] << 8u; acl_max = r[1] | r[2] << 8u; return; }   /* status, ACL length, SCO length, ACL packets */
     if (!n || !r[0]) return;
     if (op == 0x0401) { put("bt: the radio would not look, status "); put_hex(r[0]); say(); st = IDLE; term = 0; return; }
     if (op == 0x0405 || op == 0x0411 || op == 0x0413) fail("bt: the radio refused to connect", r[0]);
@@ -219,7 +223,7 @@ void btc_event(unsigned code, const unsigned char *p, unsigned n) {
         put("bt: link up, pairing"); say();
         q_handle(0x0411, 0, 0); st = PAIRING; until = now() + ms(PAIR_MS);   /* Authentication Requested */
     }
-    else if (st < CONNECTING || st > ENCRYPTING) { if (code == 0x05 && st == UP && n >= 4 && ((p[1] | p[2] << 8u) & 0xFFF) == handle) { put("bt: "); put(peer_name[0] ? peer_name : "the device"); put(" disconnected, reason "); put_hex(p[3]); say(); st = IDLE; if (hs) let_go(); hs = 0; aqh = aqt; } }
+    else if (st < CONNECTING || st > ENCRYPTING) { if (code == 0x05 && st == UP && n >= 4 && ((p[1] | p[2] << 8u) & 0xFFF) == handle) { put("bt: "); put(peer_name[0] ? peer_name : "the device"); put(" disconnected, reason "); put_hex(p[3]); say(); st = IDLE; if (hs) let_go(); hs = 0; as = 0; aqh = aqt; mqh = mqt; } }
     else if (code == 0x17 && n >= 6 && same6(p, peer)) {   /* Link Key Request: ours, if this is the saved device */
         unsigned char b[LINK_SIZE];
         if (link_load(b) && same6(b + 4, peer)) q_addr(0x040B, peer, b + 10, 16);
@@ -243,9 +247,10 @@ void btc_event(unsigned code, const unsigned char *p, unsigned n) {
         if (p[0] || !p[3]) { fail("bt: encryption did not come on", p[0]); return; }
         put("bt: "); put(peer_name[0] ? peer_name : kind(peer_cod)); put(" connected"); say();
         st = UP; until = 0; term = 0;
-        if ((peer_cod[1] & 31) == 5) { term = 1; hid_open(0); until = now() + ms(10000); }   /* a keyboard or mouse: its HID channels */
+        if ((peer_cod[1] & 31) == 5) { term = 1; ch_open(0); until = now() + ms(10000); }   /* a keyboard or mouse: its HID channels */
+        if ((peer_cod[1] & 31) == 4) { term = 1; as = 0; ch_open(2); until = now() + ms(10000); }   /* headphones or a speaker: AVDTP */
     }
-    else if (code == 0x05 && n >= 4 && ((p[1] | p[2] << 8u) & 0xFFF) == handle) { put("bt: the device hung up, reason "); put_hex(p[3]); say(); st = IDLE; until = 0; term = 0; if (hs) let_go(); hs = 0; aqh = aqt; }
+    else if (code == 0x05 && n >= 4 && ((p[1] | p[2] << 8u) & 0xFFF) == handle) { put("bt: the device hung up, reason "); put_hex(p[3]); say(); st = IDLE; until = 0; term = 0; if (hs) let_go(); hs = 0; as = 0; aqh = aqt; mqh = mqt; }
 }
 
 /* ---- 12.2: a keyboard or mouse, HID over L2CAP on this link. Once encrypted, a peripheral (major class 5) gets two
@@ -261,10 +266,12 @@ void hid_kbd(const unsigned char *r, unsigned len, unsigned char *p);   /* xhci.
 void kinput(unsigned type, unsigned code, int value);                   /* main.c */
 int bt_tx(const unsigned char *b, unsigned n);                          /* bt.c: one H4 packet into the UART queue */
 static unsigned sig_id, held;   /* hs: 0 none, 1 control opening, 2 interrupt opening, 3 ready */
-static unsigned lcid[2] = { 0x0040, 0x0041 }, rcid[2], cfg_in[2], cfg_out[2];
+static unsigned lcid[4] = { 0x0040, 0x0041, 0x0042, 0x0043 }, rcid[4], cfg_in[4], cfg_out[4], rmtu[4];   /* HID control, HID interrupt, AVDTP signalling, AVDTP media */
+static const unsigned psm[4] = { 0x11, 0x13, 0x19, 0x19 };
 static unsigned char kb_prev[8];
 void btc_flush(void) {
     while (aqh != aqt && credits && bt_tx(aq[aqh % AQ], aqn[aqh % AQ])) { wipe(aq[aqh % AQ], 40); aqh++; credits--; }
+    while (aqh == aqt && mqh != mqt && credits && bt_tx(mq[mqh % MQ], mqn[mqh % MQ])) { mqh++; credits--; }   /* signalling first */
 }
 static void l2_send(unsigned cid, const unsigned char *p, unsigned n) {   /* one L2CAP frame, one ACL packet (PB 10: a start) */
     if (n > 31 || aqt - aqh == AQ) return;
@@ -280,11 +287,12 @@ static void sig(unsigned code, unsigned id, const unsigned char *d, unsigned n) 
     for (unsigned i = 0; i < n && i < 12; i++) b[4 + i] = d[i];
     l2_send(1, b, 4 + n);
 }
-static void hid_open(unsigned c) {   /* Connection Request: PSM, our CID */
-    unsigned psm = c ? 0x13 : 0x11;
-    unsigned char d[4] = { (unsigned char)psm, 0, (unsigned char)lcid[c], (unsigned char)(lcid[c] >> 8) };
-    rcid[c] = cfg_in[c] = cfg_out[c] = 0; hs = c + 1; sig_id = sig_id % 255 + 1; sig(0x02, sig_id, d, 4);
+static void ch_open(unsigned c) {   /* Connection Request: PSM, our CID */
+    unsigned char d[4] = { (unsigned char)psm[c], 0, (unsigned char)lcid[c], (unsigned char)(lcid[c] >> 8) };
+    rcid[c] = cfg_in[c] = cfg_out[c] = rmtu[c] = 0; if (c < 2) hs = c + 1;
+    sig_id = sig_id % 255 + 1; sig(0x02, sig_id, d, 4);
 }
+static void av_configured(unsigned c);   /* 13.0, below: the AVDTP channels */
 static void let_go(void) {
     static const unsigned char up[8];
     hid_kbd(up, 8, kb_prev);
@@ -294,7 +302,8 @@ static void let_go(void) {
 }
 static void configured(unsigned c) {
     if (!cfg_in[c] || !cfg_out[c]) return;
-    if (c == 0) { hid_open(1); return; }
+    if (c >= 2) { av_configured(c); return; }
+    if (c == 0) { ch_open(1); return; }
     static const unsigned char boot = 0x70;   /* SET_PROTOCOL: boot */
     l2_send(rcid[0], &boot, 1);
     hs = 3; until = 0;
@@ -308,35 +317,39 @@ static void on_sig(const unsigned char *p, unsigned n) {   /* signalling: comman
         i += 4 + len;
         int c = -1;
         if (code == 0x03 && len >= 8) {   /* Connection Response: dcid, scid, result, status */
-            for (int k = 0; k < 2; k++) if ((unsigned)(d[2] | d[3] << 8u) == lcid[k]) c = k;
+            for (int k = 0; k < 4; k++) if ((unsigned)(d[2] | d[3] << 8u) == lcid[k]) c = k;
             if (c < 0) continue;
             unsigned res = d[4] | d[5] << 8u;
             if (res == 1) continue;   /* pending: the answer comes later */
-            if (res) { fail(c ? "bt: the device refused its interrupt channel" : "bt: the device refused its control channel", (int)res); continue; }
+            if (res) { fail(c >= 2 ? "bt: the headphones refused their audio channel" : c ? "bt: the device refused its interrupt channel" : "bt: the device refused its control channel", (int)res); continue; }
             rcid[c] = d[0] | d[1] << 8u;
             unsigned char q[8] = { (unsigned char)rcid[c], (unsigned char)(rcid[c] >> 8), 0, 0, 0x01, 0x02, 0xA0, 0x02 };   /* flags 0, MTU 672 */
             sig_id = sig_id % 255 + 1; sig(0x04, sig_id, q, 8);
         } else if (code == 0x04 && len >= 4) {   /* Configuration Request for our CID: yes, success */
-            for (int k = 0; k < 2; k++) if ((unsigned)(d[0] | d[1] << 8u) == lcid[k] && rcid[k]) c = k;
+            for (int k = 0; k < 4; k++) if ((unsigned)(d[0] | d[1] << 8u) == lcid[k] && rcid[k]) c = k;
             if (c < 0) { unsigned char r[2] = { 0x02, 0 }; sig(0x01, id, r, 2); continue; }   /* invalid CID */
+            for (unsigned o = 4; o + 2 <= len && o + 2 + d[o + 1] <= len; o += 2u + d[o + 1])   /* options: its MTU, what it can take */
+                if ((d[o] & 0x7F) == 1 && d[o + 1] == 2) rmtu[c] = d[o + 2] | d[o + 3] << 8u;
             unsigned char r[6] = { (unsigned char)rcid[c], (unsigned char)(rcid[c] >> 8), 0, 0, 0, 0 };
             sig(0x05, id, r, 6); cfg_in[c] = 1; configured((unsigned)c);
         } else if (code == 0x05 && len >= 6) {   /* Configuration Response: scid is ours */
-            for (int k = 0; k < 2; k++) if ((unsigned)(d[0] | d[1] << 8u) == lcid[k]) c = k;
+            for (int k = 0; k < 4; k++) if ((unsigned)(d[0] | d[1] << 8u) == lcid[k]) c = k;
             if (c < 0) continue;
-            if (d[4] | d[5]) { fail("bt: the device would not configure its HID channel", d[4] | d[5] << 8); continue; }
+            if (d[4] | d[5]) { fail("bt: the device would not configure a channel", d[4] | d[5] << 8); continue; }
             cfg_out[c] = 1; configured((unsigned)c);
         } else if (code == 0x0A && len >= 2) {   /* Information Request: not supported */
             unsigned char r[4] = { d[0], d[1], 0x01, 0x00 }; sig(0x0B, id, r, 4);
         } else if (code == 0x06 && len >= 4) {   /* Disconnection Request: dcid, scid, echoed */
             unsigned char r[4] = { d[0], d[1], d[2], d[3] }; sig(0x07, id, r, 4);
-        } else if (code == 0x01) { if (hs && hs < 3) fail("bt: the device rejected a HID request", d[0]); }
+        } else if (code == 0x01) { if (hs && hs < 3) fail("bt: the device rejected a HID request", d[0]); }   /* AVDTP waits time out on their own */
         else if (!(code & 1) && code != 0x02) { unsigned char r[2] = { 0, 0 }; sig(0x01, id, r, 2); }   /* a request we do not know */
         else if (code == 0x02) { unsigned char r[8] = { 0, 0, d[2], d[3], 0x02, 0, 0, 0 }; sig(0x03, id, r, 8); }   /* its own Connection Request: PSM not supported */
     }
 }
+static void on_avdtp(const unsigned char *p, unsigned n);
 static void on_data(unsigned cid, const unsigned char *p, unsigned n) {
     if (cid == 1) { on_sig(p, n); return; }
+    if (cid == lcid[2]) { on_avdtp(p, n); return; }
     if (hs != 3 || cid != lcid[1] || n < 2 || p[0] != 0xA1) return;   /* DATA Input on interrupt; HANDSHAKE on control is not waited for */
     if (p[1] == 1 && n >= 10) hid_kbd(p + 2, 8, kb_prev);
     else if (p[1] == 2 && n >= 5) {
@@ -347,7 +360,88 @@ static void on_data(unsigned cid, const unsigned char *p, unsigned n) {
         held = p[2] & 7u; kinput(0, 0, 0);
     }
 }
-static unsigned char l2[72]; static unsigned l2n, l2want;
+
+/* ---- 13.0: headphones and speakers, A2DP over AVDTP (PSM 0x19), as Linux's BlueZ source does it. Once encrypted, an audio
+   device (major class 4) gets the AVDTP signalling channel, then: DISCOVER, its first free audio sink endpoint; GET
+   CAPABILITIES, which must offer SBC at 44.1 kHz, stereo, 16 blocks, 8 subbands, loudness; SET CONFIGURATION with exactly
+   that and a bitpool of 35 inside its range (sbc.c's STEREO frames, 12 + 2 x bitpool bytes); OPEN; a second channel on
+   PSM 0x19, the media transport; START: `bt: NAME ready to play`. Its own commands get a general reject (a Delay Report an
+   accept). Then audio.c hands 128 stereo frames at a time (btc_audio); each is one SBC frame, and as many as fit the
+   headphones' MTU and the radio's ACL size (at most 15) go out as one RTP packet: version 2, payload type 96, a sequence
+   number, the timestamp in samples, then a byte with the frame count. Four packets wait at most; when the radio is behind,
+   the oldest unsent one is dropped, so the sound skips rather than lags. ponytail: 921600 baud carries about 90 KB/s and
+   bitpool 35 needs about 30, but the polled UART must be pumped often enough: measure on the board, raise the baud
+   (the vendor command takes 3000000) or interrupt-drive the UART if it stutters. ---- */
+static unsigned acp, av_label, bitpool, fpp, flen, mseq, mts, pkt_frames, drops;
+static struct sbc_enc enc;
+static void av_cmd(unsigned sid, const unsigned char *d, unsigned n) {
+    unsigned char b[16]; av_label = (av_label + 1) & 15;
+    b[0] = (unsigned char)(av_label << 4); b[1] = (unsigned char)sid;   /* single packet, a command */
+    for (unsigned i = 0; i < n && i < 14; i++) b[2 + i] = d[i];
+    l2_send(rcid[2], b, 2 + n); until = now() + ms(10000);
+}
+static void av_configured(unsigned c) {
+    if (c == 2) { as = 1; av_cmd(0x01, 0, 0); return; }   /* DISCOVER */
+    unsigned char d[1] = { (unsigned char)(acp << 2) };
+    as = 6; av_cmd(0x07, d, 1);                           /* the media channel is up: START */
+}
+static void on_avdtp(const unsigned char *p, unsigned n) {
+    if (n < 2 || (p[0] >> 2 & 3)) return;   /* fragmented signalling: nothing we ask for is that long */
+    unsigned type = p[0] & 3, sid = p[1] & 0x3F;
+    if (type == 0) { unsigned char r[2] = { (unsigned char)((p[0] & 0xF0) | (sid == 0x0D ? 2 : 1)), (unsigned char)sid }; l2_send(rcid[2], r, 2); return; }
+    if (type != 2) { fail("bt: the headphones said no to sound, AVDTP error", n > 2 ? p[n - 1] : -1); return; }
+    unsigned char d[12];
+    if (sid == 0x01 && as == 1) {            /* DISCOVER: SEID and in use; media type and sink */
+        acp = 0;
+        for (unsigned i = 2; i + 1 < n && !acp; i += 2) if (!(p[i] & 2) && !(p[i + 1] >> 4) && (p[i + 1] & 8)) acp = p[i] >> 2;
+        if (!acp) { fail("bt: no free audio sink on this device", -1); return; }
+        d[0] = (unsigned char)(acp << 2); as = 2; av_cmd(0x02, d, 1);
+    } else if (sid == 0x02 && as == 2) {     /* GET CAPABILITIES: category, length, data; Media Codec is 7 */
+        int ok = 0; unsigned lo = 2, hi = 53;
+        for (unsigned i = 2; i + 2 <= n && i + 2 + p[i + 1] <= n; i += 2u + p[i + 1])
+            if (p[i] == 7 && p[i + 1] >= 6 && !(p[i + 2] >> 4) && !p[i + 3]) {
+                const unsigned char *c = p + i + 4;
+                ok = (c[0] & 0x20) && (c[0] & 0x02) && (c[1] & 0x10) && (c[1] & 0x04) && (c[1] & 0x01);
+                lo = c[2]; hi = c[3];
+            }
+        bitpool = 35 < lo ? lo : 35 > hi ? hi : 35;
+        if (!ok || bitpool < 2 || bitpool > 58) { fail("bt: these headphones do not take SBC at 44.1 kHz stereo", -1); return; }
+        static const unsigned char conf[10] = { 0, 1 << 2, 0x01, 0x00, 0x07, 0x06, 0x00, 0x00, 0x22, 0x15 };   /* transport; SBC 44.1 kHz stereo, 16 blocks, 8 subbands, loudness */
+        for (int i = 0; i < 10; i++) d[i] = conf[i];
+        d[0] = (unsigned char)(acp << 2); d[10] = d[11] = (unsigned char)bitpool;
+        as = 3; av_cmd(0x03, d, 12);
+    } else if (sid == 0x03 && as == 3) { d[0] = (unsigned char)(acp << 2); as = 4; av_cmd(0x06, d, 1); }   /* OPEN */
+    else if (sid == 0x06 && as == 4) { as = 5; ch_open(3); until = now() + ms(10000); }
+    else if (sid == 0x07 && as == 6) {
+        sbc_init(&enc, 44100, bitpool); flen = 12 + 2 * bitpool;
+        unsigned mtu = rmtu[3] ? rmtu[3] : 672, room = acl_max < 1002 ? acl_max : 1002;   /* 1002: mq's 1024 less the H4, ACL and L2CAP headers */
+        if (room > mtu) room = mtu;
+        fpp = (room - 13) / flen; if (fpp > 15) fpp = 15; if (!fpp) fpp = 1;
+        mseq = mts = pkt_frames = drops = 0; mqh = mqt;
+        as = 7; until = 0;
+        put("bt: "); put(peer_name[0] ? peer_name : kind(peer_cod)); put(" ready to play, "); put_dec((int)fpp); put(" frames a packet"); say(); term = 0;
+    }
+}
+int btc_audio_live(void) { return st == UP && as == 7; }
+int btc_audio_room(void) { return pkt_frames || mqt - mqh < MQ; }   /* another SBC frame fits without dropping a packet */
+void btc_audio(const short *pcm) {   /* 128 stereo frames, 44.1 kHz: one SBC frame into the packet being built */
+    if (!btc_audio_live()) return;
+    if (!pkt_frames && mqt - mqh == MQ) { mqh++; drops++; }   /* the radio is behind: the oldest unsent packet goes */
+    unsigned char *b = mq[mqt % MQ];
+    sbc_encode(&enc, pcm, b + 22 + pkt_frames * flen);
+    if (++pkt_frames < fpp) return;
+    unsigned l2len = 13 + fpp * flen, cid = rcid[3];
+    b[0] = 2; b[1] = (unsigned char)handle; b[2] = (unsigned char)((handle >> 8 & 0x0F) | 0x20);
+    b[3] = (unsigned char)(l2len + 4); b[4] = (unsigned char)((l2len + 4) >> 8);
+    b[5] = (unsigned char)l2len; b[6] = (unsigned char)(l2len >> 8); b[7] = (unsigned char)cid; b[8] = (unsigned char)(cid >> 8);
+    b[9] = 0x80; b[10] = 96; b[11] = (unsigned char)(mseq >> 8); b[12] = (unsigned char)mseq;   /* RTP: version 2, payload type 96 */
+    for (int i = 0; i < 4; i++) { b[13 + i] = (unsigned char)(mts >> (24 - 8 * i)); b[17 + i] = i == 3; }   /* timestamp, SSRC 1 */
+    b[21] = (unsigned char)fpp;                                                                         /* SBC frames in this packet */
+    mqn[mqt % MQ] = 22 + fpp * flen; mqt++;
+    mseq = (mseq + 1) & 0xFFFF; mts += fpp * 128; pkt_frames = 0;
+    btc_flush();
+}
+static unsigned char l2[160]; static unsigned l2n, l2want;
 int btc_acl(const unsigned char *p, unsigned n) {   /* bt.c: an ACL packet; 1 when it was on our link */
     if (n < 4 || st != UP || ((p[0] | p[1] << 8u) & 0xFFF) != handle) return 0;
     unsigned pb = p[1] >> 4 & 3, len = p[2] | p[3] << 8u;
@@ -365,6 +459,7 @@ int btc_acl(const unsigned char *p, unsigned n) {   /* bt.c: an ACL packet; 1 wh
 int btc_poll(void) {   /* bt.c's slot is free: a deadline, or the next command. 1 when one was sent */
     if (until && now() > until && !sent) {
         if (st == UP && hs && hs < 3) fail("bt: the device did not open its keyboard channels", -1);
+        else if (st == UP && as < 7) fail("bt: the headphones did not get ready to play", -1);
         else if (st == FINDING) { list(); st = IDLE; term = 0; }
         else if (st == CONNECTING) { q_addr(0x0408, peer, 0, 0); fail("bt: no answer, is it on and in pairing mode?", -1); }   /* Create Connection Cancel */
         else if (st == PAIRING || st == ENCRYPTING) fail("bt: pairing took too long", -1);

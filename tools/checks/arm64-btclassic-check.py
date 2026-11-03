@@ -25,8 +25,17 @@ not from btc.c. A FAT32 card (sdcard.py) is the virtio disk. Three boots on one 
      keyboard's Information Request answered "not supported", a Configuration Request each way (ours asks MTU 672), then
      PSM 0x13 (interrupt) the same, then SET_PROTOCOL boot (0x70) on control: `bt: keyboard ready`. Two boot reports on
      interrupt (DATA Input 0xA1, report ID 1: H down, then nothing held) type `key 35 down` and `key 35 up`.
+  5. headphones (13.0): a card with JT/MUSIC/ALPHA.WAV (440 Hz, 8-bit mono 8000 Hz, tools/media/musicfix.py). `bt connect
+     1` pairs the headphones, then A2DP over AVDTP (PSM 0x19, Linux's include/net/bluetooth/l2cap.h and the A2DP spec's
+     SBC codec bytes): DISCOVER, where the first endpoint is in use and the second (SEID 5) a free audio sink; GET
+     CAPABILITIES of SEID 5; SET CONFIGURATION to SEID 5 from our SEID 1 with media transport and SBC 44.1 kHz stereo, 16
+     blocks, 8 subbands, loudness (0x22 0x15) and bitpool 35 both ends; OPEN; a second channel on PSM 0x19; START: `bt: JT
+     Headphones ready to play`. Then Music plays ALPHA.WAV: its sound comes over that second channel as RTP (version 2,
+     payload type 96, sequence numbers one apart, timestamps counting 128 samples a frame) with a frame count byte, the
+     SBC frames ffmpeg decodes to 44.1 kHz stereo whose loudest tone is 440 Hz, and the stream's line ends ", bluetooth".
 Discriminating: answer every Link Key Request with the negative reply and boot 2's Link Key Reply never comes; drop the
-interrupt channel's reports in btc.c's on_data and boot 4 never types the H.
+interrupt channel's reports in btc.c's on_data and boot 4 never types the H; make bt_pump hand over silence and boot 5
+hears no 440 Hz.
 Skips (exit 0) without clang, ld.lld, qemu-system-aarch64 or mtools, or a QEMU that builds no second PL011.
 Usage: tools/checks/arm64-btclassic-check.py   (from the repo root)
 """
@@ -67,6 +76,7 @@ class Fake(threading.Thread):
         self.mode, self.log, self.problems = mode, [], []
         self.peer = KEYB if mode == "keyboard" else HEAD
         self.sig, self.chan, self.ctrl_data = [], {}, []   # signalling commands from the kernel; PSM -> (kernel CID, our CID)
+        self.av, self.media, self.av_chans = [], [], []     # AVDTP commands (signal, params); media packets; (kernel CID, ours) on PSM 0x19
         self.srv = socket.socket(socket.AF_UNIX); self.srv.bind(path); self.srv.listen(1); self.srv.settimeout(60)
     def run(self):
         try: self.c, _ = self.srv.accept()
@@ -102,6 +112,8 @@ class Fake(threading.Thread):
         n, cid = struct.unpack("<HH", data[:4]); p = data[4:4 + n]
         self.event(0x13, b"\x01" + u16(HANDLE) + u16(1))   # Number of Completed Packets: that buffer is free again
         if cid == 1: self.on_sig(p); return
+        if cid == 0x0072: self.on_avdtp(p); return
+        if cid == 0x0073: self.media.append(p); return
         if cid == 0x0070:
             self.ctrl_data.append(p)
             if p == b"\x70":   # SET_PROTOCOL boot: HANDSHAKE success, then H down and up on interrupt
@@ -113,16 +125,27 @@ class Fake(threading.Thread):
         code, ident, ln = p[0], p[1], p[2] | p[3] << 8; d = p[4:4 + ln]
         self.sig.append((code, d))
         if code == 0x02:   # Connection Request: PSM, the kernel's CID
-            psm, scid = struct.unpack("<HH", d[:4]); ours = 0x0070 if psm == 0x11 else 0x0071
-            self.chan[psm] = (scid, ours)
+            psm, scid = struct.unpack("<HH", d[:4]); ours = {0x11: 0x0070, 0x13: 0x0071}.get(psm, 0x0072 + len(self.av_chans))
+            if psm == 0x19: self.av_chans.append((scid, ours))
+            else: self.chan[psm] = (scid, ours)
             if psm == 0x11: self.l2(1, b"\x0a\x40\x02\x00\x02\x00")   # its own Information Request first (extended features)
             self.l2(1, bytes([0x03, ident, 8, 0]) + struct.pack("<HHHH", ours, scid, 0, 0))
-            self.l2(1, bytes([0x04, 0x41 + len(self.chan), 8, 0]) + struct.pack("<HH", scid, 0) + b"\x01\x02\xa0\x02")
+            mtu = b"\x7f\x03" if ours == 0x0073 else b"\xa0\x02"   # the media channel takes 895
+            self.l2(1, bytes([0x04, 0x41 + len(self.chan) + len(self.av_chans), 8, 0]) + struct.pack("<HH", scid, 0) + b"\x01\x02" + mtu)
         elif code == 0x04:   # the kernel's Configuration Request: must name our CID
             dcid = struct.unpack("<H", d[:2])[0]
-            k = [scid for scid, ours in self.chan.values() if ours == dcid]
+            k = [scid for scid, ours in list(self.chan.values()) + self.av_chans if ours == dcid]
             if not k: self.problems.append("Configuration Request for CID %04x" % dcid); return
             self.l2(1, bytes([0x05, ident, 6, 0]) + struct.pack("<HHH", k[0], 0, 0))
+    def on_avdtp(self, p):
+        label, sid, d = p[0] >> 4, p[1] & 0x3F, p[2:]
+        if p[0] & 0x0F: self.problems.append("AVDTP not a single command: %s" % p.hex()); return
+        self.av.append((sid, d))
+        acc = lambda body=b"": self.l2(self.av_chans[0][0], bytes([label << 4 | 2, sid]) + body)
+        if sid == 0x01: acc(bytes([2 << 2 | 2, 0x08, 5 << 2, 0x08]))   # SEID 2 in use, SEID 5 free; both audio sinks
+        elif sid == 0x02: acc(b"\x01\x00" + b"\x07\x06\x00\x00\xff\xff\x02\x35")   # transport; SBC, everything, bitpool 2-53
+        elif sid in (0x03, 0x06, 0x07): acc()
+        else: self.problems.append("AVDTP signal %d unexpected" % sid)
     def answer(self, op, p):
         self.log.append((op, p))
         if op == 0x1001: self.complete(op, bytes([0, 9, 0, 0, 9, 0x0F, 0, 0x19, 0x61])); return
@@ -291,5 +314,51 @@ try:
     check("the fake keyboard saw nothing malformed", not b.fake.problems, b.fake.problems)
 finally: b.close()
 
+# ---- 5: headphones play Music's song ----
+sys.path.insert(0, os.path.join(root, "tools", "media"))
+from musicfix import wav
+song = os.path.join(tmp, "ALPHA.WAV"); open(song, "wb").write(wav(1, 8, 8000, 6, 440))
+card2 = os.path.join(tmp, "card2.img"); build_card(card2, False)
+for a in (("mmd", "::JT"), ("mmd", "::JT/MUSIC"), ("mcopy", song, "::JT/MUSIC/ALPHA.WAV")): mt(card2, *a)
+b = Boot("headphones", "pair", card2)
+try:
+    b.wait_for("bt: ready", 30); b.key("f2"); b.wait_for("terminal open", 10)
+    b.run("bt find", "bt: bt connect 1 pairs number 1", 20)
+    ok, out = b.run("bt connect 1", "bt: JT Headphones ready to play", 25)
+    check("bt connect 1 pairs the headphones and gets them ready to play", ok, (out[-500:], b.fake.av))
+    sigs = [sid for sid, _ in b.fake.av]
+    check("AVDTP DISCOVER, GET CAPABILITIES, SET CONFIGURATION, OPEN, START, in that order", sigs == [1, 2, 3, 6, 7], sigs)
+    prm = dict(b.fake.av)
+    check("it skips the endpoint in use and configures SEID 5 from SEID 1: transport, SBC 44.1 kHz stereo 16/8 loudness, bitpool 35",
+          prm.get(2) == b"\x14" and prm.get(3) == bytes([5 << 2, 1 << 2, 1, 0, 7, 6, 0, 0, 0x22, 0x15, 35, 35]) and prm.get(6) == b"\x14" and prm.get(7) == b"\x14", prm)
+    check("two L2CAP channels on PSM 0x19, signalling then media", [k for k, _ in b.fake.av_chans] == [0x42, 0x43], b.fake.av_chans)
+    n = len(b.uart()); b.key("esc"); time.sleep(0.3); b.key("f1"); b.wait_for("spotlight open", 10, n)
+    for k in "music": b.key(k)
+    time.sleep(0.3); b.key("ret")
+    check("Music opens and lists the song", b.wait_for("music: library n=1", 15, n), b.uart()[n:][-400:])
+    time.sleep(0.5); b.key("spc")
+    check("Space plays ALPHA.WAV", b.wait_for("music: playing ALPHA.WAV", 8, n), b.uart()[n:][-300:])
+    time.sleep(5)
+    pk = list(b.fake.media)
+    check("RTP packets arrive on the media channel", len(pk) >= 20, len(pk))
+    hdr_ok = all(x[0] == 0x80 and x[1] & 0x7F == 96 for x in pk)
+    seqs = [struct.unpack(">H", x[2:4])[0] for x in pk]; ts = [struct.unpack(">I", x[4:8])[0] for x in pk]; cnt = [x[12] & 0x0F for x in pk]
+    check("RTP version 2, payload type 96, sequence numbers one apart, timestamps 128 samples a frame",
+          hdr_ok and all(b_ - a_ == 1 for a_, b_ in zip(seqs, seqs[1:])) and all(t2 - t1 == c * 128 for t1, t2, c in zip(ts, ts[1:], cnt)), (seqs[:5], ts[:5], cnt[:5]))
+    raw = os.path.join(tmp, "bt.sbc"); open(raw, "wb").write(b"".join(x[13:] for x in pk))
+    pcm_out = os.path.join(tmp, "bt.raw")
+    r = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "sbc", "-i", raw, "-f", "s16le", "-ac", "2", "-ar", "44100", pcm_out], capture_output=True, text=True) if shutil.which("ffmpeg") else None
+    if r is None: print("  SKIP: no ffmpeg to decode the SBC")
+    else:
+        smp = struct.unpack("<%dh" % (os.path.getsize(pcm_out) // 2), open(pcm_out, "rb").read()) if not r.returncode else ()
+        left = smp[0::2][4410:4410 + 22050]
+        import math
+        def power(f): return abs(sum(v * complex(math.cos(2 * math.pi * f * i / 44100), -math.sin(2 * math.pi * f * i / 44100)) for i, v in enumerate(left)))
+        best = max(range(200, 1201, 20), key=power) if left else 0
+        check("ffmpeg decodes the SBC frames and the loudest tone is 440 Hz", not r.returncode and abs(best - 440) <= 20, (r.stderr[-300:], best, len(left)))
+    check("the fake headphones saw nothing malformed", not b.fake.problems, b.fake.problems)
+    check("the stream's line says bluetooth", b.wait_for(", bluetooth\n", 10), b.uart()[-400:])
+finally: b.close()
+
 if fails: print("FAIL: " + "; ".join(fails)); sys.exit(1)
-print("PASS: bt find lists classic headphones and keyboards by name and kind, bt connect pairs with Secure Simple Pairing and keeps the link key in JT/BTLINK.BIN, a later bt connect uses it, a key the device forgot is erased, and a classic keyboard opens HID control and interrupt over L2CAP in boot protocol and types")
+print("PASS: bt find lists classic headphones and keyboards by name and kind, bt connect pairs with Secure Simple Pairing and keeps the link key in JT/BTLINK.BIN, a later bt connect uses it, a key the device forgot is erased, a classic keyboard opens HID control and interrupt over L2CAP in boot protocol and types, and headphones set up A2DP over AVDTP and play Music's song as SBC in RTP")

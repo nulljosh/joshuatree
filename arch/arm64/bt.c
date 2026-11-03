@@ -192,7 +192,7 @@ static void ux_baud(unsigned baud) {   /* off, last byte out, the new divisor, L
     U(LCRH) = 0x70;                      /* 8 bits, no parity, FIFOs on */
     U(CR) = CR_ON;
 }
-static unsigned char txb[640]; static unsigned txn, txi;
+static unsigned char txb[4096];   /* 13.0: room for SBC packets behind the rest */ static unsigned txn, txi;
 static void pump(void) { while (txi < txn && !(U(FR) & TXFF)) U(DR) = txb[txi++]; }
 static unsigned char *tx_room(unsigned n) {   /* room for a packet of n bytes at the end of the queue, or 0 */
     if (txi == txn) txi = txn = 0;
