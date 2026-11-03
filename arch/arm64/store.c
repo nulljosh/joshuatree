@@ -41,14 +41,27 @@ int store_put(const char *low, unsigned n, const char *img, unsigned il) {
     fat_cwd_set(0);
     return ok;
 }
+/* A signed app into JT/APPS: NAME.APP and NAME.SIG. 1 written. Callers have checked the signature. */
+static int store_write(const char *low, unsigned n, const char *img, unsigned il, const char *sig, unsigned sl) {
+    char f[13];
+    for (unsigned i = 0; i < n; i++) f[i] = (char)(low[i] >= 'a' && low[i] <= 'z' ? low[i] - 32 : low[i]);
+    int ok = sd_ready() && sd_enter_jt(1);
+    if (ok) { fat_mkdir("APPS"); ok = fat_chdir("APPS"); }
+    f[n] = '.'; f[n + 1] = 'A'; f[n + 2] = 'P'; f[n + 3] = 'P'; f[n + 4] = 0;
+    if (ok) ok = fat_replace_file(f, img, il);
+    f[n + 1] = 'S'; f[n + 2] = 'I'; f[n + 3] = 'G';
+    if (ok) ok = fat_replace_file(f, sig, sl);
+    fat_cwd_set(0);
+    return ok;
+}
 void store_install(const char *name, unsigned n) {
-    char low[9], f[13];
+    char low[9];
     cmd_out("install: ");
     if (!n || n > 8) { cmd_out("use install NAME, a name of 1 to 8 letters, digits, - or _\n"); return; }
     for (unsigned i = 0; i < n; i++) {
         char c = (char)(name[i] | 32);
         if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) { cmd_out("use install NAME, a name of 1 to 8 letters, digits, - or _\n"); return; }
-        low[i] = c; f[i] = (char)(c >= 'a' && c <= 'z' ? c - 32 : c);
+        low[i] = c;
     }
     low[n] = 0;
     if (card_name_taken(low, n)) { cmd_out(low); cmd_out(" is a built-in app's name\n"); return; }
@@ -67,14 +80,47 @@ void store_install(const char *name, unsigned n) {
         cmd_out(low); cmd_out(st == 200 ? "'s signature does not match it, so it was not installed\n" : " has no signature in the store, so it was not installed\n");
         heap_release(mark); return;
     }
-    int ok = sd_ready() && sd_enter_jt(1);
-    if (ok) { fat_mkdir("APPS"); ok = fat_chdir("APPS"); }
-    f[n] = '.'; f[n + 1] = 'A'; f[n + 2] = 'P'; f[n + 3] = 'P'; f[n + 4] = 0;
-    if (ok) ok = fat_replace_file(f, img, il);
-    f[n + 1] = 'S'; f[n + 2] = 'I'; f[n + 3] = 'G';
-    if (ok) ok = fat_replace_file(f, sig, sl);
-    fat_cwd_set(0);
+    int ok = store_write(low, n, img, il, sig, sl);
     heap_release(mark);
     if (!ok) { cmd_out("the card did not take "); cmd_out(low); cmd_out("\n"); return; }
     cmd_out(low); cmd_out(", "); cmd_dec(il); cmd_out(" bytes, signed, is in JT/APPS: userrun "); cmd_out(low); cmd_out(" or Spotlight opens it\n");
+}
+
+/* 13.4.0: Blackcomb followed a link to NAME.app. Its signature is fetched from NAME.sig beside it and the app goes into JT/APPS
+   only when appsig_ok passes, the same gate as install (an admin's, or anyone's with no accounts). An unsigned or tampered app
+   is not saved anywhere. 0 when the URL is not an app (the caller saves it as a download), 1 when this handled it. */
+unsigned accounts_count(void); int sudo_is_admin(const char *name); extern char current_user[];
+int store_from_page(const char *url, const char *img, unsigned il) {
+    unsigned end = 0, seg = 0;
+    while (url[end] && url[end] != '?' && url[end] != '#') { if (url[end] == '/') seg = end + 1; end++; }
+    if (end < seg + 5 || end - seg - 4 > 8) return 0;
+    const char *e = url + end - 4;
+    if (e[0] != '.' || (e[1] | 32) != 'a' || (e[2] | 32) != 'p' || (e[3] | 32) != 'p') return 0;
+    unsigned n = end - seg - 4; char low[9];
+    for (unsigned i = 0; i < n; i++) {
+        char c = (char)(url[seg + i] | 32);
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) return 0;
+        low[i] = c;
+    }
+    low[n] = 0;
+    cmd_out("browser: ");
+    if (card_name_taken(low, n)) { cmd_out(low); cmd_out(" is a built-in app's name, not installed\n"); return 1; }
+    if (accounts_count() && !sudo_is_admin(current_user)) { cmd_out("installing an app is an admin's, not installed\n"); return 1; }
+    if (il > UIMG_MAX) { cmd_out(low); cmd_out(" is too big for an app\n"); return 1; }
+    char su[256]; unsigned o = 0;
+    if (end - 3 + 4 > sizeof su) { cmd_out("the address is too long, not installed\n"); return 1; }
+    for (; o < end - 3; o++) su[o] = url[o];
+    su[o++] = 's'; su[o++] = 'i'; su[o++] = 'g'; su[o] = 0;
+    unsigned long mark = heap_mark();
+    char *sig; unsigned sl;
+    int st = browser_get(su, &sig, &sl);
+    if (st != 200 || !sig || !appsig_ok(low, n, img, il, (const unsigned char *)sig, sl)) {   /* nothing is written unless it is signed */
+        cmd_out(low); cmd_out(st == 200 ? "'s signature does not match it, not installed\n" : " has no signature beside it, not installed\n");
+        heap_release(mark); return 1;
+    }
+    int ok = store_write(low, n, img, il, sig, sl);
+    heap_release(mark);
+    if (!ok) { cmd_out("the card did not take "); cmd_out(low); cmd_out("\n"); return 1; }
+    cmd_out("installed "); cmd_out(low); cmd_out(", "); cmd_dec(il); cmd_out(" bytes, signed, in JT/APPS: userrun "); cmd_out(low); cmd_out(" or Spotlight opens it\n");
+    return 1;
 }
