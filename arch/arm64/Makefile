@@ -39,8 +39,8 @@ NETPORT ?= 0
 # The IP stack is the i386 kernel's own drivers/net.c and drivers/http.c, built against drivers/nic.h (-DNET_NIC)
 # instead of the PC network cards. -mstrict-align: a real board's firmware may leave alignment checks on.
 NETCC = $(CC) -DNET_NIC -mstrict-align -I../../drivers -I../../kernel
-NETOBJ = rng.o net.o http.o ip.o clock.o tls.o appsig.o store.o update.o browser.o kavi.o mail.o ics.o nimble.o $(BSSLOBJ)
-NETLD = rng.o net.o http.o ip.o clock.o tls.o appsig.o store.o update.o browser.o kavi.o mail.o ics.o nimble.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
+NETOBJ = rng.o net.o http.o ip.o clock.o tls.o appsig.o store.o update.o browser.o kavi.o kmp4.o kh264.o kaac.o mail.o ics.o nimble.o $(BSSLOBJ)
+NETLD = rng.o net.o http.o ip.o clock.o tls.o appsig.o store.o update.o browser.o kavi.o kmp4.o kh264.o kaac.o mail.o ics.o nimble.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
 all: kernel8.elf
 rng.o: rng.c rng.h
 	$(CC) -c $< -o $@
@@ -77,7 +77,13 @@ nimble.o: nimble.c tls.h ../../drivers/net.h ../../drivers/http.h FORCE
 	$(NETCC) $(if $(NIMBLE_BASE),-DNIMBLE_BASE='"$(NIMBLE_BASE)"') -c $< -o $@
 kavi.o: ../../user/libjt/avi.c ../../user/libjt/avi.h
 	$(CC) -c $< -o $@   # 13.1.0: Movies' AVI reader, for YouTube in the page
-browser.o: browser.c tls.h ../../user/libjt/avi.h ../../drivers/net.h ../../drivers/http.h
+kmp4.o: ../../user/libjt/mp4.c ../../user/libjt/mp4.h
+	$(CC) -c $< -o $@   # 13.5.0: video files in Blackcomb
+kh264.o: ../../user/libjt/h264.c ../../user/libjt/h264.h ../../user/libjt/h264_cabac.c ../../user/libjt/h264_cabac.inc
+	$(CC) -c $< -o $@
+kaac.o: ../../user/libjt/aac.c ../../user/libjt/aac.h ../../user/libjt/aac_tab.inc
+	$(FPCC) -c $< -o $@   # floating point, like ttf.c
+browser.o: browser.c browser_mp4.h tls.h ../../user/libjt/avi.h ../../user/libjt/mp4.h ../../user/libjt/h264.h ../../user/libjt/aac.h ../../drivers/net.h ../../drivers/http.h
 	$(NETCC) -c $< -o $@
 mail.o: mail.c tls.h ../../drivers/http.h   # 6.18.0: IMAP over TLS
 	$(NETCC) -c $< -o $@

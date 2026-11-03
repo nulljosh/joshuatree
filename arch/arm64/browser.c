@@ -1023,7 +1023,9 @@ int audio_app_queue(const unsigned char *pcm, unsigned len, unsigned rate, int e
 /* 13.1.0: on the heap, not in .bss: 8 MiB of .bss moved the kernel's end past 64 MiB and the EL0 arena with it. Taken once,
    VID_MAX down to 1 MiB, before show()'s heap mark so a page's release never hands it back; the bump heap keeps it. */
 static unsigned char *vbuf; static unsigned vcap;
+static void mp4_pool_reserve(void);
 static void vid_reserve(void) {
+    static int pooled; if (!pooled) { pooled = 1; mp4_pool_reserve(); }   /* 13.5.0: the MP4 decoders' memory first, then vbuf takes what is left */
     for (unsigned c = VID_MAX; !vbuf && c >= (1u << 20); c >>= 1) if ((vbuf = kmalloc(c))) vcap = c;
 }
 static struct avi vid_avi;
@@ -1081,9 +1083,12 @@ static void yt_play(const char *vid) {
     if (vid_avi.arate) { audio_app_stop(); vid_seek_audio(0); vid_feed(); }
     kputs("browser: video playing "); kdec(nvfr); kputs(" frames "); kdec(vid_avi.width); kputs("x"); kdec(vid_avi.height); kputs("\n");
 }
-int browser_video_playing(void) { return vplaying && !vpaused; }
-int browser_video_on(void) { return vplaying; }
+#include "browser_mp4.h"
+static void mp4_pool_reserve(void) { mpool = kmalloc(MP4_POOL); }
+int browser_video_playing(void) { return (vplaying && !vpaused) || (m4on && !m4paused); }
+int browser_video_on(void) { return vplaying || m4on; }
 int browser_video_tick(void) {   /* 1 when a new frame is in slot 0 */
+    if (m4on) return m4_tick();
     if (!vplaying || vpaused) return 0;
     unsigned long us = vid_avi.arate ? (unsigned long)vid_samples() * 1000000UL / vid_avi.arate : (unsigned long)(ticks() - vt0) * 10000UL;
     unsigned due = vid_avi.us_per_frame ? (unsigned)(us / vid_avi.us_per_frame) : 0;
@@ -1103,6 +1108,7 @@ int browser_video_tick(void) {   /* 1 when a new frame is in slot 0 */
     return 1;
 }
 void browser_video_pause(void) {   /* Space: pause, or play on from the same sample */
+    if (m4on) { m4_pause(); return; }
     if (!vplaying) return;
     if (!vpaused) { vbase = vid_samples(); audio_app_stop(); vpaused = 1; kputs("browser: video paused\n"); return; }
     if (vid_avi.arate && audio_busy()) return;   /* the old run is still playing out; Space again in a moment */
@@ -1110,7 +1116,7 @@ void browser_video_pause(void) {   /* Space: pause, or play on from the same sam
     if (vid_avi.arate) { vid_seek_audio(vbase); vid_feed(); }
     kputs("browser: video playing on\n");
 }
-void browser_video_stop(void) { vid_stop(); }
+void browser_video_stop(void) { vid_stop(); m4_stop(); }
 unsigned int ticks(void);   /* ip.c, 100 a second */
 /* 6.86.0: the images come after the page shows, one each pass of the desktop loop (browser_image_tick), so the window
    answers between them instead of blocking until all are in. A page's images get 20 s in all (5 s while they blocked). */
@@ -1356,11 +1362,12 @@ int limits_web_ok(void);   /* limits.c (12.0): parental controls' web=0 */
 static void show(const char *url, int push) {
     if (!limits_web_ok()) { kputs("browser: the web is off for this account\n"); return; }
     char vid[12];
-    int play = yt_id(url, vid) && has(url, "play=1");
-    if (play) vid_reserve();
+    int play = yt_id(url, vid) && has(url, "play=1"), mp4 = !play && url_is_mp4(url);
+    if (play || mp4) vid_reserve();
     unsigned long mark = heap_mark();
     if (play) { yt_play(vid); heap_release(mark); return; }   /* 6.10.0: not a page, the clip; 13.1.0 in the page */
-    vid_stop();
+    if (mp4) { mp4_play(url); heap_release(mark); return; }   /* 13.5.0: a video file, decoded here */
+    vid_stop(); m4_stop();
     unsigned cap; char *raw = raw_alloc(&cap);
     if (!raw) { kputs("browser: out of memory\n"); heap_release(mark); return; }
     if (!net_get_gateway()) { kputs("browser: no network\n"); heap_release(mark); return; }
