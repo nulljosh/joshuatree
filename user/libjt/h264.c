@@ -7,10 +7,12 @@ typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32; 
 #define NBUF (MAXREF + 1)
 
 struct sps { int ok, id, log2_max_fn, poc_type, log2_max_poc, dpo_zero, num_ref, mbw, mbh, crop[4]; };
-struct pps { int ok, id, sps, nref_def, qp, cqp_off, deblock_ctl, cip, bfpo; };
+struct pps { int ok, id, sps, nref_def, qp, cqp_off, deblock_ctl, cip, bfpo, cabac; };
 struct frame { u8 *y, *u, *v; int fn, ref, lt, ltidx, picnum; };   /* ref: 0 unused, 1 short, 2 long */
 struct mb {
-    u8 type, qp, qpc, avail;   /* type: 0 not decoded, 1 I4x4, 2 I16x16, 3 inter, 4 PCM */
+    u8 type, qp, qpc, skip;    /* type: 0 not decoded, 1 I4x4, 2 I16x16, 3 inter, 4 PCM */
+    u8 cbp, cmode, dcf;        /* CABAC's neighbour context: coded_block_pattern, intra chroma mode, DC coded flags (luma, Cb, Cr) */
+    u8 mvd[16][2];             /* |mvd| per 4x4, capped */
     u16 slice;
     u8 nnz[16], nnzc[2][4];    /* total coefficients per 4x4 block, raster order */
     i8 i4[16];                 /* intra 4x4 modes, raster */
@@ -29,7 +31,8 @@ struct h264 {
     u8 *rbsp; unsigned rbsp_max;
     int cur, decoded, slice_num, maxfn, prev_fn;
     /* the slice */
-    int stype, nal_ref, idr, fn, qp, nref, dbidc, dba, dbb, mmco_adaptive, mmco5, lt_ref;
+    int stype, nal_ref, idr, fn, qp, nref, dbidc, dba, dbb, mmco_adaptive, mmco5, lt_ref, cabac_idc, last_dqp;
+    u32 crng, coff; struct bs *cs; u8 cst[460];   /* CABAC's engine and contexts */
     int list[MAXREF + 1];   /* buffer per reference index, one spare for 8.2.4.3.1 */
     int mmco[64][3], nmmco;
     const char *err;
@@ -142,6 +145,7 @@ static const u8 qpc_tab[52] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19
 static const u8 cbp_intra[48] = {47,31,15,0,23,27,29,30,7,11,13,14,39,43,45,46,16,3,5,10,12,19,21,26,28,35,37,42,44,1,2,4,8,17,18,20,24,6,9,22,25,32,33,34,36,40,38,41};
 static const u8 cbp_inter[48] = {0,16,1,2,4,8,32,3,5,10,12,15,47,7,11,13,14,6,9,31,35,37,42,44,33,34,36,40,39,43,45,46,17,18,20,24,19,21,26,28,23,27,29,30,22,25,38,41};
 static int cls(int r) { int i = r >> 2, j = r & 3; return !(i & 1) && !(j & 1) ? 0 : (i & 1) && (j & 1) ? 1 : 2; }
+static int clip3(int lo, int hi, int v) { return v < lo ? lo : v > hi ? hi : v; }
 static u8 clip1(int v) { return v < 0 ? 0 : v > 255 ? 255 : (u8)v; }
 
 static void idct_add(u8 *dst, int stride, int *d) {   /* 8.5.12.2: d raster, dequantised */
@@ -403,29 +407,30 @@ static void luma_recon(struct h264 *d, int cur, int qp, int i16, int *coef, int 
         if (any) idct_add(dst, d->w, dd);
     }
 }
-static int chroma(struct h264 *d, struct bs *s, int cur, int cbpc, int qpc) {
-    struct mb *m = &d->mbs[cur];
-    int dcc[2][4] = {{0}}, ac[2][4][16] = {{{0}}}, sc[16];
-    for (int c = 0; c < 2; c++) for (int i = 0; i < 4; i++) m->nnzc[c][i] = 0;
-    if (cbpc) for (int c = 0; c < 2; c++) { if (cavlc(s, -1, 4, dcc[c]) < 0) return -1; }
+struct mbd { int intra, i16, i16mode, cmode, cbp; i8 modes[16]; int coef[256], dc[16], dcc[2][4], ac[2][4][16]; };
+static int chroma_cavlc(struct h264 *d, struct bs *s, int cur, struct mbd *x) {
+    struct mb *m = &d->mbs[cur]; int sc[16], cbpc = x->cbp >> 4;
+    if (cbpc) for (int c = 0; c < 2; c++) { if (cavlc(s, -1, 4, x->dcc[c]) < 0) return -1; }
     if (cbpc == 2) for (int c = 0; c < 2; c++) for (int b = 0; b < 4; b++) {
         int n = cavlc(s, nc_chroma(d, cur, c, b & 1, b >> 1), 15, sc); if (n < 0) return -1;
         m->nnzc[c][b] = (u8)n;
-        for (int i = 0; i < 15; i++) ac[c][b][zz[i + 1]] = sc[i];
+        for (int i = 0; i < 15; i++) x->ac[c][b][zz[i + 1]] = sc[i];
     }
+    return 0;
+}
+static void chroma_recon(struct h264 *d, int cur, struct mbd *x, int qpc) {
     int mx = cur % d->mbw * 8, my = cur / d->mbw * 8;
     for (int c = 0; c < 2; c++) {
-        int *k = dcc[c], f[4] = {k[0] + k[1] + k[2] + k[3], k[0] - k[1] + k[2] - k[3], k[0] + k[1] - k[2] - k[3], k[0] - k[1] - k[2] + k[3]};
+        int *k = x->dcc[c], f[4] = {k[0] + k[1] + k[2] + k[3], k[0] - k[1] + k[2] - k[3], k[0] + k[1] - k[2] - k[3], k[0] - k[1] - k[2] + k[3]};
         u8 *p = (c ? d->buf[d->cur].v : d->buf[d->cur].u) + my * d->cw + mx;
         for (int b = 0; b < 4; b++) {
             int dd[16];
             dd[0] = (f[b] * 16 * norm[qpc % 6][0] * (1 << (qpc / 6))) >> 5;
-            for (int i = 1; i < 16; i++) dd[i] = dq(ac[c][b][i], qpc, i);
+            for (int i = 1; i < 16; i++) dd[i] = dq(x->ac[c][b][i], qpc, i);
             int any = 0; for (int i = 0; i < 16; i++) any |= dd[i];
             if (any) idct_add(p + (b >> 1) * 4 * d->cw + (b & 1) * 4, d->cw, dd);
         }
     }
-    return 0;
 }
 
 /* ---- one macroblock (7.3.5) ---- */
@@ -457,40 +462,63 @@ static void skip_mv(struct h264 *d, int cur, short *mv) {   /* 8.4.1.1 */
     mvpred(d, cur, 0, 0, 4, 0, 0, 0, mv);
 }
 
-static int macroblock(struct h264 *d, struct bs *s, int cur, int skip) {
+static void mb_begin(struct h264 *d, int cur) {
     struct mb *m = &d->mbs[cur];
-    for (int i = 0; i < 16; i++) { m->ref[i] = -2; m->nnz[i] = 0; m->i4[i] = 2; m->mv[i][0] = m->mv[i][1] = 0; m->refbuf[i] = -1; }
+    for (int i = 0; i < 16; i++) { m->ref[i] = -2; m->nnz[i] = 0; m->i4[i] = 2; m->mv[i][0] = m->mv[i][1] = 0; m->refbuf[i] = -1; m->mvd[i][0] = m->mvd[i][1] = 0; }
+    for (int c = 0; c < 2; c++) for (int i = 0; i < 4; i++) m->nnzc[c][i] = 0;
     m->slice = (u16)d->slice_num; m->dbidc = (i8)d->dbidc; m->dba = (i8)d->dba; m->dbb = (i8)d->dbb;
-    if (skip) {
-        short mv[2]; m->type = 3; skip_mv(d, cur, mv);
-        set_part(m, 0, 0, 4, 4, 0, d->list[0], mv);
-        m->qp = (u8)d->qp; m->qpc = qpc_tab[d->qp + d->p->cqp_off < 0 ? 0 : d->qp + d->p->cqp_off > 51 ? 51 : d->qp + d->p->cqp_off];
-        for (int c = 0; c < 2; c++) for (int i = 0; i < 4; i++) m->nnzc[c][i] = 0;
-        mc(d, cur, 0, 0, 16, 16, d->list[0], mv);
-        return 0;
+    m->skip = 0; m->cbp = 0; m->cmode = 0; m->dcf = 0;
+}
+static int qpc_of(const struct h264 *d, int qp) { int q = qp + d->p->cqp_off; return qpc_tab[q < 0 ? 0 : q > 51 ? 51 : q]; }
+static void mb_skip(struct h264 *d, int cur) {
+    struct mb *m = &d->mbs[cur]; short mv[2];
+    mb_begin(d, cur);
+    m->type = 3; m->skip = 1; skip_mv(d, cur, mv);
+    set_part(m, 0, 0, 4, 4, 0, d->list[0], mv);
+    m->qp = (u8)d->qp; m->qpc = (u8)qpc_of(d, d->qp);
+    mc(d, cur, 0, 0, 16, 16, d->list[0], mv);
+}
+static void mb_pcm(struct h264 *d, struct bs *s, int cur) {
+    struct mb *m = &d->mbs[cur];
+    s->pos = (s->pos + 7) & ~7u;
+    u8 *y = d->buf[d->cur].y + cur / d->mbw * 16 * d->w + cur % d->mbw * 16;
+    for (int i = 0; i < 256; i++) y[(i >> 4) * d->w + (i & 15)] = (u8)rb(s, 8);
+    for (int c = 0; c < 2; c++) { u8 *p = (c ? d->buf[d->cur].v : d->buf[d->cur].u) + cur / d->mbw * 8 * d->cw + cur % d->mbw * 8; for (int i = 0; i < 64; i++) p[(i >> 3) * d->cw + (i & 7)] = (u8)rb(s, 8); }
+    m->type = 4; m->qp = 0; m->qpc = (u8)qpc_of(d, 0); m->cbp = 0x2f; m->dcf = 7;
+    for (int i = 0; i < 16; i++) { m->nnz[i] = 16; m->ref[i] = -1; }
+    for (int c = 0; c < 2; c++) for (int i = 0; i < 4; i++) m->nnzc[c][i] = 16;
+}
+static void mb_recon(struct h264 *d, int cur, struct mbd *x) {
+    struct mb *m = &d->mbs[cur];
+    u8 *base = d->buf[d->cur].y + cur / d->mbw * 16 * d->w + cur % d->mbw * 16;
+    if (x->i16) pred_block(d, cur, base, d->w, 16, x->i16mode, 0);
+    if (!x->intra) for (int r = 0; r < 16; r++) mc(d, cur, (r & 3) * 4, (r >> 2) * 4, 4, 4, m->refbuf[r], m->mv[r]);
+    else {
+        int mx = cur % d->mbw * 8, my = cur / d->mbw * 8;
+        pred_block(d, cur, d->buf[d->cur].u + my * d->cw + mx, d->cw, 8, x->cmode, 1);
+        pred_block(d, cur, d->buf[d->cur].v + my * d->cw + mx, d->cw, 8, x->cmode, 1);
     }
+    luma_recon(d, cur, m->qp, x->i16, x->coef, x->dc, x->intra && !x->i16, x->modes);
+    chroma_recon(d, cur, x, m->qpc);
+}
+static void mbd_clear(struct mbd *x) { unsigned char *p = (unsigned char *)x; for (unsigned i = 0; i < sizeof *x; i++) p[i] = 0; }
+
+static int macroblock(struct h264 *d, struct bs *s, int cur, int skip) {
+    if (skip) { mb_skip(d, cur); return 0; }
+    struct mb *m = &d->mbs[cur];
+    mb_begin(d, cur);
+    static struct mbd x; mbd_clear(&x);
     int t = (int)ue(s), intra;
     if (d->stype == 0) { if (t >= 5) t -= 5, intra = 1; else intra = 0; } else intra = 1;
     if (intra && t > 25) return fail(d, "bad mb_type");
-    if (intra && t == 25) {   /* I_PCM */
-        s->pos = (s->pos + 7) & ~7u;
-        u8 *y = d->buf[d->cur].y + cur / d->mbw * 16 * d->w + cur % d->mbw * 16;
-        for (int i = 0; i < 256; i++) y[(i >> 4) * d->w + (i & 15)] = (u8)rb(s, 8);
-        for (int c = 0; c < 2; c++) { u8 *p = (c ? d->buf[d->cur].v : d->buf[d->cur].u) + cur / d->mbw * 8 * d->cw + cur % d->mbw * 8; for (int i = 0; i < 64; i++) p[(i >> 3) * d->cw + (i & 7)] = (u8)rb(s, 8); }
-        m->type = 4; m->qp = 0; m->qpc = qpc_tab[d->p->cqp_off < 0 ? 0 : d->p->cqp_off > 51 ? 51 : d->p->cqp_off];
-        for (int i = 0; i < 16; i++) { m->nnz[i] = 16; m->ref[i] = -1; }
-        for (int c = 0; c < 2; c++) for (int i = 0; i < 4; i++) m->nnzc[c][i] = 16;
-        return 0;
-    }
-    int cbp, i16 = intra && t >= 1, i16mode = 0, cmode = 0;
-    i8 modes[16];
-    static int coef[256], dc[16];
+    if (intra && t == 25) { mb_pcm(d, s, cur); return 0; }
+    x.intra = intra; x.i16 = intra && t >= 1;
     if (intra) {
-        m->type = i16 ? 2 : 1;
+        m->type = x.i16 ? 2 : 1;
         for (int i = 0; i < 16; i++) m->ref[i] = -1;
-        if (!i16) { intra_modes(d, s, cur, modes); for (int i = 0; i < 16; i++) m->i4[i] = modes[i]; }
-        else { i16mode = (t - 1) % 4; }
-        cmode = (int)ue(s); if (cmode > 3) return fail(d, "bad chroma mode");
+        if (!x.i16) { intra_modes(d, s, cur, x.modes); for (int i = 0; i < 16; i++) m->i4[i] = x.modes[i]; }
+        else x.i16mode = (t - 1) % 4;
+        x.cmode = (int)ue(s); if (x.cmode > 3) return fail(d, "bad chroma mode");
     } else {
         m->type = 3;
         int nparts = t == 0 ? 1 : t < 3 ? 2 : 4, refs[4] = {0, 0, 0, 0};
@@ -504,15 +532,13 @@ static int macroblock(struct h264 *d, struct bs *s, int cur, int skip) {
                 short mv[2] = {(short)(p[0] + se(s)), 0}; mv[1] = (short)(p[1] + se(s));
                 set_part(m, x4, y4, w4, h4, refs[i], d->list[refs[i]], mv);
             }
-            /* mvd and refs are interleaved as ref,ref,mvd,mvd: re-read in the right order below if needed */
         } else {
             int sub[4];
             for (int i = 0; i < 4; i++) { sub[i] = (int)ue(s); if (sub[i] > 3) return fail(d, "bad sub_mb_type"); }
             for (int i = 0; i < 4; i++) refs[i] = t == 4 || nr <= 1 ? 0 : nr == 2 ? !u1(s) : (int)ue(s);
             for (int i = 0; i < 4; i++) {
                 if (refs[i] >= nr) return fail(d, "bad ref");
-                int bx = (i & 1) * 2, by = (i >> 1) * 2;
-                int ns = sub[i] == 0 ? 1 : sub[i] == 3 ? 4 : 2;
+                int bx = (i & 1) * 2, by = (i >> 1) * 2, ns = sub[i] == 0 ? 1 : sub[i] == 3 ? 4 : 2;
                 for (int j = 0; j < ns; j++) {
                     int x4 = bx + (sub[i] == 2 || sub[i] == 3 ? (j & 1) : 0), y4 = by + (sub[i] == 1 ? j : sub[i] == 3 ? j >> 1 : 0);
                     int w4 = sub[i] == 0 || sub[i] == 1 ? 2 : 1, h4 = sub[i] == 0 || sub[i] == 2 ? 2 : 1;
@@ -523,36 +549,25 @@ static int macroblock(struct h264 *d, struct bs *s, int cur, int skip) {
             }
         }
     }
-    if (!i16) { u32 k = ue(s); if (k > 47) return fail(d, "bad cbp"); cbp = intra ? cbp_intra[k] : cbp_inter[k]; }
-    else cbp = ((t - 1) / 4 % 3) << 4 | (t >= 13 ? 15 : 0);
-    int qp = d->qp;
-    if (cbp || i16) { int dqp = se(s); qp = (d->qp + dqp + 52) % 52; d->qp = qp; }
-    m->qp = (u8)qp;
-    int qpi = qp + d->p->cqp_off; qpi = qpi < 0 ? 0 : qpi > 51 ? 51 : qpi; m->qpc = qpc_tab[qpi];
-    for (int i = 0; i < 16; i++) dc[i] = 0;
-    if (luma_residual(d, s, cur, cbp & 15, i16, coef, dc) < 0) return fail(d, "bad luma residual");
-    /* prediction then residual */
-    u8 *base = d->buf[d->cur].y + cur / d->mbw * 16 * d->w + cur % d->mbw * 16;
-    if (i16) pred_block(d, cur, base, d->w, 16, i16mode, 0);
-    if (!intra) {   /* motion compensation per 4x4: partitions are unions of 4x4s with the same mv */
-        for (int r = 0; r < 16; r++) mc(d, cur, (r & 3) * 4, (r >> 2) * 4, 4, 4, m->refbuf[r], m->mv[r]);
-    }
-    if (intra) {
-        int mx = cur % d->mbw * 8, my = cur / d->mbw * 8;
-        pred_block(d, cur, d->buf[d->cur].u + my * d->cw + mx, d->cw, 8, cmode, 1);
-        pred_block(d, cur, d->buf[d->cur].v + my * d->cw + mx, d->cw, 8, cmode, 1);
-    }
-    luma_recon(d, cur, qp, i16, coef, dc, intra && !i16, modes);
-    if (chroma(d, s, cur, cbp >> 4, m->qpc) < 0) return fail(d, "bad chroma residual");
+    if (!x.i16) { u32 k = ue(s); if (k > 47) return fail(d, "bad cbp"); x.cbp = intra ? cbp_intra[k] : cbp_inter[k]; }
+    else x.cbp = ((t - 1) / 4 % 3) << 4 | (t >= 13 ? 15 : 0);
+    m->cbp = (u8)x.cbp;
+    if (x.cbp || x.i16) d->qp = (d->qp + se(s) + 52) % 52;
+    m->qp = (u8)d->qp; m->qpc = (u8)qpc_of(d, d->qp);
+    if (luma_residual(d, s, cur, x.cbp & 15, x.i16, x.coef, x.dc) < 0) return fail(d, "bad luma residual");
+    if (chroma_cavlc(d, s, cur, &x) < 0) return fail(d, "bad chroma residual");
+    mb_recon(d, cur, &x);
     return 0;
 }
+
+#include "h264_cabac.c"
 
 /* ---- parameter sets (7.3.2) ---- */
 static int parse_sps(struct h264 *d, struct bs *s) {
     int prof = (int)rb(s, 8); rb(s, 16);
     u32 id = ue(s); if (id > 31) return fail(d, "bad sps id");
     struct sps *p = &d->sps[id];
-    if (prof == 100 || prof == 110 || prof == 122 || prof == 244 || prof == 44 || prof == 83 || prof == 86 || prof == 118 || prof == 128) return fail(d, "not a baseline stream (high profile)");
+    if (prof == 100 || prof == 110 || prof == 122 || prof == 244 || prof == 44 || prof == 83 || prof == 86 || prof == 118 || prof == 128) return fail(d, "High profile is not supported yet");
     p->id = (int)id;
     p->log2_max_fn = (int)ue(s) + 4;
     p->poc_type = (int)ue(s);
@@ -573,7 +588,7 @@ static int parse_pps(struct h264 *d, struct bs *s) {
     u32 id = ue(s), sid = ue(s); if (id > 255 || sid > 31) return fail(d, "bad pps id");
     struct pps *p = &d->pps[id];
     p->id = (int)id; p->sps = (int)sid;
-    if (u1(s)) return fail(d, "CABAC streams are not supported");
+    p->cabac = (int)u1(s);
     p->bfpo = (int)u1(s);
     if (ue(s)) return fail(d, "slice groups are not supported");
     p->nref_def = (int)ue(s) + 1; ue(s);
@@ -710,13 +725,30 @@ static int slice(struct h264 *d, struct bs *s, int nal_type, int nal_ref) {
             }
         }
     }
+    d->cabac_idc = 0;
+    if (d->p->cabac && st != 2) { d->cabac_idc = (int)ue(s); if (d->cabac_idc > 2) return fail(d, "bad cabac_init_idc"); }
     d->qp = d->p->qp + se(s);
     if (d->qp < 0 || d->qp > 51) return fail(d, "bad qp");
     d->dbidc = 0; d->dba = d->dbb = 0;
     if (d->p->deblock_ctl) { d->dbidc = (int)ue(s); if (d->dbidc != 1) { d->dba = se(s) * 2; d->dbb = se(s) * 2; } }
     if (first >= (u32)(d->mbw * d->mbh)) return fail(d, "bad first_mb");
     int cur = (int)first;
-    for (;;) {
+    if (d->p->cabac) {   /* 7.3.4 with CABAC: align, start the engine, a skip flag and an end flag per macroblock */
+        while (s->pos & 7) u1(s);
+        cab_ctx_init(d, d->qp); cab_start(d, s); d->last_dqp = 0;
+        for (;;) {
+            int skip = 0;
+            if (st == 0) {
+                d->mbs[cur].slice = (u16)d->slice_num;   /* nbA/nbB compare slices */
+                struct mb *A = nbA(d, cur), *B = nbB(d, cur);
+                skip = cdec(d, 11 + (A && !A->skip) + (B && !B->skip));
+            }
+            if (skip) { mb_skip(d, cur); d->last_dqp = 0; }
+            else if (macroblock_cabac(d, cur) < 0) return -1;
+            cur++;
+            if (cterm(d) || cur >= d->mbw * d->mbh) break;
+        }
+    } else for (;;) {
         if (st == 0) {
             u32 run = ue(s);
             while (run-- && cur < d->mbw * d->mbh) { if (macroblock(d, s, cur, 1) < 0) return -1; cur++; }
@@ -737,7 +769,6 @@ static const u8 tc0_t[52][3] = {{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},
     {0,0,1},{0,0,1},{0,0,1},{0,0,1},{0,1,1},{0,1,1},{1,1,1},{1,1,1},{1,1,1},{1,1,1},{1,1,2},{1,1,2},{1,1,2},{1,1,2},{1,2,3},{1,2,3},{2,2,3},{2,2,4},{2,3,4},{2,3,4},
     {3,3,5},{3,4,6},{3,4,6},{4,5,7},{4,5,8},{4,6,9},{5,7,10},{6,8,11},{6,8,13},{7,10,14},{8,11,16},{9,12,18},{10,13,20},{11,15,23},{13,17,25}};
 static int iabs(int v) { return v < 0 ? -v : v; }
-static int clip3(int lo, int hi, int v) { return v < lo ? lo : v > hi ? hi : v; }
 /* one line of samples across an edge: p[-k*step], q[k*step] around pos */
 static void filt(u8 *q0p, int step, int bs, int qpav, int fa, int fb, int chroma) {
     int ia = clip3(0, 51, qpav + fa), ib = clip3(0, 51, qpav + fb), al = alpha_t[ia], be = beta_t[ib];
