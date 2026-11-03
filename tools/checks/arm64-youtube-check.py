@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""YouTube in Blackcomb (6.9.0 and 6.10.0): a video's address shows a page about it, and its Play link plays it in Movies.
+"""YouTube in Blackcomb (6.9.0, 6.10.0 and 13.1.0): a video's address shows a page about it, and its Play link plays it in the page.
 
 Host: tools/claude-relay/yt.py with --fixture (a saved `yt-dlp -j` reply, so no network and no yt-dlp) answers POST
 /api/yt/page with the token and a video id; no token is 401, a bad id is 400, and the page has the title, the channel,
 the length and the description, with a Play link.
 QEMU virt, the kernel built with the service at 10.0.2.2 (the relay's port, plus two for this service) and the token:
 Spotlight opens Blackcomb, `youtu.be/jNQXAC9IVRw` is typed, and the UART says `browser: youtube dQw4w9WgXcQ`, the
-video's title, and a page of lines. 6.10.0: Tab picks the page's Play link and Enter follows it: the clip (--fixture-avi,
-avigen.py's 40 frame CLIP.AVI) is saved as YT.AVI on the check card, PLAYNOW.TXT names it, and Movies opens and plays all
-40 frames on its own. The token never appears on the UART.
+video's title, and a page of lines. 13.1.0: Tab picks the page's Play link and Enter follows it: the clip (--fixture-avi,
+avigen.py's 40 frame CLIP.AVI) plays in the page itself, `browser: video playing 40 frames`, its frames drawn where the
+page's picture goes (`browser: shows image 1`), to `browser: video done frames=40`; no YT.AVI is saved and Movies never
+opens. The token never appears on the UART.
 
-Discriminating: drop the yt_id branch in browser.c's fetch and the page is youtu.be's own (a redirect, then script).
+Discriminating: drop the yt_id branch in browser.c's fetch and the page is youtu.be's own (a redirect, then script); make
+browser_video_tick return 0 at once and the video never reaches done.
 
 Usage: tools/checks/arm64-youtube-check.py   (from the repo root)
 """
@@ -60,7 +62,7 @@ try:
     check("a body that is not a video id is refused (400)", post("../../etc/pw")[0] == 400)
     st, page = post("jNQXAC9IVRw")
     check("the page has the title, the channel, the length and a Play link", st == 200 and "<title>Me at the zoo</title>" in page
-          and "jawed - 0:19 - 380,000,000 views" in page and "Play in Movies" in page and "<p>Elephants have really long trunks.</p>" in page, page[:400])
+          and "jawed - 0:19 - 380,000,000 views" in page and ">Play</a>" in page and "<p>Elephants have really long trunks.</p>" in page, page[:400])
 
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True)   # claude_cfg.h is made once per build: start clean so it takes the token
     env = dict({k: v for k, v in os.environ.items() if not k.startswith("CLAUDE_RELAY")}, CLAUDE_RELAY_HOST="10.0.2.2",
@@ -102,8 +104,10 @@ try:
     check("the address is a video: it goes to the video service", wait_for("browser: youtube jNQXAC9IVRw", 20, n), uart()[n:][-400:])
     check("and the page about it shows, titled", wait_for("browser: Me at the zoo", 40, n) and wait_for("browser: page ", 10, n), uart()[n:][-500:])
     n = len(uart()); key("tab"); wait_for("browser: selected link 1", 10, n); key("ret")
-    check("Play saves the clip as YT.AVI", wait_for("browser: saved YT.AVI, %d bytes" % os.path.getsize(clip_avi), 60, n), uart()[n:][-400:])
-    check("and Movies opens and plays it, all 40 frames, on its own", wait_for("movie=play YT.AVI frames=40", 30, n) and wait_for("movie=done frames=40", 30, n), uart()[n:][-500:])
+    check("Play plays the clip in the page: 40 frames", wait_for("browser: video playing 40 frames", 60, n), uart()[n:][-400:])
+    check("its frames are drawn where the page's picture goes", wait_for("browser: shows image 1 at", 20, n) or wait_for("browser: video frame 12", 20, n), uart()[n:][-400:])
+    check("and it plays to the end", wait_for("browser: video done frames=40", 30, n), uart()[n:][-500:])
+    check("no YT.AVI is saved and Movies never opens", "saved YT.AVI" not in uart()[n:] and "movie=play" not in uart()[n:], uart()[n:][-400:])
     check("the token never appears on the UART", TOKEN not in uart())
 except SystemExit:
     pass
@@ -115,4 +119,4 @@ finally:
     yt.terminate()
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True)   # no token left in a build
 if fails: print("FAIL: " + "; ".join(fails)); sys.exit(1)
-print("PASS: a YouTube address in Blackcomb shows a page about the video from the Mac's video service, its Play link saves the clip and Movies plays it, the token stays off the UART, and the service refuses a missing token and a bad id")
+print("PASS: a YouTube address in Blackcomb shows a page about the video from the Mac's video service, its Play link plays the clip in the page, the token stays off the UART, and the service refuses a missing token and a bad id")
