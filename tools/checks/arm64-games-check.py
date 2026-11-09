@@ -66,8 +66,9 @@ try:
         for _ in range(6):   # Hamurabi takes an Esc per screen on its way back to the title
             key("esc"); time.sleep(.3)
             if "M3c app %s exit 0" % app in uart()[n:]: return
-        time.sleep(2)
-        if "M3c app %s exit 0" % app in uart()[n:]: return
+        for _ in range(60):   # CI's runners are about 3x slower: held keys can queue ahead of the Esc
+            if "M3c app %s exit 0" % app in uart()[n:]: return
+            time.sleep(.2)
         raise AssertionError(app + " did not close on Esc\n" + uart()[-600:])
     command("qmp_capabilities")
 
