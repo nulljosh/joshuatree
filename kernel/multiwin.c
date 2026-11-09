@@ -115,6 +115,11 @@ void gui_snap_target(int zone, int *x, int *y, int *w, int *h){
 /* 13.5.0: the same zones from the keyboard while Ctrl+Alt is down, Magnet's keys on the front window: left and right
    arrows for the halves, up for full, U I J K for the quarters. Eats the key and returns 1 only when it moved a window.
    ponytail: on a real PC the byte after E0 can be a millisecond behind; that press falls through as a plain arrow. */
+/* A window tall enough to reach the dock's label row: the label's cheap repaint would put wallpaper back over it, so the desktop does a full one. */
+int gui_window_over_dock(void){
+    for (int i = 0; i < gui_window_count; i++) if (gui_windows[i].y + gui_windows[i].h > gui_dock_y0() - 40) return 1;
+    return 0;
+}
 int gui_snap_key(void){
     if (gui_window_count == 0) return 0;
     gui_window_t *top = &gui_windows[gui_window_count - 1];

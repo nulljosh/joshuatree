@@ -41,6 +41,7 @@ static const char *const man_pages[][2] = {
     {"nimble", "nimble QUESTION\nA web answer with its sources."},
     {"open", "open N\nThe browser follows link N."},
     {"passwd", "passwd [NAME]\nChanges a password."},
+    {"ping", "ping HOST\nSends three echoes to a name or a dotted address, and says how long each reply took."},
     {"poweroff", "poweroff\nThe same as shutdown."},
     {"reader", "reader on\nreader off\nTurns the screen reader on or off."},
     {"reboot", "reboot\nRestarts. Typing the word is the confirmation."},

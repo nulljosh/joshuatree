@@ -252,6 +252,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `arch/arm64/heat.c` | 13.3.0: `temp` (`cmd.c`) prints the chip's temperature and the point the firmware slows it down, from mailbox tags 0x00030006 and 0x0003000a (thousandths of a degree C), each tag's response bit checked. Virt says it has no sensor; the `heat` variant image (`-DHEAT_TEST`, `desk.c`) prints it once the screen is up, since raspi4b has no keyboard. No fan pin: a fan on 5V and ground just runs. `tools/checks/arm64-heat-check.py`. |
 | `tools/checks/ring3seed-stale-check.py` | Boots twice on one FAT disk with the app's bytes changed between boots: the kernel replaces the stale copy, and leaves a matching one alone. |
 | `tools/checks/arm64-notify-check.py` | A card app posts a notice with `jt_notify`: it shows under the app's name, Focus holds it, and turning Focus off says how many were held. |
+| `tools/checks/ping-check.py` | `ping 10.0.2.2` in the Pi Terminal gets real ICMP replies from QEMU's gateway, and an address nobody holds gets none. |
 | `arch/arm64/man.h` | The Terminal's `man NAME` pages, one per command, included once by `cmd.c`. |
 | `tools/checks/arm64-man-check.py` | Fails when a command in `help` or `cmd_run` has no page, then runs `man cat` and `man zzz` in headless QEMU. |
 | `tools/checks/arm64-spotlight-check.py` | Boots the ARM kernel headless in QEMU, presses F1: an empty query lists all 18 apps, typing calc shows exactly Calculator, Enter opens its window. |
@@ -2560,7 +2561,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (393 checks)
+### The suite (394 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2758,6 +2759,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Ring-3 stress: window task and desktop hammer heap and FAT at once, heap walk ok, file at root, desktop alive | `tools/checks/ring3stress-check.py` | retry |
 | Ring-3 PDE sync: kernel page table born after the window task is visible on its CR3, close clean, desktop alive | `tools/checks/pdesync-check.py` | retry |
 | Window snapping (title-bar drag to edge/corner, real pixel proof) | `tools/checks/windowsnap-check.py` | retry |
+| ping on the Pi (13.8.0): the gateway answers three echoes, an address nobody holds gets no reply | `tools/checks/ping-check.py` | once |
 | Notices from apps (13.7.0): one shows under its app's name, Focus holds it and says how many, in headless QEMU | `tools/checks/arm64-notify-check.py` | once |
 | A disk kept from an older kernel gets this kernel's app: a changed KEYRATE.BIN is replaced at launch and an unchanged one is left alone | `tools/checks/ring3seed-stale-check.py` | retry |
 | man NAME (13.6.0): every Pi Terminal command has a page, man cat prints it, an unknown name is refused, in headless QEMU | `tools/checks/arm64-man-check.py` | once |

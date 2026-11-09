@@ -686,7 +686,7 @@ void gui_run(void){
                           && menu_open == last_menu_open && menu_hover == last_menu_hover;
         int dock_only = !launched && !cursor_only && drag_slot < 0 && last_drag < 0
                         && !menu_open && !last_menu_open
-                        && hover_slot != last_hover;
+                        && hover_slot != last_hover && !gui_window_over_dock();
         /* v0.76.17: direct report, the exact "icons flash when I hover"
            shape v40's own three tiers above were built to fix, just never
            extended to the Apple menu's own hover highlight -- switching

@@ -258,6 +258,7 @@ retry|1|Ring-3 window: Reminders beside Notes, keys to the focused window only, 
 retry|7|Ring-3 stress: window task and desktop hammer heap and FAT at once, heap walk ok, file at root, desktop alive|python3 ./tools/checks/ring3stress-check.py
 retry|2|Ring-3 PDE sync: kernel page table born after the window task is visible on its CR3, close clean, desktop alive|python3 ./tools/checks/pdesync-check.py
 retry|3|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
+once|8|ping on the Pi (13.8.0): the gateway answers three echoes, an address nobody holds gets no reply|python3 ./tools/checks/ping-check.py
 once|8|Notices from apps (13.7.0): one shows under its app's name, Focus holds it and says how many, in headless QEMU|python3 ./tools/checks/arm64-notify-check.py
 retry|3|A disk kept from an older kernel gets this kernel's app: a changed KEYRATE.BIN is replaced at launch and an unchanged one is left alone|python3 ./tools/checks/ring3seed-stale-check.py
 once|8|man NAME (13.6.0): every Pi Terminal command has a page, man cat prints it, an unknown name is refused, in headless QEMU|python3 ./tools/checks/arm64-man-check.py

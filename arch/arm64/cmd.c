@@ -47,8 +47,24 @@ void power_run(int off);                                   /* main.c: the confir
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), userrun A | userrun B (A's output is B's input), cores, sched, disk, stick [ls|cat NAME|copy NAME] (a USB stick), debug NAME [STEPS] (run an app one instruction at a time: where it is, the instruction, the registers that changed, then its registers and stack), install NAME (an app from the store), "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
-                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), shortcut [NAME] (NAME = A; B saves one, rm NAME drops it), reboot, shutdown, focus [on|off] (quiet notices from apps), man NAME (how a command works), help.";
+                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), shortcut [NAME] (NAME = A; B saves one, rm NAME drops it), reboot, shutdown, ping HOST, focus [on|off] (quiet notices from apps), man NAME (how a command works), help.";
 #include "man.h"
+int net_ping(unsigned ip, unsigned seq, unsigned wait_ticks, unsigned *rtt_ticks);
+int http_resolve_host(const char *host, unsigned *ip);
+unsigned net_get_gateway(void);
+static void ping_command(const char *q, unsigned n) {   /* 13.8.0: three echoes, one line each, then the count */
+    char host[64]; unsigned ip, got = 0, i = 0;
+    for (; i < n && i < sizeof host - 1 && q[i] != ' '; i++) host[i] = q[i];
+    host[i] = 0;
+    if (!net_get_gateway()) { cmd_out("ping: no network\n"); return; }
+    if (!http_resolve_host(host, &ip)) { cmd_out("ping: cannot find "); cmd_out(host); cmd_out("\n"); return; }
+    for (unsigned s = 1; s <= 3; s++) {
+        unsigned t;
+        if (net_ping(ip, s, 200, &t)) { got++; cmd_out("reply from "); cmd_out(host); cmd_out(": "); if (t) { cmd_dec(t * 10); cmd_out(" ms\n"); } else cmd_out("under 10 ms\n"); }
+        else { cmd_out("no reply from "); cmd_out(host); cmd_out("\n"); }
+    }
+    cmd_out("ping: 3 sent, "); cmd_dec(got); cmd_out(" received\n");
+}
 static void man_show(const char *q, unsigned n) {   /* 13.6.0: q is the one word after man */
     for (unsigned i = 0; i < sizeof man_pages / sizeof man_pages[0]; i++) {
         const char *w = man_pages[i][0], *p = man_pages[i][1];
@@ -712,6 +728,8 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
       if (word_is(q, n, "focus")) { cmd_out(focus_on ? "focus: on\n" : "focus: off\n"); return; }
       if (word_is(q, n, "focus on")) { focus_set(1); cmd_out("focus: on, apps are quiet\n"); return; }
       if (word_is(q, n, "focus off")) { focus_set(0); cmd_out("focus: off\n"); return; } }
+    if (word_is(q, n, "ping")) { cmd_out("ping: which host? try ping 1.1.1.1\n"); return; }
+    if (is(q, n, "ping")) { if (ask_busy()) { cmd_out("ping: sam is using the network, try again when she answers\n"); return; } ping_command(q + 5, n - 5); return; }
     if (word_is(q, n, "man")) { cmd_out("man: which command? try man ls\n"); return; }
     if (is(q, n, "man")) { man_show(q + 4, n - 4); return; }
     if (word_is(q, n, "limits")) { limits_command(q, 0); return; }

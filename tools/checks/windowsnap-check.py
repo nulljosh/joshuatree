@@ -334,6 +334,11 @@ try:
         cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": c} for c in ("ctrl", "alt", k)], "hold-time": 60}})
         time.sleep(0.8)
     half_y = TOP + (BOTTOM - TOP) // 2
+    # The mouse is still on the Files tile, so its hover label is up. Snapping covers the label's row; moving off it must not punch
+    # wallpaper back through the window (13.8.0, gui_window_over_dock).
+    chord("left"); move(*PARK); time.sleep(0.8)
+    notch = (centre(SLOT["Files"]), BOTTOM - 8)
+    if close(pixel(dump(), *notch), pixel(baseline_img, *notch)) <= 20: fails.append("keyboard snap: leaving the dock put wallpaper back through the window")
     for k, x, y, name in (("left", 0, TOP, "left half"), ("right", LOGICAL_W // 2, TOP, "right half"), ("u", 0, TOP, "top-left quarter"),
                           ("k", LOGICAL_W // 2, half_y, "bottom-right quarter"), ("up", 0, TOP, "full")):
         chord(k)

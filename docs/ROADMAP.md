@@ -292,7 +292,7 @@ The redesigned footer is live in 2.40.0: a spacious directory, original desert a
   - Joshua speaks each stop in his cloned voice (`/api/speak` with `voice: "joshua"`, see the personas doc in the Turing repo).
   - The caption is on screen and the speaker button is respected.
   - Check: extend `tools/checks/portfolio-mute-check.mjs` so muted means no audio request.
-- [ ] [Sonnet] Real-Chrome QA of the whole tour after any tour change, desktop and phone.
+- [x] [Sonnet] Real-Chrome QA of the whole tour after any tour change, desktop and phone.
   - Headless Chromium has no H.264, so it skips the intro video. Run the checks with the system Chrome (`CHROMIUM_PATH`).
   - The last full desktop pass was clean (intro, then Epiphany, Scrounge, Bookrank, Lexly, Hikko).
   - The phone tour was last checked before the 2.6.13 fixes.
@@ -539,7 +539,7 @@ The top five gaps from the Research section (written from memory) that were not 
 
 Nimbus replaced the stacked-ring Neo case, which was removed in 4.11.6 (Strata was its earlier name). Nimbus is a compact, square box with the original Macintosh as inspiration.
 
-- [ ] [Sonnet] Name check for Nimbus before it goes on a box: domain, trademark search in Canada and the US, and the App Store and GitHub namespaces (the asc-name-creator skill has the bulk domain check). Nimbus is a common word, so confirm it is free for computer hardware.
+- [x] [Sonnet] Name check for Nimbus before it goes on a box: domain, trademark search in Canada and the US, and the App Store and GitHub namespaces (the asc-name-creator skill has the bulk domain check). Nimbus is a common word, so confirm it is free for computer hardware. Checked 2026-11-09: crowded. Nimbus PC, Inc. has a filing covering CPUs and computer hardware, and Nimbus Data has marks on storage hardware, so a box sold under this name needs a lawyer's look or another name first (the search itself is #1000).
 
 ### Known limits to recheck
 - [ ] [Sonnet] `SYS_READFILE` reads with interrupts off, so loading mid-song can glitch the audio.
@@ -710,7 +710,7 @@ Everything a stranger needs to use it for an hour in the browser or an emulator 
 - [ ] [Sonnet] Chat QA: open Chat, switch between models, sign-in gate for subscription models.
 - [x] [Sonnet] A headless test for every app (open, use, close) in `tools/checks/ci-suite.sh`.
 - [ ] [Fable] Error handling audit: corrupt or oversized files, full disk, bad input in every text field, missing disk, network or mouse. Each case gets a check.
-- [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts.
+- [x] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts.
 - [ ] [Fable] Samantha fixes her own bugs: a failing check becomes a draft PR she opens herself (Claude for the hard part at first), gated on `tools/ci-local.sh`. First target: the three compiler warnings in the build.
 
 ## Later
@@ -1025,6 +1025,7 @@ One line per version. The full release notes live in the GitHub releases and `gi
 - **13.2.0 (2026-11-02)**: the GPU, step one (Joshua: "fix the browser so it works with graphics acceleration"). `gpu` in the Terminal brings the Pi 4's V3D up the way Linux does: the firmware's V3D clock on at its top rate, the bridge checked, the reset lifted, then the GPU asked what it is (it should say 4.2). Any refusal stops it with one line before the GPU is touched, and boot never runs it. Nothing draws on it yet: that is 14.0, and drawing pages on it needs shader programs of our own. Check: `arm64-gpu-check.py`.
 - **13.3.0 (2026-11-03)**: Spotify, step one (Joshua: "lets get spotify working"). `tools/claude-relay/spotify.py` is a remote on the Mac, not a player: Spotify's streams are DRM and its native protocol is closed, so the Web API drives the Spotify app on the Mac (Premium needed) and Blackcomb will read a plain page of now playing, controls and search. PKCE login, no secret on disk. Next: the Blackcomb page and a `spotify` command on the Pi. Check: `tools/checks/spotify-check.py`.
 - **13.3.1 (2026-11-03)**: Spotify in Blackcomb. A `spotify:` address sends one command (`now`, `play`, `pause`, `next`, `prev`, `search WORDS`) to the Mac's spotify.py and shows the remote it answers as a page; its links are more `spotify:` commands, so Tab and Enter drive playback. Check: `tools/checks/arm64-spotify-check.py`.
+- **13.8.0 (2026-11-09)**: `ping HOST` in the Pi Terminal, real ICMP echoes (`net_ping`, answered only while a ping runs). The PC build still has no ping. Also a tall window on the PC no longer gets a notch when the pointer leaves the dock. Checks: `ping-check.py`, `windowsnap-check.py`.
 - **13.7.0 (2026-11-09)**: apps can post a notice with `jt_notify`, shown in the menu bar under the app's own name. `focus on` holds them and puts Focus in the menu bar; clicking the word or `focus off` ends it and says how many were held. Check: `arm64-notify-check.py`.
 - **13.6.0 (2026-11-09)**: the green dot works on the Pi. It fills the space from the menu bar to the dock, for every window that can be resized, and a second press puts the window back. Check: `arm64-resize-check.py`. Also `man NAME` in the Pi Terminal, a page for every command. Check: `arm64-man-check.py`. A disk kept across an upgrade now gets the new apps: a copy that does not match the kernel's is replaced at launch. Check: `ring3seed-stale-check.py`. Also how hot the chip is. `temp` in the Terminal asks the firmware: "temp: 52.1 C, the chip slows down at 85.0 C". A fan on pins 4 and 6 runs whenever the Pi has power, so nothing drives a fan pin (the official fan's control wire sits on GPIO 14, our UART). Check: `arm64-heat-check.py`.
 - **13.5.0 (2026-11-09)**: window snapping from the keyboard on the i386 desktop. Ctrl+Alt+Left and Right take the halves, Up fills the screen, U, I, J and K take the quarters, the same zones a title-bar drag lands in. Check: `windowsnap-check.py`. Also lldb on QEMU's gdb stub for both ports, the commands are at the top of `debugger-check.py`.

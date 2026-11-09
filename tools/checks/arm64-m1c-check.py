@@ -163,7 +163,7 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
                 ("title band", L(fx + 100, fy + 6), (0xf5, 0xf0, 0xeb)),                          # WINDOW_BODY
                 ("title hairline", (L(fx + 100, 0)[0], (fy + 29) * s2 + s2 - 1), (0xd9, 0xd3, 0xcb)),   # WINDOW_RULE
                 ("close dot", L(fx + 19, fy + 16), (0xff, 0x5f, 0x57)), ("minimize dot", L(fx + 41, fy + 16), (0xff, 0xd6, 0x4a)),
-                ("zoom dot", L(fx + 63, fy + 16), (0xd8, 0xd4, 0xce)),
+                ("zoom dot", L(fx + 63, fy + 16), (0x28, 0xc8, 0x40)),
                 ("dock tray", (w // 2, (dock_y0 + 5) * s2), (0xef, 0xeb, 0xe4)),                 # DOCK_TRAY_COLOR, in the pad above the icons
                 ("dock hairline", (w // 2, dock_y0 * s2 + s2 - 1), (0xd6, 0xd0, 0xc6))]         # its top edge, one physical pixel
         if quiet: want = want[6:]                                    # the window's own pixels are not drawn; the dock's are still checked

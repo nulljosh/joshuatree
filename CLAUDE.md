@@ -10,6 +10,7 @@ A from-scratch OS: a freestanding i386 kernel plus an ARM64 build that runs on a
 - Build with stock Apple clang (`-target i386-unknown-none`). Do not add a cross-toolchain.
 - `check.sh` reads VGA memory through the QEMU monitor. It proves the kernel boots, nothing more. Check paging, disk and task switches against real artifacts.
 - `.github/workflows/check.yml` runs the suite on pull requests and is the merge gate; keep it current. Locally run only targeted checks, one at a time. `tools/ci-local.sh` is for a full local run when nothing else is going.
+- After any change to the landing tour, QA the whole tour in real Chrome before merging.
 - Push a PR once, with every commit in it: each extra push cancels the running workflow.
 - Every shipped feature gets a permanent test that fails when the fix is reverted: a shell command in `kernel/kernel.c` (like `heaptest`) or a `tools/checks/` script.
 - After any rename, move or delete, run `bash tools/checks/check-refs.sh`. `make hooks` installs the pre-push hook once per clone.

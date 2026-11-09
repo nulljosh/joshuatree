@@ -25,6 +25,8 @@ extern int net_nodhcp;
 /* What DHCP actually leased us (host byte order), 0 if net_nodhcp was set
    or no server ever answered and net_init fell back to its fixed IP. */
 unsigned int net_get_gateway(void);
+/* 13.8.0: one ICMP echo to ip; 1 and the round trip in ticks, or 0 with no reply within wait_ticks. */
+int net_ping(unsigned int ip, unsigned seq, unsigned int wait_ticks, unsigned int *rtt_ticks);
 unsigned int net_get_dns(void);
 unsigned int net_get_netmask(void);
 unsigned int net_get_ip(void);   /* our address now: the lease, or the fixed fallback */
