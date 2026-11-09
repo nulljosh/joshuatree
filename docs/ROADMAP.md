@@ -528,7 +528,7 @@ The research loop ends here (Joshua's /loop, 2026-10-06): five rounds now cover 
 The top five gaps from the Research section (written from memory) that were not already on this list:
 
 - [ ] [Fable] Bad-argument tests for every system call (xv6 `usertests`): bad pointers, huge lengths and closed handles. Check: a ring-3 program runs them all and the kernel returns an error for each and keeps running.
-- [ ] [Haiku] Attach a debugger to QEMU: lldb on QEMU's gdb stub for both ports. Check: a script boots paused, stops at the kernel entry and reads a register.
+- [x] [Haiku] Attach a debugger to QEMU: lldb on QEMU's gdb stub for both ports. Check: a script boots paused, stops at the kernel entry and reads a register.
 - [ ] [Sonnet] A manual page for every shell command, read with `man NAME`. Check: fails if any command in the shell's table has no page.
 - [ ] [Sonnet] A ports folder: build scripts for outside C programs against libjt, Lua first. Check: the ported Lua runs a script as a ring-3 app and prints the right answer.
 - [ ] [Fable] One driver out of the kernel: the mouse as a ring-3 program. Check: kill it, the kernel keeps running, restarts it, and the pointer moves again.
@@ -649,10 +649,10 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Fable] Every app converted from a blocking loop to open/draw/on_key/on_click handlers, or its own task.
 - [ ] [Sonnet] Window resize, minimize, and maximize. Needs the compositor above; once it lands, wire up the two unlit traffic-light dots.
 - [ ] [Sonnet] Right-click context menus.
-- [ ] [Sonnet] App switcher and global hotkeys.
+- [x] [Sonnet] App switcher and global hotkeys.
 - [ ] [Sonnet] Lock screen, sleep, and ACPI shutdown.
 - [ ] [Sonnet] Maps app. The wallpaper already fetches map tiles.
-- [ ] [Sonnet] Undo in editors.
+- [x] [Sonnet] Undo in editors (7.5.0).
 - [ ] [Sonnet] Files app view options: list, grid, columns, with adjustable sorting and grouping.
 - [ ] [Sonnet] Mail account configuration: setup for multiple accounts, IMAP/POP/SMTP settings.
 - [ ] [Sonnet] Chat app redesign: expanded capabilities, better interface, rename to Sam.
@@ -670,7 +670,7 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Sonnet] Lazy-load the boot loading image itself so it never shows visibly pixelated while scaling in. (Found by eye in the 2026-09-21 QA tour, `tools/qa-demo.sh`.)
 - [ ] [Sonnet] Mobile Joshua Tree: the landing demo and the OS usable on a phone screen. Mobile first by 2026-10-04.
 - [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
-- [ ] [Sonnet] Keyboard shortcuts for the snap zones (halves, quarters, full), split out of the snapping item that shipped in #82.
+- [x] [Sonnet] Keyboard shortcuts for the snap zones (halves, quarters, full), split out of the snapping item that shipped in #82.
 - [x] [Sonnet] Music app: WAV playback from disk, playlist, play, pause, skip, volume. Unblocked: the Sound Blaster driver shipped in 1.6.9. Shipped: user/music.c plays WAV and MP3 from Files and MUSIC with play, pause, seek, next, shuffle and volume (`music-check.py`, `arm64-music-check.py`; the jack on the board 2026-11-01).
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
@@ -1023,6 +1023,7 @@ One line per version. The full release notes live in the GitHub releases and `gi
 - **13.2.0 (2026-11-02)**: the GPU, step one (Joshua: "fix the browser so it works with graphics acceleration"). `gpu` in the Terminal brings the Pi 4's V3D up the way Linux does: the firmware's V3D clock on at its top rate, the bridge checked, the reset lifted, then the GPU asked what it is (it should say 4.2). Any refusal stops it with one line before the GPU is touched, and boot never runs it. Nothing draws on it yet: that is 14.0, and drawing pages on it needs shader programs of our own. Check: `arm64-gpu-check.py`.
 - **13.3.0 (2026-11-03)**: Spotify, step one (Joshua: "lets get spotify working"). `tools/claude-relay/spotify.py` is a remote on the Mac, not a player: Spotify's streams are DRM and its native protocol is closed, so the Web API drives the Spotify app on the Mac (Premium needed) and Blackcomb will read a plain page of now playing, controls and search. PKCE login, no secret on disk. Next: the Blackcomb page and a `spotify` command on the Pi. Check: `tools/checks/spotify-check.py`.
 - **13.3.1 (2026-11-03)**: Spotify in Blackcomb. A `spotify:` address sends one command (`now`, `play`, `pause`, `next`, `prev`, `search WORDS`) to the Mac's spotify.py and shows the remote it answers as a page; its links are more `spotify:` commands, so Tab and Enter drive playback. Check: `tools/checks/arm64-spotify-check.py`.
+- **13.5.0 (2026-11-09)**: window snapping from the keyboard on the i386 desktop. Ctrl+Alt+Left and Right take the halves, Up fills the screen, U, I, J and K take the quarters, the same zones a title-bar drag lands in. Check: `windowsnap-check.py`. Also lldb on QEMU's gdb stub for both ports, the commands are at the top of `debugger-check.py`.
 - **13.4.0 (2026-11-03)**: install from the web. A link in Blackcomb to a signed `NAME.app` installs it, as `install NAME` does: its signature is fetched from `NAME.sig` beside it and checked before anything is written, so a changed or unsigned app is refused and saved nowhere. Other files still download. Check: `arm64-browser-install-check.py`.
 - **13.0.0 (2026-11-02)**: Bluetooth headphones and keyboards, which finish 13.0. Classic Bluetooth (BR/EDR) runs beside the LE mouse on the same UART: `bt find` lists what Inquiry hears by name and kind (headphones, speaker, keyboard, mouse), `bt connect N` pairs it with Secure Simple Pairing (Just Works, or PIN 0000 for an old device) and keeps the link key in `JT/BTLINK.BIN`, a protected file, and a later `bt connect` reconnects with it. A keyboard or mouse opens HID control and interrupt over L2CAP in boot protocol and types. Headphones and speakers get A2DP over AVDTP and play every app's sound, Music and Movies included, as SBC (a new fixed-point encoder, `sbc.c`) in RTP, paced so a slow radio slows the clock instead of dropping sound. Checks: `arm64-btclassic-check.py` (a fake radio; opcodes from Linux's hci.h; ffmpeg decodes what the headphones receive), `sbc-encode-check.py`.
 - **12.0.0 (2026-11-02)**: Parental controls, which finish 12.0. As in Screen Time, an admin limits another account with `sudo limits NAME apps A,B`, `hours F-T` and `web off` (and `all`, `any`, `on` and `clear` to undo), kept in `JT/LIMITS.TXT`, a protected file. Every way an app starts (the dock, Spotlight, the Launchpad, Samantha's open, the Terminal key and a ring-3 start) asks first; a refused app says why in the menu bar and never starts, Blackcomb loads nothing with the web off, the hours follow the Pi's clock, and admins are never limited. Check: `arm64-limits-check.py`. Also in 12.0.0, YouTube plays whole songs, sharper. The Mac's video service fits the whole video into the 12 MB the Pi can take by lowering the bitrate across its full length, instead of cutting the end off (Drake's Plot Twist was 2:48 of 3:16, now all of it), and short videos come 320 wide, the most Movies decodes, instead of 256. It cuts a video short only when the bitrate would be too low to watch. Check: `yt-fit-check.py`.

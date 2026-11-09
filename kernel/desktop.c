@@ -359,6 +359,7 @@ void gui_run(void){
         if (kbd_ctrl && kbd_alt) {
             int shell_pk = kbd_peek();
             if (shell_pk == 0x0E) { kbd_pop(); break; }
+            if (gui_snap_key()) mw_key_repaint = 1; /* the frame moved: the same full repaint a drag-snap release gets */
         }
         if (gui_multiwin_interactive(mw_topmost_icon)) {
             int mwk = gui_multiwin_key_nonblock();
