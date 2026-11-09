@@ -21,6 +21,7 @@ static const char *const man_pages[][2] = {
     {"fetch", "fetch URL\nSaves what is at that address to the card."},
     {"fill", "fill N TEXT\nSets form field N on the browser's page."},
     {"find", "find WORD\nFinds a word on the browser's page."},
+    {"focus", "focus [on|off]\nWhile Focus is on, notices from apps are held and the menu bar says Focus. Click the word, or type focus off, to end it."},
     {"forward", "forward\nThe browser goes to the page after this one."},
     {"help", "help\nLists every command. man NAME says more about one."},
     {"history", "history [WORDS|top|clear]\nThe browser's history: searches it, shows the most visited, or clears it."},

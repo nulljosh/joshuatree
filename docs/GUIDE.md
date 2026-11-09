@@ -55,6 +55,8 @@ To resize, press within 12 pixels of a right, bottom or left edge (below the tit
 
 Content lays itself out again to fit: the Console and Terminal change columns and rows, the Browser re-wraps, the Calculator spreads its keys, Calendar, Notes, Music and Books redraw. Brick has a fixed field and keeps its first size as its smallest. On a 720p, 768p or 4K screen an app's window also stops growing at about 376,000 pixels of content (it needs that much memory). A 1080p Pi never gets there.
 
+**Focus (Pi).** `focus on` keeps notices from apps out of the menu bar, and the word Focus sits there while it is on. Click the word, or type `focus off`, and it says how many it held.
+
 **Fill the screen (Pi).** The green dot on the front window fills the space from the menu bar to the dock, and pressing it again puts the window back.
 
 **Snap a window from the keyboard (PC build).** Ctrl+Alt+Left and Ctrl+Alt+Right put the front window on half the screen, Ctrl+Alt+Up fills it, and Ctrl+Alt+U, I, J and K put it in a corner.

@@ -75,6 +75,7 @@
 #define JT_SYS_FUTEX        409 /* 8.1.0, Pi only: (0, addr, val) sleeps while *addr == val; (1, addr, n) wakes up to n sleepers */
 #define JT_SYS_SPAWN        410 /* 8.4.0, Pi only: (name, words, 0) starts another app with those words; returns its pid or -errno */
 #define JT_SYS_WAIT         411 /* 8.4.0, Pi only: (pid) waits for a child to end; returns its exit status (-1 for a fault or a kill) or -ECHILD */
+#define JT_SYS_NOTIFY       413 /* 13.7.0, Pi only: (text) a one-line notice in the menu bar under the app's name, held while Focus is on */
 #define JT_SYS_CONNECT      412 /* 8.5.0, Pi only: (host, port) opens a TCP connection; returns fd 100 for read, write and close, or -errno */
 #define JT_SOCK_FD          100
 #define JT_SYS_CLIPBOARD   399 /* 1.9.28: the one system clipboard, 4 KB; see kernel/syscall.h */
@@ -236,6 +237,7 @@ static inline void jt_exit(int code) {
     jt_syscall(JT_SYS_EXIT, (jt_arg)code, 0, 0);
     for (;;) { } /* SYS_EXIT never returns; the loop only tells the compiler that too */
 }
+static inline int jt_notify(const char *text)                     { return jt_syscall(JT_SYS_NOTIFY, (jt_arg)text, 0, 0); }
 static inline int jt_read(int fd, void *buf, unsigned len)        { return jt_syscall(JT_SYS_READ,  (jt_arg)fd, (jt_arg)buf, len); }
 static inline int jt_write(int fd, const void *buf, unsigned len) { return jt_syscall(JT_SYS_WRITE, (jt_arg)fd, (jt_arg)buf, len); }
 static inline int jt_open(const char *path, int flags)            { return jt_syscall(JT_SYS_OPEN,  (jt_arg)path, (jt_arg)flags, 0); }

@@ -47,7 +47,7 @@ void power_run(int off);                                   /* main.c: the confir
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), userrun A | userrun B (A's output is B's input), cores, sched, disk, stick [ls|cat NAME|copy NAME] (a USB stick), debug NAME [STEPS] (run an app one instruction at a time: where it is, the instruction, the registers that changed, then its registers and stack), install NAME (an app from the store), "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
-                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), shortcut [NAME] (NAME = A; B saves one, rm NAME drops it), reboot, shutdown, man NAME (how a command works), help.";
+                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), shortcut [NAME] (NAME = A; B saves one, rm NAME drops it), reboot, shutdown, focus [on|off] (quiet notices from apps), man NAME (how a command works), help.";
 #include "man.h"
 static void man_show(const char *q, unsigned n) {   /* 13.6.0: q is the one word after man */
     for (unsigned i = 0; i < sizeof man_pages / sizeof man_pages[0]; i++) {
@@ -708,6 +708,10 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (n == 3 && q[0] == 's' && q[1] == 'a' && q[2] == 'm') { sam_command(q + 3, 0); return; }
     if (is(q, n, "sam")) { sam_command(q + 4, n - 4); return; }
     if (n == 4 && q[0] == 'h' && q[1] == 'e' && q[2] == 'l' && q[3] == 'p') { say_wrapped("", help, sizeof help - 1); return; }
+    { extern int focus_on; void focus_set(int on);
+      if (word_is(q, n, "focus")) { cmd_out(focus_on ? "focus: on\n" : "focus: off\n"); return; }
+      if (word_is(q, n, "focus on")) { focus_set(1); cmd_out("focus: on, apps are quiet\n"); return; }
+      if (word_is(q, n, "focus off")) { focus_set(0); cmd_out("focus: off\n"); return; } }
     if (word_is(q, n, "man")) { cmd_out("man: which command? try man ls\n"); return; }
     if (is(q, n, "man")) { man_show(q + 4, n - 4); return; }
     if (word_is(q, n, "limits")) { limits_command(q, 0); return; }

@@ -251,6 +251,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `tools/checks/debugger-check.py` | Boots both kernels paused under QEMU's gdb stub, lldb stops each at its first C function and reads the program counter. Skips when lldb is missing. |
 | `arch/arm64/heat.c` | 13.3.0: `temp` (`cmd.c`) prints the chip's temperature and the point the firmware slows it down, from mailbox tags 0x00030006 and 0x0003000a (thousandths of a degree C), each tag's response bit checked. Virt says it has no sensor; the `heat` variant image (`-DHEAT_TEST`, `desk.c`) prints it once the screen is up, since raspi4b has no keyboard. No fan pin: a fan on 5V and ground just runs. `tools/checks/arm64-heat-check.py`. |
 | `tools/checks/ring3seed-stale-check.py` | Boots twice on one FAT disk with the app's bytes changed between boots: the kernel replaces the stale copy, and leaves a matching one alone. |
+| `tools/checks/arm64-notify-check.py` | A card app posts a notice with `jt_notify`: it shows under the app's name, Focus holds it, and turning Focus off says how many were held. |
 | `arch/arm64/man.h` | The Terminal's `man NAME` pages, one per command, included once by `cmd.c`. |
 | `tools/checks/arm64-man-check.py` | Fails when a command in `help` or `cmd_run` has no page, then runs `man cat` and `man zzz` in headless QEMU. |
 | `tools/checks/arm64-spotlight-check.py` | Boots the ARM kernel headless in QEMU, presses F1: an empty query lists all 18 apps, typing calc shows exactly Calculator, Enter opens its window. |
@@ -2097,6 +2098,7 @@ Threads (8.1.0) and processes (8.4.0), the Pi only; i386 answers -ENOSYS. `user/
 | 410 | `spawn` | `const char *name` | `const char *words`, or 0 | 0 | the child's pid, or -ENOENT, -EAGAIN, -ENOEXEC, -EFAULT |
 | 411 | `wait` | pid | 0 | 0 | the child's exit status (-1 for a fault or a kill), or -ECHILD |
 | 412 | `connect` | `const char *host`, a name or a dotted address | port | 0 | fd 100, or -EBUSY, -EHOSTUNREACH, -ECONNREFUSED, -EFAULT, -EINVAL |
+| 413 | `notify` (13.7.0, the Pi only) | `const char *text`, up to 63 bytes | 0 | 0 | 0, or -EFAULT, -EINVAL |
 
 An app has up to four threads, each with its own registers, pc, stack and FP block (`struct thread` in `arch/arm64/kmain.h`). Every app runs in 10 ms slices (8.6.0; until then only an app with threads did, and a lone thread kept the core until it yielded or the 3 s watchdog fired), so the desktop's loop, which moves the pointer and refills the sound, runs between any two of an app's turns. At a slice's end (`app_preempt`) at its end the thread is parked, NZCV flags and all (kept in the frame's esr word, which `resume_user` puts back), the exclusive monitor is cleared, and the next ready thread runs on the desktop's next pass. A call never restarts the slice, or a thread that calls often would never be cut off; it only clears the spin count, and 300 slices with no call from any thread is the watchdog's three seconds. The kernel holds no locks for an app: `jt_mutex` (Drepper's three-state futex mutex) and `jt_cond` (a sequence word) are ldaxr and stlxr loops in the app, since the A72 has no LSE atomics. The compare and sleep in `futex` is atomic only because there is one core and the kernel runs with IRQs masked; the four-core change must lock it. Checks: `arm64-threads-check.py`, and `arm64-sched-check.py` for the slices (`sched` in the Terminal says the longest one app held the core in a turn).
 
@@ -2558,7 +2560,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (392 checks)
+### The suite (393 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2756,6 +2758,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Ring-3 stress: window task and desktop hammer heap and FAT at once, heap walk ok, file at root, desktop alive | `tools/checks/ring3stress-check.py` | retry |
 | Ring-3 PDE sync: kernel page table born after the window task is visible on its CR3, close clean, desktop alive | `tools/checks/pdesync-check.py` | retry |
 | Window snapping (title-bar drag to edge/corner, real pixel proof) | `tools/checks/windowsnap-check.py` | retry |
+| Notices from apps (13.7.0): one shows under its app's name, Focus holds it and says how many, in headless QEMU | `tools/checks/arm64-notify-check.py` | once |
 | A disk kept from an older kernel gets this kernel's app: a changed KEYRATE.BIN is replaced at launch and an unchanged one is left alone | `tools/checks/ring3seed-stale-check.py` | retry |
 | man NAME (13.6.0): every Pi Terminal command has a page, man cat prints it, an unknown name is refused, in headless QEMU | `tools/checks/arm64-man-check.py` | once |
 | lldb stops both kernels at their entry through QEMU's gdb stub (skips with no lldb) | `tools/checks/debugger-check.py` | once |
@@ -2999,7 +3002,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Depths | `tools/checks/arm64-games-check.py`, `tools/checks/ring3-depths-check.py` |
 | Snake | `tools/checks/arm64-games-check.py`, `tools/checks/ring3-snake-check.py` |
 | Chess | `tools/checks/chess-core-check.py`, `tools/checks/ring3-chess-check.py` |
-| Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appsig-fuzz-check.sh`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-appboot-check.py`, `tools/checks/arm64-appsig-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-cardapp-check.py`, `tools/checks/arm64-finder-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/arm64-limits-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-samapp-check.py`, `tools/checks/arm64-sambuild-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/arm64-smp-threads-check.py`, `tools/checks/arm64-store-check.py`, `tools/checks/arm64-watchdog-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
+| Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appsig-fuzz-check.sh`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/arm64-appboot-check.py`, `tools/checks/arm64-appsig-check.py`, `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-cardapp-check.py`, `tools/checks/arm64-finder-check.py`, `tools/checks/arm64-launchpad-check.py`, `tools/checks/arm64-limits-check.py`, `tools/checks/arm64-notify-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-samapp-check.py`, `tools/checks/arm64-sambuild-check.py`, `tools/checks/arm64-screen-idle-check.py`, `tools/checks/arm64-smp-threads-check.py`, `tools/checks/arm64-store-check.py`, `tools/checks/arm64-watchdog-check.py`, `tools/checks/launchpad-exit-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | `tools/checks/arm64-launchpad-check.py` |
 | Settings | `tools/checks/arm64-lang-check.py`, `tools/checks/arm64-model-check.py`, `tools/checks/arm64-settings-check.py`, `tools/checks/arm64-spotlight-check.py`, `tools/checks/arm64-users-check.py`, `tools/checks/arm64-wifi-pane-check.py`, `tools/checks/location-check.py`, `tools/checks/settingsclick-check.sh`, `tools/checks/walldemo-regression-check.py` |
 

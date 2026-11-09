@@ -392,6 +392,7 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_FUTEX 409
 #define JT_SYS_SPAWN 410        /* 8.4.0: spawn and wait, see app_spawn */
 #define JT_SYS_WAIT 411
+#define JT_SYS_NOTIFY 413       /* 13.7.0: see ufile_notify */
 #define JT_SYS_CONNECT 412      /* 8.5.0: a TCP socket, see sock_connect */
 #define JT_SYS_CLOSE 6
 #define JT_SYS_TEXT2 402         /* 3.9.0: Tree Sans into a device-size window buffer (user/libjt/hires.h) */
@@ -1064,6 +1065,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             else if (n == JT_SYS_THREAD_SPAWN) r = th_spawn(a0, f->x[1], f->x[2]);   /* 8.1.0 */
             else if (n == JT_SYS_SPAWN) r = app_spawn(a0, f->x[1]);   /* 8.4.0 */
             else if (n == JT_SYS_WAIT) r = app_wait(f, fp, a0);
+            else if (n == JT_SYS_NOTIFY) { long ufile_notify(unsigned long text, const char *app); r = ufile_notify(a0, app_cur ? app_cur->name : "App"); }
             else if (n == JT_SYS_CONNECT) r = sock_connect(a0, f->x[1]);   /* 8.5.0 */
             else if (n == JT_SYS_CLIPBOARD) r = app_clip(a0, f->x[1], f->x[2]);   /* 3.10.0 */
             else if (n == JT_SYS_TASKS) {
@@ -1307,6 +1309,8 @@ void app_kill(const char *how) {   /* every app ends: a kernel-drawn window is o
     ap = &apps[app_top >= 0 ? app_top : 0];
 }
 int ufile_launch_take(char *name, char *arg);   /* ufile.c */
+int ufile_notify_take(char *out);   /* ufile.c */
+void menubar_app_notice(const char *m);   /* desk.c */
 void ufile_args_next(const char *s, unsigned n);
 int app_dock(const char *name);                  /* appwin.c */
 unsigned long sched_worst;   /* 8.6.0: `sched` in the Terminal reads it and starts again */
@@ -1317,6 +1321,7 @@ void app_tick(void) {   /* every app with something to do gets its turn: it runs
         if (cnt_now() - last_sev >= cnt_hz() / 100) { last_sev = cnt_now(); __asm__ volatile ("sev"); }
     }
     {   static char nm[65], arg[65];   /* 7.7.0: an app asked for another (Files opens a song in Music): opened here, between turns */
+        { char note[64]; if (ufile_notify_take(note)) menubar_app_notice(note); }   /* 13.7.0: between app turns, as a launch is */
         if (ufile_launch_take(nm, arg)) {
             unsigned n = 0; while (arg[n]) n++;
             ufile_args_next(arg, n);
