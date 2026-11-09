@@ -47,7 +47,17 @@ void power_run(int off);                                   /* main.c: the confir
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), userrun A | userrun B (A's output is B's input), cores, sched, disk, stick [ls|cat NAME|copy NAME] (a USB stick), debug NAME [STEPS] (run an app one instruction at a time: where it is, the instruction, the registers that changed, then its registers and stack), install NAME (an app from the store), "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
-                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), shortcut [NAME] (NAME = A; B saves one, rm NAME drops it), reboot, shutdown, help.";
+                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), shortcut [NAME] (NAME = A; B saves one, rm NAME drops it), reboot, shutdown, man NAME (how a command works), help.";
+#include "man.h"
+static void man_show(const char *q, unsigned n) {   /* 13.6.0: q is the one word after man */
+    for (unsigned i = 0; i < sizeof man_pages / sizeof man_pages[0]; i++) {
+        const char *w = man_pages[i][0], *p = man_pages[i][1];
+        unsigned k = 0;
+        while (k < n && w[k] && q[k] == w[k]) k++;
+        if (k == n && !w[k]) { cmd_out(p); cmd_out("\n"); return; }
+    }
+    cmd_out("man: no page for "); for (unsigned k = 0; k < n; k++) { char c[2] = { q[k], 0 }; cmd_out(c); } cmd_out(", try help\n");
+}
 static unsigned ls_count;
 static void ls_one(const char *name, unsigned size, int is_dir) {   /* one line a file: the 8.3 name, then its size in bytes */
     unsigned k = 0;
@@ -698,6 +708,8 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (n == 3 && q[0] == 's' && q[1] == 'a' && q[2] == 'm') { sam_command(q + 3, 0); return; }
     if (is(q, n, "sam")) { sam_command(q + 4, n - 4); return; }
     if (n == 4 && q[0] == 'h' && q[1] == 'e' && q[2] == 'l' && q[3] == 'p') { say_wrapped("", help, sizeof help - 1); return; }
+    if (word_is(q, n, "man")) { cmd_out("man: which command? try man ls\n"); return; }
+    if (is(q, n, "man")) { man_show(q + 4, n - 4); return; }
     if (word_is(q, n, "limits")) { limits_command(q, 0); return; }
     if (is(q, n, "limits")) { limits_command(q + 7, n - 7); return; }
     if (word_is(q, n, "shortcut")) { shortcut_command(q, 0); return; }
@@ -802,7 +814,8 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (word_is(q, n, "reboot") || word_is(q, n, "restart")) { power_run(0); return; }     /* typing it is the confirmation the chord asks for */
     if (word_is(q, n, "shutdown") || word_is(q, n, "poweroff")) { power_run(1); return; }
     if (bt_command(q, n)) return;
-    { int gpu_command(const char *q, unsigned n); if (gpu_command(q, n)) return; }   /* 13.2.0: gpu.c, the V3D brought up by hand */
+    { int gpu_command(const char *q, unsigned n); if (gpu_command(q, n)) return; }
+    { int heat_command(const char *q, unsigned n); if (heat_command(q, n)) return; }   /* 13.3.0: heat.c, how hot the chip is */   /* 13.2.0: gpu.c, the V3D brought up by hand */
     if (beep_command(q, n)) return;
     if (mic_command(q, n)) return;
     if (vol_command(q, n)) return;

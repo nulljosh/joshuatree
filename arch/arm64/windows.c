@@ -180,6 +180,19 @@ static void win_resize_to(int lx, int ly) {   /* the pointer is at (lx, ly): the
     if (t == WT_APP && (unsigned long)(nw - 16) * (unsigned)(nh - 40) * 4 > UWIN_MAX) return;   /* the app's buffer must fit its mapped window: the size stays where it last fit */
     win_set(t, nx, y, nw, nh);
 }
+/* 13.6.0: the green dot. The front window fills the space between the menu bar and the dock's band, and a second press puts it
+   back where it was. ponytail: a saved rectangle outlives its window; it is only read while the window sits exactly full, so a
+   fresh window never reaches a stale one. */
+static int zoom_was[2 + APP_SLOTS][4];
+static void win_zoom(int t) {
+    int s = (int)window_scale(), top = sg(MENUBAR_H) / s + 8, sw = (int)fb_w / s, h = gui_dock_band_top() - 22 - top;
+    if (t == WT_APP && (unsigned long)(sw - 16) * (unsigned)(h - 40) * 4 > UWIN_MAX) h = (int)(UWIN_MAX / 4 / (unsigned)(sw - 16)) + 40;   /* the app's buffer must fit its mapped window, as a corner drag */
+    int *was = zoom_was[t == WT_APP ? 2 + (int)ap->slot : t];
+    if (*win_rc(t, 0) == 0 && *win_rc(t, 1) == top && *win_rc(t, 2) == sw && *win_rc(t, 3) == h && was[2]) win_set(t, was[0], was[1], was[2], was[3]);
+    else { for (int i = 0; i < 4; i++) was[i] = *win_rc(t, i); win_set(t, 0, top, sw, h); }
+    con_quiet = 1; uart_puts("window fill "); uart_dec((unsigned)*win_rc(t, 0)); uart_putc(','); uart_dec((unsigned)*win_rc(t, 1)); uart_putc(' ');
+    uart_dec((unsigned)*win_rc(t, 2)); uart_putc('x'); uart_dec((unsigned)*win_rc(t, 3)); uart_putc('\n');
+}
 void drag_end(void) {
     if (!drag_on && !rs_on) return;
     int t = drag_t, was_sizing = rs_on;
@@ -219,6 +232,7 @@ void pointer_moved(void) {   /* one report done: the arrow to its new place, the
 }
 int in_box(int x, int y, int bx, int by, int bw, int bh) { return x >= bx && x < bx + bw && y >= by && y < by + bh; }
 static int on_min_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 46), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* 6.5.0: the yellow dot */
+static int on_zoom_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 68), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }
 static int on_close_dot(int x, int y, int wx, int wy) { int dx = x - (wx + 24), dy = y - (wy + 16); return dx * dx + dy * dy <= 8 * 8; }   /* gui_draw_window_frame's red dot, radius 7 */
 void dock_activate(int slot);
 void ask_prefill(const char *s);   /* ask.c: type s on the Terminal's empty line */
@@ -245,6 +259,7 @@ void pointer_click(void) {   /* the left button went down */
     }
     int on_app = app_wbytes && !ap->min && in_box(lx, ly, app_lx, app_ly, app_lw, app_lh);
     int wt = slot < 0 ? win_target() : -1, grab = wt >= 0 ? win_grab(wt, lx, ly) : 0;   /* the front window's title band or an edge takes hold of it */
+    if (wt >= 0 && on_zoom_dot(lx, ly, *win_rc(wt, 0), *win_rc(wt, 1))) { win_zoom(wt); return; }
     if (grab == GRAB_TITLE) { drag_on = 1; drag_t = wt; drag_dx = lx - *win_rc(wt, 0); drag_dy = ly - *win_rc(wt, 1); return; }
     if (grab) { rs_on = grab; drag_t = wt; rs_dx = lx - (*win_rc(wt, 0) + *win_rc(wt, 2)); rs_dy = ly - (*win_rc(wt, 1) + *win_rc(wt, 3)); if (grab & RS_L) rs_dx = lx - *win_rc(wt, 0); return; }
     if (brick_live && slot < 0) {

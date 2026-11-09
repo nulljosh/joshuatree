@@ -212,6 +212,19 @@ static int ring3app_seed(const struct ring3_app *a) {
             }
         }
         kfree(raw);
+    } else {
+        /* 13.6.0: a disk kept from an older kernel still holds the old app. A copy that does not match this kernel's is replaced;
+           if the replace fails, the old copy still runs, as it did before. */
+        unsigned char *disk = kmalloc(a->len + 1);
+        if (disk) {
+            int n = vfs_read_file(a->file, disk, a->len + 1);
+            int same = n == (int)a->len && inflate_adler32(disk, a->len) == a->sum;
+            kfree(disk);
+            if (!same) {
+                serial_puts("ring3app: replacing stale "); serial_puts(a->file); serial_puts("\n");
+                ring3app_write_packed(a->file, a->bin, a->clen, a->len, a->sum, 1);
+            }
+        }
     }
     return 0;
 }
