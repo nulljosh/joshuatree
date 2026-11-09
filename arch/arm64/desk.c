@@ -399,6 +399,7 @@ unsigned notice_now(void) {
 struct menu_notice notice;
 int notice_up(void) { return notice.text[0] != 0; }   /* boot.c: a notice is showing, so the loop keeps polling */
 static unsigned *mb_save; static int mb_h, mb_x0;
+int focus_on; static unsigned focus_held; static int focus_hit[2]; void focus_set(int on);   /* 13.7.0, below */
 static int mb_hit[4][2];   /* the status icons' columns in physical pixels: power, sound, Wi-Fi, clock (menubar_wifi sets them) */
 static int mb_wifi = -1;   /* the Wi-Fi state last shown (0 off, 1 working, 2 connected), so the clock can redraw alone each minute */
 static int clock_minute = -1;
@@ -514,6 +515,12 @@ void menubar_wifi(int state) {
         int rx = (mb_mic ? lx - sg(12) - isz : lx) - sg(16), tw = text_width(2, tr(S_READER_ON), sg(120));
         text_draw(2, tr(S_READER_ON), rx - tw, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, rx, H);
     }
+    focus_hit[0] = focus_hit[1] = 0;
+    if (focus_on && !notice.text[0]) {   /* 13.7.0: left of the reader's mark when both are up */
+        int fx = (mb_mic ? lx - sg(12) - isz : lx) - sg(16) - (reader_on ? text_width(2, tr(S_READER_ON), sg(120)) + sg(12) : 0), tw = text_width(2, "Focus", sg(120));
+        text_draw(2, "Focus", fx - tw, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, fx, H);
+        focus_hit[0] = fx - tw - sg(5); focus_hit[1] = fx + sg(5);
+    }
     mb_hit[0][0] = wx - sg(5); mb_hit[0][1] = wx + isz + sg(5);         /* power */
     mb_hit[1][0] = sx - sg(5); mb_hit[1][1] = sx + isz + sg(5);         /* sound */
     mb_hit[2][0] = ox - R - sg(5); mb_hit[2][1] = ox + R + sg(5);       /* Wi-Fi */
@@ -537,6 +544,7 @@ int menubar_click(int x, int y) {
     static const int section[4] = { SET_ABOUT, SET_SOUND, SET_ABOUT, SET_TIME };
     static const char *const name[4] = { "power", "sound", "wifi", "clock" };
     if (!fb || y >= mb_h) return 0;
+    if (focus_hit[1] > focus_hit[0] && x >= focus_hit[0] && x < focus_hit[1]) { focus_set(0); return 1; }
     for (int i = 0; i < 4; i++) if (mb_hit[i][1] > mb_hit[i][0] && x >= mb_hit[i][0] && x < mb_hit[i][1]) {
         con_quiet = 1; uart_puts("menubar click "); uart_puts(name[i]); uart_putc('\n');
         settings_open(section[i]);
@@ -551,6 +559,26 @@ int limits_hour(void) {   /* 12.0, limits.c: the local hour, -1 while the networ
     unsigned long u = net_clock_utc(); if (!u) return -1;
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd); return (int)h;
 #endif
+}
+/* 13.7.0: Focus. While it is on, a notice from an app is counted and not shown; the word Focus sits in the menu bar, and clicking it
+   turns Focus off. Turning it off says how many were held. ponytail: forgotten at restart, a line in SETTINGS.TXT if that matters. */
+void menubar_notify(const char *message);
+void menubar_app_notice(const char *m) {
+    con_quiet = 1; uart_puts(focus_on ? "notice held: " : "notice app: "); uart_puts(m); uart_putc('\n');
+    if (focus_on) { focus_held++; return; }
+    menubar_notify(m);
+}
+void focus_set(int on) {
+    if (on == focus_on) return;
+    focus_on = on;
+    con_quiet = 1; uart_puts(on ? "focus: on\n" : "focus: off\n");
+    if (!on && focus_held) {
+        char t[32]; unsigned n = 0, v = focus_held; focus_held = 0;
+        char d[10]; unsigned k = 0; do d[k++] = (char)('0' + v % 10); while (v /= 10); while (k) t[n++] = d[--k];
+        for (const char *s = " held during Focus"; *s; s++) t[n++] = *s;
+        t[n] = 0;
+        menubar_notify(t);
+    } else if (fb) { cur_hide(); menubar_wifi(mb_wifi); cur_show(); }
 }
 void menubar_notify(const char *message) {
     notice_set(&notice, message, notice_now());
@@ -969,6 +997,9 @@ void m1_selftest(void) {
 #endif
 #ifdef GPU_TEST   /* arm64-gpu-check.py: QEMU has no keyboard on raspi4b, so this image types `gpu` once the screen is up */
     { int gpu_bringup(void (*say)(const char *)); gpu_bringup(uart_puts); }
+#endif
+#ifdef HEAT_TEST   /* arm64-heat-check.py: the same for `temp` */
+    { const char *heat_line(void); uart_puts(heat_line()); }
 #endif
 }
 

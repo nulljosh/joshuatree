@@ -33,7 +33,7 @@ def check(name, ok, detail=""):
     print(("  ok: " if ok else "  FAIL: ") + name + ("" if ok else "  " + repr(detail)[:600]))
     if not ok: fails.append(name)
 
-WALL, RED, YELLOW, GREY = (0x3B, 0x6E, 0xA5), (0xFF, 0x5F, 0x57), (0xFF, 0xD6, 0x4A), (0xD8, 0xD4, 0xCE)
+WALL, RED, YELLOW, GREEN = (0x3B, 0x6E, 0xA5), (0xFF, 0x5F, 0x57), (0xFF, 0xD6, 0x4A), (0x28, 0xC8, 0x40)
 ZONE = 12
 
 def screendump(cmd, tmp):
@@ -156,7 +156,7 @@ try:
             mnw, mnh = min(mnw, w.first[0]), min(mnh, w.first[1])
             if n == "Brick": mnw, mnh = w.first
             img0 = screendump(cmd, tmp)
-            check(f"{n}: opens with its three dots", dots(img0, r[0] * S, r[1] * S) == [RED, YELLOW, GREY], dots(img0, r[0] * S, r[1] * S))
+            check(f"{n}: opens with its three dots", dots(img0, r[0] * S, r[1] * S) == [RED, YELLOW, GREEN], dots(img0, r[0] * S, r[1] * S))
             # 1. a drag by the title band to the top left (or a step off it when it is there): moved, dots, wallpaper left behind
             tx, ty = (24, TOP - 20) if (r[0], r[1]) != (24, TOP) else (84, TOP + 24)
             old = (r[0] * S, r[1] * S, r[2] * S, r[3] * S)
@@ -167,7 +167,7 @@ try:
             if at is None: return
             r[0], r[1] = at
             img = screendump(cmd, tmp)
-            check(f"{n}: its dots are at the new place", dots(img, r[0] * S, r[1] * S) == [RED, YELLOW, GREY], dots(img, r[0] * S, r[1] * S))
+            check(f"{n}: its dots are at the new place", dots(img, r[0] * S, r[1] * S) == [RED, YELLOW, GREEN], dots(img, r[0] * S, r[1] * S))
             skip = [arrow(pos[0], pos[1]), arrow(g[0] * S, g[1] * S)]
             check(f"{n}: the rectangle it left is flat wallpaper", not_flat_outside(img, old, (r[0] * S, r[1] * S, r[2] * S, r[3] * S), skip) == 0,
                   not_flat_outside(img, old, (r[0] * S, r[1] * S, r[2] * S, r[3] * S), skip))
@@ -185,7 +185,7 @@ try:
             after = screendump(cmd, tmp)
             ar = arrow(pos[0] * S, pos[1] * S)
             check(f"{n}: the dots stay and the right and bottom edges are at the new place",
-                  dots(after, r[0] * S, r[1] * S) == [RED, YELLOW, GREY] and px(after, (r[0] + r[2] - 4) * S, (r[1] + r[3] // 2) * S) != WALL and px(after, (r[0] + r[2] + 3) * S, (r[1] + r[3] // 2) * S) == WALL
+                  dots(after, r[0] * S, r[1] * S) == [RED, YELLOW, GREEN] and px(after, (r[0] + r[2] - 4) * S, (r[1] + r[3] // 2) * S) != WALL and px(after, (r[0] + r[2] + 3) * S, (r[1] + r[3] // 2) * S) == WALL
                   and px(after, (r[0] + r[2] // 2) * S, (r[1] + r[3] - 4) * S) != WALL and px(after, (r[0] + r[2] // 2) * S, (r[1] + r[3] + 3) * S) == WALL,
                   (dots(after, r[0] * S, r[1] * S), px(after, (r[0] + r[2] - 4) * S, (r[1] + r[3] // 2) * S), px(after, (r[0] + r[2] + 3) * S, (r[1] + r[3] // 2) * S)))
             ok, detail = w.relayout(before, after, r0, tuple(r), dw, dh, ar)
@@ -197,6 +197,22 @@ try:
                 check(f"{n}: the app got JT_EV_RESIZE, re-opened its window at {cw}x{ch} and drew a frame in it",
                       wait_for(f"M3c event resize ", 20) and wait_for(f"M3c window {n.lower()} {cw}x{ch} resized", 40) and wait_for(f"ring3: window now {cw}x{ch}", 40)
                       and wait_for(f"M3c window {n.lower()} redrawn {cw}x{ch}", 40) and uart().count("ring3: window now ") > pre, uart()[-500:])
+            # 2b. the green dot (13.6.0): fills the space from the menu bar to the dock's band, and a second press puts it back
+            def zoom():
+                nz = uart().count("window fill ")
+                if not (move_to((r[0] + 68) * S, (r[1] + 16) * S) and click() and wait_for("window fill ", 40, nz + 1)): return None
+                return tuple(map(int, re.findall(r"window fill (\d+),(\d+) (\d+)x(\d+)\n", uart())[-1]))
+            was = tuple(r)
+            got = zoom()
+            check(f"{n}: the green dot fills the screen", got == (0, TOP, SW, BOTTOM - TOP), got)
+            if got is None: return
+            r[:] = got
+            time.sleep(0.5)
+            back = zoom()
+            check(f"{n}: a second press puts it back", back == was, (back, was))
+            if back is None: return
+            r[:] = back
+            time.sleep(0.5)
             # 3. the minimum, by the corner; then the right edge alone, and the bottom edge alone
             c = corner(r)
             at, size = drag(c, (r[0] + 4, r[1] + 4))

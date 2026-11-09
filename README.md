@@ -27,7 +27,13 @@ A small operating system, written from scratch, that runs on a Raspberry Pi 4, i
 - In a browser: open [joshuatree.jaybulb.com/?demo](https://joshuatree.jaybulb.com/?demo).
 - On a PC: boot the [latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) ([checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS)). BIOS boot is checked in QEMU. UEFI and real PCs are not.
 - On a Pi 4: flash a card with `tools/flash-pi.sh` ([steps](docs/GUIDE.md#raspberry-pi)).
-- To build it: `brew install lld qemu`. Then `make run` to boot and `./check.sh` to test.
+- To build it on a Mac, Apple Silicon or Intel: `brew install lld qemu`. On Linux, Intel or AMD: `sudo apt install clang lld qemu-system-x86 qemu-system-arm`. Then `make run` to boot and `./check.sh` to test. Every pull request is built and checked on Linux x86-64.
+
+## New
+
+- On the Pi: the green dot fills the screen, `man NAME` explains every Terminal command, `temp` reads the chip, `ping HOST` works, and apps can post notices that Focus keeps quiet.
+- On a PC: Ctrl+Alt with the arrows or U, I, J and K snaps the front window.
+- For developers: lldb attaches to both kernels through QEMU's gdb stub.
 
 ## The box
 

@@ -68,6 +68,7 @@ once |8|ARM menu notices: bounded messages, expiry, pixels and input|python3 ./t
 once |8|Pi screen sleep and deep idle (10.1.0): idle deadline, wrap, active apps, refused mailbox requests, keyboard/mouse wake, and 50 loop passes a second asleep|python3 ./tools/checks/arm64-screen-idle-check.py
 once |10|Trackpad (10.2.0): one finger moves the pointer, two scroll, a tap clicks left and a two-finger tap right, on the host and through QEMU virtio-multitouch|python3 ./tools/checks/arm64-trackpad-check.py
 once |2|USB precision touchpads (11.0.0): a PTP descriptor is found and a mouse's or touch screen's is not; its reports drag, scroll, tap, click and lift through trackpad.h|python3 ./tools/checks/arm64-ptp-check.py
+once |9|Heat (13.3.0): `temp` reads the chip's temperature from the firmware on raspi4b to a tenth of a degree, virt says it has no sensor, a refused tag says so|python3 ./tools/checks/arm64-heat-check.py
 once |9|GPU (13.2.0): gpu.c brings the V3D up in Linux's order on a fake Pi 4 and stops before any V3D read at a refused tag, a missing bridge or a stuck ACK; virt has none, raspi4b has no bridge and boots on|python3 ./tools/checks/arm64-gpu-check.py
 once |9|Battery (10.3.0): a MAX17048 gauge read over the Pi's own I2C driver (an EEPROM stands in for it on QEMU raspi4b), none without one, and the menu bar shows it|python3 ./tools/checks/arm64-battery-check.py
 once |9|Brick on ARM: collision rules, lives and win under sanitizers; keyboard/mouse play, timed animation, pause, restart, Spotlight and close in QEMU|python3 ./tools/checks/arm64-brick-check.py
@@ -257,6 +258,11 @@ retry|1|Ring-3 window: Reminders beside Notes, keys to the focused window only, 
 retry|7|Ring-3 stress: window task and desktop hammer heap and FAT at once, heap walk ok, file at root, desktop alive|python3 ./tools/checks/ring3stress-check.py
 retry|2|Ring-3 PDE sync: kernel page table born after the window task is visible on its CR3, close clean, desktop alive|python3 ./tools/checks/pdesync-check.py
 retry|3|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
+once|8|ping on the Pi (13.8.0): the gateway answers three echoes, an address nobody holds gets no reply|python3 ./tools/checks/ping-check.py
+once|8|Notices from apps (13.7.0): one shows under its app's name, Focus holds it and says how many, in headless QEMU|python3 ./tools/checks/arm64-notify-check.py
+retry|3|A disk kept from an older kernel gets this kernel's app: a changed KEYRATE.BIN is replaced at launch and an unchanged one is left alone|python3 ./tools/checks/ring3seed-stale-check.py
+once|8|man NAME (13.6.0): every Pi Terminal command has a page, man cat prints it, an unknown name is refused, in headless QEMU|python3 ./tools/checks/arm64-man-check.py
+once|8|lldb stops both kernels at their entry through QEMU's gdb stub (skips with no lldb)|python3 ./tools/checks/debugger-check.py
 retry|7|Ring-3 window resize: snap Notes to a quarter, JT_EV_RESIZE answered, new buffer mapped, app redrew at the quarter size (serial marker + far-corner pixels)|python3 ./tools/checks/ring3resize-check.py
 retry|5|Windows drag live by their title bar (single-window Notes and multi-window Files)|python3 ./tools/checks/windowdrag-check.py
 retry|3|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py

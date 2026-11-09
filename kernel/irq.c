@@ -91,6 +91,12 @@ int kbd_peek(void) {
     return kbd_buf[kbd_tail];
 }
 
+/* The scancode behind the next one, for a chord that starts with the E0 prefix; -1 when it is not here yet. */
+int kbd_peek2(void) {
+    int next = (kbd_tail + 1) % KBD_BUF_SIZE;
+    return kbd_head == kbd_tail || next == kbd_head ? -1 : kbd_buf[next];
+}
+
 void kbd_drain(void) {
     while (kbd_pop() >= 0) {}
 }

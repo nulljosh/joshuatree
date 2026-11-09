@@ -32,7 +32,7 @@ def check(name, ok, detail=""):
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from parkwall import park   # 8.9.0: the Pi image boots on the park picture
-WALL, RED, YELLOW, GREY, WHITE = (0x3B, 0x6E, 0xA5), (0xFF, 0x5F, 0x57), (0xFF, 0xD6, 0x4A), (0xD8, 0xD4, 0xCE), (255, 255, 255)
+WALL, RED, YELLOW, GREEN, WHITE = (0x3B, 0x6E, 0xA5), (0xFF, 0x5F, 0x57), (0xFF, 0xD6, 0x4A), (0x28, 0xC8, 0x40), (255, 255, 255)
 
 def geom(w, h):   # main.c's numbers: scale, the window's logical rectangle, the lowest and highest places it may sit
     s = 2 if h >= 1080 else 1
@@ -136,7 +136,7 @@ try:
         ok = button(True) and move_to((wx + 310) * s, (wy + 230) * s) and button(False)
         time.sleep(0.2)
         img = screendump(cmd, tmp)
-        check("a press in the Console's well and a move drag nothing", ok and uart().count("window at ") == n and dots(img, wx, wy, s) == [RED, YELLOW, GREY], uart()[-200:])
+        check("a press in the Console's well and a move drag nothing", ok and uart().count("window at ") == n and dots(img, wx, wy, s) == [RED, YELLOW, GREEN], uart()[-200:])
         # 2. a drag by the title band: 100 right, 15 down
         grab = ((wx + 150) * s, (wy + 12) * s)
         move_to(*grab)
@@ -149,7 +149,7 @@ try:
         check("releasing prints where the window is", got == (nx, ny), (got, uart()[-200:]))
         after = screendump(cmd, tmp)
         skip = [arrow(*grab), arrow(grab[0] + 100 * s, grab[1] + (ny - wy) * s)]
-        check("the three dots are at the new place", got is not None and dots(after, nx, ny, s) == [RED, YELLOW, GREY], dots(after, nx, ny, s))
+        check("the three dots are at the new place", got is not None and dots(after, nx, ny, s) == [RED, YELLOW, GREEN], dots(after, nx, ny, s))
         check("the rectangle it left is flat wallpaper", left_over(after, old, (nx * s, ny * s), skip) == 0, left_over(after, old, (nx * s, ny * s), skip))
         moved = rows(after, nx * s, ny * s, lw * s, lh * s); was = rows(before, wx * s, wy * s, lw * s, lh * s)
         diff = sum(1 for j in range(lh * s) for i in range(lw * s)
@@ -162,7 +162,7 @@ try:
         got = drag(grab, (grab[0] + 200 * s, grab[1] + 200 * s))
         check("dragged past the right edge and the dock the window stops at the corner", got == (xright, ybot), (got, xright, ybot))
         img = screendump(cmd, tmp)
-        check("the clamped window is whole on screen above the dock band", got is not None and dots(img, got[0], got[1], s) == [RED, YELLOW, GREY] and (ybot + lh) * s <= band_top * s)
+        check("the clamped window is whole on screen above the dock band", got is not None and dots(img, got[0], got[1], s) == [RED, YELLOW, GREEN] and (ybot + lh) * s <= band_top * s)
         nx, ny = got if got else (nx, ny)
         grab = ((nx + 150) * s, (ny + 12) * s)
         got = drag(grab, (grab[0] - 420 * s, grab[1] - 120 * s))
@@ -180,7 +180,7 @@ try:
         check("Spotlight opens the Browser", wait_for("browser open", 30), uart()[-300:])
         time.sleep(0.3)
         img = screendump(cmd, tmp)
-        check("the Browser opens at the dragged place", dots(img, nx, ny, s) == [RED, YELLOW, GREY], dots(img, nx, ny, s))
+        check("the Browser opens at the dragged place", dots(img, nx, ny, s) == [RED, YELLOW, GREEN], dots(img, nx, ny, s))
         grab = ((nx + 300) * s, (ny + 12) * s)
         move_to(*grab)
         before = screendump(cmd, tmp)
@@ -188,7 +188,7 @@ try:
         tx, ty = nx + 100, min(ny + 40, ybot)
         got = drag(grab, (grab[0] + 100 * s, grab[1] + (ty - ny) * s))
         after = screendump(cmd, tmp)
-        check("the Browser follows its title band", got == (tx, ty) and dots(after, tx, ty, s) == [RED, YELLOW, GREY], (got, dots(after, tx, ty, s)))
+        check("the Browser follows its title band", got == (tx, ty) and dots(after, tx, ty, s) == [RED, YELLOW, GREEN], (got, dots(after, tx, ty, s)))
         skip = [arrow(*grab), arrow(grab[0] + 100 * s, grab[1] + (ty - ny) * s)]
         check("the rectangle it left is flat wallpaper", left_over(after, old, (tx * s, ty * s), skip) == 0, left_over(after, old, (tx * s, ty * s), skip))
         moved = rows(after, tx * s, ty * s, lw * s, lh * s); was = rows(before, nx * s, ny * s, lw * s, lh * s)
@@ -202,13 +202,13 @@ try:
         ok = button(True) and move_to((nx + 200) * s, (ny + 180) * s) and button(False)
         time.sleep(0.2)
         img = screendump(cmd, tmp)
-        check("a press in the Browser's page well drags nothing", ok and uart().count("window at ") == n and dots(img, nx, ny, s) == [RED, YELLOW, GREY], uart()[-200:])
+        check("a press in the Browser's page well drags nothing", ok and uart().count("window at ") == n and dots(img, nx, ny, s) == [RED, YELLOW, GREEN], uart()[-200:])
         move_to(W - 40, H // 2)
         key("esc"); key("esc")   # the first leaves the address bar, the second closes the window
         check("Esc closes the Browser", wait_for("browser closed", 30), uart()[-200:])
         time.sleep(0.3)
         img = screendump(cmd, tmp)
-        check("the Console comes back at the dragged place", dots(img, nx, ny, s) == [RED, YELLOW, GREY], dots(img, nx, ny, s))
+        check("the Console comes back at the dragged place", dots(img, nx, ny, s) == [RED, YELLOW, GREEN], dots(img, nx, ny, s))
         ink = sum(1 for y in range((ny + 34) * s, (ny + lh - 8) * s, 2) for x in range((nx + 8) * s, (nx + lw - 8) * s, 2) if max(px(img, x, y)) < 0x90)
         check("its log is drawn inside the new well (the text origin followed)", ink > 100, ink)
         if "KERNEL CRASH" in uart(): fails.append("the kernel crashed")
@@ -242,7 +242,7 @@ if "raspi4b" in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capt
                 cmd("qmp_capabilities")
                 img = screendump(cmd, tmp)
                 old = (wx * s, wy * s, lw * s, lh * s)
-                check("pi 1080p: the dots are at the clamped place", dots(img, nx, ny, s) == [RED, YELLOW, GREY], dots(img, nx, ny, s))
+                check("pi 1080p: the dots are at the clamped place", dots(img, nx, ny, s) == [RED, YELLOW, GREEN], dots(img, nx, ny, s))
                 check("pi 1080p: the old area is the park wallpaper again", left_over(img, old, (nx * s, ny * s), [], True) == 0, left_over(img, old, (nx * s, ny * s), [], True))
                 well = [px(img, x, y) for y in range((ny + 40) * s, (ny + lh - 12) * s, 7) for x in range((nx + 12) * s, (nx + lw - 12) * s, 7)]
                 check("pi 1080p: the white well came along", sum(1 for c in well if c == WHITE) * 2 > len(well), len(well))

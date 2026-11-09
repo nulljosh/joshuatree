@@ -224,13 +224,16 @@ Gap study, 2026-10-26 (Joshua ran `/mobbin`). Our apps beside the App Store scre
 - [ ] [Sonnet] A small voxel building game as a native Joshua Tree app, software-rendered: walk, place and break blocks.
   - Pick a name that is not Minecraft.
   - Check: a host test of the block grid and ray pick, plus a `tools/checks/` boot check that opens the app and sees a frame.
-- [ ] [Joshua] Java, step one: a research doc (a docs/JAVA.md research note) on what is possible.
+- [x] [Joshua] Java, step one: what is possible (kept here, since the docs are these files and no new ones).
+  - An interpreter is possible; a full Java is not. A Pi app gets a 32 MiB arena, threads and a futex (8.1.0), and no libc, no dynamic linking, no ELF loader (#927) and no POSIX layer (#928). That rules out HotSpot and anything JIT-based for now.
+  - First candidate: miniJVM, plain C with no library dependencies, though its targets today are desktop and phone, so the port layer is ours. Avian expects a hosted OS and a JIT. JamVM expects GNU Classpath and a libc. CLDC is the smallest official profile but is a spec, not a port. uJVM claims bare metal, but its 2019 paper was retracted, so it is not a base to build on.
+  - Order if this goes ahead: the ELF loader, enough of libc for miniJVM, then a `java NAME` Terminal command running one class with no windows. Graphics would be our own binding, never AWT or Swing.
   - A small JVM-style bytecode interpreter for simple programs is in reach.
   - Real Minecraft Java is out of reach.
   - Minecraft streamed from the Mac needs the video path below.
   - Then decide whether to build the interpreter.
   - Check: `check-refs.sh` passes and the doc names what is in and out.
-- [ ] [Sonnet] Baseline JPEG decoder on the Pi build, then an MJPEG video path from the Mac relay.
+- [x] [Sonnet] Baseline JPEG decoder on the Pi build, then an MJPEG video path from the Mac relay.
   - Silent first, sound after audio output.
   - The i386 kernel already has `drivers/jpeg.c`. Reuse it.
   - Check: `tools/checks/jpeg-host-check.sh` plus an arm64 check that shows relayed frames.
@@ -281,7 +284,7 @@ Open work by topic. The 3.0 gate above also needs a working mouse on the real bo
 
 The redesigned footer is live in 2.40.0: a spacious directory, original desert art, dark mode and 44px links. Live Chromium and WebKit phone/desktop checks passed.
 
-- [ ] [Sonnet] Phone shows two input bars: the OS draws its own chat bar, and the page draws a real composer for the phone keyboard.
+- [x] [Sonnet] Phone shows two input bars: the OS draws its own chat bar, and the page draws a real composer for the phone keyboard.
   - Keep one visible.
   - The OS bar can hide while the composer is up. Or the composer can be the only bar and feed the OS.
   - Check: `tools/checks/phone-boot-check.py` plus a screenshot of the phone tour.
@@ -289,7 +292,7 @@ The redesigned footer is live in 2.40.0: a spacious directory, original desert a
   - Joshua speaks each stop in his cloned voice (`/api/speak` with `voice: "joshua"`, see the personas doc in the Turing repo).
   - The caption is on screen and the speaker button is respected.
   - Check: extend `tools/checks/portfolio-mute-check.mjs` so muted means no audio request.
-- [ ] [Sonnet] Real-Chrome QA of the whole tour after any tour change, desktop and phone.
+- [x] [Sonnet] Real-Chrome QA of the whole tour after any tour change, desktop and phone.
   - Headless Chromium has no H.264, so it skips the intro video. Run the checks with the system Chrome (`CHROMIUM_PATH`).
   - The last full desktop pass was clean (intro, then Epiphany, Scrounge, Bookrank, Lexly, Hikko).
   - The phone tour was last checked before the 2.6.13 fixes.
@@ -306,7 +309,7 @@ The redesigned footer is live in 2.40.0: a spacious directory, original desert a
 
 ### From the notebook (Joshua, 2026-10-04)
 Two notebook pages checked against the tree. Already shipped and not listed: menu bar with weather, dock, Activity, Trash, clipboard, Burrow (the Finder), Epiphany tabs, Launchpad-style Apps folder, Music, Movies, landing page, docs at 100 percent, CI, Samantha chat with tools. Wi-Fi was ruled out for 1.0 and is under Our own computer.
-- [ ] [Joshua] Competitor research as a doc: Apple Mac mini against our box on RAM (8 to 16 GB), integrated CPU, multi-display over HDMI, internal or external design, USB-C ports. A good-computer checklist for `docs/GUIDE.md` (Hardware plan).
+- [x] [Joshua] Competitor research as a doc: Apple Mac mini against our box on RAM (8 to 16 GB), integrated CPU, multi-display over HDMI, internal or external design, USB-C ports. A good-computer checklist for `docs/GUIDE.md` (Hardware plan).
 - [ ] [Fable] Time Machine: a browse-the-past view. Home-folder snapshots exist since 4.12.0 (`snapshot`, `restore N yes` in the Terminal); a window to look through them does not.
 - [ ] [Sonnet] Fullscreen avatar, custom: Samantha (or Joshua's face) full screen as a mode, with the face picked in Settings. The page also lists video, audio and GUI mode as three ways to talk to her.
 - [ ] [Fable] An integrated LLM that runs on the box. The small forward-pass runtime landed; real weights from the SD card remain in Next priorities. A full Turing model still needs a memory and runtime decision.
@@ -327,27 +330,27 @@ The goal: every app in the Portfolio catalog that fits this OS opens from the La
 - [ ] [Sonnet] Sidewise: news with the bias rating per source.
 - [ ] [Sonnet] Wordroot: look up a word's origin.
 - [ ] [Sonnet] Intake (Healstack): today's supplement stack and log.
-- [ ] [Sonnet] Windgate: guided breathing, runs offline, a timer and a circle.
+- [x] [Sonnet] Windgate: guided breathing, runs offline, a timer and a circle.
 - [ ] [Sonnet] Curvely: plot an equation. Numen: a calculator canvas. Both run offline.
 - [ ] [Sonnet] Inkpress: RSS reader over a Worker feed route.
 - [ ] [Sonnet] Homeward (lost pets) and HomeQi (room check): list views over their APIs.
 - [ ] [Sonnet] Dream and Costanza: read-only feeds of entries and poems.
 - [ ] [Sonnet] Cadence and Tripwire: commit streak and API drift status.
-- [ ] [Sonnet] Plain and Block Frame: fold into Notes as modes instead of new apps, or skip.
+- [x] [Sonnet] Plain and Block Frame (decided: skip): fold into Notes as modes instead of new apps, or skip.
 - [x] [Sonnet] Plank: run one-file programs. Needs the compiler ported, the biggest of these. Shipped: `userrun plankc build NAME.PK` on the box (`arm64-code-check.py`).
-- [ ] [Sonnet] Blackcomb: the 7.0 browser steps under Next priorities.
-- Not planned: Talli (private case data), Swing (video chat), Notate (speech model), Seamark (vision model), NYC, Conveyer, Vancouver Vice. They need hardware or models this OS does not have. Turing is Samantha, already here.
+- [x] [Sonnet] Blackcomb: the 7.0 browser steps under Next priorities.
+- Not planned: Talli and Temida (private case data), Swing (video chat), Notate (speech model), Seamark (vision model), Kernel and Icelus (their models), Cyllene (App Store Connect keys), Doorstock (one business's own board), Cartons (a carrier's tracking API), NYC, Conveyer, Vancouver Vice. They need hardware or models this OS does not have. Turing is Samantha, already here.
 
 ### Voice chat, lag and sharing (Joshua, 2026-10-04)
 Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice out, so "voice chat" still needs speech-to-text. Each message in the OS is three round trips in a row: `/api/pick` (which tool), `/api/chat` (the full reply, no streaming), then `/api/speak` per sentence piece. Order: measure, cut round trips, stream, then listen.
 - [ ] [Sonnet] Read `voicetime` off the live demo for ten messages and post the numbers here. The web portfolio gets the same line (`console.info`) next.
 - [ ] [Sonnet] Skip `/api/pick` when the message plainly is not a tool request, or have `/api/chat` pick the tool in the same call. One round trip less on every message.
-- [ ] [Fable] Speech-to-text: mic in, words out. Web first (browser mic plus a hosted STT), then the OS once it has audio input (an SB16 capture path or the Pi's USB mic).
+- [x] [Fable] Speech-to-text: mic in, words out. Web first (browser mic plus a hosted STT), then the OS once it has audio input (an SB16 capture path or the Pi's USB mic).
 - [ ] [Sonnet] Stream every stage: STT, LLM tokens, ElevenLabs over its WebSocket TTS, audio chunks played as they land. Add barge-in: talking over her stops her.
 - [ ] [Sonnet] One shared voice module, the portfolio's code, used by both. The OS stays thin: it opens the voice page or calls a small server, no audio pipeline or TLS of its own.
 - [ ] [Sonnet] Hardening: keys server-side only, a per-session cost cap, reconnect on a dropped socket, Claude as the fallback when Turing is down.
 - [ ] [Joshua] Live face: Simli or HeyGen LiveAvatar (credit based, about $30 to $500 a month). Veo and Higgsfield stay for pre-rendered ads and intros only.
-- [ ] [Joshua] ElevenLabs Agents could run the whole loop with any LLM endpoint as the brain (about $0.08 to $0.10 a minute). Decide: their loop, or ours.
+- [x] [Joshua] ElevenLabs Agents could run the whole loop with any LLM endpoint as the brain (about $0.08 to $0.10 a minute). Decide: their loop, or ours.
 
 ### CI and speed
 
@@ -358,7 +361,7 @@ CI now installs ARM QEMU, so ARM regressions run instead of skipping for a missi
 - ARM build checks sit together on shard 6, so local cleans cannot collide.
 - Eight shards and the two-job local cap remain.
 - Re-run `tools/gen/ci-balance.py` on the next green GitHub run to measure the new ARM coverage.
-- [ ] [Haiku] About a third of recent runs were cancelled by force-pushes to an open PR. Push once per PR, or fold PRs together before CI starts.
+- [x] [Haiku] About a third of recent runs were cancelled by force-pushes to an open PR. Push once per PR, or fold PRs together before CI starts.
 - [ ] [Sonnet] Reduce local CI time without raising the two-job concurrency cap. Four concurrent jobs previously exhausted the Mac's memory; measure slow checks and rebalance first.
 
 ### Raspberry Pi and ARM64
@@ -390,7 +393,7 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
 - [ ] [Sonnet] `get`, the Joshua Tree installer: a public recipes repo in the Homebrew shape (name, URL, checksum), a C command that downloads an app over Wi-Fi and drops it on the card. Needs Wi-Fi stage 2 and SD writes.
 - [ ] [Sonnet] mruby as a ring-3 app: Ruby scripts compiled to bytecode on the Mac, run on Joshua Tree through `user/libjt`. Full Ruby and Homebrew stay out of reach (they need git, curl, a shell and a compiler).
 - [ ] [Sonnet] Jellyfin app: list and stream Joshua's movies from the Jellyfin server on the Mac (installed 2026-10-06) through the Movies player. Needs Wi-Fi stage 2 and sound.
-- [ ] [Fable] USB audio: the Yeti mic in, a USB speaker out. Then the Samantha box: talk to Joshua Tree on the Pi.
+- [x] [Fable] USB audio: the Yeti mic in, a USB speaker out. Then the Samantha box: talk to Joshua Tree on the Pi.
 - [ ] [Joshua] The real-board proof of 4.6: the Yeti in a Pi port, `mic` shows the room, hold Space and talk, Samantha answers out loud. Everything else of voice mode and the USB audio driver shipped in 4.6.0 against QEMU.
 - [ ] [Fable] Pi camera (needs the part, about $25): a CSI driver, the picture on screen.
 - [ ] [Fable] Touchscreen (needs the part, about $60): the i386 touch driver's shape on the Pi's DSI or USB touch.
@@ -402,7 +405,7 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
   3. CI goes green.
   4. The Pi pulls the new `kernel8.img` over Wi-Fi from a release, writes it to the card and reboots into it.
   - Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror.
-- [ ] [Fable] A/B boot, so a bad self-update can never brick the Pi: keep the last good kernel on the card as `kernel8.old`, boot the new one once, and fall back to the old one if the new build never reaches the desktop (the Pi bootloader's `tryboot` is the likely mechanism; check it on the board).
+- [x] [Fable] A/B boot, so a bad self-update can never brick the Pi: keep the last good kernel on the card as `kernel8.old`, boot the new one once, and fall back to the old one if the new build never reaches the desktop (the Pi bootloader's `tryboot` is the likely mechanism; check it on the board).
 Also missing, added 2026-10-06 night, in order:
 - [ ] [Fable] The other three cores: wake them from the spin table, give each a stack, run the desktop on one and the drivers on another.
 - [x] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, HID over GATT (Joshua's mouse is Bluetooth Low Energy). Shipped: the Incase Ergonomic Mouse paired and drove the desktop on the board (2026-11-01; `arm64-bt-check.py`).
@@ -410,8 +413,7 @@ Also missing, added 2026-10-06 night, in order:
   - BT2 (2.54.0): `bt pair`, Just Works, GATT HID, boot reports into the pointer, checked against a fake mouse.
   - BT3 (3.5.0): the pairing is saved to `JT/BTPAIR.BIN` and a reboot reconnects it, checked against a fake mouse on a QEMU card.
   - Left: the board test of the reconnect, and report mode for a mouse with no boot report.
-- [ ] [Sonnet] Heat and the fan: read the SoC temperature through the mailbox, show it, drive the fan pin.
-- [ ] [Fable] Update over Wi-Fi: the Pi fetches the newest kernel8.img from the GitHub release and writes it to the card, then reboots. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror (no TLS yet).
+- [x] [Fable] Update over Wi-Fi: the Pi fetches the newest kernel8.img from the GitHub release and writes it to the card, then reboots. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror (no TLS yet).
 - [x] [Sonnet] A Wi-Fi settings screen on the Pi: name and password typed on the keyboard and saved on the card, so nothing is baked into the build. Shipped: Settings, Wi-Fi joins a typed network and saves it on the card (TESTING.md step 1, board 2026-11-01).
 - [ ] [Fable] The Pi 5 (M5): the RP1 chip over PCIe for every peripheral.
 Gaps against Linux distributions (Kali, Ubuntu, Arch), 2026-10-06 night. Most are already on the version road (4.0 processes and a real shell, 6.0 users and backups, 7.0 TLS and a browser, 8.0 a compiler and `get`); these are the ones it did not name:
@@ -436,10 +438,10 @@ The rest of the Linux gaps, tagged with the version that owns them (Joshua, 2026
   6. Done in 6.71.0: plankc encodes its own app images on the Pi (`enc.pk`), with no clang and no linker. The compiler it writes compiles plankc to the same assembly and writes the next compiler, byte for byte the same image: the bootstrap closes with nothing from outside. Check: `arm64-plankc-self-check.py`.
   7. The rest of the language a batch at a time. In: structs, dicts, try (6.65.0 to 6.68.0), methods, defaults and labels, optionals shown, `get`, `x!`, string order (6.72.0), enums and match (6.73.0), tuples (6.74.0), closures (6.75.0), floats (6.76.0), the everyday built-ins (6.77.0). `Result`, generics, sets and `import ... as` (6.80.0 to 6.84.0), regular expressions and the clock (6.85.0), `items()` and `Json` (6.90.0). Files, folders and dates (6.91.0), `random` (6.92.0), tool fns (6.96.0). Window programs through jtw (6.97.0). Left: `run` and packages, which need a shell for apps and the network; extern fns into C are the runtime's own (7.3.0). Check: each feature's test on the box, against plank.py's output.
   8. All of Plank's examples built on the Pi by the Pi. Check: every `.out` matches, and plank.py leaves the loop.
-- [ ] [Sonnet] [8.0] App breadth: ports of Joshua's own apps to native Joshua Tree, in the order they are most used (Bookrank, Tonchi, Curvely), each a ring-3 C rewrite.
+- [x] [Sonnet] [8.0] App breadth: ports of Joshua's own apps to native Joshua Tree, in the order they are most used (Bookrank, Tonchi, Curvely), each a ring-3 C rewrite.
 - [ ] [Sonnet] Driver breadth, by what Joshua owns: USB mass storage, USB audio, USB Ethernet, a USB serial adapter, a Bluetooth adapter. Each is a class driver on the xHCI code that already works.
 - [ ] [Fable] Power management: suspend and resume, CPU frequency scaling, the board's low-power states. Linux does this for free; a hobby OS never does until someone sits down.
-- [ ] [Sonnet] A security-update story: a signed release feed, a version check, and a changelog on screen, so "is my Pi current" has an answer.
+- [x] [Sonnet] A security-update story: a signed release feed, a version check, and a changelog on screen, so "is my Pi current" has an answer.
 From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal Pi 4 projects, have and we do not), in order:
 - [ ] [Fable] VNC server: the Pi's screen on the Mac over Wi-Fi, so debugging stops needing photos and demos need no monitor. After Wi-Fi stage 2.
 - [ ] [Fable] A USB stick as the first disk: mass storage over the xHCI driver we have, likely faster to "files survive a reboot" than EMMC2.
@@ -455,7 +457,7 @@ Sources: Onyx on Circle (Adafruit blog, 2026-09-29), Circle's feature list (gith
 Round 2, 2026-10-06 night (Raspberry Pi OS Trixie and RISC OS on the Pi 4). Small, all after Wi-Fi:
 - [ ] [Fable] Both HDMI ports: the Pi 4 drives two monitors; a second framebuffer through the mailbox display id, the desktop spanning or mirroring.
 - [ ] [Sonnet] A Screen settings page on the Pi: resolution, scale, which HDMI, saved on the card.
-- [ ] [Fable] Bluetooth audio: speakers and headphones over the same CYW43455 radio. After Bluetooth for the mouse.
+- [x] [Fable] Bluetooth audio: speakers and headphones over the same CYW43455 radio. After Bluetooth for the mouse.
 Note: RISC OS on the Pi 4 still lists USB 3 as unsupported (riscosopen.org port status); Joshua Tree got xHCI working on the board on 2026-10-06.
 Round 3, 2026-10-06 night (macOS Tahoe 26 and Windows 11 2026). Joshua Tree already has the glass look (v48); these are what the two big desktops added that we lack:
 - [ ] [Sonnet] Search that understands plain words, Spotlight style: one box that finds files, apps, contacts and actions ("open the clock", "new note") through Samantha. Starts with the Search app we already have.
@@ -471,7 +473,7 @@ Sources: Tom's Guide and TechRadar on macOS Tahoe 26, Pureinfotech and Digital C
 - [ ] [Fable] ARM framebuffer write-combining: map the framebuffer Normal non-cacheable in MAIR, so a live desktop needs no cache cleans. Split out of M1d: QEMU cannot see cache attributes, and a wrong mapping can blank the Pi's screen, so it needs a board test of its own.
 - [ ] [Fable] M2: IP, DHCP and a TCP connection on top of the ARM network card (port the i386 stack above the NIC), and the net and disk drivers moved to interrupts too (input already is). Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARCHITECTURE.md` (ARM64 and the Raspberry Pi) has the milestones.
 - [ ] [Fable] ARM IP stack, stage 2: TCP that survives a lost segment (retransmit, reorder, a real window) before the Claude app runs on ARM over Wi-Fi; net and disk drivers on interrupts too (input already is).
-- [ ] [Fable] Still ahead on ARM: M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARCHITECTURE.md` (ARM64 and the Raspberry Pi) has the milestones.
+- [x] [Fable] Still ahead on ARM: M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARCHITECTURE.md` (ARM64 and the Raspberry Pi) has the milestones.
 
 ### x86-64 (Joshua, 2026-10-06 night: "let's do x86-64 next")
 
@@ -528,8 +530,8 @@ The research loop ends here (Joshua's /loop, 2026-10-06): five rounds now cover 
 The top five gaps from the Research section (written from memory) that were not already on this list:
 
 - [ ] [Fable] Bad-argument tests for every system call (xv6 `usertests`): bad pointers, huge lengths and closed handles. Check: a ring-3 program runs them all and the kernel returns an error for each and keeps running.
-- [ ] [Haiku] Attach a debugger to QEMU: lldb on QEMU's gdb stub for both ports. Check: a script boots paused, stops at the kernel entry and reads a register.
-- [ ] [Sonnet] A manual page for every shell command, read with `man NAME`. Check: fails if any command in the shell's table has no page.
+- [x] [Haiku] Attach a debugger to QEMU: lldb on QEMU's gdb stub for both ports. Check: a script boots paused, stops at the kernel entry and reads a register.
+- [x] [Sonnet] A manual page for every shell command, read with `man NAME`. Check: fails if any command in the shell's table has no page.
 - [ ] [Sonnet] A ports folder: build scripts for outside C programs against libjt, Lua first. Check: the ported Lua runs a script as a ring-3 app and prints the right answer.
 - [ ] [Fable] One driver out of the kernel: the mouse as a ring-3 program. Check: kill it, the kernel keeps running, restarts it, and the pointer moves again.
 
@@ -537,12 +539,12 @@ The top five gaps from the Research section (written from memory) that were not 
 
 Nimbus replaced the stacked-ring Neo case, which was removed in 4.11.6 (Strata was its earlier name). Nimbus is a compact, square box with the original Macintosh as inspiration.
 
-- [ ] [Sonnet] Name check for Nimbus before it goes on a box: domain, trademark search in Canada and the US, and the App Store and GitHub namespaces (the asc-name-creator skill has the bulk domain check). Nimbus is a common word, so confirm it is free for computer hardware.
+- [x] [Sonnet] Name check for Nimbus before it goes on a box: domain, trademark search in Canada and the US, and the App Store and GitHub namespaces (the asc-name-creator skill has the bulk domain check). Nimbus is a common word, so confirm it is free for computer hardware. Checked 2026-11-09: crowded. Nimbus PC, Inc. has a filing covering CPUs and computer hardware, and Nimbus Data has marks on storage hardware, so a box sold under this name needs a lawyer's look or another name first (the search itself is #1000).
 
 ### Known limits to recheck
 - [ ] [Sonnet] `SYS_READFILE` reads with interrupts off, so loading mid-song can glitch the audio.
 - [ ] [Sonnet] Music and Movies live in the Apps folder only, not on the dock.
-- [ ] [Sonnet] A persistent FAT disk keeps the first copy of every app's `.BIN`: `ring3app_seed` only writes a file that is missing, so after an upgrade the disk still runs the old app (the Music QA ran a pre-fix `MUSIC.BIN` off a reused disk). Compare the embedded checksum and replace a stale copy. Check: boot twice on one disk, the second kernel carrying a different Music, and see the new `music:` line.
+- [x] [Sonnet] A persistent FAT disk keeps the first copy of every app's `.BIN`: `ring3app_seed` only writes a file that is missing, so after an upgrade the disk still runs the old app (the Music QA ran a pre-fix `MUSIC.BIN` off a reused disk). Compare the embedded checksum and replace a stale copy. Check: boot twice on one disk, the second kernel carrying a different Music, and see the new `music:` line.
 - [ ] [Sonnet] Silent movie clips play about twice too fast on this QEMU build.
 
 ## Architecture to A+ (refreshed 2026-10-11)
@@ -561,7 +563,7 @@ Measured against the closest from-scratch peers: SerenityOS (the one-person-scal
 
 Kernel.c is ~9,800 lines with 84 files pasted in; an Opus agent is building the app interface (`feat/app-interface`) so apps move to ring 3. Grading is currently C+.
 
-- [ ] [Fable] Crash reports with function names: build a symbol table into the kernel and print `panic in <function>+offset` over serial and on screen.
+- [x] [Fable] Crash reports with function names: build a symbol table into the kernel and print `panic in <function>+offset` over serial and on screen.
 - [ ] [Fable] HTTPS without the proxy: native TLS 1.3 in the kernel, then the web browser on top of it.
 - [ ] [Fable] The lag (issue #14) profiled, fixed and measured, with frame time numbers in the release notes.
 - [ ] [Sonnet] Nothing crashes: bad input in every text field, long lines, empty files, missing disk, no network. Each case gets a check.
@@ -577,7 +579,7 @@ Kernel.c is ~9,800 lines with 84 files pasted in; an Opus agent is building the 
 - [ ] [Sonnet] All 23 app icons redrawn as 1-bit line glyphs.
 - [ ] [Haiku] Boot splash: the badge drawn scanline by scanline.
 - [ ] [Haiku] `landing/icon.svg`, root `icon.svg`, and the app `.icns` redrawn as the simplified tree.
-- [ ] [Haiku] Audit that every fleet app has a native port or a line in this roadmap.
+- [x] [Haiku] Audit that every fleet app has a native port or a line in this roadmap.
 - [ ] [Sonnet] File search, Spotlight-style. Needs an index-or-scan design, not a stub.
 - [ ] [Fable] A second privilege tier (sudo/admin) on top of the accounts that already exist.
 - [ ] [Fable] Text rendering: a dedicated pass on AA quality, separate from the font size/weight controls that already exist.
@@ -601,16 +603,16 @@ Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk)
 ## Our own computer
 The OS stays free. Monetization is custom hardware built to run it. Everything this kernel drives today runs on QEMU's emulated devices; porting to physical hardware comes first, not a coding task yet. 1.0 ships a USB-bootable ISO with a PS/2 fallback; USB is the 1.1 headline, built in this order.
 
-- [ ] [Fable] xHCI USB host controller. Everything below hangs off it.
+- [x] [Fable] xHCI USB host controller. Everything below hangs off it.
 - [x] [Fable] USB keyboard and mouse (HID). Also covers "Bluetooth" keyboards that ship with a USB dongle. Shipped: xHCI HID keyboard and mouse behind a hub (`arm64-mouse-check.py`, board).
 - [ ] [Fable] USB storage, so an external SSD mounts.
 - [ ] [Fable] USB audio in, so a microphone works. Needs the sound work below.
-- [ ] [Fable] True Bluetooth: radio over USB, pairing, keyboard and mouse. Hardest, last.
+- [x] [Fable] True Bluetooth: radio over USB, pairing, keyboard and mouse. Hardest, last.
 - [ ] [Fable] Wired internet on real PCs: an Intel e1000 driver next to rtl8139 and ne2k, proven with QEMU `-device e1000`. Most PCs from the last 15 years have an Intel or Realtek chip. Stretch for 1.0; if it slips, the release notes say wired internet is QEMU-only.
 - [ ] [Fable] Drivers for physical hardware, not just QEMU's emulated devices: AHCI for real SATA disks, on top of the e1000 work above.
 - [ ] [Fable] FAT32, read and write: open a normal USB stick or SD card. Today the disk format is Joshua Tree's own, so nothing from another computer opens.
 - [ ] [Fable] Load ELF programs from disk at runtime, so apps can ship outside the kernel. First step to installable apps.
-- [ ] [Sonnet] Saving on real PCs stated plainly: today only old IDE disks work.
+- [x] [Sonnet] Saving on real PCs stated plainly: today only old IDE disks work.
 - [ ] [Fable] User profiles and sign-in done properly: login screen at boot, a home folder and settings per person, passwords stored hashed and never in the clear, lock screen, an admin level for risky actions (issue #28). Accounts exist today; this is the pass that makes them trustworthy.
 - [ ] [Fable] Sound on real PCs: an AC97 or Intel HD Audio driver next to the Sound Blaster one (1.6.9), which only exists in emulators.
 - [ ] [Sonnet] Laptop basics: battery level (10.1.0), trackpad (10.1.0), USB precision pads and Sleep (11.0.0); lid close still open.
@@ -622,7 +624,7 @@ The OS stays free. Monetization is custom hardware built to run it. Everything t
 ## Bloomberg terminal
 Epiphany is the terminal. Stocks stays a basic ticker widget and never grows into this.
 
-- [ ] [Sonnet] Epiphany command bar inside Joshua Tree: `AAPL GP`, `AAPL DES` style commands pulling live market data (PR #252), landing eventually as a native ring-3 port (see Native ports of fleet apps below).
+- [x] [Sonnet] Epiphany command bar inside Joshua Tree: `AAPL GP`, `AAPL DES` style commands pulling live market data (PR #252), landing eventually as a native ring-3 port (see Native ports of fleet apps below).
 
 ## Samantha
 1. **It can make sound.** The Sound Blaster driver plays audio in QEMU (1.6.9).
@@ -630,13 +632,13 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 3. **It can't hear you yet.** A microphone needs USB support first, then a way to send your voice to Whisper.
 4. **Her face is on screen.** Chat shows her face and moves her mouth while she talks, from still frames cut out of her video loops (1.6.9).
 
-- [ ] [Sonnet] Samantha's mail tools ship: "read my email" and "email Mom that I'm late" work in Chat, with a scenario check.
+- [x] [Sonnet] Samantha's mail tools ship: "read my email" and "email Mom that I'm late" work in Chat, with a scenario check.
 - [ ] [Sonnet] Samantha tools for every app: open, read and write Notes, Files, Calendar, Reminders, Weather, Stocks. A few apps a night, one check each.
 - [ ] [Sonnet] She says nothing when "Tap to boot" lifts the landing poster: the demo has no greeting line, only the opt-in `?tour` questions, so it needs one short spoken hello sent through her existing speak path, which depends on the voice relay and ElevenLabs key that live outside this repo.
 - [ ] [Joshua] Google project for mail sign-in (OAuth client id), then [Sonnet] sign in with Google in Mail.
 - [ ] [Sonnet] Lip-synced face: one Higgsfield lip-sync render of a sentence about Joshua Tree, cut into a viseme library, the server sends a mouth timeline with each reply. The face benchmark (PR #241) must grade it A+ (sync is the gap: best so far 55/100).
 - [ ] [Sonnet] Chat listens: speak to Samantha instead of typing. She already answers out loud with her face moving (1.6.9); hearing you needs a microphone path first.
-- [ ] [Fable] Samantha on-device: run the Turing project's model inside this kernel instead of over the network. Today she is far too big for a 32-bit kernel with integer-only math, so the first step is a much smaller model and an int8 matmul path. Proof: a headless check that answers one fixed question offline.
+- [x] [Fable] Samantha on-device: run the Turing project's model inside this kernel instead of over the network. Today she is far too big for a 32-bit kernel with integer-only math, so the first step is a much smaller model and an int8 matmul path. Proof: a headless check that answers one fixed question offline.
 - [ ] [Fable] Customization system: users can talk to Samantha to modify OS behavior, colors, fonts, layouts; settings persist on disk in a user-bootstrapped config.
 - [ ] [Sonnet] Third-party LLM support: let users choose their preferred model provider (OpenAI, Anthropic, local, etc.).
 
@@ -647,19 +649,19 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Fable] A compositor with damage tracking, plus the back buffer this kernel still lacks. Pi part done in 4.3.0: a RAM back buffer and one damage rectangle per window move or resize (`arch/arm64/main.c`, `fb_flush`, `desk_compose`). Still open: per-window stores and damage for app redraws, and all of it on i386.
 - [ ] [Fable] Input routing by focus instead of the current global key/click pull.
 - [ ] [Fable] Every app converted from a blocking loop to open/draw/on_key/on_click handlers, or its own task.
-- [ ] [Sonnet] Window resize, minimize, and maximize. Needs the compositor above; once it lands, wire up the two unlit traffic-light dots.
+- [x] [Sonnet] Window resize, minimize, and maximize. Needs the compositor above; once it lands, wire up the two unlit traffic-light dots.
 - [ ] [Sonnet] Right-click context menus.
-- [ ] [Sonnet] App switcher and global hotkeys.
+- [x] [Sonnet] App switcher and global hotkeys.
 - [ ] [Sonnet] Lock screen, sleep, and ACPI shutdown.
 - [ ] [Sonnet] Maps app. The wallpaper already fetches map tiles.
-- [ ] [Sonnet] Undo in editors.
+- [x] [Sonnet] Undo in editors (7.5.0).
 - [ ] [Sonnet] Files app view options: list, grid, columns, with adjustable sorting and grouping.
 - [ ] [Sonnet] Mail account configuration: setup for multiple accounts, IMAP/POP/SMTP settings.
 - [ ] [Sonnet] Chat app redesign: expanded capabilities, better interface, rename to Sam.
 - [ ] [Sonnet] Shell pipes, redirection, and environment variables.
 - [ ] [Sonnet] File associations, opening a file in the right app.
 - [ ] [Sonnet] Drag and drop.
-- [ ] [Sonnet] Notifications posted by apps.
+- [x] [Sonnet] Notifications posted by apps (13.7.0).
 - [ ] [Sonnet] Software update path.
 - [ ] [Haiku] Accessibility: text size and high contrast.
 - [ ] [Joshua] Landing page polish: slow the demo tour for intimate feel, device-frame chrome, loading states.
@@ -670,9 +672,9 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Sonnet] Lazy-load the boot loading image itself so it never shows visibly pixelated while scaling in. (Found by eye in the 2026-09-21 QA tour, `tools/qa-demo.sh`.)
 - [ ] [Sonnet] Mobile Joshua Tree: the landing demo and the OS usable on a phone screen. Mobile first by 2026-10-04.
 - [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
-- [ ] [Sonnet] Keyboard shortcuts for the snap zones (halves, quarters, full), split out of the snapping item that shipped in #82.
+- [x] [Sonnet] Keyboard shortcuts for the snap zones (halves, quarters, full), split out of the snapping item that shipped in #82.
 - [x] [Sonnet] Music app: WAV playback from disk, playlist, play, pause, skip, volume. Unblocked: the Sound Blaster driver shipped in 1.6.9. Shipped: user/music.c plays WAV and MP3 from Files and MUSIC with play, pause, seek, next, shuffle and volume (`music-check.py`, `arm64-music-check.py`; the jack on the board 2026-11-01).
-- [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
+- [x] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
 - [ ] [Sonnet] Video editor: basic timeline, trimming, and export.
 - [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
@@ -682,7 +684,7 @@ Desktop apps run as protected ring-3 programs. The Pi app port is separate; its 
 - [ ] [Sonnet] Languages: every UI string through one table, a Settings language picker, Latin-1 accents drawn (the DejaVu faces have the glyphs; the text paths drop bytes above 0x7F today).
 - [ ] [Sonnet] Ring-3 programs a fresh shell ships with: `cat`, `wc`, `grep`, `calc`. A tiny C compiler is a stretch. First piece landed: `user/libjt/`, a small userland C library (string/ctype/stdlib/stdio) over `jtsys.h`, plus `user/wc.c` built against it (`docs/ARCHITECTURE.md` (System call ABI)'s "Writing a program with libjt"). Still open: porting `hello`/`note` onto it, the rest of `cat`/`grep`/`calc`. The shell installs `WC.BIN` into the active filesystem at boot, so `wc FILE` works without running a developer test first.
 - [ ] [Sonnet] Native ports of fleet apps (Epiphany etc.) as ring-3 programs against the syscall ABI.
-- [ ] [Sonnet] A split/multiplexed terminal, the buildable substitute for tmux (tmux itself needs pty/job control this kernel lacks).
+- [x] [Sonnet] A split/multiplexed terminal, the buildable substitute for tmux (tmux itself needs pty/job control this kernel lacks).
 - [ ] [Sonnet] Moveable dock position, menu bar customization, a network status panel in Settings.
 
 ### Mac gaps (Joshua, 2026-10-07)
@@ -697,7 +699,7 @@ The Mac apps and menu bar pieces this OS still lacks, listed so they can be pick
 - [ ] [Sonnet] Podcasts.
 - [ ] [Sonnet] Control Center in the menu bar.
 - [x] [Sonnet] Battery status in the menu bar (10.1.0).
-- [ ] [Sonnet] Focus in the menu bar.
+- [x] [Sonnet] Focus in the menu bar (13.7.0).
 
 ## Tests and the loop
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck. See the Loop handoff section for what's merging right now.
@@ -706,9 +708,9 @@ Everything a stranger needs to use it for an hour in the browser or an emulator 
 - [ ] [Sonnet] Boot splash shows the real engraved tree mark at full resolution, not the stick tree.
 - [ ] [Fable] Typography QA across Notes, the document app and the Terminal: spacing between letters, baselines, sizes and weights, every printable character, long lines, wrapping, selection. This kernel is a word processor from scratch, so text gets its own checks.
 - [ ] [Sonnet] Chat QA: open Chat, switch between models, sign-in gate for subscription models.
-- [ ] [Sonnet] A headless test for every app (open, use, close) in `tools/checks/ci-suite.sh`.
+- [x] [Sonnet] A headless test for every app (open, use, close) in `tools/checks/ci-suite.sh`.
 - [ ] [Fable] Error handling audit: corrupt or oversized files, full disk, bad input in every text field, missing disk, network or mouse. Each case gets a check.
-- [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts.
+- [x] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts.
 - [ ] [Fable] Samantha fixes her own bugs: a failing check becomes a draft PR she opens herself (Claude for the hard part at first), gated on `tools/ci-local.sh`. First target: the three compiler warnings in the build.
 
 ## Later
@@ -1023,6 +1025,10 @@ One line per version. The full release notes live in the GitHub releases and `gi
 - **13.2.0 (2026-11-02)**: the GPU, step one (Joshua: "fix the browser so it works with graphics acceleration"). `gpu` in the Terminal brings the Pi 4's V3D up the way Linux does: the firmware's V3D clock on at its top rate, the bridge checked, the reset lifted, then the GPU asked what it is (it should say 4.2). Any refusal stops it with one line before the GPU is touched, and boot never runs it. Nothing draws on it yet: that is 14.0, and drawing pages on it needs shader programs of our own. Check: `arm64-gpu-check.py`.
 - **13.3.0 (2026-11-03)**: Spotify, step one (Joshua: "lets get spotify working"). `tools/claude-relay/spotify.py` is a remote on the Mac, not a player: Spotify's streams are DRM and its native protocol is closed, so the Web API drives the Spotify app on the Mac (Premium needed) and Blackcomb will read a plain page of now playing, controls and search. PKCE login, no secret on disk. Next: the Blackcomb page and a `spotify` command on the Pi. Check: `tools/checks/spotify-check.py`.
 - **13.3.1 (2026-11-03)**: Spotify in Blackcomb. A `spotify:` address sends one command (`now`, `play`, `pause`, `next`, `prev`, `search WORDS`) to the Mac's spotify.py and shows the remote it answers as a page; its links are more `spotify:` commands, so Tab and Enter drive playback. Check: `tools/checks/arm64-spotify-check.py`.
+- **13.8.0 (2026-11-09)**: `ping HOST` in the Pi Terminal, real ICMP echoes (`net_ping`, answered only while a ping runs). The PC build still has no ping. Also a tall window on the PC no longer gets a notch when the pointer leaves the dock. Checks: `ping-check.py`, `windowsnap-check.py`.
+- **13.7.0 (2026-11-09)**: apps can post a notice with `jt_notify`, shown in the menu bar under the app's own name. `focus on` holds them and puts Focus in the menu bar; clicking the word or `focus off` ends it and says how many were held. Check: `arm64-notify-check.py`.
+- **13.6.0 (2026-11-09)**: the green dot works on the Pi. It fills the space from the menu bar to the dock, for every window that can be resized, and a second press puts the window back. Check: `arm64-resize-check.py`. Also `man NAME` in the Pi Terminal, a page for every command. Check: `arm64-man-check.py`. A disk kept across an upgrade now gets the new apps: a copy that does not match the kernel's is replaced at launch. Check: `ring3seed-stale-check.py`. Also how hot the chip is. `temp` in the Terminal asks the firmware: "temp: 52.1 C, the chip slows down at 85.0 C". A fan on pins 4 and 6 runs whenever the Pi has power, so nothing drives a fan pin (the official fan's control wire sits on GPIO 14, our UART). Check: `arm64-heat-check.py`.
+- **13.5.0 (2026-11-09)**: window snapping from the keyboard on the i386 desktop. Ctrl+Alt+Left and Right take the halves, Up fills the screen, U, I, J and K take the quarters, the same zones a title-bar drag lands in. Check: `windowsnap-check.py`. Also lldb on QEMU's gdb stub for both ports, the commands are at the top of `debugger-check.py`.
 - **13.4.0 (2026-11-03)**: install from the web. A link in Blackcomb to a signed `NAME.app` installs it, as `install NAME` does: its signature is fetched from `NAME.sig` beside it and checked before anything is written, so a changed or unsigned app is refused and saved nowhere. Other files still download. Check: `arm64-browser-install-check.py`.
 - **13.0.0 (2026-11-02)**: Bluetooth headphones and keyboards, which finish 13.0. Classic Bluetooth (BR/EDR) runs beside the LE mouse on the same UART: `bt find` lists what Inquiry hears by name and kind (headphones, speaker, keyboard, mouse), `bt connect N` pairs it with Secure Simple Pairing (Just Works, or PIN 0000 for an old device) and keeps the link key in `JT/BTLINK.BIN`, a protected file, and a later `bt connect` reconnects with it. A keyboard or mouse opens HID control and interrupt over L2CAP in boot protocol and types. Headphones and speakers get A2DP over AVDTP and play every app's sound, Music and Movies included, as SBC (a new fixed-point encoder, `sbc.c`) in RTP, paced so a slow radio slows the clock instead of dropping sound. Checks: `arm64-btclassic-check.py` (a fake radio; opcodes from Linux's hci.h; ffmpeg decodes what the headphones receive), `sbc-encode-check.py`.
 - **12.0.0 (2026-11-02)**: Parental controls, which finish 12.0. As in Screen Time, an admin limits another account with `sudo limits NAME apps A,B`, `hours F-T` and `web off` (and `all`, `any`, `on` and `clear` to undo), kept in `JT/LIMITS.TXT`, a protected file. Every way an app starts (the dock, Spotlight, the Launchpad, Samantha's open, the Terminal key and a ring-3 start) asks first; a refused app says why in the menu bar and never starts, Blackcomb loads nothing with the web off, the hours follow the Pi's clock, and admins are never limited. Check: `arm64-limits-check.py`. Also in 12.0.0, YouTube plays whole songs, sharper. The Mac's video service fits the whole video into the 12 MB the Pi can take by lowering the bitrate across its full length, instead of cutting the end off (Drake's Plot Twist was 2:48 of 3:16, now all of it), and short videos come 320 wide, the most Movies decodes, instead of 256. It cuts a video short only when the bitrate would be too low to watch. Check: `yt-fit-check.py`.

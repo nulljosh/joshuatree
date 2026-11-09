@@ -112,6 +112,28 @@ void gui_snap_target(int zone, int *x, int *y, int *w, int *h){
         default:*x = 0;      *y = top;             *w = sw;          *h = areaH; break; /* 6: full */
     }
 }
+/* 13.5.0: the same zones from the keyboard while Ctrl+Alt is down, Magnet's keys on the front window: left and right
+   arrows for the halves, up for full, U I J K for the quarters. Eats the key and returns 1 only when it moved a window.
+   ponytail: on a real PC the byte after E0 can be a millisecond behind; that press falls through as a plain arrow. */
+/* A window tall enough to reach the dock's label row: the label's cheap repaint would put wallpaper back over it, so the desktop does a full one. */
+int gui_window_over_dock(void){
+    for (int i = 0; i < gui_window_count; i++) if (gui_windows[i].y + gui_windows[i].h > gui_dock_y0() - 40) return 1;
+    return 0;
+}
+int gui_snap_key(void){
+    if (gui_window_count == 0) return 0;
+    gui_window_t *top = &gui_windows[gui_window_count - 1];
+    if (gui_window_bleed(top->icon)) return 0;
+    int sc = kbd_peek(), zone = -1, bytes = 1;
+    if (sc == 0xE0) { int k = kbd_peek2(); bytes = 2; zone = k == 0x4B ? 0 : k == 0x4D ? 1 : k == 0x48 ? 6 : -1; }
+    else zone = sc == 0x16 ? 2 : sc == 0x17 ? 3 : sc == 0x24 ? 4 : sc == 0x25 ? 5 : -1;
+    if (zone < 0) return 0;
+    while (bytes--) kbd_pop();
+    gui_snap_target(zone, &top->x, &top->y, &top->w, &top->h);
+    serial_puts("snap key\n");
+    return 1;
+}
+
 /* One-pixel border, drawn straight onto the framebuffer, never onto a
    window (there's nothing under it to preserve while dragging: the
    dragged window itself isn't moved live, only this preview outline is

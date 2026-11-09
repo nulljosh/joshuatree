@@ -327,6 +327,26 @@ try:
         print(f"cleanup (free-move Files): window closed via its own X={'yes' if closed_ok2 else 'NO'}")
         if not closed_ok2: fails.append("cleanup: the free-moved Files window did not close via its own X afterward")
 
+    # Case 7 (13.5.0, #1039): the same zones from the keyboard. Ctrl+Alt+Left, Right, U and K on Files; Up for full, which
+    # also has to cover the right half. Discriminating: drop gui_snap_key's call in desktop.c and no close button moves.
+    open_app("Files")
+    def chord(k):
+        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": c} for c in ("ctrl", "alt", k)], "hold-time": 60}})
+        time.sleep(0.8)
+    half_y = TOP + (BOTTOM - TOP) // 2
+    # The mouse is still on the Files tile, so its hover label is up. Snapping covers the label's row; moving off it must not punch
+    # wallpaper back through the window (13.8.0, gui_window_over_dock).
+    chord("left"); move(*PARK); time.sleep(0.8)
+    notch = (centre(SLOT["Files"]), BOTTOM - 8)
+    if close(pixel(dump(), *notch), pixel(baseline_img, *notch)) <= 20: fails.append("keyboard snap: leaving the dock put wallpaper back through the window")
+    for k, x, y, name in (("left", 0, TOP, "left half"), ("right", LOGICAL_W // 2, TOP, "right half"), ("u", 0, TOP, "top-left quarter"),
+                          ("k", LOGICAL_W // 2, half_y, "bottom-right quarter"), ("up", 0, TOP, "full")):
+        chord(k)
+        ok = is_red(pixel(dump(), x + 24, y + 10))
+        print(f"keyboard snap ({name}): close button in place={'yes' if ok else 'NO'}")
+        if not ok: fails.append(f"keyboard snap: Ctrl+Alt+{k} did not move Files to the {name}")
+    if close(pixel(dump(), *EDGE_POINTS[0]), baseline_edges[0]) <= 6: fails.append("keyboard snap: full did not cover the desktop")
+
     try: cmd({"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, OSError): pass
 finally:

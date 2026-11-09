@@ -338,6 +338,27 @@ static long u_feed(unsigned long kind, unsigned long uarg) {
     if (!len || commas > 7) return -EINVAL;
     return feeds_stocks_for(a) ? 0 : -EIO;
 }
+/* JT_SYS_NOTIFY (413, 13.7.0): one line for the menu bar, under the app's own name so an app cannot pass for the system. Kept here
+   and shown by app_tick between app turns, as a launch is; a newer one replaces one not shown yet. */
+static char notify_line[64];
+long ufile_notify(unsigned long utext, const char *app) {
+    char t[PATH_MAX + 1];
+    long err = copy_path(utext, t);
+    if (err) return err;
+    if (!t[0]) return -EINVAL;
+    unsigned n = 0;
+    while (*app && n < 16) notify_line[n++] = *app++;
+    notify_line[n++] = ':'; notify_line[n++] = ' ';
+    for (unsigned i = 0; t[i] && n < sizeof notify_line - 1; i++) notify_line[n++] = (t[i] < ' ' || t[i] > '~') ? '?' : t[i];
+    notify_line[n] = 0;
+    return 0;
+}
+int ufile_notify_take(char *out) {   /* main.c: 1 and the line, once */
+    if (!notify_line[0]) return 0;
+    for (unsigned i = 0; i < sizeof notify_line; i++) out[i] = notify_line[i];
+    notify_line[0] = 0;
+    return 1;
+}
 int ufile_launch_take(char *name, char *arg) {   /* main.c: 1 and the request, once */
     if (!launch_name[0]) return 0;
     for (unsigned i = 0; i <= PATH_MAX; i++) { name[i] = launch_name[i]; arg[i] = launch_arg[i]; }

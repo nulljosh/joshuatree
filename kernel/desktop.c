@@ -359,6 +359,7 @@ void gui_run(void){
         if (kbd_ctrl && kbd_alt) {
             int shell_pk = kbd_peek();
             if (shell_pk == 0x0E) { kbd_pop(); break; }
+            if (gui_snap_key()) mw_key_repaint = 1; /* the frame moved: the same full repaint a drag-snap release gets */
         }
         if (gui_multiwin_interactive(mw_topmost_icon)) {
             int mwk = gui_multiwin_key_nonblock();
@@ -685,7 +686,7 @@ void gui_run(void){
                           && menu_open == last_menu_open && menu_hover == last_menu_hover;
         int dock_only = !launched && !cursor_only && drag_slot < 0 && last_drag < 0
                         && !menu_open && !last_menu_open
-                        && hover_slot != last_hover;
+                        && hover_slot != last_hover && !gui_window_over_dock();
         /* v0.76.17: direct report, the exact "icons flash when I hover"
            shape v40's own three tiers above were built to fix, just never
            extended to the Apple menu's own hover highlight -- switching

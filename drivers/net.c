@@ -721,6 +721,57 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
     return 0;
 }
 
+/* 13.8.0: ICMP echo (RFC 792), so ping works. One request, then wait for its reply; a request for us that arrives during the wait
+   is answered. ponytail: pings are answered only while a ping is running, an always-on receive path would answer them when idle. */
+#define ICMP_HDR 8u
+#define ICMP_PAY_MAX 64u
+static int icmp_send(const u8 *dest_mac, u32 dest_ip, u8 type, const u8 *id_seq, const u8 *pay, u32 paylen) {
+    u8 frame[sizeof(struct eth_header) + sizeof(struct ip_header) + ICMP_HDR + ICMP_PAY_MAX];
+    struct eth_header *eth = (struct eth_header *)frame;
+    struct ip_header  *ip  = (struct ip_header *)(frame + sizeof(*eth));
+    u8 *ic = frame + sizeof(*eth) + sizeof(*ip);
+    for (int i = 0; i < 6; i++) { eth->dest[i] = dest_mac[i]; eth->src[i] = our_mac[i]; }
+    eth->ethertype = htons(ETHERTYPE_IP);
+    u16 ip_len = (u16)(sizeof(*ip) + ICMP_HDR + paylen);
+    ip->version_ihl = 0x45; ip->tos = 0; ip->total_length = htons(ip_len); ip->id = 0; ip->flags_fragment = 0; ip->ttl = 64;
+    ip->protocol = 1; ip->checksum = 0; ip->src_ip = htonl(our_ip); ip->dst_ip = htonl(dest_ip);
+    ip->checksum = checksum16(ip, sizeof(*ip));
+    ic[0] = type; ic[1] = 0; ic[2] = ic[3] = 0;
+    for (int i = 0; i < 4; i++) ic[4 + i] = id_seq[i];
+    for (u32 i = 0; i < paylen; i++) ic[ICMP_HDR + i] = pay[i];
+    u16 sum = checksum16(ic, ICMP_HDR + paylen);
+    ic[2] = ((const u8 *)&sum)[0]; ic[3] = ((const u8 *)&sum)[1];
+    u32 frame_len = sizeof(*eth) + ip_len;
+    if (frame_len < 60) frame_len = 60;
+    return active_send(frame, frame_len);
+}
+int net_ping(u32 dest_ip, unsigned seq, u32 wait_ticks, u32 *rtt_ticks) {
+    static const u8 pay[16] = "joshuatree ping!";
+    u8 dest_mac[6], rx[1514];
+    if (!resolve_next_hop(dest_ip, dest_mac)) return 0;
+    u8 id_seq[4] = { 0x4A, 0x54, (u8)(seq >> 8), (u8)seq };
+    u32 start = ticks();
+    if (!icmp_send(dest_mac, dest_ip, 8, id_seq, pay, sizeof pay)) return 0;
+    while (ticks() - start < wait_ticks) {
+        NET_IDLE();
+        u32 n = active_receive(rx, sizeof(rx));
+        if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + ICMP_HDR) continue;
+        struct eth_header *eth = (struct eth_header *)rx;
+        struct ip_header *ip = (struct ip_header *)(rx + sizeof(*eth));
+        u32 ip_hlen = (u32)(ip->version_ihl & 0x0F) * 4, total = htons(ip->total_length);
+        if (eth->ethertype != htons(ETHERTYPE_IP) || ip->protocol != 1 || ip_hlen < sizeof(struct ip_header)) continue;
+        if (total < ip_hlen + ICMP_HDR || sizeof(*eth) + total > n || htonl(ip->dst_ip) != our_ip) continue;
+        const u8 *ic = rx + sizeof(*eth) + ip_hlen;
+        u32 paylen = total - ip_hlen - ICMP_HDR;
+        if (ic[0] == 8 && paylen <= ICMP_PAY_MAX) { icmp_send(eth->src, htonl(ip->src_ip), 0, ic + 4, ic + ICMP_HDR, paylen); continue; }
+        if (ic[0] == 0 && htonl(ip->src_ip) == dest_ip && ic[4] == id_seq[0] && ic[5] == id_seq[1] && ic[6] == id_seq[2] && ic[7] == id_seq[3]) {
+            *rtt_ticks = ticks() - start;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* ---- TCP: one connection at a time, synchronous, no retransmission or
    congestion control. Enough to do a real handshake, push one request,
    and read back a response, which is everything a raw HTTP GET needs. ---- */

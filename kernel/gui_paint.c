@@ -675,7 +675,11 @@ void gui_draw_traffic(int x, int y, int st){
     window_rect(x + 14, y + 6, 64, 21, 0x00F5F0EB);
     gui_fill_circle(x + 24, y + 16, 7, red, 0x00F5F0EB);
     gui_fill_circle(x + 46, y + 16, 7, yel, 0x00F5F0EB);
+#ifdef __aarch64__
+    gui_fill_circle(x + 68, y + 16, 7, st == GUI_TL_BACK ? 0x00D8D4CE : 0x0028C840, 0x00F5F0EB); /* 13.6.0: the Pi's green dot fills the screen; i386's has nothing to do */
+#else
     gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
+#endif
     if (st != GUI_TL_GLYPHS) return;
     gui_close_glyph(x + 24, y + 16, 0x00FF5F57);
     gui_text("-", x + 43, y + 8, 0x00624A20);

@@ -55,6 +55,12 @@ To resize, press within 12 pixels of a right, bottom or left edge (below the tit
 
 Content lays itself out again to fit: the Console and Terminal change columns and rows, the Browser re-wraps, the Calculator spreads its keys, Calendar, Notes, Music and Books redraw. Brick has a fixed field and keeps its first size as its smallest. On a 720p, 768p or 4K screen an app's window also stops growing at about 376,000 pixels of content (it needs that much memory). A 1080p Pi never gets there.
 
+**Focus (Pi).** `focus on` keeps notices from apps out of the menu bar, and the word Focus sits there while it is on. Click the word, or type `focus off`, and it says how many it held.
+
+**Fill the screen (Pi).** The green dot on the front window fills the space from the menu bar to the dock, and pressing it again puts the window back.
+
+**Snap a window from the keyboard (PC build).** Ctrl+Alt+Left and Ctrl+Alt+Right put the front window on half the screen, Ctrl+Alt+Up fills it, and Ctrl+Alt+U, I, J and K put it in a corner.
+
 **Copy and paste.** Cmd is the Windows or Super key on a PC keyboard, and Ctrl does the same. One clipboard serves the whole Pi: plain text, 4 KB. Cmd+A selects all in a note, Cmd+C copies, Cmd+X cuts, Cmd+V pastes. This works in Notes, on the Terminal's input line and in the Browser's address bar (there the whole line is what copy and cut take). A longer copy keeps the first 4 KB. A paste takes what fits, turns line breaks into spaces and never runs a command. Cmd+W closes the front window and Cmd+Q quits the front app (both do what the red dot does). Cmd+N starts a new note in Notes, saving the open one first. Cmd+Tab (or Ctrl+Tab) brings the app window behind to the front; tap it again to walk through every open one.
 
 **Menu bar messages.** A Wi-Fi join and a Brick result show beside the clock for four seconds. A new message replaces the old one and never takes the keyboard or mouse from your app.
@@ -175,7 +181,7 @@ The pairing is written to `JT/BTPAIR.BIN`. On every boot the Pi reconnects by it
 
 ### Other ways to run it
 
-- **PC USB stick:** download the latest ISO and `SHA256SUMS` from the [release page](https://github.com/nulljosh/joshuatree/releases/latest), which has the copy steps. BIOS boot is checked in QEMU. UEFI and real PC hardware are not verified.
+- **PC USB stick:** download the latest ISO and `SHA256SUMS` from the [release page](https://github.com/nulljosh/joshuatree/releases/latest), which has the copy steps. BIOS boot is checked in QEMU. UEFI and real PC hardware are not verified. Saving on a real PC only works on an old IDE disk today.
 - **Talk to Samantha on a Mac:** `make talk`, then hold F2. It needs a mic (see `user/samantha.c`). Voice on the real Pi is not verified.
 - **Samantha on the Pi:** she answers through a relay on your Mac that uses your own Claude API key. The key stays on the Mac and never goes on the Pi.
 - **Ask Claude Code:** run the relay on your Mac and open Claude from the Launchpad (the Claude app section).
@@ -1158,6 +1164,19 @@ Next three, ranked:
 > The x86 analysis below stays as the later x86 box. The $199 Neo Kit and $349 Neo Complete in the old plan are replaced for now by the $500 Pi kit in the Money section.
 >
 > Trimmed 2026-10-12: the long source-citation prose is in git history.
+
+**A good computer, against the Mac mini (Apple's specs, November 2026).** What the next box should be judged on:
+
+| | Mac mini (M6, or M5 Pro) | Our box (Pi 4B) |
+|---|---|---|
+| Memory | 16 to 32 GB, or 24 to 64 GB on the M5 Pro | Up to 8 GB |
+| Chip | Integrated CPU, GPU and memory | Four Cortex-A72 cores, with V3D graphics |
+| Screens | Three: any mix of Thunderbolt and HDMI | Two over micro-HDMI, one driven today (#902) |
+| USB-C | Three Thunderbolt at the back, two USB 3 at the front | One, for power only |
+| Network | 2.5Gb Ethernet, 10Gb optional | Gigabit Ethernet, no driver yet (#867) |
+| Design | External box | External box; Nimbus wraps it with a built-in 7 inch display |
+
+The checklist: enough memory that one app cannot crowd out the rest, two screens over ordinary HDMI, USB-C that carries data, wired network that works without setup, and a case you would leave on a desk.
 
 Everything the i386 kernel talks to today is a QEMU-emulated device:
 - rtl8139 or ne2k NIC
