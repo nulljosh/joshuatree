@@ -49,6 +49,8 @@ The Pi wallpaper is the park picture, Joshua Tree at dusk (`arch/arm64/park_wall
 
 ## Loop rules
 
+The loop: `docs/LOOP-HANDOFF.md` says where it stands and has the restart prompt.
+
 - PRs open as drafts (`gh pr create --draft`). Run the targeted checks for what you changed; `gh pr ready` before the first push, then merge on green CI. The repo requires up-to-date PRs, so merge one at a time.
 - On a conflict in a generated file (`VERSION`, `landing/index.html`, `landing/version.txt`, the generated blocks in `docs/ARCHITECTURE.md`), take main's side, then regenerate.
 - Never resolve a Makefile conflict by taking one side blindly. Merge both by hand.
