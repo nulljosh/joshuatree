@@ -169,6 +169,9 @@ int http_post(const char *host, const char *path, unsigned short port,
    the request is built, so no later request can carry it. */
 static const char *post_bearer = 0;
 void http_post_set_bearer(const char *token) { post_bearer = (token && token[0]) ? token : 0; }
+/* 13.11.0: Content-Type for the next POST only (printing sends application/ipp); JSON otherwise. */
+static const char *post_type = 0;
+void http_post_set_type(const char *type) { post_type = (type && type[0]) ? type : 0; }
 
 int http_post_timeout(const char *host, const char *path, unsigned short port,
                        const char *body, unsigned int body_len,
@@ -199,8 +202,8 @@ static int http_post_locked(u32 ip, const char *host, const char *path, unsigned
        long; ~200 bytes of slack covers any realistic path plus headers),
        the same pattern http_get already uses for its own raw response
        buffer just below. */
-    const char *bearer = post_bearer;
-    post_bearer = 0;
+    const char *bearer = post_bearer, *type = post_type ? post_type : "application/json";
+    post_bearer = 0; post_type = 0;
     u32 bearer_len = 0;
     while (bearer && bearer[bearer_len]) bearer_len++;
     u32 req_cap = body_len + 256 + (bearer ? bearer_len + 32 : 0);
@@ -218,7 +221,10 @@ static int http_post_locked(u32 ip, const char *host, const char *path, unsigned
         while (*ah && n < req_cap - 1) req[n++] = *ah++;
         for (u32 bi = 0; bi < bearer_len && n < req_cap - 1; bi++) req[n++] = bearer[bi];
     }
-    const char *ct = "\r\nContent-Type: application/json\r\nContent-Length: ";
+    const char *ct = "\r\nContent-Type: ";
+    while (*ct && n < req_cap - 1) req[n++] = *ct++;
+    while (*type && n < req_cap - 1) req[n++] = *type++;
+    ct = "\r\nContent-Length: ";
     while (*ct && n < req_cap - 1) req[n++] = *ct++;
     putn_into(req, &n, req_cap - 1, body_len);
     const char *tail = "\r\nConnection: close\r\n\r\n";

@@ -42,6 +42,7 @@ static const char *const man_pages[][2] = {
     {"open", "open N\nThe browser follows link N."},
     {"passwd", "passwd [NAME]\nChanges a password."},
     {"ping", "ping HOST\nSends three echoes to a name or a dotted address, and says how long each reply took."},
+    {"print", "print FILE PRINTER\nPrints a text file on a network printer, by its name or address (add :PORT if it is not 631). Any AirPrint or IPP Everywhere printer takes it, no driver."},
     {"poweroff", "poweroff\nThe same as shutdown."},
     {"reader", "reader on\nreader off\nTurns the screen reader on or off."},
     {"reboot", "reboot\nRestarts. Typing the word is the confirmation."},

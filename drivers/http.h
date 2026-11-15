@@ -40,6 +40,8 @@ int http_post_timeout(const char *host, const char *path, unsigned short port,
                        unsigned int reply_timeout_ticks);
 /* Authorization: Bearer <token> on the NEXT http_post_timeout only (then cleared). 0 or "" = none. */
 void http_post_set_bearer(const char *token);
+/* Content-Type for the NEXT POST only (then back to application/json). */
+void http_post_set_type(const char *type);
 
 /* The pieces arch/arm64/tls.c reuses (2.31): a dotted quad or a DNS lookup, and the two reply parsers. */
 int http_resolve_host(const char *host, unsigned int *ip);
