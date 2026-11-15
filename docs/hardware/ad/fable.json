@@ -1,0 +1,125 @@
+{
+ "out": "fable.mp4",
+ "font": "/System/Library/Fonts/SFNS.ttf",
+ "palette": {
+  "ink": "#15110e",
+  "paper": "#f4f3ec",
+  "rust": "#b5502c",
+  "sand": "#e08a5f",
+  "card": "#1e1813",
+  "sub": "#b8aa96"
+ },
+ "home": {
+  "image": "../../brand/park-wall.png",
+  "focus": [
+   0.5,
+   0.55
+  ],
+  "zoom": 1.0,
+  "sky": [
+   "ink",
+   "rust"
+  ],
+  "walker": true
+ },
+ "shots": [
+  {
+   "image": "fable/desktop.jpg",
+   "focus": [
+    0.5,
+    0.76
+   ],
+   "zoom": 1.0,
+   "sky": [
+    "ink",
+    "rust"
+   ]
+  },
+  {
+   "image": "fable/weather.jpg",
+   "focus": [
+    0.5,
+    0.76
+   ],
+   "zoom": 1.0,
+   "sky": [
+    "paper",
+    "sand"
+   ]
+  },
+  {
+   "image": "fable/stocks.jpg",
+   "focus": [
+    0.5,
+    0.76
+   ],
+   "zoom": 1.0,
+   "sky": [
+    "ink",
+    "rust"
+   ]
+  },
+  {
+   "image": "../nimbus-hero.jpg",
+   "full": true
+  },
+  {
+   "image": "fable/music.jpg",
+   "focus": [
+    0.5,
+    0.76
+   ],
+   "zoom": 1.0,
+   "sky": [
+    "ink",
+    "rust"
+   ]
+  },
+  {
+   "image": "fable/settings.jpg",
+   "focus": [
+    0.5,
+    0.76
+   ],
+   "zoom": 1.0,
+   "sky": [
+    "paper",
+    "sand"
+   ]
+  },
+  {
+   "image": "fable/brick.jpg",
+   "focus": [
+    0.5,
+    0.76
+   ],
+   "zoom": 1.0,
+   "sky": [
+    "ink",
+    "rust"
+   ]
+  },
+  {
+   "lines": [
+    "765 commits, Sep",
+    "706 commits, Oct",
+    "281 releases since Oct 12"
+   ],
+   "fg": "paper",
+   "bg": "rust",
+   "full": true
+  },
+  {
+   "image": "../first-boot-2026-10-06.jpg",
+   "full": true
+  }
+ ],
+ "name": {
+  "text": "Joshua Tree 13",
+  "colour": "paper"
+ },
+ "end": {
+  "mark": "fable/mark.png",
+  "name": "Joshua Tree"
+ }
+}
