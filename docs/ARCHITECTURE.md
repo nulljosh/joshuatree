@@ -767,8 +767,8 @@ None of this is kernel code. It builds and runs on the Mac.
 | `landing/ad/icons/*.png` | The 26 app icons as the OS draws them: 23 rendered from `art/icons/*.svg`, plus Portfolio, Activity and Clock cropped from the Apps grid capture and masked to the same tile shape. |
 | `tools/ad-desktop-capture.py` | Headless QEMU run that drives the real kernel over QMP (Apps grid scroll, snap Samantha and Notes, send a line) and saves the 1920x1080 framebuffer for the ad. |
 | `tools/ad-audio.py` | Narration and sound for the ad: Samantha's ElevenLabs voice per line, the `docs/hardware/ad/music2.py` bed cut to 30 s, ffmpeg places each line on its beat and ducks the bed under the voice. |
-| `landing/joshua-tree-ad-fable.mp4` | The film on the landing (13.x), in the calm Fable style: 19 s, 1920x1080 h264, 9 steady shots under one curved horizon. It opens and closes on the desert at dusk with a tiny tree walking the rim; between them, real 1080p windows from the Pi build in QEMU (Weather and Stocks live), the Nimbus case, a chart of real commit counts and the first boot on the board. Spec: `docs/hardware/ad/fable.json`, rendered by the fable-ad skill. |
-| `landing/joshua-tree-ad-fable-poster.jpg` | The film's poster: the end card, the mark and Joshua Tree on the desert horizon. |
+| `landing/joshua-tree-ad-v13-fable.mp4` | The film on the landing (13.x), in the calm Fable style: 19 s, 1920x1080 h264, 9 steady shots under one curved horizon. It opens and closes on the desert at dusk with a tiny tree walking the rim; between them, real 1080p windows from the Pi build in QEMU (Weather and Stocks live), the Nimbus case, a chart of real commit counts and the first boot on the board. Spec: `docs/hardware/ad/fable.json`, rendered by the fable-ad skill. |
+| `landing/joshua-tree-ad-v13-fable-poster.jpg` | The film's poster: the end card, the mark and Joshua Tree on the desert horizon. |
 
 ### Where to go next
 
