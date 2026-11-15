@@ -1721,7 +1721,54 @@ A Codex mode for the relay was tried, and the safety check rightly blocked it. I
 
 The sentence the whole project is trying to make true: a computer you can talk to and tell what to fix. The Pi on the desk is the first one that could.
 
-*How this was written.* By Joshua with Claude in October 2026, from the repo's docs and git log and the public journal at journal.jaybulb.com. Every date and number traces to a commit, a doc or a photo in `docs/hardware/`.
+### 8. Thirteen versions in a month
+
+From October 12 to November 14, 281 pull requests merged. Each version is a goal with a name, and it gets its number when the last piece of it lands:
+
+- 3.0, Hold it (October 12): the desktop on the real Pi, apps in user mode.
+- 4.0, many windows (October 18): four apps at once, each in its own 16 MB box, and a crash ends only the app that made it.
+- 5.0, Talk to it (October 26): hold Space and Samantha answers out loud.
+- 6.0, Yours (October 26): accounts, home folders, snapshots and backups to the Mac.
+- 7.0, Online (October 29): Wi-Fi without a restart, the web with its pictures, real mail and a synced calendar.
+- 8.0, Build things (November 1): someone other than me follows the SDK page and runs their own app.
+- 9.0 to 13.0 (November 2): the kit's screens, a screen reader and twelve languages, a laptop's touchpad and battery, parental controls, then Bluetooth headphones and keyboards.
+
+Five majors on one day sounds like a stunt. It was not. Most of that work had been landing for days, and the number only moves when a goal is finished. November 2 is when the last pieces of five goals came in.
+
+The busiest days were October 25 to 28: 42, 47, 54 and 29 releases. On the 27th we pointed a fuzzer at every piece of code that reads bytes off the network, and it found sixteen places that read past the end of a buffer. Some had been there since version 4. Now any code that reads bytes someone else made ships with its own fuzzer, in the same pull request.
+
+On November 1 the board found the bug no emulator could. With nothing plugged in, the screen slept after five minutes, and nothing could wake it but pulling the power. Now it only sleeps when there is a keyboard or a mouse to wake it.
+
+### 9. Behind the scenes
+
+This is how a change gets made now, start to finish. Tonight's was the Energy Saver, so I'll use that.
+
+1. **A note.** I write "needs auto lock, auto dim and screensaver" in Apple Notes. A sweep files it into this roadmap, under the day it came in.
+2. **A branch.** Claude takes one item, opens a fresh copy of the repo beside the main one, and starts from main, never from whatever was lying around. Half the screen saver already sat in an old pull request next to three thousand lines of video decoder. Only the screen saver part came across.
+3. **A check that fails without it.** The change comes with a test that watches the screen dim to half, then the saver, then dark, and makes sure a key brings back the exact picture. Every check also gets a broken copy of the code, and that copy has to fail, so a test that always passes cannot hide.
+4. **The whole suite on the Mac.** About 450 checks, in 11 groups, four at a time, each group in its own emulator: a PC, a Pi 4, and the virtual machine in between. It takes about fifteen minutes. Nothing goes up to GitHub until it is green here.
+5. **A pull request, then GitHub runs it all again** on Linux, which is slower and pickier. Since October 12 that has been 1,138 runs.
+6. **Merge on green.** It goes in the moment it passes, squashed into one commit, and the next item starts.
+
+It runs as a loop. I say what matters and what is good enough, and the loop picks the next item and keeps going until the usage window runs out. Agents work one at a time, never a crowd, because a crowd burns the whole window in minutes and they trip over each other.
+
+The rules the loop lives by were each paid for once:
+
+- **A draft pull request never runs the tests,** so it shows no red even when it is broken. Worse, flipping a draft to ready right after a push let the skipped run cancel the real one, and the pull request looked green with nothing tested. Now they open ready, after the local suite passes.
+- **A test that sleeps a fixed time and then looks** passes on a fast Mac and fails on a busy server. Tests wait for the thing they expect, with a deadline.
+- **Conflict markers got committed twice.** Every commit after a merge is now checked for them.
+- **Nobody merges with the admin override,** because then the code lands without anyone seeing it go green.
+- **A traced emulator run with no time limit** ran for two days and filled the disk. Every one gets a timeout now.
+
+The disk is still the tightest part. The Mac has 228 GB, and the builds, the emulators and the films fill it fast. A bigger drive is on the way.
+
+### 10. What the loop can't do
+
+Some things only happen on the desk. Wi-Fi only showed its real problems on the board. The screen that would not wake only showed up on the board. Spotify got as far as a remote on the Mac and a page in the browser, then stopped, because playing the music itself needs a Premium account.
+
+So the work splits in two. The loop does everything an emulator can prove. I flash a card, plug it in, and try what it can't: the second display, the touch screen, the speaker in the case. Each board test is a short list in `docs/TESTING.md`. Whatever breaks on it goes to the top of the roadmap.
+
+*How this was written.* By Joshua with Claude, from the repo's docs and git log. Chapters 1 to 7 were written in October 2026. Chapters 8 to 10 were added on November 14, 2026, and their counts come from GitHub: merged pull requests and workflow runs since October 12, and the files in `tools/checks/`.
 
 ## Our story and launch drafts
 
