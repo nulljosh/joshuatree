@@ -1,0 +1,324 @@
+{
+ "out": "v13.mp4",
+ "size": [
+  1920,
+  1080
+ ],
+ "fps": 30,
+ "font": "../../../tools/fonts/treesans/TreeSans-Medium.ttf",
+ "font_bold": "../../../tools/fonts/treesans/TreeSansDisplay-Bold.ttf",
+ "font_size": 100,
+ "palette": {
+  "paper": "#faf8f4",
+  "ink": "#141311",
+  "grey": "#6E6E6E",
+  "terra": "#b5502c",
+  "clay": "#923F20"
+ },
+ "sky": "ink",
+ "glow": [
+  "paper",
+  "terra"
+ ],
+ "open": {
+  "secs": 1.6
+ },
+ "pool": [
+  {
+   "video": "nimbus-rear-clip.mp4",
+   "start": 0.6,
+   "focus": [
+    0.5,
+    0.0
+   ],
+   "zoom": 1.6,
+   "sky": "paper"
+  },
+  {
+   "image": "../first-boot-2026-10-06.jpg",
+   "focus": [
+    0.5,
+    0.42
+   ],
+   "zoom": 1.0,
+   "sky": "ink"
+  },
+  {
+   "image": "v13/weather.jpg",
+   "focus": [
+    0.82,
+    0.05
+   ],
+   "zoom": 1.25,
+   "sky": "paper"
+  },
+  {
+   "image": "v13/stocks.jpg",
+   "focus": [
+    0.79,
+    0.06
+   ],
+   "zoom": 1.25,
+   "sky": "ink"
+  },
+  {
+   "image": "v13/desktop.jpg",
+   "focus": [
+    0.5,
+    0.86
+   ],
+   "zoom": 1.6,
+   "sky": "paper"
+  },
+  {
+   "image": "v13/settings.jpg",
+   "focus": [
+    0.44,
+    0.05
+   ],
+   "zoom": 1.4,
+   "sky": "ink"
+  },
+  {
+   "image": "v13/music.jpg",
+   "focus": [
+    0.8,
+    0.1
+   ],
+   "zoom": 1.3,
+   "sky": "paper"
+  },
+  {
+   "image": "../nimbus-hero.jpg",
+   "focus": [
+    0.44,
+    0.44
+   ],
+   "zoom": 3.2,
+   "sky": "ink"
+  },
+  {
+   "image": "v13/brick.jpg",
+   "focus": [
+    0.5,
+    0.2
+   ],
+   "zoom": 1.4,
+   "sky": "paper"
+  },
+  {
+   "image": "v13/calculator.jpg",
+   "focus": [
+    0.53,
+    0.24
+   ],
+   "zoom": 1.6,
+   "sky": "ink"
+  },
+  {
+   "image": "v13/weather.jpg",
+   "focus": [
+    0.8,
+    0.17
+   ],
+   "zoom": 2.2,
+   "sky": "paper"
+  },
+  {
+   "image": "v13/stocks.jpg",
+   "focus": [
+    0.7,
+    0.12
+   ],
+   "zoom": 2.0,
+   "sky": "ink"
+  },
+  {
+   "image": "../../../landing/face/hd.jpg",
+   "focus": [
+    0.5,
+    0.42
+   ],
+   "zoom": 1.9,
+   "sky": "ink"
+  },
+  {
+   "image": "v13/desktop.jpg",
+   "focus": [
+    0.5,
+    0.86
+   ],
+   "zoom": 1.2,
+   "sky": "paper"
+  },
+  {
+   "image": "v13/stocks.jpg",
+   "focus": [
+    0.66,
+    0.1
+   ],
+   "zoom": 2.6,
+   "sky": "paper"
+  },
+  {
+   "image": "v13/weather.jpg",
+   "focus": [
+    0.68,
+    0.24
+   ],
+   "zoom": 2.4,
+   "sky": "ink"
+  },
+  {
+   "image": "../breadboard.jpg",
+   "focus": [
+    0.35,
+    0.45
+   ],
+   "zoom": 1.5,
+   "sky": "paper"
+  },
+  {
+   "image": "v13/desktop.jpg",
+   "focus": [
+    0.5,
+    0.88
+   ],
+   "zoom": 3.0,
+   "sky": "ink"
+  },
+  {
+   "fill": "terra",
+   "sky": "ink"
+  },
+  {
+   "image": "v13/music.jpg",
+   "focus": [
+    0.86,
+    0.18
+   ],
+   "zoom": 2.4,
+   "sky": "ink"
+  },
+  {
+   "fill": "grey",
+   "sky": "paper"
+  },
+  {
+   "image": "v13/settings.jpg",
+   "focus": [
+    0.33,
+    0.1
+   ],
+   "zoom": 2.4,
+   "sky": "paper"
+  },
+  {
+   "fill": "clay",
+   "sky": "paper"
+  },
+  {
+   "image": "v13/brick.jpg",
+   "focus": [
+    0.5,
+    0.22
+   ],
+   "zoom": 2.4,
+   "sky": "ink"
+  },
+  {
+   "fill": "ink",
+   "sky": "paper"
+  },
+  {
+   "image": "v13/weather.jpg",
+   "focus": [
+    0.82,
+    0.05
+   ],
+   "zoom": 1.25,
+   "sky": "ink"
+  },
+  {
+   "fill": "terra",
+   "sky": "paper"
+  },
+  {
+   "image": "v13/stocks.jpg",
+   "focus": [
+    0.79,
+    0.06
+   ],
+   "zoom": 1.25,
+   "sky": "paper"
+  },
+  {
+   "fill": "grey",
+   "sky": "ink"
+  },
+  {
+   "image": "../first-boot-2026-10-06.jpg",
+   "focus": [
+    0.5,
+    0.42
+   ],
+   "zoom": 1.0,
+   "sky": "paper"
+  },
+  {
+   "fill": "clay",
+   "sky": "ink"
+  },
+  {
+   "image": "v13/desktop.jpg",
+   "focus": [
+    0.5,
+    0.86
+   ],
+   "zoom": 1.6,
+   "sky": "ink"
+  },
+  {
+   "fill": "ink",
+   "sky": "paper"
+  },
+  {
+   "image": "../nimbus-hero.jpg",
+   "focus": [
+    0.44,
+    0.44
+   ],
+   "zoom": 3.2,
+   "sky": "ink"
+  }
+ ],
+ "schedule": {
+  "count": 34,
+  "first": 1.05,
+  "last": 0.12
+ },
+ "words": [
+  [
+   12,
+   "Everything"
+  ],
+  [
+   16,
+   "just"
+  ],
+  [
+   18,
+   "connects."
+  ]
+ ],
+ "title": {
+  "text": "Joshua Tree 13",
+  "secs": 1.4
+ },
+ "end": {
+  "mark": "../../brand/mark-paper.png",
+  "name": "Joshua Tree",
+  "secs": 3.0
+ },
+ "grain": 0.18
+}

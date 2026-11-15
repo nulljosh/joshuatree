@@ -767,8 +767,8 @@ None of this is kernel code. It builds and runs on the Mac.
 | `landing/ad/icons/*.png` | The 26 app icons as the OS draws them: 23 rendered from `art/icons/*.svg`, plus Portfolio, Activity and Clock cropped from the Apps grid capture and masked to the same tile shape. |
 | `tools/ad-desktop-capture.py` | Headless QEMU run that drives the real kernel over QMP (Apps grid scroll, snap Samantha and Notes, send a line) and saves the 1920x1080 framebuffer for the ad. |
 | `tools/ad-audio.py` | Narration and sound for the ad: Samantha's ElevenLabs voice per line, the `docs/hardware/ad/music2.py` bed cut to 30 s, ffmpeg places each line on its beat and ducks the bed under the voice. |
-| `landing/joshua-tree-ad-v11.mp4` | The film on the landing (11.5.1): 30 s, 1920x1080 h264, 179 hard cuts of real screens from the Pi build at 1080p in QEMU (every app opened from Spotlight with the network and a card attached, so Weather, Stocks and Blackcomb show live data), full windows and pixel close-ups, every cut on a 32nd of an original 128 BPM piano score, slowing for Mission Control and Spaces, ending on the name. The 6.72.1 film, "It builds itself.", is still made by `docs/hardware/ad/builds.json`. |
-| `landing/joshua-tree-ad-v11-poster.jpg` | The film's poster: Launchpad, every app on the Pi. |
+| `landing/joshua-tree-ad-v13.mp4` | The film on the landing (13.x): 20 s, 1920x1080 h264, 34 cuts that speed up from 1 s to 0.12 s, each a real 1080p screen from the Pi build in QEMU (Weather and Stocks live) or a photo of the board, seen through one curved horizon. The line is "Everything just connects." and it ends on the name. Made by `docs/hardware/ad/v13.json` and the opus-ad renderer; the screens are in `docs/hardware/ad/v13/`. |
+| `landing/joshua-tree-ad-v13-poster.jpg` | The film's poster: the name card, Joshua Tree 13. |
 
 ### Where to go next
 
