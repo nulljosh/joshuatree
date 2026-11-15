@@ -29,6 +29,11 @@ static void clock_local(unsigned long u, unsigned *a, unsigned *b, unsigned *c, 
 static int sg(int v) { return v; } static unsigned fb_color(unsigned c) { return c; }
 static int text_width(int w, const char *s, int p) { (void)w; (void)s; return p; }
 static int text_draw(int w, const char *s, int x, int y, int p, unsigned c, unsigned *f, unsigned pi, int W, int H) { (void)w; (void)s; (void)x; (void)y; (void)p; (void)c; (void)f; (void)pi; (void)W; (void)H; return 0; }
+/* 13.10.0 auto lock: someone signed in or not, and the card (9s on the scanout) */
+static int signed_in; static unsigned cards;
+void dcache_clean(void *p, unsigned long n) { (void)p; (void)n; }
+static int lock_start(void) { return signed_in; }
+static void lock_paint(void) { cards++; for (int i = 0; i < 64; i++) B[i] = 9; }
 #include "screen_idle.h"
 int main(void) {
     screen_activity(); now=29999; screen_tick(); assert(!calls && !screen_asleep);
@@ -69,6 +74,25 @@ int main(void) {
     now += 1; screen_tick(); assert(calls == c0 + 1 && screen_asleep);
     unsigned f0 = flushes; screen_activity(); assert(!saver_on && !saver_hold && !screen_asleep && flushes == f0 + 1);
     sleep_cs = 0; now += 10000000; screen_tick(); assert(!saver_on && !screen_asleep);   /* Never */
+    /* 13.10.0 auto lock: the saver locks when someone is signed in; a wake shows the card, never fb */
+    sleep_cs = 6000; signed_in = 1; for (int i = 0; i < 64; i++) A[i] = B[i] = 7;
+    now += 100000; screen_activity();
+    now += 4500; screen_tick(); assert(dim_on && !lock_on);                                          /* the dim warns, never locks */
+    screen_activity(); assert(!dim_on && !saver_hold && !lock_on);
+    now += 6000; screen_tick(); assert(saver_on && lock_on && saver_hold);                            /* the saver locks */
+    unsigned f2 = flushes, k2 = cards; assert(screen_activity());                                     /* the waking key is swallowed */
+    assert(!saver_on && lock_on && saver_hold && flushes == f2 && cards == k2 + 1 && B[0] == 9);    /* and it wakes to the card */
+    assert(!screen_activity());                                                                       /* the next key is the password's */
+    busy = 1; screen_tick(); busy = 0; input_ok = 0; screen_tick(); input_ok = 1;
+    assert(lock_on && saver_hold && flushes == f2 && B[0] == 9);                                     /* busy or unplugged never unlock */
+    now += 4500; screen_tick(); assert(!dim_on && B[0] == 9);                                        /* no dim: it would be fb at half */
+    now += 1500; screen_tick(); assert(saver_on); now += SAVER_CS; screen_tick(); assert(screen_asleep);
+    assert(screen_activity() && !screen_asleep && lock_on && B[0] == 9 && flushes == f2);           /* dark, then a key: the card */
+    lock_on = 0; saver_hold = 0; for (int i = 0; i < 64; i++) A[i] = B[i] = 7;                       /* login_ui.h's lock_done */
+    screen_sleep_soon(); now += 100; screen_tick(); assert(screen_asleep && lock_on && B[0] == 9);   /* the menu's Sleep: the card, then dark */
+    lock_on = 0; saver_hold = 0; signed_in = 0; screen_activity();
+    now += 6000; screen_tick(); assert(saver_on && !lock_on); unsigned f3 = flushes;
+    screen_activity(); assert(!saver_hold && flushes == f3 + 1);                                      /* nobody signed in: no lock */
 }
 '''
 header = (ROOT/'arch/arm64/screen_idle.h').read_text()
@@ -83,7 +107,14 @@ assert host_check(header.replace('screen_asleep = 0;', 'screen_asleep = 1;')).re
 assert host_check(header.replace(' || !input_present()', '')).returncode != 0, 'sleeps-with-no-input control passed'
 assert host_check(header.replace('(fb[i] >> 1) & 0x7f7f7f7fu', 'fb[i]')).returncode != 0, 'no-dim control passed'
 assert host_check(header.replace('if (!screen_asleep || busy) return;', '(void)busy; if (!screen_asleep) return;')).returncode != 0, 'naps-while-busy control passed'
+# 13.10.0 auto lock: each way a locked screen could show the desktop, or not lock at all, must fail
+assert host_check(header.replace('    if (lock_on) { lock_paint(); return; }', '')).returncode != 0, 'wake-shows-the-desktop control passed'
+assert host_check(header.replace('&& !lock_on && idle + DIM_CS', '&& idle + DIM_CS')).returncode != 0, 'dim-while-locked control passed'
+assert host_check(header.replace('    return woke;', '    return woke && 0;')).returncode != 0, 'wake-key-typed control passed'
+assert host_check(header.replace('if (!saver_on) { lock_arm(); ', 'if (!saver_on) { ')).returncode != 0, 'no-lock-at-saver control passed'
+assert host_check(header.replace('    lock_arm();\n    if (lock_on && !saver_on)', '    if (lock_on && !saver_on)')).returncode != 0, 'sleep-menu-does-not-lock control passed'
 print('PASS: five-minute boundary, activity reset, wrap, active apps, refused requests, broken-wake control, and deep idle naps only asleep and idle',flush=True)
+print('PASS: auto lock (13.10.0): the saver and Sleep lock, the dim does not; a wake shows the card and swallows its key; busy, unplugged or idle never show fb',flush=True)
 subprocess.run(['make','-s','-C',str(ROOT/'arch/arm64'),'screen-kernel8.img'],check=True)
 log, sock = TMP/'uart', TMP/'qmp'
 q = subprocess.Popen(['qemu-system-aarch64','-machine','raspi4b','-display','none',

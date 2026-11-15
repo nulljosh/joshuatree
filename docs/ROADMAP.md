@@ -613,7 +613,7 @@ The OS stays free. Monetization is custom hardware built to run it. Everything t
 - [ ] [Fable] FAT32, read and write: open a normal USB stick or SD card. Today the disk format is Joshua Tree's own, so nothing from another computer opens.
 - [ ] [Fable] Load ELF programs from disk at runtime, so apps can ship outside the kernel. First step to installable apps.
 - [x] [Sonnet] Saving on real PCs stated plainly: today only old IDE disks work.
-- [ ] [Fable] User profiles and sign-in done properly: login screen at boot, a home folder and settings per person, passwords stored hashed and never in the clear, lock screen, an admin level for risky actions (issue #28). Accounts exist today; this is the pass that makes them trustworthy.
+- [ ] [Fable] User profiles and sign-in done properly: login screen at boot, a home folder and settings per person, passwords stored hashed and never in the clear, lock screen (the Pi's auto lock shipped in 13.10.0), an admin level for risky actions (issue #28). Accounts exist today; this is the pass that makes them trustworthy.
 - [ ] [Fable] Sound on real PCs: an AC97 or Intel HD Audio driver next to the Sound Blaster one (1.6.9), which only exists in emulators.
 - [ ] [Sonnet] Laptop basics: battery level (10.1.0), trackpad (10.1.0), USB precision pads and Sleep (11.0.0); lid close still open.
 - [ ] [Joshua] One real PC booted from the USB stick, keyboard and mouse working, photographed. The USB image and non-emulator graphics are only proven in QEMU so far.
