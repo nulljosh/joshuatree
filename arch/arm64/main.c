@@ -1608,7 +1608,7 @@ void fb_flush(int x, int y, int w, int h) {
 void fb_hold(void) { fb_defer++; }
 void fb_release(void) {
     if (!fb_defer || --fb_defer) return;
-    if (fd_x1 > fd_x0) {
+    if (fd_x1 > fd_x0 && !saver_hold) {   /* 13.10.0: a batch begun before the saver or the lock stays in fb; the wake's one flush shows it */
 #ifdef FB_TRACE   /* the dirtyrect build (arm64-dirtyrect-check.py): one line per window move, the rectangle copied and how long the copy took */
         unsigned long t = cnt_now();
         fb_copy(fd_x0, fd_y0, fd_x1 - fd_x0, fd_y1 - fd_y0);

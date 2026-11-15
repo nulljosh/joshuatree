@@ -66,6 +66,7 @@ manifest() {
 cat <<'EOF'
 once |8|ARM menu notices: bounded messages, expiry, pixels and input|python3 ./tools/checks/arm64-notice-check.py
 once |8|Pi screen sleep and deep idle (10.1.0): idle deadline, wrap, active apps, refused mailbox requests, keyboard/mouse wake, and 50 loop passes a second asleep|python3 ./tools/checks/arm64-screen-idle-check.py
+retry|3|Auto lock on the Pi (13.10.0): the saver locks, a key wakes the card and is not typed, only the signed-in password opens it, and the desktop comes back exactly|python3 ./tools/checks/arm64-lock-check.py
 once |10|Trackpad (10.2.0): one finger moves the pointer, two scroll, a tap clicks left and a two-finger tap right, on the host and through QEMU virtio-multitouch|python3 ./tools/checks/arm64-trackpad-check.py
 once |2|USB precision touchpads (11.0.0): a PTP descriptor is found and a mouse's or touch screen's is not; its reports drag, scroll, tap, click and lift through trackpad.h|python3 ./tools/checks/arm64-ptp-check.py
 once |9|Heat (13.3.0): `temp` reads the chip's temperature from the firmware on raspi4b to a tenth of a degree, virt says it has no sensor, a refused tag says so|python3 ./tools/checks/arm64-heat-check.py
