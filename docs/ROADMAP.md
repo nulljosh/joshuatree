@@ -921,13 +921,14 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
   - 11 A laptop: battery, suspend, trackpad
   - 12 macOS 27 Golden Gate parity (Joshua, 2026-11-02: "bridge those gaps for v12"; Wi-Fi, the old 12, shipped in 7.0): GPU compositing and a glass slider, Spaces and Mission Control, Samantha as a system-wide assistant that writes Shortcuts, tab grouping in Blackcomb, Photos edits, parental controls.
   - 13 Bluetooth: headphones, keyboards
-  - 14 Graphics acceleration on the reference board
-  - 15 An ARM port, the second chip family
-  - 16 A phone board: cellular modem, cameras
-  - 17 External displays and HiDPI everywhere
-  - 18 Printers and scanners
-  - 19 Power management that beats the laptop's stock OS on battery life
-  - 20 Three shipping devices: dev kit, laptop, phone
+  - The rest are goals, not numbers: each takes the next major when its gate passes, in whatever order they finish (Wi-Fi, once the 12, shipped as 7.0). Steps along the way are minors. A goal that only the board can prove waits for Joshua's board test, so the count may stop well short of 20, and that is the point.
+  - Printers and scanners: print a note to a real printer over IPP, scan into Photos over eSCL. Gate: both against the Mac's stub printer in QEMU, then a real printer on the desk.
+  - External displays and HiDPI everywhere: both HDMI ports, and every app sharp at 2x. Gate: two monitors on the Pi (board).
+  - Graphics acceleration on the reference board: the V3D draws the desktop (13.2.0 brought it up). Gate: the board.
+  - A 64-bit PC, the third port (it replaces "an ARM port": the Pi has been ARM since 3.0): the x86-64 slices in the Raspberry Pi and ARM64 section. Gate: the desktop in `qemu-system-x86_64`, then a real UEFI PC.
+  - Power management that beats the laptop's stock OS on battery life. Gate: the board, timed.
+  - A phone board: cellular modem, cameras. Gate: hardware we do not have yet.
+  - Three shipping devices: dev kit, laptop, phone.
 - **21 to 30: an ecosystem**
   - 21 An SDK anyone can build apps with
   - 22 A package manager and updates for every app
