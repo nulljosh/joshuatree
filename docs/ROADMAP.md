@@ -928,7 +928,7 @@ The one-line ideas and gates are the roadmap's long-road table (the Roadmap sect
   - A 64-bit PC, the third port (it replaces "an ARM port": the Pi has been ARM since 3.0): the x86-64 slices in the Raspberry Pi and ARM64 section. Gate: the desktop in `qemu-system-x86_64`, then a real UEFI PC.
   - Power management that beats the laptop's stock OS on battery life. Gate: the board, timed.
   - Three shipping devices: the dev kit, a laptop and a desktop. Gate: a stranger buys and boots each one.
-  - No phone (Joshua, 2026-11-15: "it's a computer not a phone"): the phone board is cut.
+  - No phone yet (Joshua, 2026-11-15: "it's a computer not a phone", "a working desktop first"): a phone port is for 2027.
 - **21 to 30: an ecosystem**
   - 21 An SDK anyone can build apps with
   - 22 A package manager and updates for every app
