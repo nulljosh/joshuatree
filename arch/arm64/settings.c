@@ -66,6 +66,15 @@ int settings_mag(void) { return dock_mag; }
 #define SET_GLASSES 5
 static const struct { const char *name; int a; } glasses[SET_GLASSES] = { { "Clear", 64 }, { "Light", 96 }, { "Standard", 128 }, { "Frosted", 176 }, { "Tinted", 224 } };
 static int glass_pick = 2;
+/* 13.4.0, Energy Saver: how long the screen waits before its saver starts (screen_idle.h); saved as sleep= on the card */
+#define SET_SLEEPS 7
+static const struct { const char *name; unsigned cs; } sleeps[SET_SLEEPS] = { { "1 minute", 6000 }, { "2 minutes", 12000 }, { "5 minutes", 30000 },
+    { "10 minutes", 60000 }, { "15 minutes", 90000 }, { "30 minutes", 180000 }, { "Never", 0 } };
+static int sleep_pick = 2;
+int settings_sleep(void) { return sleep_pick; }
+const char *settings_sleep_name(int i) { return i >= 0 && i < SET_SLEEPS ? sleeps[i].name : ""; }
+void settings_set_sleep(int i) { sleep_pick = i < 0 ? 0 : i >= SET_SLEEPS ? SET_SLEEPS - 1 : i; }
+unsigned settings_sleep_cs(void) { return sleeps[sleep_pick].cs; }
 int settings_glass(void) { return glass_pick; }
 const char *settings_glass_name(int i) { return i >= 0 && i < SET_GLASSES ? glasses[i].name : ""; }
 void settings_set_glass(int i) { glass_pick = i < 0 ? 0 : i >= SET_GLASSES ? SET_GLASSES - 1 : i; }
@@ -112,13 +121,14 @@ unsigned settings_format(char *out, int vol, int wall, int dock, int mag, int gl
     return n;
 }
 void settings_save(void) {
-    char buf[64];
+    char buf[80];
     int mine = 0;
     if (home_active()) {                                      /* 6.0: the wallpaper is yours, saved in your home with no admin needed */
         char w[8] = "wall=0\n"; w[5] = (char)('0' + wall_pick);
         mine = sd_ready() && home_save(WALL_FILE, w, 7) == 1;
     }
     unsigned n = settings_format(buf, audio_volume(), wall_pick, dock_scale_pct, dock_mag, glass_pick);
+    buf[n++] = 's'; buf[n++] = 'l'; buf[n++] = 'e'; buf[n++] = 'e'; buf[n++] = 'p'; buf[n++] = '='; buf[n++] = (char)('0' + sleep_pick); buf[n++] = '\n';
     if (!sudo_may_write()) { saved_state = mine ? 2 : -2; return; }     /* 4.10.0: only an admin saves the rest; anyone else's lasts until restart */
     saved_state = sd_ready() && sd_write(SET_FILE, buf, n) == 1 ? 1 : -1;
     if (saved_state == 1) card_wall = wall_pick;
@@ -137,7 +147,7 @@ void settings_user_wall(void) {
 /* After sd_mount, before the desktop is first painted on the Pi. The choices that need the screen (the wallpaper) repaint it
    when it is already up, as on QEMU's virt machine, where the desktop is drawn before the card is looked at. */
 void settings_load(void) {
-    char buf[96];
+    char buf[128];
     int vol = audio_volume(), wall = wall_pick, dock = dock_scale_pct, mag = dock_mag, glass = glass_pick;
     if (!sd_ready() || !sd_enter_jt(0)) return;
     int got = fat_read_file(SET_FILE, buf, sizeof buf);
@@ -148,6 +158,8 @@ void settings_load(void) {
     if (mag < 0) { mag = mag0; wall = wall_pick; }   /* 8.9.0: a file from before 8.9 (no zoom= line) keeps its volume and dock,
                                                        but its wallpaper was the old default, so the new default (the park on
                                                        the Pi) shows once; the next save writes zoom= and the choice sticks */
+    for (int i = 0; i + 7 < got; i++)   /* 13.4.0: sleep=N, a line settings_parse does not know */
+        if ((!i || buf[i - 1] == '\n') && key_is(buf + i, 6, "sleep=") && buf[i + 6] >= '0' && buf[i + 6] < '0' + SET_SLEEPS) settings_set_sleep(buf[i + 6] - '0');
     audio_set_volume(vol);
     settings_set_dock(dock);
     settings_set_mag(mag);
