@@ -60,8 +60,16 @@
    ]
   },
   {
-   "image": "../nimbus-hero.jpg",
-   "full": true
+   "image": "fable/calculator.jpg",
+   "focus": [
+    0.5,
+    0.76
+   ],
+   "zoom": 1.0,
+   "sky": [
+    "paper",
+    "sand"
+   ]
   },
   {
    "image": "fable/music.jpg",
@@ -110,8 +118,11 @@
    "full": true
   },
   {
-   "image": "../first-boot-2026-10-06.jpg",
-   "full": true
+   "fill": "sand",
+   "sky": [
+    "ink",
+    "rust"
+   ]
   }
  ],
  "name": {
