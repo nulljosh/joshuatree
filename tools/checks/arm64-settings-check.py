@@ -380,7 +380,8 @@ S = Session("b")
 try:
     if not S.wait_for("M2 input ready", 60) or not S.wait_for("settings loaded", 30):
         check("the second boot loads the file", False, S.uart()[-600:]); raise SystemExit
-    check("second boot: it says what it loaded", "settings loaded volume 20 wall 2 dock 8 mag 1 glass 3\n" in S.uart(), S.uart()[-400:])
+    # the line is printed in pieces: wait for all of it, or a slow runner reads it half-written (13.9.2, shard 9 on CI)
+    check("second boot: it says what it loaded", S.wait_for("settings loaded volume 20 wall 2 dock 8 mag 1 glass 3\n", 10), S.uart()[-400:])
     S.connect(); time.sleep(1.0)
     g = S.shot()
     check("and the desktop is Clay without opening anything (the card was read after the desktop was drawn, which repainted it)", px(g, 30, 300) == CLAY and px(g, 400, 8) == bar(CLAY, 176), (px(g, 30, 300), px(g, 400, 8)))
