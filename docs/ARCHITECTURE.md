@@ -89,7 +89,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `arch/arm64/clock_ui.h` | Read-only Clock window on ARM, opened through Spotlight or Samantha. |
 | `arch/arm64/settings.c` | The Pi's Settings choices and their file, 3.13.0. 13.21.0: Accent (Display) picks Blue, Purple, Terracotta, Orange, Green or Graphite. Kernel windows read `ui_accent`; apps read it with `jt_accent()` (syscall 415). Blue on the Pi, terracotta on QEMU so the checks read one colour. Saved as `accent=`. |
 | `arch/arm64/accounts.c` | User accounts on the Pi, 4.8.0 (slice 1 of 6.0 Yours; the login screen is `login.c`). |
-| `arch/arm64/login.c`, `arch/arm64/login.h`, `arch/arm64/login_ui.h` | The Pi's login screen, 4.9.0 (slice 2 of 6.0). |
+| `arch/arm64/login.c`, `arch/arm64/login.h`, `arch/arm64/login_ui.h` | The Pi's login screen, 4.9.0 (slice 2 of 6.0). 13.24.0: `login_ui.h` also draws the lock card on the scanout (the name fixed, one password field) and checks the password for the signed-in name only, as sudo does. |
 | `arch/arm64/sudo.c`, `arch/arm64/sudo.h` | Admins and sudo on the Pi, 4.10.0 (slice 3 of 6.0). |
 | `arch/arm64/limits.c`, `arch/arm64/limits.h` | Parental controls on the Pi, 12.0.0, as in Screen Time. |
 | `tools/checks/fat-crash-check.py` | 4.13.0, slice 6 of 6.0: the real `fat.c` under sanitizers on FAT16 and FAT32 `mkfs.fat` images, power cut after every sector. |
@@ -232,7 +232,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/libjt/osk.c`, `user/libjt/osk.h` | The phone on-screen keyboard for ring-3 apps. |
 | `user/libjt/aafont.h` | Generated glyph atlas behind `text.c`: 4-bit coverage bitmaps of DejaVu Sans, rendered from the kernel's own font data. |
 | `tools/gen/gen_user_text.c` | Host program that bakes `user/libjt/aafont.h` through `drivers/ttf.c`, so ring-3 text and in-kernel text share one rasterizer and one font. |
-| `arch/arm64/screen_idle.h` | Pi display idle: 15 s before the wait (Settings, Display, Screen saver after: 1 to 30 minutes or Never; five by default) the. |
+| `arch/arm64/screen_idle.h` | Pi display idle: 15 s before the wait (Settings, Display, Screen saver after: 1 to 30 minutes or Never; five by default) the. Auto lock (13.24.0): with someone signed in, the saver or the dark locks; a wake shows the lock card, never fb, and only that person's password gives fb back. |
 | `arch/arm64/trackpad.h` | The trackpad (10.2.0): multitouch slots in, mouse events out. |
 | `arch/arm64/battery.h` | The battery (10.3.0): a small I2C driver on BSC1 (GPIO 2 and 3) reads a MAX17048 fuel gauge at 0x36 once a minute; the menu bar. |
 | `arch/arm64/ptp.h` | USB precision touchpads (11.0.0): finds a Digitizer Touch Pad report descriptor (fingers, contact count, button, Input Mode), and xhci.c switches the. |
@@ -1704,12 +1704,13 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (403 checks)
+### The suite (404 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
 | ARM menu notices: bounded messages, expiry, pixels and input | `tools/checks/arm64-notice-check.py` | once |
 | Pi screen sleep and deep idle (10.1.0): idle deadline, wrap, active apps, refused mailbox requests, keyboard/mouse wake, and 50 loop passes a second asleep | `tools/checks/arm64-screen-idle-check.py` | once |
+| Auto lock on the Pi (13.24.0): the saver locks, a key wakes the card and is not typed, only the signed-in password opens it, and the desktop comes back exactly | `tools/checks/arm64-lock-check.py` | retry |
 | Trackpad (10.2.0): one finger moves the pointer, two scroll, a tap clicks left and a two-finger tap right, on the host and through QEMU virtio-multitouch | `tools/checks/arm64-trackpad-check.py` | once |
 | USB precision touchpads (11.0.0): a PTP descriptor is found and a mouse's or touch screen's is not; its reports drag, scroll, tap, click and lift through trackpad.h | `tools/checks/arm64-ptp-check.py` | once |
 | Heat (13.3.0): `temp` reads the chip's temperature from the firmware on raspi4b to a tenth of a degree, virt says it has no sensor, a refused tag says so | `tools/checks/arm64-heat-check.py` | once |
