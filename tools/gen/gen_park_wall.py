@@ -14,17 +14,18 @@ K = 2   # 14.x refresh: the same scene drawn at twice the detail, 960 x 540, so 
 W, H = 480 * K, 270 * K
 root = Path(__file__).resolve().parents[2]
 PAL = [
-    (0x14, 0x1c, 0x3e),  # 0 night, the top of the sky
-    (0x22, 0x35, 0x68),  # 1 deep blue
-    (0x3b, 0x6e, 0xa5),  # 2 the house blue (8.9.0's flat wallpaper)
-    (0x72, 0x9c, 0xc9),  # 3 high sky
-    (0xb8, 0xc6, 0xd8),  # 4 pale sky, the stars
-    (0xf3, 0xd2, 0xa2),  # 5 peach glow
-    (0xec, 0x9e, 0x76),  # 6 horizon pink-orange
-    (0xfb, 0xec, 0xc6),  # 7 the sun, the lit rims
-    (0x9a, 0x7c, 0xa8),  # 8 far ridge, lavender
-    (0x66, 0x4f, 0x7d),  # 9 near ridge, dusk purple
-    (0x40, 0x31, 0x55),  # 10 ridge shadow
+    # 13.9.5, Joshua's art brief: the dusk of a 90s cel, indigo through violet and magenta into hot pink, coral and gold
+    (0x1a, 0x14, 0x42),  # 0 indigo, the top of the sky
+    (0x3a, 0x2a, 0x78),  # 1 violet
+    (0x7b, 0x3c, 0x98),  # 2 magenta violet, the cloud's shadow side
+    (0xc9, 0x50, 0x8f),  # 3 hot pink
+    (0xff, 0xd9, 0xa8),  # 4 pale peach, the stars and the glints' halo
+    (0xf6, 0xb7, 0x5a),  # 5 gold, the lit rims
+    (0xef, 0x7d, 0x5e),  # 6 coral
+    (0xff, 0xf1, 0xc9),  # 7 cream, the sun and the brightest light
+    (0x9b, 0x5f, 0x9e),  # 8 far ridge, mauve
+    (0x5e, 0x3a, 0x7c),  # 9 near ridge, dusk purple
+    (0x34, 0x22, 0x4f),  # 10 ridge shadow
     (0xc9, 0x93, 0x66),  # 11 sand
     (0x9c, 0x68, 0x47),  # 12 sand in shadow, the granite
     (0x6c, 0x45, 0x34),  # 13 near ground
@@ -44,7 +45,7 @@ def ramp(stops, t, x, y, seam=1.0):   # t along (position, palette index) stops:
     return stops[-1][1]
 
 SUN_X, SUN_Y, SUN_R = 318, 150, 17
-SKY = [(0.0, 0), (0.16, 1), (0.36, 2), (0.54, 3), (0.68, 4), (0.80, 5), (0.92, 6)]
+SKY = [(0.0, 0), (0.2, 1), (0.4, 2), (0.58, 3), (0.74, 6), (0.88, 5), (1.0, 4)]
 horizon = 168
 for Y in range(H):
     for X in range(W):
@@ -64,10 +65,10 @@ star = random.Random(3)
 for _ in range(70):   # stars in the dark top only, some twinkling as a plus
     x, y = star.randrange(W), star.randrange(int(horizon * 0.30 * K))
     if abs(x - W // 2) < 70 * K and y < 14 * K: continue
-    idx[y][x] = 4
+    idx[y][x] = 7
     if star.random() < 0.12:
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            if 0 <= x + dx < W and 0 <= y + dy < H: idx[y + dy][x + dx] = 3
+            if 0 <= x + dx < W and 0 <= y + dy < H: idx[y + dy][x + dx] = 4
 
 def streak(cx, cy, length, core, edge):   # one thin cloud: a solid core line, a dithered underside, tapered dithered ends
     for X in range(int((cx - length / 2) * K), int((cx + length / 2) * K)):
@@ -82,6 +83,51 @@ def streak(cx, cy, length, core, edge):   # one thin cloud: a solid core line, a
 for cx, cy, L, core, edge in ((120, 104, 92, 5, 6), (196, 92, 54, 5, 4), (402, 112, 70, 6, 5), (452, 98, 40, 5, 4), (40, 122, 46, 6, 5)):
     for k, (ox, oy, f) in enumerate(((0, 0, 1.0), (-0.18, -1.6, 0.55), (0.22, 1.4, 0.6), (0.05, -2.8, 0.3))):   # a bank, not a line
         streak(cx + ox * L, cy + oy, L * f, core if k != 3 else edge, edge)
+
+LIGHTER = {1: 2, 2: 3, 3: 6, 6: 5, 5: 7, 4: 7}
+for Y in range(0, int(horizon * K)):   # rays: alternate wedges out of the sun lit one stop, dithered thinner with distance
+    for X in range(W):
+        x, y = X / K, Y / K
+        a = math.atan2(y - SUN_Y, x - SUN_X); d = math.hypot(x - SUN_X, y - SUN_Y)
+        if int((a + math.pi) * 26 / math.pi) % 2 or d < SUN_R * 2.4 or d > 260: continue
+        f = 1 - d / 260
+        if f * 5 > BAYER[Y & 3][X & 3] + 0.5 and idx[Y][X] in LIGHTER: idx[Y][X] = LIGHTER[idx[Y][X]]
+
+def HATCH(X, Y, k):   # a dry pencil's diagonal hatching, k of 4 marks, with a wobble so it reads drawn, not ruled
+    return ((X + Y + ((Y >> 3) * 7 + (X >> 4) * 3) % 3) % 4) < k
+def cumulus(cx, base, scale, seed):   # a towering cloud of lumps, lit from the sun's side: gold rims, pink body, violet shade
+    rr = random.Random(seed); lumps = []
+    for layer, n in enumerate((6, 5, 5, 4, 3, 3, 2)):   # a column that billows: wide foot, a cauliflower crown, ragged sides
+        for i in range(n):
+            w = (n - 1) / 2
+            lumps.append((cx + (i - w) * 13 * scale * (1 - layer * 0.05) + rr.uniform(-6, 6) * scale,
+                          base - layer * 14 * scale - rr.uniform(0, 7) * scale, (11 + rr.uniform(-1, 7) + (3 if layer >= 4 else 0)) * scale))
+        if layer and rr.random() < 0.8:   # a puff bulging out of one side, so the outline is never a straight slope
+            side = rr.choice((-1, 1))
+            lumps.append((cx + side * (n / 2 + 0.6) * 13 * scale, base - layer * 14 * scale + 4 * scale, 8 * scale))
+    sx = 1 if SUN_X > cx else -1
+    x0 = int(min(l[0] - l[2] for l in lumps) * K); x1 = int(max(l[0] + l[2] for l in lumps) * K)
+    y0 = int(min(l[1] - l[2] for l in lumps) * K); y1 = int(base * K)
+    for Y in range(max(0, y0), min(H, y1)):
+        for X in range(max(0, x0), min(W, x1)):
+            x, y = X / K, Y / K; best = None
+            for lx, ly, lr in lumps:   # the lump nearest the viewer here is the one whose surface is highest
+                e = ((x - lx) ** 2 + (y - ly) ** 2) / (lr * lr)
+                if e < 1 and (best is None or ly - lr * math.sqrt(1 - e) < best[0]): best = (ly - lr * math.sqrt(1 - e), lx, ly, lr, e)
+            if not best: continue
+            _, lx, ly, lr, e = best
+            # one mass, not balls: light comes mostly from where the point sits in the whole cloud (sun side, height), and
+            # only a little from its own lump's bulge, which gives the edges their roundness
+            ccx = (x0 + x1) / 2 / K; span = (x1 - x0) / 2 / K
+            lit = ((x - ccx) * sx / span) * 0.55 + (base - y) / (100 * scale) * 0.55 + ((x - lx) * sx * 0.6 - (y - ly) * 0.5) / lr * 0.25 - 0.1
+            if lit > 0.75 and e > 0.55: c = 7 if HATCH(X, Y, 2) else 5          # the rim, hot
+            elif lit > 0.45: c = 5 if HATCH(X, Y, 3) else 6
+            elif lit > 0.1: c = 6 if HATCH(X, Y, 2) else 3
+            elif lit > -0.3: c = 3 if HATCH(X, Y, 3) else 2
+            else: c = 2 if HATCH(X, Y, 3) else 1
+            idx[Y][X] = c
+cumulus(150, 156, 1.0, 7)
+cumulus(420, 160, 0.55, 9)
 
 def ridge(base, amp, seed, freq):
     r = random.Random(seed); ph = [r.random() * 6.28 for _ in range(4)]
@@ -192,6 +238,16 @@ for Y in range(H):   # backlit: a bark pixel with sky on its sun side gets a war
             n = idx[Y][X + 1] if X < SUN_X * K else idx[Y][X - 1]
             if n <= 7 and n != 15: idx[Y][X] = 6 if n in (5, 6, 7) else 9
             elif n != 15 and idx[Y][X - (1 if X < SUN_X * K else -1)] == 15 and BAYER[Y & 3][X & 3] < 8: idx[Y][X] = 13   # bark catching light
+
+def glint(x, y, size):   # a four-point sparkle: a cream cross with long arms and a peach halo between them
+    X0, Y0 = int(x * K), int(y * K)
+    for k in range(-size, size + 1):
+        for (X, Y) in ((X0 + k, Y0), (X0, Y0 + k)):
+            if 0 <= X < W and 0 <= Y < H: idx[Y][X] = 7 if abs(k) < size * 0.6 else 4
+    for dx, dy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+        if 0 <= X0 + dx < W and 0 <= Y0 + dy < H: idx[Y0 + dy][X0 + dx] = 4
+for gx, gy, gs in ((SUN_X + 26, SUN_Y - 22, 9), (SUN_X - 30, SUN_Y - 12, 5), (171, 92, 6), (126, 190, 4), (398, 189, 4), (300, 60, 3), (360, 40, 4)):
+    glint(gx, gy, gs)
 
 out = root / "arch/arm64/park_wall.h"
 packed = bytes(idx[y][x] << 4 | idx[y][x + 1] for y in range(H) for x in range(0, W, 2))
