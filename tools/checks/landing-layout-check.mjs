@@ -91,7 +91,7 @@ try {
         facts, counts, sections,
         linkColor: ls && ls.color, bodyColor: body,
         ad: !!(want && want.querySelector('video source[src*="joshua-tree-ad-v"][src$=".mp4"]')),
-        neo: !!(want && want.querySelector('img[src="nimbus-painted.webp"]')),
+        videos: want ? want.querySelectorAll('video').length : 0,
         scrolled: scrollY,
       };
     }, KEY);
@@ -127,7 +127,7 @@ try {
     }
     // 5. Want one
     if (!d.ad) fail(`${tag}: "Want one?" has no joshua-tree-ad video`);
-    if (!d.neo) fail(`${tag}: "Want one?" has no Nimbus painting`);
+    if (d.videos !== 1) fail(`${tag}: "Want one?" should hold exactly one film, found ${d.videos}`);
     await page.close();
   }
   // 7. Portfolio on a phone: his face fills the stage right down to the composer,
