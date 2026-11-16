@@ -1046,9 +1046,17 @@ int tcp_get_timeout(u32 dest_ip, u16 dest_port, const void *request, u32 request
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
         u32 seg_seq = htonl(tcp->seq);
-        if (seg_seq != their_seq) continue; /* out of order or a duplicate; no reassembly, just drop it */
+        if (seg_seq != their_seq) {   /* out of order or a duplicate; no reassembly, just drop it */
+            /* 13.9.5: a segment from past a hole gets the ACK for the hole again, so the server's fast retransmit
+               fills it now, not after its timer. Wi-Fi loses frames; the old silent drop cost a second or more each. */
+            if ((int)(seg_seq - their_seq) > 0 && paylen) tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, their_seq, TCP_ACK, 0, 0);
+            continue;
+        }
 
         if (paylen > 0) {
+            /* 13.9.5: the deadline is for silence, not for the whole reply. A 2 MB file over the Pi's Wi-Fi takes
+               longer than the browser's 8 seconds, and used to be cut wherever the clock ran out. */
+            data_deadline = ticks() + (reply_timeout_ticks ? reply_timeout_ticks : SLOW_REPLY_TIMEOUT_TICKS);
             u32 copy = paylen;
             if (total + copy > response_maxlen) copy = response_maxlen - total;
             u8 *dst = (u8 *)response + total;

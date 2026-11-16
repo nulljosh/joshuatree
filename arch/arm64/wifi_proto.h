@@ -91,4 +91,35 @@ static inline int f2_rest(const unsigned char *h) {
     if (((len ^ ck) & 0xffff) != 0xffff || len > F2_FRAME_MAX) return -1;
     return len > 64 ? (int)fw_padded(len - 64) : 0;
 }
+/* 13.9.5: the chip's send credit. brcmfmac sends only while seq != max and (max - seq) is not "negative" (bit 7). */
+static inline int credit_out(unsigned tx_max, unsigned seq) { return ((tx_max - seq) & 0xff) == 0 || ((tx_max - seq) & 0x80) != 0; }
+/* 13.9.5: frames read while waiting for something else (send credit, a command's reply) are kept here for the next
+   receive, oldest first. Before this they were thrown away: an ACK that had to wait for credit read and dropped up to
+   100 frames, which on the board were the rest of the download ("reply cut short, 800 of 2100300 bytes"). When the
+   queue is full the newest frame is dropped and counted; TCP sends it again. */
+#define RXQ_N 16
+#define RXQ_MAX 1600
+struct rxq { unsigned char d[RXQ_N][RXQ_MAX]; unsigned short n[RXQ_N]; unsigned head, count, lost; };
+static inline int rxq_put(struct rxq *q, const unsigned char *p, unsigned n) {
+    if (!n || n > RXQ_MAX || q->count == RXQ_N) { q->lost++; return 0; }
+    unsigned at = (q->head + q->count++) % RXQ_N;
+    for (unsigned i = 0; i < n; i++) q->d[at][i] = p[i];
+    q->n[at] = (unsigned short)n;
+    return 1;
+}
+static inline unsigned rxq_get(struct rxq *q, unsigned char *out, unsigned max) {
+    if (!q->count) return 0;
+    unsigned n = q->n[q->head]; if (n > max) n = max;
+    for (unsigned i = 0; i < n; i++) out[i] = q->d[q->head][i];
+    q->head = (q->head + 1) % RXQ_N; q->count--;
+    return n;
+}
+/* The Ethernet frame inside an SDPCM data frame's payload (past the 4-byte BDC header and its data offset); 0 if none. */
+static inline unsigned bdc_eth(const unsigned char *bd, unsigned l, const unsigned char **eth) {
+    if (l < 4) return 0;
+    unsigned skip = 4 + bd[3] * 4u;
+    if (l <= skip) return 0;
+    *eth = bd + skip;
+    return l - skip;
+}
 #endif
