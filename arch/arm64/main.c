@@ -1290,6 +1290,7 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     if (me->preempts) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" was cut off "); uart_dec(me->preempts); uart_puts(" times\n"); }   /* 8.1.0: arm64-threads-check.py reads it */
     if (me->on & ~1u) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" ran on cores"); for (unsigned c = 0; c < 4; c++) if (me->on & 1u << c) { uart_putc(' '); uart_dec(c); } uart_putc('\n'); }   /* 8.11.0: arm64-smp-threads-check.py reads it */
     if (me->heap_pages) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" touched "); uart_dec(me->heap_pages); uart_puts(" heap pages\n"); }   /* 8.7.0: arm64-heap-check.py reads it */
+    if (me->presents) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" presented "); uart_dec(me->presents); uart_puts(" frames, "); uart_dec((unsigned)(me->flushed / me->presents)); uart_puts(" pixels each\n"); }   /* 13.9.3: arm64-present-check.py reads it */
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
     uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times\n");
@@ -1376,7 +1377,7 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
     if (a->name[0] == 'b' && a->name[1] == 'o' && a->name[2] == 'o' && a->name[3] == 'k' && a->name[4] == 's' && !a->name[5])
         ufile_mkdirs("BOOKS");         /* 2.66: Books' library, JT/BOOKS/, the books the card ships with and the ones dropped there */
     for (unsigned i = 0; i < APP_THREADS; i++) { ap->th[i].state = TH_FREE; ap->th[i].k0 = 0; }   /* 8.1.0: one thread to start with */
-    ap->tcur = 0; ap->th[0].state = TH_READY; ap->preempts = ap->spin = 0; ap->heap_pages = 0; ap->on = 0;
+    ap->tcur = 0; ap->th[0].state = TH_READY; ap->preempts = ap->spin = 0; ap->heap_pages = 0; ap->on = 0; ap->presents = 0; ap->flushed = 0;
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
     app_frame.esr = 0;                                 /* no flags to put back */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */
