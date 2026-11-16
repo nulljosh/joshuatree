@@ -43,6 +43,7 @@ static const char *const man_pages[][2] = {
     {"passwd", "passwd [NAME]\nChanges a password."},
     {"ping", "ping HOST\nSends three echoes to a name or a dotted address, and says how long each reply took."},
     {"print", "print FILE [PRINTER]\nPrints a text file on a network printer, by its name or address (add :PORT if it is not 631), or on the first one that answers when none is named. Any AirPrint or IPP Everywhere printer takes it, no driver."},
+    {"bench", "bench\nLets the Mac run Terminal commands on this machine, for testing a board without a second keyboard: tools/pi-bench.py on the Mac sends a line, it runs here, and what it prints goes back. Off at every start. Type bench again to turn it off. Only the Mac this card was set up for can do it."},
     {"scan", "scan [SCANNER]\nScans one page on a network scanner into PHOTOS as the next SCAN0001.JPG, where Photos shows it. With no scanner named, the first one that answers on the network (any AirPrint or Mopria scanner, over eSCL). Add :PORT if it is not 80."},
     {"printers", "printers\nAsks the network for printers (mDNS, as a Mac does) and names the first that answers, with its address."},
     {"poweroff", "poweroff\nThe same as shutdown."},
