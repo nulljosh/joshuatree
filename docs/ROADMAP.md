@@ -1887,9 +1887,19 @@ The three source clips, the render recipe and the voice clone live on Joshua's d
 
 ## Loop handoff
 
-Updated 2026-11-03, morning Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-11-16, after midnight Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
+
+**Board night, 2026-11-15 (stashed by Joshua's word, picked up next session).** Joshua ran a 13.3.0 card: most of it was broken. Open, in order:
+1. Merge #1131 (one film on the landing, 13.9.2), #1132 (board fixes, 13.9.3) and #1133 (Paddle A+ pass, 13.9.4), one at a time, regenerating VERSION and landing facts between them.
+2. Reflash the card once with 13.9.3: a stale card cannot set its clock (tls error 54 on every https site) and so cannot `update` to the fix. After that, sign each release with `tools/update-sign.sh` so `update` works.
+3. Plain-HTTP downloads stop after the first segment on the board: a 2.1 MB MP3 said "reply cut short, 800 of 2100300 bytes". Reproduce in QEMU against a 2 MB file served from the host, then fix the receive path.
+4. A 20 second freeze on the board, cause unknown; and the arrow vanished after a menu bar clock click (fixed blind in 13.9.3, TESTING.md 36 confirms).
+5. The wallpaper from Joshua's art brief (branch `pi/wall-anime`): 90s cel dusk, rays, a hatched cloud tower, glints. The tower is still faceted; loop it to A+, then animate the glints and stars with small repaints, then an iPhone wallpaper (1290 x 2796) from the same generator.
+6. Paddle, second /mobbin pass (Atari Recharged, Pongfinity, Pong Quest): a title screen with Easy, Normal and Hard; two players on one keyboard (w and s against the arrows); a win screen; special shots last.
+7. A Joshua Tree board: a Compute Module 5 carrier designed in KiCad, with a 3D render like a real board's.
+8. A verbose always-on self-test screen on the Pi, a boot mode for the bench.
 
 **Where things stand (2026-11-02, afternoon).** 11.0.0, a laptop, is on main: deep idle, trackpad gestures from QEMU multitouch and USB precision touchpads, a MAX17048 battery gauge in the menu bar, and Sleep in the tree menu. 10.0.0 before it brought the screen reader, twelve languages and signed self-update. Lid close is the one 11.0 item left. 12.0.0 finished macOS 27 parity: Spaces, Mission Control, the Glass slider, Shortcuts, Blackcomb tab groups, Photos and parental controls. 13.0.0 brought classic Bluetooth: headphones, speakers and keyboards. 13.3.1 opened Spotify in Blackcomb (a `spotify:` page from the Mac's `tools/claude-relay/spotify.py`); 13.4.0 lets Blackcomb install a signed app it follows a link to, an admin's only once there are accounts.
 
