@@ -16,17 +16,18 @@ GREEN = mat("cmgreen", (0.05, 0.25, 0.12), rough=0.4)
 def box(x, y, z, w, d, h, m, bevel=0.0):
     bpy.ops.mesh.primitive_cube_add(location=(x + w / 2, y + d / 2, z + h / 2)); o = bpy.context.object
     o.scale = (w / 2, d / 2, h / 2); o.data.materials.append(m)
-    if bevel: mod = o.modifiers.new("b", "BEVEL"); mod.width = bevel; mod.segments = 3
+    if bevel: mod = o.modifiers.new("b", "BEVEL"); mod.width = bevel; mod.segments = 10; mod.limit_method = "ANGLE"
     return o
 def cyl(x, y, z, r, h, m):
     bpy.ops.mesh.primitive_cylinder_add(radius=r, depth=h, location=(x, y, z + h / 2)); bpy.context.object.data.materials.append(m)
 # the board, 160 x 90 x 1.6 mm (units: cm, so 16 x 9)
 box(0, 0, 0, 16, 9, 0.16, PCB, 0.3)
-for hx, hy in ((0.4, 0.4), (15.6, 0.4), (0.4, 8.6), (15.6, 8.6)): cyl(hx, hy, 0.16, 0.28, 0.01, GOLD)
+for hx, hy in ((0.6, 0.6), (15.4, 0.6), (0.6, 8.4), (15.4, 8.4)): cyl(hx, hy, 0.16, 0.3, 0.012, GOLD); cyl(hx, hy, 0.16, 0.16, 0.014, mat('drill', (0.01, 0.01, 0.01)))
 # the CM5 module on its connectors
 box(5.2, 2.6, 0.16, 5.5, 4.0, 0.25, BLACK)
 box(5.2, 2.6, 0.41, 5.5, 4.0, 0.12, GREEN, 0.05)
 box(6.4, 3.6, 0.53, 1.6, 1.6, 0.12, STEEL, 0.03)          # the SoC's lid
+bpy.ops.object.text_add(location=(6.55, 4.25, 0.655)); _t = bpy.context.object; _t.data.body = 'BCM2712'; _t.data.size = 0.24; _t.data.materials.append(mat('etch', (0.35, 0.35, 0.38), 1.0, 0.5))
 for i in range(4): box(8.5 + i * 0.5, 3.4, 0.53, 0.4, 0.9, 0.1, BLACK)   # RAM and eMMC
 # back edge ports
 box(-0.15, 0.8, 0.16, 0.9, 0.9, 0.35, STEEL, 0.05)                         # USB-C power
@@ -53,7 +54,7 @@ for _ in range(60):   # caps and resistors
     if 5.0 < x < 11.0 and 2.4 < y < 6.8: continue
     box(x, y, 0.16, 0.2, 0.12, 0.08, CREAM if r.random() < 0.6 else BLACK)
 # the mark in terracotta silkscreen: a small raised plate as a stand-in
-box(11.9, 5.1, 0.16, 4.2, 0.03, 0.004, RUST)
+box(12.0, 4.95, 0.16, 3.4, 0.03, 0.004, RUST)
 
 def label(txt, x, y, size=0.22, m=None, rot=0.0):   # silkscreen: flat cream text on the board
     bpy.ops.object.text_add(location=(x, y, 0.161)); t = bpy.context.object
@@ -77,13 +78,13 @@ for i in range(18):
     x = 5.6 + i * 0.27
     box(x, 1.2, 0.16, 0.03, 1.35, 0.004, GOLD)
 # electrolytic capacitors with cream tops, an inductor
-for cx, cy in ((13.0, 6.4), (14.2, 6.4), (2.5, 6.6)):
+for cx, cy in ((10.0, 7.6), (11.2, 7.6), (13.9, 2.2)):
     cyl(cx, cy, 0.16, 0.42, 0.85, STEEL); cyl(cx, cy, 1.01, 0.42, 0.02, CREAM)
 box(2.4, 4.1, 0.16, 1.0, 1.0, 0.45, BLACK, 0.12)
 # labels
-label("JOSHUA TREE  board 1", 11.9, 5.25, 0.3)
+label("JOSHUA TREE", 12.0, 5.6, 0.42); label("board 1  rev A", 12.0, 5.1, 0.24, RUST)
 for txt, x, y in (("HDMI0", 1.4, 1.05), ("HDMI1", 3.2, 1.05), ("ETH", 5.3, 2.0), ("USB3", 7.1, 1.6), ("USB3", 8.9, 1.6),
-                  ("PWR", 0.95, 1.85), ("GPIO", 0.9, 7.45), ("FAN", 6.4, 7.5), ("RTC", 7.95, 7.45), ("NVMe", 11.3, 4.75), ("CM5", 5.3, 6.75)):
+                  ("PWR", 0.95, 1.85), ("GPIO", 0.9, 7.45), ("FAN", 6.4, 7.5), ("RTC", 7.95, 7.45), ("M.2 NVMe", 12.6, 2.25), ("CM5", 5.25, 6.75), ("Raspberry Pi Compute Module 5", 6.3, 6.1)):
     label(txt, x, y, 0.2)
 # the mark: tree.png on a plane, alpha kept
 import os
@@ -92,10 +93,11 @@ mm = bpy.data.materials.new("mark"); mm.use_nodes = True; nt = mm.node_tree
 tex = nt.nodes.new("ShaderNodeTexImage"); tex.image = img; b = nt.nodes["Principled BSDF"]
 nt.links.new(tex.outputs["Color"], b.inputs["Base Color"]); nt.links.new(tex.outputs["Alpha"], b.inputs["Alpha"])
 mm.blend_method = "BLEND" if hasattr(mm, "blend_method") else None
-bpy.ops.mesh.primitive_plane_add(size=1.6, location=(14.6, 4.9, 0.163)); bpy.context.object.data.materials.append(mm)
+bpy.ops.mesh.primitive_plane_add(size=1.9, location=(14.9, 6.6, 0.163)); bpy.context.object.data.materials.append(mm)
 
 # floor, lights, camera
-bpy.ops.mesh.primitive_plane_add(size=80, location=(8, 4.5, -0.01)); bpy.context.object.data.materials.append(mat("floor", (0.55, 0.52, 0.62), rough=0.9))
+bpy.ops.mesh.primitive_plane_add(size=80, location=(8, 4.5, -0.01)); bpy.context.object.data.materials.append(mat("floor", (0.62, 0.6, 0.78), rough=0.9))
+bpy.ops.object.light_add(type="AREA", location=(18, 12, 6)); bpy.context.object.data.energy = 1500; bpy.context.object.data.size = 8; bpy.context.object.data.color = (1.0, 0.85, 0.7)
 bpy.ops.object.light_add(type="AREA", location=(4, -6, 14)); L = bpy.context.object; L.data.energy = 4000; L.data.size = 12
 bpy.ops.object.light_add(type="SUN", location=(0, 0, 10)); bpy.context.object.data.energy = 2.5; bpy.context.object.rotation_euler = (0.6, 0.2, 0.8)
 bpy.ops.object.camera_add(location=(-5.5, -12.5, 15)); cam = bpy.context.object; sc.camera = cam
