@@ -1900,6 +1900,8 @@ Updated 2026-11-16, after midnight Vancouver time. The loop's working notes live
 6. Paddle, second /mobbin pass (Atari Recharged, Pongfinity, Pong Quest): a title screen with Easy, Normal and Hard; two players on one keyboard (w and s against the arrows); a win screen; special shots last.
 7. A Joshua Tree board: a Compute Module 5 carrier designed in KiCad, with a 3D render like a real board's.
 8. A verbose always-on self-test screen on the Pi, a boot mode for the bench.
+9. Board 1's Blender mockup to A+ (scripts on `pi/wall-anime` in `docs/hardware/board1/`): labels clear of parts, real port shapes, the mark on the silkscreen.
+10. Repo tidy: loose files and folders into place, README and docs simplified (Joshua's ask, 2026-11-16).
 
 **Where things stand (2026-11-02, afternoon).** 11.0.0, a laptop, is on main: deep idle, trackpad gestures from QEMU multitouch and USB precision touchpads, a MAX17048 battery gauge in the menu bar, and Sleep in the tree menu. 10.0.0 before it brought the screen reader, twelve languages and signed self-update. Lid close is the one 11.0 item left. 12.0.0 finished macOS 27 parity: Spaces, Mission Control, the Glass slider, Shortcuts, Blackcomb tab groups, Photos and parental controls. 13.0.0 brought classic Bluetooth: headphones, speakers and keyboards. 13.3.1 opened Spotify in Blackcomb (a `spotify:` page from the Mac's `tools/claude-relay/spotify.py`); 13.4.0 lets Blackcomb install a signed app it follows a link to, an admin's only once there are accounts.
 
