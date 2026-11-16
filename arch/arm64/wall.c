@@ -1,6 +1,6 @@
 /* The ARM desktop's wallpaper. 8.9.0: on the Pi the default is a picture, Joshua Tree at dusk (park_wall.h, drawn by
-   tools/gen/gen_park_wall.py): 480 x 270 in 16 colours, dithered, scaled to the screen with every fourth row dimmed, a
-   scanline look. Settings can pick a flat colour instead (settings.c); the QEMU builds start on the flat blue #3B6EA5, so the
+   tools/gen/gen_park_wall.py): 960 x 540 since 13.9.3 (480 x 270 before) in 16 colours, dithered, scaled to the screen with
+   every other row dimmed, a scanline look. Settings can pick a flat colour instead (settings.c); the QEMU builds start on the flat blue #3B6EA5, so the
    checks that read bare wallpaper see one colour. No decoder, no heap: wall_px works out any pixel from the packed picture. */
 #include "park_wall.h"
 #define WALL_PARK 0x01000000u   /* settings.c's walls[]: the picture, not a colour */
@@ -20,16 +20,15 @@ void wall_span(unsigned *dst, int x, int y, int n, int w, int h, int swap) {
         for (int i = 0; i < n; i++) dst[i] = c;
         return;
     }
+    static unsigned lut[4][16], made;   /* 13.9.3: the palette plain and scanline-dimmed, both byte orders, worked out once:
+                                           the dither changes colour almost every pixel, and the drag path repaints every frame */
+    if (!made) { for (int k = 0; k < 16; k++) { lut[0][k] = park_pal[k]; lut[1][k] = dimmed(park_pal[k]); lut[2][k] = rb_swap(lut[0][k]); lut[3][k] = rb_swap(lut[1][k]); } made = 1; }
     const unsigned char *row = park_px + (unsigned)y * PARK_H / (unsigned)h * (PARK_W / 2);
-    unsigned step = (PARK_W << 16) / (unsigned)w, at = (unsigned)x * step, dim = (y & 3) == 3, last = ~0u, out = 0;
+    const unsigned *pal = lut[(swap ? 2 : 0) + (y & 1)];   /* every other screen row is the scanline */
+    unsigned step = (PARK_W << 16) / (unsigned)w, at = (unsigned)x * step;
     for (int i = 0; i < n; i++, at += step) {
-        unsigned px = at >> 16, k = px & 1 ? row[px / 2] & 15 : row[px / 2] >> 4;
-        if (k != last) {   /* runs of one colour are long: convert only on a change */
-            unsigned v = dim ? dimmed(park_pal[k]) : park_pal[k];
-            out = swap ? rb_swap(v) : v;
-            last = k;
-        }
-        dst[i] = out;
+        unsigned px = at >> 16;
+        dst[i] = pal[px & 1 ? row[px / 2] & 15 : row[px / 2] >> 4];
     }
 }
 unsigned wall_px(int x, int y, int w, int h) {   /* the wallpaper's colour at screen pixel x, y of a w x h screen, 0x00RRGGBB */

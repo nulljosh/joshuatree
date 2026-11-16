@@ -37,12 +37,27 @@ __attribute__((unused)) static unsigned long gpu_hz(void) { unsigned long f; __a
 #define GPU_BRDG 0x62726467u
 #define GPU_HUB 0xFEC00000UL
 #define GPU_CORE0 0xFEC04000UL
+/* core 0's registers for one render job (v3d_regs.h) */
+#define GPU_MISCCFG 0x018
+#define GPU_SLCACTL 0x024
+#define GPU_L2TCACTL 0x030
+#define GPU_L2TFLSTA 0x034
+#define GPU_L2TFLEND 0x038
+#define GPU_CT1CS 0x104
+#define GPU_CT1CA 0x114
+#define GPU_RFC 0x138
+#define GPU_CT1QBA 0x164
+#define GPU_CT1QEA 0x16c
+/* the V3D sits on the 2711's SCB bus, which has no dma-ranges (bcm2711.dtsi): it sees ARM addresses as they are, not the
+   0xC0000000 alias the legacy DMA engines need (audio.c) */
+#define GPU_BUS(p) ((unsigned)(unsigned long)(p))
 
 int gpu_up;   /* 1 once the ident read back as a V3D */
 unsigned gpu_ver(unsigned ident1) { return (ident1 & 15) * 10 + ((ident1 >> 4) & 15); }
 
 #if !defined(PI_BUILD) && !defined(GPU_HOST_TEST)
 int gpu_bringup(void (*say)(const char *)) { say("gpu: no V3D on this machine\n"); return 0; }
+int gpu_clear(void (*say)(const char *), unsigned rgba) { (void)rgba; say("gpu: no V3D on this machine\n"); return 0; }
 #else
 /* One clock tag for clock 5, value then a zero (SET_CLOCK_RATE's skip-turbo). 1 with *out the answer, 0 refused: the call
    or the tag's own response bit (bit 31 of the size word, as power.h checks it). */
@@ -89,17 +104,80 @@ int gpu_bringup(void (*say)(const char *)) {
     if (v < 40 || v > 79) { ga("gpu: V3D did not identify (hub ident1 "); gx(i1); ga(")"); showl(); return 0; }
     ga("gpu: V3D "); gd(v / 10); ga("."); gd(v % 10); ga(", "); gd((i1 >> 8) & 15); ga((i1 >> 8 & 15) == 1 ? " core, " : " cores, ");
     ga(i2 & (1u << 8) ? "MMU, " : "no MMU, "); ga("L3 cache "); gd(i2 & 255); ga(" KB, core ident "); gx(c0); showl();
+    GW(GPU_CORE0 + GPU_MISCCFG, 1);   /* v3d_init_core: OVRTMUOUT, and the L2T flush range covers all memory */
+    GW(GPU_CORE0 + GPU_L2TFLSTA, 0);
+    GW(GPU_CORE0 + GPU_L2TFLEND, ~0u);
     gpu_up = 1;
     show("gpu: ready\n");
+    return 1;
+}
+
+/* 13.4.1: the first job the V3D runs, a render control list (RCL) that clears one 64x64 tile to a colour and stores it to
+   memory, which the CPU then reads back. No binning, no shaders, MMU off. The packets are V3D 4.2's (Mesa's
+   v3d_packet.xml, MIT), in the order Mesa's v3dx_rcl.c emits them: the common config first, the Z/stencil clear values
+   last; a first tile that stores nothing and clears the tile buffer (Mesa's own workaround), then the tile again, stored
+   as raster RGBA8. The caches go as Linux's v3d_gem.c does them: L2T flushed and the slices invalidated before, the TMU
+   write cache and L2T cleaned after. Done is the render frame count moving (CT1 queues one frame). */
+static unsigned char gpu_cl[128] __attribute__((aligned(256)));
+static unsigned gpu_px[64 * 64] __attribute__((aligned(4096)));
+static unsigned gcn;
+static void cb(unsigned v) { gpu_cl[gcn++] = (unsigned char)v; }
+static void cw(unsigned long long v, int n) { while (n--) { cb((unsigned)v & 255); v >>= 8; } }
+static int gpu_wait(unsigned long reg, unsigned bit) {
+    for (unsigned long t0 = gpu_now(); GR(reg) & bit;) if (gpu_now() - t0 > gpu_hz() / 100) return 0;
+    return 1;
+}
+int gpu_clear(void (*say)(const char *), unsigned rgba) {
+    gsay = say; gn = 0;
+    if (!gpu_up) { show("gpu: not up, run gpu first\n"); return 0; }
+    gcn = 0;
+    cb(121); cw((64ull << 8) | (64ull << 24) | (1ull << 46) | (1ull << 47), 8);   /* COMMON: 64x64, 1 RT, early Z off, depth_24 */
+    cb(121); cw(3 | ((unsigned long long)rgba << 8), 8);                          /* CLEAR_COLORS_PART1 for RT0 */
+    cb(121); cw(1 | (2u << 6), 8);                                                 /* COLOR: RT0 32 bpp, internal type 8 */
+    cb(121); cw(2 | (0x3f800000ull << 16), 8);                                     /* ZS_CLEAR_VALUES: Z 1.0, last */
+    cb(122); cw((1ull << 16) | (1ull << 24) | (1ull << 32) | (1ull << 44), 8);    /* SUPERTILE_CFG: one tile, one supertile */
+    cb(124); cw(0, 3); cb(26);                                                     /* TILE_COORDINATES 0,0; END_OF_LOADS */
+    cb(29); cw(8, 12);                                                             /* STORE_TILE_BUFFER_GENERAL: none */
+    cb(25); cb(3); cb(27);                                                         /* CLEAR_TILE_BUFFERS RTs and Z/S; END_OF_TILE */
+    cb(124); cw(0, 3); cb(26);
+    cb(29); cw((27ull << 12) | (256ull << 28) | (64ull << 48), 8); cw(GPU_BUS(gpu_px), 4);   /* RT0, raster rgba8, 256 B rows */
+    cb(27); cb(19); cb(13);                                                        /* END_OF_TILE, FLUSH_VCD_CACHE, END_OF_RENDERING */
+    for (unsigned i = 0; i < 64 * 64; i++) gpu_px[i] = 0;
+    dcache_clean(gpu_cl, sizeof gpu_cl);
+    dcache_clean(gpu_px, sizeof gpu_px);
+    GW(GPU_CORE0 + GPU_L2TCACTL, 1);   /* L2TFLS, mode flush */
+    if (!gpu_wait(GPU_CORE0 + GPU_L2TCACTL, 1)) { show("gpu: the L2T flush never finished\n"); return 0; }
+    GW(GPU_CORE0 + GPU_SLCACTL, 0x0f0f0f0fu);
+    unsigned f0 = GR(GPU_CORE0 + GPU_RFC);
+    GW(GPU_CORE0 + GPU_CT1QBA, GPU_BUS(gpu_cl));
+    GW(GPU_CORE0 + GPU_CT1QEA, GPU_BUS(gpu_cl) + gcn);   /* this write starts the job */
+    for (unsigned long t0 = gpu_now(); GR(GPU_CORE0 + GPU_RFC) == f0;)
+        if (gpu_now() - t0 > gpu_hz() / 10) {
+            ga("gpu: the clear job hung (CT1CS "); gx(GR(GPU_CORE0 + GPU_CT1CS)); ga(", at "); gx(GR(GPU_CORE0 + GPU_CT1CA)); ga(")"); showl();
+            return 0;
+        }
+    GW(GPU_CORE0 + GPU_L2TCACTL, 1u << 8);   /* TMUWCF, then L2TFLS in clean mode */
+    if (!gpu_wait(GPU_CORE0 + GPU_L2TCACTL, 1u << 8)) { show("gpu: the TMU write cache never cleaned\n"); return 0; }
+    GW(GPU_CORE0 + GPU_L2TCACTL, 1 | (2u << 1));
+    if (!gpu_wait(GPU_CORE0 + GPU_L2TCACTL, 1)) { show("gpu: the L2T clean never finished\n"); return 0; }
+    dcache_clean(gpu_px, sizeof gpu_px);   /* dc civac: drops any stale line before the CPU reads what the GPU wrote */
+    unsigned bad = 0;
+    for (unsigned i = 0; i < 64 * 64; i++) bad += gpu_px[i] != rgba;
+    if (bad) { ga("gpu: the V3D ran but "); gd(bad); ga(" of 4096 pixels are wrong (first "); gx(gpu_px[0]); ga(")"); showl(); return 0; }
+    ga("gpu: the V3D cleared 64x64 pixels to "); gx(rgba); showl();
     return 1;
 }
 #endif
 
 #ifndef GPU_HOST_TEST
 extern void (*cmd_out)(const char *s);
-int gpu_command(const char *q, unsigned n) {   /* cmd.c: `gpu` */
-    if (n != 3 || q[0] != 'g' || q[1] != 'p' || q[2] != 'u') return 0;
-    gpu_bringup(cmd_out);
+int gpu_command(const char *q, unsigned n) {   /* cmd.c: `gpu`, `gpu clear` */
+    if (n < 3 || q[0] != 'g' || q[1] != 'p' || q[2] != 'u') return 0;
+    if (n == 3) { gpu_bringup(cmd_out); return 1; }
+    static const char c[] = " clear";
+    if (n != 9) return 0;
+    for (unsigned i = 0; i < 6; i++) if (q[3 + i] != c[i]) return 0;
+    gpu_clear(cmd_out, 0xff2c50b5u);   /* terracotta #b5502c as RGBA8 bytes */
     return 1;
 }
 #endif

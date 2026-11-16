@@ -22,7 +22,7 @@ unsigned long heap_mark(void);
 void heap_release(unsigned long m);
 void *kmalloc(unsigned int n);
 
-#define URL_MAX 256
+#define URL_MAX 1024   /* 13.9.3: was 256; a GitHub release download redirects to a signed address about 900 long, cut short it failed (update said 618) */
 #define LINK_MAX 32
 #define RAW_MAX (4u << 20)  /* the reply as it came, headers and all */
 #define PAGE_MAX (8u << 20)  /* the most a gzip body may inflate to (its trailer names the size): with RAW_MAX, 12 of the 16 MiB heap */

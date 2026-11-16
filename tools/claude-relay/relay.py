@@ -411,6 +411,28 @@ BACKUP_USER_RE = re.compile(r"[a-z0-9_-]{1,24}")
 BACKUP_NAME_RE = re.compile(r"[A-Za-z0-9_~-]{1,8}(\.[A-Za-z0-9_~-]{1,3})?")
 
 
+# ---- the bench (13.16.0): the Pi asks "what next?" every couple of seconds while `bench` is on, sending what its last
+# command printed. Commands wait one per line in BENCH_DIR/queue (tools/pi-bench.py appends them); what the Pi printed is
+# appended to BENCH_DIR/log, and BENCH_DIR/seen is touched on every ask so the tool can tell a live Pi from a silent one.
+# Only a caller with the relay token gets here, and the relay only hands out what a person on this Mac queued. ----
+BENCH_LINE_MAX = 200           # ask.c's ASK_MAX: one Terminal line
+_bench_lock = threading.Lock()
+def bench_turn(folder, output):
+    with _bench_lock:
+        with open(os.path.join(folder, "seen"), "w") as fh: fh.write(str(time.time()))
+        if output:
+            with open(os.path.join(folder, "log"), "ab") as fh: fh.write(output)
+        qp = os.path.join(folder, "queue")
+        try:
+            with open(qp, encoding="utf-8", errors="replace") as fh: lines = fh.read().split("\n")
+        except FileNotFoundError: return ""
+        lines = [l for l in lines if l.strip()]
+        if not lines: return ""
+        with open(qp, "w", encoding="utf-8") as fh: fh.write("".join(l + "\n" for l in lines[1:]))
+        line = "".join(c for c in lines[0] if " " <= c <= "~")[:BENCH_LINE_MAX]   # printable ASCII, one line, as a keyboard would type it
+        with open(os.path.join(folder, "log"), "ab") as fh: fh.write(("\n$ " + line + "\n").encode())
+        return line
+
 def backup_unpack(raw):
     """[(parts, bytes)] from a container, or ValueError with the reason in plain words."""
     if raw[:4] != b"JTB1": raise ValueError("That is not a Joshua Tree backup.")
@@ -621,6 +643,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.close_connection = True
         self.log_line(200, n, len(out), t0)
 
+    def bench(self, raw, n, t0):   # 13.16.0: the Pi's `bench`. Its last command's output comes in, the next command goes out
+        try: line = bench_turn(self.relay.cfg.bench_dir, raw)
+        except OSError: return self.reply(500, "The Mac could not read the bench queue.", n, t0)
+        return self.reply(200, line, n, t0)
+
     def backup(self, raw, query, n, t0):
         q = urllib.parse.parse_qs(query, keep_blank_values=True)
         user = q.get("user", [""])[0]
@@ -667,7 +694,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         r = self.relay
         route, _, query = self.path.partition("?")
         backups = route in ("/api/backup", "/api/backup/latest")
-        if route not in ("/api/claude", "/api/tts", "/api/build") and not backups: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
+        if route not in ("/api/claude", "/api/tts", "/api/build", "/api/bench") and not backups: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
+        if route == "/api/bench" and not r.cfg.bench_dir: return self.reply(404, "This relay runs no bench. Start it with --bench-dir FOLDER.", 0, t0)
         if backups and not r.cfg.backup_dir: return self.reply(404, "This relay keeps no backups. Start it with --backup-dir FOLDER.", 0, t0)
         if not backups and route != "/api/build" and query: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
         auth = self.headers.get("Authorization", "")
@@ -684,6 +712,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
         if route == "/api/tts": return self.tts(raw, ctype, n, t0)
         if route == "/api/build": return self.build(raw, query, n, t0)
+        if route == "/api/bench": return self.bench(raw, n, t0)
         session = ""
         model, effort = "auto", "medium"
         if ctype == "application/json":
@@ -768,6 +797,7 @@ def main(argv=None):
     ap.add_argument("--tts-usage-file", default=TTS_DEFAULT_USAGE_FILE, help="where the day's character count is kept")
     ap.add_argument("--tts-base", default=TTS_DEFAULT_BASE, help="ElevenLabs base URL (tests point it at a loopback stub)")
     ap.add_argument("--plank", default="", help="plank.py, for [[app NAME]] builds (tools/plankapp.sh's PLANK; default ~/Documents/Code/plank/plank.py)")
+    ap.add_argument("--bench-dir", default="", help="13.16.0: let tools/pi-bench.py run Terminal commands on a Pi that said `bench`: the queue and the log live here (off when unset)")
     ap.add_argument("--backup-dir", default="", help="keep the Pi's `backup` uploads here, one folder per person and time (off when unset)")
     ap.add_argument("--tools", default=",".join(READ_ONLY_TOOLS),
                     help="comma-separated built-in tools (default Read,Grep,Glob: read-only)")
@@ -790,6 +820,9 @@ def main(argv=None):
         context.load_cert_chain(os.path.expanduser(args.tls_cert), os.path.expanduser(args.tls_key))
     args.tools = [t for t in args.tools.split(",") if t]
     args.cwd = os.path.abspath(os.path.expanduser(args.cwd))
+    if args.bench_dir:
+        args.bench_dir = os.path.abspath(os.path.expanduser(args.bench_dir))
+        os.makedirs(args.bench_dir, mode=0o700, exist_ok=True)
     if args.backup_dir:
         args.backup_dir = os.path.abspath(os.path.expanduser(args.backup_dir))
         os.makedirs(args.backup_dir, mode=0o700, exist_ok=True)

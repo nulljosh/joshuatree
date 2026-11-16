@@ -463,6 +463,11 @@ static void ed_key(int k) {
     else if (k == JT_KEY_END) { int s, e; ed_line_bounds(&s, &e); epos = e; goalx = -1; }
     else if (k == JT_KEY_DELETE) { if (ed_has_sel()) ed_drop_sel(); else { esel = -1; if (epos < elen) ed_remove(epos, 1); } }
     else if (k == JT_KEY_SAVE) { if (edirty) { if (edit_save()) note = "Saved."; } else note = "Saved."; }
+    else if (k == JT_KEY_PRINT) {   /* 13.13.0: Cmd+P prints the note on the first printer that answers */
+        int r = jt_print(efile, ar->ed, (unsigned)elen);
+        say("notes: print=", r);
+        note = r == 0 ? "Sent to the printer." : r == -38 ? "Printing needs the Pi." : "No printer answered.";
+    }
 }
 
 /* n: an empty note lands in the open folder, selected. */
