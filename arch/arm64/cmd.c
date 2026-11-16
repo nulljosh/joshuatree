@@ -47,7 +47,7 @@ void power_run(int off);                                   /* main.c: the confir
 static const char help[] = "browse URL (a bare host is https), open N, back, forward, reload, links, more, up, down, "
                            "top, bottom, find WORD, fill N TEXT (a form field), fetch URL (save it), tabs, mail (login HOST USER, N, send TO SUBJECT | BODY, reply N BODY, logout), calendar subscribe URL, calendar caldav URL USER, calendar sync, cookies [clear], history [WORDS|top|clear], wifi (join NAME), nimble QUESTION (a web answer with sources), beep [FREQ MS], mic [SECONDS], double-tap and hold Space (speak to Samantha), vol [0-100|up|down], llm PROMPT, bt, bt scan, bt pair, userrun NAME [WORDS] (the words go to the app), userrun A | userrun B (A's output is B's input), cores, sched, disk, stick [ls|cat NAME|copy NAME] (a USB stick), debug NAME [STEPS] (run an app one instruction at a time: where it is, the instruction, the registers that changed, then its registers and stack), install NAME (an app from the store), "
                            "ls [DIR], cat NAME, write NAME.EXT TEXT, rm NAME, mkdir NAME (the last three in JT/, admins only; ~ is your own home folder, JT/HOME/YOU, open to you alone: write ~/NOTE.TXT TEXT, cat ~/NOTE.TXT, ls ~), users, admins, adduser NAME PASSWORD, deluser NAME PASSWORD (the password is never shown), "
-                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), shortcut [NAME] (NAME = A; B saves one, rm NAME drops it), reboot, shutdown, ping HOST, focus [on|off] (quiet notices from apps), man NAME (how a command works), help.";
+                           "sudo COMMAND (an admin's password for five minutes, sudo -k forgets it), passwd [NAME], makeadmin NAME, unadmin NAME, logout, snapshot (copy your home folder, the last three are kept), snapshots, restore N yes (put it back as that snapshot was), backup (your home folder to the Mac, through the relay), restore mac yes (the newest backup back from the Mac), boottime (when the first key came and what held the keys up), sam QUESTION (ask Samantha), shortcut [NAME] (NAME = A; B saves one, rm NAME drops it), reboot, shutdown, ping HOST, print FILE [PRINTER], printers, scan [SCANNER] (one page into PHOTOS), bench (the Mac may run commands here, on or off), focus [on|off] (quiet notices from apps), man NAME (how a command works), help.";
 #include "man.h"
 int net_ping(unsigned ip, unsigned seq, unsigned wait_ticks, unsigned *rtt_ticks);
 int http_resolve_host(const char *host, unsigned *ip);
@@ -120,6 +120,65 @@ static void cat_file(const char *q, unsigned n) {   /* the first 4 KB of a file,
     for (unsigned i = 0; i < shown; i++) if (text[i] != '\r') text[m++] = text[i];   /* DOS line ends print as one */
     if (m) say_wrapped("", text, m);
     if (got > 4096) cmd_out("cat: the first 4096 bytes\n");
+}
+int print_text(const char *host, unsigned short port, const char *path, const char *user, const char *job, const char *text, unsigned len);   /* print.c */
+int print_find(char *name, unsigned ncap, char *host, unsigned hcap, unsigned *port, char *path, unsigned pcap);   /* print.c, 13.12.0 */
+int scan_find(char *name, unsigned ncap, char *host, unsigned hcap, unsigned *port, char *path, unsigned pcap);    /* print.c, 13.14.0 */
+int scan_to_photos(const char *host, unsigned short port, const char *root);
+static void scan_cmd(const char *q, unsigned n) {   /* 13.14.0: scan [SCANNER[:PORT]], one page over eSCL into PHOTOS/ */
+    char host[64], name[64], root[48] = "eSCL"; unsigned port = 80;
+    word(q, n, host, sizeof host);
+    for (unsigned k = 0; host[k]; k++) if (host[k] == ':') {
+        host[k] = 0; port = 0;
+        for (unsigned j = k + 1; host[j] >= '0' && host[j] <= '9' && port < 65536; j++) port = port * 10 + (unsigned)(host[j] - '0');
+        if (!port || port > 65535) { cmd_out("scan: that port is not a number from 1 to 65535\n"); return; }
+        break;
+    }
+    if (!net_get_gateway()) { cmd_out("scan: no network\n"); return; }
+    if (!sd_ready()) { cmd_out("scan: no SD card\n"); return; }
+    if (!host[0]) {
+        if (!scan_find(name, sizeof name, host, sizeof host, &port, root, sizeof root)) { cmd_out("scan: no scanner answered; name one, scan 192.168.1.20\n"); return; }
+        cmd_out("scan: found "); cmd_out(name); cmd_out("\n");
+    }
+    scan_to_photos(host, (unsigned short)port, root);
+}
+static void printers_list(void) {   /* 13.12.0: the first printer that answers on the network */
+    char name[64], host[20], path[48]; unsigned port;
+    if (!net_get_gateway()) { cmd_out("printers: no network\n"); return; }
+    if (!print_find(name, sizeof name, host, sizeof host, &port, path, sizeof path)) { cmd_out("printers: none answered\n"); return; }
+    cmd_out("printers: "); cmd_out(name); cmd_out(" at "); cmd_out(host); cmd_out(":"); cmd_dec(port); cmd_out("\n");
+}
+static void print_file(const char *q, unsigned n) {   /* 13.11.0: print FILE PRINTER[:PORT], the file as a PDF to an IPP printer */
+    static char text[32769];
+    char path[64], shown[64], host[64], *name;
+    unsigned used = word(q, n, path, sizeof path), port = 631;
+    word(q + used, n - used, host, sizeof host);
+    char ppath[48] = "ipp/print", pname[64];
+    if (!path[0]) { cmd_out("print: which file? try print NOTE.TXT\n"); return; }
+    for (unsigned k = 0; host[k]; k++) if (host[k] == ':') {
+        host[k] = 0; port = 0;
+        for (unsigned j = k + 1; host[j] >= '0' && host[j] <= '9' && port < 65536; j++) port = port * 10 + (unsigned)(host[j] - '0');
+        if (!port || port > 65535) { cmd_out("print: that port is not a number from 1 to 65535\n"); return; }
+        break;
+    }
+    for (unsigned i = 0; i < sizeof path; i++) shown[i] = path[i];
+    if (!net_get_gateway()) { cmd_out("print: no network\n"); return; }
+    if (!sd_ready()) { cmd_out("print: no SD card\n"); return; }
+    int w = walk_path("print", path, sizeof path, 1, &name);
+    if (w == 0) return;
+    if (w < 0) { cmd_out("print: no file "); cmd_out(shown); cmd_out("\n"); return; }
+    if (accounts_count() && accounts_protected(name) && !priv("print")) { home_back(); return; }
+    int got = fat_read_file(name, text, sizeof text);
+    home_back();
+    if (got < 0) { cmd_out("print: no file "); cmd_out(shown); cmd_out("\n"); return; }
+    if (got > (int)sizeof text - 1) { cmd_out("print: files up to 32 KB for now\n"); return; }
+    if (!host[0]) {   /* the file first, so a typo never waits on the network */   /* 13.12.0: no printer named, so the first one that answers */
+        if (!net_get_gateway()) { cmd_out("print: no network\n"); return; }
+        if (!print_find(pname, sizeof pname, host, sizeof host, &port, ppath, sizeof ppath)) { cmd_out("print: no printer answered; name one, print NOTE.TXT 192.168.1.20\n"); return; }
+        cmd_out("print: found "); cmd_out(pname); cmd_out("\n");
+    }
+    cmd_out("print: sending "); cmd_out(shown); cmd_out("\n");
+    print_text(host, (unsigned short)port, ppath, current_user, shown, text, (unsigned)got);
 }
 static int num(const char *s, unsigned n, int *v) {   /* a plain decimal of 1 to 6 digits */
     if (!n || n > 6) return 0;
@@ -659,7 +718,7 @@ int users_passwd(const char *name, const char *pass, void (*out)(const char *)) 
     cmd_out = saved; return r;
 }
 static int blocked_while_sam(const char *q, unsigned n) {   /* the one TCP connection and the heap are in use: these would collide */
-    static const char *const names[] = {"browse", "open", "back", "forward", "reload", "nimble", "llm", "bt", "userrun", "debug", "install"};
+    static const char *const names[] = {"browse", "open", "back", "forward", "reload", "nimble", "llm", "bt", "userrun", "debug", "install", "print", "printers"};
     for (unsigned a = 0; a < sizeof names / sizeof *names; a++) {
         unsigned k = 0;
         while (names[a][k] && k < n && q[k] == names[a][k]) k++;
@@ -751,6 +810,10 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
         return;
     }
     if (is(q, n, "cat")) { cat_file(q + 4, n - 4); return; }
+    if (word_is(q, n, "print")) { cmd_out("print: print FILE [PRINTER], the printer's name or address, or the first one found\n"); return; }
+    if (word_is(q, n, "printers")) { if (ask_busy()) { cmd_out("printers: sam is using the network, try again when she answers\n"); return; } printers_list(); return; }
+    if (is(q, n, "print")) { print_file(q + 6, n - 6); return; }
+    if (word_is(q, n, "scan") || is(q, n, "scan")) { if (ask_busy()) { cmd_out("scan: sam is using the network, try again when she answers\n"); return; } scan_cmd(n > 5 ? q + 5 : q + n, n > 5 ? n - 5 : 0); return; }
     if (is(q, n, "write")) {   /* NAME needs a dot (NOTE.TXT) */
         unsigned k = 6;
         while (k < n && q[k] != ' ' && q[k] != '.') k++;
@@ -826,6 +889,7 @@ void cmd_run(const char *q, unsigned n, void (*out)(const char *)) {
     if (word_is(q, n, "makeadmin") || is(q, n, "makeadmin")) { admin_command(q + 9 + (n > 9), n > 9 ? n - 10 : 0, 1); return; }
     if (word_is(q, n, "unadmin") || is(q, n, "unadmin")) { admin_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 0); return; }
     if (word_is(q, n, "backup")) { backup_command(); return; }
+    if (word_is(q, n, "bench")) { void bench_command(void); bench_command(); return; }   /* 13.16.0: ask.c */
     if (word_is(q, n, "boottime")) { const char *boot_stamps(void); const char *t = boot_stamps(); cmd_out(*t ? t : "boottime: no key yet and no slow step\n"); return; }   /* boot.c: the dead first seconds, timed */
     if (word_is(q, n, "logout")) { if (accounts_count()) { cmd_out("logout: signing out\n"); logout_request(); } else cmd_out("logout: no accounts, nobody to sign out\n"); return; }
     if (word_is(q, n, "adduser") || is(q, n, "adduser")) { account_command(q + 7 + (n > 7), n > 7 ? n - 8 : 0, 0); return; }

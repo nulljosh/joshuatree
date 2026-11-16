@@ -8,6 +8,8 @@
 int tls_connect(unsigned ip, unsigned short port, const char *host);   /* the three steps of https_fetch, for a caller that reports progress */
 int tls_connect_private(unsigned ip, unsigned short port, const char *name);   /* the relay: name checked, TLS_TA anchors only */
 int tls_handshake(void);
+void tls_time_bootstrap(int on);   /* 13.9.3: clock.c, check the chain without the time while the clock is unset */
+int tls_time_window(unsigned long *nb, unsigned long *na);   /* the bootstrapped chain's validity, 0 when none was checked */
 int tls_exchange(const void *request, unsigned request_len, char *out, unsigned max);
 int tls_exchange_timeout(const void *request, unsigned request_len, char *out, unsigned max, unsigned reply_ticks);
 int https_fetch(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max);

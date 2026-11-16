@@ -14,15 +14,29 @@ void spot_close(void);
 static unsigned mix31(unsigned a, unsigned b) {   /* three parts a, one part b, in each colour lane */
     return ((((a & 0xFF00FFu) * 3 + (b & 0xFF00FFu)) >> 2) & 0xFF00FFu) | ((((a & 0x00FF00u) * 3 + (b & 0x00FF00u)) >> 2) & 0x00FF00u);
 }
+/* 13.9.3, Joshua's board test (Paddle froze and ignored the arrows; the whole Pi stalled): a present flushed the whole window,
+   about 5 MB to the scanout with a cache clean per line, 100 times a second for a game, which starved the USB keyboard. The blit
+   now writes only pixels that differ from what fb already holds (cached RAM, cheap to read) and keeps their bounding box, so a
+   present flushes what changed: a few hundred pixels for a game, nothing for an unchanged frame. */
+static int blit_x0, blit_y0, blit_x1, blit_y1;
+static void blit_grow(int xa, int xb, int y) {   /* screen columns xa..xb-1 of row y changed */
+    if (xa < blit_x0) blit_x0 = xa;
+    if (xb > blit_x1) blit_x1 = xb;
+    if (y < blit_y0) blit_y0 = y;
+    if (y + 1 > blit_y1) blit_y1 = y + 1;
+}
 static void app_blit(void) {
     int s = (int)window_scale(), x0 = (app_lx + 8) * s, y0 = (app_ly + 32) * s;
+    blit_x0 = blit_y0 = 1 << 30; blit_x1 = blit_y1 = 0;
     const unsigned *src = (const unsigned *)(UB + UP_WIN);
     unsigned bw = app_bw, cw_ = app_bw < app_cw ? app_bw : app_cw, ch_ = app_bh < app_ch ? app_bh : app_ch;   /* while a resize is in flight the buffer is the old size: its pixels go where they fit */
     if (app_hi) {   /* 3.9.0: the app drew at device size (hires.h and JT_SYS_TEXT2): one buffer pixel per screen pixel, nothing to smooth */
         unsigned hw = bw * 2;
         for (unsigned y = 0; y < ch_ * 2; y++) {
             const unsigned *r = src + y * hw; unsigned *d = fb + (unsigned)(y0 + (int)y) * fb_pitch + (unsigned)x0;
-            for (unsigned x = 0; x < cw_ * 2; x++) d[x] = fb_color(r[x] & 0x00FFFFFFu);
+            int lo = -1, hi = -1;
+            for (unsigned x = 0; x < cw_ * 2; x++) { unsigned v = fb_color(r[x] & 0x00FFFFFFu); if (d[x] != v) { d[x] = v; if (lo < 0) lo = (int)x; hi = (int)x; } }
+            if (lo >= 0) blit_grow(x0 + lo, x0 + hi + 1, y0 + (int)y);
         }
         return;
     }
@@ -31,17 +45,22 @@ static void app_blit(void) {
         for (int y = 0; y < ch; y++) for (int j = 0; j < 2; j++) {
             const unsigned *r0 = src + (unsigned)y * bw, *r1 = src + (unsigned)(j ? (y + 1 < ch ? y + 1 : y) : (y ? y - 1 : y)) * bw;
             unsigned *d = fb + (unsigned)(y0 + y * 2 + j) * fb_pitch + (unsigned)x0;
+            int lo = -1, hi = -1;
             for (int x = 0; x < cw; x++) for (int i = 0; i < 2; i++) {
                 int xn = i ? (x + 1 < cw ? x + 1 : x) : (x ? x - 1 : x);
                 unsigned a = mix31(r0[x] & 0x00FFFFFFu, r0[xn] & 0x00FFFFFFu), b = mix31(r1[x] & 0x00FFFFFFu, r1[xn] & 0x00FFFFFFu);
-                d[x * 2 + i] = fb_color(mix31(a, b));
+                unsigned v = fb_color(mix31(a, b));
+                if (d[x * 2 + i] != v) { d[x * 2 + i] = v; if (lo < 0) lo = x * 2 + i; hi = x * 2 + i; }
             }
+            if (lo >= 0) blit_grow(x0 + lo, x0 + hi + 1, y0 + y * 2 + j);
         }
         return;
     }
     for (unsigned y = 0; y < ch_; y++) for (unsigned x = 0; x < cw_; x++) {
         unsigned c = fb_color(src[y * bw + x] & 0x00FFFFFFu), *d = fb + (unsigned)(y0 + (int)y * s) * fb_pitch + (unsigned)(x0 + (int)x * s);
+        if (*d == c && d[(unsigned)(s - 1) * fb_pitch + (unsigned)(s - 1)] == c) continue;   /* the block's corners hold it already */
         for (int j = 0; j < s; j++) for (int i = 0; i < s; i++) d[(unsigned)j * fb_pitch + (unsigned)i] = c;
+        blit_grow(x0 + (int)x * s, x0 + (int)x * s + s, y0 + (int)y * s); blit_grow(x0 + (int)x * s, x0 + (int)x * s + s, y0 + (int)y * s + s - 1);
     }
 }
 void app_paint(void) {   /* the frame, then the last frame the app presented */
@@ -195,7 +214,8 @@ long app_window_poll(unsigned long ev, unsigned long flags) {
         app_shown = 1;
         if (app_front && app_top == (int)ap->slot && !spot_live) {
             int s = (int)window_scale();
-            fb_hold(); cur_hide(); app_blit(); fb_flush((app_lx + 8) * s, (app_ly + 32) * s, (int)app_cw * s, (int)app_ch * s); cur_show(); fb_release();
+            (void)s;
+            fb_hold(); cur_hide(); app_blit(); if (blit_x1 > blit_x0) { fb_flush(blit_x0, blit_y0, blit_x1 - blit_x0, blit_y1 - blit_y0); ap->flushed += (unsigned long)(blit_x1 - blit_x0) * (unsigned long)(blit_y1 - blit_y0); } cur_show(); fb_release();
         }
     }
     if (app_qh == app_qt) return -11;

@@ -172,6 +172,7 @@ struct app {   /* 4.0: one of APP_SLOTS apps, each in its own arena; the old app
     unsigned bw, bh;                      /* the app's buffer, pixel for pixel: the content's size as of its last JT_SYS_WINDOW_OPEN */
     int rs_log;                           /* a resized buffer is waiting for the app's first frame at the new size */
     unsigned presents;                    /* frames it has handed to JT_SYS_WINDOW_POLL, for the windows gate */
+    unsigned long flushed;                /* 13.9.3: screen pixels those presents copied out (arm64-present-check.py) */
     int shown;                            /* the app has presented a frame since its window opened */
     unsigned long base;                   /* its arena: USER_BASE + slot * ARENA_SIZE (apps are position independent, so each loads where its arena is) */
     unsigned l3off, slot;                 /* its first l3 entry; its index in apps */

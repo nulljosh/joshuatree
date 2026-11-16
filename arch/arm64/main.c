@@ -393,6 +393,7 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_SPAWN 410        /* 8.4.0: spawn and wait, see app_spawn */
 #define JT_SYS_WAIT 411
 #define JT_SYS_NOTIFY 413       /* 13.7.0: see ufile_notify */
+#define JT_SYS_PRINT 414        /* 13.13.0: see ufile_print */
 #define JT_SYS_CONNECT 412      /* 8.5.0: a TCP socket, see sock_connect */
 #define JT_SYS_CLOSE 6
 #define JT_SYS_TEXT2 402         /* 3.9.0: Tree Sans into a device-size window buffer (user/libjt/hires.h) */
@@ -1065,6 +1066,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             else if (n == JT_SYS_THREAD_SPAWN) r = th_spawn(a0, f->x[1], f->x[2]);   /* 8.1.0 */
             else if (n == JT_SYS_SPAWN) r = app_spawn(a0, f->x[1]);   /* 8.4.0 */
             else if (n == JT_SYS_WAIT) r = app_wait(f, fp, a0);
+            else if (n == JT_SYS_PRINT) { long ufile_print(unsigned long, unsigned long, unsigned long, const char *); extern char current_user[]; r = ufile_print(a0, f->x[1], f->x[2], current_user); }
             else if (n == JT_SYS_NOTIFY) { long ufile_notify(unsigned long text, const char *app); r = ufile_notify(a0, app_cur ? app_cur->name : "App"); }
             else if (n == JT_SYS_CONNECT) r = sock_connect(a0, f->x[1]);   /* 8.5.0 */
             else if (n == JT_SYS_CLIPBOARD) r = app_clip(a0, f->x[1], f->x[2]);   /* 3.10.0 */
@@ -1290,6 +1292,7 @@ static void app_end(unsigned long status, const char *how) {   /* an exit, a fau
     if (me->preempts) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" was cut off "); uart_dec(me->preempts); uart_puts(" times\n"); }   /* 8.1.0: arm64-threads-check.py reads it */
     if (me->on & ~1u) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" ran on cores"); for (unsigned c = 0; c < 4; c++) if (me->on & 1u << c) { uart_putc(' '); uart_dec(c); } uart_putc('\n'); }   /* 8.11.0: arm64-smp-threads-check.py reads it */
     if (me->heap_pages) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" touched "); uart_dec(me->heap_pages); uart_puts(" heap pages\n"); }   /* 8.7.0: arm64-heap-check.py reads it */
+    if (me->presents) { uart_puts("M3c app "); uart_puts(a->name); uart_puts(" presented "); uart_dec(me->presents); uart_puts(" frames, "); uart_dec((unsigned)(me->flushed / me->presents)); uart_puts(" pixels each\n"); }   /* 13.9.3: arm64-present-check.py reads it */
     uart_puts("M3c app "); uart_puts(a->name);
     if (how) { uart_putc(' '); uart_puts(how); } else { uart_puts(" exit "); uart_dec((unsigned)status); }
     uart_puts(", ran "); uart_dec(app_runs); uart_puts(" times\n");
@@ -1376,7 +1379,7 @@ int app_start(const struct user_app *a) {   /* 0 started (it runs on the next pa
     if (a->name[0] == 'b' && a->name[1] == 'o' && a->name[2] == 'o' && a->name[3] == 'k' && a->name[4] == 's' && !a->name[5])
         ufile_mkdirs("BOOKS");         /* 2.66: Books' library, JT/BOOKS/, the books the card ships with and the ones dropped there */
     for (unsigned i = 0; i < APP_THREADS; i++) { ap->th[i].state = TH_FREE; ap->th[i].k0 = 0; }   /* 8.1.0: one thread to start with */
-    ap->tcur = 0; ap->th[0].state = TH_READY; ap->preempts = ap->spin = 0; ap->heap_pages = 0; ap->on = 0;
+    ap->tcur = 0; ap->th[0].state = TH_READY; ap->preempts = ap->spin = 0; ap->heap_pages = 0; ap->on = 0; ap->presents = 0; ap->flushed = 0;
     for (int i = 0; i < 31; i++) app_frame.x[i] = 0;   /* argc 0, argv 0, like user_run */
     app_frame.esr = 0;                                 /* no flags to put back */
     for (int i = 0; i < 66; i++) app_fp[i] = 0;        /* M3e: its FP registers start at 0, FPCR 0 */

@@ -178,6 +178,10 @@ static int udp_broadcast_frame(u32 src_ip, u32 dst_ip, u16 src_port, u16 dst_por
     u8 *payload = frame + sizeof(*eth) + sizeof(*ip) + sizeof(*udp);
 
     for (int i = 0; i < 6; i++) { eth->dest[i] = 0xFF; eth->src[i] = our_mac[i]; }
+    if ((dst_ip >> 28) == 0xE) {   /* 13.12.0: a multicast group's own MAC, 01:00:5e and its low 23 bits (mDNS, 224.0.0.251) */
+        eth->dest[0] = 0x01; eth->dest[1] = 0x00; eth->dest[2] = 0x5E;
+        eth->dest[3] = (u8)((dst_ip >> 16) & 0x7F); eth->dest[4] = (u8)(dst_ip >> 8); eth->dest[5] = (u8)dst_ip;
+    }
     eth->ethertype = htons(ETHERTYPE_IP);
 
     u16 udp_len = (u16)(sizeof(*udp) + len);
@@ -188,7 +192,7 @@ static int udp_broadcast_frame(u32 src_ip, u32 dst_ip, u16 src_port, u16 dst_por
     ip->total_length = htons(ip_len);
     ip->id = 0;
     ip->flags_fragment = 0;
-    ip->ttl = 64;
+    ip->ttl = (dst_ip >> 28) == 0xE ? 255 : 64;   /* mDNS wants 255 */
     ip->protocol = 17;
     ip->checksum = 0;
     ip->src_ip = htonl(src_ip);
@@ -546,9 +550,12 @@ static int resolve_next_hop(u32 dest_ip, u8 mac_out[6]) {
    while it waits: the replier learned our address from a broadcast, not from an ARP request, so it has to ask. The
    reply is whatever the network sent: the caller must not trust it. */
 int udp_broadcast_ask(u16 port, u16 src_port, const void *probe, u32 len, void *reply, u32 max, u32 *from_ip, u32 wait_ticks) {
-    net_err = NET_ERR_NONE;
     u32 mask = dhcp_netmask ? dhcp_netmask : LOCAL_SUBNET_MASK;
-    if (!active_send || !udp_broadcast_frame(our_ip, our_ip | ~mask, src_port, port, probe, len)) { net_err = NET_ERR_SEND; return -1; }
+    return udp_group_ask(our_ip | ~mask, port, src_port, probe, len, reply, max, from_ip, wait_ticks);
+}
+int udp_group_ask(u32 group, u16 port, u16 src_port, const void *probe, u32 len, void *reply, u32 max, u32 *from_ip, u32 wait_ticks) {
+    net_err = NET_ERR_NONE;
+    if (!active_send || !udp_broadcast_frame(our_ip, group, src_port, port, probe, len)) { net_err = NET_ERR_SEND; return -1; }
     u8 rx[1514];
     u32 deadline = ticks() + wait_ticks;
     while (ticks() < deadline) {
@@ -1046,9 +1053,17 @@ int tcp_get_timeout(u32 dest_ip, u16 dest_port, const void *request, u32 request
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
         u32 seg_seq = htonl(tcp->seq);
-        if (seg_seq != their_seq) continue; /* out of order or a duplicate; no reassembly, just drop it */
+        if (seg_seq != their_seq) {   /* out of order or a duplicate; no reassembly, just drop it */
+            /* 13.9.5: a segment from past a hole gets the ACK for the hole again, so the server's fast retransmit
+               fills it now, not after its timer. Wi-Fi loses frames; the old silent drop cost a second or more each. */
+            if ((int)(seg_seq - their_seq) > 0 && paylen) tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, their_seq, TCP_ACK, 0, 0);
+            continue;
+        }
 
         if (paylen > 0) {
+            /* 13.9.5: the deadline is for silence, not for the whole reply. A 2 MB file over the Pi's Wi-Fi takes
+               longer than the browser's 8 seconds, and used to be cut wherever the clock ran out. */
+            data_deadline = ticks() + (reply_timeout_ticks ? reply_timeout_ticks : SLOW_REPLY_TIMEOUT_TICKS);
             u32 copy = paylen;
             if (total + copy > response_maxlen) copy = response_maxlen - total;
             u8 *dst = (u8 *)response + total;

@@ -306,8 +306,23 @@ static int reply_match(const unsigned char *b, unsigned len, unsigned id, unsign
 static unsigned tx_max, tx_max_seen;   /* the chip's flow control: the highest sequence number it will take, from byte 9 of every SDPCM header it sends */
 /* brcmfmac only sends while seq != max and (max - seq) is not "negative" (bit 7). Frames sent past the credit are dropped by the chip,
    which looks exactly like a command that never gets a reply. Poll for fresh credit (any frame carries it) for up to half a second. */
+static struct rxq rxq;
+/* 13.9.5: a frame read while waiting for something else. Its credit byte counts, and a data frame is kept for
+   wifi_nic_recv instead of being thrown away. Returns the channel, -1 for no frame. */
+static int side_frame(unsigned *off, unsigned *l) {
+    int c = sdpcm_parse(frame, 1600, off, l);
+    if (c < 0) return c;
+    tx_max = frame[9]; tx_max_seen = 1;
+    const unsigned char *eth; unsigned n;
+    if (c == SDPCM_DATA && (n = bdc_eth(frame + *off, *l, &eth))) rxq_put(&rxq, eth, n);
+    return c;
+}
 static void wait_credit(void) {
-    for (unsigned t = 0; t < 100 && tx_max_seen && (((tx_max - seq) & 0xff) == 0 || ((tx_max - seq) & 0x80)); t++) { f2_read(); mdelay(5); }
+    for (unsigned t = 0; t < 100 && tx_max_seen && credit_out(tx_max, seq); t++) {
+        unsigned off, l;
+        if (f2_read() && side_frame(&off, &l) >= 0) continue;   /* a frame came: look at the credit again at once */
+        mdelay(5);
+    }
 }
 static void no_reply(const char *name, unsigned want) {
     kputs("wifi "); kputs(name); kputs(" no reply: want id "); kdec(want); kputs(", last frame ch "); kdec(last_chan);
@@ -323,8 +338,8 @@ static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *s
     for (unsigned t = 0; t < 200; t++) {
         unsigned off, l, ch; int c;
         if (!f2_read()) return 0;
-        c = sdpcm_parse(frame, 1536, &off, &l);
-        if (c >= 0) { tx_max = frame[9]; tx_max_seen = 1; last_chan = c; last_len = l; if (c == SDPCM_CONTROL && l >= 16) { last_cmd = rd32(frame + off); last_id = rd32(frame + off + 8) >> 16; last_st = rd32(frame + off + 12); } }
+        c = side_frame(&off, &l);   /* 13.9.5: a data frame that lands between a command and its reply is kept */
+        if (c >= 0) { last_chan = c; last_len = l; if (c == SDPCM_CONTROL && l >= 16) { last_cmd = rd32(frame + off); last_id = rd32(frame + off + 8) >> 16; last_st = rd32(frame + off + 12); } }
         else last_chan = 99;
         if (c == SDPCM_CONTROL && reply_match(frame + off, l, id, &ch)) {
             *status = rd32(frame + off + 12);
@@ -346,7 +361,7 @@ static int wlc_ioctl(unsigned cmd, void *buf, unsigned len, unsigned *status) {
     for (unsigned t = 0; t < 200; t++) {
         unsigned off, l, ch; int c;
         if (!f2_read()) return 0;
-        c = sdpcm_parse(frame, 1536, &off, &l);
+        c = side_frame(&off, &l);
         if (c == SDPCM_CONTROL && reply_match(frame + off, l, id, &ch)) { *status = rd32(frame + off + 12); return 1; }
         mdelay(5);
     }
@@ -651,15 +666,17 @@ int wifi_nic_send(const void *fr, unsigned len) {
     return cmd53(2, 0x8000, 1, txf, fw_padded(n));
 }
 unsigned wifi_nic_recv(void *buf, unsigned max) {
-    if (!link_up || !f2_read()) return 0;
+    if (!link_up) return 0;
+    unsigned len = rxq_get(&rxq, buf, max);   /* 13.9.5: frames a send or a command read on the way come first, in order */
+    if (len) return len;
+    if (!f2_read()) return 0;
     unsigned off, l; int ch = sdpcm_parse(frame, 1600, &off, &l);
     if (ch < 0) return 0;
     tx_max = frame[9]; tx_max_seen = 1;   /* every frame carries fresh send credit */
-    if (ch != SDPCM_DATA || l < 4) return 0;
-    const unsigned char *bd = frame + off; unsigned skip = 4 + bd[3] * 4;
-    if (l <= skip) return 0;
-    unsigned len = l - skip; if (len > max) len = max;
-    for (unsigned i = 0; i < len; i++) ((unsigned char *)buf)[i] = bd[skip + i];
+    const unsigned char *eth;
+    if (ch != SDPCM_DATA || !(len = bdc_eth(frame + off, l, &eth))) return 0;
+    if (len > max) len = max;
+    for (unsigned i = 0; i < len; i++) ((unsigned char *)buf)[i] = eth[i];
     return len;
 }
 /* Bluetooth pairing holds the radio. The chip has one antenna for both, and with Wi-Fi up a mouse's first packets

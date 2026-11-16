@@ -102,6 +102,14 @@ int sd_enter_jt(int make) {
 }
 /* ---- who is signed in ---- */
 char current_user[32];
+/* 13.13.0, 13.14.0: ufile.c's print call and scan's save reach into print.c, ask.c and the heap; none of it runs here */
+int print_find(char *n, unsigned nc, char *h, unsigned hc, unsigned *p, char *pa, unsigned pc) { (void)n; (void)nc; (void)h; (void)hc; (void)p; (void)pa; (void)pc; return 0; }
+int print_text(const char *h, unsigned short p, const char *pa, const char *u, const char *j, const char *t, unsigned l) { (void)h; (void)p; (void)pa; (void)u; (void)j; (void)t; (void)l; return 0; }
+void (*cmd_out)(const char *s);
+int ask_busy(void) { return 0; }
+void *kmalloc(unsigned int n) { return malloc(n); }
+void kfree(void *p) { free(p); }
+void uart_puts(const char *s) { (void)s; }
 static const char *names[8]; static unsigned nacc; static int sudo_on;
 unsigned accounts_count(void) { return nacc; }
 const char *accounts_name(unsigned i) { return i < nacc ? names[i] : ""; }

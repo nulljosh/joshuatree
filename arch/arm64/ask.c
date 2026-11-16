@@ -1654,7 +1654,64 @@ static void sam_run(void) {   /* the queued question, on a main loop pass of its
     else if (tui_on) tui_paint(0);                /* the thinking marker goes */
     prompt_row(ac->line, ac->len);
 }
+/* 13.16.0, the bench: `bench` lets the Mac run Terminal commands here, so a board test needs no second keyboard. While
+   it is on, the Pi asks the relay's /api/bench "what next?" every two seconds (at once after a command), sending what
+   the last command printed; a line that comes back runs as if typed, its output shown here and kept for the next ask.
+   Off at every boot, on only when someone at this keyboard types `bench`, and only toward the relay this card was
+   built for, with its token (TLS on a Pi). A relay that does not answer is asked less and less often, up to a minute;
+   one that says no (401, 404) turns the bench off. Keys still work while it asks (ask_service). */
+unsigned long cnt_now(void); unsigned long cnt_hz(void);
+static int bench_on; static unsigned long bench_next; static unsigned bench_gap = 2, bench_n;
+static char bench_out[3000];   /* the relay takes a 4 KB body */
+static void bench_tee(const char *s) { real_puts(s); for (; *s && bench_n < sizeof bench_out; s++) bench_out[bench_n++] = *s; }
+void bench_command(void) {
+    if (!CLAUDE_TOKEN_LEN) { kputs("bench: this card has no relay token, so there is no Mac to listen to\n"); return; }
+    bench_on = !bench_on; bench_next = 0; bench_gap = 2; bench_n = 0;
+    kputs(bench_on ? "bench: on, the Mac can run commands here until you type bench again or restart\n" : "bench: off\n");
+}
+static void bench_tick(void) {
+    if (!bench_on || sam_state || ac->pending || poll_depth || !net_get_gateway()) return;
+    if (bench_next && cnt_now() < bench_next) return;
+    unsigned long mark = heap_mark();
+    char *line = kmalloc(ASK_MAX + 1);
+    int status = 0, got = -1;
+    if (line) {
+        void (*idle0)(void) = net_idle;
+        net_idle = ask_service;
+        poll_depth++;                       /* a line typed while this waits runs through ask_service, not a second ask */
+        got = mac_post("/api/bench", bench_out, bench_n, line, ASK_MAX, &status);
+        poll_depth--;
+        net_idle = idle0;
+    }
+    if (got < 0 || status != 200) {
+        if (status == 401 || status == 404) { bench_on = 0; real_puts(status == 401 ? "bench: the Mac refused this card's token; off\n" : "bench: the Mac's relay runs no bench (start it with --bench-dir); off\n"); }
+        else if (bench_gap < 60) bench_gap *= 2;
+        bench_next = cnt_now() + cnt_hz() * bench_gap;
+        heap_release(mark); return;
+    }
+    bench_gap = 2; bench_n = 0;             /* the output is delivered */
+    unsigned n = (unsigned)got;
+    while (n && (line[n - 1] == '\n' || line[n - 1] == '\r' || line[n - 1] == ' ')) n--;
+    for (unsigned i = 0; i < n; i++) if (line[i] < 32 || line[i] > 126) n = 0;   /* one printable line or nothing */
+    if (!n || !bench_on) { bench_next = cnt_now() + cnt_hz() * bench_gap; heap_release(mark); return; }
+    line[n] = 0;
+    poll_depth++; term_output(1);
+    void (*saved)(const char *) = cmd_out;
+    real_puts("bench % "); real_puts(line); real_puts("\n");
+    cmd_run(line, n, bench_tee);
+    cmd_out = saved;
+    poll_depth--; term_output(poll_depth ? 1 : 0);
+    if (!bench_n) bench_tee("(nothing printed)\n");   /* so the Mac sees the command ran */
+    prompt_row(ac->line, ac->len);
+    bench_next = 0;                         /* ask again at once: the output goes back now */
+    if (!bench_on && bench_n) {             /* the line was `bench`: it is off, so its last words go back now or never */
+        poll_depth++; mac_post("/api/bench", bench_out, bench_n, line, ASK_MAX, &status); poll_depth--;
+        bench_n = 0;
+    }
+    heap_release(mark);
+}
 void ask_poll(void) {
+    bench_tick();
     voice_pump();                              /* the rest of a clip, as the sound ring makes room */
     vm_poll();                                 /* voice mode: the hold, the level bar, the release */
     face_tick();                               /* the chat view's mouth, while she speaks */

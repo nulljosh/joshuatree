@@ -6,6 +6,9 @@ A server on the host answers over plain HTTP on QEMU's user network (10.0.2.2):
           on the wire, ten times the old cap). The UART must say "browser: body 2097152 bytes", show the page's title
           and its first sentence.
   /plain  300 KiB with a Content-Length and no encoding: "browser: body 307200 bytes".
+  /slow   60 KiB with a Content-Length, sent as 12 pieces a second apart (13.9.5): longer than the browser's 8 second
+          deadline, but never silent that long, so it reads whole. The deadline used to cover the whole reply, and a
+          big file over the Pi's Wi-Fi was cut wherever the clock ran out.
   /cut    a chunked reply whose last chunk claims more than arrives: "browser: chunked reply cut short".
 The server also sees the request ask for HTTP/1.1 and gzip.
 
@@ -34,6 +37,7 @@ assert len(BIGPAGE) == BIG
 GZ = gzip.compress(BIGPAGE, 6)
 PLAIN = (b"<html><head><title>A plain page</title></head><body><p>" + b"x" * 307200)[:307200 - 18] + b"</p></body></html>"
 assert len(PLAIN) == 307200
+SLOW = (b"<html><head><title>A slow page</title></head><body><p>" + b"s" * 61440)[:61440 - 18] + b"</p></body></html>"
 seen = []
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -43,6 +47,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path == "/plain":
             self.send_response(200); self.send_header("Content-Length", str(len(PLAIN))); self.send_header("Connection", "close")
             self.end_headers(); self.wfile.write(PLAIN); return
+        if self.path == "/slow":
+            self.send_response(200); self.send_header("Content-Length", str(len(SLOW))); self.send_header("Connection", "close"); self.end_headers()
+            for i in range(0, len(SLOW), 5120):
+                self.wfile.write(SLOW[i:i + 5120]); self.wfile.flush(); time.sleep(1.0)
+            return
         data = GZ if self.path == "/big" else b"<p>cut</p>" * 10
         self.send_response(200); self.send_header("Transfer-Encoding", "chunked"); self.send_header("Connection", "close")
         if self.path == "/big": self.send_header("Content-Encoding", "gzip")
@@ -106,6 +115,9 @@ try:
 
     n = len(uart()); type_line("browse http://10.0.2.2:%d/plain" % port)
     check("a 300 KiB plain page reads whole", wait_for("browser: body %d bytes" % len(PLAIN), 60, n), uart()[n:][-500:])
+
+    n = len(uart()); type_line("browse http://10.0.2.2:%d/slow" % port)
+    check("a reply slower than the 8 second deadline, but never silent, reads whole", wait_for("browser: body %d bytes" % len(SLOW), 40, n), uart()[n:][-500:])
 
     n = len(uart()); type_line("browse http://10.0.2.2:%d/cut" % port)
     check("a chunk cut short is refused, not shown", wait_for("browser: chunked reply cut short", 30, n), uart()[n:][-500:])

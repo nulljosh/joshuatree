@@ -547,7 +547,13 @@ int menubar_click(int x, int y) {
     if (focus_hit[1] > focus_hit[0] && x >= focus_hit[0] && x < focus_hit[1]) { focus_set(0); return 1; }
     for (int i = 0; i < 4; i++) if (mb_hit[i][1] > mb_hit[i][0] && x >= mb_hit[i][0] && x < mb_hit[i][1]) {
         con_quiet = 1; uart_puts("menubar click "); uart_puts(name[i]); uart_putc('\n');
-        settings_open(section[i]);
+        /* 13.9.3, Joshua's board test: the pointer sits on the menu bar, which the menu or Settings repaints under it, so the
+           arrow went missing until it moved. Lift it first, put it back after. */
+        void cur_hide(void); void cur_show(void);
+        cur_hide();
+        if (i == 0) tree_open();   /* the power symbol is Sleep, Restart and Shut Down, not Settings */
+        else settings_open(section[i]);
+        cur_show();
         return 1;
     }
     return 0;
