@@ -62,6 +62,14 @@ try:
     check("a queued line is handed out, control characters dropped", post(p_on) == (200, "gpu clear"), post)
     check("... once: the next ask gets the next line, cut to 200", post(p_on, b"gpu: ready\n") == (200, "x" * 200))
     check("then nothing", post(p_on) == (200, ""))
+    def shot_post(body, token=TOKEN):
+        req = urllib.request.Request("http://127.0.0.1:%d/api/bench/shot" % p_on, data=body, method="POST", headers={"Authorization": "Bearer " + token} if token else {})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r: return r.status, r.read().decode()
+        except urllib.error.HTTPError as e: return e.code, e.read().decode()
+    check("a picture without the token is 401", shot_post(b"JTSHOT 1 1\n\0\0\0", token=None)[0] == 401)
+    check("a picture whose bytes do not match its size is 400, and nothing is written", shot_post(b"JTSHOT 2 2\n\0\0\0")[0] == 400 and not (d1 / "shot.png").exists())
+    check("a good 2x1 picture is kept as a PNG", shot_post(b"JTSHOT 2 1\n\xff\0\0\0\xff\0") == (200, "shot 2x1") and (d1 / "shot.png").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n")
     logtxt = (d1 / "log").read_text()
     check("the log has each command and what the Pi sent back", "$ gpu clear\ngpu: ready\n" in logtxt, logtxt)
     check("the tool reports a Pi that just asked", tool(d1, "--status")[0] == 0)
@@ -108,6 +116,37 @@ try:
     check("... and the Pi's own screen shows the line it ran", "bench % man bench" in uart(), uart()[-400:])
     rc, out = tool(d2, "zzznope")
     check("a word that is no command comes back as the refusal", rc == 0 and "command not found: zzznope" in out, out)
+    # 13.17.0: keys, the pointer and a picture of the screen
+    n0 = len(uart())
+    rc, out = tool(d2, "type", "man", "scan")
+    check("`type` plays the keys of a line into the Terminal", rc == 0 and "typed 8 keys" in out, out)
+    rc, out = tool(d2, "key", "28")
+    check("`key 28` is Enter: the typed line runs on the Pi", rc == 0 and wait("Scans one page on a network scanner", 15, n0), uart()[n0:][-400:])
+    rc, out = tool(d2, "key", "nope")
+    check("a bad key line says how", rc == 0 and "Linux key codes" in out, out)
+    rc, out = tool(d2, "click", "400", "300")
+    check("`click X Y` lands a press and a release", rc == 0 and "clicked" in out, out)
+    rc, out = tool(d2, "drag", "100", "100", "300", "200")
+    check("`drag` runs", rc == 0 and "dragged" in out, out)
+    shot = d2 / "shot.png"
+    rc, out = tool(d2, "shot", "2")
+    import struct, zlib
+    ok = rc == 0 and "shot 400x300 sent" in out and shot.exists()
+    check("`shot 2` sends the screen at half size and the relay keeps a PNG", ok, out)
+    if ok:
+        b = shot.read_bytes()
+        w, h = struct.unpack(">II", b[16:24])
+        at, idat = 8, b""
+        while at < len(b):
+            ln, tag = struct.unpack(">I", b[at:at + 4])[0], b[at + 4:at + 8]
+            if tag == b"IDAT": idat += b[at + 8:at + 8 + ln]
+            at += 12 + ln
+        rows = zlib.decompress(idat)
+        check("the PNG is 400x300 RGB and decodes to that many bytes", (w, h) == (400, 300) and len(rows) == 300 * (1 + 400 * 3), (w, h, len(rows)))
+        px = lambda x, y: tuple(rows[y * (1 + 400 * 3) + 1 + x * 3: y * (1 + 400 * 3) + 4 + x * 3])
+        check("its desktop is the calm blue the QEMU build starts on (#3B6EA5)", px(5, 150) == (0x3B, 0x6E, 0xA5), px(5, 150))
+    rc, out = tool(d2, "shot", "9")
+    check("a size out of range is refused", rc == 0 and "N from 1 to 8" in out, out)
     rc, out = tool(d2, "bench")
     check("`bench` from the Mac turns it off", rc == 0 and "bench: off" in out, out)
     rc, out = tool(d2, "man", "scan", wait=6)
