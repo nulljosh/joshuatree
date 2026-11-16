@@ -112,6 +112,35 @@
   {
    "image": "../first-boot-2026-10-06.jpg",
    "full": true
+  },
+  {
+   "image": "../breadboard.jpg",
+   "full": true
+  },
+  {
+   "image": "../../../landing/nimbus-print-front.webp",
+   "full": true
+  },
+  {
+   "image": "../../../landing/nimbus-print-parts.webp",
+   "full": true
+  },
+  {
+   "image": "../nimbus-rear.jpg",
+   "full": true
+  },
+  {
+   "image": "../nimbus-box.jpg",
+   "full": true
+  },
+  {
+   "image": "../../brand/v10/nimbus-desk.webp",
+   "full": true
+  },
+  {
+   "image": "../nimbus-painted.png",
+   "full": true,
+   "secs": 2.4
   }
  ],
  "name": {
