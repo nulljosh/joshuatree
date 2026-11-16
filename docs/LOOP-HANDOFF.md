@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-11-16, morning)
+# Joshua Tree loop handoff (2026-11-16, midday)
 
 ## What the loop is
 
@@ -6,24 +6,24 @@ Claude works the roadmap's goals toward v14, one pull request at a time, until w
 
 ## Where things stand
 
-- Main is on 13.9.2. PR 1134 (roadmap handoff docs) is merged.
-- PRs 1121, 1127 and 1130 were closed as superseded.
-- PR 1132 (13.9.3, board test fixes) is rebased onto main, in CI, set to auto-merge. It also makes the flaky Settings check wait for the whole line and print the full second-boot log when it fails.
-- PR 1135 (13.11.0 to 13.14.0) is open, in CI, set to auto-merge: print a text file to a network printer, find printers on the network, Cmd+P in Notes, and a scan command that pulls a page from a network scanner into Photos. It is tested against a stub printer and a stub scanner in the emulator on the Mac, not yet on a real printer.
-- Print and scan now release their memory after each job. Before that, the third scan ran the kernel heap out of memory on the Pi build.
-- The Playwright browser cache was a link to the LaCie drive, which is gone, so local test runs were failing silently. The dead link is removed and the browsers are reinstalled.
-- Branch `pi/wifi-rx` (worktree `~/Documents/Code/jt-wifirx`, one local commit, NOT pushed, no PR yet) is the likely fix for big plain-HTTP downloads stopping after 800 bytes on the real board. The Wi-Fi driver was throwing away incoming frames while it waited for permission to send. It passes the emulator and host tests. Only a board test can confirm it. It needs a rebase, a bump to 13.14.1 and a docs line before a PR.
+- Main is on 13.9.2. PR 1134 (roadmap handoff docs) is merged. PRs 1121, 1127 and 1130 were closed as superseded.
+- PRs 1132 and 1135 were closed and folded into PR 1137 (13.9.3 to 13.16.0, branch v14/bench), in CI with auto-merge on. It carries the board fixes, printing and scanning, the Wi-Fi fix for downloads that stopped at 800 bytes, `gpu clear` (the graphics chip's first job) and `bench`. Do not touch PR 1137 or branch v14/bench.
+- Joshua has no printer. Printing ships as 13.x, and version 14 is now graphics acceleration: the V3D chip drawing the desktop, proven on the board.
+- `bench` lets the Mac run Terminal commands on the Pi through the relay (relay.py --bench-dir, tools/pi-bench.py), so board tests need no second keyboard. It passes in the emulator and has not run on the board yet. Next for it: key presses, mouse clicks, and a screenshot back.
+- A test card with 13.14.1 was flashed today. After 1137 merges, every release must be signed with tools/update-sign.sh so the Pi's `update` command can pull it. 13.16.0 is not signed yet.
+- Version 15 (the 64-bit PC port) is not happening today.
 - Parked until after 14: PR 1133 (Paddle polish) and PR 1128 (auto lock).
 
 ## Next, in order
 
-1. Let PR 1132 and PR 1135 merge on green. Do not touch them by hand.
-2. Rebase `pi/wifi-rx`, bump to 13.14.1, add the docs line, open a PR, merge on green. Its real test is on the board.
-3. Joshua reflashes the card and, on real hardware, prints a note, scans a page and downloads a big file over plain HTTP. Those three checks close goal 14. The printing and scanning gates in QEMU are already provable; the board steps are not.
-4. Then the next goal in the Version plan, with the same rules. Parked PRs 1133 and 1128 wait until 14 is done.
+1. Let PR 1137 merge on green. Do not touch it by hand.
+2. Sign 13.16.0 with tools/update-sign.sh so the Pi can update to it.
+3. Test the board through `bench`: flash or update the card, then drive key presses, mouse clicks and a screenshot from the Mac. Joshua's board checks for printing, scanning, the Wi-Fi fix and a big download still count.
+4. GPU steps toward v14: the V3D chip drawing the desktop, each step a minor with host checks, proven on the board.
+5. Park PRs 1133 and 1128 until 14 is done.
 
 ## Restart prompt
 
 ```
-/loop check joshuatree until v14: work toward v14, the printing and scanning goal (docs/ROADMAP.md, Version plan), honest semver: a minor per step, a patch per fix, a major only when a goal's gate truly passes (board-only gates wait for Joshua's board test). Start from the state in docs/LOOP-HANDOFF.md: PRs 1132 and 1135 are auto-merge on green, do not touch them; the Wi-Fi fix sits on local branch pi/wifi-rx and needs a rebase, a 13.14.1 bump and a docs line before its PR. One PR per item off origin/main, local checks green, open ready, merge on green, no --admin. Park PRs 1133 and 1128 until 14 is done. Each major, unasked: fresh landing screenshots (tools/landing-shots.py), a fable-ad trailer of real screens with an audible hit on every cut; fix the roadmap Latest line. Keep docs slim and human, update the book. Keep docs/LOOP-HANDOFF.md current. Stop at weekly usage 75% or when nothing provable is left.
+/loop joshuatree: ship 13.16.0, sign it, test the board through bench, then GPU steps toward v14
 ```
