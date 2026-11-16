@@ -76,6 +76,7 @@
 #define JT_SYS_SPAWN        410 /* 8.4.0, Pi only: (name, words, 0) starts another app with those words; returns its pid or -errno */
 #define JT_SYS_WAIT         411 /* 8.4.0, Pi only: (pid) waits for a child to end; returns its exit status (-1 for a fault or a kill) or -ECHILD */
 #define JT_SYS_NOTIFY       413 /* 13.7.0, Pi only: (text) a one-line notice in the menu bar under the app's name, held while Focus is on */
+#define JT_SYS_PRINT        414 /* 13.13.0, Pi only: (title, text, len) prints the text on the first printer that answers; 0 or -errno */
 #define JT_SYS_CONNECT      412 /* 8.5.0, Pi only: (host, port) opens a TCP connection; returns fd 100 for read, write and close, or -errno */
 #define JT_SOCK_FD          100
 #define JT_SYS_CLIPBOARD   399 /* 1.9.28: the one system clipboard, 4 KB; see kernel/syscall.h */
@@ -145,6 +146,7 @@ struct jt_text { int x, y; unsigned int fg; const char *s; };
 #define JT_KEY_SDOWN 314
 #define JT_KEY_NEW   316 /* Ctrl+N or Cmd+N: a new document (Notes: a new note) */
 #define JT_KEY_SELALL 315
+#define JT_KEY_PRINT 318 /* 13.13.0: Cmd+P or Ctrl+P: print (Notes: the open note) */
 #define JT_KEY_UNDO  317 /* 7.5.0: Ctrl+Z or Cmd+Z: undo (Notes: the last edit, and again to redo it) */
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
 struct jt_event { unsigned int kind; int a, b; };
@@ -296,6 +298,7 @@ static inline int jt_connect(const char *host, int port)              { return j
 static inline int jt_writefile(const char *path, const void *buf, unsigned len) { return jt_syscall(JT_SYS_WRITEFILE, (jt_arg)path, (jt_arg)buf, (jt_arg)len); }
 static inline int jt_feed(int kind, const char *arg)               { return jt_syscall(JT_SYS_FEED, (jt_arg)kind, (jt_arg)arg, 0); }
 /* Replace the system clipboard with len bytes (0 clears). Returns len, -EINVAL over JT_CLIP_MAX, -EFAULT. */
+static inline int jt_print(const char *title, const void *text, unsigned len) { return jt_syscall(JT_SYS_PRINT, (jt_arg)title, (jt_arg)text, len); }
 static inline int jt_clip_set(const void *buf, unsigned len)      { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_SET, (jt_arg)buf, len); }
 /* Copy out at most len bytes of the clipboard; returns bytes copied (0 when empty), -EFAULT. A short len clips the paste. */
 static inline int jt_clip_get(void *buf, unsigned len)            { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_GET, (jt_arg)buf, len); }

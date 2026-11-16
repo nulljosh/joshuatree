@@ -18,6 +18,8 @@ int http_get_timeout(const char *host, const char *path, unsigned short port,
    0 when there was no parseable status line. The body-only return value
    cannot tell a 200 from a proxy's 403 page; callers that care check this. */
 int http_last_status(void);
+/* 13.14.0: the last reply's Location header, its path only; "" when it had none. */
+const char *http_last_location(void);
 
 /* Waits (interrupts must be on) for the one-connection net stack to be free, up to max_ticks.
    1 = free, 0 = still held by another fetch (the caller reports -EBUSY, not a network error). */
@@ -40,6 +42,8 @@ int http_post_timeout(const char *host, const char *path, unsigned short port,
                        unsigned int reply_timeout_ticks);
 /* Authorization: Bearer <token> on the NEXT http_post_timeout only (then cleared). 0 or "" = none. */
 void http_post_set_bearer(const char *token);
+/* Content-Type for the NEXT POST only (then back to application/json). */
+void http_post_set_type(const char *type);
 
 /* The pieces arch/arm64/tls.c reuses (2.31): a dotted quad or a DNS lookup, and the two reply parsers. */
 int http_resolve_host(const char *host, unsigned int *ip);

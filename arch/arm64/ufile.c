@@ -341,6 +341,35 @@ static long u_feed(unsigned long kind, unsigned long uarg) {
 /* JT_SYS_NOTIFY (413, 13.7.0): one line for the menu bar, under the app's own name so an app cannot pass for the system. Kept here
    and shown by app_tick between app turns, as a launch is; a newer one replaces one not shown yet. */
 static char notify_line[64];
+/* 13.13.0, JT_SYS_PRINT (title, text, len): the text as a PDF on the first printer that answers (print.c), so an app
+   prints without knowing about IPP or mDNS. 0 when the printer took it, -EIO when none answered or it said no. Up to
+   32 KB; print.c's lines go to the UART, not the Terminal. ponytail: the call blocks the loop while it asks and sends,
+   a few seconds at most; a background job when apps print big things. */
+int print_find(char *name, unsigned ncap, char *host, unsigned hcap, unsigned *port, char *path, unsigned pcap);
+int print_text(const char *host, unsigned short port, const char *path, const char *user, const char *job, const char *text, unsigned len);
+extern void (*cmd_out)(const char *s);
+void uart_puts(const char *s);
+void *kmalloc(unsigned int n); void kfree(void *p);
+long ufile_print(unsigned long utitle, unsigned long utext, unsigned long len, const char *user) {
+    char t[PATH_MAX + 1], name[64], host[20], path[48]; unsigned port;
+    int ask_busy(void);   /* ask.c: Samantha's request holds the one connection and the heap */
+    if (ask_busy()) return -EAGAIN;
+    long err = copy_path(utitle, t);
+    if (err) return err;
+    if (len > 32768 || !user_in_range(utext, len)) return -EFAULT;
+    char *k = kmalloc((unsigned)len + 1);
+    if (!k) return -EIO;
+    for (unsigned long i = 0; i < len; i++) k[i] = ((const char *)utext)[i];
+    void (*saved)(const char *) = cmd_out; cmd_out = uart_puts;
+    long r = -EIO;
+    if (print_find(name, sizeof name, host, sizeof host, &port, path, sizeof path)) {
+        uart_puts("print: found "); uart_puts(name); uart_puts("\n");
+        if (print_text(host, (unsigned short)port, path, user, t, k, (unsigned)len)) r = 0;
+    } else uart_puts("print: no printer answered\n");
+    cmd_out = saved;
+    kfree(k);
+    return r;
+}
 long ufile_notify(unsigned long utext, const char *app) {
     char t[PATH_MAX + 1];
     long err = copy_path(utext, t);
@@ -432,4 +461,26 @@ void ufile_mkdirs(const char *path) {
         fat_mkdir(leaf);   /* fails harmlessly when it is there */
         path_leave();
     }
+}
+/* 13.14.0: a scan lands where Photos looks, PHOTOS/ in the app root (JT/, or JT/HOME/<name>/ with accounts), as the first
+   free SCANnnnn.JPG; name gets it. 1 when written. */
+int photo_save_next(const void *d, unsigned n, char *name, unsigned ncap) {
+    char hb[HOME_DIR_MAX + 1], c;
+    const char *home = cur_home(hb);
+    if (ncap < 13 || !sd_ready()) return 0;
+    saved_cwd = fat_cwd_get();
+    fat_cwd_set(0);
+    if (!sd_enter_jt(1) || (home && !home_in(home, 1))) { path_leave(); return 0; }
+    if (!fat_chdir("PHOTOS") && !(fat_mkdir("PHOTOS") && fat_chdir("PHOTOS"))) { path_leave(); return 0; }
+    int ok = 0;
+    for (unsigned k = 1; k < 10000; k++) {
+        const char *b = "SCAN0000.JPG";
+        for (int i = 0; i < 13; i++) name[i] = b[i];
+        for (int i = 7, v = (int)k; i >= 4; i--, v /= 10) name[i] = (char)('0' + v % 10);
+        if (fat_read_at(name, 0, &c, 1) >= 0) continue;   /* taken */
+        ok = fat_replace_file(name, d, n);
+        break;
+    }
+    path_leave();
+    return ok;
 }

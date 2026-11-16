@@ -64,6 +64,31 @@ static int last_status = 0;
    entry while one is in flight fails fast instead of sharing the socket. */
 static int in_flight = 0;
 int http_last_status(void) { return last_status; }
+/* 13.14.0: the last reply's Location header, the path part only ("http://h:p/eSCL/ScanJobs/1" -> "/eSCL/ScanJobs/1"),
+   "" when there was none. An eSCL scanner names the new job there. */
+static char last_location[96];
+const char *http_last_location(void) { return last_location; }
+static void keep_location(const char *raw, unsigned int hdr_end) {
+    last_location[0] = 0;
+    for (unsigned int i = 0; i + 10 < hdr_end; i++) {
+        if (i && raw[i - 1] != '\n') continue;
+        const char *k = "location:"; unsigned int j = 0;
+        while (k[j] && (raw[i + j] | 0x20) == k[j]) j++;
+        if (k[j]) continue;
+        i += j;
+        while (i < hdr_end && raw[i] == ' ') i++;
+        unsigned int e = i; while (e < hdr_end && raw[e] != '\r' && raw[e] != '\n') e++;
+        unsigned int st = i;
+        for (unsigned int t = i; t + 2 < e; t++) if (raw[t] == '/' && raw[t + 1] == '/') {   /* skip scheme://host:port */
+            st = t + 2; while (st < e && raw[st] != '/') st++;
+            break;
+        }
+        unsigned int o = 0;
+        while (st < e && o < sizeof last_location - 1) { char c = raw[st++]; last_location[o++] = c > 32 && c < 127 ? c : '?'; }
+        last_location[o] = 0;
+        return;
+    }
+}
 
 /* 2.0.0: a ring-3 fetch used to fail with -EIO the instant the desktop (the Weather window's geocode,
    ip-api and forecast calls, each able to sit out a 20 s DNS or connect wait) held the one connection,
@@ -85,12 +110,13 @@ int http_wait_idle(unsigned int max_ticks) {
 
 static int http_body_only(u32 ip, unsigned short port, const char *req, u32 req_len,
                            void *body_out, u32 body_maxlen, char *raw, u32 raw_cap, u32 reply_timeout_ticks) {
-    last_status = 0;
+    last_status = 0; last_location[0] = 0;
     int total = tcp_get_timeout(ip, port, req, req_len, raw, raw_cap - 1, reply_timeout_ticks);
     if (total < 0) return -1;
 
     last_status = http_status_of(raw, (u32)total);
     int body_start = http_body_start(raw, (u32)total);
+    keep_location(raw, body_start < 0 ? (u32)total : (u32)body_start);
     if (body_start < 0) return 0;
 
     u32 body_len = (u32)(total - body_start);
@@ -169,16 +195,20 @@ int http_post(const char *host, const char *path, unsigned short port,
    the request is built, so no later request can carry it. */
 static const char *post_bearer = 0;
 void http_post_set_bearer(const char *token) { post_bearer = (token && token[0]) ? token : 0; }
+/* 13.11.0: Content-Type for the next POST only (printing sends application/ipp); JSON otherwise. */
+static const char *post_type = 0;
+void http_post_set_type(const char *type) { post_type = (type && type[0]) ? type : 0; }
 
 int http_post_timeout(const char *host, const char *path, unsigned short port,
                        const char *body, unsigned int body_len,
                        void *response_out, unsigned int response_maxlen,
                        unsigned int reply_timeout_ticks) {
     u32 ip;
-    if (in_flight) return -1;
+    if (in_flight) { post_bearer = 0; post_type = 0; return -1; }   /* the one-shot settings never outlive their POST */
     in_flight = 1;
     int r = -1;
     if (resolve_host(host, &ip)) r = http_post_locked(ip, host, path, port, body, body_len, response_out, response_maxlen, reply_timeout_ticks);
+    post_bearer = 0; post_type = 0;
     in_flight = 0;
     return r;
 }
@@ -199,8 +229,8 @@ static int http_post_locked(u32 ip, const char *host, const char *path, unsigned
        long; ~200 bytes of slack covers any realistic path plus headers),
        the same pattern http_get already uses for its own raw response
        buffer just below. */
-    const char *bearer = post_bearer;
-    post_bearer = 0;
+    const char *bearer = post_bearer, *type = post_type ? post_type : "application/json";
+    post_bearer = 0; post_type = 0;
     u32 bearer_len = 0;
     while (bearer && bearer[bearer_len]) bearer_len++;
     u32 req_cap = body_len + 256 + (bearer ? bearer_len + 32 : 0);
@@ -218,7 +248,10 @@ static int http_post_locked(u32 ip, const char *host, const char *path, unsigned
         while (*ah && n < req_cap - 1) req[n++] = *ah++;
         for (u32 bi = 0; bi < bearer_len && n < req_cap - 1; bi++) req[n++] = bearer[bi];
     }
-    const char *ct = "\r\nContent-Type: application/json\r\nContent-Length: ";
+    const char *ct = "\r\nContent-Type: ";
+    while (*ct && n < req_cap - 1) req[n++] = *ct++;
+    while (*type && n < req_cap - 1) req[n++] = *type++;
+    ct = "\r\nContent-Length: ";
     while (*ct && n < req_cap - 1) req[n++] = *ct++;
     putn_into(req, &n, req_cap - 1, body_len);
     const char *tail = "\r\nConnection: close\r\n\r\n";

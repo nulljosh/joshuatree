@@ -59,6 +59,9 @@ int udp_send(unsigned int dest_ip, unsigned short dest_port, unsigned short src_
    (arch/arm64/ask.c) uses only the address, and TLS decides whether it is the relay. */
 int udp_broadcast_ask(unsigned short port, unsigned short src_port, const void *probe, unsigned int len,
                       void *reply, unsigned int max, unsigned int *from_ip, unsigned int wait_ticks);
+/* The same, to any broadcast or multicast address (13.12.0: mDNS asks 224.0.0.251). */
+int udp_group_ask(unsigned int group, unsigned short port, unsigned short src_port, const void *probe, unsigned int len,
+                  void *reply, unsigned int max, unsigned int *from_ip, unsigned int wait_ticks);
 
 /* Resolves hostname to an IPv4 address via a single-question A-record query
    to dns_server_ip (e.g. QEMU SLIRP's built-in resolver at 10.0.2.3), which
