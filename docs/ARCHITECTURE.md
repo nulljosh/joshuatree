@@ -2562,7 +2562,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (396 checks)
+### The suite (397 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -2936,6 +2936,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | ARM64 Mail over IMAP and TLS against a fixture server: login with a starred app password, list, plain, HTML and base64 messages, logout (skips where the tools are missing) | `tools/checks/arm64-mail-check.py` | retry |
 | ARM64 close glitch at 1080p: after the Terminal, Calendar, Notes, Browser, Brick and Calculator each open and close (red dot, Esc, dragged first, dragged to the bottom, and the Terminal and Calendar stacked both ways) the screen is pixel for pixel the empty desktop except the arrow, and a plain 800x600 boot has no white sliver by the tribute line (skips where the tools are missing) | `tools/checks/arm64-closeglitch-check.py` | retry |
 | ARM64 back buffer at 1080p: with Calendar, Toroid and Notes open, one pointer report drags Calendar and the screen changes only inside the union of its old and new rectangles, in one copy whose fb: flush line is that union, Calendar's pixels move whole, Toroid behind comes back where it was uncovered, then Toroid crashes on purpose and Calendar and Notes still answer clicks (skips where the tools are missing) | `tools/checks/arm64-dirtyrect-check.py` | retry |
+| ARM64 presents at 1080p (13.9.3): Paddle's arrows move it and each present flushes only the pixels that changed, not the whole window, so a game no longer starves the keyboard (skips where the tools are missing) | `tools/checks/arm64-present-check.py` | retry |
 | ARM64 Browser flicker: the BR_TRACE build hashes the screen's window rectangle before a Browser paint and again just before the copy, and every paint (open, load, Tab, scroll, address typing) must log offscreen with the screen unchanged, never paint direct (skips where the tools are missing) | `tools/checks/arm64-browser-flicker-check.py` | retry |
 | ARM64 Browser pointer motion: 120 pointer reports across a long (hundreds of lines) Browser page on the BR_TRACE build must cause zero Browser paints and zero page layouts, leave the screen pixel for pixel as it was, and a page down must paint once without laying out again (skips where the tools are missing) | `tools/checks/arm64-browser-mouse-check.py` | retry |
 | ARM64 focus: with the Terminal and the Calculator both open, a click focuses one and typed keys land only in it (the sum in the Calculator, digits on the Terminal's prompt row), the clicked window comes to the front, and closing the Calculator puts the wallpaper back (skips where the tools are missing) | `tools/checks/arm64-focus-check.py` | retry |
@@ -3002,7 +3003,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Mines | `tools/checks/arm64-games-check.py`, `tools/checks/ring3mines-check.py` |
 | Books | `tools/checks/arm64-appsize-check.py`, `tools/checks/arm64-mascot-empty-check.py`, `tools/checks/arm64-resize-check.py`, `tools/checks/arm64-sharp2x-check.py`, `tools/checks/books-check.py` |
 | Solitaire | `tools/checks/arm64-games-check.py`, `tools/checks/ring3-solitaire-check.py` |
-| Paddle | `tools/checks/arm64-games-check.py`, `tools/checks/games-sim-check.py`, `tools/checks/ring3-bricks-check.py`, `tools/checks/ring3-paddle-check.py` |
+| Paddle | `tools/checks/arm64-games-check.py`, `tools/checks/arm64-present-check.py`, `tools/checks/games-sim-check.py`, `tools/checks/ring3-bricks-check.py`, `tools/checks/ring3-paddle-check.py` |
 | Bricks | `tools/checks/arm64-games-check.py`, `tools/checks/games-sim-check.py`, `tools/checks/ring3-bricks-check.py` |
 | Depths | `tools/checks/arm64-games-check.py`, `tools/checks/ring3-depths-check.py` |
 | Snake | `tools/checks/arm64-games-check.py`, `tools/checks/ring3-snake-check.py` |

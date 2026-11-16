@@ -40,4 +40,7 @@ Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with t
 34. **Print.** Find your printer's address (its screen, or its page in your router). Put a short NOTE.TXT on the card, then in the Terminal, `print NOTE.TXT 192.168.1.20` with your printer's address: it says `print: sent`, and the page comes out with your note on it. Then `printers`: it names your printer by itself, and `print NOTE.TXT` with no address prints there too. In Notes, open a note and press Cmd+P: the page comes out and Notes says Sent to the printer.
 35. **Scan.** Put a photo face down on your printer's glass. In the Terminal type `scan` (or `scan 192.168.1.20` with its address): it says `scan: saved PHOTOS/SCAN0001.JPG`, and Photos shows the picture.
 
+34. **The clock after a stale card (13.9.3).** On a card built two weeks ago, the menu bar clock sets itself within a minute of Wi-Fi and `google.com` opens in Blackcomb (it said tls error 54 before). Then `update` reaches the release (it said 618 before).
+35. **Paddle and dragging (13.9.3).** Open Paddle, Space, hold Up and Down: the left paddle follows and the desktop stays smooth. Drag a window around with Paddle playing behind it.
+36. **Menu bar icons (13.9.3).** Click the power symbol: Sleep, Restart and Shut Down, not Settings. Click the clock: Settings at Date and Time, and the arrow is still there.
 Steps 1 to 3 are 10.0, 4 is 9.0's touch screen; 5 to 9 are last night's fixes.
