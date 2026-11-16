@@ -31,6 +31,19 @@ int main(void) {
     wr16(h, 2048); wr16(h + 2, ~2048u & 0xffff); if (f2_rest(h) != 1984) return 10;
     wr16(h, 2049); wr16(h + 2, ~2049u & 0xffff); if (f2_rest(h) != -1) return 11;
     wr16(h, 1700); wr16(h + 2, 0x1234); if (f2_rest(h) != -1) return 12;
+    /* 13.9.5: send credit, and the queue that keeps frames read while waiting for it */
+    if (!credit_out(5, 5) || !credit_out(4, 5) || credit_out(6, 5) || credit_out(2, 250) || !credit_out(250, 2)) return 13;
+    static struct rxq q; unsigned char fr[RXQ_MAX + 1], got[RXQ_MAX];
+    if (rxq_get(&q, got, sizeof got) != 0) return 14;
+    for (unsigned k = 0; k < RXQ_N; k++) { memset(fr, (int)k + 1, 100 + k); if (!rxq_put(&q, fr, 100 + k)) return 15; }
+    if (rxq_put(&q, fr, 100) || q.lost != 1) return 16;                       /* full: the newest is dropped and counted */
+    if (rxq_put(&q, fr, RXQ_MAX + 1) || rxq_put(&q, fr, 0) || q.lost != 3) return 17;   /* too long or empty never goes in */
+    for (unsigned k = 0; k < RXQ_N; k++) { if (rxq_get(&q, got, sizeof got) != 100 + k || got[0] != k + 1 || got[99 + k] != k + 1) return 18; }   /* oldest first, whole */
+    if (rxq_get(&q, got, sizeof got) != 0) return 19;
+    memset(fr, 7, 300); rxq_put(&q, fr, 300); if (rxq_get(&q, got, 50) != 50 || q.count) return 20;   /* a short buffer gets what fits */
+    unsigned char bd[40] = {0x20, 0, 0, 1, 9, 9, 9, 9, 0xAA, 0xBB}; const unsigned char *eth;
+    if (bdc_eth(bd, 40, &eth) != 32 || eth[0] != 0xAA) return 21;             /* the data offset is in 4-byte words */
+    if (bdc_eth(bd, 8, &eth) != 0 || bdc_eth(bd, 3, &eth) != 0) return 22;    /* nothing past the header: no frame */
     puts("wifi-host-check ok"); return 0;
 }
 EOF
