@@ -66,12 +66,14 @@ void net_clock_sync(void) {
     if (!net_get_gateway()) return;
     static const char req[] = "HEAD / HTTP/1.0\r\nHost: www.google.com\r\nConnection: close\r\n\r\n";
     static char rep[4096];
-    int got = 0;
+    int got = 0, boot = !clock_utc0;
+    tls_time_bootstrap(boot);
     for (int t = 0; t < 3; t++) {   /* the first join is often a second early for TLS: try three times before giving up */
         got = https_fetch("www.google.com", 443, req, sizeof req - 1, rep, sizeof rep);
         if (got > 0 && http_status_of(rep, (unsigned)got) >= 200 && http_status_of(rep, (unsigned)got) < 400) break;
         got = 0; kputs("Internet: trusted time unavailable, trying again\n");
     }
+    tls_time_bootstrap(0);
     if (got <= 0) { kputs("Internet: trusted time unavailable\n"); return; }
     int end = http_body_start(rep, (unsigned)got);
     if (end < 0) { kputs("Internet: the reply had no trusted time\n"); return; }
@@ -91,6 +93,10 @@ void net_clock_sync(void) {
     }
     unsigned long floor = net_clock_utc(); if (floor < BUILD_UTC) floor = BUILD_UTC;
     if (!utc || utc < floor) { kputs("Internet: trusted time refused\n"); return; }
+    if (boot) {   /* the chain was checked without the time: its Date counts only inside every certificate's validity */
+        unsigned long nb, na;
+        if (!tls_time_window(&nb, &na) || utc < nb || utc > na) { kputs("Internet: trusted time refused, outside the certificate\n"); return; }
+    }
     clock_utc0 = utc; clock_tick0 = ticks();
     kputs("Internet: online\n");
 }

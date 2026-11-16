@@ -85,6 +85,23 @@ static void sess_keep(void) {   /* after a handshake: resumed (logged) or new (k
     sess[i].private_only = cur_private; sess[i].at = ticks(); sess[i].p = now;
     for (unsigned k = 0; k < sizeof now; k++) ((volatile unsigned char *)&now)[k] = 0;
 }
+/* 13.9.3, Joshua's board test (tls error 54 on every site, the clock stuck at --:--): with no battery clock, a card checks
+   certificates at its build time, so once the time server's certificate is newer than the build nothing verifies, the
+   clock never sets, and `update` cannot reach the fix. While the clock is being bootstrapped the chain is checked
+   without the time: only a certificate that expired before the build is refused, and the chain's validity window is
+   kept, so net_clock_sync accepts the server's Date only inside it, the same as checking the chain at that Date. */
+static int boot_on; static unsigned long boot_nb, boot_na;
+void tls_time_bootstrap(int on) { boot_on = on; if (on) { boot_nb = 0; boot_na = ~0UL; } }
+int tls_time_window(unsigned long *nb, unsigned long *na) { *nb = boot_nb; *na = boot_na; return boot_na != ~0UL; }
+static unsigned long epoch_of(uint32_t days, uint32_t secs) { return days < 719528 ? 0 : (unsigned long)(days - 719528) * 86400UL + secs; }
+static int boot_time(void *ctx, uint32_t nbd, uint32_t nbs, uint32_t nad, uint32_t nas) {
+    (void)ctx;
+    unsigned long nb = epoch_of(nbd, nbs), na = epoch_of(nad, nas);
+    if (na < net_clock_floor()) return 1;   /* expired before this kernel was built: expired now */
+    if (nb > boot_nb) boot_nb = nb;
+    if (na < boot_na) boot_na = na;
+    return 0;
+}
 static int setup(const char *host, int private_only) {
     static const uint16_t suites[] = {
         BR_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, BR_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -100,6 +117,7 @@ static int setup(const char *host, int private_only) {
     unsigned long now = net_clock_utc(), floor = net_clock_floor();
     if (now < floor) now = floor;
     br_x509_minimal_set_time(&xc, (uint32_t)(now / 86400 + 719528), (uint32_t)(now % 86400));
+    if (boot_on) br_x509_minimal_set_time_callback(&xc, 0, boot_time);
     br_ssl_engine_set_suites(&sc.eng, suites, sizeof suites / sizeof suites[0]);
     br_ssl_client_set_rsapub(&sc, br_rsa_i31_public);
     br_ssl_engine_set_rsavrfy(&sc.eng, br_rsa_i31_pkcs1_vrfy);

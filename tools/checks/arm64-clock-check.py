@@ -20,8 +20,12 @@ int http_body_start(const char *raw, unsigned total) {
     for (unsigned i = 0; i + 3 < total; i++) if (!memcmp(raw + i, "\r\n\r\n", 4)) return (int)i + 4;
     return -1;
 }
+static int boot_on, win_have = 1, boot_seen; static unsigned long win_nb = 0, win_na = ~0UL;
+void tls_time_bootstrap(int on) { boot_on = on; }
+int tls_time_window(unsigned long *nb, unsigned long *na) { *nb = win_nb; *na = win_na; return win_have; }
 int https_fetch(const char *host, unsigned short port, const void *req, unsigned len, char *out, unsigned max) {
     assert(!strcmp(host, "www.google.com") && port == 443);
+    boot_seen = boot_on;   /* 13.9.3: the fetch runs with the chain checked without the time only while the clock is unset */
     assert(len > 5 && !memcmp(req, "HEAD ", 5));
     if (fail_tls) return -1;
     unsigned n = (unsigned)strlen(response); assert(n <= max); memcpy(out, response, n); return (int)n;
@@ -49,7 +53,14 @@ int main(void) {
     net_clock_sync(); assert(!net_clock_utc());
     strcpy(response, "HTTP/1.0 200 OK\r\nDate: Fri, 09 Oct 2026 12:34:56 GMT\r\nDate: Fri, 09 Oct 2026 13:34:56 GMT\r\n\r\n");
     net_clock_sync(); assert(!net_clock_utc());
+    /* 13.9.3: a card older than the time server's certificate. The chain is checked without the time, so the Date
+       counts only inside its validity window, and an unchecked (resumed) chain sets nothing. */
+    win_nb = 1791549297UL; sync_date(valid); assert(boot_seen && !boot_on && !net_clock_utc()); win_nb = 0;
+    win_na = 1791549295UL; sync_date(valid); assert(!net_clock_utc()); win_na = ~0UL;
+    win_have = 0; sync_date(valid); assert(!net_clock_utc()); win_have = 1;
     sync_date(valid); assert(net_clock_utc() == 1791549296UL);
+    sync_date("Fri, 09 Oct 2026 12:44:56 GMT"); assert(!boot_seen && !boot_on);   /* once set, normal checks at the clock */
+    clock_utc0 = 1791549296UL;
     tick += 100; assert(net_clock_utc() == 1791549297UL);
     sync_date(valid); assert(net_clock_utc() == 1791549297UL); /* reject rollback even after a good sync */
     sync_date("Fri, 09 Oct 2026 13:34:56 GMT"); assert(net_clock_utc() == 1791552896UL);

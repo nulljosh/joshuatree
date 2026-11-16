@@ -38,4 +38,7 @@ Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with t
 32. **Heat and the fan.** Fan's red wire on pin 4, black on pin 6 (the outer row, 2nd and 3rd pins from the end away from the USB ports): it spins at power on. In the Terminal, `temp`: around 40 to 60 C with the fan, and it says the chip slows down at 85.0 C.
 33. **Dim and the saver.** Settings, Display, Screen saver after: 1 minute. Leave it: at about 45 s the screen drops to half brightness, at 1 minute a small grey clock on black jumps around every 10 s. Press a key: the exact screen comes back. Leave it again and wait 5 more minutes after the clock: HDMI goes dark, and a key wakes it. Restart: the setting is still 1 minute.
 
+34. **The clock after a stale card (13.9.3).** On a card built two weeks ago, the menu bar clock sets itself within a minute of Wi-Fi and `google.com` opens in Blackcomb (it said tls error 54 before). Then `update` reaches the release (it said 618 before).
+35. **Paddle and dragging (13.9.3).** Open Paddle, Space, hold Up and Down: the left paddle follows and the desktop stays smooth. Drag a window around with Paddle playing behind it.
+36. **Menu bar icons (13.9.3).** Click the power symbol: Sleep, Restart and Shut Down, not Settings. Click the clock: Settings at Date and Time, and the arrow is still there.
 Steps 1 to 3 are 10.0, 4 is 9.0's touch screen; 5 to 9 are last night's fixes.
