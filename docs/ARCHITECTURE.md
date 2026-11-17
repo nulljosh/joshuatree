@@ -82,7 +82,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `arch/arm64/btc.c`, `arch/arm64/btc.h` | Classic Bluetooth (12.1, BR/EDR) beside `bt.c`'s LE mouse, on the same UART and command slot: `bt.c` hands it every event and the answers to commands. |
 | `arch/arm64/btpair.h` | The saved pairing's record, a 70 byte versioned file (magic `JTBP`, version, address type, address, LTK, Rand, EDIV, name, a 16 bit sum) as static. |
 | `arch/arm64/emmc.c`, `arch/arm64/emmc.h` | M4 SD card (2.53.0 reads, 2.57.0 writes): the Pi 4 reads and writes the card it booted from. |
-| `arch/x86_64/boot.S`, `arch/x86_64/main.c`, `arch/x86_64/linker.ld`, `arch/x86_64/Makefile`, `tools/checks/x86_64-m0-check.py` | 13.18.0, the third port's first slice: a 64-bit kernel for PCs. |
+| `arch/x86_64/boot.S`, `arch/x86_64/main.c`, `arch/x86_64/linker.ld`, `arch/x86_64/Makefile`, `tools/checks/x86_64-m0-check.py`, `tools/checks/x86_64-irq-check.py` | 13.18.0, the third port's first slice: a 64-bit kernel for PCs. 13.22.0 (v15, slice 2): a 64-bit IDT with the 32 exception stubs, the 8259 PIC remapped to 32-47, the PIT at 100 Hz on IRQ0 and the PS/2 keyboard on IRQ1, each key printed on COM1. |
 | `arch/arm64/start.S`, `arch/arm64/vectors.S`, `arch/arm64/user.S`, `arch/arm64/main.c`, `arch/arm64/text.c`, `arch/arm64/libc.c`, `arch/arm64/linker.ld`, `arch/arm64/Makefile` | The ARM64 port (the ARM64 and the Raspberry Pi section), milestones M0, M1a, M1b, M1c, the first M2 drivers and M3a, the first userland. |
 | `arch/arm64/ip.c`, `drivers/nic.h` | The IP stack on ARM. |
 | `arch/arm64/rng.c`, `arch/arm64/rng.h` | Seeds TLS from the Pi 4 RNG200 hardware FIFO with health checks and a one-second deadline. |
@@ -1698,7 +1698,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (400 checks)
+### The suite (401 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -1979,6 +1979,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Brand tokens: docs/brand/tokens.css matches the kernel's desktop colours, the accent, the brand page links it and the map reads it | `tools/checks/brand-tokens-check.py` | retry |
 | ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing) | `tools/checks/arm64-m0-check.py` | retry |
 | x86-64 slice 1 (13.18.0): the 64-bit kernel boots in qemu-system-x86_64 into long mode, maps 4 GiB, prints on the serial port and a 1024x768 screen; a CPU without long mode is refused in words | `tools/checks/x86_64-m0-check.py` | retry |
+| x86-64 slice 2 (13.22.0): the IDT loads, the PIC and PIT tick at 100 Hz for 20 ticks, and IRQ1 reads the keyboard (a is scancode 0x1e, b is 0x30) on the serial port | `tools/checks/x86_64-irq-check.py` | retry |
 | ARM64: a tiny local language model answers under QEMU (skips where the tools are missing) | `tools/checks/arm64-llm-check.py` | retry |
 | ARM64: with the relay out of reach, Samantha answers from the hosted Turing over HTTPS (skips where the tools are missing) | `tools/checks/arm64-sam-hosted-check.py` | retry |
 | ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing) | `tools/checks/arm64-m1c-check.py` | retry |

@@ -1,11 +1,15 @@
-/* x86-64, slice 1 (M0): the 64-bit kernel boots and says so, on the serial port and on the screen.
+/* x86-64, slices 1 and 2: the 64-bit kernel boots and says so, then takes interrupts.
 
-   boot.S has already put the CPU in long mode with the first 4 GiB identity mapped. kmain proves it from C: it reads
-   back CR0, CR4 and EFER, does 64-bit arithmetic that a 32-bit build would get wrong, and writes above 2 GiB through the
-   new page tables. Then the screen: the 8x16 font is copied out of VGA plane 2 where the BIOS left it (drivers/font.c
-   does the same on i386), the Bochs display (QEMU's -vga std, PCI 1234:1111) is switched to 1024x768 at 32 bits through
-   its I/O ports, its framebuffer is found in PCI BAR0, and the same lines are drawn there on the calm blue the other
-   ports start on. tools/checks/x86_64-m0-check.py reads both. No interrupts yet: slice 2 brings the IDT and a timer. */
+   Slice 1 (M0): boot.S has already put the CPU in long mode with the first 4 GiB identity mapped. kmain proves it from C:
+   it reads back CR0, CR4 and EFER, does 64-bit arithmetic that a 32-bit build would get wrong, and writes above 2 GiB
+   through the new page tables. Then the screen: the 8x16 font is copied out of VGA plane 2 where the BIOS left it, the
+   Bochs display (QEMU's -vga std, PCI 1234:1111) is switched to 1024x768 at 32 bits, and the M0 lines are drawn there.
+
+   Slice 2: a 64-bit IDT with 256 gates. Vectors 0 to 31 are the CPU exceptions: each prints its vector, error code and
+   RIP on COM1 and halts. The legacy 8259 PIC moves to vectors 32 to 47, and only IRQ0 (the PIT, set to 100 Hz) and IRQ1
+   (the PS/2 keyboard) are unmasked. IRQ1 prints each scancode read from port 0x60. The IRQ lines go to COM1 only, so the
+   M0 screen stays as slice 1 drew it. tools/checks/x86_64-m0-check.py reads the M0 lines,
+   tools/checks/x86_64-irq-check.py reads the rest. */
 typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32; typedef unsigned long long u64;
 _Static_assert(sizeof(void *) == 8 && sizeof(long) == 8, "this is the 64-bit kernel");
 
@@ -41,6 +45,11 @@ static void kputs(const char *s) { while (*s) kputc(*s++); }
 static void khex(u64 v) { kputs("0x"); for (int i = 60; i >= 0; i -= 4) { if (i && !(v >> i)) continue; kputc("0123456789abcdef"[(v >> i) & 15]); } }
 static void kdec(u64 v) { char t[21]; int k = 0; do t[k++] = (char)('0' + v % 10); while (v /= 10); while (k) kputc(t[--k]); }
 
+/* serial only: the interrupt lines, printed from the handlers too */
+static void ser_puts(const char *s) { while (*s) serial_putc(*s++); }
+static void ser_hex(u64 v, int digits) { ser_puts("0x"); for (int i = (digits - 1) * 4; i >= 0; i -= 4) serial_putc("0123456789abcdef"[(v >> i) & 15]); }
+static void ser_dec(u64 v) { char t[21]; int k = 0; do t[k++] = (char)('0' + v % 10); while (v /= 10); while (k) serial_putc(t[--k]); }
+
 static void font_dump(void) {   /* plane 2 of VGA memory holds the text-mode font: read it, then put the registers back */
     u8 s2, s4, g4, g5, g6;
     outb(0x3C4, 2); s2 = inb(0x3C5); outb(0x3C4, 4); s4 = inb(0x3C5);
@@ -72,6 +81,124 @@ static u64 rdcr0(void) { u64 v; __asm__ volatile ("mov %%cr0,%0" : "=r"(v)); ret
 static u64 rdcr4(void) { u64 v; __asm__ volatile ("mov %%cr4,%0" : "=r"(v)); return v; }
 static u64 rdefer(void) { u32 lo, hi; __asm__ volatile ("rdmsr" : "=a"(lo), "=d"(hi) : "c"(0xC0000080u)); return (u64)hi << 32 | lo; }
 
+/* ---- slice 2: interrupts ---- */
+
+/* The stubs. Exceptions: the CPU pushes an error code for 8, 10 to 14, 17, 21, 29 and 30; the stub pushes a 0 for the
+   others, then the vector, so exc_common always finds vector, error and RIP at the same offsets. IRQ stubs save the
+   caller-saved registers around the C dispatcher and return with iretq. */
+__asm__(
+".pushsection .text\n"
+".macro EXC_NOERR n\n"
+"exc_stub_\\n:\n"
+"    pushq $0\n"
+"    pushq $\\n\n"
+"    jmp exc_common\n"
+".pushsection .rodata\n"
+"    .quad exc_stub_\\n\n"
+".popsection\n"
+".endm\n"
+".macro EXC_ERR n\n"
+"exc_stub_\\n:\n"
+"    pushq $\\n\n"
+"    jmp exc_common\n"
+".pushsection .rodata\n"
+"    .quad exc_stub_\\n\n"
+".popsection\n"
+".endm\n"
+".macro IRQ_STUB n\n"
+"irq_stub_\\n:\n"
+"    pushq %rdi\n"
+"    movl $(32 + \\n), %edi\n"
+"    jmp irq_common\n"
+".pushsection .rodata\n"
+"    .quad irq_stub_\\n\n"
+".popsection\n"
+".endm\n"
+".pushsection .rodata\n"
+".globl exc_table\n"
+"exc_table:\n"
+".popsection\n"
+"EXC_NOERR 0\nEXC_NOERR 1\nEXC_NOERR 2\nEXC_NOERR 3\nEXC_NOERR 4\nEXC_NOERR 5\nEXC_NOERR 6\nEXC_NOERR 7\n"
+"EXC_ERR 8\nEXC_NOERR 9\nEXC_ERR 10\nEXC_ERR 11\nEXC_ERR 12\nEXC_ERR 13\nEXC_ERR 14\nEXC_NOERR 15\n"
+"EXC_NOERR 16\nEXC_ERR 17\nEXC_NOERR 18\nEXC_NOERR 19\nEXC_NOERR 20\nEXC_ERR 21\nEXC_NOERR 22\nEXC_NOERR 23\n"
+"EXC_NOERR 24\nEXC_NOERR 25\nEXC_NOERR 26\nEXC_NOERR 27\nEXC_NOERR 28\nEXC_ERR 29\nEXC_ERR 30\nEXC_NOERR 31\n"
+".pushsection .rodata\n"
+".globl irq_table\n"
+"irq_table:\n"
+".popsection\n"
+"IRQ_STUB 0\nIRQ_STUB 1\nIRQ_STUB 2\nIRQ_STUB 3\nIRQ_STUB 4\nIRQ_STUB 5\nIRQ_STUB 6\nIRQ_STUB 7\n"
+"IRQ_STUB 8\nIRQ_STUB 9\nIRQ_STUB 10\nIRQ_STUB 11\nIRQ_STUB 12\nIRQ_STUB 13\nIRQ_STUB 14\nIRQ_STUB 15\n"
+"exc_common:\n"
+"    movq 0(%rsp), %rdi            /* vector */\n"
+"    movq 8(%rsp), %rsi            /* error code, or 0 */\n"
+"    movq 16(%rsp), %rdx           /* RIP the CPU saved */\n"
+"    andq $-16, %rsp\n"
+"    call exc_halt\n"
+"1:  hlt\n"
+"    jmp 1b\n"
+"irq_common:\n"
+"    pushq %rax\n    pushq %rcx\n    pushq %rdx\n    pushq %rsi\n"
+"    pushq %r8\n    pushq %r9\n    pushq %r10\n    pushq %r11\n"
+"    pushq %rbp\n"
+"    movq %rsp, %rbp\n"
+"    andq $-16, %rsp\n"
+"    call irq_dispatch             /* vector in edi */\n"
+"    movq %rbp, %rsp\n"
+"    popq %rbp\n"
+"    popq %r11\n    popq %r10\n    popq %r9\n    popq %r8\n"
+"    popq %rsi\n    popq %rdx\n    popq %rcx\n    popq %rax\n"
+"    popq %rdi\n"
+"    iretq\n"
+".popsection\n");
+
+typedef struct { u16 off_lo, sel; u8 ist, type; u16 off_mid; u32 off_hi, zero; } gate;   /* a 16-byte 64-bit gate */
+typedef struct __attribute__((packed)) { u16 limit; u64 base; } desc_ptr;
+static gate idt[256];
+extern const u64 exc_table[32], irq_table[16];
+static volatile u64 ticks;
+
+static void idt_set(u32 v, u64 handler) {
+    idt[v].off_lo = (u16)handler; idt[v].sel = 0x08; idt[v].ist = 0; idt[v].type = 0x8E;   /* present, ring 0, interrupt gate */
+    idt[v].off_mid = (u16)(handler >> 16); idt[v].off_hi = (u32)(handler >> 32); idt[v].zero = 0;
+}
+
+/* called from exc_common: say which exception, where, and stop */
+void exc_halt(u64 vec, u64 err, u64 rip) {
+    __asm__ volatile ("cli");
+    ser_puts("JT64 exception "); ser_hex(vec, 2); ser_puts(" at RIP "); ser_hex(rip, 16);
+    ser_puts(", error "); ser_hex(err, 8); ser_puts(", halted\n");
+    for (;;) __asm__ volatile ("hlt");
+}
+
+static u8 pic_isr(void) { outb(0x20, 0x0B); return inb(0x20); }   /* OCW3: read the in-service register */
+
+/* called from irq_common with the vector in edi */
+void irq_dispatch(u32 vec) {
+    if (vec == 32) ticks++;
+    else if (vec == 33) { u8 sc = inb(0x60); ser_puts("JT64 key "); ser_hex(sc, 2); ser_puts("\n"); }
+    else if (vec == 39 && !(pic_isr() & 0x80)) return;   /* a spurious IRQ7 gets no EOI */
+    outb(0x20, 0x20);   /* end of interrupt to the master PIC */
+}
+
+static void io_wait(void) { outb(0x80, 0); }
+static void pic_init(void) {
+    outb(0x20, 0x11); io_wait(); outb(0xA0, 0x11); io_wait();   /* ICW1: start the init sequence, ICW4 follows */
+    outb(0x21, 0x20); io_wait(); outb(0xA1, 0x28); io_wait();   /* ICW2: IRQ0 to 7 at vector 32, IRQ8 to 15 at 40 */
+    outb(0x21, 0x04); io_wait(); outb(0xA1, 0x02); io_wait();   /* ICW3: the slave hangs off IRQ2 */
+    outb(0x21, 0x01); io_wait(); outb(0xA1, 0x01); io_wait();   /* ICW4: 8086 mode */
+    outb(0x21, 0xFC); outb(0xA1, 0xFF);                         /* masks: IRQ0 and IRQ1 open, every other line closed */
+}
+static void pit_100hz(void) {
+    outb(0x43, 0x36);                                  /* channel 0, low byte then high byte, square wave */
+    outb(0x40, 11931 & 0xFF); outb(0x40, 11931 >> 8);  /* 1193182 Hz / 11931, about 100.01 Hz */
+}
+static void idt_load(void) {
+    for (u32 v = 0; v < 32; v++) idt_set(v, exc_table[v]);
+    for (u32 v = 0; v < 16; v++) idt_set(32 + v, irq_table[v]);
+    desc_ptr idtr = { (u16)(sizeof(idt) - 1), (u64)idt };
+    __asm__ volatile ("lidt %0" :: "m"(idtr));
+}
+
 void kmain(u32 magic, u32 info) {
     (void)info;
     serial_init();
@@ -93,5 +220,14 @@ void kmain(u32 magic, u32 info) {
     if (screen) { kputs("JT64 screen ok "); kdec(fb_w); kputs("x"); kdec(fb_h); kputs(" at "); khex((u64)fb); kputs("\n"); }
     else kputs("JT64 screen none\n");
     kputs("JT64 M0 done\n");
+
+    idt_load();
+    ser_puts("JT64 idt ok\n");
+    pic_init();
+    pit_100hz();
+    __asm__ volatile ("sti");
+    while (ticks < 20) __asm__ volatile ("hlt");
+    u64 t = ticks;
+    ser_puts("JT64 timer 100 Hz, "); ser_dec(t); ser_puts(" ticks\n");
     for (;;) __asm__ volatile ("hlt");
 }
