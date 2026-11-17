@@ -1,29 +1,28 @@
-# Joshua Tree loop handoff (2026-11-16, midday)
+# Joshua Tree loop handoff (2026-11-16, afternoon)
 
 ## What the loop is
 
-Claude works the roadmap's goals toward v14, one pull request at a time, until weekly usage reaches 75% or nothing an emulator can prove is left. Each step is a minor version, each fix a patch. A goal only becomes the next major when its gate truly passes, and a gate that needs the board waits for Joshua's board test. Goal 14 is printing and scanning. The goals and gates are in `docs/ROADMAP.md`, under Version plan. The target was 20 until today; Joshua narrowed it to 14.
+Claude works the roadmap's goals toward v15, one pull request at a time, until weekly usage reaches 75% or nothing an emulator can prove is left. Each step is a minor version, each fix a patch. A goal only becomes the next major when its gate truly passes, and a gate that needs the board waits for Joshua's board test. Goal 14 is graphics acceleration; goal 15 is the 64-bit PC port. The goals and gates are in `docs/ROADMAP.md`, under Version plan. The target was 20 until today; Joshua narrowed it to 14.
 
 ## Where things stand
 
-- Main is on 13.9.2. PR 1134 (roadmap handoff docs) is merged. PRs 1121, 1127 and 1130 were closed as superseded.
-- PRs 1132 and 1135 were closed and folded into PR 1137 (13.9.3 to 13.16.0, branch v14/bench), in CI with auto-merge on. It carries the board fixes, printing and scanning, the Wi-Fi fix for downloads that stopped at 800 bytes, `gpu clear` (the graphics chip's first job) and `bench`. Do not touch PR 1137 or branch v14/bench.
-- Joshua has no printer. Printing ships as 13.x, and version 14 is now graphics acceleration: the V3D chip drawing the desktop, proven on the board.
-- `bench` lets the Mac run Terminal commands on the Pi through the relay (relay.py --bench-dir, tools/pi-bench.py), so board tests need no second keyboard. It passes in the emulator and has not run on the board yet. Next for it: key presses, mouse clicks, and a screenshot back.
-- A test card with 13.14.1 was flashed today. After 1137 merges, every release must be signed with tools/update-sign.sh so the Pi's `update` command can pull it. 13.16.0 is not signed yet.
-- Version 15 (the 64-bit PC port) is not happening today.
+- Main is on 13.16.0, released and signed, so the Pi's `update` command can pull it. Joshua has not run `update` or `bench` on the Pi yet; the Mac relay is running with bench on, waiting for the Pi.
+- Printing and scanning shipped in 13.16.0 (a note prints to a network printer, printers are found on the network, Cmd+P in Notes, a scan command pulls a page into Photos). Joshua has no printer, so it was not proven on paper.
+- PR 1138 (13.17.0, bench's hands and eyes) is open, in CI, auto-merge on: the Mac can press keys, type, move, click and drag the pointer on the Pi, and get a PNG of the Pi's screen back. It passes in the emulator; one landing spec flaked and is rerunning. Do not touch PR 1138 or branch v14/bench2.
+- Version 14 is still graphics acceleration on the Pi (the V3D chip drawing the desktop). Its next step waits on Joshua trying `gpu` and `gpu clear` on the real board.
+- The 64-bit PC port has started: branch v15/x64-m0 (worktree ~/Documents/Code/jt-x64) has one local commit, NOT pushed. A 64-bit kernel boots into long mode in the emulator, maps 4 GB, and prints on serial and a 1024x768 screen. It ships as 13.18.0 after 1138 merges. Do not touch that branch or worktree.
 - Parked until after 14: PR 1133 (Paddle polish) and PR 1128 (auto lock).
 
 ## Next, in order
 
-1. Let PR 1137 merge on green. Do not touch it by hand.
-2. Sign 13.16.0 with tools/update-sign.sh so the Pi can update to it.
-3. Test the board through `bench`: flash or update the card, then drive key presses, mouse clicks and a screenshot from the Mac. Joshua's board checks for printing, scanning, the Wi-Fi fix and a big download still count.
-4. GPU steps toward v14: the V3D chip drawing the desktop, each step a minor with host checks, proven on the board.
-5. Park PRs 1133 and 1128 until 14 is done.
+1. Let PR 1138 merge on green (the main session merges it). Do not touch it by hand.
+2. Sign each release with tools/update-sign.sh so the Pi's `update` can pull it, starting with 13.17.0 and 13.18.0.
+3. Test the board through `bench` once the Pi asks for it: keys, mouse clicks and screenshots from the Mac. Joshua's checks for printing, scanning, the Wi-Fi fix and a big download still count.
+4. GPU steps toward v14: the V3D chip drawing the desktop, each step a minor with host checks, proven on the board when Joshua tries `gpu` and `gpu clear`.
+5. x86-64 slices toward v15: 13.18.0 is slice 1, each later slice a minor with emulator checks.
 
 ## Restart prompt
 
 ```
-/loop joshuatree: ship 13.16.0, sign it, test the board through bench, then GPU steps toward v14
+/loop joshuatree: ship 13.17.0 (bench keys, mouse, screenshot) and 13.18.0 (x86-64 slice 1), sign each release, test the board through bench once the Pi asks, then GPU steps toward v14 and x86-64 slices toward v15
 ```
