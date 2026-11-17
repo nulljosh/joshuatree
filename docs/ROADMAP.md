@@ -404,8 +404,8 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - Power management that beats the laptop's stock OS on battery life. Gate: the board, timed.
   - Three shipping devices: the dev kit, a laptop and a desktop. Gate: a stranger buys and boots each one.
   - No phone yet (Joshua, 2026-11-15: "it's a computer not a phone", "a working desktop first"): a phone port is for 2027.
-  - v20 (Joshua, 2026-11-17): A crayon design and theme for the whole desktop
-  - v20 (Joshua, 2026-11-17): Theming: three to five whole-system themes in Settings
+  - v20 (Joshua, 2026-11-17, replaces the crayon idea): a redesign in the style of a flat mid-century concert poster (`docs/brand/v20-reference.jpg`). Cream paper with wide margins, blocks of cobalt blue and black, a red sun, a yellow crescent moon, white and yellow dots for clouds and stars, green triangles for the land, and one big serif face. Flat shapes only: no gradients, shadows or glass. Day and night as two panels: the desktop by day, a dark mode by night. Gate: Joshua signs off on the desktop, the dock, one app and the login screen on the board.
+  - v20 (Joshua, 2026-11-17): Theming: three to five whole-system themes in Settings, the poster one first. 13.21.0's Accent choice (Blue by default) is the start.
 - **21 to 30: an ecosystem**
   - 21 An SDK anyone can build apps with
   - 22 A package manager and updates for every app
