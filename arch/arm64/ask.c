@@ -41,6 +41,40 @@ int sudo_may_write(void);   /* sudo.c: no accounts, or the signed-in user is an 
 #define CLAUDE_TOKEN_LEN 0
 #endif
 
+/* 13.19.0: the relay key on the card. JT/RELAYKEY.TXT (and the relay CA in JT/RELAYTA.BIN, handed to tls.c) win over the
+   ones built into the kernel, so a signed release image, built with neither, still reaches the Mac after `update
+   install`. tools/flash-pi.sh writes both (tools/gen/card-keys.py). Read once the card is up; never printed. */
+#include "cardkeys.h"
+static char card_tok[64]; static unsigned card_tok_n; static int card_keys_read, card_wifi;
+static void tok_load(void) {
+    if (card_keys_read || !sd_ready()) return;
+    card_keys_read = 1;
+    static char b[2048];
+    if (!sd_enter_jt(0)) return;
+    int r = fat_read_file("RELAYKEY.TXT", b, 128);
+    if (r > 0) card_tok_n = cardkey_token(b, (unsigned)r, card_tok);
+    r = fat_read_file("RELAYTA.BIN", b, sizeof b);
+    if (r > 0 && r <= (int)sizeof b) tls_card_anchor((const unsigned char *)b, (unsigned)r);
+    card_wifi = fat_read_file("WIFI.TXT", b, 8) > 0;
+    for (int i = 0; i < (int)sizeof b; i++) ((volatile char *)b)[i] = 0;
+    fat_chdir("..");
+}
+static unsigned tok_len(void) { tok_load(); return card_tok_n ? card_tok_n : (unsigned)CLAUDE_TOKEN_LEN; }
+static void tok_copy(char *token) {   /* token holds 64 */
+    tok_load();
+    unsigned n = card_tok_n ? card_tok_n : (unsigned)CLAUDE_TOKEN_LEN;
+    if (n > 63) n = 63;
+    for (unsigned i = 0; i < n; i++) token[i] = card_tok_n ? card_tok[i] : (char)claude_token[i];
+    token[n] = 0;
+}
+/* update.c: 1 when replacing this kernel with a release image would lose a key only the kernel holds (a built-in token
+   or Wi-Fi network with no copy on the card). */
+int wifi_built_in(void);   /* wifi.c */
+int ask_keys_only_in_kernel(void) {
+    tok_load();
+    return (CLAUDE_TOKEN_LEN && !card_tok_n) || (wifi_built_in() && !card_wifi);
+}
+
 void kputs(const char *s);                     /* main.c */
 static void (*const real_puts)(const char *) = kputs;   /* the Terminal's own printer, before kputs means cmd_out below */
 extern void (*cmd_out)(const char *s);         /* cmd.c: where this line's output goes */
@@ -552,7 +586,7 @@ static int slash(const char *q, unsigned n) {
         kputs("status: model "); kputs(models[ac->model_i]); kputs(", effort "); kputs(efforts[ac->effort_i]); kputs("\n");
         kputs("status: last answer "); kputs(ac->last_name[0] ? ac->last_name : ASK_DEFAULT_MODEL); kputs("\n");
         kputs("status: relay ");
-        kputs(!CLAUDE_TOKEN_LEN ? "no token" : !net_get_gateway() ? "no network" : ac->relay_state == 1 ? "answered last time"
+        kputs(!tok_len() ? "no token" : !net_get_gateway() ? "no network" : ac->relay_state == 1 ? "answered last time"
               : ac->relay_state == 2 ? "did not answer last time" : "not tried yet");
         kputs("\nstatus: steps used "); kdec(ac->steps_total); kputs("\n");
     } else if (word_is(w, wn, "clear")) {
@@ -642,7 +676,7 @@ static int relay_discover(unsigned *ip, unsigned short *port) {
     while (n < sizeof probe) probe[n++] = ' ';
     for (int attempt = 0; attempt < 2; attempt++) {
         unsigned from = 0;
-        int got = udp_broadcast_ask(CLAUDE_PORT, RELAY_PROBE_SRC, probe, n, rep, sizeof rep, &from, RELAY_PROBE_TICKS);
+        int got = udp_broadcast_ask(CLAUDE_PORT ? CLAUDE_PORT : 8765, RELAY_PROBE_SRC, probe, n, rep, sizeof rep, &from, RELAY_PROBE_TICKS);
         if (got < 0) continue;
         unsigned i = 0, p = 0;
         for (const char *m = "JT-RELAY "; *m; m++, i++) if (i >= (unsigned)got || rep[i] != *m) goto bad;
@@ -734,8 +768,7 @@ static void user_path(char *path, const char *base) {   /* base then the signed-
 }
 static int mac_post(const char *path, const char *body, unsigned len, char *reply, unsigned max, int *status) {   /* with the token, wiped after */
     static char token[64];
-    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
-    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    tok_copy(token);
 #if defined(PI_BUILD) || CLAUDE_TLS
     int got = relay_post_tls_to(path, body, len, token, reply, max, status);
 #else
@@ -748,7 +781,7 @@ static int mac_post(const char *path, const char *body, unsigned len, char *repl
     return got;
 }
 void backup_command(void) {
-    if (!CLAUDE_TOKEN_LEN) { kputs("backup: this card has no relay token, so there is no Mac to send to\n"); return; }
+    if (!tok_len()) { kputs("backup: this card has no relay token, so there is no Mac to send to\n"); return; }
     if (!net_get_gateway()) { kputs("backup: no network\n"); return; }
     unsigned long mark = heap_mark();
     unsigned char *box = kmalloc(BACKUP_MAX);
@@ -779,7 +812,7 @@ void backup_command(void) {
 /* restore from the Mac (5.3.0): the relay's /api/backup/latest sends the newest backup it keeps for this name, packed the
    same way; snap.c checks all of it, takes a snapshot, then writes it into the home folder. */
 void restore_mac_command(void) {
-    if (!CLAUDE_TOKEN_LEN) { kputs("restore mac: this card has no relay token, so there is no Mac to ask\n"); return; }
+    if (!tok_len()) { kputs("restore mac: this card has no relay token, so there is no Mac to ask\n"); return; }
     if (!net_get_gateway()) { kputs("restore mac: no network\n"); return; }
     if (!current_user[0]) { kputs("restore mac: nobody is signed in, so there is no home folder\n"); return; }
     unsigned long mark = heap_mark();
@@ -862,8 +895,7 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
     timed = 1; request_sent = 0;
     unsigned p0 = ticks(), find0 = t_find, tls0 = t_tls;
     static char token[64];
-    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
-    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    tok_copy(token);
     unsigned long mark = heap_mark();          /* http.c borrows two buffers from the bump heap; give them back */
     int status;
 #if defined(PI_BUILD) || CLAUDE_TLS
@@ -991,7 +1023,7 @@ static void app_build(const char *t, unsigned k) {
     if (!sudo_may_write()) { kputs("app: only an admin adds an app\n"); result_puts("refused, not an admin\n"); return; }
     if (!len) { kputs("app: no code block to build\n"); result_puts("no code block\n"); return; }
     if (app_build_here(name, k, said + at, len)) return;
-    if (!CLAUDE_TOKEN_LEN || !net_get_gateway()) { kputs("app: no relay to build it\n"); result_puts("no relay\n"); return; }
+    if (!tok_len() || !net_get_gateway()) { kputs("app: no relay to build it\n"); result_puts("no relay\n"); return; }
     unsigned long mark = heap_mark();
     char *body = kmalloc(len * 2 + 32), *reply = kmalloc(APP_BUILD_MAX + 1);
     if (!body || !reply) { kputs("app: out of memory\n"); result_puts("out of memory\n"); heap_release(mark); return; }
@@ -1010,8 +1042,7 @@ static void app_build(const char *t, unsigned k) {
     for (unsigned i = 0; i < k; i++) path[o++] = name[i];
     path[o] = 0;
     static char token[64];
-    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
-    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    tok_copy(token);
     kputs("app: building "); kputs(name); kputs(" on the Mac\n");
     int status = 0, got;
 #if defined(PI_BUILD) || CLAUDE_TLS
@@ -1345,7 +1376,6 @@ static void face_tick(void) {   /* ask_poll: the mouth follows the voice, 25 tim
     con_tui_mouth(m);
     if (m / 25 != last) { last = m / 25; kputs("face: mouth="); kdec((unsigned)m); kputs("\n"); }
 }
-int ask_dev_build(void) { return CLAUDE_TOKEN_LEN != 0; }   /* update.c: a dev card's kernel carries the relay token */
 void reader_say(const char *t) { unsigned k = 0; while (t[k] && k + 1 < sizeof reader_text) { reader_text[k] = t[k]; k++; } reader_text[k] = 0; }   /* the newest line wins */
 static void reader_speak(void) {   /* ask_poll, while Samantha is not mid-turn: one TLS round trip to the relay's voice */
     char t[sizeof reader_text]; unsigned k = 0;
@@ -1354,7 +1384,7 @@ static void reader_speak(void) {   /* ask_poll, while Samantha is not mid-turn: 
     voice_fetch(t, k);   /* ponytail: blocks the loop for that one round trip, as [[say]] does; async TLS if it ever stutters */
 }
 static void voice_fetch(const char *t, unsigned k) {
-    if (!CLAUDE_TOKEN_LEN || !net_get_gateway()) return;        /* no relay: the caption is all there is */
+    if (!tok_len() || !net_get_gateway()) return;        /* no relay: the caption is all there is */
     static char body[VOICE_TEXT_MAX * 2 + 16];
     unsigned b = 0;
     for (const char *p = "{\"text\":\""; *p; p++) body[b++] = *p;
@@ -1366,8 +1396,7 @@ static void voice_fetch(const char *t, unsigned k) {
     }
     body[b++] = '"'; body[b++] = '}';
     static char token[64];
-    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
-    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    tok_copy(token);
     unsigned long mark = heap_mark();
     char *raw = kmalloc(VOICE_MAX * 2);
     int status = 0, got = -1;
@@ -1403,8 +1432,7 @@ int usb_mic_ok(void);                                             /* xhci.c */
 #define HEAR_HZ 16000
 static void hear_post(const short *pcm, unsigned got, char *raw) {   /* the samples to the words service, the words to sam; raw: REPLY_MAX + 2048 */
     static char token[64];
-    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
-    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    tok_copy(token);
     kputs("hear: sending "); kdec(got * 10 / HEAR_HZ); kputs(" tenths of a second\n");
     int status = 0, n;
 #if defined(PI_BUILD) || CLAUDE_TLS
@@ -1454,8 +1482,7 @@ static void hear_post(const short *pcm, unsigned got, char *raw) {   /* the samp
    /api/yt/page is a plain page about the video (6.9.0); /api/yt/avi the video itself as a Movies clip (6.10.0). */
 static int yt_post(const char *path, const char *body, unsigned blen, char *out, unsigned max, int *status, unsigned ticks, unsigned off) {   /* off: the relay's port plus off (yt.py 2, spotify.py 3) */
     static char token[64], req[320];
-    for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];
-    token[CLAUDE_TOKEN_LEN < 63 ? CLAUDE_TOKEN_LEN : 63] = 0;
+    tok_copy(token);
     int n; unsigned k = 0; *status = 0;
     char digits[10]; unsigned dn = 0, v = blen;
     do { digits[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -1541,7 +1568,7 @@ static void vm_poll(void) {
     unsigned now = ticks();
     if (vm_state == 2 && now - vm_t >= VM_HOLD_TICKS) {           /* the hold is real */
         unsigned n = 0; while (n < 2 && ac->len && ac->line[ac->len - 1] == ' ') { ac->len--; n++; }   /* the two taps' spaces */
-        const char *why = !CLAUDE_TOKEN_LEN ? "voice: no relay token in this build\n"
+        const char *why = !tok_len() ? "voice: no relay token in this build\n"
                         : !hear_fake(0, 0) && !usb_mic_ok() ? "voice: no USB microphone found (plug it into a Pi port, then wait a second)\n" : 0;
         if (why) { kputs(why); vm_state = 0; prompt_row(ac->line, ac->len); return; }
         vm_mark = heap_mark(); vm_pcm = kmalloc(VM_MAX_SECS * HEAR_HZ * 2); vm_got = 0; vm_level = 0;
@@ -1584,7 +1611,7 @@ void sam_command(const char *q, unsigned n) {   /* cmd.c: `sam QUESTION` queues 
 }
 static void ask_relay_steps(const char *q, unsigned n) {   /* the whole exchange for one question, run from ask_relay */
     static char reply[REPLY_MAX + 1];
-    if (!CLAUDE_TOKEN_LEN) { kputs("samantha: no token\n"); fallback(q, n); return; }
+    if (!tok_len()) { kputs("samantha: no token\n"); fallback(q, n); return; }
     if (!net_get_gateway()) {                  /* no DHCP lease, or no card at all */
 #ifdef PI_BUILD
         kputs("samantha: no network, Wi-Fi has not joined yet\n");
@@ -1665,7 +1692,7 @@ static int bench_on; static unsigned long bench_next; static unsigned bench_gap 
 static char bench_out[3000];   /* the relay takes a 4 KB body */
 static void bench_tee(const char *s) { real_puts(s); for (; *s && bench_n < sizeof bench_out; s++) bench_out[bench_n++] = *s; }
 void bench_command(void) {
-    if (!CLAUDE_TOKEN_LEN) { kputs("bench: this card has no relay token, so there is no Mac to listen to\n"); return; }
+    if (!tok_len()) { kputs("bench: this card has no relay token, so there is no Mac to listen to\n"); return; }
     bench_on = !bench_on; bench_next = 0; bench_gap = 2; bench_n = 0;
     kputs(bench_on ? "bench: on, the Mac can run commands here until you type bench again or restart\n" : "bench: off\n");
 }
