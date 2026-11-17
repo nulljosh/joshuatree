@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-11-16, TIME)
+# Joshua Tree loop handoff (2026-11-16, afternoon)
 
 ## What the loop is
 
