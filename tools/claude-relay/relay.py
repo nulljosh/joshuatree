@@ -415,6 +415,21 @@ BACKUP_NAME_RE = re.compile(r"[A-Za-z0-9_~-]{1,8}(\.[A-Za-z0-9_~-]{1,3})?")
 # command printed. Commands wait one per line in BENCH_DIR/queue (tools/pi-bench.py appends them); what the Pi printed is
 # appended to BENCH_DIR/log, and BENCH_DIR/seen is touched on every ask so the tool can tell a live Pi from a silent one.
 # Only a caller with the relay token gets here, and the relay only hands out what a person on this Mac queued. ----
+BENCH_SHOT_MAX = 8 * 1024 * 1024   # 1920x1080 RGB is 6.2 MB
+def bench_shot_write(folder, raw):
+    import struct, zlib
+    head, sep, px = raw.partition(b"\n")
+    parts = head.split(b" ")
+    if not sep or len(parts) != 3 or parts[0] != b"JTSHOT" or not (parts[1].isdigit() and parts[2].isdigit()): raise ValueError("Not a bench picture.")
+    w, h = int(parts[1]), int(parts[2])
+    if not (0 < w <= 4096 and 0 < h <= 4096) or len(px) != w * h * 3: raise ValueError("The picture's size does not match its bytes.")
+    def chunk(tag, data): return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff)
+    rows = b"".join(b"\0" + px[y * w * 3:(y + 1) * w * 3] for y in range(h))
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows, 6)) + chunk(b"IEND", b"")
+    tmp = os.path.join(folder, "shot.png.part")
+    with open(tmp, "wb") as fh: fh.write(png)
+    os.replace(tmp, os.path.join(folder, "shot.png"))
+    return w, h
 BENCH_LINE_MAX = 200           # ask.c's ASK_MAX: one Terminal line
 _bench_lock = threading.Lock()
 def bench_turn(folder, output):
@@ -648,6 +663,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except OSError: return self.reply(500, "The Mac could not read the bench queue.", n, t0)
         return self.reply(200, line, n, t0)
 
+    def bench_shot(self, raw, n, t0):   # 13.17.0: the Pi's screen, "JTSHOT W H\n" then W*H RGB bytes, kept as BENCH_DIR/shot.png
+        try: w, h = bench_shot_write(self.relay.cfg.bench_dir, raw)
+        except ValueError as e: return self.reply(400, str(e), n, t0)
+        except OSError: return self.reply(500, "The Mac could not write the picture.", n, t0)
+        return self.reply(200, "shot %dx%d" % (w, h), n, t0)
+
     def backup(self, raw, query, n, t0):
         q = urllib.parse.parse_qs(query, keep_blank_values=True)
         user = q.get("user", [""])[0]
@@ -694,8 +715,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         r = self.relay
         route, _, query = self.path.partition("?")
         backups = route in ("/api/backup", "/api/backup/latest")
-        if route not in ("/api/claude", "/api/tts", "/api/build", "/api/bench") and not backups: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
-        if route == "/api/bench" and not r.cfg.bench_dir: return self.reply(404, "This relay runs no bench. Start it with --bench-dir FOLDER.", 0, t0)
+        if route not in ("/api/claude", "/api/tts", "/api/build", "/api/bench", "/api/bench/shot") and not backups: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
+        if route in ("/api/bench", "/api/bench/shot") and not r.cfg.bench_dir: return self.reply(404, "This relay runs no bench. Start it with --bench-dir FOLDER.", 0, t0)
         if backups and not r.cfg.backup_dir: return self.reply(404, "This relay keeps no backups. Start it with --backup-dir FOLDER.", 0, t0)
         if not backups and route != "/api/build" and query: return self.reply(404, "Not here. POST /api/claude or /api/tts.", 0, t0)
         auth = self.headers.get("Authorization", "")
@@ -705,7 +726,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try: n = int(self.headers.get("Content-Length", ""))
         except ValueError: return self.reply(411, "Send a Content-Length.", 0, t0)
         if n < 0: return self.reply(400, "Bad length.", 0, t0)
-        if n > (BACKUP_MAX_BODY if route == "/api/backup" else r.cfg.max_body): return self.reply(413, "That prompt is too long for the relay.", n, t0)
+        if n > (BACKUP_MAX_BODY if route == "/api/backup" else BENCH_SHOT_MAX if route == "/api/bench/shot" else r.cfg.max_body): return self.reply(413, "That prompt is too long for the relay.", n, t0)
         raw = self.rfile.read(n)
         if route == "/api/backup": return self.backup(raw, query, n, t0)
         if route == "/api/backup/latest": return self.backup_latest(query, n, t0)
@@ -713,6 +734,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if route == "/api/tts": return self.tts(raw, ctype, n, t0)
         if route == "/api/build": return self.build(raw, query, n, t0)
         if route == "/api/bench": return self.bench(raw, n, t0)
+        if route == "/api/bench/shot": return self.bench_shot(raw, n, t0)
         session = ""
         model, effort = "auto", "medium"
         if ctype == "application/json":
