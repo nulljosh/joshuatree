@@ -89,3 +89,4 @@ arch/arm64/audio-pi-kernel8.elf
 arch/arm64/audio-kernel8.img
 arch/arm64/*-kernel8.img
 arch/arm64/*-kernel8.elf
+arch/x86_64/kernel64.bin
