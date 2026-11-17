@@ -148,6 +148,7 @@ p,li,.sub{text-wrap:pretty}
      dark demo backdrop -- the tagline it used to pair with is gone too,
      "it's really running" is already implied by the live thing sitting
      right above it. */
+  .pi-wall { display:block; width:100%; height:auto; border-radius:14px; margin:20px 0 24px; image-rendering:pixelated; }
   .eyebrow { color: var(--fg); font-size:var(--t13); text-transform: uppercase; letter-spacing: 0.14em; margin: 10px 0 0; font-weight: 600;line-height:var(--lh13)}
   /* The eyebrow's typewriter rewrites its text every few seconds, and the
      items aren't the same length. Left to size itself the h2 changed height
@@ -678,7 +679,7 @@ p,li,.sub{text-wrap:pretty}
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
 <h1>Introducing Joshua Tree.</h1>
-    <p class="eyebrow" data-latest="12.0: macOS parity. Spaces, Mission Control, Shortcuts, tab groups, Photos and parental controls"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
+    <p class="eyebrow" data-latest="13.19: The Pi's own GPU at work, updates over the air, printing and scanning, and the 64-bit PC begins"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
     <p class="hero-line"><span data-fact="apps">38</span> apps on a Raspberry Pi.</p>
     <p class="hero-sub">Joshua Tree is a whole computer built from nothing. It is free, open source, and it runs on a Raspberry Pi 4.</p>
     <p class="hero-cta"><a class="boot-btn" href="?demo">Try it in your browser</a></p>
@@ -697,7 +698,7 @@ p,li,.sub{text-wrap:pretty}
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">38</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">13.18.0</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">13.19.1</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
@@ -796,16 +797,17 @@ p,li,.sub{text-wrap:pretty}
 
 
 <section class="app-features reveal" id="pi" aria-label="Raspberry Pi">
-  <h2>Now on a real Raspberry Pi.</h2>
-  <p class="sub">The same desktop, on a small board you can hold. One command puts it on an SD card. Here is what works on a Pi 4 today, and what does not yet.</p>
+  <h2>Joshua Tree 13, on a real Raspberry Pi.</h2>
+  <p class="sub">The same desktop, on a small board you can hold. Here is what it does on a Pi 4 today.</p>
+  <img class="pi-wall" src="brand/park-wall.webp?v=13.19.1" alt="The Pi's wallpaper: Joshua Tree National Park at dusk, two old Joshua trees framing a glowing desert under a sky of long lit clouds" width="1920" height="1080" loading="lazy" decoding="async">
   <div class="tile-grid">
-    <div class="tile"><p><strong>The whole desktop.</strong> Joshua Tree at dusk on the wallpaper, menu bar, dock and windows, full screen at 1080p, running on all four cores.</p></div>
-    <div class="tile"><p><strong>Apps that cannot hurt it.</strong> Calendar, Notes and Music run in user mode, walled off from the kernel. If one crashes, the desktop carries on.</p></div>
-    <div class="tile"><p><strong>It keeps your files.</strong> The Pi reads and writes its own SD card. Notes saves two seconds after your last key, and the note is still there after you pull the power.</p></div>
-    <div class="tile"><p><strong>A Bluetooth mouse.</strong> It scans, pairs and moves the pointer, so there is no cable to find. Pair it once in Settings and it is back after every restart. USB keyboards and mice work any time, with Caps Lock and key repeat.</p></div>
-    <div class="tile"><p><strong>Sound and your music.</strong> Volume keys, a beep, and a Music app that plays the MP3s you own, with their titles, artists and covers. Apple Music downloads are out; their files are locked.</p></div>
-    <div class="tile"><p><strong>Wi-Fi, done by hand.</strong> The Pi's radio chip cannot join a protected network on its own, so Joshua Tree does the WPA2 handshake itself, gets an address and sets its clock from the internet.</p></div>
-    <div class="tile"><p><strong>Still ahead.</strong> A restart that skips the Pi's firmware, pictures and scrolling in Blackcomb, then a screen reader, other languages and updates that install themselves. See the <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ROADMAP.md">roadmap</a>.</p></div>
+    <div class="tile"><p><strong>Its own graphics chip.</strong> Joshua Tree wakes the Pi's GPU and hands it work by itself, with no driver from anyone else. It is the first step to a desktop the GPU draws.</p></div>
+    <div class="tile"><p><strong>Updates over the air.</strong> Type update and it fetches the newest release, checks its signature and restarts into it. Your Wi-Fi and keys stay on the card.</p></div>
+    <div class="tile"><p><strong>Drive it from your Mac.</strong> Type bench once and your Mac can type, click and take a picture of the screen. Testing a board needs no second keyboard.</p></div>
+    <div class="tile"><p><strong>Print and scan.</strong> Send a note to any AirPrint printer, or scan a page straight into Photos. It finds the printer on the network by itself.</p></div>
+    <div class="tile"><p><strong>Apps that cannot hurt it.</strong> Every app runs walled off from the kernel, on all four cores. If one crashes, the desktop carries on.</p></div>
+    <div class="tile"><p><strong>Wi-Fi, Bluetooth and sound.</strong> It joins your network, pairs mice, keyboards and headphones, and plays the music you own.</p></div>
+    <div class="tile"><p><strong>Next: a 64-bit PC.</strong> The same OS on the PC under your desk. Its 64-bit kernel already boots; the desktop comes next.</p></div>
   </div>
   <p class="sub" style="margin-top:16px"><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/GUIDE.md">Put it on your own Pi</a></p>
 </section>
@@ -995,7 +997,7 @@ p,li,.sub{text-wrap:pretty}
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">13.18.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">13.19.1</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"><canvas></canvas></div>
 </footer>
