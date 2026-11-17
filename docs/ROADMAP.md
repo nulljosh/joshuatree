@@ -66,6 +66,11 @@ A freestanding kernel for i386 and the Raspberry Pi 4, no libc. This is the forw
   - Never automatic. Always an explicit yes from Joshua with the cost shown first. One clip at a time. Nothing from Samantha on her own.
   - Check: a relay test that a request without a fresh yes is refused and that Samantha's actions cannot start one.
 
+<details><summary>Details (0 lines)</summary>
+
+
+</details>
+
 ## The long road: version 3 to 10, and 100 (proposal, 2026-10-05)
 ### [5.0] Talk to it: Claude Code in Joshua Tree
 - [ ] [5.0] [Fable] Claude phase 2: tools on Joshua Tree itself, so Claude can read and change the OS's own files. Needs real TLS on the box or a trusted relay protocol that calls back into the machine.
@@ -218,6 +223,11 @@ Sources: Tom's Guide and TechRadar on macOS Tahoe 26, Pureinfotech and Digital C
 - [ ] [Sonnet] Music and Movies live in the Apps folder only, not on the dock.
 - [ ] [Sonnet] Silent movie clips play about twice too fast on this QEMU build.
 
+<details><summary>Details (0 lines)</summary>
+
+
+</details>
+
 ## Architecture to A+ (refreshed 2026-10-11)
 - [ ] Window open takes about 640 ms for a ring-3 app (CI frametime check, 2.0.0): profile the seed, private page table and first draw; preseed binaries at boot and skip zeroing pages that get overwritten. [Sonnet]
 - [ ] [Fable] What the ports will need from the ABI: a font syscall (Keyrate carries its own 8x16 bitmap), a tick clock finer than `SYS_TIME`'s seconds, more than one program window at a time, and the framebuffer pages flipped back to supervisor-only on release (today they are zeroed and re-mapped on the next open).
@@ -320,6 +330,11 @@ Measured against the closest from-scratch peers: SerenityOS (the one-person-scal
 - [ ] [Sonnet] Podcasts.
 - [ ] [Sonnet] Control Center in the menu bar.
 
+<details><summary>Details (0 lines)</summary>
+
+
+</details>
+
 ## Tests and the loop
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
 - [ ] [Sonnet] Boot splash shows the real engraved tree mark at full resolution, not the stick tree.
@@ -358,6 +373,9 @@ A computer you talk to, that anyone can trust, that anyone can read. The version
 ## Version plan
 
 Where this goes, one major version at a time. Up to 10 it's a plan: each version is one promise kept, and the roadmap holds the steps. Past 10 it's a direction, not a schedule. The loop works top down and moves this file as versions ship.
+
+<details><summary>Details (118 lines)</summary>
+
 
 ### The plan to 10
 
@@ -476,6 +494,8 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - 98 Fully open, fully verified, fully yours
   - 99 The next person builds their own OS on it
   - 100 A computer you talk to, that anyone can trust, that anyone can read
+
+</details>
 
 ## Shipped
 

@@ -6,6 +6,9 @@ How to use it, put it on a Raspberry Pi 4, and build the hardware.
 
 ### Keys
 
+<details><summary>Details (126 lines)</summary>
+
+
 | Key | What it does |
 |---|---|
 | F1, Cmd+Space | Spotlight: type an app name, Enter opens it. Up and Down pick, Esc closes |
@@ -131,6 +134,8 @@ Samantha can act on the Pi. She does it with action lines at the end of an answe
 | `[[app NAME]]` | Builds the first code block as a Plank app in `JT/APPS/`, only when you asked for an app |
 
 She can change files only where you named them, inside `JT/`. Boot files are refused. The loop runs up to 5 steps per question, with 4 actions per answer. Esc stops it.
+
+</details>
 
 ## Wi-Fi
 
@@ -260,6 +265,9 @@ A real board still needs testing for Wi-Fi timing, the probe over a real router,
 ## Raspberry Pi
 
 Joshua Tree booted on a real Pi 4 on 2026-10-06. The board list to try is [TESTING.md](TESTING.md).
+
+<details><summary>Details (191 lines)</summary>
+
 
 ### What works
 
@@ -451,6 +459,8 @@ Check Wi-Fi, mail and calendar on the real Pi. Stop at the first failure and sen
 5. **Calendar.** Use a scratch calendar. `calendar caldav https://caldav.icloud.com/ YOUR-APPLE-ID`, `calendar use N`, add a day, then `calendar sync`.
 6. **History.** Open a second tab with Cmd+T. Type two letters of a page you visited. It should offer it.
 7. **Bluetooth keyboard.** `bt scan`, `bt pair NAME`, then type the six digits.
+
+</details>
 
 ## Nimbus
 
