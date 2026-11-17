@@ -1669,7 +1669,118 @@ void bench_command(void) {
     bench_on = !bench_on; bench_next = 0; bench_gap = 2; bench_n = 0;
     kputs(bench_on ? "bench: on, the Mac can run commands here until you type bench again or restart\n" : "bench: off\n");
 }
+/* 13.17.0, the bench's hands and eyes. A line from the Mac that starts with one of these words is not a Terminal
+   command: it becomes input events, played one a pass with real gaps between them so the desktop sees a person, or a
+   picture of the screen sent back.
+     key CODE [CODE ...]   Linux key codes, pressed in order and let go in reverse (125 25 is Cmd+P)
+     type TEXT             the keys that type TEXT on a US layout
+     move X Y, click X Y   the pointer, in screen pixels; click presses and lets go the left button there
+     drag X1 Y1 X2 Y2      press at the first point, eight steps to the second, let go
+     shot [N]              the screen at one Nth of its size (4 unless said, 1 to 8), as RGB, to the relay's /api/bench/shot
+   The next ask waits until every event has been played, so what a command after them prints is about the new state. */
+void kinput(unsigned type, unsigned code, int value);   /* boot.c: one Linux input event */
+extern unsigned int *fb; extern unsigned fb_w, fb_h, fb_pitch; extern int fb_swap;
+#define BQ_MAX 1024
+#define BQ_PAUSE 255
+static struct { unsigned char type; unsigned short code; int value; } bq[BQ_MAX];
+static unsigned bq_n, bq_i; static unsigned long bq_until;
+static void bq_add(unsigned type, unsigned code, int value) { if (bq_n < BQ_MAX) { bq[bq_n].type = (unsigned char)type; bq[bq_n].code = (unsigned short)code; bq[bq_n].value = value; bq_n++; } }
+static void bq_key(unsigned code, int down) { bq_add(1, code, down); bq_add(0, 0, 0); bq_add(BQ_PAUSE, 0, 30); }
+static void bq_at(unsigned x, unsigned y) {   /* boot.c turns 0..32767 back into pixels by v * fb_w / 32768: round up so it lands on x */
+    if (x >= fb_w) x = fb_w - 1;
+    if (y >= fb_h) y = fb_h - 1;
+    bq_add(3, 0, (int)((x * 32768u + fb_w - 1) / fb_w)); bq_add(3, 1, (int)((y * 32768u + fb_h - 1) / fb_h)); bq_add(0, 0, 0); bq_add(BQ_PAUSE, 0, 40);
+}
+static int bq_play(void) {   /* 1 while events are still owed */
+    if (bq_i >= bq_n) { bq_i = bq_n = 0; return 0; }
+    if (bq_until) { if (cnt_now() < bq_until) return 1; bq_until = 0; }
+    while (bq_i < bq_n) {
+        if (bq[bq_i].type == BQ_PAUSE) { bq_until = cnt_now() + cnt_hz() / 1000 * (unsigned long)bq[bq_i].value; bq_i++; return 1; }
+        kinput(bq[bq_i].type, bq[bq_i].code, bq[bq_i].value); bq_i++;
+    }
+    return 1;
+}
+static int bench_num(const char **p, unsigned *v) {   /* the next decimal on the line, up to 5 digits */
+    const char *q = *p; unsigned n = 0, d = 0;
+    while (*q == ' ') q++;
+    while (*q >= '0' && *q <= '9' && d < 5) { n = n * 10 + (unsigned)(*q++ - '0'); d++; }
+    if (!d || (*q && *q != ' ')) return 0;
+    *p = q; *v = n; return 1;
+}
+static int bench_word(const char *l, const char *w, const char **rest) {
+    unsigned k = 0;
+    for (; w[k]; k++) if (l[k] != w[k]) return 0;
+    if (l[k] && l[k] != ' ') return 0;
+    *rest = l + k; return 1;
+}
+static void bench_dec(unsigned v) { char t[12]; int k = 11; t[k] = 0; do t[--k] = (char)('0' + v % 10); while ((v /= 10) && k); bench_tee(t + k); }
+static int mac_post(const char *path, const char *body, unsigned len, char *reply, unsigned max, int *status);
+static void bench_shot(unsigned div) {
+    if (!fb || !fb_w || !fb_h) { bench_tee("bench: no screen\n"); return; }
+    unsigned w = fb_w / div, h = fb_h / div, n = 0;
+    unsigned char *b = kmalloc(32 + w * h * 3);
+    char reply[64]; int status = 0;
+    if (!b) { bench_tee("bench: not enough memory for a picture that size, try shot 8\n"); return; }
+    const char *hd = "JTSHOT "; while (*hd) b[n++] = (unsigned char)*hd++;
+    for (int part = 0; part < 2; part++) { unsigned v = part ? h : w; char t[8]; int k = 0; do t[k++] = (char)('0' + v % 10); while (v /= 10); while (k) b[n++] = (unsigned char)t[--k]; b[n++] = part ? '\n' : ' '; }
+    for (unsigned y = 0; y < h; y++) for (unsigned x = 0; x < w; x++) {
+        unsigned c = fb[y * div * fb_pitch + x * div], r = (c >> 16) & 255, g = (c >> 8) & 255, bl = c & 255;
+        if (fb_swap) { unsigned t = r; r = bl; bl = t; }
+        b[n++] = (unsigned char)r; b[n++] = (unsigned char)g; b[n++] = (unsigned char)bl;
+    }
+    poll_depth++; int got = mac_post("/api/bench/shot", (const char *)b, n, reply, sizeof reply - 1, &status); poll_depth--;
+    if (got < 0 || status != 200) { bench_tee("bench: the picture did not reach the Mac\n"); return; }
+    bench_tee("bench: shot "); bench_dec(w); bench_tee("x"); bench_dec(h); bench_tee(" sent\n");
+}
+static int bench_special(const char *l) {   /* 1 when the line was one of the bench's own words */
+    const char *r; unsigned a, b, c, d;
+    if (bench_word(l, "key", &r)) {
+        unsigned codes[8], k = 0;
+        while (k < 8 && bench_num(&r, &a) && a && a < 768) codes[k++] = a;
+        while (*r == ' ') r++;
+        if (!k || *r) { bench_tee("bench: key CODE [CODE ...], Linux key codes, eight at most\n"); return 1; }
+        for (unsigned i = 0; i < k; i++) bq_key(codes[i], 1);
+        for (unsigned i = k; i--;) bq_key(codes[i], 0);
+        bench_tee("bench: keys sent\n"); return 1;
+    }
+    if (bench_word(l, "type", &r)) {
+        if (*r == ' ') r++;
+        unsigned typed = 0;
+        for (; *r; r++) {
+            unsigned code = 0; int sh = 0;
+            for (unsigned k = 1; k < 58 && !code; k++) { if (plain[k] == *r) code = k; else if (shifted[k] == *r) { code = k; sh = 1; } }
+            if (!code) continue;   /* a character this keyboard has no key for */
+            if (sh) bq_key(42, 1);
+            bq_key(code, 1); bq_key(code, 0);
+            if (sh) bq_key(42, 0);
+            typed++;
+        }
+        bench_tee("bench: typed "); bench_dec(typed); bench_tee(" keys\n"); return 1;
+    }
+    int mv = bench_word(l, "move", &r), ck = !mv && bench_word(l, "click", &r);
+    if (mv || ck) {
+        if (!bench_num(&r, &a) || !bench_num(&r, &b)) { bench_tee("bench: move X Y or click X Y, in pixels\n"); return 1; }
+        bq_at(a, b);
+        if (ck) { bq_add(1, 272, 1); bq_add(0, 0, 0); bq_add(BQ_PAUSE, 0, 60); bq_add(1, 272, 0); bq_add(0, 0, 0); bq_add(BQ_PAUSE, 0, 60); }
+        bench_tee(ck ? "bench: clicked\n" : "bench: moved\n"); return 1;
+    }
+    if (bench_word(l, "drag", &r)) {
+        if (!bench_num(&r, &a) || !bench_num(&r, &b) || !bench_num(&r, &c) || !bench_num(&r, &d)) { bench_tee("bench: drag X1 Y1 X2 Y2, in pixels\n"); return 1; }
+        bq_at(a, b); bq_add(1, 272, 1); bq_add(0, 0, 0); bq_add(BQ_PAUSE, 0, 60);
+        for (int i = 1; i <= 8; i++) bq_at((unsigned)((int)a + ((int)c - (int)a) * i / 8), (unsigned)((int)b + ((int)d - (int)b) * i / 8));
+        bq_add(1, 272, 0); bq_add(0, 0, 0); bq_add(BQ_PAUSE, 0, 60);
+        bench_tee("bench: dragged\n"); return 1;
+    }
+    if (bench_word(l, "shot", &r)) {
+        a = 4;
+        while (*r == ' ') r++;
+        if (*r && (!bench_num(&r, &a) || a < 1 || a > 8)) { bench_tee("bench: shot [N], N from 1 to 8\n"); return 1; }
+        bench_shot(a); return 1;
+    }
+    return 0;
+}
 static void bench_tick(void) {
+    if (bench_on && bq_play()) return;      /* the Mac's keys and clicks first, one step a pass */
     if (!bench_on || sam_state || ac->pending || poll_depth || !net_get_gateway()) return;
     if (bench_next && cnt_now() < bench_next) return;
     unsigned long mark = heap_mark();
@@ -1698,7 +1809,7 @@ static void bench_tick(void) {
     poll_depth++; term_output(1);
     void (*saved)(const char *) = cmd_out;
     real_puts("bench % "); real_puts(line); real_puts("\n");
-    cmd_run(line, n, bench_tee);
+    if (!bench_special(line)) cmd_run(line, n, bench_tee);
     cmd_out = saved;
     poll_depth--; term_output(poll_depth ? 1 : 0);
     if (!bench_n) bench_tee("(nothing printed)\n");   /* so the Mac sees the command ran */

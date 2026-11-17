@@ -6,6 +6,8 @@ tool puts a line in FOLDER/queue, waits for the Pi to take it and send back what
 
   tools/pi-bench.py gpu                 one command, its output
   tools/pi-bench.py "print NOTE.TXT"    quote a line with spaces
+  tools/pi-bench.py type "man scan"     13.17.0: press keys (also: key 28, click 400 300, move, drag X1 Y1 X2 Y2)
+  tools/pi-bench.py shot                a picture of the screen, kept as FOLDER/shot.png (shot 2 is bigger)
   tools/pi-bench.py --status            when the Pi last asked
   --dir FOLDER   the relay's --bench-dir (default ~/.cache/joshuatree/bench)
   --wait SECS    how long to wait for the output (default 60)
