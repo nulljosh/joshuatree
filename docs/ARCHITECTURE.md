@@ -112,7 +112,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `arch/arm64/ics.c`, `tools/checks/arm64-ics-check.py` | Calendar subscriptions (6.19.0). |
 | `arch/arm64/mail.c`, `tools/checks/arm64-mail-check.py` | Mail over IMAP and TLS (6.18.0), at the Terminal. |
 | `arch/arm64/browser.c` | A text browser behind the one command line (`cmd.c`). |
-| `arch/arm64/gpu.c` | 13.2.0: the Pi 4's V3D GPU brought up by hand with `gpu` (`cmd.c`), never at boot. |
+| `arch/arm64/gpu.c` | 13.2.0: the Pi 4's V3D GPU brought up by hand with `gpu` (`cmd.c`), never at boot. 13.20.0 (v14, slice 1): `gpu fill` runs the same job over a rectangle of tiles stored straight into the screen's back buffer, so the GPU paints a panel you can see. |
 | `arch/arm64/nimble.c` | Nimble on the Pi: one question to `nimble.jaybulb.com/api/answer` through the Browser's TLS client, one short answer back with up to three sources. |
 | `arch/arm64/print.c` | Printing (13.11.0): `print FILE PRINTER[:PORT]` turns a text file into a PDF (Letter, Helvetica 11 pt, 60 lines a page) and sends it as one IPP. |
 | `arch/arm64/mascot_art.h`, `tools/gen/gen_mascot_art.py` | The brand art on the Pi: `gen_mascot_art.py` scales the painted tree (`docs/brand/tree.png`, 8.0.0; the crayon mascot it replaced. |

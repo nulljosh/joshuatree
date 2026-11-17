@@ -58,6 +58,7 @@ unsigned gpu_ver(unsigned ident1) { return (ident1 & 15) * 10 + ((ident1 >> 4) &
 #if !defined(PI_BUILD) && !defined(GPU_HOST_TEST)
 int gpu_bringup(void (*say)(const char *)) { say("gpu: no V3D on this machine\n"); return 0; }
 int gpu_clear(void (*say)(const char *), unsigned rgba) { (void)rgba; say("gpu: no V3D on this machine\n"); return 0; }
+int gpu_fill(void (*say)(const char *), unsigned *scr, unsigned pitch, int x, int y, int w, int h, unsigned px) { (void)scr; (void)pitch; (void)x; (void)y; (void)w; (void)h; (void)px; say("gpu: no V3D on this machine\n"); return 0; }
 #else
 /* One clock tag for clock 5, value then a zero (SET_CLOCK_RATE's skip-turbo). 1 with *out the answer, 0 refused: the call
    or the tag's own response bit (bit 31 of the size word, as power.h checks it). */
@@ -112,13 +113,18 @@ int gpu_bringup(void (*say)(const char *)) {
     return 1;
 }
 
-/* 13.4.1: the first job the V3D runs, a render control list (RCL) that clears one 64x64 tile to a colour and stores it to
-   memory, which the CPU then reads back. No binning, no shaders, MMU off. The packets are V3D 4.2's (Mesa's
-   v3d_packet.xml, MIT), in the order Mesa's v3dx_rcl.c emits them: the common config first, the Z/stencil clear values
-   last; a first tile that stores nothing and clears the tile buffer (Mesa's own workaround), then the tile again, stored
-   as raster RGBA8. The caches go as Linux's v3d_gem.c does them: L2T flushed and the slices invalidated before, the TMU
-   write cache and L2T cleaned after. Done is the render frame count moving (CT1 queues one frame). */
-static unsigned char gpu_cl[128] __attribute__((aligned(256)));
+/* 13.4.1: the first job the V3D runs, a render control list (RCL) that clears tiles to a colour and stores them to memory.
+   No binning, no shaders, MMU off. The packets are V3D 4.2's (Mesa's v3d_packet.xml, MIT), in the order Mesa's v3dx_rcl.c
+   emits them: the common config first, the Z/stencil clear values last; a first tile that stores nothing and clears the
+   tile buffer (Mesa's own workaround), then each real tile stored as raster RGBA8. The caches go as Linux's v3d_gem.c does
+   them: L2T flushed and the slices invalidated before, the TMU write cache and L2T cleaned after. Done is the render frame
+   count moving (CT1 queues one frame).
+   13.20.0 (v14, slice 1): the same job over any rectangle of 64x64 tiles. The store's address is the rectangle's top left
+   and its stride the row length in bytes; the V3D adds each tile's place from its coordinates and clips the last row and
+   column to the frame. After a stored tile, a CLEAR_TILE_BUFFERS sets the buffer back to the clear colour for the next.
+   `gpu fill` points it at the screen's back buffer, so the V3D paints pixels you can see. */
+#define GPU_MAX 2048   /* frame side, in pixels: 32x32 tiles at most */
+static unsigned char gpu_cl[24 * 1024] __attribute__((aligned(256)));
 static unsigned gpu_px[64 * 64] __attribute__((aligned(4096)));
 static unsigned gcn;
 static void cb(unsigned v) { gpu_cl[gcn++] = (unsigned char)v; }
@@ -127,24 +133,30 @@ static int gpu_wait(unsigned long reg, unsigned bit) {
     for (unsigned long t0 = gpu_now(); GR(reg) & bit;) if (gpu_now() - t0 > gpu_hz() / 100) return 0;
     return 1;
 }
-int gpu_clear(void (*say)(const char *), unsigned rgba) {
-    gsay = say; gn = 0;
+/* Paint w x h pixels at dst (rows pitch pixels apart) with rgba, as the bytes land in memory. 1 done, 0 with a line said. */
+static int gpu_paint(unsigned *dst, unsigned pitch, unsigned w, unsigned h, unsigned rgba) {
     if (!gpu_up) { show("gpu: not up, run gpu first\n"); return 0; }
+    if (!w || !h || w > GPU_MAX || h > GPU_MAX || w > pitch || ((unsigned long)dst & 15)) { show("gpu: bad rectangle\n"); return 0; }
+    unsigned tw = (w + 63) / 64, th = (h + 63) / 64;
+    unsigned long span = ((unsigned long)(h - 1) * pitch + w) * 4;
     gcn = 0;
-    cb(121); cw((64ull << 8) | (64ull << 24) | (1ull << 46) | (1ull << 47), 8);   /* COMMON: 64x64, 1 RT, early Z off, depth_24 */
+    cb(121); cw(((unsigned long long)w << 8) | ((unsigned long long)h << 24) | (1ull << 46) | (1ull << 47), 8);   /* COMMON: w x h, 1 RT, early Z off, depth_24 */
     cb(121); cw(3 | ((unsigned long long)rgba << 8), 8);                          /* CLEAR_COLORS_PART1 for RT0 */
     cb(121); cw(1 | (2u << 6), 8);                                                 /* COLOR: RT0 32 bpp, internal type 8 */
     cb(121); cw(2 | (0x3f800000ull << 16), 8);                                     /* ZS_CLEAR_VALUES: Z 1.0, last */
-    cb(122); cw((1ull << 16) | (1ull << 24) | (1ull << 32) | (1ull << 44), 8);    /* SUPERTILE_CFG: one tile, one supertile */
+    cb(122); cw(((unsigned long long)tw << 16) | ((unsigned long long)th << 24) | ((unsigned long long)tw << 32) | ((unsigned long long)th << 44), 8);   /* SUPERTILE_CFG: 1x1 supertiles */
     cb(124); cw(0, 3); cb(26);                                                     /* TILE_COORDINATES 0,0; END_OF_LOADS */
     cb(29); cw(8, 12);                                                             /* STORE_TILE_BUFFER_GENERAL: none */
     cb(25); cb(3); cb(27);                                                         /* CLEAR_TILE_BUFFERS RTs and Z/S; END_OF_TILE */
-    cb(124); cw(0, 3); cb(26);
-    cb(29); cw((27ull << 12) | (256ull << 28) | (64ull << 48), 8); cw(GPU_BUS(gpu_px), 4);   /* RT0, raster rgba8, 256 B rows */
+    for (unsigned ty = 0; ty < th; ty++)
+        for (unsigned tx = 0; tx < tw; tx++) {
+            cb(124); cw(tx | ty << 12, 3); cb(26);
+            cb(29); cw((27ull << 12) | ((unsigned long long)pitch * 4 << 28) | ((unsigned long long)h << 48), 8); cw(GPU_BUS(dst), 4);   /* RT0, raster rgba8 */
+            if (tx + 1 < tw || ty + 1 < th) { cb(25); cb(3); cb(27); }             /* the next tile starts from the clear colour */
+        }
     cb(27); cb(19); cb(13);                                                        /* END_OF_TILE, FLUSH_VCD_CACHE, END_OF_RENDERING */
-    for (unsigned i = 0; i < 64 * 64; i++) gpu_px[i] = 0;
     dcache_clean(gpu_cl, sizeof gpu_cl);
-    dcache_clean(gpu_px, sizeof gpu_px);
+    dcache_clean(dst, span);   /* no dirty CPU line left to land on top of what the GPU writes */
     GW(GPU_CORE0 + GPU_L2TCACTL, 1);   /* L2TFLS, mode flush */
     if (!gpu_wait(GPU_CORE0 + GPU_L2TCACTL, 1)) { show("gpu: the L2T flush never finished\n"); return 0; }
     GW(GPU_CORE0 + GPU_SLCACTL, 0x0f0f0f0fu);
@@ -153,31 +165,53 @@ int gpu_clear(void (*say)(const char *), unsigned rgba) {
     GW(GPU_CORE0 + GPU_CT1QEA, GPU_BUS(gpu_cl) + gcn);   /* this write starts the job */
     for (unsigned long t0 = gpu_now(); GR(GPU_CORE0 + GPU_RFC) == f0;)
         if (gpu_now() - t0 > gpu_hz() / 10) {
-            ga("gpu: the clear job hung (CT1CS "); gx(GR(GPU_CORE0 + GPU_CT1CS)); ga(", at "); gx(GR(GPU_CORE0 + GPU_CT1CA)); ga(")"); showl();
+            ga("gpu: the job hung (CT1CS "); gx(GR(GPU_CORE0 + GPU_CT1CS)); ga(", at "); gx(GR(GPU_CORE0 + GPU_CT1CA)); ga(")"); showl();
             return 0;
         }
     GW(GPU_CORE0 + GPU_L2TCACTL, 1u << 8);   /* TMUWCF, then L2TFLS in clean mode */
     if (!gpu_wait(GPU_CORE0 + GPU_L2TCACTL, 1u << 8)) { show("gpu: the TMU write cache never cleaned\n"); return 0; }
     GW(GPU_CORE0 + GPU_L2TCACTL, 1 | (2u << 1));
     if (!gpu_wait(GPU_CORE0 + GPU_L2TCACTL, 1)) { show("gpu: the L2T clean never finished\n"); return 0; }
-    dcache_clean(gpu_px, sizeof gpu_px);   /* dc civac: drops any stale line before the CPU reads what the GPU wrote */
+    dcache_clean(dst, span);   /* dc civac: drops any stale line before the CPU reads what the GPU wrote */
+    return 1;
+}
+int gpu_clear(void (*say)(const char *), unsigned rgba) {
+    gsay = say; gn = 0;
+    for (unsigned i = 0; i < 64 * 64; i++) gpu_px[i] = 0;
+    if (!gpu_paint(gpu_px, 64, 64, 64, rgba)) return 0;
     unsigned bad = 0;
     for (unsigned i = 0; i < 64 * 64; i++) bad += gpu_px[i] != rgba;
     if (bad) { ga("gpu: the V3D ran but "); gd(bad); ga(" of 4096 pixels are wrong (first "); gx(gpu_px[0]); ga(")"); showl(); return 0; }
     ga("gpu: the V3D cleared 64x64 pixels to "); gx(rgba); showl();
     return 1;
 }
+/* 13.20.0: the V3D paints a w x h rectangle of the screen at x,y (x a multiple of 4) in the screen's own pixel format, then
+   the CPU checks every pixel and shows it. */
+int gpu_fill(void (*say)(const char *), unsigned *scr, unsigned pitch, int x, int y, int w, int h, unsigned px) {
+    gsay = say; gn = 0;
+    if (!scr || x < 0 || y < 0 || w <= 0 || h <= 0 || (x & 3)) { show("gpu: bad rectangle\n"); return 0; }
+    unsigned *dst = scr + (unsigned long)y * pitch + (unsigned)x;
+    if (!gpu_paint(dst, pitch, (unsigned)w, (unsigned)h, px)) return 0;
+    unsigned bad = 0;
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) bad += dst[(unsigned long)j * pitch + (unsigned)i] != px;
+    if (bad) { ga("gpu: the V3D ran but "); gd(bad); ga(" pixels are wrong"); showl(); return 0; }
+    ga("gpu: the V3D painted "); gd((unsigned)w); ga("x"); gd((unsigned)h); ga(" pixels on the screen"); showl();
+    return 1;
+}
 #endif
 
 #ifndef GPU_HOST_TEST
 extern void (*cmd_out)(const char *s);
-int gpu_command(const char *q, unsigned n) {   /* cmd.c: `gpu`, `gpu clear` */
+int gpu_command(const char *q, unsigned n) {   /* cmd.c: `gpu`, `gpu clear`, `gpu fill` */
     if (n < 3 || q[0] != 'g' || q[1] != 'p' || q[2] != 'u') return 0;
     if (n == 3) { gpu_bringup(cmd_out); return 1; }
-    static const char c[] = " clear";
-    if (n != 9) return 0;
-    for (unsigned i = 0; i < 6; i++) if (q[3 + i] != c[i]) return 0;
-    gpu_clear(cmd_out, 0xff2c50b5u);   /* terracotta #b5502c as RGBA8 bytes */
+    if (n != 8 && n != 9) return 0;
+    const char *c = n == 9 ? " clear" : " fill";
+    for (unsigned i = 0; i < n - 3; i++) if (q[3 + i] != c[i]) return 0;
+    if (n == 9) { gpu_clear(cmd_out, 0xff2c50b5u); return 1; }   /* terracotta #b5502c as RGBA8 bytes */
+    /* a terracotta panel in the middle of the screen, a third of each side; the next redraw of that spot paints over it */
+    int w = (int)fb_w / 3 & ~15, h = (int)fb_h / 3, x = ((int)fb_w - w) / 2 & ~15, y = ((int)fb_h - h) / 2;
+    if (gpu_fill(cmd_out, fb, fb_pitch, x, y, w, h, fb_color(0xb5502cu) | 0xff000000u)) fb_flush(x, y, w, h);
     return 1;
 }
 #endif
