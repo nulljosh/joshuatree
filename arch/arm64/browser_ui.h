@@ -26,7 +26,7 @@ const unsigned *browser_image(unsigned k, unsigned *w, unsigned *h);   /* 6.14.0
 #define BR_STRIP 24        /* 6.39.0: the tab strip's height, between the toolbar and the well */
 #define BR_VL_MAX 1024     /* wrapped lines kept: 8 KiB of page never needs more than this */
 #define BR_ADDR_MAX 200
-#define BR_ACCENT 0x00b5502c
+#define BR_ACCENT ui_accent
 static unsigned short br_off[BR_VL_MAX], br_len[BR_VL_MAX];   /* wrapped line i: an offset into the page text and a length */
 /* 6.13.0: each wrapped line's style. The low three bits: 0 body text, 1 an h1 or h2 (bold, 20 px, two rows tall), 2 an h3
    to h6 (bold, body size), 3 the second row under a big heading's line, 4 (6.14.0) one BR_ROW slice of an inline image,

@@ -36,7 +36,7 @@ int jpeg_decode_scaled(const unsigned char *data, unsigned int len, unsigned sho
 #define INK    0x001C1C1E
 #define DIM    0x0075726E
 #define RULE   0x00E0D8CE
-#define ACCENT 0x00B5502C
+#define ACCENT jt_accent()   /* 13.21.0: the accent Settings picked */
 #define STAGE  0x00111111
 #define PALE   0x00F5F0EB
 

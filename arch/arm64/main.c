@@ -394,6 +394,7 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_WAIT 411
 #define JT_SYS_NOTIFY 413       /* 13.7.0: see ufile_notify */
 #define JT_SYS_PRINT 414        /* 13.13.0: see ufile_print */
+#define JT_SYS_ACCENT 415       /* 13.21.0: the accent colour Settings picked, as the return value */
 #define JT_SYS_CONNECT 412      /* 8.5.0: a TCP socket, see sock_connect */
 #define JT_SYS_CLOSE 6
 #define JT_SYS_TEXT2 402         /* 3.9.0: Tree Sans into a device-size window buffer (user/libjt/hires.h) */
@@ -1070,6 +1071,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             else if (n == JT_SYS_NOTIFY) { long ufile_notify(unsigned long text, const char *app); r = ufile_notify(a0, app_cur ? app_cur->name : "App"); }
             else if (n == JT_SYS_CONNECT) r = sock_connect(a0, f->x[1]);   /* 8.5.0 */
             else if (n == JT_SYS_CLIPBOARD) r = app_clip(a0, f->x[1], f->x[2]);   /* 3.10.0 */
+            else if (n == JT_SYS_ACCENT) r = (long)ui_accent;   /* 13.21.0 */
             else if (n == JT_SYS_TASKS) {
                 if (!a0 || !user_writable(a0, 20)) r = -14;
                 else { unsigned t = (unsigned)(cnt_now() / (cnt_hz() / 100)); for (int i = 0; i < 20; i++) ((unsigned char *)a0)[i] = i < 4 ? (unsigned char)(t >> (8 * i)) : 0; r = 0; }

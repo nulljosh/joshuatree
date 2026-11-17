@@ -24,7 +24,7 @@ int png_decode(const unsigned char *data, unsigned int len, unsigned char **out,
 #define BG     0x00FAF8F6
 #define INK    0x001C1C1E
 #define DIM    0x0075726E
-#define ACCENT 0x00B5502C
+#define ACCENT jt_accent()   /* 13.21.0: the accent Settings picked */
 #define STAGE  0x00111111
 #define PALE   0x00ECE6DE
 

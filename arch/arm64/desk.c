@@ -95,7 +95,7 @@ static void tree_paint(void) {
         about_center(l1, spot_ly + 104, 0x0075726E); about_center(l2, spot_ly + 122, 0x0075726E);
         gui_rounded_rect_on_wallpaper(upd_cancel_x(), upd_btn_y(), UPD_CW, 32, 0x00E6E1D9, 16);
         gui_text("Cancel", upd_cancel_x() + (UPD_CW - gui_text_width("Cancel")) / 2, upd_btn_y() + 8, 0x001C1C1E);
-        gui_rounded_rect_on_wallpaper(upd_btn_x(), upd_btn_y(), UPD_BW, 32, 0x00b5502c, 16);
+        gui_rounded_rect_on_wallpaper(upd_btn_x(), upd_btn_y(), UPD_BW, 32, ui_accent, 16);
         gui_text("Update and Restart", upd_btn_x() + (UPD_BW - gui_text_width("Update and Restart")) / 2, upd_btn_y() + 8, 0x00FFFFFF);
         about_center("If it does not start, the Pi goes back", spot_ly + 196, 0x0075726E);
         about_center("to the version that worked.", spot_ly + 214, 0x0075726E);
@@ -109,7 +109,7 @@ static void tree_paint(void) {
         int by = dlg_btn_y(), bw = dlg_btn_w(), cx = spot_lx + 16, gx = cx + bw + 16;
         gui_rounded_rect_on_wallpaper(cx, by, bw, 28, 0x00E6E1D9, 14);
         gui_text("Cancel", cx + (bw - gui_text_width("Cancel")) / 2, by + 6, 0x001C1C1E);
-        gui_rounded_rect_on_wallpaper(gx, by, bw, 28, 0x00b5502c, 14);
+        gui_rounded_rect_on_wallpaper(gx, by, bw, 28, ui_accent, 14);
         gui_text(go, gx + (bw - gui_text_width(go)) / 2, by + 6, 0x00FFFFFF);
     } else if (tree_about) {   /* 7.6.0: a small window in the middle of the screen, as a Mac's About This Mac: the mark, the name, the version */
         gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, ABOUT_W, ABOUT_H, 0x00faf8f4, 12);
@@ -129,7 +129,7 @@ static void tree_paint(void) {
         gui_hairline_h(spot_lx + 10, spot_ly + 31, TREE_W - 20, 0x00DDD8CE);
         for (int r = 0; r < 5; r++) {
             int ry = tree_ry(r), on = r == tree_sel;
-            if (on) window_rect(spot_lx + 8, ry, TREE_W - 16, SPOT_ROW - 2, 0x00b5502c);
+            if (on) window_rect(spot_lx + 8, ry, TREE_W - 16, SPOT_ROW - 2, ui_accent);
             gui_text(tree_rows[r], spot_lx + 22, ry + 2, on ? 0x00FFFFFF : 0x001C1C1E);
         }
     }
@@ -506,7 +506,7 @@ void menubar_wifi(int state) {
     }
     if (mb_mic) {   /* voice mode is listening (ask.c): a terracotta microphone left of the power symbol, a capsule on a stem */
         int mx = lx - sg(12) - isz, cw = isz * 2 / 5, ch = isz * 3 / 5, cx0 = mx + (isz - cw) / 2;
-        unsigned t = fb_color(0x00B5502C);
+        unsigned t = fb_color(ui_accent);
         fb_rect(cx0, iy, cw, ch, t);
         fb_rect(mx + isz / 2 - sg(1), iy + ch, sg(2), isz - ch - sg(2), t);
         fb_rect(cx0 - sg(1), iy + isz - sg(2), cw + sg(2), sg(2), t);
@@ -758,7 +758,7 @@ static void desktop_chrome(void) {   /* the mark, the title, the status icons an
     if (text_ok) {
         menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
         text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
-        if (current_user[0]) text_draw(1, current_user, sg(40) + text_width(1, "Joshua Tree", sg(130)) + sg(14), (mb + sg(8)) / 2, sg(130), fb_color(0x00B5502C), fb, fb_pitch, W, H);   /* 4.9.0: who is signed in, after the title */
+        if (current_user[0]) text_draw(1, current_user, sg(40) + text_width(1, "Joshua Tree", sg(130)) + sg(14), (mb + sg(8)) / 2, sg(130), fb_color(ui_accent), fb, fb_pitch, W, H);   /* 4.9.0: who is signed in, after the title */
         menubar_wifi(mb_wifi < 0 ? 1 : mb_wifi);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
         tribute_paint();   /* pointer.c: the one copy of the line above the dock */
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
