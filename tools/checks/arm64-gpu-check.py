@@ -7,6 +7,9 @@ the bridge ID, clock 5 on then off, PM_GRAFX with the password and V3DRSTN while
 rate, the bridge's master port, then its slave. A tag whose response bit is clear,
 a bridge that is not "brdg" and a bridge that never drops ACK each stop it with a line and no V3D register read. Broken
 copies (no response-bit gate, no ACK wait) must fail.
+13.20.1 adds gpu_copy: the same job with a LOAD_TILE_BUFFER_GENERAL (packet 30) per tile, the fake V3D reads the source
+rectangle at the load's address and writes it to the destination, and a copy with a wrong source address, no load or a
+wrong load stride must fail.
 Part 2, QEMU: `gpu` typed in virt's Terminal says "gpu: no V3D on this machine". raspi4b has no keyboard, so the gpu image
 (-DGPU_TEST) runs it once the screen is up: it has no bridge, so one line ("gpu: no V3D bridge"), no V3D register read,
 and the boot goes on to the desktop with no crash.
@@ -46,7 +49,7 @@ int mbox_call(void) {
 /* the fake V3D's control list engine, after gpu.c below */
 static void job_start(unsigned end); static unsigned job_rfc(void); static void job_l2t(unsigned v);
 static unsigned long qba;
-static unsigned *job_base;
+static unsigned *job_base, *job_src_base;   /* the host buffers the 32-bit store and load addresses land in */
 void dcache_clean(void *p, unsigned long n);
 static unsigned GR(unsigned long a) {
     if (a == 0xFEC04138UL) return job_rfc();
@@ -83,8 +86,10 @@ static unsigned le(const unsigned char *p, int n) { unsigned v = 0; while (n--) 
    first tile that stores nothing and clears, then every tile of the grid once, each stored as RT0 raster rgba8 at the
    rectangle's top left with the row stride, a clear between tiles, and END_OF_TILE, FLUSH_VCD_CACHE, END_OF_RENDERING. */
 static unsigned job_w, job_h, job_stride, job_addr, job_tiles;
+static unsigned job_loads, job_lstride, job_laddr;   /* LOAD_TILE_BUFFER_GENERAL tiles, their source stride and address */
 static int cl_ok(unsigned end) {
     static const unsigned char head[] = { 121, 121, 121, 121, 122, 124, 26, 29, 25, 27 };
+    job_loads = 0;
     if (hang || qba != (unsigned)(unsigned long)gpu_cl || end <= qba || end - qba > sizeof gpu_cl || !cl_clean || !tgt_clean || !l2t_flushed) return 0;
     const unsigned char *p = gpu_cl, *e = gpu_cl + (end - qba); unsigned k = 0, tw = 0, th = 0, n = 0; static unsigned char seen[32 * 32];
     while (p < e) {
@@ -105,11 +110,22 @@ static int cl_ok(unsigned end) {
             if (k == 8 && p[1] != 3) return 0;
             p += len; k++; continue;
         }
-        /* one real tile: coords, END_OF_LOADS, the store, then CLEAR+END_OF_TILE, or the last END_OF_TILE, VCD flush, end */
+        /* one real tile: coords, an optional load from the source, END_OF_LOADS, the store, then CLEAR+END_OF_TILE (fill), or
+           END_OF_TILE alone (copy: a loaded tile needs no clear), or the last END_OF_TILE, VCD flush, end */
         if (*p != 124) return 0;
         unsigned c = le(p + 1, 3), tx = c & 0xfff, ty = c >> 12;
         if (tx >= tw || ty >= th || seen[ty * 32 + tx]++) return 0;
-        p += 4; if (p >= e || *p++ != 26) return 0;
+        p += 4;
+        int has_load = p < e && *p == 30;
+        if (has_load) {
+            if (p + 13 > e) return 0;
+            unsigned long long lw = (unsigned long long)le(p + 5, 4) << 32 | le(p + 1, 4);
+            if ((lw & 15) || ((lw >> 4) & 7) || ((lw >> 12) & 63) != 27 || (lw >> 48) != job_h) return 0;   /* RT0, raster, rgba8 */
+            unsigned ls = (lw >> 28) & 0xfffff, la = le(p + 9, 4);
+            if (job_loads && (ls != job_lstride || la != job_laddr)) return 0;
+            job_lstride = ls; job_laddr = la; job_loads++; p += 13;
+        }
+        if (p >= e || *p++ != 26) return 0;
         if (p + 13 > e || *p != 29) return 0;
         unsigned long long w = (unsigned long long)le(p + 5, 4) << 32 | le(p + 1, 4);
         if ((w & 15) || ((w >> 4) & 7) || ((w >> 12) & 63) != 27 || (w >> 48) != job_h) return 0;
@@ -117,16 +133,20 @@ static int cl_ok(unsigned end) {
         if (n && (st != job_stride || ad != job_addr)) return 0;
         job_stride = st; job_addr = ad; n++; p += 13;
         if (n == tw * th) { if (e - p != 3 || p[0] != 27 || p[1] != 19 || p[2] != 13) return 0; p = e; break; }
-        if (e - p < 3 || p[0] != 25 || p[1] != 3 || p[2] != 27) return 0;
-        p += 3;
+        if (has_load) { if (e - p < 1 || p[0] != 27) return 0; p += 1; }
+        else { if (e - p < 3 || p[0] != 25 || p[1] != 3 || p[2] != 27) return 0; p += 3; }
     }
     job_tiles = n;
+    if (job_loads && (job_loads != n || job_lstride < job_w * 4)) return 0;   /* all tiles loaded, or none */
     return k == sizeof head && n && n == tw * th && job_stride >= job_w * 4;
 }
 /* The pixels land where a real V3D puts them: the store address is 32 bits, so the host buffer's upper bits come back on */
 static void job_write(void) {
     unsigned char *base = (unsigned char *)(((unsigned long)(job_base ? job_base : gpu_px) & ~0xffffffffUL) | job_addr);
-    for (unsigned j = 0; j < job_h; j++) for (unsigned i = 0; i < job_w; i++) memcpy(base + (unsigned long)j * job_stride + i * 4, &job_rgba, 4);
+    unsigned char *src = (unsigned char *)(((unsigned long)job_src_base & ~0xffffffffUL) | job_laddr);   /* the load's address */
+    for (unsigned j = 0; j < job_h; j++) for (unsigned i = 0; i < job_w; i++)
+        if (job_loads) memcpy(base + (unsigned long)j * job_stride + i * 4, src + (unsigned long)j * job_lstride + i * 4, 4);
+        else memcpy(base + (unsigned long)j * job_stride + i * 4, &job_rgba, 4);
 }
 static void job_start(unsigned end) { if (cl_ok(end)) { pending = 1; rfc_left = 3; } qba = 0; cl_clean = tgt_clean = l2t_flushed = 0; }
 static unsigned job_rfc(void) { if (pending && !--rfc_left) { pending = 0; done = 1; rfc++; } return rfc; }
@@ -174,6 +194,22 @@ int main(void) {
       said[0] = 0; assert(gpu_fill(say, scr, 336, 2, 10, 64, 64, 1) == 0 && strstr(said, "bad rectangle"));
       said[0] = 0; assert(gpu_fill(say, scr, 336, 0, 0, 4096, 64, 1) == 0 && strstr(said, "bad rectangle"));
       job_base = gpu_px; }
+    /* gpu_copy: a 150x90 rectangle at (8,6) of a 256-pixel source (its own 128-row buffer, a pattern that names each pixel) into
+       (32,20) of a 300-pixel destination: 3x2 tiles, the edges clipped, every pixel inside copied, none outside touched, the source unchanged */
+    { static unsigned sbuf[256 * 128] __attribute__((aligned(16))), dbuf[300 * 128] __attribute__((aligned(16)));
+      for (unsigned j = 0; j < 128; j++) for (unsigned i = 0; i < 256; i++) sbuf[j * 256 + i] = 0xa0000000u + j * 4096 + i;
+      memset(dbuf, 0x22, sizeof dbuf);
+      job_base = dbuf; job_src_base = sbuf; said[0] = 0;
+      assert(gpu_copy(say, sbuf + 6 * 256 + 8, 256, dbuf + 20 * 300 + 32, 300, 150, 90) == 1);
+      assert(strstr(said, "gpu: the V3D copied 150x90 pixels\n") && job_tiles == 6 && job_loads == 6 && job_lstride == 256 * 4 && job_stride == 300 * 4);
+      for (unsigned j = 0; j < 128; j++) for (unsigned i = 0; i < 300; i++) {
+          int in = i >= 32 && i < 182 && j >= 20 && j < 110;
+          assert(dbuf[j * 300 + i] == (in ? sbuf[(6 + j - 20) * 256 + (8 + i - 32)] : 0x22222222u));
+      }
+      for (unsigned j = 0; j < 128; j++) for (unsigned i = 0; i < 256; i++) assert(sbuf[j * 256 + i] == 0xa0000000u + j * 4096 + i);
+      said[0] = 0; assert(gpu_copy(say, sbuf, 256, dbuf, 300, 0, 10) == 0 && strstr(said, "bad rectangle"));
+      said[0] = 0; assert(gpu_copy(say, sbuf, 100, dbuf, 300, 150, 90) == 0 && strstr(said, "bad rectangle"));
+      job_base = gpu_px; }
     hang = 1; said[0] = 0;   /* a V3D that never finishes: the poll times out and says where the CLE stopped */
     assert(gpu_clear(say, 1) == 0 && strstr(said, "gpu: the job hung (CT1CS ")); hang = 0;
     job_base = gpu_px;
@@ -215,15 +251,19 @@ for name, a, b in (("no response-bit gate", "!(mbox[4] & 0x80000000u) || ", ""),
                    ("no wait for the frame", "for (unsigned long t0 = gpu_now(); GR(GPU_CORE0 + GPU_RFC) == f0;)", "for (unsigned long t0 = gpu_now(); 0;)"),
                    ("no L2T clean after", "GW(GPU_CORE0 + GPU_L2TCACTL, 1 | (2u << 1));", ""),
                    ("the store at the wrong address", "cw(GPU_BUS(dst), 4);", "cw(GPU_BUS(dst) + 256, 4);"),
-                   ("no clear between tiles", "if (tx + 1 < tw || ty + 1 < th) { cb(25); cb(3); cb(27); }", "if (tx + 1 < tw || ty + 1 < th) { cb(27); }"),
+                   ("no clear between tiles", "if (!src) { cb(25); cb(3); }", ""),
                    ("one tile only", "for (unsigned tx = 0; tx < tw; tx++) {", "for (unsigned tx = 0; tx < 1; tx++) {"),
                    ("no CPU cache clean of the target", "dcache_clean(dst, span);   /* no dirty", "(void)span;   /* no dirty"),
+                   ("the copy's load from the wrong source address", "cw(GPU_BUS(src), 4);", "cw(GPU_BUS(src) + 256, 4);"),
+                   ("the copy with no load per tile", "if (src) cload(src, spitch, h);", ""),
+                   ("the copy's load with the wrong stride", "((unsigned long long)spitch * 4 << 28)", "((unsigned long long)(spitch + 1) * 4 << 28)"),
                    ("no up check", "if (!gpu_up) { show(\"gpu: not up, run gpu first\\n\"); return 0; }", "")):
     assert a in src, "mutation anchor gone: " + name
     assert host_rc(src.replace(a, b, 1)) != 0, "the copy with %s passed" % name
 print("PASS: host: Linux's sequence on a fake Pi 4 reads back V3D 4.2; a refused tag, a missing bridge and a stuck ACK stop "
       "before any V3D register is read; `gpu clear` hands a fake V3D Mesa's clear list and reads its colour back, and refuses "
-      "before bring-up (ten broken copies fail)", flush=True)
+      "before bring-up; `gpu_copy` loads each tile from the source and the fake V3D copies the pattern, edges clipped "
+      "(sixteen broken copies fail)", flush=True)
 
 subprocess.run(["make", "-s", "-C", str(ARCH), "kernel8.elf", "gpu-kernel8.img"], check=True, capture_output=True)
 

@@ -59,6 +59,7 @@ unsigned gpu_ver(unsigned ident1) { return (ident1 & 15) * 10 + ((ident1 >> 4) &
 int gpu_bringup(void (*say)(const char *)) { say("gpu: no V3D on this machine\n"); return 0; }
 int gpu_clear(void (*say)(const char *), unsigned rgba) { (void)rgba; say("gpu: no V3D on this machine\n"); return 0; }
 int gpu_fill(void (*say)(const char *), unsigned *scr, unsigned pitch, int x, int y, int w, int h, unsigned px) { (void)scr; (void)pitch; (void)x; (void)y; (void)w; (void)h; (void)px; say("gpu: no V3D on this machine\n"); return 0; }
+int gpu_copy(void (*say)(const char *), unsigned *src, unsigned spitch, unsigned *dst, unsigned dpitch, int w, int h) { (void)src; (void)spitch; (void)dst; (void)dpitch; (void)w; (void)h; say("gpu: no V3D on this machine\n"); return 0; }
 #else
 /* One clock tag for clock 5, value then a zero (SET_CLOCK_RATE's skip-turbo). 1 with *out the answer, 0 refused: the call
    or the tag's own response bit (bit 31 of the size word, as power.h checks it). */
@@ -133,12 +134,21 @@ static int gpu_wait(unsigned long reg, unsigned bit) {
     for (unsigned long t0 = gpu_now(); GR(reg) & bit;) if (gpu_now() - t0 > gpu_hz() / 100) return 0;
     return 1;
 }
-/* Paint w x h pixels at dst (rows pitch pixels apart) with rgba, as the bytes land in memory. 1 done, 0 with a line said. */
-static int gpu_paint(unsigned *dst, unsigned pitch, unsigned w, unsigned h, unsigned rgba) {
+/* One LOAD_TILE_BUFFER_GENERAL (packet 30, V3D 4.2) for RT0: the tile's pixels come from the source rectangle's top left,
+   raster rgba8, row stride spitch * 4. The V3D adds each tile's place, as it does for the store. */
+static void cload(unsigned *src, unsigned spitch, unsigned h) {
+    cb(30); cw(((unsigned long long)27 << 12) | ((unsigned long long)spitch * 4 << 28) | ((unsigned long long)h << 48), 8); cw(GPU_BUS(src), 4);
+}
+/* Paint w x h pixels at dst (rows pitch pixels apart). With src (rows spitch apart), each tile is loaded from src first and
+   no clear goes between tiles, so the result is src's pixels; with src NULL the tiles start from rgba, as before.
+   1 done, 0 with a line said. */
+static int gpu_paint(unsigned *dst, unsigned pitch, unsigned w, unsigned h, unsigned rgba, unsigned *src, unsigned spitch) {
     if (!gpu_up) { show("gpu: not up, run gpu first\n"); return 0; }
     if (!w || !h || w > GPU_MAX || h > GPU_MAX || w > pitch || ((unsigned long)dst & 15)) { show("gpu: bad rectangle\n"); return 0; }
+    if (src && (spitch < w || spitch > 65536 || ((unsigned long)src & 15))) { show("gpu: bad rectangle\n"); return 0; }
     unsigned tw = (w + 63) / 64, th = (h + 63) / 64;
     unsigned long span = ((unsigned long)(h - 1) * pitch + w) * 4;
+    unsigned long sspan = src ? ((unsigned long)(h - 1) * spitch + w) * 4 : 0;
     gcn = 0;
     cb(121); cw(((unsigned long long)w << 8) | ((unsigned long long)h << 24) | (1ull << 46) | (1ull << 47), 8);   /* COMMON: w x h, 1 RT, early Z off, depth_24 */
     cb(121); cw(3 | ((unsigned long long)rgba << 8), 8);                          /* CLEAR_COLORS_PART1 for RT0 */
@@ -150,13 +160,16 @@ static int gpu_paint(unsigned *dst, unsigned pitch, unsigned w, unsigned h, unsi
     cb(25); cb(3); cb(27);                                                         /* CLEAR_TILE_BUFFERS RTs and Z/S; END_OF_TILE */
     for (unsigned ty = 0; ty < th; ty++)
         for (unsigned tx = 0; tx < tw; tx++) {
-            cb(124); cw(tx | ty << 12, 3); cb(26);
+            cb(124); cw(tx | ty << 12, 3);                                         /* TILE_COORDINATES */
+            if (src) cload(src, spitch, h);                                        /* this tile's pixels from the source */
+            cb(26);                                                                /* END_OF_LOADS */
             cb(29); cw((27ull << 12) | ((unsigned long long)pitch * 4 << 28) | ((unsigned long long)h << 48), 8); cw(GPU_BUS(dst), 4);   /* RT0, raster rgba8 */
-            if (tx + 1 < tw || ty + 1 < th) { cb(25); cb(3); cb(27); }             /* the next tile starts from the clear colour */
+            if (tx + 1 < tw || ty + 1 < th) { if (!src) { cb(25); cb(3); } cb(27); }   /* the next tile starts from the clear colour, or from its load */
         }
     cb(27); cb(19); cb(13);                                                        /* END_OF_TILE, FLUSH_VCD_CACHE, END_OF_RENDERING */
     dcache_clean(gpu_cl, sizeof gpu_cl);
     dcache_clean(dst, span);   /* no dirty CPU line left to land on top of what the GPU writes */
+    if (src) dcache_clean(src, sspan);   /* nor under what it reads */
     GW(GPU_CORE0 + GPU_L2TCACTL, 1);   /* L2TFLS, mode flush */
     if (!gpu_wait(GPU_CORE0 + GPU_L2TCACTL, 1)) { show("gpu: the L2T flush never finished\n"); return 0; }
     GW(GPU_CORE0 + GPU_SLCACTL, 0x0f0f0f0fu);
@@ -178,7 +191,7 @@ static int gpu_paint(unsigned *dst, unsigned pitch, unsigned w, unsigned h, unsi
 int gpu_clear(void (*say)(const char *), unsigned rgba) {
     gsay = say; gn = 0;
     for (unsigned i = 0; i < 64 * 64; i++) gpu_px[i] = 0;
-    if (!gpu_paint(gpu_px, 64, 64, 64, rgba)) return 0;
+    if (!gpu_paint(gpu_px, 64, 64, 64, rgba, 0, 0)) return 0;
     unsigned bad = 0;
     for (unsigned i = 0; i < 64 * 64; i++) bad += gpu_px[i] != rgba;
     if (bad) { ga("gpu: the V3D ran but "); gd(bad); ga(" of 4096 pixels are wrong (first "); gx(gpu_px[0]); ga(")"); showl(); return 0; }
@@ -191,24 +204,42 @@ int gpu_fill(void (*say)(const char *), unsigned *scr, unsigned pitch, int x, in
     gsay = say; gn = 0;
     if (!scr || x < 0 || y < 0 || w <= 0 || h <= 0 || (x & 3)) { show("gpu: bad rectangle\n"); return 0; }
     unsigned *dst = scr + (unsigned long)y * pitch + (unsigned)x;
-    if (!gpu_paint(dst, pitch, (unsigned)w, (unsigned)h, px)) return 0;
+    if (!gpu_paint(dst, pitch, (unsigned)w, (unsigned)h, px, 0, 0)) return 0;
     unsigned bad = 0;
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) bad += dst[(unsigned long)j * pitch + (unsigned)i] != px;
     if (bad) { ga("gpu: the V3D ran but "); gd(bad); ga(" pixels are wrong"); showl(); return 0; }
     ga("gpu: the V3D painted "); gd((unsigned)w); ga("x"); gd((unsigned)h); ga(" pixels on the screen"); showl();
     return 1;
 }
+/* 13.20.1 (v14, slice 2): the V3D copies a w x h rectangle from src (rows spitch apart) to dst (rows dpitch apart). Each tile
+   is loaded from the source and stored to the destination, so the copy is the compositing primitive. The CPU then checks
+   every pixel against the source. */
+int gpu_copy(void (*say)(const char *), unsigned *src, unsigned spitch, unsigned *dst, unsigned dpitch, int w, int h) {
+    gsay = say; gn = 0;
+    if (!src || !dst || w <= 0 || h <= 0 || spitch < (unsigned)w || dpitch < (unsigned)w) { show("gpu: bad rectangle\n"); return 0; }
+    if (!gpu_paint(dst, dpitch, (unsigned)w, (unsigned)h, 0, src, spitch)) return 0;
+    unsigned bad = 0;
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) bad += dst[(unsigned long)j * dpitch + (unsigned)i] != src[(unsigned long)j * spitch + (unsigned)i];
+    if (bad) { ga("gpu: the V3D ran but "); gd(bad); ga(" pixels are wrong"); showl(); return 0; }
+    ga("gpu: the V3D copied "); gd((unsigned)w); ga("x"); gd((unsigned)h); ga(" pixels"); showl();
+    return 1;
+}
 #endif
 
 #ifndef GPU_HOST_TEST
 extern void (*cmd_out)(const char *s);
-int gpu_command(const char *q, unsigned n) {   /* cmd.c: `gpu`, `gpu clear`, `gpu fill` */
+static int gpu_word(const char *q, const char *w) { for (; *w; w++, q++) if (*q != *w) return 0; return 1; }
+int gpu_command(const char *q, unsigned n) {   /* cmd.c: `gpu`, `gpu clear`, `gpu fill`, `gpu copy` */
     if (n < 3 || q[0] != 'g' || q[1] != 'p' || q[2] != 'u') return 0;
     if (n == 3) { gpu_bringup(cmd_out); return 1; }
-    if (n != 8 && n != 9) return 0;
-    const char *c = n == 9 ? " clear" : " fill";
-    for (unsigned i = 0; i < n - 3; i++) if (q[3 + i] != c[i]) return 0;
-    if (n == 9) { gpu_clear(cmd_out, 0xff2c50b5u); return 1; }   /* terracotta #b5502c as RGBA8 bytes */
+    if (n == 9 && gpu_word(q + 3, " clear")) { gpu_clear(cmd_out, 0xff2c50b5u); return 1; }   /* terracotta #b5502c as RGBA8 bytes */
+    if (n != 8) return 0;
+    if (gpu_word(q + 3, " copy")) {   /* the top-left third of the back buffer, one third to the right */
+        int w = (int)fb_w / 3 & ~15, h = (int)fb_h / 3;
+        if (gpu_copy(cmd_out, fb, fb_pitch, fb + w, fb_pitch, w, h)) fb_flush(w, 0, w, h);
+        return 1;
+    }
+    if (!gpu_word(q + 3, " fill")) return 0;
     /* a terracotta panel in the middle of the screen, a third of each side; the next redraw of that spot paints over it */
     int w = (int)fb_w / 3 & ~15, h = (int)fb_h / 3, x = ((int)fb_w - w) / 2 & ~15, y = ((int)fb_h - h) / 2;
     if (gpu_fill(cmd_out, fb, fb_pitch, x, y, w, h, fb_color(0xb5502cu) | 0xff000000u)) fb_flush(x, y, w, h);
