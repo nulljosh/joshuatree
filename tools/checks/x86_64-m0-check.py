@@ -42,6 +42,7 @@ def boot(tag, extra, secs, want):
 q, out, sock = boot("a", [], 30, "JT64 M0 done")
 try:
     lines = [l for l in out.splitlines() if l.startswith("JT64")]
+    lines = lines[:lines.index("JT64 M0 done") + 1] if "JT64 M0 done" in lines else lines   # slice 2 lines follow it
     want = ["JT64 M0 Joshua Tree, x86-64", "JT64 multiboot ok", "JT64 long mode ok, EFER 0x500", "JT64 64-bit math ok 0x300000007",
             "JT64 paging ok, 4 GiB mapped in 2048 pages of 2 MiB", None, "JT64 M0 done"]
     check("the serial log has the seven lines in order", len(lines) == 7 and all(w is None or w == l for w, l in zip(want, lines)), lines)
