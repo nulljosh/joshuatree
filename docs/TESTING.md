@@ -47,3 +47,4 @@ Bench first. On the Mac, run the relay with `--bench-dir ~/.cache/joshuatree/ben
 
 Steps 1 to 3 are 10.0. Step 4 is 9.0's touch screen. Steps 5 to 9 are the 8.x fixes.
 38. **Update over the air (13.19.0).** On a card flashed with 13.19.0 or later: `update`, then `update install`. It restarts into the newest release; Wi-Fi, `sam` and `bench` still work.
+39. **Blue by default (13.21.0).** Selections, buttons and the caret are blue; Weather is a blue sky. Settings, Display, Accent: step to Green, and Settings, Spotlight and the next app you open turn green. Restart: still green.

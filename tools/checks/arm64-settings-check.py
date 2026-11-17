@@ -96,13 +96,21 @@ int main(void) {
     settings_set_wall(-1); assert(settings_wall() == 4 && wall_rgb == 0x01000000); settings_set_wall(5); assert(settings_wall() == 0 && wall_rgb == 0x003B6EA5);
     settings_set_dock(2); assert(settings_dock() == 5); settings_set_dock(99); assert(settings_dock() == 25); settings_set_dock(7);
     vol = 30; settings_set_wall(2); settings_set_dock(11); settings_save();
-    assert(settings_saved() == 1 && file_len == 48 && !memcmp(file, "volume=30\nwall=2\ndock=11\nzoom=2\nglass=2\nsleep=2\n", 48));
+    assert(settings_saved() == 1 && file_len == 57 && !memcmp(file, "volume=30\nwall=2\ndock=11\nzoom=2\nglass=2\nsleep=2\naccent=2\n", 57));
     {   /* 13.4.0, Energy Saver: sleep= round-trips, an out-of-range one is ignored */
         settings_set_sleep(4); settings_save(); assert(!memcmp(file + 40, "sleep=4\n", 8));
         settings_set_sleep(0); settings_load(); assert(settings_sleep() == 4 && settings_sleep_cs() == 90000);
         file[46] = '9'; settings_set_sleep(1); settings_load(); assert(settings_sleep() == 1);
         settings_set_sleep(99); assert(settings_sleep() == 6 && settings_sleep_cs() == 0 && !strcmp(settings_sleep_name(6), "Never"));
         settings_set_sleep(2); settings_save();
+    }
+    {   /* 13.21.0, Accent: terracotta on a QEMU build, cycles through six, round-trips as accent=, sets ui_accent */
+        assert(settings_accent() == 2 && ui_accent == 0x00B5502Cu && !strcmp(settings_accent_name(0), "Blue"));
+        settings_set_accent(0); assert(ui_accent == 0x00007AFFu); settings_set_accent(-1); assert(settings_accent() == 5 && ui_accent == 0x008E8E93u);
+        settings_set_accent(4); settings_save(); assert(file_len == 57 && !memcmp(file + 48, "accent=4\n", 9));
+        settings_set_accent(1); settings_load(); assert(settings_accent() == 4 && ui_accent == 0x0034C759u);
+        file[55] = '9'; settings_set_accent(3); settings_load(); assert(settings_accent() == 3);   /* out of range: ignored */
+        settings_set_accent(2); settings_save();
     }
     vol = 70; settings_set_wall(0); settings_set_dock(7); repaints = 0; wall_rgb = 0; settings_load();
     assert(vol == 30 && settings_wall() == 2 && wall_rgb == 0x00923F20 && settings_dock() == 11 && repaints == 1 && settings_saved() == 1);
@@ -113,7 +121,7 @@ int main(void) {
         int wp = settings_wall(); settings_load(); assert(vol == 40 && settings_wall() == wp && settings_dock() == 9);
         memcpy(file, keep, sizeof keep); file_len = kl; settings_set_dock(11);
     }
-    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 48); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
+    may = 0; { int w = written; vol = 10; settings_save(); assert(settings_saved() == -2 && written == w && vol == 10 && file_len == 57); }   /* 4.10.0: not an admin, so nothing is written and the choice stays */
     may = 1;
     card = 0; vol = 20; settings_save(); assert(settings_saved() == -1 && vol == 20 && settings_wall() == 2);   /* no card: said, and the choices stay */
     file_len = -1; card = 1; vol = 70; settings_load(); assert(vol == 70);                                         /* no file: nothing changes */
@@ -376,7 +384,7 @@ finally:
 # ---- the card: what the first boot left, and a second boot on the same card ----
 r = mt("mtype", "::JT/SETTINGS.TXT")
 text = r.stdout.decode(errors="replace")
-check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\nzoom=1\nglass=3\nsleep=2\n", text)
+check("JT/SETTINGS.TXT on the card holds the last choices", text == "volume=20\nwall=2\ndock=8\nzoom=1\nglass=3\nsleep=2\naccent=2\n", text)
 S = Session("b")
 try:
     if not S.wait_for("M2 input ready", 60) or not S.wait_for("settings loaded", 30):

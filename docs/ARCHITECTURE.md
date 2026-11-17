@@ -87,7 +87,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `arch/arm64/ip.c`, `drivers/nic.h` | The IP stack on ARM. |
 | `arch/arm64/rng.c`, `arch/arm64/rng.h` | Seeds TLS from the Pi 4 RNG200 hardware FIFO with health checks and a one-second deadline. |
 | `arch/arm64/clock_ui.h` | Read-only Clock window on ARM, opened through Spotlight or Samantha. |
-| `arch/arm64/settings.c` | The Pi's Settings choices and their file, 3.13.0. |
+| `arch/arm64/settings.c` | The Pi's Settings choices and their file, 3.13.0. 13.21.0: Accent (Display) picks Blue, Purple, Terracotta, Orange, Green or Graphite. Kernel windows read `ui_accent`; apps read it with `jt_accent()` (syscall 415). Blue on the Pi, terracotta on QEMU so the checks read one colour. Saved as `accent=`. |
 | `arch/arm64/accounts.c` | User accounts on the Pi, 4.8.0 (slice 1 of 6.0 Yours; the login screen is `login.c`). |
 | `arch/arm64/login.c`, `arch/arm64/login.h`, `arch/arm64/login_ui.h` | The Pi's login screen, 4.9.0 (slice 2 of 6.0). |
 | `arch/arm64/sudo.c`, `arch/arm64/sudo.h` | Admins and sudo on the Pi, 4.10.0 (slice 3 of 6.0). |
@@ -306,7 +306,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/search.c` | Search, the query box that filters the current directory as you type, as a ring-3 program: the eighteenth app out of the kernel (1.9.13). |
 | `user/burrow.c` | Files (called Burrow from 2.26.0 to 8.9.0; the file keeps the name), as a ring-3 program: a List and Icons toolbar, folders. |
 | `user/epiphany.c` | Epiphany, the markets terminal (a 40-ticker watchlist, portfolio, trading simulator, macro brief and the `/` command bar for `AAPL GP` and `AAPL. |
-| `user/weather_pi.c`, `tools/checks/arm64-weather-check.py` | Weather on the ARM64 build (3.16.0), a small ring-3 program the Makefile builds as `weather` (the dock tile named Weather. |
+| `user/weather_pi.c`, `tools/checks/arm64-weather-check.py` | Weather on the ARM64 build (3.16.0), a small ring-3 program the Makefile builds as `weather` (the dock tile named Weather. 13.21.0: a blue sky, white text and a yellow sun. |
 | `user/weather.c` | Weather, as a ring-3 program: the twentieth app out of the kernel (1.9.22), made much richer in 2.10.0. |
 | `user/stocks.c` | Stocks, the watchlist sidebar with sparklines and a five-range line chart, as a ring-3 program: the twenty-first app out of the kernel. The kernel's `stocks_fetch` still does the network work and writes `STOCKS.TXT` after every fetch; the app reads the whole file with `jt_readfile` (one `jt_read` moves only 255 bytes). Arrow keys and clicks pick a symbol, a range change or R calls `SYS_REFRESH` (398) with `range | sel << 8`, the desktop loop refetches, and the window reloads when `data_stamp` moves. |
 | `user/portfolio.c` | Portfolio, Joshua's About block and the fleet catalog grouped Life, Read, Make, Play and Dev, as a ring-3 program: the eleventh app out of the kernel (1.9.5). |

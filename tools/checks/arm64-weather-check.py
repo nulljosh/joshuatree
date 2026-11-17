@@ -7,8 +7,8 @@ from RAM. Here the feedsfix build fetches it from this script's own server on th
 QEMU's user network, on the virt machine with ramfb and virtio keyboard and tablet. Through QMP it:
   - clicks the Weather tile (slot 8): the kernel says "weather: live reading fetched", the scheduler starts weather
     ("M3c app weather starts"), its window opens, and it says "weather: 1 saved, days 5" and "weather: temp 18 code 0";
-  - samples the framebuffer against weather_pi.c's own layout: ink for the large temperature, the terracotta sun (the
-    fixture is clear), five card-coloured day cards in a row with the page colour between them, and ink inside each;
+  - samples the framebuffer against weather_pi.c's own layout: white ink for the large temperature, the yellow sun (the
+    fixture is clear), five card-coloured day cards in a row with the sky between them, and ink inside each;
   - presses Esc: "weather: closed", "M3c app weather exit 0", and the wallpaper is back where the window stood;
   - opens it again from Spotlight (F1, "weat", Enter) and closes it with its red dot.
 Then the normal kernel with no network: Weather opens with no reading and says so, nothing made up.
@@ -46,7 +46,7 @@ W, H = 800, 600
 icon = max(16, min(H * 7 // 100, (min(740, W - 40) - 2 * 10 - 11 * 6) // 12))
 dock_x0, dock_y0 = (W - (12 * icon + 11 * 6 + 2 * 10)) // 2, H - icon - 2 * 10 - 24
 def slot_centre(slot): return dock_x0 + 10 + slot * (icon + 6) + icon // 2, dock_y0 + 10 + icon // 2
-BG, CARD, ACCENT, RED = (0xf5, 0xf0, 0xeb), (0xec, 0xe5, 0xdc), (0xb5, 0x50, 0x2c), (0xff, 0x5f, 0x57)
+BG, CARD, ACCENT, RED = (0x3d, 0x7f, 0xd6), (0x56, 0x8f, 0xdd), (0xff, 0xc9, 0x3c), (0xff, 0x5f, 0x57)   # 13.21.0: sky, card, sun
 
 tmp = scratch_dir("arm64-weather")
 log, sock = tmp + "/uart", tmp + "/qmp"
@@ -111,8 +111,8 @@ try:
     time.sleep(0.5)
     a = shot(os.environ.get("JT_WEATHER_SHOT"))
     check("the window wears the house frame: its red dot, inside the screen", px(a, fx + 19, fy + 16) == RED and fx + fw <= W and fy + fh <= dock_y0, (fx, fy, fw, fh))
-    check("the page is the warm off-white", px(a, cx0 + 4, cy0 + 4) == BG, px(a, cx0 + 4, cy0 + 4))
-    ink = sum(1 for c in region(a, cx0 + 18, cy0 + 40, 110, 60) if max(c) < 0x90)
+    check("the page is the blue sky", px(a, cx0 + 4, cy0 + 4) == BG, px(a, cx0 + 4, cy0 + 4))
+    ink = sum(1 for c in region(a, cx0 + 18, cy0 + 40, 110, 60) if min(c) > 0xd0)   # white on the sky
     check("the temperature is drawn large at the top left (%d ink pixels)" % ink, ink > 400, ink)
     sun = sum(1 for c in region(a, cx0 + vw - 20 - 52 - 40, cy0 + 82 - 40, 80, 80) if c == ACCENT)
     check("the clear-sky glyph is the terracotta sun (%d accent pixels)" % sun, sun > 300, sun)
