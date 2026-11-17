@@ -342,6 +342,7 @@ retry|7|Brand tokens: docs/brand/tokens.css matches the kernel's desktop colours
 retry|10|ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing)|python3 ./tools/checks/arm64-m0-check.py
 retry|7|x86-64 slice 1 (13.18.0): the 64-bit kernel boots in qemu-system-x86_64 into long mode, maps 4 GiB, prints on the serial port and a 1024x768 screen; a CPU without long mode is refused in words|python3 ./tools/checks/x86_64-m0-check.py
 retry|3|x86-64 slice 2 (13.22.0): the IDT loads, the PIC and PIT tick at 100 Hz for 20 ticks, and IRQ1 reads the keyboard (a is scancode 0x1e, b is 0x30) on the serial port|python3 ./tools/checks/x86_64-irq-check.py
+retry|3|x86-64 slice 3 (13.24.0): the multiboot memory map gives 200 to 256 MB under -m 256, the frame allocator and kmalloc pass a self-test, and QMP mouse moves draw a white cursor, print its position on the serial port and clamp at the screen edge|python3 ./tools/checks/x86_64-mem-check.py
 retry|6|ARM64: a tiny local language model answers under QEMU (skips where the tools are missing)|python3 ./tools/checks/arm64-llm-check.py
 retry|6|ARM64: with the relay out of reach, Samantha answers from the hosted Turing over HTTPS (skips where the tools are missing)|python3 ./tools/checks/arm64-sam-hosted-check.py
 retry|6|ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing)|python3 ./tools/checks/arm64-m1c-check.py
