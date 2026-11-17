@@ -46,6 +46,7 @@ int mbox_call(void) {
 /* the fake V3D's control list engine, after gpu.c below */
 static void job_start(unsigned end); static unsigned job_rfc(void); static void job_l2t(unsigned v);
 static unsigned long qba;
+static unsigned *job_base;
 void dcache_clean(void *p, unsigned long n);
 static unsigned GR(unsigned long a) {
     if (a == 0xFEC04138UL) return job_rfc();
@@ -72,39 +73,67 @@ static unsigned long gpu_now(void) { return now_t += 10; }
 static unsigned long gpu_hz(void) { return 1000000; }
 #include "gpu.c"
 /* The fake CLE walks gpu_cl with its own packet table (V3D 4.2 lengths, Mesa's v3d_packet.xml) and runs it only when the
-   list is the one Mesa would send: the right packets in the right order, 64x64, the clear colour, RT0 stored raster
-   rgba8 at gpu_px. It also wants the list cleaned out of the CPU cache and the L2T flushed before QEA, and QBA before QEA.
+   list is the one Mesa would send (cl_ok below). It also wants the list and the target cleaned out of the CPU cache and
+   the L2T flushed before QEA, and QBA before QEA.
    The frame count moves on the third read after (the GPU takes time), and the pixels reach memory only at the L2T clean. */
-static int hang, cl_clean, l2t_flushed, pending, done, tmu; static unsigned rfc, rfc_left, job_rgba;
-void dcache_clean(void *p, unsigned long n) { if (p == gpu_cl && n == sizeof gpu_cl) cl_clean = 1; }
+static int hang, cl_clean, tgt_clean, l2t_flushed, pending, done, tmu; static unsigned rfc, rfc_left, job_rgba;
+void dcache_clean(void *p, unsigned long n) { if (p == gpu_cl && n == sizeof gpu_cl) cl_clean = 1; else tgt_clean = 1; }
 static unsigned le(const unsigned char *p, int n) { unsigned v = 0; while (n--) v = v << 8 | p[n]; return v; }
+/* The list must be Mesa's shape: COMMON (w x h), clear colours, COLOR, Z/S last, SUPERTILE_CFG naming the tile grid, a
+   first tile that stores nothing and clears, then every tile of the grid once, each stored as RT0 raster rgba8 at the
+   rectangle's top left with the row stride, a clear between tiles, and END_OF_TILE, FLUSH_VCD_CACHE, END_OF_RENDERING. */
+static unsigned job_w, job_h, job_stride, job_addr, job_tiles;
 static int cl_ok(unsigned end) {
-    static const unsigned char want[] = { 121, 121, 121, 121, 122, 124, 26, 29, 25, 27, 124, 26, 29, 27, 19, 13 };
-    if (hang || qba != (unsigned)(unsigned long)gpu_cl || end <= qba || end - qba > sizeof gpu_cl || !cl_clean || !l2t_flushed) return 0;
-    const unsigned char *p = gpu_cl, *e = gpu_cl + (end - qba); unsigned k = 0;
+    static const unsigned char head[] = { 121, 121, 121, 121, 122, 124, 26, 29, 25, 27 };
+    if (hang || qba != (unsigned)(unsigned long)gpu_cl || end <= qba || end - qba > sizeof gpu_cl || !cl_clean || !tgt_clean || !l2t_flushed) return 0;
+    const unsigned char *p = gpu_cl, *e = gpu_cl + (end - qba); unsigned k = 0, tw = 0, th = 0, n = 0; static unsigned char seen[32 * 32];
     while (p < e) {
         int len = *p == 121 || *p == 122 ? 9 : *p == 124 ? 4 : *p == 29 ? 13 : *p == 25 ? 2 : 1;
-        if (p + len > e || k >= sizeof want || *p != want[k]) return 0;
-        if (k == 0 && ((p[1] & 15) || le(p + 2, 2) != 64 || le(p + 4, 2) != 64)) return 0;   /* common: 64x64 */
-        if (k == 1) { if ((p[1] & 15) != 3) return 0; job_rgba = le(p + 2, 4); }               /* clear colours */
-        if ((k == 2 && (p[1] & 15) != 1) || (k == 3 && (p[1] & 15) != 2)) return 0;           /* colour, Z/S last */
-        if (k == 7 && (p[1] & 15) != 8) return 0;                                               /* first store: none */
-        if (k == 8 && p[1] != 3) return 0;                                                      /* clear RTs and Z/S */
-        if (k == 12) {                                                                          /* RT0 raster rgba8 */
-            unsigned long long w = (unsigned long long)le(p + 5, 4) << 32 | le(p + 1, 4);
-            if ((w & 15) || ((w >> 4) & 7) || ((w >> 12) & 63) != 27 || ((w >> 28) & 0xfffff) != 256 || (w >> 48) != 64) return 0;
-            if (le(p + 9, 4) != (unsigned)(unsigned long)gpu_px) return 0;
+        if (p + len > e) return 0;
+        if (k < sizeof head) {
+            if (*p != head[k]) return 0;
+            if (k == 0) { if (p[1] & 15) return 0; job_w = le(p + 2, 2); job_h = le(p + 4, 2); }
+            if (k == 1) { if ((p[1] & 15) != 3) return 0; job_rgba = le(p + 2, 4); }
+            if ((k == 2 && (p[1] & 15) != 1) || (k == 3 && (p[1] & 15) != 2)) return 0;
+            if (k == 4) {
+                unsigned long long v = (unsigned long long)le(p + 5, 4) << 32 | le(p + 1, 4);
+                tw = (v >> 32) & 0xfff; th = (v >> 44) & 0xfff;
+                if ((v & 0xffff) || ((v >> 16) & 255) != tw || ((v >> 24) & 255) != th || tw != (job_w + 63) / 64 || th != (job_h + 63) / 64 || tw > 32 || th > 32) return 0;
+                memset(seen, 0, sizeof seen);
+            }
+            if (k == 7 && (p[1] & 15) != 8) return 0;
+            if (k == 8 && p[1] != 3) return 0;
+            p += len; k++; continue;
         }
-        p += len; k++;
+        /* one real tile: coords, END_OF_LOADS, the store, then CLEAR+END_OF_TILE, or the last END_OF_TILE, VCD flush, end */
+        if (*p != 124) return 0;
+        unsigned c = le(p + 1, 3), tx = c & 0xfff, ty = c >> 12;
+        if (tx >= tw || ty >= th || seen[ty * 32 + tx]++) return 0;
+        p += 4; if (p >= e || *p++ != 26) return 0;
+        if (p + 13 > e || *p != 29) return 0;
+        unsigned long long w = (unsigned long long)le(p + 5, 4) << 32 | le(p + 1, 4);
+        if ((w & 15) || ((w >> 4) & 7) || ((w >> 12) & 63) != 27 || (w >> 48) != job_h) return 0;
+        unsigned st = (w >> 28) & 0xfffff, ad = le(p + 9, 4);
+        if (n && (st != job_stride || ad != job_addr)) return 0;
+        job_stride = st; job_addr = ad; n++; p += 13;
+        if (n == tw * th) { if (e - p != 3 || p[0] != 27 || p[1] != 19 || p[2] != 13) return 0; p = e; break; }
+        if (e - p < 3 || p[0] != 25 || p[1] != 3 || p[2] != 27) return 0;
+        p += 3;
     }
-    return k == sizeof want;
+    job_tiles = n;
+    return k == sizeof head && n && n == tw * th && job_stride >= job_w * 4;
 }
-static void job_start(unsigned end) { if (cl_ok(end)) { pending = 1; rfc_left = 3; } qba = 0; cl_clean = l2t_flushed = 0; }
+/* The pixels land where a real V3D puts them: the store address is 32 bits, so the host buffer's upper bits come back on */
+static void job_write(void) {
+    unsigned char *base = (unsigned char *)(((unsigned long)(job_base ? job_base : gpu_px) & ~0xffffffffUL) | job_addr);
+    for (unsigned j = 0; j < job_h; j++) for (unsigned i = 0; i < job_w; i++) memcpy(base + (unsigned long)j * job_stride + i * 4, &job_rgba, 4);
+}
+static void job_start(unsigned end) { if (cl_ok(end)) { pending = 1; rfc_left = 3; } qba = 0; cl_clean = tgt_clean = l2t_flushed = 0; }
 static unsigned job_rfc(void) { if (pending && !--rfc_left) { pending = 0; done = 1; rfc++; } return rfc; }
 static void job_l2t(unsigned v) {
     if (v == 1) l2t_flushed = 1;
     if (v == 0x100 && done) tmu = 1;
-    if (v == 5 && done && tmu) { for (unsigned i = 0; i < 64 * 64; i++) gpu_px[i] = job_rgba; done = tmu = 0; }
+    if (v == 5 && done && tmu) { job_write(); done = tmu = 0; }
 }
 static char said[512];
 static void say(const char *s) { strncat(said, s, sizeof said - strlen(said) - 1); }
@@ -132,8 +161,22 @@ int main(void) {
         assert(nt == 6);
         for (int i = 0; i < 6; i++) assert(tr[i][0] == 'W' && tr[i][1] == order[i][0] && tr[i][2] == order[i][1]);
     }
+    /* gpu fill: a 200x100 panel at 16,10 of a 320x240 screen whose rows are 336 pixels apart: 4x2 tiles, the edges clipped,
+       every pixel inside painted and none outside touched */
+    { static unsigned scr[336 * 240] __attribute__((aligned(16)));
+      job_base = scr; memset(scr, 0x11, sizeof scr); said[0] = 0;
+      assert(gpu_fill(say, scr, 336, 16, 10, 200, 100, 0xff2c50b5u) == 1);
+      assert(strstr(said, "gpu: the V3D painted 200x100 pixels on the screen\n") && job_tiles == 8 && job_stride == 336 * 4);
+      for (unsigned j = 0; j < 240; j++) for (unsigned i = 0; i < 336; i++) {
+          int in = i >= 16 && i < 216 && j >= 10 && j < 110;
+          assert(scr[j * 336 + i] == (in ? 0xff2c50b5u : 0x11111111u));
+      }
+      said[0] = 0; assert(gpu_fill(say, scr, 336, 2, 10, 64, 64, 1) == 0 && strstr(said, "bad rectangle"));
+      said[0] = 0; assert(gpu_fill(say, scr, 336, 0, 0, 4096, 64, 1) == 0 && strstr(said, "bad rectangle"));
+      job_base = gpu_px; }
     hang = 1; said[0] = 0;   /* a V3D that never finishes: the poll times out and says where the CLE stopped */
-    assert(gpu_clear(say, 1) == 0 && strstr(said, "gpu: the clear job hung (CT1CS ")); hang = 0;
+    assert(gpu_clear(say, 1) == 0 && strstr(said, "gpu: the job hung (CT1CS ")); hang = 0;
+    job_base = gpu_px;
     reset();
     assert(gpu_clear(say, 1) == 0 && strstr(said, "gpu: not up, run gpu first") && nw == 0 && v3d_reads == 0);
     reset(); deny_bit = 1;
@@ -155,9 +198,12 @@ def host(text):
     b = subprocess.run(["clang", "-Wall", "-Wextra", "-Werror", "-Wno-unused-function", "-fsanitize=address,undefined",
                         "-I", str(TMP), str(c), "-o", str(exe)], capture_output=True, text=True)
     if b.returncode: return "build: " + b.stderr[-400:]
-    return subprocess.run([str(exe)], capture_output=True, text=True, timeout=10).returncode
+    return subprocess.run([str(exe)], capture_output=True, text=True, timeout=10)
+def host_rc(text):
+    r = host(text)
+    return r if isinstance(r, str) else r.returncode
 r = host(src)
-assert r == 0, "gpu.c failed on the host: %r" % r
+assert not isinstance(r, str) and r.returncode == 0, "gpu.c failed on the host: %s" % (r if isinstance(r, str) else r.stderr[-600:])
 for name, a, b in (("no response-bit gate", "!(mbox[4] & 0x80000000u) || ", ""),
                    ("no ACK wait", "for (unsigned long t0 = gpu_now(); GR(reg) & 2u;) if (gpu_now() - t0 > gpu_hz() / 1000) return 0;", ""),
                    ("QEA before QBA", "GW(GPU_CORE0 + GPU_CT1QBA, GPU_BUS(gpu_cl));\n    GW(GPU_CORE0 + GPU_CT1QEA, GPU_BUS(gpu_cl) + gcn);",
@@ -168,10 +214,13 @@ for name, a, b in (("no response-bit gate", "!(mbox[4] & 0x80000000u) || ", ""),
                    ("no L2T flush first", "GW(GPU_CORE0 + GPU_L2TCACTL, 1);   /* L2TFLS, mode flush */", ""),
                    ("no wait for the frame", "for (unsigned long t0 = gpu_now(); GR(GPU_CORE0 + GPU_RFC) == f0;)", "for (unsigned long t0 = gpu_now(); 0;)"),
                    ("no L2T clean after", "GW(GPU_CORE0 + GPU_L2TCACTL, 1 | (2u << 1));", ""),
-                   ("the store at the wrong address", "cw(GPU_BUS(gpu_px), 4);", "cw(GPU_BUS(gpu_px) + 256, 4);"),
+                   ("the store at the wrong address", "cw(GPU_BUS(dst), 4);", "cw(GPU_BUS(dst) + 256, 4);"),
+                   ("no clear between tiles", "if (tx + 1 < tw || ty + 1 < th) { cb(25); cb(3); cb(27); }", "if (tx + 1 < tw || ty + 1 < th) { cb(27); }"),
+                   ("one tile only", "for (unsigned tx = 0; tx < tw; tx++) {", "for (unsigned tx = 0; tx < 1; tx++) {"),
+                   ("no CPU cache clean of the target", "dcache_clean(dst, span);   /* no dirty", "(void)span;   /* no dirty"),
                    ("no up check", "if (!gpu_up) { show(\"gpu: not up, run gpu first\\n\"); return 0; }", "")):
     assert a in src, "mutation anchor gone: " + name
-    assert host(src.replace(a, b, 1)) != 0, "the copy with %s passed" % name
+    assert host_rc(src.replace(a, b, 1)) != 0, "the copy with %s passed" % name
 print("PASS: host: Linux's sequence on a fake Pi 4 reads back V3D 4.2; a refused tag, a missing bridge and a stuck ACK stop "
       "before any V3D register is read; `gpu clear` hands a fake V3D Mesa's clear list and reads its colour back, and refuses "
       "before bring-up (ten broken copies fail)", flush=True)
