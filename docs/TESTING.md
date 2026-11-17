@@ -1,48 +1,49 @@
 # Board testing
 
-What to try on the real Pi, most important first. Flash the card first (card in the Mac, `tools/flash-pi.sh`): it carries main, 10.0.0 or later. Stop at the first failure and send the step number with a photo. The long version of each step, with the lines to expect, is [7.0 board day](GUIDE.md#70-board-day).
+What to try on the real Pi, most important first. Flash the card first (`tools/flash-pi.sh`). Stop at the first failure and send the step number with a photo.
 
-Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with the tree glyph; pairing the mouse from Settings, and it comes back after a restart with a wiggle; the restart dialog; Notes kept through a restart; `cores` says 4 of 4; the blue wallpaper and the Picasso line. A pink speckle on light colours was a loose HDMI plug. The crackle on restart is the Pi's own boot stage: muted, with no chime, it still crackles (Joshua's video), so the fix is a restart that skips the firmware, not the sound driver.
+Done on the board, 2026-11-01 and 11-02 (8.0 to 8.9): the flat boot, mouse pairing from Settings, Notes kept through a restart, `cores` says 4 of 4, the blue wallpaper. A pink speckle was a loose HDMI plug. The crackle on restart is the Pi's own boot stage.
 
-37. **The bench (do this first).** On the Mac the relay runs with `--bench-dir ~/.cache/joshuatree/bench`. On the Pi, in the Terminal, type `bench`: it says `bench: on`. From then on the Mac can run the steps below that are Terminal commands (`tools/pi-bench.py gpu`), and since 13.17.0 it can press keys, click and take a picture of the screen too (`tools/pi-bench.py click 400 300`, `tools/pi-bench.py shot`), so you only need to look at the Pi for what a picture cannot show: sound, lag, the real printer. `bench` again turns it off; a restart does too.
-1. **10.0 on the monitor.** Boot: the tree, then the desktop. `mem` says how many heap pages are in RAM (0 sent to the card is normal); `cores` lists cores 1 to 3 with their app slices. Settings, About says 10.0.0.
-2. **The screen reader.** Cmd+F5, or `reader on` in the Terminal, turns it on: the menu bar says Screen reader on. Press Left and Right along the dock. Each tile is captioned over the dock, and once you stop for 600 ms Samantha says it, if the relay is reachable.
-3. **Language.** Settings, Up to Language, Right to Español, then restart. It is still Spanish after the boot. Apps and the Terminal stay English.
-4. **A touch screen, if one is here.** Plug the panel's HDMI and its USB into the Pi: the desktop fills it at its own size, and a tap on a dock tile opens that app.
-5. **The park wallpaper.** Boot: Joshua Tree at dusk, dithered, with fine scanlines, sharp at 1080p. Drag a window across it: what it leaves behind is the picture again, no blocks of flat colour.
-6. **The lag.** Drag a window with another one open, and sweep the pointer along the dock. Compare with last night: cores 1 to 3 now sleep, so it should feel lighter. `cores` run twice a minute apart: each count goes up by hundreds, not millions.
-7. **Dock zoom is off.** Sweep the pointer along the dock: no tile grows. Settings, Dock, Magnify: Small turns it on; put it back to Off.
-8. **Settings fits its window.** Every section at 1080p: nothing past the right edge or under the buttons; Display lists Park as a wallpaper.
-9. **USB stick.** A FAT32 stick in a USB port: `stick ls` lists it, `stick cat NAME` shows a text file, `stick copy NAME` puts it in JT/ and `cat jt/NAME` reads it back.
-10. **The Berkeley list.** `sched` says the longest turn is under 60 ms after a minute of normal use. `userrun hello | userrun hello` runs without a hang.
-11. **Wi-Fi.** Settings, Wi-Fi: R looks again, pick the phone's hotspot, type its password: "Joined." in about 15 seconds. Switch back to home.
-12. **Web.** `browse en.wikipedia.org/wiki/Raspberry_Pi`, then the same page in Blackcomb. Text first, then the pictures one by one.
-13. **Mail and Calendar.** `mail login imap.mail.me.com YOUR-APPLE-ID` with an app password, `mail`, `mail 1`. `calendar caldav https://caldav.icloud.com/ YOUR-APPLE-ID`, add a day, `calendar sync`: it shows on the Mac.
-14. **Write a program on the Pi.** `sudo userrun plankc build CODE.PK`, then `sudo userrun code HI.PK`; type a `main` that prints hi, Esc to save, build it, `userrun hi` prints hi.
-15. **Bluetooth keyboard.** Settings, Bluetooth, S, its number, type the six digits it shows: it types in the Terminal.
-16. **Files.** The dock's second tile says Files, and the login, sign-out and shutdown screens show the park picture, not black.
-17. **Deep idle.** Leave it alone five minutes: the screen goes dark. Touch a key: it is back at once, and the Pi runs cooler while dark (`sched`, run just after, still under 60 ms).
-18. **Trackpad, if one is here.** Plug a USB precision touchpad in: the UART says `usb trackpad`. One finger moves the pointer, two scroll a page in Blackcomb, a tap clicks and a two-finger tap right-clicks. If it says `input mode refused, left a mouse`, send the pad's name: it still points, as a mouse.
-19. **Battery, if a gauge board is here.** A UPS or laptop board with a MAX17048 at I2C 0x36 on the HAT pins (Geekworm style): the menu bar shows its percent and a battery where the power symbol was; `battery: N percent` on the UART at boot. No board: the power symbol, as before.
-20. **Sleep.** Click the tree, then Sleep: the screen goes dark a second later. A key brings it back.
-21. **Spaces.** Open Calendar, then Ctrl+Right: an empty desktop, and the menu bar says Desktop 2. Open Notes there, Ctrl+Left: Calendar is back alone. Notes' dock tile takes you to Desktop 2.
-22. **Mission Control.** With two apps open, Ctrl+Up: the desktops along the top and both windows side by side. Enter or a click brings one up; a desktop chip goes there; Esc closes it.
-23. **Glass.** Settings, Display, Tab to Glass, Right twice: the menu bar turns milkier (Tinted). Left four times: Clear, the wallpaper shows through. It stays after a restart.
-24. **Shortcuts.** In the Terminal, `shortcut loud = vol 30; vol`, then `shortcut loud`: each command shows, then runs. `sam make a shortcut called night that sets volume 10`, then `shortcut night`.
-25. **Tab groups.** In the Terminal, `browse en.wikipedia.org`, `tab new`, `browse duckduckgo.com`, then `tab group save work`. `tab close`, then `tab group work`: both tabs come back. Restart and `tab group work` again.
-26. **Photos.** Put two `.JPG` files in a `PHOTOS` folder on the card. Spotlight, Photos: both show in the grid. Enter, then r, b and +: it turns, goes black and white and lighter. Restart: the edits are still there, and 0 puts it back.
-27. **YouTube.** With `tools/claude-relay/yt.py --lan ...` running on the Mac, Blackcomb, `youtube.com/watch?v=QW29Ly55Kvs`, Enter, Tab, Enter: Drake's Plot Twist plays in the page, the whole 3:16, picture and sound. Space pauses and plays on. Stop `yt.py` on the Mac afterwards.
-28. **Parental controls.** As an admin, `adduser kid kidpass`, then `sudo limits kid apps notes,calculator` and `sudo limits kid web off`. Log out and sign in as kid: Notes opens, Mines says it is not allowed in the menu bar, Blackcomb does not open.
-29. **Bluetooth headphones and keyboards.** Put headphones in pairing mode. In the Terminal, `bt find`: they show by name as headphones. `bt connect 1`: `ready to play`. Open Music and play a song: it comes out of the headphones, with no stutter (if it stutters, note it: the UART's speed is the suspect). Then a Bluetooth keyboard in pairing mode, `bt find`, `bt connect N`: `ready`, and it types in the Terminal.
-30. **The GPU.** In the Terminal, `gpu`: it says the reset is lifted, the V3D clock in MHz, that it is reading the ident, then `gpu: V3D 4.2, 1 core, MMU, ...` and `gpu: ready`. Any other line (refused, no bridge, did not answer, did not identify), send it word for word. If it freezes, send the last line on the screen: it names the step. Then `gpu clear`: the V3D paints a 64x64 tile and the Pi reads it back, `gpu: the V3D cleared 64x64 pixels to 0xff2c50b5`. A hung job or wrong pixels prints its own line; send it word for word. Then drag a window: the desktop still works.
-31. **Install from the web.** In Blackcomb, go to `joshuatree.jaybulb.com/apps/fortune.app`: it says `browser: installed fortune, ... signed, in JT/APPS`, then `userrun fortune` prints a line. Any other line (no signature, does not match), send it word for word.
-32. **Heat and the fan.** Fan's red wire on pin 4, black on pin 6 (the outer row, 2nd and 3rd pins from the end away from the USB ports): it spins at power on. In the Terminal, `temp`: around 40 to 60 C with the fan, and it says the chip slows down at 85.0 C.
-33. **Dim and the saver.** Settings, Display, Screen saver after: 1 minute. Leave it: at about 45 s the screen drops to half brightness, at 1 minute a small grey clock on black jumps around every 10 s. Press a key: the exact screen comes back. Leave it again and wait 5 more minutes after the clock: HDMI goes dark, and a key wakes it. Restart: the setting is still 1 minute.
-34. **Print.** Find your printer's address (its screen, or its page in your router). Put a short NOTE.TXT on the card, then in the Terminal, `print NOTE.TXT 192.168.1.20` with your printer's address: it says `print: sent`, and the page comes out with your note on it. Then `printers`: it names your printer by itself, and `print NOTE.TXT` with no address prints there too. In Notes, open a note and press Cmd+P: the page comes out and Notes says Sent to the printer.
-35. **Scan.** Put a photo face down on your printer's glass. In the Terminal type `scan` (or `scan 192.168.1.20` with its address): it says `scan: saved PHOTOS/SCAN0001.JPG`, and Photos shows the picture.
+Bench first. On the Mac, run the relay with `--bench-dir ~/.cache/joshuatree/bench`. On the Pi, type `bench` (it says `bench: on`). From then on the Mac can run Terminal steps (`tools/pi-bench.py gpu`), press keys and click (`tools/pi-bench.py click 400 300`) and take a screenshot (`tools/pi-bench.py shot`). `bench` again turns it off.
 
-34. **The clock after a stale card (13.9.3).** On a card built two weeks ago, the menu bar clock sets itself within a minute of Wi-Fi and `google.com` opens in Blackcomb (it said tls error 54 before). Then `update` reaches the release (it said 618 before).
-35. **Paddle and dragging (13.9.3).** Open Paddle, Space, hold Up and Down: the left paddle follows and the desktop stays smooth. Drag a window around with Paddle playing behind it.
-36. **Menu bar icons (13.9.3).** Click the power symbol: Sleep, Restart and Shut Down, not Settings. Click the clock: Settings at Date and Time, and the arrow is still there.
-Steps 1 to 3 are 10.0, 4 is 9.0's touch screen; 5 to 9 are last night's fixes.
-38. **Update over the air (13.19.0).** On a card flashed with 13.19.0 or later, in the Terminal: `update`, then `update install`. It restarts into the newest release, and Wi-Fi, `sam` and `bench` still work after it. On an older card it says to flash once more with flash-pi.sh.
+1. **10.0 on the monitor.** Boot to the tree, then the desktop. `mem` shows heap pages; `cores` lists cores 1 to 3. Settings, About says 10.0.0.
+2. **Screen reader.** Cmd+F5 or `reader on`. Left and Right along the dock are captioned and spoken.
+3. **Language.** Settings, Language, Español, restart. It stays Spanish.
+4. **Touch screen, if here.** Plug the panel's HDMI and USB in. The desktop fills it, and a tap opens a dock tile.
+5. **Park wallpaper.** Joshua Tree at dusk, sharp at 1080p. Drag a window across it: no flat blocks are left behind.
+6. **Lag.** Drag a window with another open, sweep the dock. `cores` run twice a minute apart should grow by hundreds, not millions.
+7. **Dock zoom is off.** Settings, Dock, Magnify: Small turns it on. Put it back to Off.
+8. **Settings fits its window** at 1080p. Display lists Park.
+9. **USB stick.** `stick ls`, `stick cat NAME`, `stick copy NAME`, then `cat jt/NAME`.
+10. **Berkeley list.** `sched` says the longest turn is under 60 ms. `userrun hello | userrun hello` does not hang.
+11. **Wi-Fi.** Settings, Wi-Fi: R, pick the phone hotspot, type its password. "Joined." in about 15 seconds. Switch back.
+12. **Web.** `browse en.wikipedia.org/wiki/Raspberry_Pi`, then the same page in Blackcomb.
+13. **Mail and Calendar.** `mail login imap.mail.me.com YOUR-APPLE-ID`, `mail`, `mail 1`. `calendar caldav https://caldav.icloud.com/ YOUR-APPLE-ID`, add a day, `calendar sync`.
+14. **Write a program on the Pi.** `sudo userrun plankc build CODE.PK`, then `sudo userrun code HI.PK`. Save, build, `userrun hi` prints hi.
+15. **Bluetooth keyboard.** Settings, Bluetooth, pair, type the six digits.
+16. **Files and screens.** The second dock tile says Files. Login, sign-out and shutdown show the park picture, not black.
+17. **Deep idle.** Leave it five minutes: the screen goes dark. A key brings it back at once.
+18. **Trackpad, if here.** One finger moves the pointer, two scroll in Blackcomb, a tap clicks. `input mode refused, left a mouse` means it still points.
+19. **Battery, if a gauge board is here.** The menu bar shows its percent. `battery: N percent` on the UART at boot.
+20. **Sleep.** Tree menu, Sleep. A key wakes it.
+21. **Spaces.** Ctrl+Right gives an empty Desktop 2. Ctrl+Left returns.
+22. **Mission Control.** Ctrl+Up shows the desktops and windows. Esc closes it.
+23. **Glass.** Settings, Display, Glass. It stays after a restart.
+24. **Shortcuts.** `shortcut loud = vol 30; vol`, then `shortcut loud`.
+25. **Tab groups.** `tab new`, then `tab group save work`. Close the tab, then `tab group work` brings both back.
+26. **Photos.** Two `.JPG` files in a `PHOTOS` folder show in the grid. r, b and + edit. Edits survive a restart. 0 undoes them.
+27. **YouTube.** With `yt.py --lan` running on the Mac, Blackcomb plays `youtube.com/watch?v=QW29Ly55Kvs` in full, with sound.
+28. **Parental controls.** `adduser kid kidpass`, `sudo limits kid apps notes,calculator`, `sudo limits kid web off`. Signed in as kid, Mines is refused.
+29. **Bluetooth headphones and keyboard.** `bt find`, `bt connect 1`, then play a song. Then a keyboard: `bt connect N`.
+30. **GPU.** `gpu` ends with `gpu: ready`. `gpu clear` paints a 64x64 tile. Any other line, send it word for word.
+31. **Install from the web.** Blackcomb, `joshuatree.jaybulb.com/apps/fortune.app`, then `userrun fortune`.
+32. **Heat and fan.** Fan spins at power on. `temp` reads about 40 to 60 C.
+33. **Screen saver.** Settings, Display, Screen saver after 1 minute. The saver starts, a key brings the screen back.
+34. **Print.** `print NOTE.TXT ADDRESS` with your printer's address, then `printers`. In Notes, Cmd+P prints.
+35. **Scan.** `scan` (or `scan ADDRESS`) saves `PHOTOS/SCAN0001.JPG`, and Photos shows it.
+34. **Clock after a stale card (13.9.3).** The menu bar clock sets itself within a minute. `google.com` opens in Blackcomb. `update` reaches the release.
+35. **Paddle and dragging (13.9.3).** Paddle stays smooth while a window is dragged.
+36. **Menu bar icons (13.9.3).** The power symbol shows Sleep, Restart and Shut Down. The clock opens Date and Time.
+
+Steps 1 to 3 are 10.0. Step 4 is 9.0's touch screen. Steps 5 to 9 are the 8.x fixes.
+38. **Update over the air (13.19.0).** On a card flashed with 13.19.0 or later: `update`, then `update install`. It restarts into the newest release; Wi-Fi, `sam` and `bench` still work.
