@@ -61,6 +61,10 @@ for f in kernel8.img config.txt; do [ -f "$CARD/$f" ] && cp "$CARD/$f" "$CARD/$f
 cp -R "$FW"/. "$CARD"/
 cp arch/arm64/kernel8.img "$CARD"/kernel8.img
 cp tools/pi-config.txt "$CARD"/config.txt
+# 13.19.0: the keys go on the card too (tools/gen/card-keys.py): Wi-Fi, the relay token and its CA, so a signed release
+# image, which carries none of them, keeps joining the network and reaching the Mac after `update install`.
+mkdir -p "$CARD"/JT
+python3 tools/gen/card-keys.py "$CARD"/JT
 # 2.66: Books' library, JT/BOOKS/ on the card. One public domain sample, The Yellow Wallpaper, with its
 # Project Gutenberg licence inside the file. Make Something Wonderful is not bundled (not public domain):
 # drop your own copy on the card as JT/BOOKS/JOBS.TXT (docs/GUIDE.md).
