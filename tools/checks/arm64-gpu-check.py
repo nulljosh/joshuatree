@@ -51,6 +51,7 @@ static void job_start(unsigned end); static unsigned job_rfc(void); static void 
 static unsigned long qba;
 static unsigned *job_base, *job_src_base;   /* the host buffers the 32-bit store and load addresses land in */
 void dcache_clean(void *p, unsigned long n);
+static int kputs_n; void kputs(const char *s) { (void)s; kputs_n++; }
 static unsigned GR(unsigned long a) {
     if (a == 0xFEC04138UL) return job_rfc();
     if (a >= 0xFEC00000UL && a < 0xFEC08000UL) v3d_reads++;
@@ -210,6 +211,25 @@ int main(void) {
       said[0] = 0; assert(gpu_copy(say, sbuf, 256, dbuf, 300, 0, 10) == 0 && strstr(said, "bad rectangle"));
       said[0] = 0; assert(gpu_copy(say, sbuf, 100, dbuf, 300, 150, 90) == 0 && strstr(said, "bad rectangle"));
       job_base = gpu_px; }
+    /* 13.23.0, the desktop through the V3D: off by default; on, a back-buffer rectangle reaches the scanout; one too big or
+       unaligned goes back to the CPU and leaves it on; a hung job turns it off, says so once and the CPU takes that update */
+    { static unsigned back[320 * 200] __attribute__((aligned(16))), scan[320 * 200] __attribute__((aligned(16)));
+      for (unsigned i = 0; i < 320 * 200; i++) { back[i] = 0xff000000u | i * 2654435761u >> 8; scan[i] = 0; }
+      job_base = scan; said[0] = 0;
+      assert(gpu_desk == 0 && gpu_blit(back, scan, 320, 128, 64) == 0 && scan[0] == 0);
+      gpu_desk = 1;
+      assert(gpu_blit(back + 320 * 10 + 16, scan + 320 * 10 + 16, 320, 128, 64) == 1 && gpu_desk_jobs == 1);
+      for (unsigned j = 0; j < 200; j++) for (unsigned i = 0; i < 320; i++) {
+          int in = i >= 16 && i < 144 && j >= 10 && j < 74;
+          assert(scan[j * 320 + i] == (in ? back[j * 320 + i] : 0u));
+      }
+      assert(gpu_blit(back + 2, scan + 2, 320, 64, 64) == 0 && gpu_desk == 1);        /* unaligned: the CPU, still on */
+      assert(gpu_blit(back, scan, 320, 4096, 64) == 0 && gpu_desk == 1);             /* too wide: the CPU, still on */
+      assert(gpu_blit(back, scan, 318, 64, 64) == 0 && gpu_desk == 1);               /* a pitch that leaves rows unaligned */
+      assert(!said[0] && kputs_n == 0);                                               /* nothing said in the Terminal */
+      hang = 1; assert(gpu_blit(back, scan, 320, 64, 64) == 0 && gpu_desk == 0 && gpu_desk_fail == 1 && kputs_n == 1 && !said[0]); hang = 0;
+      assert(gpu_blit(back, scan, 320, 64, 64) == 0 && kputs_n == 1);                 /* off now, and quiet */
+      job_base = gpu_px; }
     hang = 1; said[0] = 0;   /* a V3D that never finishes: the poll times out and says where the CLE stopped */
     assert(gpu_clear(say, 1) == 0 && strstr(said, "gpu: the job hung (CT1CS ")); hang = 0;
     job_base = gpu_px;
@@ -257,6 +277,9 @@ for name, a, b in (("no response-bit gate", "!(mbox[4] & 0x80000000u) || ", ""),
                    ("the copy's load from the wrong source address", "cw(GPU_BUS(src), 4);", "cw(GPU_BUS(src) + 256, 4);"),
                    ("the copy with no load per tile", "if (src) cload(src, spitch, h);", ""),
                    ("the copy's load with the wrong stride", "((unsigned long long)spitch * 4 << 28)", "((unsigned long long)(spitch + 1) * 4 << 28)"),
+                   ("the desktop on by default", "int gpu_desk;  /* 13.23.0", "int gpu_desk = 1;  /* 13.23.0"),
+                   ("a failed desktop job left on", "gpu_desk_fail++; gpu_desk = 0;", "gpu_desk_fail++;"),
+                   ("no unaligned guard", "|| (((unsigned long)src | (unsigned long)dst) & 15)) return 0;", ") return 0;"),
                    ("no up check", "if (!gpu_up) { show(\"gpu: not up, run gpu first\\n\"); return 0; }", "")):
     assert a in src, "mutation anchor gone: " + name
     assert host_rc(src.replace(a, b, 1)) != 0, "the copy with %s passed" % name

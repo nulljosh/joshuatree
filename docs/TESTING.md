@@ -35,7 +35,7 @@ Bench first. On the Mac, run the relay with `--bench-dir ~/.cache/joshuatree/ben
 27. **YouTube.** With `yt.py --lan` running on the Mac, Blackcomb plays `youtube.com/watch?v=QW29Ly55Kvs` in full, with sound.
 28. **Parental controls.** `adduser kid kidpass`, `sudo limits kid apps notes,calculator`, `sudo limits kid web off`. Signed in as kid, Mines is refused.
 29. **Bluetooth headphones and keyboard.** `bt find`, `bt connect 1`, then play a song. Then a keyboard: `bt connect N`.
-30. **GPU.** `gpu` ends with `gpu: ready`. `gpu clear` paints a 64x64 tile. `gpu fill` (13.20.0) paints a terracotta panel in the middle of the screen. `gpu copy` copies the top-left third of the screen one third to the right. Any other line, send it word for word.
+30. **GPU.** `gpu` ends with `gpu: ready`. `gpu clear` paints a 64x64 tile. `gpu fill` (13.20.0) paints a terracotta panel in the middle of the screen. `gpu copy` copies the top-left third of the screen one third to the right. Then `gpu desktop on` (13.23.0): drag windows and open apps for a minute; it should look the same or smoother. `gpu desktop` says how many jobs ran and how many failed; send that line. Any other line, send it word for word.
 31. **Install from the web.** Blackcomb, `joshuatree.jaybulb.com/apps/fortune.app`, then `userrun fortune`.
 32. **Heat and fan.** Fan spins at power on. `temp` reads about 40 to 60 C.
 33. **Screen saver.** Settings, Display, Screen saver after 1 minute. The saver starts, a key brings the screen back.

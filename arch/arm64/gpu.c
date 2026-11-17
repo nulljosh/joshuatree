@@ -53,6 +53,8 @@ __attribute__((unused)) static unsigned long gpu_hz(void) { unsigned long f; __a
 #define GPU_BUS(p) ((unsigned)(unsigned long)(p))
 
 int gpu_up;   /* 1 once the ident read back as a V3D */
+int gpu_desk;  /* 13.23.0: `gpu desktop on`: fb_copy (main.c) hands screen updates to gpu_blit */
+unsigned gpu_desk_jobs, gpu_desk_fail;
 unsigned gpu_ver(unsigned ident1) { return (ident1 & 15) * 10 + ((ident1 >> 4) & 15); }
 
 #if !defined(PI_BUILD) && !defined(GPU_HOST_TEST)
@@ -60,6 +62,7 @@ int gpu_bringup(void (*say)(const char *)) { say("gpu: no V3D on this machine\n"
 int gpu_clear(void (*say)(const char *), unsigned rgba) { (void)rgba; say("gpu: no V3D on this machine\n"); return 0; }
 int gpu_fill(void (*say)(const char *), unsigned *scr, unsigned pitch, int x, int y, int w, int h, unsigned px) { (void)scr; (void)pitch; (void)x; (void)y; (void)w; (void)h; (void)px; say("gpu: no V3D on this machine\n"); return 0; }
 int gpu_copy(void (*say)(const char *), unsigned *src, unsigned spitch, unsigned *dst, unsigned dpitch, int w, int h) { (void)src; (void)spitch; (void)dst; (void)dpitch; (void)w; (void)h; say("gpu: no V3D on this machine\n"); return 0; }
+int gpu_blit(unsigned *src, unsigned *dst, unsigned pitch, int w, int h) { (void)src; (void)dst; (void)pitch; (void)w; (void)h; return 0; }
 #else
 /* One clock tag for clock 5, value then a zero (SET_CLOCK_RATE's skip-turbo). 1 with *out the answer, 0 refused: the call
    or the tag's own response bit (bit 31 of the size word, as power.h checks it). */
@@ -224,6 +227,27 @@ int gpu_copy(void (*say)(const char *), unsigned *src, unsigned spitch, unsigned
     ga("gpu: the V3D copied "); gd((unsigned)w); ga("x"); gd((unsigned)h); ga(" pixels"); showl();
     return 1;
 }
+
+/* 13.23.0 (v14, slice 3): the desktop through the V3D. With `gpu desktop on`, fb_copy (main.c) hands each screen update of
+   64x64 pixels or more here: the V3D loads the rectangle from the back buffer and stores it to the scanout. Smaller ones stay
+   on the CPU, where a job's setup costs more than the copy. A rectangle the V3D cannot take (too big, unaligned) goes back
+   to the CPU quietly; a job that fails turns it off and says so once, and the CPU copies that update, so the screen is never
+   left stale. One job at a time: a second core, or a flush from inside a job's own message, takes the CPU path. */
+void kputs(const char *s);   /* main.c: the UART */
+static int gpu_busy;
+static void gpu_quiet(const char *s) { (void)s; }
+int gpu_blit(unsigned *src, unsigned *dst, unsigned pitch, int w, int h) {
+    if (!gpu_desk || !gpu_up || w <= 0 || h <= 0 || w > GPU_MAX || h > GPU_MAX || (unsigned)w > pitch || (pitch & 3)
+        || (((unsigned long)src | (unsigned long)dst) & 15)) return 0;
+    if (__atomic_exchange_n(&gpu_busy, 1, __ATOMIC_ACQUIRE)) return 0;
+    void (*was)(const char *) = gsay; gsay = gpu_quiet;
+    int ok = gpu_paint(dst, pitch, (unsigned)w, (unsigned)h, 0, src, pitch);
+    gsay = was;
+    if (ok) gpu_desk_jobs++;
+    else { gpu_desk_fail++; gpu_desk = 0; kputs("gpu: a desktop job failed, the CPU draws the screen again\n"); }
+    __atomic_store_n(&gpu_busy, 0, __ATOMIC_RELEASE);
+    return ok;
+}
 #endif
 
 #ifndef GPU_HOST_TEST
@@ -233,6 +257,25 @@ int gpu_command(const char *q, unsigned n) {   /* cmd.c: `gpu`, `gpu clear`, `gp
     if (n < 3 || q[0] != 'g' || q[1] != 'p' || q[2] != 'u') return 0;
     if (n == 3) { gpu_bringup(cmd_out); return 1; }
     if (n == 9 && gpu_word(q + 3, " clear")) { gpu_clear(cmd_out, 0xff2c50b5u); return 1; }   /* terracotta #b5502c as RGBA8 bytes */
+    if (n >= 11 && gpu_word(q + 3, " desktop")) {   /* 13.23.0: `gpu desktop on`, `gpu desktop off`, `gpu desktop` */
+        char b[96]; unsigned k = 0;
+        if (n == 14 && gpu_word(q + 11, " on")) {
+            if (!gpu_up && !gpu_bringup(cmd_out)) return 1;
+            if (!gpu_clear(cmd_out, 0xff2c50b5u)) { cmd_out("gpu: desktop stays on the CPU\n"); return 1; }   /* a job must pass first */
+            gpu_desk = 1;
+        } else if (n == 15 && gpu_word(q + 11, " off")) gpu_desk = 0;
+        else if (n != 11) return 0;
+        const char *h = gpu_desk ? "gpu: the V3D draws the desktop, " : "gpu: the CPU draws the desktop, ";
+        while (*h) b[k++] = *h++;
+        unsigned v[2] = { gpu_desk_jobs, gpu_desk_fail }; const char *tail[2] = { " jobs, ", " failed\n" };
+        for (int i = 0; i < 2; i++) {
+            char d[12]; int m = 0; unsigned x = v[i]; do d[m++] = (char)('0' + x % 10); while (x /= 10);
+            while (m) b[k++] = d[--m];
+            for (const char *t = tail[i]; *t; t++) b[k++] = *t;
+        }
+        b[k] = 0; cmd_out(b);
+        return 1;
+    }
     if (n != 8) return 0;
     if (gpu_word(q + 3, " copy")) {   /* the top-left third of the back buffer, one third to the right */
         int w = (int)fb_w / 3 & ~15, h = (int)fb_h / 3;

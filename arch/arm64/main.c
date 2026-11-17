@@ -1583,6 +1583,13 @@ unsigned *fb_scan;
 int fb_defer, fb_mute, fb_tag, fd_x0, fd_y0, fd_x1, fd_y1;   /* fb_tag: the batch moved a window (FB_TRACE prints it) */
 int off_on;   /* off_begin's buffer is the target: a flush waits for off_end, as fb points into that buffer */
 static void fb_copy(int x, int y, int w, int h) {   /* clipped already */
+    if (fb_scan && w * h >= 64 * 64) {   /* 13.23.0: with `gpu desktop on` the V3D copies it (gpu.c's gpu_blit), rows widened to 16 bytes */
+        int x0 = x & ~3, w0 = (w + (x - x0) + 3) & ~3;
+        if (x0 + w0 > (int)fb_pitch) w0 = (int)fb_pitch - x0;
+        int gpu_blit(unsigned *src, unsigned *dst, unsigned pitch, int w, int h);
+        unsigned long o = (unsigned long)y * fb_pitch + (unsigned)x0;
+        if (gpu_blit(fb + o, fb_scan + o, fb_pitch, w0, h)) return;
+    }
     for (int j = y; j < y + h; j++) {
         unsigned o = (unsigned)j * fb_pitch + (unsigned)x;
         if (fb_scan) {
