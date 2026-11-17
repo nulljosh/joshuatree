@@ -9,37 +9,32 @@
 ![release](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/release.yml?branch=main&label=release)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A small operating system, written from scratch, that runs on a Raspberry Pi 4, in an emulator on a Mac and in your browser. It has its own windows, dock, sound, internet and 38 apps, from Notes and a Terminal to a web browser, mail and live Weather, plus a few games. Its compiler is its own too: Plank's, written in Plank, rebuilds itself on the Pi with nothing from outside.
+Joshua Tree is an operating system written from scratch. No Linux, no libc. It runs on PCs and on the Raspberry Pi 4.
 
-<img src="landing/shots/desktop-apps.webp" width="100%" alt="The Joshua Tree desktop with the Terminal and live Weather open, and running-app dots in the dock">
+It has windows, a dock, sound, the internet and 38 apps, from Notes and a Terminal to a web browser, mail and live weather. Samantha, the built-in assistant, opens apps and does things for you when you talk to her. The compiler, Plank, is written in Plank and rebuilds itself on the Pi.
 
-<p>
-  <img src="landing/shots/app-files.webp" width="32%" alt="Files, the file browser">
-  <img src="landing/shots/app-notes.webp" width="32%" alt="Notes">
-  <img src="landing/shots/app-terminal.webp" width="32%" alt="Terminal running uptime, mem and ls">
-  <img src="landing/shots/app-weather.webp" width="32%" alt="Weather, live">
-  <img src="landing/shots/app-stocks.webp" width="32%" alt="Stocks, live quotes and a chart">
-  <img src="landing/shots/app-calendar.webp" width="32%" alt="Calendar">
-</p>
+<img src="landing/shots/desktop-apps.webp" width="100%" alt="The Joshua Tree desktop with the Terminal and live Weather open">
 
 ## Try it
 
-- In a browser: open [joshuatree.jaybulb.com/?demo](https://joshuatree.jaybulb.com/?demo).
-- On a PC: boot the [latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) ([checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS)). BIOS boot is checked in QEMU. UEFI and real PCs are not.
-- On a Pi 4: flash a card with `tools/flash-pi.sh` ([steps](docs/GUIDE.md#raspberry-pi)).
-- To build it on a Mac, Apple Silicon or Intel: `brew install lld qemu`. On Linux, Intel or AMD: `sudo apt install clang lld qemu-system-x86 qemu-system-arm`. Then `make run` to boot and `./check.sh` to test. Every pull request is built and checked on Linux x86-64.
+- In a browser: [joshuatree.jaybulb.com/?demo](https://joshuatree.jaybulb.com/?demo).
+- On a PC: download the [latest ISO](https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso) and check it against the [checksums](https://github.com/nulljosh/joshuatree/releases/latest/download/SHA256SUMS). PC boot is tested in QEMU only so far.
+- On a Pi 4: `tools/flash-pi.sh` writes the card. The [Guide](docs/GUIDE.md#raspberry-pi) has the steps.
 
-## New
+## Build and run
 
-- On the Pi: the green dot fills the screen, `man NAME` explains every Terminal command, `temp` reads the chip, `ping HOST` works, and apps can post notices that Focus keeps quiet.
-- On a PC: Ctrl+Alt with the arrows or U, I, J and K snaps the front window.
-- For developers: lldb attaches to both kernels through QEMU's gdb stub.
+You need clang, lld and QEMU. On a Mac: `brew install lld qemu`. On Linux: `sudo apt install clang lld qemu-system-x86 qemu-system-arm`.
 
-## The box
+- `make run` builds the PC version and boots it in QEMU.
+- `./check.sh` runs the boot test.
+- `make -C arch/arm64 run` boots the Pi version in QEMU.
 
-<img src="docs/hardware/nimbus-hero.jpg" width="60%" alt="Nimbus, a small square computer running Joshua Tree">
+## Docs
 
-Nimbus: a Raspberry Pi 4 and a 7 inch screen in a printed shell. A concept, with the CAD, renders and print pack in the [Guide](docs/GUIDE.md#nimbus).
+- [Guide](docs/GUIDE.md): using it, the Raspberry Pi, the hardware.
+- [Architecture](docs/ARCHITECTURE.md): how it is built, the design rules, system calls, tests.
+- [Roadmap](docs/ROADMAP.md): what is next and what shipped.
+- [Testing](docs/TESTING.md): the short list to try on a real Pi.
 
 ## How fast
 
@@ -54,15 +49,6 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 | Context switch | 3236 ns/switch |
 | Disk read | 10253 KB/s |
 <!-- bench:end -->
-
-## Docs
-
-<img src="architecture.svg" width="60%" alt="Joshua Tree at a glance: where it runs, the layers, Samantha, apps, the compiler building itself, and the Pi">
-
-- [Guide](docs/GUIDE.md): using it, the Raspberry Pi, building the hardware.
-- [Architecture](docs/ARCHITECTURE.md): how it is built, design rules, system calls, security, tests.
-- [Roadmap](docs/ROADMAP.md): what is next, what shipped, the story.
-- [Testing](docs/TESTING.md): the short list to try on a real Pi.
 
 ## License
 
