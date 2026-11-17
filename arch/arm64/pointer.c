@@ -220,14 +220,14 @@ void calc_paint(void) {
     while (*in && gui_text_width(in) > w0 - 70) in++;   /* keep the end of a long sum in view */
     gui_text(*in ? in : "Type or click a sum", x0 + 6, y0 + 3, *in ? 0x001C1C1E : 0x0075726E);
     gui_text(f & 1 ? (f & 2 ? "DEG" : "RAD") : "", x0 + w0 - 34, y0 + 3, 0x0075726E);
-    if (f & 4) gui_text("M", x0 + w0 - 50, y0 + 3, 0x00b5502c);
+    if (f & 4) gui_text("M", x0 + w0 - 50, y0 + 3, ui_accent);
     if (*out) gui_icon_text(out, x0 + w0 - 8 - gui_icon_text_w(out, 1, s), y0 + 20, 1, s, *out == 'E' ? 0x00b5502c : 0x001C1C1E);
     int cols, n = calc_keys(&cols);
     for (int i = 0; i < n; i++) {
         const char *k = calc_key(i);
         int x, y, w, h, eq = k[0] == '=', op = !k[1] && (k[0] == '+' || k[0] == '-' || k[0] == '*' || k[0] == '/');
         calc_cell(i, &x, &y, &w, &h);
-        window_rect(x, y, w, h, eq ? 0x00b5502c : 0x00DDD8CE);
+        window_rect(x, y, w, h, eq ? ui_accent : 0x00DDD8CE);
         if (!eq) window_rect(x + 1, y + 1, w - 2, h - 2, op ? 0x00EFEBE4 : 0x00FFFFFF);
         gui_text(k, x + (w - gui_text_width(k)) / 2, y + (h - 16) / 2, eq ? 0x00FFFFFF : 0x001C1C1E);
     }

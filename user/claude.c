@@ -36,7 +36,7 @@
 #define BG      0x00F5F0EB /* WINDOW_BODY */
 #define INK     0x001C1C1E /* WINDOW_INK */
 #define MUTED   0x00807468
-#define ACCENT  0x00B5502C /* the house terracotta */
+#define ACCENT  jt_accent()   /* 13.21.0: the accent Settings picked */
 #define ERR     0x00A33B3B
 #define FIELD   0x00FFFFFF
 #define RULE    0x00D9D3CB

@@ -20,7 +20,7 @@
 #define SEL    0x00EDE6DC
 #define RULE   0x00E0D8CE
 #define SIDE   0x00F1EDE6
-#define ACCENT 0x00B5502C
+#define ACCENT jt_accent()   /* 13.21.0: the accent Settings picked */
 #define WHITE  0x00FFFFFF
 
 #define MAX 24

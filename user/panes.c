@@ -52,7 +52,7 @@
 #define AMBER  0x00C98A3E
 #define HINT   0x00807468
 #define TABINK 0x00A89C8E
-#define ACCENT 0x00B5502C
+#define ACCENT jt_accent()   /* 13.21.0: the accent Settings picked */
 #define CELL   8
 #define LH     17
 #define MARGIN 16

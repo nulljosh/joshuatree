@@ -24,8 +24,8 @@
 #define SELOFF 0x00F4F0EA
 #define SIDE   0x00F2EEE8
 #define RULE   0x00E4DDD3
-#define ACCENT 0x00B5502C
-#define ACCENT_DK 0x008E3A1E
+#define ACCENT jt_accent()   /* 13.21.0: the accent Settings picked */
+#define ACCENT_DK jt_accent_dark()
 #define WHITE  0x00FFFFFF
 
 #define SB_W   132
