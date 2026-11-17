@@ -339,6 +339,7 @@ retry|2|Drunk mode easter egg: horizontal sway applied to framebuffer rows|pytho
 retry|7|Mac speech to text: stt.py turns a spoken sentence (macOS say, 16 kHz PCM) into words through whisper.cpp, and refuses a wrong token, an odd body and a GET (skips off a Mac)|python3 tools/checks/stt-check.py
 retry|7|Brand tokens: docs/brand/tokens.css matches the kernel's desktop colours, the accent, the brand page links it and the map reads it|python3 tools/checks/brand-tokens-check.py
 retry|10|ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing)|python3 ./tools/checks/arm64-m0-check.py
+retry|7|x86-64 slice 1 (13.18.0): the 64-bit kernel boots in qemu-system-x86_64 into long mode, maps 4 GiB, prints on the serial port and a 1024x768 screen; a CPU without long mode is refused in words|python3 ./tools/checks/x86_64-m0-check.py
 retry|6|ARM64: a tiny local language model answers under QEMU (skips where the tools are missing)|python3 ./tools/checks/arm64-llm-check.py
 retry|6|ARM64: with the relay out of reach, Samantha answers from the hosted Turing over HTTPS (skips where the tools are missing)|python3 ./tools/checks/arm64-sam-hosted-check.py
 retry|6|ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing)|python3 ./tools/checks/arm64-m1c-check.py
