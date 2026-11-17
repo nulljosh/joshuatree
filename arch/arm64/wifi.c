@@ -24,6 +24,7 @@ static unsigned unhex_line(const char *f, unsigned n, const char *key, unsigned 
     }
     return 0;
 }
+int wifi_built_in(void) { return WIFI_SSID_LEN > 0; }   /* 13.19.0, ask.c: this kernel holds a network only a rebuild puts back */
 static void net_load(void) {
     char f[160]; int got = sd_enter_jt(0) ? fat_read_file("WIFI.TXT", f, sizeof f) : -1;
     fat_cwd_set(0);
@@ -802,6 +803,7 @@ int wifi_init(void) {
 }
 #else
 int wifi_init(void) { return 0; }
+int wifi_built_in(void) { return 0; }   /* 13.19.0, ask.c: no radio, so no built-in network to lose */
 int wifi_rejoin(void) { return 0; }
 int wifi_signal_level(void) { return 1; }
 void wifi_hold(void) {}

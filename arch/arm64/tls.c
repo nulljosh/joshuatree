@@ -102,6 +102,31 @@ static int boot_time(void *ctx, uint32_t nbd, uint32_t nbs, uint32_t nad, uint32
     if (na < boot_na) boot_na = na;
     return 0;
 }
+/* 13.19.0: the relay CA from the card (JT/RELAYTA.BIN, cardkeys.h), when there is one, is the only anchor that can vouch
+   for the relay: a release image is built with no private anchor at all, and a dev image's built-in one gives way to
+   the card's, so a CA renewed on the Mac and written by flash-pi.sh wins without a rebuild. */
+#include "cardkeys.h"
+static unsigned char card_ta_buf[2048];
+static br_x509_trust_anchor card_ta;
+static int card_ta_ok;
+int tls_card_anchor(const unsigned char *b, unsigned n) {
+    struct cardta t;
+    if (n > sizeof card_ta_buf || !cardta_parse(b, n, &t)) return 0;
+    for (unsigned i = 0; i < n; i++) card_ta_buf[i] = b[i];
+    card_ta.dn.data = card_ta_buf + t.dn_at; card_ta.dn.len = t.dn_len;
+    card_ta.flags = BR_X509_TA_CA;
+    if (t.type == 1) {
+        card_ta.pkey.key_type = BR_KEYTYPE_RSA;
+        card_ta.pkey.key.rsa.n = card_ta_buf + t.a_at; card_ta.pkey.key.rsa.nlen = t.a_len;
+        card_ta.pkey.key.rsa.e = card_ta_buf + t.b_at; card_ta.pkey.key.rsa.elen = t.b_len;
+    } else {
+        card_ta.pkey.key_type = BR_KEYTYPE_EC;
+        card_ta.pkey.key.ec.curve = (int)t.curve;
+        card_ta.pkey.key.ec.q = card_ta_buf + t.a_at; card_ta.pkey.key.ec.qlen = t.a_len;
+    }
+    card_ta_ok = 1;
+    return 1;
+}
 static int setup(const char *host, int private_only) {
     static const uint16_t suites[] = {
         BR_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, BR_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -113,7 +138,8 @@ static int setup(const char *host, int private_only) {
     br_ssl_client_zero(&sc);
     br_ssl_engine_set_versions(&sc.eng, BR_TLS12, BR_TLS12);
     /* The relay's own CA (TLS_TA, the anchors from TAS_PRIVATE on) is the only one that can vouch for the relay. */
-    br_x509_minimal_init(&xc, &br_sha256_vtable, private_only ? TAS + TAS_PRIVATE : TAS, private_only ? TAS_NUM - TAS_PRIVATE : TAS_NUM);
+    if (private_only && card_ta_ok) br_x509_minimal_init(&xc, &br_sha256_vtable, &card_ta, 1);
+    else br_x509_minimal_init(&xc, &br_sha256_vtable, private_only ? TAS + TAS_PRIVATE : TAS, private_only ? TAS_NUM - TAS_PRIVATE : TAS_NUM);
     unsigned long now = net_clock_utc(), floor = net_clock_floor();
     if (now < floor) now = floor;
     br_x509_minimal_set_time(&xc, (uint32_t)(now / 86400 + 719528), (uint32_t)(now % 86400));

@@ -45,3 +45,4 @@ Done on the board on 2026-11-01 and 11-02 (8.0.0 to 8.9.0): the flat boot with t
 35. **Paddle and dragging (13.9.3).** Open Paddle, Space, hold Up and Down: the left paddle follows and the desktop stays smooth. Drag a window around with Paddle playing behind it.
 36. **Menu bar icons (13.9.3).** Click the power symbol: Sleep, Restart and Shut Down, not Settings. Click the clock: Settings at Date and Time, and the arrow is still there.
 Steps 1 to 3 are 10.0, 4 is 9.0's touch screen; 5 to 9 are last night's fixes.
+38. **Update over the air (13.19.0).** On a card flashed with 13.19.0 or later, in the Terminal: `update`, then `update install`. It restarts into the newest release, and Wi-Fi, `sam` and `bench` still work after it. On an older card it says to flash once more with flash-pi.sh.

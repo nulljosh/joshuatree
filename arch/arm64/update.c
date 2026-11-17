@@ -15,7 +15,7 @@
    is the firmware's and needs the board. UPDATE_BASE= and UPDATE_DL= point it at a stub for that check only (FORCE rebuilds
    the object, as store.c's). */
 #include "appsig.h"
-int ask_dev_build(void);   /* ask.c: 1 when this kernel carries the relay token (a dev card from tools/flash-pi.sh) */
+int ask_keys_only_in_kernel(void);   /* ask.c, 13.19.0: 1 when a release image would lose a key the card has no copy of */
 #ifndef UPDATE_BASE
 #define UPDATE_BASE "https://github.com/nulljosh/joshuatree/releases/latest/download/"
 #endif
@@ -94,9 +94,9 @@ void update_check(void) {   /* `update` */
 void update_install(void) {   /* `update install`, or Update and Restart */
     if (!latest[0]) { fail("update: run update first, to see what is out\n", "Check for updates first"); return; }
     if (!sd_ready()) { fail("update: no card to put it on\n", "The update needs the card"); return; }
-    if (ask_dev_build()) {   /* a dev card: its kernel carries the relay key and CA, which the release image does not */
-        fail("update: this card's kernel carries your relay key; the release would drop it. Update it with tools/flash-pi.sh\n", "A dev card updates with flash-pi.sh");
-        uart_puts("update: dev card, not replaced\n"); return;
+    if (ask_keys_only_in_kernel()) {   /* 13.19.0: a key only this kernel holds would be lost; once the card holds them all, it may update */
+        fail("update: this kernel holds your relay key or Wi-Fi and the card does not; flash it once more with tools/flash-pi.sh, which puts them on the card, and update works from then on\n", "Flash once more with flash-pi.sh");
+        uart_puts("update: keys only in the kernel, not replaced\n"); return;
     }
     unsigned long mark = heap_mark();
     char *img, *sig; unsigned il, sl;
