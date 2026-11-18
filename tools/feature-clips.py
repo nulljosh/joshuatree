@@ -6,7 +6,10 @@ at about 10 fps into landing/clips/feature-<name>.mp4, muted, 800x600, with its 
 Clips: spaces (Ctrl+Left/Right between desktops), mission (Ctrl+Up), spotlight (Cmd+Space, type, Enter), launchpad
 (the dock's first tile).
 
+Features that need a fake relay, radio or signed release are filmed through their own check instead (tools/film/), then cut:
+
 Usage: python3 tools/feature-clips.py [name ...]   (from anywhere; default: all)
+       python3 tools/feature-clips.py --cut FILMED.mp4 START END NAME [SPEED]   (seconds; SPEED 2 plays a slow wait twice as fast)
 """
 import json, os, shutil, socket, subprocess, sys, threading, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "checks"))
@@ -109,7 +112,17 @@ def film(name):
         except subprocess.TimeoutExpired: q.kill()
 
 
+def cut(src, start, end, name, speed="1"):
+    """Trim a boot filmed by tools/film/qemu-system-aarch64 into landing/clips/feature-<name>.mp4 and its poster."""
+    out = os.path.join(ROOT, "landing", "clips", f"feature-{name}.mp4")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", start, "-to", end, "-i", src, "-vf", "setpts=PTS/%s" % speed, "-c:v", "libx264", "-preset", "slow", "-crf", "28",
+                    "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", out], check=True)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", out, "-frames:v", "1", "-q:v", "4", out[:-4] + ".jpg"], check=True)
+    print(f"cut {os.path.relpath(out, ROOT)} ({os.path.getsize(out)} bytes)")
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--cut"]: cut(*sys.argv[2:7]); sys.exit(0)
     if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64", "ffmpeg")): sys.exit("needs clang, ld.lld, qemu-system-aarch64, ffmpeg")
     subprocess.run(["make", "-s", "-C", ARCH, "kernel8.elf"], check=True)
     for n in sys.argv[1:] or ["spaces", "mission", "spotlight", "launchpad"]: film(n)
