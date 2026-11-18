@@ -150,7 +150,7 @@ p,li,.sub{text-wrap:pretty}
      right above it. */
   .pi-wall { display:block; width:100%; height:auto; border-radius:14px; margin:20px 0 24px; image-rendering:pixelated; }
   .eyebrow { color: var(--fg); font-size:var(--t13); text-transform: uppercase; letter-spacing: 0.14em; margin: 10px 0 0; font-weight: 600;line-height:var(--lh13)}
-  /* The eyebrow's typewriter rewrites its text every few seconds, and the
+  /* The eyebrow rewrites its text every few seconds, and the
      items aren't the same length. Left to size itself the h2 changed height
      between items (measured 18px vs 21px at 1440px wide) and pushed every
      section below it up and down on every cycle. Fixed box sized for the
@@ -698,7 +698,7 @@ p,li,.sub{text-wrap:pretty}
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">38</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">13.19.1</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">13.19.2</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
@@ -997,7 +997,7 @@ p,li,.sub{text-wrap:pretty}
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">13.19.1</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">13.19.2</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"><canvas></canvas></div>
 </footer>
@@ -1141,8 +1141,7 @@ p,li,.sub{text-wrap:pretty}
 // sibling, versionsync-check.sh, asserts the two never drift apart.
 (function () {
   // v0.76.54: direct request, the eyebrow now cycles through recent real
-  // shipped work with a typewriter effect (same manual implementation
-  // embed.js's headline already uses), not a static version number. Hand-
+  // shipped work, not a static version number. Hand-
   // curated, not fetched from GitHub's API at runtime: a live API call
   // from every visitor's browser would need auth to avoid rate-limiting
   // and a CORS-safe proxy, real scope beyond a landing-page cycling
@@ -1162,16 +1161,8 @@ p,li,.sub{text-wrap:pretty}
     'Two apps side by side, drag them anywhere',
     'Running right here in your browser'
   ];
-  var i = 0, typing = null;
-  function typeOut(text, cb) {
-    if (typing) clearInterval(typing);
-    el.textContent = '';
-    var idx = 0, chars = text.split('');
-    typing = setInterval(function () {
-      if (idx < chars.length) { el.textContent += chars[idx]; idx++; }
-      else { clearInterval(typing); typing = null; if (cb) cb(); }
-    }, 45);
-  }
+  var i = 0;
+  function typeOut(text, cb) { el.textContent = text; if (cb) cb(); }   // instant swap, no per-letter animation (2026-11-18)
   function cycle() {
     typeOut(items[i], function () { setTimeout(cycle, 2600); });
     i = (i + 1) % items.length;
@@ -1413,6 +1404,6 @@ p,li,.sub{text-wrap:pretty}
   });
 })();
 </script>
-<script>if (document.documentElement.classList.contains('demo')) document.write('<script src="v86/libv86.js"><\/script><script src="v86/embed.js"><\/script>');</script>
+<script>if (document.documentElement.classList.contains('demo')) document.write('<script src="v86/libv86.js"><\/script><script src="v86/embed.js?v=13.19.2"><\/script>');</script>
 </body>
 </html>
