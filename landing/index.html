@@ -223,14 +223,16 @@ p,li,.sub{text-wrap:pretty}
   .app-features .sub, .progress-section .sub { text-align: center; color: var(--sub); font-size:var(--t17); max-width: 480px; margin: 0 auto 40px; line-height:var(--lh17); ;letter-spacing:var(--tr17)}
   .tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .app-features .tile-grid { grid-template-columns: repeat(3, 1fr); }
+  #desktop .tile-grid { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 700px) { #desktop .tile-grid { grid-template-columns: 1fr; } }
   .tile { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
-  .tile img { width: 100%; height: auto; display: block; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .tile img, .tile video { width: 100%; height: auto; display: block; background: var(--bg); border-bottom: 1px solid var(--border); }
   .tile p { margin: 0; padding: 14px 16px; font-size:var(--t15); line-height:var(--lh15); color: var(--fg); ;letter-spacing:var(--tr15)}
   @media (max-width: 700px) { .tile-grid, .app-features .tile-grid { grid-template-columns: 1fr; } .app-features h2, .progress-section h2 { font-size:var(--t28);line-height:var(--lh28);letter-spacing:var(--tr28)} }
   /* The app wall: CSS columns, each shot keeps its own height, 8px gaps, one small name badge per shot. */
   .wall-grid { columns: 3; column-gap: 8px; }
   .wall-item { position: relative; break-inside: avoid; margin: 0 0 8px; border-radius: 14px; overflow: hidden; }
-  .wall-item img { display: block; width: 100%; height: auto; }
+  .wall-item img, .wall-item video { display: block; width: 100%; height: auto; }
   .wall-name { position: absolute; left: 10px; bottom: 10px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 80%, transparent); color: var(--bg); font-size: var(--t11); font-weight: 600; line-height: var(--lh11); letter-spacing: var(--tr11); }
   @media (max-width: 900px) { .wall-grid { columns: 2; } }
   @media (max-width: 600px) { .wall-grid { columns: 1; } }
@@ -698,7 +700,7 @@ p,li,.sub{text-wrap:pretty}
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">38</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">13.19.2</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">13.20.0</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
@@ -712,81 +714,92 @@ p,li,.sub{text-wrap:pretty}
   <p class="sub">A full set of apps, built from nothing but a screen and a keyboard.</p>
   <div class="wall-grid">
     <figure class="wall-item">
-      <img src="shots/app-notes.webp" alt="Notes app showing a short grocery list" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-notes.mp4" poster="shots/app-notes.webp" muted loop playsinline preload="none" aria-label="Notes app showing a short grocery list" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Notes</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-calendar.webp" alt="Calendar app showing a month view" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-calendar.mp4" poster="shots/app-calendar.webp" muted loop playsinline preload="none" aria-label="Calendar app showing a month view" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Calendar</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-weather.webp" alt="Weather app showing live current conditions and the next 24 hours, a 7-day forecast and a few details" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-weather.mp4" poster="shots/app-weather.webp" muted loop playsinline preload="none" aria-label="Weather app showing live current conditions and the next 24 hours, a 7-day forecast and a few details" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Weather</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-files.webp" alt="Files app showing a folder of files" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-files.mp4" poster="shots/app-files.webp" muted loop playsinline preload="none" aria-label="Files app showing a folder of files" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Files</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-terminal.webp" alt="Terminal app after uptime, mem and ls" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-terminal.mp4" poster="shots/app-terminal.webp" muted loop playsinline preload="none" aria-label="Terminal app after uptime, mem and ls" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Terminal</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-stocks.webp" alt="Stocks app showing live quotes and an intraday chart" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-stocks.mp4" poster="shots/app-stocks.webp" muted loop playsinline preload="none" aria-label="Stocks app showing live quotes and an intraday chart" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Stocks</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-bookrank.webp" alt="Bookrank app showing a ranked list of books with the author and a short summary of the selected one" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-bookrank.mp4" poster="shots/app-bookrank.webp" muted loop playsinline preload="none" aria-label="Bookrank app showing a ranked list of books with the author and a short summary of the selected one" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Bookrank</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-tonchi.webp" alt="Patois app showing a Spanish word and four answers to pick from" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-tonchi.mp4" poster="shots/app-tonchi.webp" muted loop playsinline preload="none" aria-label="Patois app showing a Spanish word and four answers to pick from" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Patois</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-curbfind.webp" alt="Scrounge app showing local listings with prices and a deal score for the selected one" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-curbfind.mp4" poster="shots/app-curbfind.webp" muted loop playsinline preload="none" aria-label="Scrounge app showing local listings with prices and a deal score for the selected one" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Scrounge</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-epiphany.webp" alt="Epiphany app showing a watchlist, crypto and commodities, and a fear and greed gauge" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-epiphany.mp4" poster="shots/app-epiphany.webp" muted loop playsinline preload="none" aria-label="Epiphany app showing a watchlist, crypto and commodities, and a fear and greed gauge" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Epiphany</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-hamurapi.webp" alt="Hamurapi app showing a drawn city of houses and villagers around a ziggurat, with a button to start a new game" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-hamurapi.mp4" poster="shots/app-hamurapi.webp" muted loop playsinline preload="none" aria-label="Hamurapi app showing a drawn city of houses and villagers around a ziggurat, with a button to start a new game" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Hamurapi</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-windgate.webp" alt="Airwell app showing a blue circle growing inside a ring, with four breathing presets and a countdown" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-windgate.mp4" poster="shots/app-windgate.webp" muted loop playsinline preload="none" aria-label="Airwell app showing a blue circle growing inside a ring, with four breathing presets and a countdown" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Airwell</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-panes.webp" alt="Panes app showing two shells side by side, with a rail of tabs on the left" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-panes.mp4" poster="shots/app-panes.webp" muted loop playsinline preload="none" aria-label="Panes app showing two shells side by side, with a rail of tabs on the left" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Panes</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-solitaire.webp" alt="Solitaire app showing seven columns of cards, the stock and four empty foundations" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-solitaire.mp4" poster="shots/app-solitaire.webp" muted loop playsinline preload="none" aria-label="Solitaire app showing seven columns of cards, the stock and four empty foundations" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Solitaire</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-depths.webp" alt="Depths app showing a terracotta corridor in first person with a creature in the crosshair" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-depths.mp4" poster="shots/app-depths.webp" muted loop playsinline preload="none" aria-label="Depths app showing a terracotta corridor in first person with a creature in the crosshair" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Depths</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-bricks.webp" alt="Bricks app showing six rows of clay-coloured bricks over a paddle and a ball" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-bricks.mp4" poster="shots/app-bricks.webp" muted loop playsinline preload="none" aria-label="Bricks app showing six rows of clay-coloured bricks over a paddle and a ball" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Bricks</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-paddle.webp" alt="Paddle app showing two paddles, a ball and the score" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-paddle.mp4" poster="shots/app-paddle.webp" muted loop playsinline preload="none" aria-label="Paddle app showing two paddles, a ball and the score" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Paddle</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-snake.webp" alt="Snake app showing a snake on a checked grid and an apple" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-snake.mp4" poster="shots/app-snake.webp" muted loop playsinline preload="none" aria-label="Snake app showing a snake on a checked grid and an apple" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Snake</span>
     </figure>
     <figure class="wall-item">
-      <img src="shots/app-chess.webp" alt="Chess app showing the board at the start of a game" loading="lazy" width="984" height="462">
+      <video class="clip" src="clips/app-chess.mp4" poster="shots/app-chess.webp" muted loop playsinline preload="none" aria-label="Chess app showing the board at the start of a game" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Chess</span>
     </figure>
+  </div>
+</section>
+
+<section class="app-features reveal" id="desktop" aria-label="The desktop at work">
+  <h2>A desktop that keeps up with you.</h2>
+  <p class="sub">Filmed on the Pi build, nothing staged.</p>
+  <div class="tile-grid">
+    <div class="tile"><video class="clip" src="clips/feature-spaces.mp4" poster="clips/feature-spaces.jpg" muted loop playsinline preload="none" aria-label="Ctrl and the arrow keys move between two desktops, each keeping its own windows" width="800" height="600"></video><p><strong>Spaces.</strong> Four desktops. Ctrl and an arrow moves between them, and every window stays where you left it.</p></div>
+    <div class="tile"><video class="clip" src="clips/feature-mission.mp4" poster="clips/feature-mission.jpg" muted loop playsinline preload="none" aria-label="Ctrl and Up shows every desktop and every open window at once" width="800" height="600"></video><p><strong>Mission Control.</strong> Ctrl and Up shows every desktop and every open window. Pick one and you are there.</p></div>
+    <div class="tile"><video class="clip" src="clips/feature-spotlight.mp4" poster="clips/feature-spotlight.jpg" muted loop playsinline preload="none" aria-label="Cmd and Space opens Spotlight, typing term finds the Terminal, which runs cores and mem" width="800" height="600"></video><p><strong>Spotlight.</strong> Cmd and Space, a few letters, Enter. Any app is a second away.</p></div>
+    <div class="tile"><video class="clip" src="clips/feature-launchpad.mp4" poster="clips/feature-launchpad.jpg" muted loop playsinline preload="none" aria-label="Launchpad shows every app in one grid, the arrow keys walk it" width="800" height="600"></video><p><strong>Launchpad.</strong> Every app in one grid, from the first tile in the dock. The arrow keys walk it.</p></div>
   </div>
 </section>
 
@@ -997,7 +1010,7 @@ p,li,.sub{text-wrap:pretty}
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">13.19.2</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">13.20.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"><canvas></canvas></div>
 </footer>
@@ -1187,6 +1200,15 @@ p,li,.sub{text-wrap:pretty}
     if (!v) return;
     items.unshift('v' + v.trim());
   }).catch(function () {}).then(cycle);
+})();
+// The app wall is short real clips of each app, filmed by tools/landing-shots.py --clips.
+// Each plays only while on screen; with reduced motion they stay on their poster, the still.
+(function () {
+  if (!('IntersectionObserver' in window) || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) e.target.play().catch(function () {}); else e.target.pause(); });
+  }, { threshold: 0.3 });
+  document.querySelectorAll('video.clip').forEach(function (v) { io.observe(v); });
 })();
 // v51: reveal-on-scroll + one parallax layer, direct request ("add scroll
 // animation with parallax"). IntersectionObserver for the reveal (a real,
@@ -1404,6 +1426,6 @@ p,li,.sub{text-wrap:pretty}
   });
 })();
 </script>
-<script>if (document.documentElement.classList.contains('demo')) document.write('<script src="v86/libv86.js"><\/script><script src="v86/embed.js?v=13.19.2"><\/script>');</script>
+<script>if (document.documentElement.classList.contains('demo')) document.write('<script src="v86/libv86.js"><\/script><script src="v86/embed.js?v=13.20.0"><\/script>');</script>
 </body>
 </html>
