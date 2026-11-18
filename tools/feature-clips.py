@@ -14,6 +14,7 @@ Usage: python3 tools/feature-clips.py [name ...]   (from anywhere; default: all)
 import json, os, shutil, socket, subprocess, sys, threading, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "checks"))
 from scratch import scratch_dir
+from sdcard import build_card
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 ARCH = os.path.join(ROOT, "arch", "arm64")
@@ -28,9 +29,11 @@ REMIND, NOTES = 5, 4   # dock slots, as arm64-spaces-check.py has them
 def film(name):
     tmp = scratch_dir("feature-clips-" + name)
     log, sock = tmp + "/uart", tmp + "/qmp"
+    card = tmp + "/card.img"; build_card(card, False)   # the checks' clean FAT32 card: Reminders and Notes save to it, no "No card" line
     kern = tmp + "/kernel8.elf"; shutil.copy(os.path.join(ARCH, "kernel8.elf"), kern)   # its own copy: a parallel build can't swap it mid-boot
     q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-nic", "none", "-device", "ramfb",
                           "-device", "pcie-root-port,id=rp,chassis=1", "-device", "qemu-xhci,id=x,bus=rp", "-device", "usb-hub,id=h,bus=x.0,port=1",
+                          "-global", "virtio-mmio.force-legacy=false", "-drive", "if=none,id=card,file=%s,format=raw" % card, "-device", "virtio-blk-device,drive=card",
                           "-device", "usb-kbd,bus=x.0,port=1.1", "-device", "usb-mouse,id=m1,bus=x.0,port=1.2",
                           "-display", "none", "-serial", "file:" + log, "-qmp", "unix:%s,server,nowait" % sock,
                           "-kernel", kern], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
