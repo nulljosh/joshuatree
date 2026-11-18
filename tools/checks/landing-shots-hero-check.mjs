@@ -50,7 +50,7 @@ try {
       if (v86) fail('the default page loads libv86.js or embed.js');
       if (!s.hero) fail('the default page has no desktop shot hero');
       for (const f of shots) if (!s.srcs.includes('shots/' + f)) fail('no tile for shots/' + f);
-      for (const c of s.clips) await access(join(ROOT, c)).catch(() => fail('a tile plays ' + c + ', which is not in landing/'));
+      for (const c of s.clips) await access(join(ROOT, c.split('?')[0])).catch(() => fail('a tile plays ' + c + ', which is not in landing/'));
     } else {
       if (!s.embed) fail('?demo does not show #v86-embed');
       if (!asked.some(u => /embed\.js/.test(u))) fail('?demo does not load embed.js');
