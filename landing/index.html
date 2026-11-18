@@ -223,8 +223,10 @@ p,li,.sub{text-wrap:pretty}
   .app-features .sub, .progress-section .sub { text-align: center; color: var(--sub); font-size:var(--t17); max-width: 480px; margin: 0 auto 40px; line-height:var(--lh17); ;letter-spacing:var(--tr17)}
   .tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .app-features .tile-grid { grid-template-columns: repeat(3, 1fr); }
+  #desktop .tile-grid { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 700px) { #desktop .tile-grid { grid-template-columns: 1fr; } }
   .tile { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
-  .tile img { width: 100%; height: auto; display: block; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .tile img, .tile video { width: 100%; height: auto; display: block; background: var(--bg); border-bottom: 1px solid var(--border); }
   .tile p { margin: 0; padding: 14px 16px; font-size:var(--t15); line-height:var(--lh15); color: var(--fg); ;letter-spacing:var(--tr15)}
   @media (max-width: 700px) { .tile-grid, .app-features .tile-grid { grid-template-columns: 1fr; } .app-features h2, .progress-section h2 { font-size:var(--t28);line-height:var(--lh28);letter-spacing:var(--tr28)} }
   /* The app wall: CSS columns, each shot keeps its own height, 8px gaps, one small name badge per shot. */
@@ -787,6 +789,17 @@ p,li,.sub{text-wrap:pretty}
       <video class="clip" src="clips/app-chess.mp4" poster="shots/app-chess.webp" muted loop playsinline preload="none" aria-label="Chess app showing the board at the start of a game" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Chess</span>
     </figure>
+  </div>
+</section>
+
+<section class="app-features reveal" id="desktop" aria-label="The desktop at work">
+  <h2>A desktop that keeps up with you.</h2>
+  <p class="sub">Filmed on the Pi build, nothing staged.</p>
+  <div class="tile-grid">
+    <div class="tile"><video class="clip" src="clips/feature-spaces.mp4" poster="clips/feature-spaces.jpg" muted loop playsinline preload="none" aria-label="Ctrl and the arrow keys move between two desktops, each keeping its own windows" width="800" height="600"></video><p><strong>Spaces.</strong> Four desktops. Ctrl and an arrow moves between them, and every window stays where you left it.</p></div>
+    <div class="tile"><video class="clip" src="clips/feature-mission.mp4" poster="clips/feature-mission.jpg" muted loop playsinline preload="none" aria-label="Ctrl and Up shows every desktop and every open window at once" width="800" height="600"></video><p><strong>Mission Control.</strong> Ctrl and Up shows every desktop and every open window. Pick one and you are there.</p></div>
+    <div class="tile"><video class="clip" src="clips/feature-spotlight.mp4" poster="clips/feature-spotlight.jpg" muted loop playsinline preload="none" aria-label="Cmd and Space opens Spotlight, typing term finds the Terminal, which runs cores and mem" width="800" height="600"></video><p><strong>Spotlight.</strong> Cmd and Space, a few letters, Enter. Any app is a second away.</p></div>
+    <div class="tile"><video class="clip" src="clips/feature-launchpad.mp4" poster="clips/feature-launchpad.jpg" muted loop playsinline preload="none" aria-label="Launchpad shows every app in one grid, the arrow keys walk it" width="800" height="600"></video><p><strong>Launchpad.</strong> Every app in one grid, from the first tile in the dock. The arrow keys walk it.</p></div>
   </div>
 </section>
 
