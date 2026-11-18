@@ -126,12 +126,13 @@ try {
     // keyboard: focus the first summary, Enter opens, Space closes
     const first = page.locator('#specs details > summary').first();
     await first.focus();
+    // WebKit toggles a <details> a task after the key, so wait for the state rather than read it at once
+    // (GitHub's WebKit read it closed twice in a row on 2026-11-18; the Mac never did).
+    const openIs = (want) => page.waitForFunction((w) => document.querySelector('#specs details').open === w, want, { timeout: 2000 }).then(() => true, () => false);
     await page.keyboard.press('Enter');
-    let st = await page.evaluate(() => document.querySelector('#specs details').open);
-    if (!st) fail(`${tag}: Enter on a summary did not open it`);
+    if (!await openIs(true)) fail(`${tag}: Enter on a summary did not open it`);
     await page.keyboard.press('Space');
-    st = await page.evaluate(() => document.querySelector('#specs details').open);
-    if (st) fail(`${tag}: Space on a summary did not close it`);
+    if (!await openIs(false)) fail(`${tag}: Space on a summary did not close it`);
     // 7. summary size and focus ring (focused by keyboard above)
     const sm = await page.evaluate(() => [...document.querySelectorAll('#specs details > summary')].map(e => {
       const r = e.getBoundingClientRect(); return { h: r.height, t: e.textContent.trim() }; }));
