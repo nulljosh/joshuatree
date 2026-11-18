@@ -2125,32 +2125,10 @@ if (typeof document !== "undefined") (function () {
   // solo below, just no longer inline in a for-loop so it can be
   // interleaved with the multi-window rounds instead of run as one block
   // after them.
-  // v0.76.30: typewriter effect for dynamic headlines. Lightweight manual implementation
-  // (no external library dependency, vanilla JS, works in the landing page's static context).
-  var typewriterInterval = null;
+  // The headline swaps instantly, no per-letter animation (Joshua, 2026-11-18).
   var HEADLINE_PREFIX = 'Introducing ';
-  function typewriterEffect(element, variablePart, callback) {
-    // v0.76.31: direct request, "Introducing" is static, only the
-    // variable part (app name + period) animates -- retyping the whole
-    // fixed prefix every app switch was noisy and pointless motion.
-    if (!element) { if (callback) callback(); return; }
-    if (typewriterInterval) clearInterval(typewriterInterval);
-
-    element.textContent = HEADLINE_PREFIX;
-    var index = 0;
-    var chars = variablePart.split('');
-
-    // Type out the variable part at 20ms (fast, so the H1 tracks the demo) per character
-    typewriterInterval = setInterval(function() {
-      if (index < chars.length) {
-        element.textContent += chars[index];
-        index++;
-      } else {
-        clearInterval(typewriterInterval);
-        typewriterInterval = null;
-        if (callback) callback();
-      }
-    }, 20);
+  function setHeadline(element, variablePart) {
+    if (element) element.textContent = HEADLINE_PREFIX + variablePart;
   }
 
   // One line per app, so the eyebrow says something about the SAME app the
@@ -2177,12 +2155,9 @@ if (typeof document !== "undefined") (function () {
   }
 
   function updateHeadline(appName) {
-    // v0.76.30: dynamic headline with typewriter animation.
-    // Types out "Introducing <AppName>." when app opens, creating a real sense
-    // of discovery rather than instant replacement. Lightweight effect, no external deps.
     var h1Link = document.querySelector('h1');
     if (h1Link) {
-      typewriterEffect(h1Link, appName + '.');
+      setHeadline(h1Link, appName + '.');
     }
     setEyebrow(appName);
   }
@@ -2200,10 +2175,9 @@ if (typeof document !== "undefined") (function () {
   })();
   function resetHeadline() {
     // Default headline when no tour is running or before the tour starts.
-    // Uses typewriter effect for visual consistency.
     var h1Link = document.querySelector('h1');
     if (h1Link) {
-      typewriterEffect(h1Link, DEFAULT_HEADLINE);
+      setHeadline(h1Link, DEFAULT_HEADLINE);
     }
     if (window.jtEyebrow) window.jtEyebrow.resume();
   }

@@ -27,7 +27,7 @@
 // The failing direction is the one that was actually wrong: announcing an
 // app with nothing on screen. A little tolerance is deliberate, since a
 // sample can land in the genuine milliseconds between the headline
-// finishing its typewriter run and the window's first frame, or during a
+// swap and the window's first frame, or during a
 // window's own close animation.
 //
 // Usage: node tools/checks/headline-sync-check.mjs [url]

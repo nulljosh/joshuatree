@@ -101,7 +101,7 @@ try {
     if (tickRatio < 4.5) fail(`progress chart tick label fails WCAG AA in light mode (${tickRatio.toFixed(2)}:1, need 4.5:1)`);
   }
 
-  // 3. the eyebrow keeps its height across a full typewriter cycle.
+  // 3. the eyebrow keeps its height across a full eyebrow cycle.
   // offsetHeight, not boundingBox()/getBoundingClientRect(): the hero's
   // own scroll-recede effect (.hero-copy's --recede-s transform: scale())
   // legitimately shrinks the *rendered* box a fraction of a pixel once the
@@ -111,22 +111,24 @@ try {
   // assertion exists to catch. offsetHeight is the element's own CSS box
   // (height:22px, line-height:22px, fixed), never affected by an ancestor's
   // transform, so it still catches the real bug (the box's own height
-  // varying between differently-sized typewriter items) without false-
+  // varying between differently-sized items) without false-
   // failing on an unrelated, expected scroll-driven scale change.
   const heights = new Set();
-  // Long enough to cover several typewriter items: the height difference
+  // Long enough to cover several items: the height difference
   // only shows up between items of different length, not within one.
   for (let i = 0; i < 120; i++) {
     heights.add(await page.locator('.eyebrow').evaluate((el) => el.offsetHeight));
     await page.waitForTimeout(120);
   }
   console.log('eyebrow heights seen: ' + [...heights].join(', '));
-  if (heights.size > 1) fail('eyebrow changes height while typing (page shifts): ' + [...heights].join(', '));
+  if (heights.size > 1) fail('eyebrow changes height between items (page shifts): ' + [...heights].join(', '));
 
   // 1. the headline the tour resets to is the injected one, not a hardcoded other
   const source = await (await fetch(url.replace('index.html', 'v86/embed.js'))).text();
-  if (/typewriterEffect\(h1Link, 'Joshua Tree\.'\)/.test(source))
+  if (/setHeadline\(h1Link, 'Joshua Tree\.'\)/.test(source))
     fail("resetHeadline still hardcodes 'Joshua Tree.' instead of the injected headline");
+  if (/setInterval/.test(source.slice(source.indexOf('function setHeadline'), source.indexOf('function setEyebrow'))) || /typewriter/i.test(source))
+    fail('the typewriter is back: the headline must swap instantly (Joshua, 2026-11-18)');
   if (!/DEFAULT_HEADLINE/.test(source))
     fail('embed.js no longer derives the default headline from the injected h1');
   console.log(`injected headline: "${injected}"`);
