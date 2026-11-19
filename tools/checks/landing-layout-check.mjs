@@ -135,11 +135,14 @@ try {
       const dead = n ? [...n.querySelectorAll('a[href^="#"]')].map(a => a.getAttribute('href')).filter(h => !document.querySelector(h)) : [];
       const tops = [...document.querySelectorAll('.wall-item')].map(e => Math.round(e.getBoundingClientRect().top));
       const last = Math.max(...tops);
+      const pg = document.querySelector('#pi .tile-grid'), pl = pg && pg.lastElementChild;
+      const piHole = pg ? Math.round(pg.getBoundingClientRect().right - pl.getBoundingClientRect().right) : 0;
       scrollTo(0, 0);
-      return { top: r ? Math.round(r.top) : null, dead, lastRow: tops.filter(t => t === last).length, perRow: tops.filter(t => t === tops[1]).length };
+      return { piHole, top: r ? Math.round(r.top) : null, dead, lastRow: tops.filter(t => t === last).length, perRow: tops.filter(t => t === tops[1]).length };
     });
     if (nv.top !== 0) fail(`${tag}: local nav is not pinned to the top after scrolling (top ${nv.top})`);
     if (nv.dead.length) fail(`${tag}: local nav links to missing sections ${nv.dead.join(', ')}`);
+    if (nv.piHole > 2) fail(`${tag}: the Pi tile grid ends with a hole (${nv.piHole}px short)`);
     if (nv.lastRow !== nv.perRow) fail(`${tag}: app wall ends on a ragged row (${nv.lastRow} of ${nv.perRow})`);
     await page.close();
   }

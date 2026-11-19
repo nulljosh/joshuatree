@@ -396,7 +396,9 @@ p,li,.sub{text-wrap:pretty}
   /* Bento: mixed spans, headline first, flat accent tints (Dribbble "Today" shot, 2026-10-18). */
   #pi .tile-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); max-width: 960px; margin: 0 auto; }
   #pi .tile { grid-column: span 2; }
-  #pi .tile:nth-child(1), #pi .tile:nth-child(6) { grid-column: span 4; background: color-mix(in srgb, var(--accent) 14%, var(--card)); border-color: transparent; }
+  #pi .tile:nth-child(1) { grid-column: span 4; }
+  #pi .tile:nth-child(6) { grid-column: span 6; }
+  #pi .tile:nth-child(1), #pi .tile:nth-child(6) { background: color-mix(in srgb, var(--accent) 14%, var(--card)); border-color: transparent; }
   #pi .tile:nth-child(8) { grid-column: span 6; background: transparent; }
   #pi .tile p { padding: var(--s24); color: var(--sub); }
   #pi .tile p strong { display: block; margin-bottom: var(--s8); color: var(--fg); font-size: var(--t22); line-height: var(--lh22); letter-spacing: var(--tr22); }
