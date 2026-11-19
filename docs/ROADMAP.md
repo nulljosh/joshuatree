@@ -308,7 +308,9 @@ The redesigned footer is live in 2.40.0: a spacious directory, original desert a
 - [ ] [Joshua] Judge the live landing against the Plank landing, the bar for the whole site. List what still falls short, in his words.
 - [x] Trim the repeats (13.21.2): top divider, stats row and the Pi tile that repeated Protected are gone; Download PC ISO joins the hero; the desktop clips are one scroll-snap strip.
 - [ ] Reorder toward apple.com/macos (Joshua, 2026-11-18, graded B-): a sticky local nav (Overview, Apps, Pi, Specs, a Try it pill), then hero, the clips strip, three one-idea chapters (38 apps, protected apps, a real Pi), specs, and one closer with the film, waitlist and Build. The six Nimbus build steps move to their own page.
-  - The app wall's CSS columns end on a ragged last row; even it out.
+  - [x] 13.21.2: the local nav (fixed, 52 px, Overview, Apps, Pi, Specs and a Try it pill) and an app wall that ends on a full row (a grid, Depths full width as the feature). `landing-layout-check.mjs` fails if the nav lets go on scroll, links to a missing section, or the wall's last row is short.
+  - [ ] On a phone the wall is 19 tiles in one column, about 3,000 px of scroll: make it a sideways strip like the desktop clips.
+  - [ ] Three one-idea chapters, then one closer (film, waitlist, Build); the six Nimbus build steps move to their own page.
   - Check: `landing-layout-check.mjs` and `mobile-overflow-check.mjs` in CI, plus a 1280 and a 390 screenshot.
 
 ### From the notebook (Joshua, 2026-10-04)

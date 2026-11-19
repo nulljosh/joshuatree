@@ -233,12 +233,26 @@ p,li,.sub{text-wrap:pretty}
   .tile p { margin: 0; padding: 14px 16px; font-size:var(--t15); line-height:var(--lh15); color: var(--fg); ;letter-spacing:var(--tr15)}
   @media (max-width: 700px) { .tile-grid, .app-features .tile-grid { grid-template-columns: 1fr; } .app-features h2, .progress-section h2 { font-size:var(--t28);line-height:var(--lh28);letter-spacing:var(--tr28)} }
   /* The app wall: CSS columns, each shot keeps its own height, 8px gaps, one small name badge per shot. */
-  .wall-grid { columns: 3; column-gap: 8px; }
-  .wall-item { position: relative; break-inside: avoid; margin: 0 0 8px; border-radius: 14px; overflow: hidden; }
+  /* 13.21.3: a grid, not CSS columns, so the wall ends on a full row. Every tile is the same
+     984x462 shape; the first one runs full width as the feature, which leaves 18, even at 3 and 2 across. */
+  .wall-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .wall-item:first-child { grid-column: 1 / -1; }
+  .wall-item { position: relative; margin: 0; border-radius: 14px; overflow: hidden; }
   .wall-item img, .wall-item video { display: block; width: 100%; height: auto; }
   .wall-name { position: absolute; left: 10px; bottom: 10px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 80%, transparent); color: var(--bg); font-size: var(--t11); font-weight: 600; line-height: var(--lh11); letter-spacing: var(--tr11); }
-  @media (max-width: 900px) { .wall-grid { columns: 2; } }
-  @media (max-width: 600px) { .wall-grid { columns: 1; } }
+  @media (max-width: 900px) { .wall-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .wall-grid { grid-template-columns: 1fr; } }
+  /* 13.21.3: the local nav, apple.com/macos style. Fixed, not sticky: body is height:100%, so a sticky bar
+     would let go after one screen. Under the full-screen demo (z 50). */
+  html { scroll-padding-top: 52px; }
+  main { padding-top: 52px; }
+  .localnav { position: fixed; top: 0; left: 0; right: 0; z-index: 40; height: 52px; display: flex; align-items: center; gap: 24px; padding: 0 max(22px, calc((100% - 980px) / 2)); background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: saturate(1.8) blur(20px); backdrop-filter: saturate(1.8) blur(20px); border-bottom: 1px solid var(--border); }
+  .localnav-title { margin-right: auto; color: var(--fg); font-size: var(--t17); line-height: var(--lh17); letter-spacing: var(--tr17); font-weight: 600; text-decoration: none; }
+  .localnav a:not(.localnav-title) { color: var(--sub); font-size: var(--t13); line-height: var(--lh13); text-decoration: none; }
+  .localnav a:not(.localnav-title):hover, .localnav a[aria-current] { color: var(--fg); }
+  .localnav a.localnav-cta { background: var(--accent); color: var(--bg); padding: 4px 12px; border-radius: 999px; font-weight: 600; }
+  .localnav a.localnav-cta:hover { color: var(--bg); }
+  @media (max-width: 600px) { .localnav .localnav-link { display: none; } }
   .boot-line a:hover { text-decoration: underline; }
 
   /* Full-bleed at every width, no framed-window card: the demo is edge
@@ -597,6 +611,15 @@ p,li,.sub{text-wrap:pretty}
 
 <a class="skip-link" href="#main">Skip to content</a>
 
+<nav class="localnav" aria-label="Joshua Tree">
+  <a class="localnav-title" href="#main">Joshua Tree</a>
+  <a class="localnav-link" href="#main" aria-current="page">Overview</a>
+  <a class="localnav-link" href="#apps">Apps</a>
+  <a class="localnav-link" href="#pi">Pi</a>
+  <a class="localnav-link" href="#specs">Specs</a>
+  <a class="localnav-cta" href="?demo">Try it</a>
+</nav>
+
 <main id="main">
 
 <span id="demo"></span>
@@ -685,7 +708,7 @@ p,li,.sub{text-wrap:pretty}
 <h1>Introducing Joshua Tree.</h1>
     <p class="eyebrow" data-latest="13.19: The Pi's own GPU at work, updates over the air, printing and scanning, and the 64-bit PC begins"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
     <p class="hero-line"><span data-fact="apps">38</span> apps on a Raspberry Pi.</p>
-    <p class="hero-sub">Joshua Tree is a whole computer built from nothing. It is free, open source, and it runs on a Raspberry Pi 4.</p>
+    <p class="hero-sub">A whole computer, written from the first line up. Free, open source, and it boots on a Raspberry Pi 4 or a PC.</p>
     <p class="hero-cta"><a class="boot-btn" href="?demo">Try it in your browser</a> <a class="hero-link" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO &rsaquo;</a></p>
     <div class="hero-shot">
       <img src="shots/desktop-apps.webp" alt="The Joshua Tree desktop with the Terminal and live Weather open, and running-app dots in the dock" width="960" height="540">
@@ -699,6 +722,10 @@ p,li,.sub{text-wrap:pretty}
   <h2>Everything you need is already there.</h2>
   <p class="sub">A full set of apps, built from nothing but a screen and a keyboard.</p>
   <div class="wall-grid">
+    <figure class="wall-item">
+      <video class="clip" src="clips/app-depths.mp4" poster="shots/app-depths.webp" muted loop playsinline preload="none" aria-label="Depths app showing a terracotta corridor in first person with a creature in the crosshair" width="984" height="462"></video>
+      <span class="wall-name" aria-hidden="true">Depths</span>
+    </figure>
     <figure class="wall-item">
       <video class="clip" src="clips/app-notes.mp4" poster="shots/app-notes.webp" muted loop playsinline preload="none" aria-label="Notes app showing a short grocery list" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Notes</span>
@@ -754,10 +781,6 @@ p,li,.sub{text-wrap:pretty}
     <figure class="wall-item">
       <video class="clip" src="clips/app-solitaire.mp4" poster="shots/app-solitaire.webp" muted loop playsinline preload="none" aria-label="Solitaire app showing seven columns of cards, the stock and four empty foundations" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Solitaire</span>
-    </figure>
-    <figure class="wall-item">
-      <video class="clip" src="clips/app-depths.mp4" poster="shots/app-depths.webp" muted loop playsinline preload="none" aria-label="Depths app showing a terracotta corridor in first person with a creature in the crosshair" width="984" height="462"></video>
-      <span class="wall-name" aria-hidden="true">Depths</span>
     </figure>
     <figure class="wall-item">
       <video class="clip" src="clips/app-bricks.mp4" poster="shots/app-bricks.webp" muted loop playsinline preload="none" aria-label="Bricks app showing six rows of clay-coloured bricks over a paddle and a ball" width="984" height="462"></video>
