@@ -6,7 +6,7 @@ Where it is going, and what has shipped. The open items are kept here; finished 
 
 A freestanding kernel for i386 and the Raspberry Pi 4, no libc. This is the forward plan; what shipped is in the [Shipped list](#shipped) and the [releases](https://github.com/nulljosh/joshuatree/releases).
 
-**Latest**: 13.19: The Pi's own GPU at work, updates over the air, printing and scanning, and the 64-bit PC begins.
+**Latest**: 13.22: GPU drawing.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
