@@ -626,14 +626,14 @@ p,li,.sub{text-wrap:pretty}
   .hero h1 em { font-style: normal; color: #ffd98a; }
   .hero-sub { max-width: 40ch; margin: 18px auto 0; color: rgba(255, 255, 255, .86); font-size: clamp(17px, 1.6vw, 20px); line-height: 1.5; letter-spacing: 0; }
   .hero-cta { margin: 30px 0 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-  .hero .boot-btn, .hero-ghost { display: inline-flex; align-items: center; height: 46px; padding: 0 22px; border-radius: 999px; font-size: 16px; font-weight: 600; text-decoration: none; }
+  .hero .boot-btn, .hero-ghost { display: inline-flex; align-items: center; height: 46px; padding: 0 22px; border-radius: 999px; font-size:var(--t17); font-weight: 600; text-decoration: none;line-height:var(--lh17);letter-spacing:var(--tr17)}
   .hero .boot-btn { background: #f4f3ec; color: #261a13; }
   .hero-ghost { color: #fff; background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .4); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
   .hero-ghost:hover, .hero .boot-btn:hover { opacity: .9; }
   .hero .eyebrow { display: inline-flex; align-items: center; gap: 10px; height: 34px; max-width: min(92vw, 660px); margin: 26px auto 0; padding: 0 14px 0 6px; border-radius: 999px;
     background: rgba(20, 12, 36, .35); border: 1px solid rgba(255, 255, 255, .18); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     color: rgba(255, 255, 255, .9); font: 500 14px/34px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; -webkit-line-clamp: unset; line-clamp: unset; }
-  .hero .eyebrow .prompt { flex: none; height: 24px; line-height: 24px; padding: 0 10px; border-radius: 999px; background: rgba(255, 217, 138, .18); color: #ffd98a; font-size: 12px; font-weight: 600; }
+  .hero .eyebrow .prompt { flex: none; display: inline-flex; align-items: center; height: 24px; line-height:var(--lh13); padding: 0 10px; border-radius: 999px; background: rgba(255, 217, 138, .18); color: #ffd98a; font-size:var(--t13); font-weight: 600; ;letter-spacing:var(--tr13)}
   .hero .eyebrow a { display: block; height: auto; overflow: hidden; text-overflow: ellipsis; color: inherit; text-decoration: none; }
   .hero .eyebrow a::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -.15em; background: #ffd98a; animation: jt-blink 1s steps(1) infinite; }
   @keyframes jt-blink { 50% { opacity: 0; } }
@@ -648,7 +648,7 @@ p,li,.sub{text-wrap:pretty}
   .g-r { right: calc(3% + var(--c) * var(--s) * 1.06); bottom: calc(12% + var(--r) * var(--s) * 1.06); }
   .g-m { --s: clamp(22px, 2.8vw, 38px); left: calc(50% + var(--c) * var(--s) * 1.06 - var(--s) * 1.5); bottom: calc(30% + var(--r) * var(--s) * 1.06); left: calc(14% + var(--c) * var(--s) * 1.06); }
   @keyframes jt-drift { from { transform: translateY(-5px); } to { transform: translateY(5px); } }
-  @media (max-width: 700px) { .hero-card { min-height: 88svh; padding-top: 112px; background-position: 30% 100%; } .hero .boot-btn, .hero-ghost { min-width: 240px; justify-content: center; } .hero-sub { font-size: 17px; } .g-m, .g-l:nth-child(n+5), .g-r:nth-child(n+12) { display: none; } }
+  @media (max-width: 700px) { .hero-card { min-height: 88svh; padding-top: 112px; background-position: 30% 100%; } .hero .boot-btn, .hero-ghost { min-width: 240px; justify-content: center; } .hero-sub { font-size:var(--t17);line-height:var(--lh17);letter-spacing:var(--tr17)} .g-m, .g-l:nth-child(n+5), .g-r:nth-child(n+12) { display: none; } }
   @media (prefers-reduced-motion: reduce) { .g, .hero .eyebrow a::after { animation: none; } }
 
   .hero-shot { position: relative; z-index: 2; width: calc(100% - 40px); max-width: 1040px; margin: -16vh auto 0; }
