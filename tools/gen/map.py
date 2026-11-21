@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Draws architecture.svg: every Joshua Tree graph in one picture (where it runs, the stack, talking to Samantha, how an
-app gets onto the Pi, the compiler building itself, the Pi bring-up, apps over time). The apps line is read from progress.svg, so
-rerun this after tools/gen/progress.sh. The Pi row is typed in: update it when the board moves. Colours, spacing, radii
+"""Draws architecture.svg: Joshua Tree at a glance, three panels (where it runs, the layers, talking to Samantha). 13.21.3 cut
+it from seven panels and 2092 px to these, so the README stays short. The app count is read from progress.svg. Colours, spacing, radii
 and type come from the brand kit's tokens (docs/brand/tokens.css) through tools/gen/svgkit.py, so the map cannot drift."""
 import re, os
 from svgkit import Pic, ROOT, M, S, R, PAPER, INK, MUT, RULE, CARD, T, G
@@ -73,66 +72,6 @@ y = sec(y, 'talk', 'Talking to Samantha')
 y = chain(y, [('You type or say', '"call Mom at 5"'), ('Turing', 'picks the tool'), ('Joshua Tree', 'does it'), ('She answers', 'voice and face')],
           ['host', 'host', 'core', 'core']) + S[32]
 
-# 8.0 (6.51.0 to 6.59.0): an app no longer has to be built into the kernel. Six steps, from whoever writes it to the Pi.
-y = sec(y, 'box', 'How an app gets onto the Pi (8.0)')
-y = chain(y, [('Write it', 'you, or Sam'), ('Build it', 'C or Plank'), ('Seal it', "Joshua's key"),
-              ('The store', 'on the website'), ('install', 'seal checked'), ('It runs', 'walled off')],
-          ['host', 'host', 'new', 'host', 'core', 'core'])
-y = note(y + S[8], "Sealed apps run for anyone; unsealed ones (yours, or Samantha's) only for an admin; a broken seal never.") + S[32]
-
-# 8.0 (6.60.0 to 6.71.0, then 6.72.0 on): plankc, the compiler written in Plank, rebuilds itself on the Pi.
-y = sec(y, 'loop', 'It builds itself (8.0)')
-y = chain(y, [('plankc', 'Plank, in Plank'), ('On the Pi', 'compiles itself'), ('A new plankc', 'no clang, no linker'),
-              ('Same bytes', 'every time')], ['host', 'core', 'core', 'new'])
-y = note(y + S[8], 'Checked on every pull request. The kernel is still C, built on a Mac.') + S[32]
-
-# 8.1 to 8.11: what Berkeley's CS162 teaches that the kernel lacked, one minor each (docs/ROADMAP.md, the Berkeley list).
-y = sec(y, 'stack', 'The operating systems course (8.1 to 8.12)')
-os_ = [('Threads', 'locks, wait, signal', 1), ('Four cores', 'all up, all used', 1), ('Pipes', 'one app into the next', 1), ('Spawn', 'and wait', 1),
-       ('Sockets', 'TCP for apps', 1), ('Fair turns', '10 ms slices', 1), ('Paging', 'on first touch', 1), ('Block cache', 'for the card', 1),
-       ('Swap', 'heap pages to the card', 1)]
-ow = (IW - 3 * S[16]) / 4
-for i, (a, b, done) in enumerate(os_):
-    box(M + (i % 4) * (ow + S[16]), y + (i // 4) * (48 + S[8]), ow, 48, a, b, 'core' if done else 'todo')
-y += ((len(os_) + 3) // 4) * (48 + S[8])
-y = note(y, 'Built and checked in QEMU on every pull request.') + S[32]
-
-# The Pi, on the real board. Solid = seen working on the board (docs/ROADMAP.md); dashed = proven in QEMU only.
-y = sec(y, 'chip', 'The Pi, on the real board')
-pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi', 'WPA2, joined', 1),
-      ('Internet', 'DHCP and DNS', 1), ('Clock', 'from the net', 1), ('Terminal', 'zsh style, sam', 1),
-      ('Samantha', 'chat on the Pi', 1), ('Pi actions', 'note, green light', 1), ('HTTPS', 'Browser, 37 roots', 1),
-      ('Browser', 'window, links', 1), ('Books', 'plain text', 1), ('Music', 'wav, mp3, covers', 1),
-      ('Notes', 'saved to the card', 1), ('Calendar', 'four views', 1), ('Bluetooth', 'mouse pairs', 1),
-      ('Sound', 'headphone jack', 1), ('Many windows', 'apps side by side', 1),
-      ('Walled memory', 'one app, one arena', 0), ('Watchdog', 'frozen app stopped', 0), ('Mic', 'Yeti, USB', 0),
-      ('Wi-Fi switch', 'no restart', 0), ('Mail', 'IMAP, reply', 0), ('CalDAV', 'syncs when idle', 0),
-      ('BT keyboard', 'LE, passkey', 0), ('Settings', 'wallpaper, sound', 1), ('Build apps', 'plankc on the Pi', 1),
-      ('Live data', 'stocks, weather', 0), ('Settings tile', 'in the dock', 1),
-      ('Park wallpaper', 'Joshua Tree at dusk', 1), ('Four cores', '4 of 4 up', 1), ('Wikipedia', 'in Blackcomb', 1), ('USB stick', 'ls, cat, copy', 0),
-      ('Kit screens', '800x480 to 1080p', 0), ('Touch', 'USB touch panels', 0), ('GPU', 'V3D, board only', 0), ('Camera', 'board only', 0)]
-pw = (IW - 3 * S[16]) / 4
-for i, (a, b, done) in enumerate(pi):
-    box(M + (i % 4) * (pw + S[16]), y + (i // 4) * (48 + S[8]), pw, 48, a, b, 'new' if done else 'todo')
-y += ((len(pi) + 3) // 4) * (48 + S[8])
-y = note(y, 'Solid: seen working on the real board (2026-11-02, 8.9). Dashed: built and checked in QEMU, not yet seen there.') + S[32]
-
-y = sec(y, 'bars', 'Apps shipped')
-pts = [tuple(map(int, q.split(','))) for q in re.search(r'<polyline points="([^"]+)"', svg).group(1).split()]
-dates = re.findall(r'data-version="([\d-]+)"', svg)
-x0, x1 = pts[0][0], pts[-1][0]
-gy = lambda v: y + (v - 10) * 96 / 140          # progress.svg's plot runs from y 10 (its peak) to 150 (none)
-PEAK = max(map(int, re.findall(r'data-apps="(\d+)"', svg)))
-CX = M + S[32]                                   # the chart starts past its scale
-for k, v in enumerate((PEAK, PEAK // 2, 0)):
-    p.add(f'<path d="M{CX} {y + k * 48}H{W - M}" stroke="{RULE}"/>')
-    p.text(CX - S[8], y + k * 48 + 4, str(v), 11, MUT, anchor='end')
-p.add('<polyline points="' + ' '.join(f'{CX + (x - x0) * (W - M - CX) / (x1 - x0):.0f},{gy(v):.0f}' for x, v in pts)
-      + f'" fill="none" stroke="{INK}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>')
-p.add(f'<circle cx="{W - M}" cy="{gy(pts[-1][1]):.0f}" r="4" fill="{PAPER}" stroke="{T}" stroke-width="2"/>')
-p.text(W - M - S[8], gy(pts[-1][1]) + 40, f'{APPS} apps', 13, weight=600, anchor='end')
-y += 96 + S[16]
-p.text(CX, y + 4, dates[0], 11, MUT); p.text(W - M, y + 4, dates[-1], 11, MUT, anchor='end')
-y += S[32]
-p.text(M, y + 4, 'Drawn by tools/gen/map.py. The detail graphs live in docs/.', 11, MUT)
+y -= S[16]
+p.text(M, y + 4, 'Drawn by tools/gen/map.py. More in docs/ARCHITECTURE.md.', 11, MUT)
 p.save('architecture.svg', y + 4 + M)

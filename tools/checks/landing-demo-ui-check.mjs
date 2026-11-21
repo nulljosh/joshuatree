@@ -70,7 +70,7 @@ try {
     // Walk to the demo with Tab, the way a keyboard user would.
     await page.evaluate(() => document.querySelector('.skip-link').focus());
     let onDemo = false;
-    for (let i = 0; i < 6 && !onDemo; i++) {
+    for (let i = 0; i < 12 && !onDemo; i++) { // 13.21.2: six local-nav links come first
       await page.keyboard.press('Tab');
       onDemo = await page.evaluate(() => document.activeElement && document.activeElement.id === 'v86-embed');
     }

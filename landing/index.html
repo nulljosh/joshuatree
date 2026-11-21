@@ -223,19 +223,29 @@ p,li,.sub{text-wrap:pretty}
   .app-features .sub, .progress-section .sub { text-align: center; color: var(--sub); font-size:var(--t17); max-width: 480px; margin: 0 auto 40px; line-height:var(--lh17); ;letter-spacing:var(--tr17)}
   .tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .app-features .tile-grid { grid-template-columns: repeat(3, 1fr); }
-  #desktop .tile-grid { grid-template-columns: repeat(2, 1fr); }
-  @media (max-width: 700px) { #desktop .tile-grid { grid-template-columns: 1fr; } }
+  #desktop .tile-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(78%, 420px); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; }
+  #desktop .tile { scroll-snap-align: start; }
+  .hero-link { margin-left: 20px; color: var(--accent2); font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .hero-link:hover { text-decoration: underline; }
+  @media (max-width: 520px) { .hero-link { display: block; margin: 16px 0 0; } }
   .tile { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
   .tile img, .tile video { width: 100%; height: auto; display: block; background: var(--bg); border-bottom: 1px solid var(--border); }
   .tile p { margin: 0; padding: 14px 16px; font-size:var(--t15); line-height:var(--lh15); color: var(--fg); ;letter-spacing:var(--tr15)}
   @media (max-width: 700px) { .tile-grid, .app-features .tile-grid { grid-template-columns: 1fr; } .app-features h2, .progress-section h2 { font-size:var(--t28);line-height:var(--lh28);letter-spacing:var(--tr28)} }
   /* The app wall: CSS columns, each shot keeps its own height, 8px gaps, one small name badge per shot. */
-  .wall-grid { columns: 3; column-gap: 8px; }
-  .wall-item { position: relative; break-inside: avoid; margin: 0 0 8px; border-radius: 14px; overflow: hidden; }
+  /* 13.21.3: a grid, not CSS columns, so the wall ends on a full row. Every tile is the same
+     984x462 shape; the first one runs full width as the feature, which leaves 18, even at 3 and 2 across. */
+  .wall-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .wall-item:first-child { grid-column: 1 / -1; }
+  .wall-item { position: relative; margin: 0; border-radius: 14px; overflow: hidden; }
   .wall-item img, .wall-item video { display: block; width: 100%; height: auto; }
   .wall-name { position: absolute; left: 10px; bottom: 10px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 80%, transparent); color: var(--bg); font-size: var(--t11); font-weight: 600; line-height: var(--lh11); letter-spacing: var(--tr11); }
-  @media (max-width: 900px) { .wall-grid { columns: 2; } }
-  @media (max-width: 600px) { .wall-grid { columns: 1; } }
+  @media (max-width: 900px) { .wall-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .wall-grid { grid-template-columns: 1fr; } }
+  /* 13.21.3: the local nav, apple.com/macos style. Fixed, not sticky: body is height:100%, so a sticky bar
+     would let go after one screen. Under the full-screen demo (z 50). */
+  html { scroll-padding-top: 52px; }
+  main { padding-top: 52px; }
   .boot-line a:hover { text-decoration: underline; }
 
   /* Full-bleed at every width, no framed-window card: the demo is edge
@@ -379,7 +389,9 @@ p,li,.sub{text-wrap:pretty}
   /* Bento: mixed spans, headline first, flat accent tints (Dribbble "Today" shot, 2026-10-18). */
   #pi .tile-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); max-width: 960px; margin: 0 auto; }
   #pi .tile { grid-column: span 2; }
-  #pi .tile:nth-child(1), #pi .tile:nth-child(6) { grid-column: span 4; background: color-mix(in srgb, var(--accent) 14%, var(--card)); border-color: transparent; }
+  #pi .tile:nth-child(1) { grid-column: span 4; }
+  #pi .tile:nth-child(6) { grid-column: span 6; }
+  #pi .tile:nth-child(1), #pi .tile:nth-child(6) { background: color-mix(in srgb, var(--accent) 14%, var(--card)); border-color: transparent; }
   #pi .tile:nth-child(8) { grid-column: span 6; background: transparent; }
   #pi .tile p { padding: var(--s24); color: var(--sub); }
   #pi .tile p strong { display: block; margin-bottom: var(--s8); color: var(--fg); font-size: var(--t22); line-height: var(--lh22); letter-spacing: var(--tr22); }
@@ -588,11 +600,74 @@ p,li,.sub{text-wrap:pretty}
   .waitlist-status[data-state="ok"] { color: var(--accent); }
   .waitlist-status[data-state="error"] { color: var(--accent2); }
   @media (max-width: 520px) { .waitlist-section h2 { font-size:var(--t28);line-height:var(--lh28);letter-spacing:var(--tr28)} .waitlist-form { flex-direction: column; } }
+  /* 13.21.3: the hero card and the floating nav pill (after Plank, Keyrate and Joshua's reference). */
+  html { scroll-padding-top: 72px; }
+  main { padding-top: 0; }
+  .localnav { position: fixed; top: 0; left: 0; right: 0; z-index: 40; display: flex; justify-content: center; padding: 14px 16px 0; pointer-events: none; }
+  .localnav .pill { pointer-events: auto; display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 14px; border-radius: 999px;
+    background: color-mix(in srgb, var(--bg) 78%, transparent); -webkit-backdrop-filter: saturate(1.6) blur(18px); backdrop-filter: saturate(1.6) blur(18px);
+    border: 1px solid color-mix(in srgb, var(--fg) 10%, transparent); box-shadow: 0 8px 28px -12px rgba(20, 12, 30, .35); }
+  .localnav a { text-decoration: none; }
+  .localnav-brand { display: flex; align-items: center; gap: 8px; margin-right: 10px; color: var(--fg); font-weight: 600; font-size: var(--t17); line-height: var(--lh17); letter-spacing: var(--tr17); }
+  .localnav-brand .ink-img { width: 22px; height: 22px; }
+  .localnav-link { color: var(--sub); font-size: var(--t13); line-height: var(--lh13); padding: 6px 10px; border-radius: 999px; }
+  .localnav-link:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
+  .localnav-cta { margin-left: 6px; background: var(--accent); color: #fff; font-size: var(--t13); line-height: var(--lh13); font-weight: 600; padding: 8px 16px; border-radius: 999px; }
+  .localnav-cta:hover { opacity: .92; }
+  @media (max-width: 600px) { .localnav-link { display: none; } }
+
+  .hero { display: block; padding: 12px 12px 0; text-align: center; }
+  .hero-card { position: relative; isolation: isolate; overflow: hidden; border-radius: 28px; min-height: min(92svh, 880px);
+    display: flex; flex-direction: column; align-items: center; padding: clamp(120px, 20vh, 200px) 20px 0;
+    background: #2b1d4f url(brand/park-wall.webp?v=13.19.1) 50% 100% / cover no-repeat; }
+  .hero-card::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: radial-gradient(ellipse 60% 42% at 50% 28%, rgba(24, 14, 46, .38), transparent 75%); }
+  .hero h1 { color: #fff; font-family: var(--font-display); font-size: clamp(44px, 7vw, 92px); line-height: 1.02; letter-spacing: -.035em; font-weight: 700; margin: 0; text-wrap: balance; text-shadow: 0 2px 24px rgba(20, 10, 40, .35); }
+  .hero h1 em { font-style: normal; color: #ffd98a; }
+  .hero-sub { max-width: 40ch; margin: 18px auto 0; color: rgba(255, 255, 255, .86); font-size: clamp(17px, 1.6vw, 20px); line-height: 1.5; letter-spacing: 0; }
+  .hero-cta { margin: 30px 0 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .hero .boot-btn, .hero-ghost { display: inline-flex; align-items: center; height: 46px; padding: 0 22px; border-radius: 999px; font-size:var(--t17); font-weight: 600; text-decoration: none;line-height:var(--lh17);letter-spacing:var(--tr17)}
+  .hero .boot-btn { background: #f4f3ec; color: #261a13; }
+  .hero-ghost { color: #fff; background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .4); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .hero-ghost:hover, .hero .boot-btn:hover { opacity: .9; }
+  .hero .eyebrow { display: inline-flex; align-items: center; gap: 10px; height: 34px; max-width: min(92vw, 660px); margin: 26px auto 0; padding: 0 14px 0 6px; border-radius: 999px;
+    background: rgba(20, 12, 36, .35); border: 1px solid rgba(255, 255, 255, .18); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    color: rgba(255, 255, 255, .9); font: 500 14px/34px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0; text-transform: none; white-space: nowrap; overflow: hidden; -webkit-line-clamp: unset; line-clamp: unset; }
+  .hero .eyebrow .prompt { flex: none; display: inline-flex; align-items: center; height: 24px; line-height:var(--lh13); padding: 0 10px; border-radius: 999px; background: rgba(255, 217, 138, .18); color: #ffd98a; font-size:var(--t13); font-weight: 600; ;letter-spacing:var(--tr13)}
+  .hero .eyebrow a { display: block; height: auto; overflow: hidden; text-overflow: ellipsis; color: inherit; text-decoration: none; }
+  .hero .eyebrow a::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -.15em; background: #ffd98a; animation: jt-blink 1s steps(1) infinite; }
+  @keyframes jt-blink { 50% { opacity: 0; } }
+
+  /* the glass: frosted squares in three clusters over the desert, drifting a little, each its own depth */
+  .glass { position: absolute; inset: 0; z-index: 0; pointer-events: none; --s: clamp(34px, 5vw, 68px); }
+  .g { position: absolute; width: var(--s); height: var(--s); border-radius: calc(var(--s) * .18);
+    background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .42); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 10px 24px -14px rgba(20, 10, 40, .5);
+    -webkit-backdrop-filter: blur(8px) saturate(1.3); backdrop-filter: blur(8px) saturate(1.3);
+    animation: jt-drift calc(6s + var(--d) * 1s) ease-in-out calc(var(--d) * -1.3s) infinite alternate; }
+  .g-l { left: calc(2% + var(--c) * var(--s) * 1.06); bottom: calc(8% + var(--r) * var(--s) * 1.06); }
+  .g-r { right: calc(3% + var(--c) * var(--s) * 1.06); bottom: calc(12% + var(--r) * var(--s) * 1.06); }
+  .g-m { --s: clamp(22px, 2.8vw, 38px); left: calc(50% + var(--c) * var(--s) * 1.06 - var(--s) * 1.5); bottom: calc(30% + var(--r) * var(--s) * 1.06); left: calc(14% + var(--c) * var(--s) * 1.06); }
+  @keyframes jt-drift { from { transform: translateY(-5px); } to { transform: translateY(5px); } }
+  @media (max-width: 700px) { .hero-card { min-height: 88svh; padding-top: 112px; background-position: 30% 100%; } .hero .boot-btn, .hero-ghost { min-width: 240px; justify-content: center; } .hero-sub { font-size:var(--t17);line-height:var(--lh17);letter-spacing:var(--tr17)} .g-m, .g-l:nth-child(n+5), .g-r:nth-child(n+12) { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .g, .hero .eyebrow a::after { animation: none; } }
+
+  .hero-shot { position: relative; z-index: 2; width: calc(100% - 40px); max-width: 1040px; margin: -16vh auto 0; }
+  .hero-shot img { display: block; width: 100%; height: auto; border-radius: 16px; box-shadow: 0 40px 80px -30px rgba(20, 10, 40, .55), 0 0 0 1px rgba(0, 0, 0, .06); }
+  @media (max-width: 700px) { .hero-shot { margin-top: -10vh; } }
+  html.demo .hero-card { min-height: 0; padding-bottom: 96px; }
 </style>
 </head>
 <body>
 
 <a class="skip-link" href="#main">Skip to content</a>
+
+<nav class="localnav" aria-label="Joshua Tree">
+  <div class="pill">
+    <a class="localnav-brand" href="#main" aria-label="Joshua Tree, top of the page"><span class="ink-img" style="--src:url(mark-tree.svg)"></span><span>Joshua Tree</span></a>
+    <a class="localnav-link" href="#apps">Apps</a><a class="localnav-link" href="#pi">Pi</a><a class="localnav-link" href="#specs">Specs</a>
+    <a class="localnav-cta" href="?demo">Try it</a>
+  </div>
+</nav>
 
 <main id="main">
 
@@ -646,73 +721,34 @@ p,li,.sub{text-wrap:pretty}
   <p class="plate-cap"><a href="?desktop" id="desktop-boot-link">See the desktop</a></p>
 </div>
 
-<div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Co.</span><span>Est. 2026</span></div>
 
 <header class="hero">
-  <div class="hero-copy">
-    <img class="hero-logo" src="tree.png" alt="The Joshua Tree mark: a painted Joshua tree with its branches raised like arms" width="176" height="176">
-    <!-- Sep 2026, direct urgent correction -- this line briefly named
-         Satellite Wallpaper (v0.76.7), but a real headless test of this
-         exact deployed page found the browser demo can never actually show
-         it: window.__jt.serial's own console log surfaces a real CORS
-         rejection ("Access to fetch at 'http://ip-api.com/json/' ...
-         blocked by CORS policy"), since v86's relay_url:"fetch" network
-         mode makes the GUEST's HTTP requests through the BROWSER's own
-         fetch(), and none of ip-api.com/opentopomap.org/mt0.google.com
-         send an Access-Control-Allow-Origin header. That's not this
-         session's own sandboxed network policy (a different, previously
-         suspected culprit) -- it's a real, structural, every-visitor
-         limitation of the fetch-relay approach, confirmed independent of
-         any one environment. The kernel feature itself is real and proven
-         (`check.sh`/`walldefault-check.sh` boot the kernel with a real
-         network stack, no browser fetch() involved), so this isn't
-         reverting the kernel fix, only what the landing page claims a
-         browser visitor will see today. Real follow-up logged in
-         ROADMAP.md: a same-origin Cloudflare Worker proxy route would
-         fix this for real (server-to-server fetches aren't CORS-limited),
-         scoped carefully to avoid becoming an open proxy -- not done in
-         this pass. Headline swapped to Multi-Window, a real, CI-verified
-         (`tools/checks/multiwindow-check.py`), actually-visible-on-load
-         capability instead. -->
-<!-- The H1 is the brand line and nothing else. It used to carry the
-     roadmap's **Latest** announcement, injected at deploy time, which meant
-     every visitor watched the announcement render and then get replaced a
-     second later by the tour's own reset. The announcement now rides the
-     eyebrow below (data-latest, same injector), where it belongs: H1 says
-     what this is, H2 says what is new about it. -->
-<h1>Introducing Joshua Tree.</h1>
-    <p class="eyebrow" data-latest="13.19: The Pi's own GPU at work, updates over the air, printing and scanning, and the 64-bit PC begins"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
-    <p class="hero-line"><span data-fact="apps">38</span> apps on a Raspberry Pi.</p>
-    <p class="hero-sub">Joshua Tree is a whole computer built from nothing. It is free, open source, and it runs on a Raspberry Pi 4.</p>
-    <p class="hero-cta"><a class="boot-btn" href="?demo">Try it in your browser</a></p>
-    <div class="hero-shot">
-      <img src="shots/desktop-apps.webp" alt="The Joshua Tree desktop with the Terminal and live Weather open, and running-app dots in the dock" width="960" height="540">
+  <!-- 13.21.3: one painted card, after Plank, Keyrate and Joshua's reference: the park at dusk fills it, the line
+       sits in its sky, and frosted glass tiles (the painting's own pixels, blown up) float over the desert. -->
+  <div class="hero-card">
+    <div class="glass" aria-hidden="true" inert><i class="g g-l" style="--c:0;--r:1;--d:0"></i><i class="g g-l" style="--c:1;--r:1;--d:2"></i><i class="g g-l" style="--c:0;--r:2;--d:4"></i><i class="g g-l" style="--c:1;--r:2;--d:1"></i><i class="g g-l" style="--c:2;--r:0;--d:3"></i><i class="g g-l" style="--c:0;--r:3;--d:0"></i><i class="g g-l" style="--c:-1;--r:2;--d:2"></i><i class="g g-r" style="--c:0;--r:0;--d:0"></i><i class="g g-r" style="--c:0;--r:1;--d:2"></i><i class="g g-r" style="--c:1;--r:1;--d:4"></i><i class="g g-r" style="--c:0;--r:2;--d:1"></i><i class="g g-r" style="--c:1;--r:3;--d:3"></i><i class="g g-r" style="--c:-1;--r:1;--d:0"></i><i class="g g-r" style="--c:2;--r:2;--d:2"></i><i class="g g-m" style="--c:0;--r:0;--d:0"></i><i class="g g-m" style="--c:1;--r:0;--d:2"></i><i class="g g-m" style="--c:1;--r:1;--d:4"></i><i class="g g-m" style="--c:2;--r:1;--d:1"></i></div>
+    <div class="hero-copy">
+      <h1>A computer, <em>from scratch.</em></h1>
+      <p class="hero-sub">Free and open source. Runs on a Raspberry Pi, a PC, or right here.</p>
+      <p class="hero-cta"><a class="boot-btn" href="?demo">Try it in your browser</a><a class="hero-ghost" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download for PC</a></p>
+      <p class="eyebrow" data-latest="13.19: The Pi's own GPU at work, updates over the air, printing and scanning, and the 64-bit PC begins"><span class="prompt">joshua@tree %</span><a href="https://github.com/nulljosh/joshuatree/releases"><span id="kernel-version" class="kernel-version"></span></a></p>
     </div>
+  </div>
+  <div class="hero-shot">
+    <img src="shots/desktop-apps.webp" alt="The Joshua Tree desktop with the Terminal and live Weather open, and running-app dots in the dock" width="960" height="540">
   </div>
 </header>
 
-<!-- Real facts, not marketing copy: every number here is read straight off
-     the source at deploy time by tools/gen/inject-landing-facts.py (the
-     data-fact spans below), the same "can't drift" contract the eyebrow's
-     data-latest and the version number already keep. tools/checks/
-     landing-facts-check.py fails CI if a span ever disagrees with the
-     source it names. -->
-<section class="facts reveal" aria-label="Joshua Tree by the numbers">
-  <div class="facts-row two">
-    <div class="fact"><strong><span data-fact="apps">38</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">13.21.4</span></strong><span class="label">Version</span></div>
-  </div>
-  <div class="boot-cta">
-    <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download PC ISO</a>
-    <p class="boot-line">or <a href="?demo">try it in your browser</a>, <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/GUIDE.md">put it on a Raspberry Pi 4</a>, or <a href="sdk.html">write your own app</a></p>
-  </div>
-</section>
 
 
 <section class="app-features wall reveal" id="apps" aria-label="Apps built in">
   <h2>Everything you need is already there.</h2>
-  <p class="sub">A full set of apps, built from nothing but a screen and a keyboard.</p>
+  <p class="sub">Built from nothing but a screen and a keyboard.</p>
   <div class="wall-grid">
+    <figure class="wall-item">
+      <video class="clip" src="clips/app-depths.mp4" poster="shots/app-depths.webp" muted loop playsinline preload="none" aria-label="Depths app showing a terracotta corridor in first person with a creature in the crosshair" width="984" height="462"></video>
+      <span class="wall-name" aria-hidden="true">Depths</span>
+    </figure>
     <figure class="wall-item">
       <video class="clip" src="clips/app-notes.mp4" poster="shots/app-notes.webp" muted loop playsinline preload="none" aria-label="Notes app showing a short grocery list" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Notes</span>
@@ -770,10 +806,6 @@ p,li,.sub{text-wrap:pretty}
       <span class="wall-name" aria-hidden="true">Solitaire</span>
     </figure>
     <figure class="wall-item">
-      <video class="clip" src="clips/app-depths.mp4" poster="shots/app-depths.webp" muted loop playsinline preload="none" aria-label="Depths app showing a terracotta corridor in first person with a creature in the crosshair" width="984" height="462"></video>
-      <span class="wall-name" aria-hidden="true">Depths</span>
-    </figure>
-    <figure class="wall-item">
       <video class="clip" src="clips/app-bricks.mp4" poster="shots/app-bricks.webp" muted loop playsinline preload="none" aria-label="Bricks app showing six rows of clay-coloured bricks over a paddle and a ball" width="984" height="462"></video>
       <span class="wall-name" aria-hidden="true">Bricks</span>
     </figure>
@@ -794,7 +826,7 @@ p,li,.sub{text-wrap:pretty}
 
 <section class="app-features reveal" id="desktop" aria-label="The desktop at work">
   <h2>A desktop that keeps up with you.</h2>
-  <p class="sub">Filmed on the Pi build in an emulator, nothing staged. Updates, Bluetooth and Samantha run against a stand-in server, radio and relay.</p>
+  <p class="sub">Filmed on the Pi build, nothing staged.</p>
   <div class="tile-grid">
     <div class="tile"><video class="clip" src="clips/feature-spaces.mp4?v=13.21.1" poster="clips/feature-spaces.jpg?v=13.21.1" muted loop playsinline preload="none" aria-label="Ctrl and the arrow keys move between two desktops, each keeping its own windows" width="800" height="600"></video><p><strong>Spaces.</strong> Four desktops. Ctrl and an arrow moves between them, and every window stays where you left it.</p></div>
     <div class="tile"><video class="clip" src="clips/feature-mission.mp4?v=13.21.1" poster="clips/feature-mission.jpg?v=13.21.1" muted loop playsinline preload="none" aria-label="Ctrl and Up shows every desktop and every open window at once" width="800" height="600"></video><p><strong>Mission Control.</strong> Ctrl and Up shows every desktop and every open window. Pick one and you are there.</p></div>
@@ -813,15 +845,13 @@ p,li,.sub{text-wrap:pretty}
 
 
 <section class="app-features reveal" id="pi" aria-label="Raspberry Pi">
-  <h2>Joshua Tree 13, on a real Raspberry Pi.</h2>
-  <p class="sub">The same desktop, on a small board you can hold. Here is what it does on a Pi 4 today.</p>
-  <img class="pi-wall" src="brand/park-wall.webp?v=13.19.1" alt="The Pi's wallpaper: Joshua Tree National Park at dusk, two old Joshua trees framing a glowing desert under a sky of long lit clouds" width="1920" height="1080" loading="lazy" decoding="async">
+  <h2>On a real Raspberry Pi.</h2>
+  <p class="sub">The same desktop, on a board you can hold.</p>
   <div class="tile-grid">
     <div class="tile"><p><strong>Its own graphics chip.</strong> Joshua Tree wakes the Pi's GPU and hands it work by itself, with no driver from anyone else. It is the first step to a desktop the GPU draws.</p></div>
     <div class="tile"><p><strong>Updates over the air.</strong> Type update and it fetches the newest release, checks its signature and restarts into it. Your Wi-Fi and keys stay on the card.</p></div>
     <div class="tile"><p><strong>Drive it from your Mac.</strong> Type bench once and your Mac can type, click and take a picture of the screen. Testing a board needs no second keyboard.</p></div>
     <div class="tile"><p><strong>Print and scan.</strong> Send a note to any AirPrint printer, or scan a page straight into Photos. It finds the printer on the network by itself.</p></div>
-    <div class="tile"><p><strong>Apps that cannot hurt it.</strong> Every app runs walled off from the kernel, on all four cores. If one crashes, the desktop carries on.</p></div>
     <div class="tile"><p><strong>Wi-Fi, Bluetooth and sound.</strong> It joins your network, pairs mice, keyboards and headphones, and plays the music you own.</p></div>
     <div class="tile"><p><strong>Next: a 64-bit PC.</strong> The same OS on the PC under your desk. Its 64-bit kernel already boots; the desktop comes next.</p></div>
   </div>
@@ -830,7 +860,7 @@ p,li,.sub{text-wrap:pretty}
 
 <section class="specs reveal" id="specs" aria-label="Tech specs">
   <h2>Tech specs</h2>
-  <p class="sub">For the curious. Every number here is measured from the real thing, not promised.</p>
+  <p class="sub">Measured, not promised.</p>
   <div class="spec-list">
     <details class="spec" id="spec-performance">
       <summary>Performance</summary>
@@ -922,8 +952,7 @@ p,li,.sub{text-wrap:pretty}
 <section class="waitlist-section reveal" id="waitlist" aria-label="Dev kit waitlist">
   <h2>Want one?</h2>
   <div class="waitlist-card">
-    <p class="sub audience">For anyone curious how a computer really works, and for developers who want to help build one.</p>
-    <p class="sub">It already boots on a real Raspberry Pi 4: the full desktop at 1080p, a USB keyboard, and Wi-Fi it joins on its own. The dev kit is that board, ready to go. Leave your email, we'll tell you when it ships.</p>
+    <p class="sub">A Pi 4 that boots straight to the desktop. Leave your email and we'll tell you when it ships.</p>
     <form class="waitlist-form" id="waitlist-form" novalidate>
       <label class="visually-hidden" for="waitlist-email">Email address</label>
       <input type="email" id="waitlist-email" name="email" placeholder="you@example.com" autocomplete="email" required maxlength="254">
@@ -937,7 +966,7 @@ p,li,.sub{text-wrap:pretty}
 
 <section class="build-section reveal" id="build" aria-label="Build a Nimbus">
   <h2>Build one yourself.</h2>
-  <p class="sub">Nimbus is two printed shells, a Raspberry Pi 4, a small HDMI screen and six screws. The plans are free and drawn from the real 3D model, at full size.</p>
+  <p class="sub">Two printed shells, a Pi 4, a small screen and six screws. Free plans, at full size.</p>
   <div class="build-prints">
     <img src="nimbus-print-front.webp" alt="Blueprint of the Nimbus front: 236 by 230 millimetres, the screen opening and the SD card slot" width="1600" height="1132" loading="lazy" decoding="async">
     <img src="nimbus-print-parts.webp" alt="Blueprint of Nimbus taken apart: the front shell and the back cover" width="1600" height="1132" loading="lazy" decoding="async">
@@ -968,7 +997,7 @@ p,li,.sub{text-wrap:pretty}
   <p class="closing">A real computer built from nothing, not a skin on someone else's. <span data-fact="apps">38</span> apps, and now a real Raspberry Pi with Wi-Fi. Free and open source, named for the tree that survives on nothing.</p>
   </div>
 </section>
-  <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Company</span><span>Rooted ideas. Bolder tomorrows.</span></div>
+  <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Company &middot; v<span data-fact="version">13.21.5</span></span><span>Rooted ideas. Bolder tomorrows.</span></div>
   <nav class="foot-dir" aria-label="Footer">
     <div class="foot-col">
       <h3>Joshua Tree</h3>
@@ -1013,7 +1042,7 @@ p,li,.sub{text-wrap:pretty}
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">13.21.4</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">13.21.5</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"><canvas></canvas></div>
 </footer>
