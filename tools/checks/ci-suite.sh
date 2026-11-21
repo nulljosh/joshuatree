@@ -289,6 +289,7 @@ retry|0|Menu bar mark AA (no false interior seams) on its terracotta ground|pyth
 retry|0|Boot splash draws the brand glyph, not the old crayon or stick tree|python3 ./tools/checks/bootmark-check.py
 retry|0|Boot splash draws the tree on stroke by stroke, never pops in whole, terracotta ground last|python3 ./tools/checks/bootanim-check.py
 once |0|Landing eyebrow tracks roadmap Latest, H1 stays the brand line|./tools/checks/landing-headline-check.sh
+once |0|Landing app wall: clips load early, sit over their stills and fade in only when playing (no flash on scroll)|python3 ./tools/checks/landing-clip-still-check.py
 once |0|Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
 once |0|Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |0|RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
