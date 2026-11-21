@@ -2126,11 +2126,6 @@ if (typeof document !== "undefined") (function () {
   // interleaved with the multi-window rounds instead of run as one block
   // after them.
   // The headline swaps instantly, no per-letter animation (Joshua, 2026-11-18).
-  var HEADLINE_PREFIX = 'Introducing ';
-  function setHeadline(element, variablePart) {
-    if (element) element.textContent = HEADLINE_PREFIX + variablePart;
-  }
-
   // One line per app, so the eyebrow says something about the SAME app the
   // H1 just named instead of cycling through unrelated captions underneath
   // it. Direct request: the two headings should read as one thought.
@@ -2147,38 +2142,14 @@ if (typeof document !== "undefined") (function () {
     'Contacts': 'Its own records, its own format',
     'Calculator': 'Small, and it actually adds up'
   };
-  function setEyebrow(appName) {
+  // 13.21.3: the H1 is the page's one line and stays put; the tour names the open app in the readout under the
+  // buttons instead (the eyebrow), so the headline never jumps while the demo runs.
+  function updateHeadline(appName) {
     if (!window.jtEyebrow) return;
     var caption = APP_CAPTION[appName];
-    if (caption) window.jtEyebrow.hold(caption);
-    else window.jtEyebrow.resume();
+    window.jtEyebrow.hold(caption ? appName + ': ' + caption : appName);
   }
-
-  function updateHeadline(appName) {
-    var h1Link = document.querySelector('h1');
-    if (h1Link) {
-      setHeadline(h1Link, appName + '.');
-    }
-    setEyebrow(appName);
-  }
-  // The H1 that ships in the HTML is the brand line, and the tour resets to
-  // exactly that, so nothing a visitor reads on load is replaced a second
-  // later by something different. The roadmap's **Latest** announcement now
-  // leads the eyebrow's own cycle instead of living here, which is what
-  // removed the swap for real rather than papering over it.
-  var DEFAULT_HEADLINE = (function () {
-    var h1 = document.querySelector('h1');
-    var text = h1 ? h1.textContent.trim() : '';
-    return text.indexOf(HEADLINE_PREFIX) === 0
-      ? text.slice(HEADLINE_PREFIX.length)
-      : 'Joshua Tree.';
-  })();
   function resetHeadline() {
-    // Default headline when no tour is running or before the tour starts.
-    var h1Link = document.querySelector('h1');
-    if (h1Link) {
-      setHeadline(h1Link, DEFAULT_HEADLINE);
-    }
     if (window.jtEyebrow) window.jtEyebrow.resume();
   }
 

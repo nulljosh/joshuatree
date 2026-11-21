@@ -26,9 +26,9 @@ expected=$(echo "$original_latest" | awk -F '\\*\\*Latest\\*\\*: ' '{print $2}' 
 # The H1 must be the brand line, nothing else.
 # Compare the H1's text, not its markup (a <span> keeps "Joshua Tree." on its own line).
 current_h1=$(grep -o '<h1>.*</h1>' landing/index.html | head -1 | sed -e 's/<[^>]*>//g')
-if [ "$current_h1" != "Introducing Joshua Tree." ]; then
+if [ "$current_h1" != "A computer, from scratch." ]; then
   echo "FAIL: the H1 should be the brand line, not an announcement"
-  echo "  Expected: Introducing Joshua Tree."
+  echo "  Expected: A computer, from scratch."
   echo "  Got: $current_h1"
   exit 1
 fi
