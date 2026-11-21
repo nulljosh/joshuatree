@@ -239,6 +239,10 @@ p,li,.sub{text-wrap:pretty}
   .wall-item:first-child { grid-column: 1 / -1; }
   .wall-item { position: relative; margin: 0; border-radius: 14px; overflow: hidden; }
   .wall-item img, .wall-item video { display: block; width: 100%; height: auto; }
+  /* 13.22.0: a clip waits invisible over its still (the figure's background) until it plays, so scrolling never flashes it blank. */
+  .wall-item { background-size: cover; background-position: center; background-repeat: no-repeat; }
+  video.clip { transition: opacity .2s; }
+  video.clip.wait { opacity: 0; }
   .wall-name { position: absolute; left: 10px; bottom: 10px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 80%, transparent); color: var(--bg); font-size: var(--t11); font-weight: 600; line-height: var(--lh11); letter-spacing: var(--tr11); }
   @media (max-width: 900px) { .wall-grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 600px) { .wall-grid { grid-template-columns: 1fr; } }
@@ -731,7 +735,7 @@ p,li,.sub{text-wrap:pretty}
       <h1>A computer, <em>from scratch.</em></h1>
       <p class="hero-sub">Free and open source. Runs on a Raspberry Pi, a PC, or right here.</p>
       <p class="hero-cta"><a class="boot-btn" href="?demo">Try it in your browser</a><a class="hero-ghost" href="https://github.com/nulljosh/joshuatree/releases/latest/download/joshuatree.iso">Download for PC</a></p>
-      <p class="eyebrow" data-latest="13.19: The Pi's own GPU at work, updates over the air, printing and scanning, and the 64-bit PC begins"><span class="prompt">joshua@tree %</span><a href="https://github.com/nulljosh/joshuatree/releases"><span id="kernel-version" class="kernel-version"></span></a></p>
+      <p class="eyebrow" data-latest="13.21: one desktop"><span class="prompt">joshua@tree %</span><a href="https://github.com/nulljosh/joshuatree/releases"><span id="kernel-version" class="kernel-version"></span></a></p>
     </div>
   </div>
   <div class="hero-shot">
@@ -997,7 +1001,7 @@ p,li,.sub{text-wrap:pretty}
   <p class="closing">A real computer built from nothing, not a skin on someone else's. <span data-fact="apps">38</span> apps, and now a real Raspberry Pi with Wi-Fi. Free and open source, named for the tree that survives on nothing.</p>
   </div>
 </section>
-  <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Company &middot; v<span data-fact="version">13.21.6</span></span><span>Rooted ideas. Bolder tomorrows.</span></div>
+  <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Company &middot; v<span data-fact="version">13.21.7</span></span><span>Rooted ideas. Bolder tomorrows.</span></div>
   <nav class="foot-dir" aria-label="Footer">
     <div class="foot-col">
       <h3>Joshua Tree</h3>
@@ -1042,7 +1046,7 @@ p,li,.sub{text-wrap:pretty}
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">13.21.6</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">13.21.7</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
   <div class="foot-landscape" aria-hidden="true"><canvas></canvas></div>
 </footer>
@@ -1237,10 +1241,20 @@ p,li,.sub{text-wrap:pretty}
 // Each plays only while on screen; with reduced motion they stay on their poster, the still.
 (function () {
   if (!('IntersectionObserver' in window) || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+  // 13.22.0: no flash on scroll. The still sits behind each clip (its figure's background), a clip starts loading
+  // 600 px before it scrolls in, and fades in only once it is really playing; paused, it keeps its last frame.
+  var near = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { e.target.preload = 'auto'; near.unobserve(e.target); } });
+  }, { rootMargin: '600px 0px' });
   var io = new IntersectionObserver(function (es) {
     es.forEach(function (e) { if (e.isIntersecting) e.target.play().catch(function () {}); else e.target.pause(); });
   }, { threshold: 0.3 });
-  document.querySelectorAll('video.clip').forEach(function (v) { io.observe(v); });
+  document.querySelectorAll('video.clip').forEach(function (v) {
+    if (v.poster) v.parentNode.style.backgroundImage = 'url(' + v.poster + ')';
+    v.classList.add('wait');
+    v.addEventListener('playing', function () { v.classList.remove('wait'); }, { once: true });
+    near.observe(v); io.observe(v);
+  });
 })();
 // v51: reveal-on-scroll + one parallax layer, direct request ("add scroll
 // animation with parallax"). IntersectionObserver for the reveal (a real,
