@@ -139,7 +139,7 @@ static void run(char *line){
            download right now (its own NIC/net bring-up, same as
            weather_fetch), no argument reports state. */
         /* 4.11.4: the four plain walls (the Pi's names and colours). */
-        if (!strcmp(arg, "grey") || !strcmp(arg, "gray")) { wall_switch_theme(WALL_GREY); wall_apply(0); puts("wallpaper: grey\n"); }
+        if (!strcmp(arg, "blue") || !strcmp(arg, "grey") || !strcmp(arg, "gray")) { wall_switch_theme(WALL_GREY); wall_apply(0); puts("wallpaper: blue\n"); }   /* 13.22.0: the first plain wall is the Pi's blue; grey stays an alias */
         else if (!strcmp(arg, "terracotta")) { wall_switch_theme(WALL_TERRA); wall_apply(0); puts("wallpaper: terracotta\n"); }
         else if (!strcmp(arg, "clay")) { wall_switch_theme(WALL_CLAY); wall_apply(0); puts("wallpaper: clay\n"); }
         else if (!strcmp(arg, "ink")) { wall_switch_theme(WALL_INK); wall_apply(0); puts("wallpaper: ink\n"); }

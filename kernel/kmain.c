@@ -175,7 +175,7 @@ void kmain(unsigned int multiboot_info_addr){
                 if (pc[0]=='m' && pc[1]=='a' && pc[2]=='p') wall_theme_override = WALL_WARM;
                 else if (pc[0]=='s' && pc[1]=='a' && pc[2]=='t') wall_theme_override = WALL_SAT;
                 else if (pc[0]=='p' && pc[1]=='h' && pc[2]=='o') wall_theme_override = WALL_PHOTO;
-                else if (pc[0]=='g' && pc[1]=='r' && pc[2]=='e') wall_theme_override = WALL_GREY;
+                else if ((pc[0]=='g' && pc[1]=='r' && pc[2]=='e') || (pc[0]=='b' && pc[1]=='l' && pc[2]=='u')) wall_theme_override = WALL_GREY;   /* 13.22.0: blue, the first plain wall */
                 break;
             }
         /* 1.0.12: llmhost=HOST / llmport=PORT, the Chat equivalent of

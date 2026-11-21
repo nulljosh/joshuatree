@@ -654,8 +654,8 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
    contract v75 established). settings_load clamps to 0..8 (4.11.4: 5..8 are
    the plain walls) so a hand-
    edited or stale SETTINGS.TXT can't select a theme that doesn't exist. */
-const unsigned int wall_solid_color[4] = { 0x006E6E6Eu, 0x00B5502Cu, 0x00923F20u, 0x00141311u };
-const char *const wall_solid_name[4] = { "Grey", "Terracotta", "Clay", "Ink" };
+const unsigned int wall_solid_color[4] = { 0x003B6EA5u, 0x00B5502Cu, 0x00923F20u, 0x00141311u };
+const char *const wall_solid_name[4] = { "Blue", "Terracotta", "Clay", "Ink" };
 /* Settings and `wallpaper` step through the themes in this order: the plain
    walls first, then the photo and the map themes. */
 const unsigned char wall_cycle_order[WALL_COUNT] = { WALL_GREY, WALL_TERRA, WALL_CLAY, WALL_INK, WALL_PHOTO, WALL_WARM, WALL_COOL, WALL_RAW, WALL_SAT };

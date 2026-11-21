@@ -1,0 +1,44 @@
+# Refilms the landing's still shots on a runner, for a Mac without QEMU or ld.lld.
+# Runs only for a pushed commit whose message has [shots] (the names after it, space
+# separated, until the end of the line; none means the hero, desktop-apps). The new
+# webp files and landing/shots/sources.json come back as the "landing-shots" artifact:
+# commit them yourself, so the commit that carries them runs CI like any other
+# (a push made with GITHUB_TOKEN would start no workflow at all).
+# 13.22.0: added to refilm the hero after the PC build's first plain wall became
+# the Pi's blue (#3B6EA5), so the hero, the clips and the Pi pictures share one wall.
+name: Landing shots
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shots:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[shots]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install clang, lld, QEMU, Pillow
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 python3-pil ffmpeg
+      - name: Which shots
+        id: names
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          names=$(printf '%s\n' "$MSG" | grep -o '\[shots\].*' | head -1 | sed 's/^\[shots\]//' | tr -cd 'a-z0-9 -')
+          echo "names=${names:-desktop-apps}" >> "$GITHUB_OUTPUT"
+      - name: Refilm
+        run: python3 tools/landing-shots.py ${{ steps.names.outputs.names }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: landing-shots
+          path: |
+            landing/shots/*.webp
+            landing/shots/sources.json
+          retention-days: 7

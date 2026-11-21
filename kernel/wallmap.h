@@ -16,7 +16,8 @@
 #define WALL_SAT   4
 /* 4.11.4: plain walls, the same four names and colours as the Pi's Settings
    (arch/arm64/settings.c). Numbered after the old five so a saved wall=0..4
-   keeps meaning what it meant. Grey is the default; none of these fetch a
+   keeps meaning what it meant. WALL_GREY is the default and, since 13.22.0, the
+   Pi's calm blue #3B6EA5 (named Blue), so the PC and the Pi start on one wall; none of these fetch a
    tile or tint the colour (a plain wall is exactly the colour you picked). */
 #define WALL_GREY  5
 #define WALL_TERRA 6
@@ -39,7 +40,7 @@ extern const unsigned int wall_photo_z_len;
 const unsigned char *wall_photo_get(void);      /* the photo, unpacked on first call; wall_solid_row if that fails */
 extern const unsigned char *wall_src;
 extern unsigned char *wall_sat_rgb, *wall_map;
-extern const char *const wall_solid_name[4];             /* kernel.c: Grey, Terracotta, Clay, Ink */
+extern const char *const wall_solid_name[4];             /* kernel.c: Blue, Terracotta, Clay, Ink */
 extern const unsigned char wall_cycle_order[];          /* kernel.c: the order Settings and `wallpaper` step through */
 extern unsigned char wall_solid_row[WALLPAPER_W * 3 * 2];
 extern int wall_map_tx, wall_map_ty, wall_map_cx, wall_map_cy, wall_map_is_sat, wall_theme;
