@@ -508,33 +508,31 @@ pass=0; fail=0; flaky=0
 summary=""
 failed_names=""
 
-while IFS='|' read -r mode shard name command; do
-    [ -z "${name:-}" ] && continue
-    mode=$(echo "$mode" | tr -d ' ')
-
-    echo "::group::$name"
+# 13.22.0: SUITE_JOBS=N runs up to N checks at once. CI sets it only on the i386 shards (0 to 4): their checks share
+# nothing but the prebuilt kernel.elf (a no-op make) and their own TMPDIR files and free ports, while every ARM check
+# cleans and rebuilds arch/arm64 and must run alone. Each check's output is held and printed whole, in manifest
+# order, so the log reads exactly as a serial run's. Unset or 1 is the serial run, streaming as before.
+SUITE_JOBS=${SUITE_JOBS:-1}
+RES="$TMPDIR/suite-results"; mkdir -p "$RES"
+run_check() {   # index mode name command: runs one check (its one retry too) and leaves "status flaky seconds" in RES/index.res
+    local i=$1 mode=$2 name=$3 command=$4 start status flaky=0
     start=$(date +%s)
-    RUN_ONE "$command"
-    status=$?
-
+    RUN_ONE "$command"; status=$?
     if [ $status -ne 0 ] && [ "$mode" = "retry" ]; then
         echo "--- $name failed (exit $status), one automatic retry (timing-sensitive check) ---"
-        RUN_ONE "$command"
-        retry_status=$?
-        if [ $retry_status -eq 0 ]; then
-            elapsed=$(( $(date +%s) - start ))
-            echo "::endgroup::"
-            echo "FLAKY  $name (failed once, passed on retry, ${elapsed}s)"
-            summary="${summary}FLAKY  ${name}"$'\n'
-            flaky=$((flaky + 1)); pass=$((pass + 1))
-            continue
-        fi
-        status=$retry_status
+        RUN_ONE "$command"; status=$?
+        [ $status -eq 0 ] && flaky=1
     fi
-
-    elapsed=$(( $(date +%s) - start ))
-    echo "::endgroup::"
-    if [ $status -eq 0 ]; then
+    echo "$status $flaky $(( $(date +%s) - start ))" > "$RES/$i.res"
+}
+report() {   # index name: one PASS, FLAKY or FAIL line and the tallies, from RES/index.res
+    local i=$1 name=$2 status flaky elapsed
+    read -r status flaky elapsed < "$RES/$i.res"
+    if [ "$status" -eq 0 ] && [ "$flaky" = 1 ]; then
+        echo "FLAKY  $name (failed once, passed on retry, ${elapsed}s)"
+        summary="${summary}FLAKY  ${name}"$'\n'
+        flaky=$((flaky + 1)); pass=$((pass + 1)); FLAKY_N=$((FLAKY_N + 1))
+    elif [ "$status" -eq 0 ]; then
         echo "PASS   $name (${elapsed}s)"
         summary="${summary}PASS   ${name}"$'\n'
         pass=$((pass + 1))
@@ -545,7 +543,34 @@ while IFS='|' read -r mode shard name command; do
         failed_names="${failed_names}  - ${name}"$'\n'
         fail=$((fail + 1))
     fi
+}
+FLAKY_N=0
+n=0; names=(); pids=()
+while IFS='|' read -r mode shard name command; do
+    [ -z "${name:-}" ] && continue
+    mode=$(echo "$mode" | tr -d ' ')
+    n=$((n + 1)); names[$n]=$name
+    if [ "$SUITE_JOBS" -gt 1 ]; then
+        # at most SUITE_JOBS running: wait for the oldest (bash 3.2 on a Mac has no wait -n)
+        while [ "${#pids[@]}" -ge "$SUITE_JOBS" ]; do wait "${pids[0]}"; pids=("${pids[@]:1}"); done
+        run_check "$n" "$mode" "$name" "$command" > "$RES/$n.log" 2>&1 < /dev/null &
+        pids+=($!)
+    else
+        echo "::group::$name"
+        run_check "$n" "$mode" "$name" "$command"
+        echo "::endgroup::"
+        report "$n" "$name"
+    fi
 done < <(manifest | grep -v '^[[:space:]]*$' | awk -v i="${SHARD:-}" -F'|' 'i == "" || $2 == i')
+if [ "$SUITE_JOBS" -gt 1 ]; then
+    wait
+    for k in $(seq 1 "$n"); do
+        echo "::group::${names[$k]}"; cat "$RES/$k.log"; echo "::endgroup::"
+        [ -f "$RES/$k.res" ] || echo "1 0 0" > "$RES/$k.res"   # a check that never wrote its result failed
+        report "$k" "${names[$k]}"
+    done
+fi
+flaky=$FLAKY_N
 
 echo
 echo "================ regression suite summary ================"

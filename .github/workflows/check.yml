@@ -213,7 +213,9 @@ jobs:
           git -C "$RUNNER_TEMP/plank" checkout -q c3679ca8989ada3483429e25a62e0da2c92c622e
           echo "PLANK=$RUNNER_TEMP/plank/plank.py" >> "$GITHUB_ENV"
       - name: Regression suite (all checks, full summary)
-        run: SHARD=${{ matrix.shard }} SHARDS=11 ./tools/checks/ci-suite.sh
+        # 13.22.0: the i386 shards (0 to 4) run three checks at once on the 4-core runner; their checks share only the
+        # prebuilt kernel.elf. ARM shards rebuild arch/arm64 per check, so they stay one at a time.
+        run: SHARD=${{ matrix.shard }} SHARDS=11 SUITE_JOBS=${{ matrix.shard < 5 && 3 || 1 }} ./tools/checks/ci-suite.sh
       # A check that fails only on the runner is unreadable from the log
       # alone. Keep what every check leaves in /tmp (serial logs, raw
       # framebuffer dumps, PNGs) so the failure can be looked at, not guessed.
