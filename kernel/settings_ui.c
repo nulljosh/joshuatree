@@ -321,7 +321,7 @@ void gui_launch_settings(void){
                    fallback became the baked satellite capture instead of
                    the tree -- font_is_fallback() is the same real v86
                    signal wall_apply() itself branches on. */
-                const char *lbl = wall_theme >= WALL_GREY ? wall_solid_name[wall_theme - WALL_GREY] : wall_theme == WALL_PHOTO ? "Park" : (wall_map ? theme_name : (font_is_fallback() ? "Satellite (offline demo)" : "Map (fetching, photo until then)"));
+                const char *lbl = wall_theme >= WALL_GREY ? wall_solid_name[wall_theme - WALL_GREY] : wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : (font_is_fallback() ? "Satellite (offline demo)" : "Map (fetching, photo until then)"));
                 font_draw_string(lbl, detail_right - font_string_width(lbl), y, WALL_THEME_FETCHES() && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
             } else if (i == 3) {
                 font_draw_string("LLM model", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);

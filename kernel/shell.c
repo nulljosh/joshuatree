@@ -143,7 +143,7 @@ static void run(char *line){
         else if (!strcmp(arg, "terracotta")) { wall_switch_theme(WALL_TERRA); wall_apply(0); puts("wallpaper: terracotta\n"); }
         else if (!strcmp(arg, "clay")) { wall_switch_theme(WALL_CLAY); wall_apply(0); puts("wallpaper: clay\n"); }
         else if (!strcmp(arg, "ink")) { wall_switch_theme(WALL_INK); wall_apply(0); puts("wallpaper: ink\n"); }
-        else if (!strcmp(arg, "photo") || !strcmp(arg, "park")) { wall_switch_theme(WALL_PHOTO); wall_apply(0); puts("wallpaper: photo\n"); }
+        else if (!strcmp(arg, "photo")) { wall_switch_theme(WALL_PHOTO); wall_apply(0); puts("wallpaper: photo\n"); }
         else if (!strcmp(arg, "map") || !strcmp(arg, "warm")) { wall_switch_theme(WALL_WARM); wall_apply(1); puts(wall_map ? "wallpaper: map (warm)\n" : "wallpaper: map (warm) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
         else if (!strcmp(arg, "cool")) { wall_switch_theme(WALL_COOL); wall_apply(1); puts(wall_map ? "wallpaper: map (cool)\n" : "wallpaper: map (cool) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
         else if (!strcmp(arg, "raw")) { wall_switch_theme(WALL_RAW); wall_apply(1); puts(wall_map ? "wallpaper: map (raw)\n" : "wallpaper: map (raw) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
