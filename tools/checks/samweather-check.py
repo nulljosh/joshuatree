@@ -13,6 +13,13 @@ Usage: tools/checks/samweather-check.py   (from the repo root)
 """
 import http.server, json, os, socket, subprocess, sys, tempfile, threading, time
 from freeport import free_port
+import wxfixture
+
+# Location and forecast come from this fake server too (wxhost=), never ip-api.com and
+# open-meteo: ip-api.com limits shared IPs, and from GitHub's runners this check failed four
+# runs in a row on 2026-11-21 with no kernel change ("answered the weather without a reading").
+GEO = b'{"status":"success","country":"Canada","city":"Langley","zip":"V3A","lat":49.0983,"lon":-122.6498,"isp":"test"}'
+WX = wxfixture.reply()
 
 LOG = os.path.join(tempfile.mkdtemp(prefix="jt-samweather-"), "serial.log")   # per run: two runs never share one log
 PORT = free_port()
@@ -20,6 +27,13 @@ PORT = free_port()
 
 class Hd(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
+    def do_GET(self):
+        rep = GEO if self.path.startswith("/json/") else WX
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(rep)))
+        self.end_headers()
+        self.wfile.write(rep)
     def do_POST(self):
         self.rfile.read(int(self.headers.get("Content-Length", "0")))
         rep = json.dumps({"tool": "weather", "arg": ""} if self.path == "/api/pick" else
@@ -40,7 +54,7 @@ except FileNotFoundError: pass
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                       "-nic", "user,model=rtl8139",
                       "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG,
-                      "-append", f"samantha llmhost=10.0.2.2 llmport={srv.server_address[1]}"],
+                      "-append", f"samantha llmhost=10.0.2.2 llmport={srv.server_address[1]} wxhost=10.0.2.2:{srv.server_address[1]}"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 def serial():
     try: return open(LOG, encoding="latin-1").read()
