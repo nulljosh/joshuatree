@@ -46,7 +46,7 @@ const realApps = names.filter(n => !['Apps', 'Trash', 'Settings', 'Compose'].inc
 console.log(`APPS[] has ${realApps} real apps`);
 
 const overlap = (a, b) => a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5;
-const KEY = ['Joshua Tree by the numbers', 'Apps built in', 'Protected apps', 'Dev kit waitlist'];
+const KEY = ['Tech specs', 'Apps built in', 'Protected apps', 'Dev kit waitlist'];
 const realNames = names.filter(n => !['Apps', 'Trash', 'Settings', 'Compose'].includes(n));
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
@@ -128,6 +128,22 @@ try {
     // 5. Want one
     if (!d.ad) fail(`${tag}: "Want one?" has no joshua-tree-ad video`);
     if (d.videos !== 1) fail(`${tag}: "Want one?" should hold exactly one film, found ${d.videos}`);
+    // 6. 13.21.3: the local nav stays pinned and links only to real sections; the app wall ends on a full row.
+    const nv = await page.evaluate(() => {
+      scrollTo(0, 3000);
+      const n = document.querySelector('nav.localnav'), r = n && n.getBoundingClientRect();
+      const dead = n ? [...n.querySelectorAll('a[href^="#"]')].map(a => a.getAttribute('href')).filter(h => !document.querySelector(h)) : [];
+      const tops = [...document.querySelectorAll('.wall-item')].map(e => Math.round(e.getBoundingClientRect().top));
+      const last = Math.max(...tops);
+      const pg = document.querySelector('#pi .tile-grid'), pl = pg && pg.lastElementChild;
+      const piHole = pg ? Math.round(pg.getBoundingClientRect().right - pl.getBoundingClientRect().right) : 0;
+      scrollTo(0, 0);
+      return { piHole, top: r ? Math.round(r.top) : null, dead, lastRow: tops.filter(t => t === last).length, perRow: tops.filter(t => t === tops[1]).length };
+    });
+    if (nv.top !== 0) fail(`${tag}: local nav is not pinned to the top after scrolling (top ${nv.top})`);
+    if (nv.dead.length) fail(`${tag}: local nav links to missing sections ${nv.dead.join(', ')}`);
+    if (nv.piHole > 2) fail(`${tag}: the Pi tile grid ends with a hole (${nv.piHole}px short)`);
+    if (nv.lastRow !== nv.perRow) fail(`${tag}: app wall ends on a ragged row (${nv.lastRow} of ${nv.perRow})`);
     await page.close();
   }
   // 7. Portfolio on a phone: his face fills the stage right down to the composer,
