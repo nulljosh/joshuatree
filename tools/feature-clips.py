@@ -127,5 +127,7 @@ def cut(src, start, end, name, speed="1"):
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--cut"]: cut(*sys.argv[2:7]); sys.exit(0)
     if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64", "ffmpeg")): sys.exit("needs clang, ld.lld, qemu-system-aarch64, ffmpeg")
-    subprocess.run(["make", "-s", "-C", ARCH, "kernel8.elf"], check=True)
+    # 13.22.0: filmed on the Pi's own picture (PARK_WALL), not the flat blue the checks read, so the clips match the hero
+    subprocess.run(["make", "-s", "-C", ARCH, "clean"], check=True)
+    subprocess.run(["make", "-s", "-C", ARCH, "kernel8.elf", "KFLAGS=-DPARK_WALL"], check=True)
     for n in sys.argv[1:] or ["spaces", "mission", "spotlight", "launchpad"]: film(n)

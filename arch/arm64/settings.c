@@ -26,7 +26,7 @@ int home_save(const char *name, const void *data, unsigned len);
 static const struct { const char *name; unsigned rgb; } walls[SET_WALLS] = {
     { "Blue", 0x003B6EA5u }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u },
     { "Park", WALL_PARK } };   /* 8.9.0: the picture, Joshua Tree at dusk */
-#ifdef PI_BUILD
+#if defined(PI_BUILD) || defined(PARK_WALL)   /* 13.22.0: the landing clips film on the park, see wall.c */
 #define WALL_DEFAULT 4                /* 8.9.0: the park picture on the Pi */
 #else
 #define WALL_DEFAULT 0                /* the flat blue on QEMU, which the checks read */

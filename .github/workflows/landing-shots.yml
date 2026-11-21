@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   shots:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[shots]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[shots]') || contains(github.event.head_commit.message, '[clips]')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -25,7 +25,7 @@ jobs:
       - name: Install clang, lld, QEMU, Pillow
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 python3-pil ffmpeg
+          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 qemu-system-arm python3-pil ffmpeg
       - name: Which shots
         id: names
         env:
@@ -35,10 +35,20 @@ jobs:
           echo "names=${names:-desktop-apps}" >> "$GITHUB_OUTPUT"
       - name: Refilm
         run: python3 tools/landing-shots.py ${{ steps.names.outputs.names }}
+      # [clips] NAMES (13.22.0): the Pi feature clips from tools/feature-clips.py, on the park picture
+      - name: Which clips
+        id: clips
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: echo "names=$(printf '%s\n' "$MSG" | grep -o '\[clips\].*' | head -1 | sed 's/^\[clips\]//' | tr -cd 'a-z ')" >> "$GITHUB_OUTPUT"
+      - name: Film clips
+        if: contains(github.event.head_commit.message, '[clips]')
+        run: python3 tools/feature-clips.py ${{ steps.clips.outputs.names }}
       - uses: actions/upload-artifact@v4
         with:
           name: landing-shots
           path: |
             landing/shots/*.webp
             landing/shots/sources.json
+            landing/clips/feature-*
           retention-days: 7
