@@ -125,10 +125,12 @@ int gpu_bringup(void (*say)(const char *)) {
    column to the frame. After a stored tile, a CLEAR_TILE_BUFFERS sets the buffer back to the clear colour for the next.
    `gpu fill` points it at the screen's back buffer, so the V3D paints pixels you can see. */
 #define GPU_MAX 2048   /* frame side, in pixels: 32x32 tiles at most */
-static unsigned char gpu_cl[24 * 1024] __attribute__((aligned(256)));
+/* 13.22.0: sized for the worst case, a 2048x2048 copy: 1024 tiles at 32 bytes each plus the frame setup (it was 24 KiB,
+   which a copy past about 765 tiles overran into the statics after it). cb drops bytes past the end and gpu_paint refuses the job. */
+static unsigned char gpu_cl[34 * 1024] __attribute__((aligned(256)));
 static unsigned gpu_px[64 * 64] __attribute__((aligned(4096)));
 static unsigned gcn;
-static void cb(unsigned v) { gpu_cl[gcn++] = (unsigned char)v; }
+static void cb(unsigned v) { if (gcn < sizeof gpu_cl) gpu_cl[gcn] = (unsigned char)v; gcn++; }
 static void cw(unsigned long long v, int n) { while (n--) { cb((unsigned)v & 255); v >>= 8; } }
 static int gpu_wait(unsigned long reg, unsigned bit) {
     for (unsigned long t0 = gpu_now(); GR(reg) & bit;) if (gpu_now() - t0 > gpu_hz() / 100) return 0;
@@ -175,6 +177,7 @@ static int gpu_paint(unsigned *dst, unsigned pitch, unsigned w, unsigned h, unsi
     GW(GPU_CORE0 + GPU_SLCACTL, 0x0f0f0f0fu);
     unsigned f0 = GR(GPU_CORE0 + GPU_RFC);
     GW(GPU_CORE0 + GPU_CT1QBA, GPU_BUS(gpu_cl));
+    if (gcn > sizeof gpu_cl) { show("gpu: job too big\n"); return 0; }   /* never reached at GPU_MAX, kept so a bigger list cannot run past the buffer */
     GW(GPU_CORE0 + GPU_CT1QEA, GPU_BUS(gpu_cl) + gcn);   /* this write starts the job */
     for (unsigned long t0 = gpu_now(); GR(GPU_CORE0 + GPU_RFC) == f0;)
         if (gpu_now() - t0 > gpu_hz() / 10) {

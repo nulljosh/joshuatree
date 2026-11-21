@@ -1704,7 +1704,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (401 checks)
+### The suite (402 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -1933,6 +1933,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Boot splash draws the brand glyph, not the old crayon or stick tree | `tools/checks/bootmark-check.py` | retry |
 | Boot splash draws the tree on stroke by stroke, never pops in whole, terracotta ground last | `tools/checks/bootanim-check.py` | retry |
 | Landing eyebrow tracks roadmap Latest, H1 stays the brand line | `tools/checks/landing-headline-check.sh` | once |
+| Landing app wall: clips load early, sit over their stills and fade in only when playing (no flash on scroll) | `tools/checks/landing-clip-still-check.py` | once |
 | Idle tour still cycles all 8 real dock apps | `tools/checks/tourappcount-check.mjs` | once |
 | Idle tour autoplay fix is in place (tourArmed reset) | `tools/checks/idletour-arm-reset-check.mjs` | once |
 | RTC local-time shift math (v86's CMOS answers in UTC) | `tools/checks/rtc-timezone-check.mjs` | once |
@@ -1985,8 +1986,8 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Brand tokens: docs/brand/tokens.css matches the kernel's desktop colours, the accent, the brand page links it and the map reads it | `tools/checks/brand-tokens-check.py` | retry |
 | ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing) | `tools/checks/arm64-m0-check.py` | retry |
 | x86-64 slice 1 (13.18.0): the 64-bit kernel boots in qemu-system-x86_64 into long mode, maps 4 GiB, prints on the serial port and a 1024x768 screen; a CPU without long mode is refused in words | `tools/checks/x86_64-m0-check.py` | retry |
-| x86-64 slice 2 (13.22.0): the IDT loads, the PIC and PIT tick at 100 Hz for 20 ticks, and IRQ1 reads the keyboard (a is scancode 0x1e, b is 0x30) on the serial port | `tools/checks/x86_64-irq-check.py` | retry |
 | ARM64: a tiny local language model answers under QEMU (skips where the tools are missing) | `tools/checks/arm64-llm-check.py` | retry |
+| x86-64 slice 2 (13.22.0): the IDT loads, the PIC and PIT tick at 100 Hz for 20 ticks, and IRQ1 reads the keyboard (a is scancode 0x1e, b is 0x30) on the serial port | `tools/checks/x86_64-irq-check.py` | retry |
 | ARM64: with the relay out of reach, Samantha answers from the hosted Turing over HTTPS (skips where the tools are missing) | `tools/checks/arm64-sam-hosted-check.py` | retry |
 | ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing) | `tools/checks/arm64-m1c-check.py` | retry |
 | ARM64 M2: the aarch64 kernel drives virtio disk, network, keyboard and mouse: a sector read back, a real ARP answer, key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-m2-check.py` | retry |

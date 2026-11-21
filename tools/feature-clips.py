@@ -130,4 +130,7 @@ if __name__ == "__main__":
     # 13.22.0: filmed on the Pi's own picture (PARK_WALL), not the flat blue the checks read, so the clips match the hero
     subprocess.run(["make", "-s", "-C", ARCH, "clean"], check=True)
     subprocess.run(["make", "-s", "-C", ARCH, "kernel8.elf", "KFLAGS=-DPARK_WALL"], check=True)
-    for n in sys.argv[1:] or ["spaces", "mission", "spotlight", "launchpad"]: film(n)
+    try:
+        for n in sys.argv[1:] or ["spaces", "mission", "spotlight", "launchpad"]: film(n)
+    finally:   # the PARK_WALL objects must not outlive the filming: a later plain build would link them and the checks read park
+        subprocess.run(["make", "-s", "-C", ARCH, "clean"])

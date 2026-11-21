@@ -31,16 +31,17 @@ jobs:
         env:
           MSG: ${{ github.event.head_commit.message }}
         run: |
-          names=$(printf '%s\n' "$MSG" | grep -o '\[shots\].*' | head -1 | sed 's/^\[shots\]//' | tr -cd 'a-z0-9 -')
+          names=$(printf '%s\n' "$MSG" | grep -o '\[shots\][^[]*' | head -1 | sed 's/^\[shots\]//' | tr -cd 'a-z0-9 -')
           echo "names=${names:-desktop-apps}" >> "$GITHUB_OUTPUT"
       - name: Refilm
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[shots]')
         run: python3 tools/landing-shots.py ${{ steps.names.outputs.names }}
       # [clips] NAMES (13.22.0): the Pi feature clips from tools/feature-clips.py, on the park picture
       - name: Which clips
         id: clips
         env:
           MSG: ${{ github.event.head_commit.message }}
-        run: echo "names=$(printf '%s\n' "$MSG" | grep -o '\[clips\].*' | head -1 | sed 's/^\[clips\]//' | tr -cd 'a-z ')" >> "$GITHUB_OUTPUT"
+        run: echo "names=$(printf '%s\n' "$MSG" | grep -o '\[clips\][^[]*' | head -1 | sed 's/^\[clips\]//' | tr -cd 'a-z ')" >> "$GITHUB_OUTPUT"
       - name: Film clips
         if: contains(github.event.head_commit.message, '[clips]')
         run: python3 tools/feature-clips.py ${{ steps.clips.outputs.names }}
