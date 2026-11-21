@@ -31,9 +31,13 @@ with tempfile.TemporaryDirectory(prefix="ci-tooling-") as tmp:
     bindir = root / "bin"
     bindir.mkdir()
     gh = bindir / "gh"
-    gh.write_text(f"#!{sys.executable}\n" + '''import json, sys
+    gh.write_text(f"#!{sys.executable}\n" + '''import json, os, sys
+if os.environ.get("FAKE_GH_FAIL"):
+    sys.exit("unknown flag: --allow-escape-sequences")
 if sys.argv[1] == "run":
     print(json.dumps({"jobs": [{"name": "suite (0)", "databaseId": 1}]}))
+elif os.environ.get("FAKE_NO_TIMES"):
+    print("timestamp a log with no PASS lines in it")
 else:
     print("timestamp PASS   ARM first (100s)\\ntimestamp PASS   ARM TLS (200s)\\ntimestamp PASS   Host first (40s)")
 ''')
@@ -45,15 +49,20 @@ else:
     assert suite.read_text() == original, "--check changed the manifest"
     subprocess.run(cmd + ["1"], cwd=root, env=env, check=True)
     rows = [line.split("|") for line in suite.read_text().splitlines()]
-    arm = {"6", "8", "9", "10"}   # the raspi4b runner's shards (check.yml)
+    arm = {"5", "6", "7", "8", "9", "10"}   # the raspi4b runner's shards (check.yml)
     assert all(row[1] in arm for row in rows[:2]), "an ARM check (by what it runs) is off the ARM shards"
     assert rows[0][1] != rows[1][1], "ARM checks were not spread across the ARM shards"
     assert all(row[1] not in arm for row in rows[2:]), "a host check (from an ARM shard) stayed on one"
     assert rows[2][1] != rows[3][1], "ordinary checks did not balance"
     assert re.sub(r"\|\d+\|", "|SHARD|", suite.read_text()) == re.sub(
         r"\|\d+\|", "|SHARD|", original), "changed check commands or retry modes"
-    invalid = subprocess.run(cmd + ["1", "12"], cwd=root, env=env, capture_output=True)
-    assert invalid.returncode != 0, "accepted a shard count check.yml does not run"
+    # 13.21.4: a gh call that fails (it was once handed a flag it does not have) or logs with no timings must stop the
+    # packing, never price every check at the 30 s default and rewrite the shards anyway
+    packed = suite.read_text()
+    for bad in ("FAKE_GH_FAIL", "FAKE_NO_TIMES"):
+        r = subprocess.run(cmd + ["1"], cwd=root, env=dict(env, **{bad: "1"}), text=True, capture_output=True)
+        assert r.returncode != 0, bad + ": packed with no timings"
+        assert suite.read_text() == packed, bad + ": rewrote the manifest with no timings"
 
     # one list: the ARM shards and the shard count in check.yml are what ci-local.sh and the suite's SHARDS use
     wf = (ROOT / ".github/workflows/check.yml").read_text()
@@ -75,4 +84,4 @@ else:
     assert "FAIL: tmp-paths-check" in rejected.stdout, "guard did not run"
     assert "-- build --" not in rejected.stdout, "build ran after failed preflight"
 
-print("PASS: ARM by what a check runs, spread across the ARM shards, host checks off them, one ARM list and shard count, dry run, fail-fast preflight")
+print("PASS: ARM by what a check runs, spread across the ARM shards, host checks off them, one ARM list and shard count, dry run, no packing without timings, fail-fast preflight")

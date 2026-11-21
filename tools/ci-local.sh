@@ -97,10 +97,10 @@ echo
 # plus their Playwright Chromes at once ran the Mac out of memory and
 # rebooted it twice on 2026-10-02.
 CI_LOCAL_JOBS=${CI_LOCAL_JOBS:-2}
-echo "-- suite job: 11 shards, $CI_LOCAL_JOBS jobs at a time, each its own QEMU (-display none); the ARM shards 6 8 9 10 run in turn in one job --"
+echo "-- suite job: 11 shards, $CI_LOCAL_JOBS jobs at a time, each its own QEMU (-display none); the ARM shards 5 6 7 8 9 10 run in turn in one job --"
 SUITE_LOGS=()
 suite_start=$(date +%s)
-for group in "6 8 9 10" 0 1 2 3 4 5 7; do   # the ARM shards share arch/arm64 (each check cleans it), so never two at once; every
+for group in "5 6 7 8 9 10" 0 1 2 3 4; do   # the ARM shards share arch/arm64 (each check cleans it), so never two at once; every
   # check that builds arch/arm64 is on one of them (ci-balance.py). Longest job first, so it overlaps the host shards.
   log="/tmp/jt-ci-local-$$-shard${group// /-}.log"
   SUITE_LOGS+=("$log")
