@@ -20,9 +20,13 @@ only when a source change cannot alter the picture, such as a comment).
 Fleet apps (bookrank, tonchi, curbfind, epiphany) boot with no network, so they show their
 offline samples and never change with the live data.
 
-Usage: python3 tools/landing-shots.py [--record] [name ...]   (from anywhere; default: all)
+--clips also films each tile (13.19.3): the same crop, recorded from the window opening through a short
+scripted use (PLAY below), to landing/clips/<tile>.mp4 at 15 fps, muted. The landing's wall plays them
+with the still as the poster, so the stills stay for the README, reduced motion and before a clip loads.
+
+Usage: python3 tools/landing-shots.py [--record] [--clips] [name ...]   (from anywhere; default: all)
 """
-import json, os, socket, subprocess, sys, time
+import json, os, socket, subprocess, sys, threading, time
 from PIL import Image
 
 REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
@@ -33,6 +37,18 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 WIN = (70, 40, 820, 385)            # logical x, y, w, h
 WIN_OF = {}   # per-tile crop overrides (none now)
 OUT = (984, 462)                    # 820x385 * 0.6, same ratio
+CLIPS = "--clips" in sys.argv
+# What each clip does once its window is up: (keys, seconds after each). Apps with none just open and sit.
+PLAY = {"paddle": [("spc", 0.5)] + [("up", 0.35)] * 6 + [("down", 0.35)] * 6,
+        "bricks": [("spc", 0.6)] + [("left", 0.3)] * 5 + [("right", 0.3)] * 8,
+        "snake": [("right", 0.9), ("up", 0.2), ("left", 0.9), ("down", 0.2)] * 3 + [("right", 0.1)],   # ends heading across the open board   # a small loop: it moves 12 cells a second
+        "calendar": [("right", 0.8)] * 4 + [("left", 0.8)] * 2,
+        "depths": [("up", 0.5)] * 4 + [("left", 0.6), ("up", 0.5), ("up", 0.5), ("spc", 0.8)],
+        "chess": [("spc", 0.3), ("up", 0.3), ("up", 0.3), ("spc", 3.0)],
+        "solitaire": [("d", 0.8)] * 4,
+        "bookrank": [("down", 0.7)] * 4, "curbfind": [("down", 0.7)] * 4, "epiphany": [("down", 0.7)] * 3,
+        "stocks": [("down", 0.8)] * 3, "tonchi": [("1", 1.5), ("2", 1.5)], "hamurabi": [("ret", 1.2)] * 2,
+        "files": [("1", 1.0), ("2", 1.0)]}
 DESKTOP_PX, DESKTOP_RGB = (480, 511), (0xEF, 0xEB, 0xE4)
 
 # kernel.c GUI_DOCK_DEFAULT: Apps,Files,Mail,Calendar,Notes,Reminders,Terminal,Chat,Weather,Stocks,Trash
@@ -77,8 +93,9 @@ def shoot(name):
             try: s = socket.create_connection(("127.0.0.1", PORT)); break
             except OSError: pass
         if s is None: sys.exit(f"FAIL {name}: QMP never came up")
-        f = s.makefile("rw")
+        f = s.makefile("rw"); lock = threading.RLock()   # the clip recorder grabs frames from its own thread
         def cmd(o):
+          with lock:
             f.write(json.dumps(o) + "\n"); f.flush()
             while True:
                 r = json.loads(f.readline())
@@ -101,11 +118,32 @@ def shoot(name):
             for ch in t:
                 key("shift-" + ch.lower() if ch.isupper() else {" ": "spc", ".": "dot", ",": "comma"}.get(ch, ch))
         def frame():
+          with lock:
             cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
             return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
         def serial():
             try: return open(LOG, errors="replace").read()
             except FileNotFoundError: return ""
+
+        rec = None
+        def start_clip():
+            nonlocal rec
+            if not CLIPS or name == "desktop-apps": return
+            os.makedirs("landing/clips", exist_ok=True)
+            move(LOGICAL_W - 2, 2); time.sleep(0.3)   # the pointer would sit in the film
+            enc = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
+                                    "-s", f"{OUT[0]}x{OUT[1]}", "-use_wallclock_as_timestamps", "1", "-i", "-",
+                                    "-vf", "fps=15", "-c:v", "libx264", "-preset", "slow", "-crf", "30", "-pix_fmt", "yuv420p",
+                                    "-movflags", "+faststart", "-an", f"landing/clips/{FILE[name]}.mp4"], stdin=subprocess.PIPE)
+            stop = threading.Event(); x, y, w, h = WIN_OF.get(name, WIN)
+            def grab():
+                while not stop.is_set():
+                    enc.stdin.write(frame().crop((x * SCALE, y * SCALE, (x + w) * SCALE, (y + h) * SCALE)).resize(OUT, Image.BILINEAR).tobytes())
+            t = threading.Thread(target=grab); t.start(); rec = (enc, stop, t)
+        def stop_clip():
+            enc, stop, t = rec; stop.set(); t.join(); enc.stdin.close()
+            if enc.wait() != 0: sys.exit(f"FAIL {name}: ffmpeg could not write the clip")
+            print(f"filmed landing/clips/{FILE[name]}.mp4 ({os.path.getsize(f'landing/clips/{FILE[name]}.mp4')} bytes)")
 
         for _ in range(160):
             if frame().getpixel((DESKTOP_PX[0] * SCALE + 1, DESKTOP_PX[1] * SCALE + 1)) == DESKTOP_RGB: break
@@ -122,6 +160,7 @@ def shoot(name):
                 else:
                     sys.exit(f"FAIL {name}: no '{needle}' on serial")
             time.sleep(2.0)                    # let the frame after the fallback land
+            start_clip()
             if name == "panes":
                 type_text("ls"); key("ret"); time.sleep(0.6)
                 key("ctrl-t"); time.sleep(0.6)
@@ -143,7 +182,9 @@ def shoot(name):
                 if "wxstate=ok" in serial(): break
                 time.sleep(4); key("r")
         else:
+            start_clip()                       # from before the click, so the clip shows the window opening
             click(SLOT0_X + SLOT[name] * PITCH + ICON // 2, DOCK_Y)
+            if CLIPS: move(LOGICAL_W - 2, 2)   # the pointer would sit in the film
             time.sleep(1.5)
 
         if name == "notes":
@@ -172,6 +213,10 @@ def shoot(name):
         if name == "desktop-apps": move(40, 470)   # on the wallpaper, left of the dock and below the windows   # the whole screen is the shot: the pointer sits on the wallpaper, whole
         else: move(LOGICAL_W - 2, 2)           # park the pointer outside the window crop
         time.sleep(1.0)
+        if rec:
+            for k, wait in PLAY.get(name, []): key(k); time.sleep(wait)
+            time.sleep(1.5)
+            stop_clip()
 
         if name == "desktop-apps":            # the whole screen, half size: menu bar, wallpaper, dock
             img = frame().resize((W // 2, H // 2), Image.LANCZOS)
@@ -197,5 +242,5 @@ if __name__ == "__main__":
         for t in list(M.PROGRAM) + list(M.KERNEL): M.record(t)
         sys.exit(0)
     subprocess.run(["make", "-s", "kernel.elf"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for n in (sys.argv[1:] or ["desktop-apps"] + list(SLOT) + list(FLEET)):
+    for n in ([a for a in sys.argv[1:] if not a.startswith("--")] or ["desktop-apps"] + list(SLOT) + list(FLEET)):
         shoot(n)

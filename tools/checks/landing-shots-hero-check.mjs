@@ -4,11 +4,13 @@
 // the page is exactly what it was before.
 //
 // Fails if the default view shows #demo-frame, requests libv86.js or
-// embed.js, or leaves out any landing/shots/*.webp; or if ?demo stops
+// embed.js, or leaves out any landing/shots/*.webp (as an image, or as the
+// poster of an app clip, 13.20.0); or a clip points at a file that is not in
+// landing/clips; or if ?demo stops
 // loading embed.js and showing #v86-embed.
 import { chromium } from 'playwright';
 import { createServer } from 'http';
-import { readFile, readdir } from 'fs/promises';
+import { readFile, readdir, access } from 'fs/promises';
 import { extname, join } from 'path';
 
 const ROOT = new URL('../../landing/', import.meta.url).pathname;
@@ -38,7 +40,9 @@ try {
     const s = await page.evaluate(() => {
       const shown = (sel) => { const e = document.querySelector(sel); return !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0; };
       return { frame: shown('#demo-frame'), embed: shown('#v86-embed'), hero: shown('.hero-shot img'),
-               srcs: [...document.querySelectorAll('img')].map(i => i.getAttribute('src')) };
+               srcs: [...document.querySelectorAll('img')].map(i => i.getAttribute('src'))
+                 .concat([...document.querySelectorAll('video.clip')].map(v => v.getAttribute('poster'))),
+               clips: [...document.querySelectorAll('video.clip')].map(v => v.getAttribute('src')) };
     });
     console.log(`${mode}: demo-frame=${s.frame} hero=${s.hero} v86=${v86}`);
     if (mode === 'default') {
@@ -46,6 +50,7 @@ try {
       if (v86) fail('the default page loads libv86.js or embed.js');
       if (!s.hero) fail('the default page has no desktop shot hero');
       for (const f of shots) if (!s.srcs.includes('shots/' + f)) fail('no tile for shots/' + f);
+      for (const c of s.clips) await access(join(ROOT, c.split('?')[0])).catch(() => fail('a tile plays ' + c + ', which is not in landing/'));
     } else {
       if (!s.embed) fail('?demo does not show #v86-embed');
       if (!asked.some(u => /embed\.js/.test(u))) fail('?demo does not load embed.js');

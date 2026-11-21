@@ -27,7 +27,7 @@
 // The failing direction is the one that was actually wrong: announcing an
 // app with nothing on screen. A little tolerance is deliberate, since a
 // sample can land in the genuine milliseconds between the headline
-// finishing its typewriter run and the window's first frame, or during a
+// swap and the window's first frame, or during a
 // window's own close animation.
 //
 // Usage: node tools/checks/headline-sync-check.mjs [url]
@@ -55,7 +55,7 @@ async function sample() {
     const sx = c.width / 960, sy = c.height / 540;
     const px = Math.round(lx * sx) + 1, py = Math.round(ly * sy) + 1;
     const d = ctx.getImageData(px, py, 1, 1).data;
-    const h1 = document.querySelector('h1');
+    const h1 = document.querySelector('.eyebrow');  // 13.21.3: the tour names apps in the readout, not the H1
     return { rgb: [d[0], d[1], d[2]], headline: h1 ? h1.textContent.trim() : '' };
   }, [A[0], A[1]]);
 }
@@ -64,7 +64,7 @@ const isWindowOpen = (p) =>
   Math.abs(p[1] - CLOSE_RED[1]) <= 40 &&
   Math.abs(p[2] - CLOSE_RED[2]) <= 40;
 
-const BRAND = 'Introducing Joshua Tree.';
+const NAMES = /^[A-Z][A-Za-z]+: /;  // "Files: Real FAT16..."; the version and Latest lines never match
 let named = 0, namedWithWindow = 0, orphaned = 0, brandSeen = 0;
 const orphanExamples = [];
 
@@ -74,9 +74,9 @@ const DEADLINE = Date.now() + 110000;
 while (Date.now() < DEADLINE) {
   const s = await sample();
   const open = isWindowOpen(s.rgb);
-  if (s.headline === BRAND) {
+  if (!NAMES.test(s.headline)) {
     brandSeen++;
-  } else if (s.headline.startsWith('Introducing ')) {
+  } else {
     named++;
     if (open) namedWithWindow++;
     else { orphaned++; if (orphanExamples.length < 5) orphanExamples.push(s.headline); }

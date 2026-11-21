@@ -83,8 +83,9 @@ jobs:
     # exact shape of "it was green yesterday and red today with no commit
     # in between". Bump this line deliberately when the toolchain should
     # move, so the bump is a commit that CI itself proves out.
-    # ARM lives on shards 6, 8, 9 and 10 and needs QEMU with raspi4b support.
-    runs-on: ${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) && 'ubuntu-26.04' || 'ubuntu-24.04' }}
+    # ARM lives on shards 5 to 10 and needs QEMU with raspi4b support. Six of eleven since 13.21.4: the ARM checks are
+    # about half the suite's time, and on four shards they ran 21 minutes or more while the host shards sat at 11.
+    runs-on: ${{ contains(fromJSON('[5, 6, 7, 8, 9, 10]'), matrix.shard) && 'ubuntu-26.04' || 'ubuntu-24.04' }}
     # A wedged QEMU process (hung boot, a script waiting forever on a socket
     # that will never answer) used to have no ceiling: the job would sit
     # "in_progress" indefinitely, which reads the same as "still fine" on
@@ -123,7 +124,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/apt-debs
-          key: apt-debs-suite-${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-v1
+          key: apt-debs-suite-${{ contains(fromJSON('[5, 6, 7, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-v1
       - name: Keep apt's downloads and put the cached ones back
         run: |
           echo 'Binary::apt::APT::Keep-Downloaded-Packages "true"; APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/01keep-debs >/dev/null
@@ -141,7 +142,7 @@ jobs:
         run: |
           nproc
           qemu-system-aarch64 --version
-          if [ "${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) }}" = true ]; then
+          if [ "${{ contains(fromJSON('[5, 6, 7, 8, 9, 10]'), matrix.shard) }}" = true ]; then
             qemu-system-aarch64 -machine help | awk '$1 == "raspi4b" { found = 1 } END { if (!found) { print "FAIL: QEMU lacks raspi4b"; exit 1 } }'
           fi
           openssl version
@@ -159,9 +160,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-ubuntu-${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-${{ hashFiles('kernel/**', 'drivers/**', 'boot/**', 'lib/**', 'arch/arm64/**', 'third_party/bearssl/**', 'Makefile') }}
+          key: ccache-ubuntu-${{ contains(fromJSON('[5, 6, 7, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-${{ hashFiles('kernel/**', 'drivers/**', 'boot/**', 'lib/**', 'arch/arm64/**', 'third_party/bearssl/**', 'Makefile') }}
           restore-keys: |
-            ccache-ubuntu-${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-
+            ccache-ubuntu-${{ contains(fromJSON('[5, 6, 7, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-
       - name: Build
         run: |
           echo "/usr/lib/ccache" >> "$GITHUB_PATH"
@@ -190,7 +191,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/apt-debs
-          key: apt-debs-suite-${{ contains(fromJSON('[6, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-v1
+          key: apt-debs-suite-${{ contains(fromJSON('[5, 6, 7, 8, 9, 10]'), matrix.shard) && '26.04' || '24.04' }}-v1
       # One step, the whole suite. tools/checks/ci-suite.sh holds the
       # manifest and the per-check comments that used to live here as ~40
       # separate workflow steps. That shape stopped the job at the first
@@ -199,10 +200,10 @@ jobs:
       # minute run at a time. The suite now runs everything, prints a full
       # pass/fail summary, and fails the job if any check failed.
       # 6.57.0: arm64-plank-check.py builds Plank's examples for the Pi with tools/plankapp.sh, which needs Plank itself
-      # (one Python file, pinned here) and uv (plank.py fetches llvmlite through it). Only shard 8 runs that check.
-      # 6.60.0: shard 7, a host shard, gets it too, for plankc-check.py (plankc's tokenizer and parser against plank.py's).
-      - name: Plank, pinned, for arm64-plank-check (shard 8) and plankc-check (shard 7)
-        if: matrix.shard == 8 || matrix.shard == 7
+      # (one Python file, pinned here) and uv (plank.py fetches llvmlite through it). 6.60.0: plankc-check.py too.
+      # 13.21.4: every shard gets it. Six checks need Plank and skip without it, and ci-balance.py moves checks between
+      # shards, so a Plank pinned to two shard numbers let a repacked check pass by skipping.
+      - name: Plank, pinned, for the checks that build with it (every shard)
         run: |
           curl -LsSf https://astral.sh/uv/0.8.15/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
