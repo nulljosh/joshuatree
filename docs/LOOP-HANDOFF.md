@@ -6,7 +6,7 @@ Claude works the roadmap's goals one pull request at a time until weekly usage r
 
 ## Where things stand
 
-- 13.21.3 (PR 1174, which folded in 1172): the landing hero is one painted card (the park at dusk, the line in its sky, glass tiles, a floating nav pill), the README is a few lines, `architecture.svg` is three panels, and `tools/gen/gen_stickers.py` draws the sticker sheet in `docs/brand/stickers/`. Ten of each of two stickers (the painted tree and the `joshua@tree %` prompt) are ordered from Sticker Mule, due Dec 9.
+- 13.21.5 (PR 1174, which folded in 1172): the landing hero is one painted card (the park at dusk, the line in its sky, glass tiles, a floating nav pill), the README is a few lines, `architecture.svg` is three panels, and `tools/gen/gen_stickers.py` draws the sticker sheet in `docs/brand/stickers/`. Ten of each of two stickers (the painted tree and the `joshua@tree %` prompt) are ordered from Sticker Mule, due Dec 9.
 - The demo tour now names apps in the hero's readout, not the H1. It still needs Joshua's QA pass in real Chrome.
 - Releases after 13.16.0 need signing with `tools/update-sign.sh` so the Pi's `update` can pull them; sign the latest after each merge.
 - Still open from before: PR 1166 (gpu fill and copy, x86-64 interrupts), 1139 (old handoff, superseded by this file), 1133 (Paddle polish) and 1128 (auto lock), parked; 1117 and 1114, stale drafts.
