@@ -21,6 +21,12 @@ fi
 
 # Extract the expected headline
 expected=$(echo "$original_latest" | awk -F '\\*\\*Latest\\*\\*: ' '{print $2}' | sed 's/\.$//')
+# 13.22.0: the line rides the hero's joshua@tree % readout, which a 390 px phone cuts at about 20 characters
+# ("13.19: The Pi's own G..."). Keep Latest short: the version and a few words.
+if [ ${#expected} -gt 20 ]; then
+  echo "FAIL: roadmap Latest is ${#expected} characters (\"$expected\"); the hero readout fits 20 on a phone"
+  exit 1
+fi
 
 
 # The H1 must be the brand line, nothing else.

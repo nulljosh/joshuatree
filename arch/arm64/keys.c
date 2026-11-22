@@ -37,12 +37,12 @@ static void spot_paint(void) {
     for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = spot_under[j * w + i];   /* the desktop back, then the bar at its new height */
     spot_lh = 34 + SPOT_ROW * spot_n + (spot_n ? 6 : 0);
     gui_rounded_rect_on_wallpaper(spot_lx, spot_ly, SPOT_W, spot_lh, 0x00faf8f4, 10);
-    window_rect(spot_lx + 12, spot_ly + 9, 3, 16, 0x00b5502c);   /* the accent: a caret mark at the left of the typed line */
+    window_rect(spot_lx + 12, spot_ly + 9, 3, 16, ui_accent);   /* the accent: a caret mark at the left of the typed line */
     gui_text(spot_len ? spot_text : "Open an app", spot_lx + 22, spot_ly + 9, spot_len ? 0x001C1C1E : 0x0075726E);
     if (spot_n) gui_hairline_h(spot_lx + 10, spot_ly + 33, SPOT_W - 20, 0x00DDD8CE);
     for (int r = 0; r < spot_n; r++) {
         int ry = spot_ly + 37 + r * SPOT_ROW, on = r == spot_sel;
-        if (on) window_rect(spot_lx + 8, ry, SPOT_W - 16, SPOT_ROW - 2, 0x00b5502c);
+        if (on) window_rect(spot_lx + 8, ry, SPOT_W - 16, SPOT_ROW - 2, ui_accent);
         gui_text(spot_name(spot_hits[r]), spot_lx + 22, ry + 2, on ? 0x00FFFFFF : 0x001C1C1E);
     }
     fb_flush(x, y, w, h);
@@ -136,7 +136,7 @@ static void lp_paint(void) {
     for (int k = 0; k < SPOT_LAST; k++) {
         int slot = k + 1, cx = spot_lx + LP_PAD + (k % LP_COLS) * LP_CW, cy = spot_ly + LP_TOP + (k / LP_COLS) * LP_CH;
         int on = k == lp_sel, grey = !lp_on_arm(slot);
-        unsigned under = on ? 0x00b5502c : 0x00faf8f4;
+        unsigned under = on ? ui_accent : 0x00faf8f4;
         if (on) window_rect(cx + 3, cy + 1, LP_CW - 6, LP_CH - 2, under);
         lp_tile(lp_art(slot), cx + (LP_CW - LP_ICON) / 2, cy + 6, LP_ICON, under, grey);
         const char *name = spot_name(slot);
@@ -190,7 +190,7 @@ static int mc_n, mc_sel, mc_r[APP_SLOTS][4];
 static unsigned char mc_slot[APP_SLOTS];
 #define MC_CHIP_W 110
 #define MC_CHIP_H 26
-#define MC_TERRA 0x00b5502c
+#define MC_TERRA ui_accent
 static int mc_chip_x(int k) { return spot_lx + (LP_W - (4 * MC_CHIP_W + 3 * 10)) / 2 + k * (MC_CHIP_W + 10); }
 static int mc_chip_y(void) { return spot_ly + 14; }
 static void mc_ring(int i, unsigned c) {   /* the selection: a 3 px ring just outside the thumbnail */

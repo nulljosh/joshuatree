@@ -394,7 +394,7 @@ int wxtest_run(const char *line, char *arg) {
                 && (wall_dispatch_raw == gray) && (wall_dispatch_photo == gray)
                 && (wall_dispatch_sat == gui_sat_color(gray)) && (wall_dispatch_sat != warm_g)
                 && (wall_dispatch_solid == gray) && (wall_tint_solid == gray)
-                && (wall_solid_color[0] == 0x006E6E6Eu);
+                && (wall_solid_color[0] == 0x003B6EA5u);
         /* Satellite must preserve hue and lift saturation. Returning raw
            pixels or restoring the old luminance-only grade fails here. */
         unsigned int sg = gui_sat_color(0x00208020);

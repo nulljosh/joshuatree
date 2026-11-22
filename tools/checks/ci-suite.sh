@@ -289,6 +289,7 @@ retry|0|Menu bar mark AA (no false interior seams) on its terracotta ground|pyth
 retry|0|Boot splash draws the brand glyph, not the old crayon or stick tree|python3 ./tools/checks/bootmark-check.py
 retry|0|Boot splash draws the tree on stroke by stroke, never pops in whole, terracotta ground last|python3 ./tools/checks/bootanim-check.py
 once |0|Landing eyebrow tracks roadmap Latest, H1 stays the brand line|./tools/checks/landing-headline-check.sh
+once |0|Landing app wall: clips load early, sit over their stills and fade in only when playing (no flash on scroll)|python3 ./tools/checks/landing-clip-still-check.py
 once |0|Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
 once |0|Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |0|RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
@@ -342,6 +343,7 @@ retry|0|Brand tokens: docs/brand/tokens.css matches the kernel's desktop colours
 retry|9|ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing)|python3 ./tools/checks/arm64-m0-check.py
 retry|8|x86-64 slice 1 (13.18.0): the 64-bit kernel boots in qemu-system-x86_64 into long mode, maps 4 GiB, prints on the serial port and a 1024x768 screen; a CPU without long mode is refused in words|python3 ./tools/checks/x86_64-m0-check.py
 retry|9|ARM64: a tiny local language model answers under QEMU (skips where the tools are missing)|python3 ./tools/checks/arm64-llm-check.py
+retry|3|x86-64 slice 2 (13.22.0): the IDT loads, the PIC and PIT tick at 100 Hz for 20 ticks, and IRQ1 reads the keyboard (a is scancode 0x1e, b is 0x30) on the serial port|python3 ./tools/checks/x86_64-irq-check.py
 retry|6|ARM64: with the relay out of reach, Samantha answers from the hosted Turing over HTTPS (skips where the tools are missing)|python3 ./tools/checks/arm64-sam-hosted-check.py
 retry|5|ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing)|python3 ./tools/checks/arm64-m1c-check.py
 retry|10|ARM64 M2: the aarch64 kernel drives virtio disk, network, keyboard and mouse: a sector read back, a real ARP answer, key presses, moves and clicks (skips where the tools are missing)|python3 ./tools/checks/arm64-m2-check.py
@@ -506,33 +508,31 @@ pass=0; fail=0; flaky=0
 summary=""
 failed_names=""
 
-while IFS='|' read -r mode shard name command; do
-    [ -z "${name:-}" ] && continue
-    mode=$(echo "$mode" | tr -d ' ')
-
-    echo "::group::$name"
+# 13.22.0: SUITE_JOBS=N runs up to N checks at once. CI sets it only on the i386 shards (0 to 4): their checks share
+# nothing but the prebuilt kernel.elf (a no-op make) and their own TMPDIR files and free ports, while every ARM check
+# cleans and rebuilds arch/arm64 and must run alone. Each check's output is held and printed whole, in manifest
+# order, so the log reads exactly as a serial run's. Unset or 1 is the serial run, streaming as before.
+SUITE_JOBS=${SUITE_JOBS:-1}
+RES="$TMPDIR/suite-results"; mkdir -p "$RES"
+run_check() {   # index mode name command: runs one check (its one retry too) and leaves "status flaky seconds" in RES/index.res
+    local i=$1 mode=$2 name=$3 command=$4 start status flaky=0
     start=$(date +%s)
-    RUN_ONE "$command"
-    status=$?
-
+    RUN_ONE "$command"; status=$?
     if [ $status -ne 0 ] && [ "$mode" = "retry" ]; then
         echo "--- $name failed (exit $status), one automatic retry (timing-sensitive check) ---"
-        RUN_ONE "$command"
-        retry_status=$?
-        if [ $retry_status -eq 0 ]; then
-            elapsed=$(( $(date +%s) - start ))
-            echo "::endgroup::"
-            echo "FLAKY  $name (failed once, passed on retry, ${elapsed}s)"
-            summary="${summary}FLAKY  ${name}"$'\n'
-            flaky=$((flaky + 1)); pass=$((pass + 1))
-            continue
-        fi
-        status=$retry_status
+        RUN_ONE "$command"; status=$?
+        [ $status -eq 0 ] && flaky=1
     fi
-
-    elapsed=$(( $(date +%s) - start ))
-    echo "::endgroup::"
-    if [ $status -eq 0 ]; then
+    echo "$status $flaky $(( $(date +%s) - start ))" > "$RES/$i.res"
+}
+report() {   # index name: one PASS, FLAKY or FAIL line and the tallies, from RES/index.res
+    local i=$1 name=$2 status flaky elapsed
+    read -r status flaky elapsed < "$RES/$i.res"
+    if [ "$status" -eq 0 ] && [ "$flaky" = 1 ]; then
+        echo "FLAKY  $name (failed once, passed on retry, ${elapsed}s)"
+        summary="${summary}FLAKY  ${name}"$'\n'
+        flaky=$((flaky + 1)); pass=$((pass + 1)); FLAKY_N=$((FLAKY_N + 1))
+    elif [ "$status" -eq 0 ]; then
         echo "PASS   $name (${elapsed}s)"
         summary="${summary}PASS   ${name}"$'\n'
         pass=$((pass + 1))
@@ -543,7 +543,34 @@ while IFS='|' read -r mode shard name command; do
         failed_names="${failed_names}  - ${name}"$'\n'
         fail=$((fail + 1))
     fi
+}
+FLAKY_N=0
+n=0; names=(); pids=()
+while IFS='|' read -r mode shard name command; do
+    [ -z "${name:-}" ] && continue
+    mode=$(echo "$mode" | tr -d ' ')
+    n=$((n + 1)); names[$n]=$name
+    if [ "$SUITE_JOBS" -gt 1 ]; then
+        # at most SUITE_JOBS running: wait for the oldest (bash 3.2 on a Mac has no wait -n)
+        while [ "${#pids[@]}" -ge "$SUITE_JOBS" ]; do wait "${pids[0]}"; pids=("${pids[@]:1}"); done
+        run_check "$n" "$mode" "$name" "$command" > "$RES/$n.log" 2>&1 < /dev/null &
+        pids+=($!)
+    else
+        echo "::group::$name"
+        run_check "$n" "$mode" "$name" "$command"
+        echo "::endgroup::"
+        report "$n" "$name"
+    fi
 done < <(manifest | grep -v '^[[:space:]]*$' | awk -v i="${SHARD:-}" -F'|' 'i == "" || $2 == i')
+if [ "$SUITE_JOBS" -gt 1 ]; then
+    wait
+    for k in $(seq 1 "$n"); do
+        echo "::group::${names[$k]}"; cat "$RES/$k.log"; echo "::endgroup::"
+        [ -f "$RES/$k.res" ] || echo "1 0 0" > "$RES/$k.res"   # a check that never wrote its result failed
+        report "$k" "${names[$k]}"
+    done
+fi
+flaky=$FLAKY_N
 
 echo
 echo "================ regression suite summary ================"

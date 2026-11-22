@@ -82,6 +82,7 @@ def shoot(name):
     fleet = name in FLEET
     net = [] if fleet else ["-net", "nic,model=rtl8139", "-net", "user"]
     boot = ["-append", "open=" + FLEET[name][0]] if fleet else []
+    if name == "desktop-apps": boot = ["-append", "walltheme=photo"]   # 13.22.0: the hero on the Pi's painting (the PC's picture wall since then), like the Pi clips
     q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                           "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG] + net + boot + [
                           "-rtc", "base=2026-10-03T12:00:00,clock=vm"],   # pinned clock: the Calendar tile is the same on every run

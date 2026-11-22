@@ -11,7 +11,7 @@
 #define LG_INK 0x001C1C1E
 #define LG_HINT 0x0075726E
 #define LG_EDGE 0x00DDD8CE
-#define LG_ACCENT 0x00B5502C
+#define LG_ACCENT ui_accent
 #ifndef SUDO_TTL_MS
 #define SUDO_TTL_MS 300000   /* sudo.c: how long a right sudo password is remembered; the sudo check's build shortens it */
 #endif

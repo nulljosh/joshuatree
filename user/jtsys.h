@@ -284,6 +284,16 @@ static inline int jt_shell_run(const char *line, char *out, unsigned outlen) { r
 /* Fills at most size bytes (pass sizeof *si); returns bytes written, -EINVAL under 8, -EFAULT bad pointer.
    si->version is first so the struct can grow; check si->size for what the kernel really wrote. */
 static inline int jt_sysinfo(struct jt_sysinfo *si)               { return jt_syscall(JT_SYS_SYSINFO, (jt_arg)si, sizeof *si, 0); }
+/* 13.21.0, the Pi: the accent colour Settings picked (Display, Accent), 0x00RRGGBB, read once per run. Where the
+   kernel has no such call (i386 answers -ENOSYS): terracotta, as it always was there. */
+#define JT_SYS_ACCENT 415
+static unsigned jt_accent_c JT_DATA __attribute__((unused));
+static inline unsigned jt_accent(void) {
+    if (!jt_accent_c) { int r = jt_syscall(JT_SYS_ACCENT, 0, 0, 0); jt_accent_c = r > 0 ? (unsigned)r : 0x00B5502Cu; }
+    return jt_accent_c;
+}
+/* the accent a quarter darker: a pressed button, a hover */
+static inline unsigned jt_accent_dark(void) { unsigned c = jt_accent(); return ((c >> 16 & 255) * 3 / 4) << 16 | ((c >> 8 & 255) * 3 / 4) << 8 | (c & 255) * 3 / 4; }
 /* 0 queued, -EINVAL no app by that exact name, -EBUSY one is already pending. The desktop opens it on its next pass. */
 static inline int jt_refresh(int kind, int arg)                   { return jt_syscall(JT_SYS_REFRESH, (jt_arg)kind, (jt_arg)arg, 0); }
 static inline int jt_launch(const char *app)                      { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (jt_arg)app, 0, 0); }

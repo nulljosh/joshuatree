@@ -4,7 +4,7 @@
    checks that read bare wallpaper see one colour. No decoder, no heap: wall_px works out any pixel from the packed picture. */
 #include "park_wall.h"
 #define WALL_PARK 0x01000000u   /* settings.c's walls[]: the picture, not a colour */
-#ifdef PI_BUILD
+#if defined(PI_BUILD) || defined(PARK_WALL)   /* 13.22.0: PARK_WALL (KFLAGS=-DPARK_WALL) films the landing clips on the Pi's own picture */
 static unsigned wall_rgb = WALL_PARK;
 #else
 static unsigned wall_rgb = 0x003B6EA5u;   /* a calm blue (Joshua: "a nice blue, not grey") */

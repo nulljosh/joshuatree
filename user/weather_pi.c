@@ -8,20 +8,20 @@
  * is when Weather opens and serves WEATHER.TXT from RAM (arch/arm64/feeds.c); a card copy is read when there is none.
  * With neither, or one that says have 0, it shows no reading and says why: no sample. Nothing is fetched here, no key.
  *
- * House style (docs/ARCHITECTURE.md): flat, sans serif, terracotta #b5502c accent, glyphs from discs and capsules, no text in
+ * House style (docs/ARCHITECTURE.md): flat, sans serif, white on a blue sky (13.21.0), a yellow sun, glyphs from discs and capsules, no text in
  * a glyph. Esc or the red dot closes it. One line per start tells tools/checks/arm64-weather-check.py what was drawn.
  */
 #include "jtsys.h"
 #include "libjt/text.h"
 #include "libjt/hires.h"
 
-#define BG     0x00F5F0EB
-#define CARD   0x00ECE5DC
-#define TEXT   0x00403439
-#define MID    0x00645057
-#define DIM    0x00857A7C
-#define ACCENT 0x00B5502C
-#define CLOUD  0x00B9AEA6
+#define BG     0x003D7FD6   /* 13.21.0: a blue sky, as Joshua asked ("Weather app should be blue") */
+#define CARD   0x00568FDD
+#define TEXT   0x00FFFFFF
+#define MID    0x00E6EFFB
+#define DIM    0x00C3D7F3
+#define SUN    0x00FFC93C
+#define CLOUD  0x00EEF3FA
 #define DAYS   5
 
 static struct jt_window_info win JT_DATA;
@@ -58,12 +58,12 @@ static void right(const char *s, int xr, int y, unsigned fg, int bold) { text(s,
 /* The condition glyphs, from weather.c: u2 is twice the unit (an eighth of the half size). */
 #define U(k) ((k) * u2 / 2)
 static void sun(int cx, int cy, int u2, int r8) {
-    disc(cx, cy, U(r8), ACCENT);
+    disc(cx, cy, U(r8), SUN);
     int a = U(r8) + (u2 > 4 ? U(2) : 3), b = U(r8) + (u2 > 4 ? U(4) : 5), t = u2 > 4 ? u2 / 4 : 1, ad = a * 707 / 1000, bd = b * 707 / 1000;
-    cap(cx + a, cy, cx + b, cy, t, ACCENT); cap(cx - a, cy, cx - b, cy, t, ACCENT);
-    cap(cx, cy + a, cx, cy + b, t, ACCENT); cap(cx, cy - a, cx, cy - b, t, ACCENT);
-    cap(cx + ad, cy + ad, cx + bd, cy + bd, t, ACCENT); cap(cx - ad, cy - ad, cx - bd, cy - bd, t, ACCENT);
-    cap(cx + ad, cy - ad, cx + bd, cy - bd, t, ACCENT); cap(cx - ad, cy + ad, cx - bd, cy + bd, t, ACCENT);
+    cap(cx + a, cy, cx + b, cy, t, SUN); cap(cx - a, cy, cx - b, cy, t, SUN);
+    cap(cx, cy + a, cx, cy + b, t, SUN); cap(cx, cy - a, cx, cy - b, t, SUN);
+    cap(cx + ad, cy + ad, cx + bd, cy + bd, t, SUN); cap(cx - ad, cy - ad, cx - bd, cy - bd, t, SUN);
+    cap(cx + ad, cy - ad, cx + bd, cy - bd, t, SUN); cap(cx - ad, cy + ad, cx - bd, cy + bd, t, SUN);
 }
 static void cloud(int cx, int cy, int u2, int grow, unsigned c) {
     disc(cx - U(4), cy + U(1), U(3) + grow, c); disc(cx + U(5), cy + U(2), U(2) + grow, c);

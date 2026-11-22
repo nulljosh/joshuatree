@@ -193,6 +193,9 @@ for local_y in range(PANEL_BOTTOM_LOCAL + 3, PANEL_BOTTOM_LOCAL + 7):
         if px >= W or py >= H: continue
         r, g, b = img1.getpixel((px, py))
         spill_checked += 1
+        # the plain Blue wall (#3B6EA5, 13.22.0) is itself saturated; it is wallpaper, not an icon
+        if abs(r - 0x3B) < 14 and abs(g - 0x6E) < 14 and abs(b - 0xA5) < 14:
+            continue
         if saturation(r, g, b) > 90:
             spill_hits += 1
 if spill_checked and spill_hits > 6:

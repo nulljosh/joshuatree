@@ -93,8 +93,11 @@ def crop(img, x0, y0, w, h):   # rows of (r, g, b) bytes; window_scale is 1 at Q
     return [pix[((y0 + j) * W + x0) * 3:((y0 + j) * W + x0 + w) * 3] for j in range(h)]
 
 
-def accent(rows):   # pixels within a few levels of terracotta #b5502c: the done circle's fill (the title is the same ink, so count a box below it)
-    return sum(1 for r in rows for i in range(len(r) // 3) if abs(r[i * 3] - 0xB5) < 12 and abs(r[i * 3 + 1] - 0x50) < 12 and abs(r[i * 3 + 2] - 0x2C) < 12)
+# 13.22.0: the app draws in the Settings accent (jt_accent, 13.21.0): blue #007AFF on the Pi build these images are,
+# terracotta #b5502c on a QEMU build. Either counts; a check that wanted only terracotta failed once the Pi went blue.
+ACCENTS = ((0xB5, 0x50, 0x2C), (0x00, 0x7A, 0xFF))
+def accent(rows):   # pixels within a few levels of the accent: the done circle's fill (the title is the same ink, so count a box below it)
+    return sum(1 for r in rows for i in range(len(r) // 3) for a in ACCENTS if abs(r[i * 3] - a[0]) < 12 and abs(r[i * 3 + 1] - a[1]) < 12 and abs(r[i * 3 + 2] - a[2]) < 12)
 
 
 def keep(img, name):
@@ -163,7 +166,7 @@ try:
     wr = window(out2)
     if wb and wr and saved and listed:
         check("the window is where boot 1 had it", wr == wb, "%r %r" % (wb, wr))
-        mask = lambda img, w: [(j, i) for j, r in enumerate(crop(img, *w[2:], w[0], w[1])) for i in range(w[0]) if 60 < j < w[1] - 70 and r[i * 3:i * 3 + 3] == b"\xb5\x50\x2c"]   # fully terracotta pixels under the title: the circle's core, the same on either row background
+        mask = lambda img, w: [(j, i) for j, r in enumerate(crop(img, *w[2:], w[0], w[1])) for i in range(w[0]) if 60 < j < w[1] - 70 and r[i * 3:i * 3 + 3] in (b"\xb5\x50\x2c", b"\x00\x7a\xff")]   # fully terracotta pixels under the title: the circle's core, the same on either row background
         check("on screen, the done circle after the reboot is exactly where boot 1 drew it (the row highlight differs: boot 1 left the row selected)",
               mask(listed, wr) == mask(saved, wb) and len(mask(listed, wr)) > 120, "%d vs %d" % (len(mask(listed, wr)), len(mask(saved, wb))))
 

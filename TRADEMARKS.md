@@ -2,11 +2,9 @@
 
 Joshua Tree™, Neo Kit™ and the Joshua tree mark are unregistered trademarks of Joshua Trommel. They are claimed through use. Registration may follow.
 
-## What they cover
-
 - **Joshua Tree™**: the operating system and its name.
 - **Neo Kit™**: the dev kit and its enclosure.
-- **The Joshua tree mark**: the engraved tree logo and badge used on the landing page, the boot screen and the kit.
+- **The Joshua tree mark**: the tree logo and badge on the landing page, the boot screen and the kit.
 
 ## What you can do
 
@@ -14,10 +12,6 @@ Refer to them accurately. "Runs on Joshua Tree", "a review of the Neo Kit" and "
 
 ## What you can't do
 
-The software is Apache 2.0 and the hardware designs are CC BY-NC-SA 4.0. Neither grants any right to the names or the mark (Apache 2.0 section 6 says so for the software). If you fork the code or remix the designs, rename your version and use your own mark. Do not use the names or the mark in a way that suggests yours is the original, or that it is endorsed by me.
+The software is Apache 2.0 and the hardware designs are CC BY-NC-SA 4.0. Neither grants rights to the names or the mark. If you fork the code or remix the designs, rename your version and use your own mark. Do not use the names or the mark in a way that suggests yours is the original or endorsed by me.
 
-## Contact
-
-Questions or permission requests: trommatic@icloud.com.
-
-This is a plain statement of how I use the names, not legal advice.
+Questions or permission requests: trommatic@icloud.com. This is a plain statement of how I use the names, not legal advice.

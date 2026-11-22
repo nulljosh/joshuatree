@@ -65,7 +65,9 @@ jobs:
           fi
           # 1.5.14: a landing-only PR (landing/, VERSION, prose) skips the
           # ~9 minute QEMU suite; the demo job runs the landing checks instead.
-          if echo "$files" | grep -qvE '^landing/|^VERSION$|\.md$'; then
+          # 13.21.6: also landing-only when the rest is docs, images, the architecture map, the sticker
+          # sheet, or the landing's own checks and generators (13.21.5 ran the whole OS suite for a hero redesign).
+          if echo "$files" | grep -qvE '^landing/|^VERSION$|\.md$|^docs/brand/stickers/|^docs/.*\.(png|jpg|webp|svg)$|^architecture\.svg$|^tools/checks/(landing-|hero-|headline-sync-check\.mjs$)|^tools/gen/(map\.py|gen_stickers\.py|landing-roadmap\.py|inject-landing-)'; then
             echo kernel=true >> "$GITHUB_OUTPUT"
           else
             echo kernel=false >> "$GITHUB_OUTPUT"
@@ -211,7 +213,9 @@ jobs:
           git -C "$RUNNER_TEMP/plank" checkout -q c3679ca8989ada3483429e25a62e0da2c92c622e
           echo "PLANK=$RUNNER_TEMP/plank/plank.py" >> "$GITHUB_ENV"
       - name: Regression suite (all checks, full summary)
-        run: SHARD=${{ matrix.shard }} SHARDS=11 ./tools/checks/ci-suite.sh
+        # 13.22.0: the i386 shards (0 to 4) run three checks at once on the 4-core runner; their checks share only the
+        # prebuilt kernel.elf. ARM shards rebuild arch/arm64 per check, so they stay one at a time.
+        run: SHARD=${{ matrix.shard }} SHARDS=11 SUITE_JOBS=${{ matrix.shard < 5 && 3 || 1 }} ./tools/checks/ci-suite.sh
       # A check that fails only on the runner is unreadable from the log
       # alone. Keep what every check leaves in /tmp (serial logs, raw
       # framebuffer dumps, PNGs) so the failure can be looked at, not guessed.
@@ -302,6 +306,10 @@ jobs:
             node tools/checks/$c || fail=1
           done
           ./tools/checks/landing-headline-check.sh || fail=1
+          node tools/checks/headline-sync-check.mjs || fail=1
+          for c in landing-facts-check.py landing-roadmap-check.py type-grid-check.py landing-clip-still-check.py doc-coverage-check.py brand-tokens-check.py; do python3 tools/checks/$c || fail=1; done
+          ./tools/checks/versionsync-check.sh || fail=1
+          bash tools/checks/testing-doc-check.sh || fail=1
           exit $fail
       - name: Keep the after-reply screenshot from a failed run
         if: failure()

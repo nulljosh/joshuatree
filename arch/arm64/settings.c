@@ -26,7 +26,7 @@ int home_save(const char *name, const void *data, unsigned len);
 static const struct { const char *name; unsigned rgb; } walls[SET_WALLS] = {
     { "Blue", 0x003B6EA5u }, { "Terracotta", 0x00B5502Cu }, { "Clay", 0x00923F20u }, { "Ink", 0x00141311u },
     { "Park", WALL_PARK } };   /* 8.9.0: the picture, Joshua Tree at dusk */
-#ifdef PI_BUILD
+#if defined(PI_BUILD) || defined(PARK_WALL)   /* 13.22.0: the landing clips film on the park, see wall.c */
 #define WALL_DEFAULT 4                /* 8.9.0: the park picture on the Pi */
 #else
 #define WALL_DEFAULT 0                /* the flat blue on QEMU, which the checks read */
@@ -75,6 +75,22 @@ int settings_sleep(void) { return sleep_pick; }
 const char *settings_sleep_name(int i) { return i >= 0 && i < SET_SLEEPS ? sleeps[i].name : ""; }
 void settings_set_sleep(int i) { sleep_pick = i < 0 ? 0 : i >= SET_SLEEPS ? SET_SLEEPS - 1 : i; }
 unsigned settings_sleep_cs(void) { return sleeps[sleep_pick].cs; }
+/* 13.21.0, Accent (Display): the colour of selections, buttons and carets, the kernel's and every app's (JT_SYS_ACCENT
+   hands it to ring 3). macOS's own accent choices. Blue on the Pi (Joshua: "default blue, not red orange"); QEMU builds keep
+   terracotta, as they keep the flat wallpaper, so the checks that read accent pixels read one colour. Saved as accent=. */
+#define SET_ACCENTS 6
+static const struct { const char *name; unsigned rgb; } accents[SET_ACCENTS] = { { "Blue", 0x00007AFFu }, { "Purple", 0x00AF52DEu },
+    { "Terracotta", 0x00B5502Cu }, { "Orange", 0x00FF9500u }, { "Green", 0x0034C759u }, { "Graphite", 0x008E8E93u } };
+#ifdef PI_BUILD
+#define ACCENT_DEFAULT 0
+#else
+#define ACCENT_DEFAULT 2
+#endif
+static int accent_pick = ACCENT_DEFAULT;
+unsigned ui_accent = ACCENT_DEFAULT ? 0x00B5502Cu : 0x00007AFFu;
+int settings_accent(void) { return accent_pick; }
+const char *settings_accent_name(int i) { return i >= 0 && i < SET_ACCENTS ? accents[i].name : ""; }
+void settings_set_accent(int i) { accent_pick = ((i % SET_ACCENTS) + SET_ACCENTS) % SET_ACCENTS; ui_accent = accents[accent_pick].rgb; }
 int settings_glass(void) { return glass_pick; }
 const char *settings_glass_name(int i) { return i >= 0 && i < SET_GLASSES ? glasses[i].name : ""; }
 void settings_set_glass(int i) { glass_pick = i < 0 ? 0 : i >= SET_GLASSES ? SET_GLASSES - 1 : i; }
@@ -129,6 +145,8 @@ void settings_save(void) {
     }
     unsigned n = settings_format(buf, audio_volume(), wall_pick, dock_scale_pct, dock_mag, glass_pick);
     buf[n++] = 's'; buf[n++] = 'l'; buf[n++] = 'e'; buf[n++] = 'e'; buf[n++] = 'p'; buf[n++] = '='; buf[n++] = (char)('0' + sleep_pick); buf[n++] = '\n';
+    for (const char *p = "accent="; *p; p++) buf[n++] = *p;
+    buf[n++] = (char)('0' + accent_pick); buf[n++] = '\n';   /* 13.21.0 */
     if (!sudo_may_write()) { saved_state = mine ? 2 : -2; return; }     /* 4.10.0: only an admin saves the rest; anyone else's lasts until restart */
     saved_state = sd_ready() && sd_write(SET_FILE, buf, n) == 1 ? 1 : -1;
     if (saved_state == 1) card_wall = wall_pick;
@@ -160,6 +178,8 @@ void settings_load(void) {
                                                        the Pi) shows once; the next save writes zoom= and the choice sticks */
     for (int i = 0; i + 7 < got; i++)   /* 13.4.0: sleep=N, a line settings_parse does not know */
         if ((!i || buf[i - 1] == '\n') && key_is(buf + i, 6, "sleep=") && buf[i + 6] >= '0' && buf[i + 6] < '0' + SET_SLEEPS) settings_set_sleep(buf[i + 6] - '0');
+    for (int i = 0; i + 8 < got; i++)   /* 13.21.0: accent=N, the same way */
+        if ((!i || buf[i - 1] == '\n') && key_is(buf + i, 7, "accent=") && buf[i + 7] >= '0' && buf[i + 7] < '0' + SET_ACCENTS) settings_set_accent(buf[i + 7] - '0');
     audio_set_volume(vol);
     settings_set_dock(dock);
     settings_set_mag(mag);

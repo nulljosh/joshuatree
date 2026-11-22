@@ -253,6 +253,7 @@ void dock_select(int slot);
 int dock_tile(int slot, int shadow);
 unsigned fb_color(unsigned c);
 extern unsigned fb_pitch;
+extern unsigned ui_accent;   /* 13.21.0, settings.c: the accent colour, 0x00RRGGBB (Settings, Display, Accent) */
 #define FB_RAM_BASE ((HEAP_END + (2UL << 20) - 1) & ~((2UL << 20) - 1))
 #define FB_RAM_MAX (16UL << 20)
 extern unsigned *fb_scan;

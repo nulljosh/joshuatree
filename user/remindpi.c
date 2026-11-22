@@ -28,7 +28,7 @@
 #define SEL    0x00F1EBE3
 #define WHITE  0x00FFFFFF
 #define RULE   0x00E4DED4
-#define ACCENT 0x00B5502C
+#define ACCENT jt_accent()   /* 13.21.0: the accent Settings picked */
 
 #define MAXR   24
 #define TEXT_N 48
