@@ -11,6 +11,7 @@ Docs: `docs/GUIDE.md` (use, Pi, hardware), `docs/ARCHITECTURE.md` (design, sysca
 - Run only targeted checks locally, one at a time. `tools/ci-local.sh` is the full run, only when nothing else is running.
 - After any landing tour change, QA the whole tour in real Chrome before merging.
 - Push a PR once, with all its commits. Each extra push cancels the running workflow.
+- Batch small fixes: one PR per session, not one per fix. Every merge cuts a release the Pi pulls (13.21.4 to 13.22.0 made five releases on 2026-11-21).
 - Every shipped feature gets a permanent test that fails if the fix is reverted: a command in `kernel/kernel.c` (like `heaptest`) or a `tools/checks/` script.
 - After any rename, move or delete, run `bash tools/checks/check-refs.sh`. `make hooks` installs the pre-push hook once per clone.
 - Never open a QEMU window or a browser to verify. A real screenshot needs the Mac display: `-display cocoa`, frontmost, then `screencapture`.
