@@ -331,6 +331,7 @@ extern unsigned *off_buf;
 unsigned long off_screen_hash(int x, int y, int w, int h);
 extern int calc_press(const char *k);
 extern int drag_on;
+int win_dragging(void);
 void win_move_to(int nx, int ny);
 extern unsigned long fp_spin(volatile unsigned *t, unsigned want);
 void uart_hex(unsigned long v);

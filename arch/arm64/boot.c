@@ -489,7 +489,10 @@ void main(void) {
           unsigned long h0 = heap_mark(); int s = (int)window_scale();
           mouse_x = (unsigned)((gui_slot_x(5) + DOCK_ICON / 2) * s); mouse_y = (unsigned)((gui_dock_y0() + DOCK_PAD + DOCK_ICON / 2) * s);
           pointer_moved();
-          con_quiet = 1; uart_puts("ptrburst: dock magnify took "); uart_dec((unsigned)(heap_mark() - h0)); uart_puts(" heap bytes\n"); }
+          con_quiet = 1; uart_puts("ptrburst: dock magnify took "); uart_dec((unsigned)(heap_mark() - h0)); uart_puts(" heap bytes\n");
+          /* 13.23.1: a held window gives the apps no slices: app_tick skips once with drag_on set, never with it clear */
+          extern unsigned app_held; unsigned a0 = app_held; app_tick(); unsigned a1 = app_held; drag_on = 1; app_tick(); unsigned a2 = app_held; drag_on = 0;
+          con_quiet = 1; uart_puts("ptrburst: drag skips apps "); uart_dec(a1 - a0); uart_putc(' '); uart_dec(a2 - a1); uart_putc('\n'); }
 #endif
 #ifdef PI_BUILD
         (void)step;

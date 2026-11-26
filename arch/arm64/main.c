@@ -1319,6 +1319,7 @@ void menubar_app_notice(const char *m);   /* desk.c */
 void ufile_args_next(const char *s, unsigned n);
 int app_dock(const char *name);                  /* appwin.c */
 unsigned long sched_worst;   /* 8.6.0: `sched` in the Terminal reads it and starts again */
+unsigned app_held;   /* 13.23.1: passes app_tick skipped for a held window (ptrburst's check reads it) */
 void app_tick(void) {   /* every app with something to do gets its turn: it runs until it yields, exits or faults, and a fault ends that app alone */
     {   /* 8.2.0: a wake-up for cores 1 to 3 (core_main counts them). 8.9.0: at most every 10 ms, not every pass: on the board
            the desktop's loop spins, and a sev each pass woke them 59 million times in minutes. */
@@ -1335,6 +1336,7 @@ void app_tick(void) {   /* every app with something to do gets its turn: it runs
             ufile_args_next("", 0);
         }
     }
+    if (win_dragging()) { app_held++; return; }   /* 13.23.1: a held window is the whole pass; every busy app's 10 ms slice made a drag trail the hand. They run again on release */
     for (unsigned i = 0; i < APP_SLOTS; i++) {
         ap = &apps[i];
         if (!app_cur || app_running) continue;

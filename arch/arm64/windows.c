@@ -42,6 +42,7 @@ static int *win_rc(int t, int i) {   /* window t's x, y, w, h (i = 0..3); the ap
 int drag_on, drag_dx, drag_dy;   /* a title-band press is moving the window; where inside it the pointer took hold, logical px */
 static int rs_on, rs_dx, rs_dy;         /* an edge press is resizing it: the edges taken (RS_*), and how far the pointer was past the right and bottom edges */
 static int drag_t;                      /* which window (WT_*) either is acting on */
+int win_dragging(void) { return drag_on || rs_on; }   /* 13.23.1: app_tick gives the apps no slices while a window is held, so a pass is the drag alone */
 int win_sizing;                  /* win_set is redrawing a window at a new size: the Clock keeps its log line for the minute */
 static int win_target(void) {   /* the window that takes a drag: the one in front, -1 for none */
     if (spot_live) return -1;
