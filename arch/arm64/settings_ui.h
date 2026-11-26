@@ -165,7 +165,7 @@ void set_paint(void) {
             int tw = gui_text_width(v), vx = vx0 + (70 - tw) / 2;
             if (set_sec == SET_DISPLAY) {   /* the colour itself, a small round chip, then its name */
                 vx = vx0 + (70 - tw - 18) / 2 + 18;
-                gui_rounded_rect_on_wallpaper(vx - 18, ry + 9, 11, 11, settings_wall_rgb(settings_wall()), 5);
+                gui_rounded_rect_on_wallpaper(vx - 18, ry + 9, 11, 11, r == 4 ? ui_accent : settings_wall_rgb(settings_wall()), 5);   /* 13.23.1: the Accent row shows the accent, not the wallpaper */
             }
             gui_text(v, vx, ry + (set_sec == SET_SOUND ? 2 : 7), SET_INK);
             if (set_sec == SET_SOUND) {   /* a thin bar under the number: the level, to the pixel */

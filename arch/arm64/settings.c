@@ -178,6 +178,7 @@ void settings_load(void) {
                                                        the Pi) shows once; the next save writes zoom= and the choice sticks */
     for (int i = 0; i + 7 < got; i++)   /* 13.4.0: sleep=N, a line settings_parse does not know */
         if ((!i || buf[i - 1] == '\n') && key_is(buf + i, 6, "sleep=") && buf[i + 6] >= '0' && buf[i + 6] < '0' + SET_SLEEPS) settings_set_sleep(buf[i + 6] - '0');
+    int accent0 = accent_pick;
     for (int i = 0; i + 8 < got; i++)   /* 13.21.0: accent=N, the same way */
         if ((!i || buf[i - 1] == '\n') && key_is(buf + i, 7, "accent=") && buf[i + 7] >= '0' && buf[i + 7] < '0' + SET_ACCENTS) settings_set_accent(buf[i + 7] - '0');
     audio_set_volume(vol);
@@ -186,7 +187,7 @@ void settings_load(void) {
     card_wall = wall;
     int was = glass_pick; settings_set_glass(glass);
     if (wall != wall_pick) { settings_set_wall(wall); desktop_wall_changed(); }
-    else if (glass_pick != was) desktop_wall_changed();   /* 11.3.0: the bar's glass is part of the desktop's paint */
+    else if (glass_pick != was || accent_pick != accent0) desktop_wall_changed();   /* 11.3.0: the bar's glass is part of the desktop's paint; 13.23.1: so is the accent, one loaded from the card repaints a desktop already drawn */
     saved_state = 1;
     kputs("settings loaded volume "); kdec((unsigned)audio_volume()); kputs(" wall "); kdec((unsigned)wall_pick); kputs(" dock "); kdec((unsigned)dock_scale_pct); kputs(" mag "); kdec((unsigned)dock_mag); kputs(" glass "); kdec((unsigned)glass_pick); kputs("\n");
 }
