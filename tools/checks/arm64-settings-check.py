@@ -108,7 +108,9 @@ int main(void) {
         assert(settings_accent() == 2 && ui_accent == 0x00B5502Cu && !strcmp(settings_accent_name(0), "Blue"));
         settings_set_accent(0); assert(ui_accent == 0x00007AFFu); settings_set_accent(-1); assert(settings_accent() == 5 && ui_accent == 0x008E8E93u);
         settings_set_accent(4); settings_save(); assert(file_len == 57 && !memcmp(file + 48, "accent=4\n", 9));
-        settings_set_accent(1); settings_load(); assert(settings_accent() == 4 && ui_accent == 0x0034C759u);
+        { int r0 = repaints; settings_set_accent(1); settings_load(); assert(settings_accent() == 4 && ui_accent == 0x0034C759u);
+          assert(repaints == r0 + 1);   /* 13.23.1: a different accent from the card repaints the desktop... */
+          r0 = repaints; settings_load(); assert(repaints == r0); }   /* ...the same one does not */
         file[55] = '9'; settings_set_accent(3); settings_load(); assert(settings_accent() == 3);   /* out of range: ignored */
         settings_set_accent(2); settings_save();
     }

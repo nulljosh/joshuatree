@@ -13,6 +13,9 @@ it says 20.
 dock's buffers are kept from the desktop's first paint, so a heap mark held around a magnify (voice mode's, a `sam`
 reply's) cannot free them. Discriminating: take them lazily in dock_magnify again (7.5.5) and it says about 3 MB.
 
+13.23.1: then app_tick is called with no window held and with one held (drag_on set); it must skip only the second. Discriminating:
+drop the win_dragging() guard in app_tick and it says 0 0. Every busy app's 10 ms slice per pass made a drag trail the hand.
+
 Usage: tools/checks/arm64-ptrburst-check.py   (from the repo root)
 """
 import os, re, shutil, subprocess, sys, time
@@ -47,4 +50,7 @@ if m.group(1) != "1": print(f"FAIL: 20 queued mouse reports were drawn {m.group(
 h = re.search(r"ptrburst: dock magnify took (\d+) heap bytes", out)
 if not h or "dock magnify 5 size" not in out: print("FAIL: the dock did not magnify under the pointer\n" + out[-600:]); sys.exit(1)
 if h.group(1) != "0": print(f"FAIL: magnifying the dock took {h.group(1)} heap bytes; a heap mark held around it would free them"); sys.exit(1)
-print("PASS: 20 queued mouse reports are drawn once, at the latest position, and magnifying the dock takes nothing from the heap")
+d = re.search(r"ptrburst: drag skips apps (\d+) (\d+)", out)
+if not d: print("FAIL: no drag skip line\n" + out[-600:]); sys.exit(1)
+if d.groups() != ("0", "1"): print(f"FAIL: app_tick skipped {d.group(1)} times with no window held and {d.group(2)} with one held; want 0 and 1 (a held window must be the whole pass)"); sys.exit(1)
+print("PASS: 20 queued mouse reports are drawn once, the dock magnify takes nothing from the heap, and a held window gives the apps no slices")
