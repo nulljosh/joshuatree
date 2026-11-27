@@ -1,16 +1,12 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/mark-paper.png">
-  <img src="docs/brand/mark-ink.png" width="80" alt="Joshua Tree">
-</picture>
+<p align="center">
+  <img src="docs/brand/readme-banner.png" width="100%" alt="Joshua Tree. A computer, from scratch. Free and open source. Runs on a Raspberry Pi, a PC, or your browser.">
+</p>
 
-# Joshua Tree
-
-![version](https://img.shields.io/github/v/release/nulljosh/joshuatree?label=version&color=blue)
-![license](https://img.shields.io/badge/license-Apache_2.0-green)
-
-An operating system written from scratch. It runs on a Raspberry Pi 4, a PC, or your browser.
-
-<img src="landing/shots/desktop-apps.webp" width="100%" alt="The Joshua Tree desktop with the Terminal and Weather open">
+<p align="center">
+  <a href="https://github.com/nulljosh/joshuatree/releases"><img src="https://img.shields.io/github/v/release/nulljosh/joshuatree?label=version&color=b5502c" alt="version"></a>
+  <a href="https://github.com/nulljosh/joshuatree/actions/workflows/check.yml"><img src="https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/check.yml?branch=main&label=checks" alt="checks"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-261a13" alt="license"></a>
+</p>
 
 ## Try it
 

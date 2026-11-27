@@ -106,6 +106,7 @@ once |0|The whole web's roots: the Pi's trust anchors hold every root in Mozilla
 once |5|CI tooling packs ARM checks across the ARM shards only and rejects fixed test paths before builds (host only)|python3 ./tools/checks/ci-tooling-check.py
 once |1|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
 once |1|Keyrate (13.24.0): the page `keyrate` serves is one offline file of about 42 KB, loading nothing by src, href, import, CSS url() or @import, fetch() or a Worker|python3 ./tools/checks/keyrate-offline-check.py
+once |1|README banner (13.24.0, #1156): the README opens on one 1600 x 640 banner whose headline is the landing h1, with no screenshot wall|python3 ./tools/checks/readme-banner-check.py
 once |0|No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
 once |0|docs/ARCHITECTURE.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static)|python3 ./tools/checks/design-doc-check.py
 once |0|every source file the progress graph counts has a row in docs/ARCHITECTURE.md (docs at 100 percent, 6.59.1) (static)|python3 ./tools/checks/doc-coverage-check.py

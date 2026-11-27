@@ -187,6 +187,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `tools/gen/sample-song.py` | Writes `HELLO.WAV`, the sample song: 8 bars at 120 bpm in C major (bass, arpeggio pad and lead), 16 s, 16-bit mono 22050 Hz, about 690 KB, pure arithmetic so every run is byte-identical. `tools/flash-pi.sh` puts it in `JT/MUSIC/` only when the folder has no `.WAV` or `.MP3`; `tools/checks/arm64-music-check.py` plays it as a third song. |
 | `tools/gen/map.py` | Draws `architecture.svg`, Joshua Tree at a glance in three panels: where it runs, the layers, talking to Samantha (13.21.3 cut it from seven, so the README stays short). Reads the app count from `progress.svg`, so it cannot drift. |
 | `tools/gen/gen_stickers.py` | Draws the sticker sheet in `docs/brand/stickers/` (13.21.5): the park circle, the `joshua@tree %` prompt and "A computer, from scratch.", 3 inch SVGs (the die-cut tree is `docs/brand/tree.png` itself) with the fonts and art inside, ready for a print shop. |
+| `tools/gen/gen_readme_banner.py` | Draws `docs/brand/readme-banner.png`, the README's one picture (13.24.0, issue #1156): the landing hero as a still, the park painting, the glyph in one ink, Tree Sans Display at the hero's tracking and its gold. `tools/checks/readme-banner-check.py` keeps the README on it. |
 | `tools/gen/svgkit.py` | The kit both pictures are drawn with (6.59.2): the brand tokens' colours, spacing and radii on an 8 point grid, Tree Sans subset to each picture's letters and embedded as woff2 (through uv's fonttools), and 8 by 8 pixel icons on terracotta tiles with a dither and scan lines. |
 | `tools/gen/humans.py` | Draws `docs/apps-for-humans.svg`, the plain-words picture of how a new app reaches the Pi (the store, Samantha, or you) and what the seal means, for someone who has never read the code (6.59.1). Drawn with `svgkit.py`, like `map.py`. |
 | `tools/gen/wallraw.py` | The baked tree photo in `drivers/wallpaper.h`: `write_header` up-filters it (each byte minus the one a row above) and deflates it, about 520 KB in place of 1.5 MB of raw RGB (4.23.0); `wallpaper_rgb()` gives the raw pixels back to the fixture generators and the wallpaper checks. The kernel unpacks it on first use in `kernel/wallmap.c` (`wall_photo_get`), and `png-check.sh` fails if the un-filter is wrong. |
@@ -1704,7 +1705,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (405 checks)
+### The suite (406 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -1750,6 +1751,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | CI tooling packs ARM checks across the ARM shards only and rejects fixed test paths before builds (host only) | `tools/checks/ci-tooling-check.py` | once |
 | Dock slot constants agree with kernel.c (static drift guard) | `tools/checks/dockslots-check.py` | once |
 | Keyrate (13.24.0): the page `keyrate` serves is one offline file of about 42 KB, loading nothing by src, href, import, CSS url() or @import, fetch() or a Worker | `tools/checks/keyrate-offline-check.py` | once |
+| README banner (13.24.0, #1156): the README opens on one 1600 x 640 banner whose headline is the landing h1, with no screenshot wall | `tools/checks/readme-banner-check.py` | once |
 | No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks) | `tools/checks/tmp-paths-check.py` | once |
 | docs/ARCHITECTURE.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static) | `tools/checks/design-doc-check.py` | once |
 | every source file the progress graph counts has a row in docs/ARCHITECTURE.md (docs at 100 percent, 6.59.1) (static) | `tools/checks/doc-coverage-check.py` | once |
