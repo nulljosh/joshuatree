@@ -48,6 +48,7 @@ static void deep_selftest_tick(void) {
 #endif
 #endif
 #include "login_ui.h"   /* 4.9.0: the login screen, over everything while JT/USERS.TXT has an account and nobody has signed in */
+#include "mail_sheet.h" /* 13.25.0: Mail's sign-in sheet, asked for by the Mail window */
 #ifdef LOCK_SELFTEST
 /* 13.24.0 (arm64-lock-check.py): ann is signed in, the saver locks, the h key wakes it (and must not be typed, so "unter22"
    after it is wrong), bob's password and a wrong one fail, hers opens it. A square drawn into fb while locked must not
@@ -156,6 +157,7 @@ void input_event(struct input_event e) {
 #ifdef PI_BUILD
     if (lock_on) { lock_event(e); return; }                                                                /* 13.24.0: so has the lock card */
 #endif
+    if (ms_live) { ms_event(e); return; }                                                                  /* 13.25.0: Mail's sign-in sheet has every key */
     if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                 /* BTN_LEFT, RIGHT, MIDDLE */
         con_quiet = 1;   /* the UART only */
         uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
@@ -543,7 +545,7 @@ void main(void) {
 #ifdef LOCK_SELFTEST
             lock_selftest_tick();
 #endif
-            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(reader_tick()); TIMED(update_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(reader_tick()); TIMED(update_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); mail_sheet_tick(); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST
             notes_tick();
 #endif
@@ -560,7 +562,7 @@ void main(void) {
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             else __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                                    " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step * 500), "r"(1UL) : "memory");   /* 6.87.0: idle, still a pass a second, so idle_tick runs */
-            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(reader_tick()); TIMED(update_tick()); TIMED(traffic_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* an app parked on yield runs again here; browser_tick fetches an image and idle_tick may sync, slow on purpose, so untimed */
+            TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(reader_tick()); TIMED(update_tick()); TIMED(traffic_tick()); TIMED(login_tick()); mail_sheet_tick(); browser_tick(); idle_tick();   /* an app parked on yield runs again here; browser_tick fetches an image and idle_tick may sync, slow on purpose, so untimed */
 #ifdef HANG_TEST
             hang_tick();
 #endif

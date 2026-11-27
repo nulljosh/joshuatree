@@ -1,5 +1,7 @@
 /* mailpi: Mail for the ARM (Pi) build, three panes at the Mac Mail scale: mailboxes, the message list, the reading pane.
  *
+ * 13.25.0: with no mail, the reading pane has a Sign in button (Enter or a click) that asks the kernel for its sign-in
+ * sheet (JT_SYS_MAIL, arch/arm64/mail_sheet.h); signed in, Blackcomb opens the inbox, which ends this window as it ends every app.
  * Built only by arch/arm64/Makefile, as the app called "mail" (the Mail dock tile, Spotlight and Samantha's [[open mail]]
  * start it until mail is signed in; 6.32.0 then opens the real inbox in Blackcomb instead). i386 keeps user/mail.c. Read only: no network mail, no passwords, no address book, nothing written to the card.
  * The mail is MAIL.TXT in the card's JT/ folder when there is one, the very format user/mail.c keeps ("r|from|subject|body"
@@ -36,6 +38,7 @@ struct msg { const char *from, *subject, *body, *date; int read, sent; };   /* s
 static const char *const box_name[3] = {"Inbox", "Unread", "Sent"};
 
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
+static int btn_x JT_DATA = -1, btn_y JT_DATA = 0, btn_w JT_DATA = 0, btn_h JT_DATA = 0;   /* 13.25.0: the Sign in button */
 extern char _user_end[];
 struct arena { struct msg msgs[MAX]; char filebuf[4096]; };   /* past _user_end: a flat image has no .bss */
 static struct arena *ar JT_DATA = 0;
@@ -168,10 +171,12 @@ static void draw(void) {
     /* reading pane */
     if (opened < 0) {
         if (!count) {   /* no mail on the card and not signed in: say how, never show made-up messages */
-            btext("Sign in to read your mail", rx + 24, H / 2 - 40, INK);
-            text("In the Terminal:", rx + 24, H / 2 - 12, DIM);
-            text("mail login imap.mail.me.com NAME", rx + 24, H / 2 + 8, DIM);
-            text("with an app-specific password.", rx + 24, H / 2 + 28, DIM);
+            int pw = W - rx - 48;   /* 13.25.0: a Sign in button, not Terminal steps (they ran off the pane's edge) */
+            fit(t, "Sign in to read your mail", pw, JT_FACE_BOLD); btext(t, rx + 24, H / 2 - 52, INK);
+            fit(t, "It takes an app password.", pw, JT_FACE_BODY); text(t, rx + 24, H / 2 - 26, DIM);
+            btn_x = rx + 24; btn_y = H / 2 + 2; btn_w = jt_text_width(JT_FACE_BODY, "Sign in") + 36; btn_h = 32;
+            rect(btn_x, btn_y, btn_w, btn_h, ACCENT);
+            text("Sign in", btn_x + 18, btn_y + 7, WHITE);
             return;
         }
         text(nvis ? "Press Enter to read" : "Nothing to read", rx + 24, H / 2 - 20, FADE);
@@ -188,6 +193,10 @@ static void draw(void) {
     wrapped(m->body, rx + 12, 74, pw, H - 8, INK);
 }
 
+static void sign_in(void) {   /* 13.25.0: the kernel draws the sheet and keeps the password; this window only asks */
+    int r = jt_mail(0);
+    jt_write(1, r == 1 ? "mail: sign-in asked\n" : r == 0 ? "mail: already signed in\n" : "mail: no sign-in here\n", r == 1 ? 20 : r == 0 ? 24 : 22);
+}
 static void open_row(int r) {
     if (r < 0 || r >= nvis) return;
     sel = r; opened = vis[r];
@@ -221,6 +230,7 @@ void _start(int argc, char **argv) {
         if (r != 1) break;
         if (ev.kind == JT_EV_CLICK) {
             if (ev.b < 0) break;   /* the red dot */
+            if (!count && btn_x >= 0 && ev.a >= btn_x && ev.a < btn_x + btn_w && ev.b >= btn_y && ev.b < btn_y + btn_h) { sign_in(); continue; }
             if (ev.a < SIDE_W) { int b = (ev.b - (BOX_Y0 - 4)) / BOX_H; if (ev.b >= BOX_Y0 - 4) set_box(b); }
             else if (ev.a < SIDE_W + LIST_W && ev.b >= LIST_Y0) {
                 int hit = (ev.b - LIST_Y0) / ROW_H;
@@ -233,7 +243,7 @@ void _start(int argc, char **argv) {
             else if (k == JT_KEY_DOWN && sel < nvis - 1) { sel++; say("mail: sel=", sel); }
             else if (k == JT_KEY_LEFT) set_box(box - 1);
             else if (k == JT_KEY_RIGHT) set_box(box + 1);
-            else if (k == JT_KEY_ENTER) open_row(sel);
+            else if (k == JT_KEY_ENTER) { if (!count) { sign_in(); continue; } open_row(sel); }
         } else { flags = JT_POLL_PRESENT; continue; }
         draw();
         flags = JT_POLL_PRESENT;

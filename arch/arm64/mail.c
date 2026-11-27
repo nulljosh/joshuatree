@@ -513,6 +513,24 @@ int mail_form(const char *action, const char *to, const char *subj, const char *
 }
 
 /* cmd.c, once the app password is typed. Tried at once, so a wrong one is said now, not at the next `mail`. */
+/* The account to sign in to, before its app password: HOST[:PORT] and the user, checked; 0, or why not (13.25.0: shared by
+   `mail login` and the Mail window's sign-in sheet, mail_sheet.h). Whatever was signed in before is forgotten first. */
+const char *mail_account(const char *host, unsigned hn, const char *user, unsigned un) {
+    if (!hn || !un) return "a server and an address are both needed";
+    if (hn >= sizeof m_host || un >= sizeof m_user) return "that server or address is too long";
+    for (unsigned k = 0; k < hn; k++) if ((unsigned char)host[k] < 0x21 || host[k] == '/') return "that server name has a space or a control character";
+    for (unsigned k = 0; k < un; k++) if ((unsigned char)user[k] < 0x21) return "that user name has a control character";
+    forget();
+    copy(m_host, host, hn, sizeof m_host);
+    m_port = MAIL_PORT;
+    for (unsigned c = 0; m_host[c]; c++) if (m_host[c] == ':') {
+        unsigned v = 0, d = c + 1; while (m_host[d] >= '0' && m_host[d] <= '9' && v < 70000) v = v * 10 + (unsigned)(m_host[d++] - '0');
+        if (m_host[d] || !v || v > 65535) { m_host[0] = 0; return "that port is not a number from 1 to 65535"; }
+        m_port = (unsigned short)v; m_host[c] = 0; break;
+    }
+    copy(m_user, user, un, sizeof m_user);
+    return 0;
+}
 void mail_password(const char *pass) {
     copy(m_pass, pass, slen(pass), sizeof m_pass);
     copy(m_owner, current_user, slen(current_user), sizeof m_owner);
@@ -546,17 +564,9 @@ int mail_command(const char *q, unsigned n) {   /* 1 when it was a mail command 
         unsigned h0 = i; while (i < an && a[i] != ' ') i++;
         unsigned h1 = i; while (i < an && a[i] == ' ') i++;
         unsigned u0 = i; while (i < an && a[i] != ' ') i++;
-        if (h1 == h0 || i == u0 || i != an || h1 - h0 >= sizeof m_host || i - u0 >= sizeof m_user) { cmd_out("mail: use mail login HOST USER (the app password is asked next)\n"); return 1; }
-        for (unsigned k = u0; k < i; k++) if ((unsigned char)a[k] < 0x21) { cmd_out("mail: that user name has a control character\n"); return 1; }
-        forget();
-        copy(m_host, a + h0, h1 - h0, sizeof m_host);
-        m_port = MAIL_PORT;
-        for (unsigned c = 0; m_host[c]; c++) if (m_host[c] == ':') {
-            unsigned v = 0, d = c + 1; while (m_host[d] >= '0' && m_host[d] <= '9' && v < 70000) v = v * 10 + (unsigned)(m_host[d++] - '0');
-            if (m_host[d] || !v || v > 65535) { cmd_out("mail: that port is not a number from 1 to 65535\n"); m_host[0] = 0; return 1; }
-            m_port = (unsigned short)v; m_host[c] = 0; break;
-        }
-        copy(m_user, a + u0, i - u0, sizeof m_user);
+        if (h1 == h0 || i == u0 || i != an) { cmd_out("mail: use mail login HOST USER (the app password is asked next)\n"); return 1; }
+        const char *why = mail_account(a + h0, h1 - h0, a + u0, i - u0);
+        if (why) { cmd_out("mail: "); cmd_out(why); cmd_out("\n"); return 1; }
         ask_mail_password(m_user);
         return 1;
     }

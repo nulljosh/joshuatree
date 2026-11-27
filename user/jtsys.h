@@ -287,6 +287,7 @@ static inline int jt_sysinfo(struct jt_sysinfo *si)               { return jt_sy
 /* 13.21.0, the Pi: the accent colour Settings picked (Display, Accent), 0x00RRGGBB, read once per run. Where the
    kernel has no such call (i386 answers -ENOSYS): terracotta, as it always was there. */
 #define JT_SYS_ACCENT 415
+#define JT_SYS_MAIL         416 /* 13.25.0, Pi only: (op) 0 asks the kernel for Mail's sign-in sheet (1 asked, 0 already signed in), 1 says whether mail is signed in */
 static unsigned jt_accent_c JT_DATA __attribute__((unused));
 static inline unsigned jt_accent(void) {
     if (!jt_accent_c) { int r = jt_syscall(JT_SYS_ACCENT, 0, 0, 0); jt_accent_c = r > 0 ? (unsigned)r : 0x00B5502Cu; }
@@ -308,6 +309,7 @@ static inline int jt_connect(const char *host, int port)              { return j
 static inline int jt_writefile(const char *path, const void *buf, unsigned len) { return jt_syscall(JT_SYS_WRITEFILE, (jt_arg)path, (jt_arg)buf, (jt_arg)len); }
 static inline int jt_feed(int kind, const char *arg)               { return jt_syscall(JT_SYS_FEED, (jt_arg)kind, (jt_arg)arg, 0); }
 /* Replace the system clipboard with len bytes (0 clears). Returns len, -EINVAL over JT_CLIP_MAX, -EFAULT. */
+static inline int jt_mail(unsigned op) { return jt_syscall(JT_SYS_MAIL, (jt_arg)op, 0, 0); }
 static inline int jt_print(const char *title, const void *text, unsigned len) { return jt_syscall(JT_SYS_PRINT, (jt_arg)title, (jt_arg)text, len); }
 static inline int jt_clip_set(const void *buf, unsigned len)      { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_SET, (jt_arg)buf, len); }
 /* Copy out at most len bytes of the clipboard; returns bytes copied (0 when empty), -EFAULT. A short len clips the paste. */
