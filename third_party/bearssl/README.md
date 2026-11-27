@@ -13,6 +13,8 @@ one libc header `inner.h` wants onto `lib/libc.h`. Nothing here is modified.
 `tools/gen/bearssl-vendor.sh <upstream>` is the file list and re-copies it;
 `tools/checks/bearssl-tls-check.py` compiles every file for aarch64.
 
-Not wired into the Pi network code yet. Left out on purpose: ChaCha20/
-Poly1305, CCM, DES, client certificates, the 64-bit (`ct64`/`m64`) variants,
+13.25.0 adds ChaCha20 (`chacha20_ct.c`), Poly1305 (`poly1305_ctmul.c`) and
+HKDF (`hkdf.c`) for age file encryption (`kernel/age.c`), copied from the same
+commit and checked byte for byte against the files already here. Left out on
+purpose: CCM, DES, client certificates, the 64-bit (`ct64`/`m64`) variants,
 and `sysrng.c` (the Pi will seed from its tick timer).
