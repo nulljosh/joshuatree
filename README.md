@@ -14,6 +14,10 @@
 - **Pi 4:** `tools/flash-pi.sh` ([steps](docs/GUIDE.md#raspberry-pi))
 - **Build:** `brew install lld qemu`, then `make run`
 
+## On a Pi
+
+<img src="docs/brand/readme-weather.png" width="100%" alt="The Joshua Tree desktop on a Raspberry Pi, on its park painting, with Weather open: Vancouver, BC, 14 degrees and partly cloudy, then the next five days">
+
 ## Docs
 
 <img src="architecture.svg" width="100%" alt="Joshua Tree at a glance: where it runs, the layers, and Samantha">
