@@ -395,6 +395,7 @@ extern unsigned long resume_user(const struct frame *f, unsigned long sp, const 
 #define JT_SYS_NOTIFY 413       /* 13.7.0: see ufile_notify */
 #define JT_SYS_PRINT 414        /* 13.13.0: see ufile_print */
 #define JT_SYS_ACCENT 415       /* 13.21.0: the accent colour Settings picked, as the return value */
+#define JT_SYS_MAIL 416         /* 13.25.0: see mail_sheet_ask (mail_sheet.h) */
 #define JT_SYS_CONNECT 412      /* 8.5.0: a TCP socket, see sock_connect */
 #define JT_SYS_CLOSE 6
 #define JT_SYS_TEXT2 402         /* 3.9.0: Tree Sans into a device-size window buffer (user/libjt/hires.h) */
@@ -1067,6 +1068,7 @@ void exc_el0_sync(struct frame *f, const unsigned long *fp) {   /* fp: the app's
             else if (n == JT_SYS_THREAD_SPAWN) r = th_spawn(a0, f->x[1], f->x[2]);   /* 8.1.0 */
             else if (n == JT_SYS_SPAWN) r = app_spawn(a0, f->x[1]);   /* 8.4.0 */
             else if (n == JT_SYS_WAIT) r = app_wait(f, fp, a0);
+            else if (n == JT_SYS_MAIL) { long mail_sheet_ask(unsigned long); r = mail_sheet_ask(a0); }   /* 13.25.0 */
             else if (n == JT_SYS_PRINT) { long ufile_print(unsigned long, unsigned long, unsigned long, const char *); extern char current_user[]; r = ufile_print(a0, f->x[1], f->x[2], current_user); }
             else if (n == JT_SYS_NOTIFY) { long ufile_notify(unsigned long text, const char *app); r = ufile_notify(a0, app_cur ? app_cur->name : "App"); }
             else if (n == JT_SYS_CONNECT) r = sock_connect(a0, f->x[1]);   /* 8.5.0 */

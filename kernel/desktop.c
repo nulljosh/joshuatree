@@ -1,6 +1,7 @@
 /* The i386 desktop's event loop, out of kernel.c since 4.23.9: gui_run (the pointer, the dock, the menu bar and
    its flyouts, keys and chords, the wind tick, the weather refresh, launching apps) and the two menu actions it
    owns, the lock screen and the Apple menu's items. i386 only; the Pi's loop is arch/arm64/boot.c. */
+#include "acpi.h"
 #include "gdt.h"
 #include "idt.h"
 #include "irq.h"
@@ -115,6 +116,7 @@ static void gui_menu_run_item(int item){
     else if (item == 4) gui_lock_screen();
     else if (item == 6) reboot();
     else if (item == 7) {
+        acpi_poweroff();   /* 13.25.0: really off (kernel/acpi.c); this screen is only for a machine without ACPI */
         window_clear(0x00111111);
         font_draw_string("It's now safe to turn off this computer.", 20, (int)window_height() / 2, 0x00F5F5F7, -1);
         __asm__ volatile ("cli");
