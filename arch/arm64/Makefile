@@ -161,8 +161,8 @@ dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
 # drivers/net.c. The Pi writes only inside the card's JT folder, never a boot file. ufile.c (M3d) is the apps' file
 # calls over the same code, rooted in JT/.
 SDCC = $(CC) -mstrict-align -I../../drivers -I../../kernel -I../../lib
-SDOBJ = emmc.o fat.o ufile.o settings.o lang.o auth_kdf.o accounts.o login.o sudo.o limits.o home.o snap.o keychain.o
-PISDOBJ = pi-emmc.o fat.o ufile.o pi-settings.o lang.o auth_kdf.o accounts.o login.o sudo.o limits.o home.o snap.o keychain.o
+SDOBJ = emmc.o fat.o ufile.o settings.o lang.o auth_kdf.o accounts.o login.o sudo.o limits.o home.o snap.o keychain.o age.o
+PISDOBJ = pi-emmc.o fat.o ufile.o pi-settings.o lang.o auth_kdf.o accounts.o login.o sudo.o limits.o home.o snap.o keychain.o age.o
 fat.o: ../../drivers/fat.c ../../drivers/fat.h ../../drivers/blockdev.h
 	$(SDCC) -c $< -o $@
 ufile.o: ufile.c home.h emmc.h ../../drivers/fat.h
@@ -176,6 +176,8 @@ pi-settings.o: settings.c audio.h emmc.h ../../drivers/fat.h ../../VERSION   # 8
 auth_kdf.o: ../../kernel/auth_kdf.c ../../kernel/auth_kdf.h
 	$(SDCC) -I$(BSSL)/inc -I$(BSSL)/shim -c $< -o $@
 keychain.o: keychain.c rng.h home.h ../../kernel/auth_kdf.h   # 6.21.0: secrets sealed under the login password
+	$(SDCC) -I$(BSSL)/inc -I$(BSSL)/shim -c $< -o $@
+age.o: age.c rng.h   # 13.26.0: age file encryption, X25519 and ChaCha20-Poly1305 from the vendored BearSSL
 	$(SDCC) -I$(BSSL)/inc -I$(BSSL)/shim -c $< -o $@
 accounts.o: accounts.c accounts.h rng.h emmc.h ../../drivers/fat.h ../../kernel/auth_kdf.h
 	$(SDCC) -c $< -o $@

@@ -32,6 +32,7 @@ static const char *const man_pages[][2] = {
     {"logout", "logout\nSigns you out."},
     {"ls", "ls [DIR]\nLists a folder, one line a file with its size in bytes. ~ is your own home folder."},
     {"mail", "mail\nmail login HOST USER\nmail N\nmail send TO SUBJECT | BODY\nmail reply N BODY\nmail logout\nReads and sends your mail."},
+    {"age", "age keygen\nage pub\nage enc IN OUT [age1...]\nage dec IN OUT\nLocks and opens files in JT/ in the age format, so a Mac with age opens them too. Admins only."},
     {"makeadmin", "makeadmin NAME\nMakes an account an admin."},
     {"man", "man NAME\nThis page, for any command."},
     {"mem", "mem\nThe heap's frame pool and the swap file."},
