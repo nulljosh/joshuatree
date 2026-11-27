@@ -113,8 +113,17 @@ SVG_DIR = os.path.join(ROOT, "art", "icons")
 OUT = os.path.join(ROOT, "kernel", "icon_art.h")
 
 
+def from_png(name):
+    """13.27.0: a painted icon, art/icons/NAME.png (296 px RGBA, cut from the Surenix-style sheet), wins over its SVG.
+    Scaled to SIZE with Lanczos and written as 8-bit RGBA, the one PNG form drivers/png.c decodes."""
+    import io
+    from PIL import Image
+    im = Image.open(os.path.join(SVG_DIR, name + ".png")).convert("RGBA").resize((SIZE, SIZE), Image.LANCZOS)
+    b = io.BytesIO(); im.save(b, "PNG", optimize=True); return b.getvalue()
+
+
 def rasterize(name):
-    """The rsvg PNG bytes, stored as-is.
+    """The rsvg PNG bytes, stored as-is (or a painted PNG's, from_png, when art/icons/NAME.png exists).
 
     Storing decoded RGBA was the first design and it did not survive contact
     with the real kernel image. 24 artworks at 128*128*4 is 1.5MB, which
@@ -129,7 +138,7 @@ def rasterize(name):
     filter 0, interlace 0, and the assertions below re-check that on every
     regeneration rather than trusting rsvg to keep doing it.
     """
-    png = subprocess.run(
+    png = from_png(name) if os.path.exists(os.path.join(SVG_DIR, name + ".png")) else subprocess.run(
         ["rsvg-convert", "-w", str(SIZE), "-h", str(SIZE),
          os.path.join(SVG_DIR, name + ".svg")],
         check=True, stdout=subprocess.PIPE).stdout
