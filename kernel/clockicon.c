@@ -75,7 +75,7 @@ static void gui_calendar_date(int cx_center, int cy_bottom, int size){
     if (d >= 10) day[n++] = (char)('0' + d / 10);
     day[n++] = (char)('0' + d % 10); day[n] = 0;
     int sc = (int)window_scale(), pw = size * sc, x = (cx_center - size / 2) * sc, y = (cy_bottom - size) * sc;
-    window_fill_rect_phys(x + pw * 12 / 128, y + pw * 50 / 128, pw * 104 / 128, pw * 66 / 128, 0x00F8F8FA);
+    window_fill_rect_phys(x + pw * 12 / 128, y + pw * 50 / 128, pw * 104 / 128, pw * 66 / 128, 0x00E2D4C6);   /* 13.27.0: the painted page's linen cream */
     int lx = cx_center - size / 2, ly = cy_bottom - size;
     gui_icon_text(months[mo - 1], lx + (size - gui_icon_text_w(months[mo - 1], 0, 1)) / 2, ly + size * 14 / 128, 0, 1, 0x00FFFFFF);
     gui_icon_text(day, lx + (size - gui_icon_text_w(day, 3, 1)) / 2, ly + size * 60 / 128, 3, 1, 0x001C1C1E);

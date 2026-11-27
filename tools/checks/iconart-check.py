@@ -26,7 +26,7 @@ some channel; on this build every slot is within 0.3.
 
 Usage: tools/checks/iconart-check.py   (from the repo root, after make kernel.elf)
 """
-import json, os, re, shutil, socket, subprocess, sys, time
+import os, json, os, re, shutil, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
 
@@ -51,6 +51,7 @@ TOL = 8
 FULL_BLEED = {"Files": range(42, 54)}
 # 7.7.0: Calendar is a page edge to edge, a terracotta band over its top rows, so only a white strip under the band is sampled.
 OWN_BANDS = {"Calendar": (range(29, 33),)}   # under the band, above the live day number (clockicon.c)
+PAINTED_BANDS = {"Calendar": (range(3, 8),)}   # 13.27.0: the painted page is cleared for the live date, so the header above the month is sampled
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -146,8 +147,26 @@ def hexrgb(h):
 
 
 fail = 0
+painted = {}   # 13.27.0: a painted icon (art/icons/NAME.png) has no gradient comment; its own pixels, scaled as the dock scales them, are the oracle
+for svg in SVGS:
+    if os.path.exists("art/icons/%s.png" % svg):
+        painted[svg] = Image.open("art/icons/%s.png" % svg).convert("RGBA").resize((pw, pw), Image.BOX)
 for slot, (name, svg) in enumerate(zip(SLOTS, SVGS)):
     m = re.search(r"Tile (#[0-9A-Fa-f]{6}) -> (#[0-9A-Fa-f]{6})", open("art/icons/%s.svg" % svg).read())
+    if svg in painted:
+        src = painted[svg]; x0 = (SLOT0_X + slot * PITCH) * SCALE; y0 = ICON_TOP_Y * SCALE; worst = 0
+        for band in PAINTED_BANDS.get(name, BANDS):
+            got = [0, 0, 0]; want = [0, 0, 0]; n = 0
+            for y in band:
+                for x in FULL_BLEED.get(name, COLS):
+                    p = img.getpixel((x0 + x, y0 + y)); q = src.getpixel((x, y))
+                    for c in range(3): got[c] += p[c]; want[c] += q[c]
+                    n += 1
+            worst = max(worst, max(abs(got[c] - want[c]) / n for c in range(3)))
+        ok = worst <= TOL
+        print("%-10s painted art/icons/%s.png  worst channel miss %5.1f  %s" % (name, svg, worst, "ok" if ok else "WRONG ART"))
+        if not ok: fail = 1
+        continue
     if not m:
         print("%-10s art/icons/%s.svg states no tile gradient" % (name, svg)); fail = 1; continue
     top, bot = hexrgb(m.group(1)), hexrgb(m.group(2))
@@ -172,4 +191,4 @@ for slot, (name, svg) in enumerate(zip(SLOTS, SVGS)):
 if fail:
     print("FAIL: a dock tile is not the colour its authored SVG says, the dock is not drawing that artwork")
     sys.exit(1)
-print("PASS: all %d dock tiles match the colours their authored SVGs state" % len(SLOTS))
+print("PASS: all %d dock tiles match their authored art (the SVG gradient, or the painted PNG scaled as the dock scales it)" % len(SLOTS))
