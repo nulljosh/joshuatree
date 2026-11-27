@@ -7,6 +7,7 @@
 #include "pic.h"
 #include "pmm.h"
 #include "paging.h"
+#include "acpi.h"
 #include "kheap.h"
 #include "picker.h"
 #include "task.h"
@@ -77,6 +78,7 @@
 #include "user_wc.h"   /* the wc program kmain installs; only this file includes its bytes */
 
 static int bench_at_boot = 0;
+static int poweroff_at_boot = 0; /* 13.25.0: "poweroff" on the boot line, tools/checks/acpi-off-check.py */
 static int panic_test_at_boot = 0;
 void kmain(unsigned int multiboot_info_addr){
     serial_init();
@@ -129,6 +131,8 @@ void kmain(unsigned int multiboot_info_addr){
            never lands on a desktop that was never designed for 430px. */
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='p' && pc[1]=='h' && pc[2]=='o' && pc[3]=='n' && pc[4]=='e' && (pc[5]==' ' || pc[5]==0)) { boot_to_phone = 1; boot_to_samantha = 1; serial_puts("bootphone\n"); break; }
+        for (const char *pc = cl; pc && *pc; pc++)
+            if ((pc == cl || pc[-1] == ' ') && pc[0]=='p' && pc[1]=='o' && pc[2]=='w' && pc[3]=='e' && pc[4]=='r' && pc[5]=='o' && pc[6]=='f' && pc[7]=='f' && (pc[8]==' ' || pc[8]==0)) { poweroff_at_boot = 1; break; }
         if (gui_parse_res(cl, &boot_res_w, &boot_res_h)) serial_puts("bootres\n"); /* dock_geom.c: "res=WxH" */
         /* "panictest" on the multiboot command line (tools/checks/
            panic-symbols-check.py passes it) -- deliberately faults from a
@@ -320,6 +324,7 @@ void kmain(unsigned int multiboot_info_addr){
     clear();
     boot_chime();
     if (bench_at_boot) bench_run(fs_ok);
+    if (poweroff_at_boot) acpi_poweroff(); /* the whole boot first, then off: the same call Shut Down makes */
     puts("joshuatree v0 -- type help\n");
     if (!fs_ok) puts("(no FAT filesystem found -- ls/cat unavailable)\n");
     /* check.sh's only way to know the kernel reached this point: booting

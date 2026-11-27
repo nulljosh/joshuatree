@@ -63,6 +63,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 |---|---|
 | `kernel/pmm.c` | Physical memory as a bitmap of 4KB frames, sized from what the bootloader reports. |
 | `kernel/paging.c` | Decides which memory each program can see, and keeps programs out of the kernel's. |
+| `kernel/acpi.c` + `kernel/acpi.h` | Turns the PC off: finds the RSDP, FADT and `\_S5_` in the firmware's ACPI tables and writes the sleep type to PM1a_CNT. Shut Down, `shutdown` and the `poweroff` boot word call it. |
 | `kernel/kheap.c` | `kmalloc` and `kfree`. A first-fit free list that grows one frame at a time. |
 | `lib/text_ink.h` | The shared coverage curve: gives kernel and ring-3 text dense stems while keeping smooth edges; light text uses contrast only. |
 | `lib/ease.h` | 6.4.0: the one motion curve, `ease_out`, 1 - (1 - p)^5 in thousandths (close to the web's `cubic-bezier(.23,1,.32,1)`), shared by the i386 boot mark. |
@@ -1706,7 +1707,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (407 checks)
+### The suite (408 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -1959,6 +1960,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Entropy pool: serial names its sources, two boots draw different salts | `tools/checks/entropy-check.py` | retry |
 | Panic screen: a ring-0 fault paints the reason, not a frozen desktop | `tools/checks/panic-check.py` | once |
 | Crash report names the faulting function, not just the exception kind | `tools/checks/panic-symbols-check.py` | once |
+| Shut Down powers the PC off through ACPI (pc and q35), and a machine without ACPI stays up | `tools/checks/acpi-off-check.py` | once |
 | Frame time: idle, dock hover and window open stay within budget | `tools/checks/frametime-check.py` | once |
 | Every check in tools/checks/ is in this manifest or says why not | `tools/checks/suite-coverage-check.sh` | once |
 | Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcut markers, selection-aware copy/cut/paste/delete | `tools/checks/textselect-check.py` | retry |

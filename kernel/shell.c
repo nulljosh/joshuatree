@@ -1,6 +1,7 @@
 /* The shell's dispatcher, out of kernel.c since 4.20.21: split_argv and run(), the one place a typed line becomes a
    command. Each family of commands lives in its own file and is asked first (selftest.c, shellfs.c, shellnet.c,
    wxtest.c, taskdemo.c, guitest.c, progtest.c); what is left here is the small built-ins. */
+#include "acpi.h"
 #include "libc.h"
 #include "serial.h"
 #include "console.h"
@@ -51,7 +52,7 @@ static void run(char *line){
     if (shellfs_run(line, arg)) return;    /* kernel/shellfs.c: ls, cat, rm, cd, mkdir, write, trash, browse */
     if (shellnet_run(line, arg)) return;
     if (wxtest_run(line, arg)) return;
-    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest fputest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps calctest pngtest jpegtest chattest beep say listen pick pickcheck\n");
+    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot shutdown crash pagefault bench heaptest heapgrow tasktest fputest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps calctest pngtest jpegtest chattest beep say listen pick pickcheck\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
@@ -206,6 +207,12 @@ static void run(char *line){
     }
     else if (!strcmp(line, "time"))  show_time();
     else if (!strcmp(line, "reboot"))reboot();
+    else if (!strcmp(line, "shutdown") || !strcmp(line, "poweroff")) {   /* 13.25.0: ACPI soft-off, kernel/acpi.c */
+        acpi_poweroff();
+        puts("shutdown: this machine has no ACPI power off; it is now safe to turn it off\n");
+        __asm__ volatile ("cli");
+        for (;;) __asm__ volatile ("hlt");
+    }
     else {
         /* 1.0.0: before calling `line` an unknown command, try it as a
            program name -- the real shell gap the roadmap calls out.

@@ -313,6 +313,7 @@ retry|3|Accounts: legacy record upgrades to PBKDF2 on login, create, reboot, log
 retry|1|Entropy pool: serial names its sources, two boots draw different salts|python3 ./tools/checks/entropy-check.py
 once |4|Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
 once |0|Crash report names the faulting function, not just the exception kind|python3 ./tools/checks/panic-symbols-check.py
+once |0|Shut Down powers the PC off through ACPI (pc and q35), and a machine without ACPI stays up|python3 ./tools/checks/acpi-off-check.py
 once |4|Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py
 once |3|Every check in tools/checks/ is in this manifest or says why not|./tools/checks/suite-coverage-check.sh
 retry|2|Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcut markers, selection-aware copy/cut/paste/delete|python3 ./tools/checks/textselect-check.py
