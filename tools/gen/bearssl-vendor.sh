@@ -35,6 +35,7 @@ for f in \
   symcipher/aes_ct.c symcipher/aes_ct_dec.c symcipher/aes_ct_enc.c \
   symcipher/aes_ct_cbcdec.c symcipher/aes_ct_cbcenc.c symcipher/aes_ct_ctr.c \
   symcipher/aes_common.c aead/gcm.c \
+  symcipher/chacha20_ct.c symcipher/poly1305_ctmul.c kdf/hkdf.c \
   codec/dec16be.c codec/dec32be.c codec/dec64be.c codec/enc16be.c \
   codec/enc32be.c codec/enc64be.c codec/dec32le.c codec/enc32le.c codec/ccopy.c
 do cp "$UP/src/$f" "$D/src/"; done

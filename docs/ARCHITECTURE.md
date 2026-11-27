@@ -89,7 +89,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `arch/arm64/clock_ui.h` | Read-only Clock window on ARM, opened through Spotlight or Samantha. |
 | `arch/arm64/settings.c` | The Pi's Settings choices and their file, 3.13.0. 13.21.0: Accent (Display) picks Blue, Purple, Terracotta, Orange, Green or Graphite. Kernel windows read `ui_accent`; apps read it with `jt_accent()` (syscall 415). Blue on the Pi, terracotta on QEMU so the checks read one colour. Saved as `accent=`. |
 | `arch/arm64/accounts.c` | User accounts on the Pi, 4.8.0 (slice 1 of 6.0 Yours; the login screen is `login.c`). |
-| `arch/arm64/login.c`, `arch/arm64/login.h`, `arch/arm64/login_ui.h` | The Pi's login screen, 4.9.0 (slice 2 of 6.0). |
+| `arch/arm64/login.c`, `arch/arm64/login.h`, `arch/arm64/login_ui.h` | The Pi's login screen, 4.9.0 (slice 2 of 6.0). 13.24.0: `login_ui.h` also draws the lock card on the scanout (the name fixed, one password field) and checks the password for the signed-in name only, as sudo does. |
 | `arch/arm64/sudo.c`, `arch/arm64/sudo.h` | Admins and sudo on the Pi, 4.10.0 (slice 3 of 6.0). |
 | `arch/arm64/limits.c`, `arch/arm64/limits.h` | Parental controls on the Pi, 12.0.0, as in Screen Time. |
 | `tools/checks/fat-crash-check.py` | 4.13.0, slice 6 of 6.0: the real `fat.c` under sanitizers on FAT16 and FAT32 `mkfs.fat` images, power cut after every sector. |
@@ -187,6 +187,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `tools/gen/sample-song.py` | Writes `HELLO.WAV`, the sample song: 8 bars at 120 bpm in C major (bass, arpeggio pad and lead), 16 s, 16-bit mono 22050 Hz, about 690 KB, pure arithmetic so every run is byte-identical. `tools/flash-pi.sh` puts it in `JT/MUSIC/` only when the folder has no `.WAV` or `.MP3`; `tools/checks/arm64-music-check.py` plays it as a third song. |
 | `tools/gen/map.py` | Draws `architecture.svg`, Joshua Tree at a glance in three panels: where it runs, the layers, talking to Samantha (13.21.3 cut it from seven, so the README stays short). Reads the app count from `progress.svg`, so it cannot drift. |
 | `tools/gen/gen_stickers.py` | Draws the sticker sheet in `docs/brand/stickers/` (13.21.5): the park circle, the `joshua@tree %` prompt and "A computer, from scratch.", 3 inch SVGs (the die-cut tree is `docs/brand/tree.png` itself) with the fonts and art inside, ready for a print shop. |
+| `tools/gen/gen_readme_banner.py` | Draws `docs/brand/readme-banner.png`, the README's one picture (13.24.0, issue #1156): the landing hero as a still, the park painting, the glyph in one ink, Tree Sans Display at the hero's tracking and its gold. `tools/checks/readme-banner-check.py` keeps the README on it. |
 | `tools/gen/svgkit.py` | The kit both pictures are drawn with (6.59.2): the brand tokens' colours, spacing and radii on an 8 point grid, Tree Sans subset to each picture's letters and embedded as woff2 (through uv's fonttools), and 8 by 8 pixel icons on terracotta tiles with a dither and scan lines. |
 | `tools/gen/humans.py` | Draws `docs/apps-for-humans.svg`, the plain-words picture of how a new app reaches the Pi (the store, Samantha, or you) and what the seal means, for someone who has never read the code (6.59.1). Drawn with `svgkit.py`, like `map.py`. |
 | `tools/gen/wallraw.py` | The baked tree photo in `drivers/wallpaper.h`: `write_header` up-filters it (each byte minus the one a row above) and deflates it, about 520 KB in place of 1.5 MB of raw RGB (4.23.0); `wallpaper_rgb()` gives the raw pixels back to the fixture generators and the wallpaper checks. The kernel unpacks it on first use in `kernel/wallmap.c` (`wall_photo_get`), and `png-check.sh` fails if the un-filter is wrong. |
@@ -232,7 +233,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/libjt/osk.c`, `user/libjt/osk.h` | The phone on-screen keyboard for ring-3 apps. |
 | `user/libjt/aafont.h` | Generated glyph atlas behind `text.c`: 4-bit coverage bitmaps of DejaVu Sans, rendered from the kernel's own font data. |
 | `tools/gen/gen_user_text.c` | Host program that bakes `user/libjt/aafont.h` through `drivers/ttf.c`, so ring-3 text and in-kernel text share one rasterizer and one font. |
-| `arch/arm64/screen_idle.h` | Pi display idle: 15 s before the wait (Settings, Display, Screen saver after: 1 to 30 minutes or Never; five by default) the. |
+| `arch/arm64/screen_idle.h` | Pi display idle: 15 s before the wait (Settings, Display, Screen saver after: 1 to 30 minutes or Never; five by default) the. Auto lock (13.24.0): with someone signed in, the saver or the dark locks; a wake shows the lock card, never fb, and only that person's password gives fb back. |
 | `arch/arm64/trackpad.h` | The trackpad (10.2.0): multitouch slots in, mouse events out. |
 | `arch/arm64/battery.h` | The battery (10.3.0): a small I2C driver on BSC1 (GPIO 2 and 3) reads a MAX17048 fuel gauge at 0x36 once a minute; the menu bar. |
 | `arch/arm64/ptp.h` | USB precision touchpads (11.0.0): finds a Digitizer Touch Pad report descriptor (fingers, contact count, button, Input Mode), and xhci.c switches the. |
@@ -1704,12 +1705,13 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (403 checks)
+### The suite (406 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
 | ARM menu notices: bounded messages, expiry, pixels and input | `tools/checks/arm64-notice-check.py` | once |
 | Pi screen sleep and deep idle (10.1.0): idle deadline, wrap, active apps, refused mailbox requests, keyboard/mouse wake, and 50 loop passes a second asleep | `tools/checks/arm64-screen-idle-check.py` | once |
+| Auto lock on the Pi (13.24.0): the saver locks, a key wakes the card and is not typed, only the signed-in password opens it, and the desktop comes back exactly | `tools/checks/arm64-lock-check.py` | retry |
 | Trackpad (10.2.0): one finger moves the pointer, two scroll, a tap clicks left and a two-finger tap right, on the host and through QEMU virtio-multitouch | `tools/checks/arm64-trackpad-check.py` | once |
 | USB precision touchpads (11.0.0): a PTP descriptor is found and a mouse's or touch screen's is not; its reports drag, scroll, tap, click and lift through trackpad.h | `tools/checks/arm64-ptp-check.py` | once |
 | Heat (13.3.0): `temp` reads the chip's temperature from the firmware on raspi4b to a tenth of a degree, virt says it has no sensor, a refused tag says so | `tools/checks/arm64-heat-check.py` | once |
@@ -1748,6 +1750,8 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | The whole web's roots: the Pi's trust anchors hold every root in Mozilla's list, each once, ISRG Root X1 among them, from a bundle under 18 months old (host only) | `tools/checks/tls-roots-check.py` | once |
 | CI tooling packs ARM checks across the ARM shards only and rejects fixed test paths before builds (host only) | `tools/checks/ci-tooling-check.py` | once |
 | Dock slot constants agree with kernel.c (static drift guard) | `tools/checks/dockslots-check.py` | once |
+| Keyrate (13.24.0): the page `keyrate` serves is one offline file of about 42 KB, loading nothing by src, href, import, CSS url() or @import, fetch() or a Worker | `tools/checks/keyrate-offline-check.py` | once |
+| README banner (13.24.0, #1156): the README opens on one 1600 x 640 banner whose headline is the landing h1, with no screenshot wall | `tools/checks/readme-banner-check.py` | once |
 | No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks) | `tools/checks/tmp-paths-check.py` | once |
 | docs/ARCHITECTURE.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static) | `tools/checks/design-doc-check.py` | once |
 | every source file the progress graph counts has a row in docs/ARCHITECTURE.md (docs at 100 percent, 6.59.1) (static) | `tools/checks/doc-coverage-check.py` | once |
@@ -2127,7 +2131,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Samantha | `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/arm64-home-check.py`, `tools/checks/arm64-nimble-check.py`, `tools/checks/arm64-sam-hosted-check.py`, `tools/checks/arm64-samapp-check.py`, `tools/checks/arm64-sambuild-check.py`, `tools/checks/arm64-samtile-check.py`, `tools/checks/arm64-samtui-check.py`, `tools/checks/arm64-shortcut-check.py`, `tools/checks/arm64-touch-check.py`, `tools/checks/arm64-voice-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/iconart-check.py`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-box-check.py`, `tools/checks/samantha-clock-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/arm64-weather-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs`, `tools/checks/worker-weather-check.mjs` |
 | Scrounge | `tools/checks/ring3curbfind-check.py` |
-| Keyrate | `tools/checks/arm64-games-check.py`, `tools/checks/ring3app-check.py`, `tools/checks/ring3seed-stale-check.py` |
+| Keyrate | `tools/checks/arm64-games-check.py`, `tools/checks/keyrate-offline-check.py`, `tools/checks/ring3app-check.py`, `tools/checks/ring3seed-stale-check.py` |
 | Bookrank | `tools/checks/ring3bookrank-check.py`, `tools/checks/ring3bookrank-live-check.py` |
 | Quotes | `tools/checks/arm64-stocks-check.py`, `tools/checks/ring3quotes-check.py`, `tools/checks/stocks-live-check.mjs` |
 | Patois | `tools/checks/ring3tonchi-check.py`, `tools/checks/ring3tonchi-live-check.py` |

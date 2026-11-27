@@ -15,6 +15,7 @@ static unsigned saver_t0, saver_moved, saver_seed = 12345;
 #define DIM_CS 1500u
 static void dim_paint(void) {
     for (unsigned long i = 0; i < (unsigned long)fb_pitch * fb_h; i++) fb_scan[i] = (fb[i] >> 1) & 0x7f7f7f7fu;
+    dcache_clean(fb_scan, (unsigned long)fb_pitch * fb_h * 4);   /* the GPU reads RAM, not the cache, as fb_flush knows */
     dim_on = 1; saver_hold = 1;
     uart_puts("screen: dimmed\n");
 }
@@ -31,7 +32,23 @@ static void saver_paint(void) {
         int y = H > px / 5 + 60 ? px / 10 + 20 + (int)((saver_seed >> 8) % (unsigned)(H - px / 5 - 60)) : H / 2;
         text_draw(2, t, x, y, px, fb_color(0x00505050), fb_scan, fb_pitch, W, H);
     }
+    dcache_clean(fb_scan, (unsigned long)fb_pitch * fb_h * 4);
     saver_moved = notice_now();
+}
+/* 13.24.0, auto lock: with someone signed in, the screen locks when the saver starts or the screen goes dark (the tree
+   menu's Sleep too), never at the dim, where a touch is the warning working. The lock keeps saver_hold, so the windows
+   go on drawing in fb out of sight; a wake shows the lock card (login_ui.h, on the scanout), never fb, and the key that
+   woke it is not typed. Only the signed-in person's password gives fb back, in one flush. No dim while locked: the dim
+   is fb at half. ponytail: no back buffer (a screen past FB_RAM_MAX) means no lock; it only goes dark, as before. */
+static int lock_on;
+static int lock_start(void);   /* login_ui.h: 1 if someone is signed in to lock for; forgets sudo and any typed password */
+static void lock_paint(void);  /* login_ui.h: the lock card, whole, on the scanout */
+static void lock_forget(void);  /* login_ui.h: wipes a half-typed password off the card */
+static void lock_arm(void) {
+    if (lock_on) { lock_forget(); return; }   /* the saver takes a locked card back: what was typed on it goes, so nobody finishes it */
+    if (!fb || !fb_scan || fb_scan == fb || !lock_start()) return;
+    lock_on = 1; saver_hold = 1;
+    uart_puts("screen: locked\n");
 }
 static unsigned screen_last;
 static int screen_asleep;
@@ -42,15 +59,19 @@ void screen_sleep_soon(void) { sleep_at = notice_now() + 100; if (!sleep_at) sle
 static void screen_unstage(void) {   /* the dim or the saver gives the scanout back to fb */
     if (!saver_on && !dim_on) return;
     uart_puts(saver_on ? "screen: saver off\n" : "screen: undimmed\n");
-    saver_on = dim_on = 0; saver_hold = 0; fb_flush(0, 0, (int)fb_w, (int)fb_h);
+    saver_on = dim_on = 0;
+    if (lock_on) { lock_paint(); return; }   /* locked: the card, never fb, and the hold stays */
+    saver_hold = 0; fb_flush(0, 0, (int)fb_w, (int)fb_h);
 }
-static void screen_activity(void) {
+static int screen_activity(void) {   /* 1 when this input took the saver or the dark away: a locked screen swallows it */
+    int woke = saver_on || dim_on;
     screen_last = notice_now();
     screen_unstage();
     if (screen_asleep && screen_blank(0)) {
-        screen_asleep = 0;
+        screen_asleep = 0; woke = 1;
         uart_puts("screen: awake\n");
     }
+    return woke;
 }
 static void screen_tick(void) {
     unsigned now = notice_now();
@@ -61,12 +82,14 @@ static void screen_tick(void) {
         unsigned wait = settings_sleep_cs(), idle = now - screen_last;
         if (screen_asleep || !wait) return;
         if (fb && fb_scan && fb_scan != fb) {   /* dim, then the saver, then dark */
-            if (idle < wait) { if (!dim_on && !saver_on && idle + DIM_CS >= wait) dim_paint(); return; }
-            if (!saver_on) { dim_on = 0; saver_on = 1; saver_hold = 1; saver_t0 = now; saver_paint(); uart_puts("screen: saver on\n"); return; }
+            if (idle < wait) { if (!dim_on && !saver_on && !lock_on && idle + DIM_CS >= wait) dim_paint(); return; }
+            if (!saver_on) { lock_arm(); dim_on = 0; saver_on = 1; saver_hold = 1; saver_t0 = now; saver_paint(); uart_puts("screen: saver on\n"); return; }
             if (now - saver_t0 < SAVER_CS) { if (now - saver_moved >= 1000) saver_paint(); return; }
         } else if (idle < wait) return;
     }
     screen_last = now;   /* a refused request gets another five minutes, never a tight retry loop */
+    lock_arm();
+    if (lock_on && !saver_on) { dim_on = 0; lock_paint(); }   /* Sleep from the menu: the card goes up before the dark */
     if (screen_blank(1)) {
         screen_asleep = 1;
         uart_puts("screen: asleep\n");

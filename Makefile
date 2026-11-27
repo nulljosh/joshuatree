@@ -88,7 +88,8 @@ drivers/app_curbfind.h:
 	./tools/gen/gen_app.sh "$$HOME/Documents/Code/scrounge/web/index.html" drivers/app_curbfind.h app_curbfind
 
 drivers/app_keyrate.h:
-	./tools/gen/gen_app.sh "$$HOME/Documents/Code/keyrate/index.html" drivers/app_keyrate.h app_keyrate
+	node "$$HOME/Documents/Josh/Code/keyrate/scripts/single.mjs"  # the test and its modules as one offline file
+	./tools/gen/gen_app.sh "$$HOME/Documents/Josh/Code/keyrate/dist/keyrate.html" drivers/app_keyrate.h app_keyrate
 
 drivers/app_bookrank.h:
 	./tools/gen/gen_app.sh "$$HOME/Documents/Code/bookrank/index.html" drivers/app_bookrank.h app_bookrank

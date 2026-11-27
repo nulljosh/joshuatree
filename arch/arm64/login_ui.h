@@ -98,11 +98,14 @@ static void login_done(void) {
     if (con_live) { con_live = 0; pane_open(cp); }        /* the boot log's window, drawn whole again as a wallpaper change does */
     con_quiet = 1; uart_puts("login: desktop up\n");
 }
+static int lg_char(struct input_event e) {               /* a key press as a form's character ('\b', '\n', '\t' or typed); 0 for the rest */
+    if (e.type != 1 || e.code >= 272) return 0;           /* the mouse, the pointer and the sync marks do nothing here */
+    if (e.code == 42 || e.code == 54 || e.code == 58) { ask_key(e.code, e.value); return 0; }   /* Shift and Caps keep ask.c's state, which ask_char reads */
+    if (!e.value) return 0;
+    return e.code == 14 ? '\b' : e.code == 28 || e.code == 96 ? '\n' : e.code == 15 ? '\t' : ask_char(e.code);
+}
 static void login_event(struct input_event e) {          /* input_event, while the screen is up: keys only, nothing else gets in */
-    if (e.type != 1 || e.code >= 272) return;             /* the mouse, the pointer and the sync marks do nothing here */
-    if (e.code == 42 || e.code == 54 || e.code == 58) { ask_key(e.code, e.value); return; }   /* Shift and Caps keep ask.c's state, which ask_char reads */
-    if (!e.value) return;
-    int ch = e.code == 14 ? '\b' : e.code == 28 || e.code == 96 ? '\n' : e.code == 15 ? '\t' : ask_char(e.code);
+    int ch = lg_char(e);
     if (!ch) return;
     int r = login_key(ch);
     if (r == LOGIN_DONE) { login_done(); return; }
@@ -119,3 +122,63 @@ static void login_tick(void) {                           /* the main loop: a log
     tree_close_all();
     login_show();
 }
+#ifdef PI_BUILD
+/* 13.24.0, the lock card: screen_idle.h decides when to lock; this draws the card and takes its keys. Not the login
+   screen: nobody signs out, the windows stay open in fb, and the name is fixed to whoever is signed in. The password is
+   checked for that name only (accounts_check, as sudo does), so another account's password never opens someone else's
+   desktop; a wrong one costs LOGIN_DELAY_MS, and every typed password is wiped once checked. The card is drawn on the
+   scanout, with fb pointed at it for the paint, so fb itself is never touched; saver_hold keeps every flush off it. */
+static char lock_pass[ACC_PASS_MAX + 1];
+static unsigned lock_len;
+static int lock_wrong;
+static void lock_forget(void) { accounts_wipe(lock_pass, sizeof lock_pass); lock_len = 0; lock_wrong = 0; }
+static int lock_start(void) {
+    if (!fb || !text_ok || login_live || !accounts_count() || !current_user[0]) return 0;
+    sudo_drop();
+    lock_forget();
+    return 1;
+}
+static void lock_paint(void) {
+    int s = (int)window_scale(), W = (int)fb_w, H = (int)fb_h;
+    int cx = (W / s - LG_W) / 2, cy = (H / s - LG_H) / 2 - 8, fx = cx + 30, fw = LG_W - 60;
+    cur_hide();                                           /* the arrow's saved pixels are fb's: it goes before the switch */
+    unsigned *keep = fb; fb = fb_scan;
+    wall_paint(fb, fb_pitch, W, H, fb_swap);
+    gui_rounded_rect_on_wallpaper(cx, cy, LG_W, LG_H, 0x00faf8f4, 14);
+    menu_mark_paint(W / 2, (cy + 44) * s, sg(48), LG_INK);
+    lg_centred(current_user, cy + 72, 1, LG_INK);
+    lg_field(fx, cy + 134, fw, 30, 1);
+    char stars[ACC_PASS_MAX + 1]; unsigned k = 0;
+    for (; k < lock_len; k++) stars[k] = '*';
+    stars[k] = 0;
+    if (k) gui_text(stars, fx + 9, cy + 134 + 8, LG_INK); else gui_text("Password", fx + 9, cy + 134 + 7, LG_HINT);
+    int tw = k ? gui_text_width(stars) : 0;
+    if (tw < fw - 24) fb_rect((fx + 9 + tw + 1) * s, (cy + 134 + 7) * s, s, 16 * s, LG_ACCENT);
+    if (lock_wrong) lg_centred("Wrong password.", cy + 196, 0, LG_ACCENT);
+    else lg_centred("Locked. Your password, then Return.", cy + 196, 0, LG_HINT);
+    fb = keep;
+    dcache_clean(fb_scan, (unsigned long)fb_pitch * fb_h * 4);
+}
+static void lock_done(void) {
+    lock_on = 0; saver_hold = 0;
+    fb_flush(0, 0, (int)fb_w, (int)fb_h);                 /* fb as the apps left it, in one copy */
+    cur_show();
+    con_quiet = 1; uart_puts("screen: unlocked\n");
+}
+static void lock_event(struct input_event e) {           /* input_event, while locked: keys only, to the one password field */
+    int ch = lg_char(e);
+    if (!ch) return;
+    lock_wrong = 0;
+    if (ch == '\b') { if (lock_len) lock_pass[--lock_len] = 0; }
+    else if (ch == '\n') {
+        if (!lock_len) return;
+        int r = accounts_check(current_user, lock_pass);
+        accounts_wipe(lock_pass, sizeof lock_pass); lock_len = 0;   /* right or wrong, the typed password is gone */
+        if (r == ACC_OK) { lock_done(); return; }
+        login_wait_ms(LOGIN_DELAY_MS); lock_wrong = 1;
+        con_quiet = 1; uart_puts("lock: wrong password\n");
+    } else if (ch >= 32 && ch <= 126 && lock_len < ACC_PASS_MAX) { lock_pass[lock_len++] = (char)ch; lock_pass[lock_len] = 0; }
+    else return;
+    lock_paint();
+}
+#endif

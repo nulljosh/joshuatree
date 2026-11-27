@@ -41,10 +41,11 @@ Bench first. On the Mac, run the relay with `--bench-dir ~/.cache/joshuatree/ben
 33. **Screen saver.** Settings, Display, Screen saver after 1 minute. The saver starts, a key brings the screen back.
 34. **Print.** `print NOTE.TXT ADDRESS` with your printer's address, then `printers`. In Notes, Cmd+P prints.
 35. **Scan.** `scan` (or `scan ADDRESS`) saves `PHOTOS/SCAN0001.JPG`, and Photos shows it.
-34. **Clock after a stale card (13.9.3).** The menu bar clock sets itself within a minute. `google.com` opens in Blackcomb. `update` reaches the release.
-35. **Paddle and dragging (13.9.3).** Paddle stays smooth while a window is dragged.
-36. **Menu bar icons (13.9.3).** The power symbol shows Sleep, Restart and Shut Down. The clock opens Date and Time.
+36. **Clock after a stale card (13.9.3).** The menu bar clock sets itself within a minute. `google.com` opens in Blackcomb. `update` reaches the release.
+37. **Paddle and dragging (13.9.3).** Paddle stays smooth while a window is dragged.
+38. **Menu bar icons (13.9.3).** The power symbol shows Sleep, Restart and Shut Down. The clock opens Date and Time.
+39. **Update over the air (13.19.0).** On a card flashed with 13.19.0 or later: `update`, then `update install`. It restarts into the newest release; Wi-Fi, `sam` and `bench` still work.
+40. **Blue by default (13.21.0).** Selections, buttons and the caret are blue; Weather is a blue sky. Settings, Display, Accent: step to Green, and Settings, Spotlight and the next app you open turn green. Restart: still green.
+41. **Auto lock (13.24.0).** Signed in, Screen saver after 1 minute. When the clock shows, press a key: the lock card with your name, not the desktop, and the key is not typed. A wrong password says so. Your password brings your windows back as they were.
 
 Steps 1 to 3 are 10.0. Step 4 is 9.0's touch screen. Steps 5 to 9 are the 8.x fixes.
-38. **Update over the air (13.19.0).** On a card flashed with 13.19.0 or later: `update`, then `update install`. It restarts into the newest release; Wi-Fi, `sam` and `bench` still work.
-39. **Blue by default (13.21.0).** Selections, buttons and the caret are blue; Weather is a blue sky. Settings, Display, Accent: step to Green, and Settings, Spotlight and the next app you open turn green. Restart: still green.

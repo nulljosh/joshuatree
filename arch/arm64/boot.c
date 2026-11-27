@@ -14,7 +14,7 @@ void wifi_tick(void);   /* wifi.c, 7.5.4: a failed join is tried again */
 int usb_input_count(void);   /* xhci.c: keyboards plus mice found on the hubs */
 int bt_input_live(void);     /* bt.c: a Bluetooth mouse is connected */
 /* 7.5.3: the screen only sleeps when something attached could wake it (SCREEN_SELFTEST injects its own input). */
-#if defined(SCREEN_SELFTEST) || TREEMENU_SELFTEST == 3
+#if defined(SCREEN_SELFTEST) || defined(LOCK_SELFTEST) || TREEMENU_SELFTEST == 3
 static int input_present(void) { return 1; }
 #else
 static int input_present(void) { return usb_input_count() > 0 || bt_input_live(); }
@@ -48,6 +48,42 @@ static void deep_selftest_tick(void) {
 #endif
 #endif
 #include "login_ui.h"   /* 4.9.0: the login screen, over everything while JT/USERS.TXT has an account and nobody has signed in */
+#ifdef LOCK_SELFTEST
+/* 13.24.0 (arm64-lock-check.py): ann is signed in, the saver locks, the h key wakes it (and must not be typed, so "unter22"
+   after it is wrong), bob's password and a wrong one fail, hers opens it. A square drawn into fb while locked must not
+   show until then. Each step prints a line and waits two seconds for the check's screendump. QEMU's raspi4b has no
+   keyboard, so the keys are made up here. */
+void kinput(unsigned type, unsigned code, int value);
+static void lt_type(const char *s) {   /* a line on a US board, then Return */
+    static const char *const rows[4] = { "1234567890", "qwertyuiop", "asdfghjkl", "zxcvbnm" };
+    static const unsigned base[4] = { 2, 16, 30, 44 };
+    for (; *s; s++) for (unsigned r = 0; r < 4; r++) for (unsigned i = 0; rows[r][i]; i++)
+        if (rows[r][i] == *s) { kinput(1, base[r] + i, 1); kinput(1, base[r] + i, 0); }
+    kinput(1, 28, 1); kinput(1, 28, 0);
+}
+static void lock_selftest_tick(void) {
+    static int step; static unsigned long t0;
+    if (step == 9 || (step && cnt_now() - t0 < 2 * cnt_hz())) return;
+    if ((step == 0 && !login_live) || (step == 1 && (login_live || !current_user[0]))) return;
+    con_quiet = 1;
+    switch (step++) {
+    case 0: {   /* signed in without the form: its keychain step wants the RNG200, which QEMU's raspi4b lacks (the form is arm64-login-check.py's, on virt) */
+        const char *n = "ann"; for (int i = 0; i < 4; i++) current_user[i] = n[i];
+        login_done(); break; }
+    case 1: uart_puts("lockself: desktop\n"); break;
+    case 2: screen_last -= settings_sleep_cs(); screen_tick(); uart_puts("lockself: saver\n"); break;
+    case 3: kinput(1, 35, 1); kinput(1, 35, 0);
+            fb_rect(0, (int)fb_h - 64, 64, 64, 0x00FF00FF); fb_flush(0, (int)fb_h - 64, 64, 64);   /* an app drawing, out of sight */
+            uart_puts("lockself: card\n"); break;
+    case 4: lt_type("unter22"); uart_puts("lockself: unter\n"); break;
+    case 5: lt_type("bobpass99"); uart_puts("lockself: bob\n"); break;
+    case 6: lt_type("wrongpass1"); kinput(2, 0, 40); kinput(0, 0, 0); uart_puts("lockself: wrong\n"); break;
+    case 7: lt_type("hunter22"); uart_puts("lockself: hers\n"); break;
+    case 8: uart_puts("lockself: done\n"); break;
+    }
+    t0 = cnt_now();
+}
+#endif
 /* Key repeat. A USB keyboard (SET_IDLE(0)) reports only a change, so a held key sends one press and then nothing.
    The last typed key down (a typed character or Backspace; not a function key, Brick's keys, a modifier or a chord)
    is remembered with the generic counter's time. After KEY_REPEAT_DELAY_MS the main loop feeds it back through
@@ -107,7 +143,7 @@ void input_event(struct input_event e) {
     }
     if (e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) input_last = notice_now();   /* 6.87.0: for idle_tick */
 #ifdef PI_BUILD
-    if (e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) screen_activity();   /* any key or button or a move wakes the screen */
+    if ((e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) && screen_activity() && lock_on) return;   /* any key or button or a move wakes the screen; on a locked one (13.24.0) it is not typed */
 #endif
     if (tp_event(e.type, e.code, (int)e.value, (unsigned)key_ms(), fb_w, fb_h)) return;                  /* 10.2.0: fingers on a trackpad, as mouse events */
     if (e.type == 1 && e.value < 2) {                                                                      /* a real press or release; value 2 is our own repeat */
@@ -117,6 +153,9 @@ void input_event(struct input_event e) {
         } else rep_code = 0;
     }
     if (login_live) { login_event(e); return; }                                                            /* the login screen has every key; the mouse is dropped */
+#ifdef PI_BUILD
+    if (lock_on) { lock_event(e); return; }                                                                /* 13.24.0: so has the lock card */
+#endif
     if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                 /* BTN_LEFT, RIGHT, MIDDLE */
         con_quiet = 1;   /* the UART only */
         uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
@@ -464,7 +503,7 @@ void main(void) {
     uart_puts("screen: input selftest done\n");
 #endif
 #endif
-#if defined(NOTES_SELFTEST) || defined(APP_BOOT) || defined(SCREEN_SELFTEST)
+#if defined(NOTES_SELFTEST) || defined(APP_BOOT) || defined(SCREEN_SELFTEST) || defined(LOCK_SELFTEST)
     usb_ok |= !inputs;   /* QEMU's raspi4b has no USB to find: the loop runs anyway, for notes_tick's made-up keys */
 #endif
     if (usb_ok || inputs) {
@@ -500,6 +539,9 @@ void main(void) {
             screen_nap(ask_pending() || brick_live || apps_live() || audio_busy() || browser_busy() || reader_waiting() || bt_input_live());   /* a Bluetooth keyboard or mouse: its reports come over the UART, so full speed (bt_busy() stays true with no chip at all) */
 #ifdef SCREEN_SELFTEST
             deep_selftest_tick();
+#endif
+#ifdef LOCK_SELFTEST
+            lock_selftest_tick();
 #endif
             TIMED(usb_poll()); TIMED(virtio_input_poll()); TIMED(key_repeat_tick()); TIMED(ask_poll()); TIMED(bt_poll()); TIMED(pointer_flush()); TIMED(wifi_tick()); TIMED(brick_tick()); TIMED(menubar_tick()); TIMED(keydbg_tick()); TIMED(app_tick()); TIMED(dock_dots_tick()); TIMED(reader_tick()); TIMED(update_tick()); TIMED(traffic_tick()); TIMED(audio_pump()); TIMED(screen_tick()); TIMED(login_tick()); browser_tick(); idle_tick();   /* only the display sleeps: USB stays polled */
 #ifdef NOTES_SELFTEST

@@ -171,12 +171,26 @@ int accounts_check(const char *name, const char *pass) {
     return ok ? ACC_OK : ACC_E_WRONG;
 }
 int accounts_has(const char *name) { return find(name) >= 0; }
-int accounts_protected(const char *name) {   /* the two account files, whatever the case: a file command must not touch them */
-    static const char *const files[] = { "USERS.TXT", "SUDOERS.TXT", "WIFI.TXT", "LIMITS.TXT", "BTPAIR.BIN", "BTLINK.BIN" };   /* 6.22.0: WIFI.TXT holds the network key; 12.0 LIMITS.TXT, set only by `limits`; 12.1 the Bluetooth keys */
-    for (unsigned f = 0; f < 6; f++) {
-        const char *a = name, *b = files[f];
-        while (*a && *b && (*a >= 'a' && *a <= 'z' ? *a - 32 : *a) == *b) { a++; b++; }
-        if (!*a && !*b) return 1;
+/* A name as fat.c's to_fat_name sees it: the base cut at 8, the extension at 3, upper case, space padded. fat.c finds a
+   file by these 11 bytes, so USERS.TXTX, USERS.TXT.BAK and "users .txt" all open JT/USERS.TXT; comparing the typed
+   string let a standard user `cat USERS.TXTX` and read every password hash (13.24.0). */
+static void fat83(const char *in, char out[11]) {
+    unsigned i = 0, j = 0;
+    for (unsigned k = 0; k < 11; k++) out[k] = ' ';
+    while (in[i] && in[i] != '.' && j < 8) { char c = in[i++]; out[j++] = c >= 'a' && c <= 'z' ? (char)(c - 32) : c; }
+    while (in[i] && in[i] != '.') i++;
+    if (in[i] == '.') { i++; for (j = 8; in[i] && j < 11; ) { char c = in[i++]; out[j++] = c >= 'a' && c <= 'z' ? (char)(c - 32) : c; } }
+}
+int accounts_protected(const char *name) {   /* the account and key files, by the name fat.c would open: a file command must not touch them */
+    static const char *const files[] = { "USERS.TXT", "SUDOERS.TXT", "WIFI.TXT", "LIMITS.TXT", "BTPAIR.BIN", "BTLINK.BIN", "RELAYKEY.TXT" };   /* 6.22.0: WIFI.TXT holds the network key; 12.0 LIMITS.TXT, set only by `limits`; 12.1 the Bluetooth keys; 13.24.0 the relay token */
+    char a[11], b[11];
+    if (!name[0]) return 0;
+    fat83(name, a);
+    for (unsigned f = 0; f < sizeof files / sizeof files[0]; f++) {
+        fat83(files[f], b);
+        unsigned k = 0;
+        while (k < 11 && a[k] == b[k]) k++;
+        if (k == 11) return 1;
     }
     return 0;
 }

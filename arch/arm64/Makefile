@@ -427,6 +427,7 @@ $(eval $(call variant,treeshutdown,-DTREEMENU_SELFTEST=2,,))
 $(eval $(call variant,treesleep,-DTREEMENU_SELFTEST=3,,))
 $(eval $(call variant,notice,-DNOTICE_SELFTEST,,))
 $(eval $(call variant,screen,-DSCREEN_SELFTEST,,))
+$(eval $(call variant,lock,-DLOCK_SELFTEST,,))   # 13.24.0: auto lock on raspi4b, for tools/checks/arm64-lock-check.py
 $(eval $(call variant,sudoshort,-DSUDO_TTL_MS=12000,,))   # sudo remembers a password for 12 s, for tools/checks/arm64-sudo-check.py
 
 

@@ -24,6 +24,8 @@ FB = 0xfd000000; W, H = 1920, 1080
 PORT = free_port()
 BALL = (0xB5, 0x50, 0x2C)
 INK = (0x1C, 0x1C, 0x1E)
+HIT = (0x7A, 0x35, 0x20)   # a returned paddle flashes this, never BALL, so the ball is never confused with it
+LOGICAL_W, LOGICAL_H = 960, 540
 WIN = (100, 150, 1780, 850)   # device pixels inside the app window, below its title bar and above the dock
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -70,9 +72,17 @@ try:
         x0, y0, x1, y1 = WIN
         hits = [(x, y) for y in range(y0, y1, 4) for x in range(x0, x1, 4) if img.getpixel((x, y)) == BALL]
         return (sum(h[0] for h in hits) // len(hits), sum(h[1] for h in hits) // len(hits)) if hits else None
+    def move(x, y):   # logical 960x540 coordinates, as tools/landing-shots.py and music-qa-check.py move the pointer
+        cmd({"execute": "input-send-event", "arguments": {"events": [
+            {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
+            {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
+    def button(name, down):
+        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": down, "button": name}}]}})
+    def press(name):
+        button(name, True); time.sleep(0.05); button(name, False); time.sleep(0.15)
     def paddle_top(img):
         x0, y0, x1, y1 = WIN
-        ys = [y for y in range(y0, y1, 2) for x in range(x0, x0 + 120, 2) if img.getpixel((x, y)) == INK]
+        ys = [y for y in range(y0, y1, 2) for x in range(x0, x0 + 120, 2) if img.getpixel((x, y)) in (INK, HIT)]
         return min(ys) if ys else None
 
     if not wait_serial("ring3app: launching PADDLE.BIN at ring 3", 40):
@@ -98,6 +108,24 @@ try:
     print(f"your paddle's top {top0} then {top1} after three Ups")
     if top0 is None or top1 is None or top1 >= top0 - 40:
         fails.append("Up did not lift your paddle")
+
+    # 13.24.0: the wheel glides the paddle the way the wheel turns (up is up, as in every other app), and a plain click
+    # puts it under the pointer. The pointer sits right of the court's middle, out of the strip paddle_top reads.
+    move(600, 300); time.sleep(0.3)
+    for _ in range(4): press("wheel-down")
+    time.sleep(0.4)
+    top2 = paddle_top(frame())
+    for _ in range(4): press("wheel-up")
+    time.sleep(0.4)
+    top3 = paddle_top(frame())
+    print(f"your paddle's top {top1} then {top2} after wheel down, {top3} after wheel up")
+    if top1 is None or top2 is None or top2 <= top1 + 40: fails.append("wheel down did not lower your paddle")
+    elif top3 is None or top3 >= top2 - 40: fails.append("wheel up did not lift your paddle")
+    ty = 380 if (top3 or 0) < 2 * 260 else 150                   # far from where the paddle is, in logical pixels
+    move(600, ty); time.sleep(0.3); press("left"); time.sleep(1.2)
+    top4 = paddle_top(frame())
+    print(f"a click at y {2 * ty} (device) leaves your paddle's top at {top4}")
+    if top4 is None or abs(top4 + 56 - 2 * ty) > 80: fails.append("a click did not bring your paddle under the pointer")
 
     for _ in range(12): key("up")   # park your paddle at the top so the computer's shots get past it
     if not wait_serial("paddle: score ", 40):
@@ -133,4 +161,4 @@ if fails:
     print("--- serial tail ---")
     print(serial()[-1500:])
     sys.exit(1)
-print("PASS: Paddle ran at ring 3, the ball moved on the clock, Up moved your paddle, a point was scored, p paused, and it closed on Esc")
+print("PASS: Paddle ran at ring 3, the ball moved on the clock, Up, the wheel and a click moved your paddle, a point was scored, p paused, and it closed on Esc")

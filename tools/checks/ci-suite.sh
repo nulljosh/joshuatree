@@ -66,6 +66,7 @@ manifest() {
 cat <<'EOF'
 once |9|ARM menu notices: bounded messages, expiry, pixels and input|python3 ./tools/checks/arm64-notice-check.py
 once |9|Pi screen sleep and deep idle (10.1.0): idle deadline, wrap, active apps, refused mailbox requests, keyboard/mouse wake, and 50 loop passes a second asleep|python3 ./tools/checks/arm64-screen-idle-check.py
+retry|9|Auto lock on the Pi (13.24.0): the saver locks, a key wakes the card and is not typed, only the signed-in password opens it, and the desktop comes back exactly|python3 ./tools/checks/arm64-lock-check.py
 once |5|Trackpad (10.2.0): one finger moves the pointer, two scroll, a tap clicks left and a two-finger tap right, on the host and through QEMU virtio-multitouch|python3 ./tools/checks/arm64-trackpad-check.py
 once |1|USB precision touchpads (11.0.0): a PTP descriptor is found and a mouse's or touch screen's is not; its reports drag, scroll, tap, click and lift through trackpad.h|python3 ./tools/checks/arm64-ptp-check.py
 once |10|Heat (13.3.0): `temp` reads the chip's temperature from the firmware on raspi4b to a tenth of a degree, virt says it has no sensor, a refused tag says so|python3 ./tools/checks/arm64-heat-check.py
@@ -104,6 +105,8 @@ once |8|ARM tree menu: click or F10 opens About, Restart, Shut Down and Log Out 
 once |0|The whole web's roots: the Pi's trust anchors hold every root in Mozilla's list, each once, ISRG Root X1 among them, from a bundle under 18 months old (host only)|python3 ./tools/checks/tls-roots-check.py
 once |5|CI tooling packs ARM checks across the ARM shards only and rejects fixed test paths before builds (host only)|python3 ./tools/checks/ci-tooling-check.py
 once |1|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
+once |1|Keyrate (13.24.0): the page `keyrate` serves is one offline file of about 42 KB, loading nothing by src, href, import, CSS url() or @import, fetch() or a Worker|python3 ./tools/checks/keyrate-offline-check.py
+once |1|README banner (13.24.0, #1156): the README opens on one 1600 x 640 banner whose headline is the landing h1, with no screenshot wall|python3 ./tools/checks/readme-banner-check.py
 once |0|No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
 once |0|docs/ARCHITECTURE.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static)|python3 ./tools/checks/design-doc-check.py
 once |0|every source file the progress graph counts has a row in docs/ARCHITECTURE.md (docs at 100 percent, 6.59.1) (static)|python3 ./tools/checks/doc-coverage-check.py
