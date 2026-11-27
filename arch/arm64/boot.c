@@ -49,7 +49,7 @@ static void deep_selftest_tick(void) {
 #endif
 #include "login_ui.h"   /* 4.9.0: the login screen, over everything while JT/USERS.TXT has an account and nobody has signed in */
 #ifdef LOCK_SELFTEST
-/* 13.10.0 (arm64-lock-check.py): ann is signed in, the saver locks, the h key wakes it (and must not be typed, so "unter22"
+/* 13.24.0 (arm64-lock-check.py): ann is signed in, the saver locks, the h key wakes it (and must not be typed, so "unter22"
    after it is wrong), bob's password and a wrong one fail, hers opens it. A square drawn into fb while locked must not
    show until then. Each step prints a line and waits two seconds for the check's screendump. QEMU's raspi4b has no
    keyboard, so the keys are made up here. */
@@ -143,7 +143,7 @@ void input_event(struct input_event e) {
     }
     if (e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) input_last = notice_now();   /* 6.87.0: for idle_tick */
 #ifdef PI_BUILD
-    if ((e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) && screen_activity() && lock_on) return;   /* any key or button or a move wakes the screen; on a locked one (13.10.0) it is not typed */
+    if ((e.type == 1 || e.type == 3 || (e.type == 2 && e.value)) && screen_activity() && lock_on) return;   /* any key or button or a move wakes the screen; on a locked one (13.24.0) it is not typed */
 #endif
     if (tp_event(e.type, e.code, (int)e.value, (unsigned)key_ms(), fb_w, fb_h)) return;                  /* 10.2.0: fingers on a trackpad, as mouse events */
     if (e.type == 1 && e.value < 2) {                                                                      /* a real press or release; value 2 is our own repeat */
@@ -154,7 +154,7 @@ void input_event(struct input_event e) {
     }
     if (login_live) { login_event(e); return; }                                                            /* the login screen has every key; the mouse is dropped */
 #ifdef PI_BUILD
-    if (lock_on) { lock_event(e); return; }                                                                /* 13.10.0: so has the lock card */
+    if (lock_on) { lock_event(e); return; }                                                                /* 13.24.0: so has the lock card */
 #endif
     if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                 /* BTN_LEFT, RIGHT, MIDDLE */
         con_quiet = 1;   /* the UART only */

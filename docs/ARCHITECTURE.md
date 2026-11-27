@@ -1749,7 +1749,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | The whole web's roots: the Pi's trust anchors hold every root in Mozilla's list, each once, ISRG Root X1 among them, from a bundle under 18 months old (host only) | `tools/checks/tls-roots-check.py` | once |
 | CI tooling packs ARM checks across the ARM shards only and rejects fixed test paths before builds (host only) | `tools/checks/ci-tooling-check.py` | once |
 | Dock slot constants agree with kernel.c (static drift guard) | `tools/checks/dockslots-check.py` | once |
-| Keyrate (13.24.0): the page `keyrate` serves is one offline file of about 42 KB, loading nothing by src, href or import | `tools/checks/keyrate-offline-check.py` | once |
+| Keyrate (13.24.0): the page `keyrate` serves is one offline file of about 42 KB, loading nothing by src, href, import, CSS url() or @import, fetch() or a Worker | `tools/checks/keyrate-offline-check.py` | once |
 | No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks) | `tools/checks/tmp-paths-check.py` | once |
 | docs/ARCHITECTURE.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static) | `tools/checks/design-doc-check.py` | once |
 | every source file the progress graph counts has a row in docs/ARCHITECTURE.md (docs at 100 percent, 6.59.1) (static) | `tools/checks/doc-coverage-check.py` | once |

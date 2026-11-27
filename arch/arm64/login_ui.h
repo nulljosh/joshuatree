@@ -123,7 +123,7 @@ static void login_tick(void) {                           /* the main loop: a log
     login_show();
 }
 #ifdef PI_BUILD
-/* 13.10.0, the lock card: screen_idle.h decides when to lock; this draws the card and takes its keys. Not the login
+/* 13.24.0, the lock card: screen_idle.h decides when to lock; this draws the card and takes its keys. Not the login
    screen: nobody signs out, the windows stay open in fb, and the name is fixed to whoever is signed in. The password is
    checked for that name only (accounts_check, as sudo does), so another account's password never opens someone else's
    desktop; a wrong one costs LOGIN_DELAY_MS, and every typed password is wiped once checked. The card is drawn on the
@@ -131,10 +131,11 @@ static void login_tick(void) {                           /* the main loop: a log
 static char lock_pass[ACC_PASS_MAX + 1];
 static unsigned lock_len;
 static int lock_wrong;
+static void lock_forget(void) { accounts_wipe(lock_pass, sizeof lock_pass); lock_len = 0; lock_wrong = 0; }
 static int lock_start(void) {
     if (!fb || !text_ok || login_live || !accounts_count() || !current_user[0]) return 0;
     sudo_drop();
-    accounts_wipe(lock_pass, sizeof lock_pass); lock_len = 0; lock_wrong = 0;
+    lock_forget();
     return 1;
 }
 static void lock_paint(void) {

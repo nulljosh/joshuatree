@@ -4,7 +4,7 @@
 13.24.0 embeds keyrate 2.5.0 bundled by keyrate's scripts/single.mjs. The kernel had served a
 7 KB October copy whose scripts and styles pointed at files the Pi never had. This decodes
 drivers/app_keyrate.h and fails if the page is that small again, or if it loads anything by
-src, href or import other than a data: URI or an in-page #anchor.
+src, href, import, CSS url() or @import, fetch() or a Worker other than a data: URI or an in-page #anchor.
 """
 import os, re, sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
@@ -19,6 +19,9 @@ html = page.decode("utf-8", "replace")
 refs = re.findall(r"""\b(?:src|href)\s*=\s*["']([^"']*)["']""", html)
 refs += re.findall(r"""\bimport\s*(?:[\w{}*,\s]+from\s*)?["']([^"']+)["']""", html)
 refs += re.findall(r"""\bimport\(\s*["']([^"']+)["']""", html)
+refs += re.findall(r"""\burl\(\s*["']?([^"')]+)["']?\s*\)""", html)            # CSS url(...), fonts and images
+refs += re.findall(r"""@import\s+["']([^"']+)["']""", html)                    # CSS @import "x.css"
+refs += re.findall(r"""\b(?:fetch|Worker|SharedWorker|importScripts)\(\s*["'`]([^"'`]+)["'`]""", html)
 bad = [r for r in refs if r and not r.startswith(("data:", "#"))]
 if bad: fails.append(f"the page loads files the Pi does not serve: {bad[:5]}")
 if "<script" not in html: fails.append("no inline script: the test is missing")

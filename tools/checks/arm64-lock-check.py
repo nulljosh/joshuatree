@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Auto lock on the Pi (13.10.0: screen_idle.h decides, login_ui.h draws the card and checks the password).
+"""Auto lock on the Pi (13.24.0: screen_idle.h decides, login_ui.h draws the card and checks the password).
 
 QEMU raspi4b, a card whose JT/USERS.TXT holds ann and bob, and the LOCK_SELFTEST build's made-up keys (QEMU's raspi4b has
 no keyboard). Each step prints a `lockself:` line; a screendump follows it.

@@ -182,7 +182,7 @@ static void fat83(const char *in, char out[11]) {
     if (in[i] == '.') { i++; for (j = 8; in[i] && j < 11; ) { char c = in[i++]; out[j++] = c >= 'a' && c <= 'z' ? (char)(c - 32) : c; } }
 }
 int accounts_protected(const char *name) {   /* the account and key files, by the name fat.c would open: a file command must not touch them */
-    static const char *const files[] = { "USERS.TXT", "SUDOERS.TXT", "WIFI.TXT", "LIMITS.TXT", "BTPAIR.BIN", "BTLINK.BIN" };   /* 6.22.0: WIFI.TXT holds the network key; 12.0 LIMITS.TXT, set only by `limits`; 12.1 the Bluetooth keys */
+    static const char *const files[] = { "USERS.TXT", "SUDOERS.TXT", "WIFI.TXT", "LIMITS.TXT", "BTPAIR.BIN", "BTLINK.BIN", "RELAYKEY.TXT" };   /* 6.22.0: WIFI.TXT holds the network key; 12.0 LIMITS.TXT, set only by `limits`; 12.1 the Bluetooth keys; 13.24.0 the relay token */
     char a[11], b[11];
     if (!name[0]) return 0;
     fat83(name, a);

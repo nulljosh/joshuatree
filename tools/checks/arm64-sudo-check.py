@@ -173,6 +173,7 @@ int main(void) {
     /* 13.24.0: fat.c opens a file by its 8.3 form (base cut at 8, extension at 3), so these all reach JT/USERS.TXT,
        SUDOERS.TXT or WIFI.TXT and must be refused too: `cat USERS.TXTX` read every hash before. */
     assert(accounts_protected("USERS.TXTX") && accounts_protected("users.txt.bak") && accounts_protected("USERS .TXT") && accounts_protected("SUDOERS.TXT1"));
+    assert(accounts_protected("RELAYKEY.TXT") && accounts_protected("relaykey.txt") && accounts_protected("RELAYKEY.TXTX"));   /* the relay token, never printed */
     assert(accounts_protected("WIFI.TXTKEY") && accounts_protected("btlink.binx") && accounts_protected("LIMITS.TXT.OLD"));
     assert(!accounts_protected("USERSX.TXT") && !accounts_protected("USERS.TX1") && !accounts_protected("SUDOERS2.TXT"));
     assert(strlen(sudo_reason(SUDO_E_LAST)) > 5 && strlen(sudo_reason(SUDO_E_NOTADMIN)) > 5 && strlen(sudo_reason(ACC_E_NOUSER)) > 3);

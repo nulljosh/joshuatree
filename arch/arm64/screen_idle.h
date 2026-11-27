@@ -35,7 +35,7 @@ static void saver_paint(void) {
     dcache_clean(fb_scan, (unsigned long)fb_pitch * fb_h * 4);
     saver_moved = notice_now();
 }
-/* 13.10.0, auto lock: with someone signed in, the screen locks when the saver starts or the screen goes dark (the tree
+/* 13.24.0, auto lock: with someone signed in, the screen locks when the saver starts or the screen goes dark (the tree
    menu's Sleep too), never at the dim, where a touch is the warning working. The lock keeps saver_hold, so the windows
    go on drawing in fb out of sight; a wake shows the lock card (login_ui.h, on the scanout), never fb, and the key that
    woke it is not typed. Only the signed-in person's password gives fb back, in one flush. No dim while locked: the dim
@@ -43,8 +43,10 @@ static void saver_paint(void) {
 static int lock_on;
 static int lock_start(void);   /* login_ui.h: 1 if someone is signed in to lock for; forgets sudo and any typed password */
 static void lock_paint(void);  /* login_ui.h: the lock card, whole, on the scanout */
+static void lock_forget(void);  /* login_ui.h: wipes a half-typed password off the card */
 static void lock_arm(void) {
-    if (lock_on || !fb || !fb_scan || fb_scan == fb || !lock_start()) return;
+    if (lock_on) { lock_forget(); return; }   /* the saver takes a locked card back: what was typed on it goes, so nobody finishes it */
+    if (!fb || !fb_scan || fb_scan == fb || !lock_start()) return;
     lock_on = 1; saver_hold = 1;
     uart_puts("screen: locked\n");
 }

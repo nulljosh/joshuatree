@@ -9,7 +9,7 @@
  * Only what moved is repainted: the old ball and paddles are wiped to the
  * court colour and drawn again, so a step is a few hundred pixels.
  *
- * 13.10 (Joshua's board test: "we can't even control our character"): a key
+ * 13.24.0 (Joshua's board test: "we can't even control our character"): a key
  * press glides the paddle instead of jumping it, and the key's own repeat keeps
  * it gliding while held; a click or drag in the court puts it under the
  * pointer and the wheel nudges it. The ball leaves a short trail, a paddle
@@ -27,9 +27,10 @@
 #define LINE  0x00D9D3CA
 #define INK   0x001C1C1E
 #define BALLC 0x00B5502C
+#define HITC  0x007A3520   /* a returned paddle flashes a dark clay: never INK or BALLC, which ring3-paddle-check.py finds the paddle and ball by */
 #define HINT  0x0075726E
 
-#define TOP   64      /* the score band above the court: tall enough for the big score (13.10; 40 before) */
+#define TOP   64      /* the score band above the court: tall enough for the big score (13.24.0; 40 before) */
 #define PW    8
 #define PH    56
 #define BS    8
@@ -49,7 +50,7 @@ static int ly JT_DATA = 0, ry JT_DATA = 0;                                   /* 
 static int me JT_DATA = 0, cpu JT_DATA = 0, wait JT_DATA = 0, paused JT_DATA = 0, over JT_DATA = 0, ready JT_DATA = 0;   /* ready: space served the first ball */
 static int oldbx JT_DATA = -1, oldby JT_DATA = -1, oldly JT_DATA = -1, oldry JT_DATA = -1;
 static unsigned seed JT_DATA = 0x6D2B79F5u;
-static int pv JT_DATA = 0, hold JT_DATA = 0, aim JT_DATA = -1;   /* the glide: direction and ticks left; aim: a pointer's target top, -1 none */
+static int pv JT_DATA = 0, hold JT_DATA = 0, aim JT_DATA = -1, dragged JT_DATA = 0;   /* dragged: a drag ended by this click, which only lets go */   /* the glide: direction and ticks left; aim: a pointer's target top, -1 none */
 static int tx[TRAIL] JT_DATA = {-1, -1, -1, -1}, ty[TRAIL] JT_DATA = {-1, -1, -1, -1};   /* the trail, newest first */
 static int lflash JT_DATA = 0, rflash JT_DATA = 0, rally JT_DATA = 0, best JT_DATA = 0;
 static unsigned char blip[RATE / 12] JT_DATA = {0};
@@ -138,8 +139,8 @@ static void frame(void) {   /* wipe what moved, draw it again */
         rect(tx[i] + (BS - sz) / 2, ty[i] + (BS - sz) / 2, sz, sz, TRAILC);
     }
     if (!live) for (int i = 0; i < TRAIL; i++) tx[i] = ty[i] = -1;
-    rect(PX, ly, PW, PH, lflash ? BALLC : INK);
-    rect(cw() - PX - PW, ry, PW, PH, rflash ? BALLC : INK);
+    rect(PX, ly, PW, PH, lflash ? HITC : INK);
+    rect(cw() - PX - PW, ry, PW, PH, rflash ? HITC : INK);
     int show = !over && (!wait || !ready || (wait / 12) % 2 == 0);   /* it blinks while it waits to serve */
     if (show) rect(nbx, nby, BS, BS, BALLC);
     else if (!over) rect(nbx, nby, BS, BS, BG);
@@ -230,10 +231,12 @@ void _start(int argc, char **argv) {
                 else if (k == 'p' && !over) { paused = !paused; scores(); }
                 else if (k == ' ' && over) { reset(); full(); }
                 else if (k == ' ' && !ready) { ready = 1; scores(); }
-            } else if (ev.kind == JT_EV_CLICK || ev.kind == JT_EV_DRAG) {   /* the paddle goes under the pointer; a click serves or plays again */
+            } else if (ev.kind == JT_EV_CLICK || ev.kind == JT_EV_DRAG) {   /* the paddle goes under the pointer; a plain click serves or plays again */
                 if (ev.b >= TOP) { aim = clampy(ev.b - PH / 2); hold = 0; }
-                if (ev.kind == JT_EV_CLICK && ev.b >= TOP) { if (over) { reset(); full(); } else if (!ready) { ready = 1; scores(); } }
-            } else if (ev.kind == JT_EV_WHEEL) { pv = ev.a > 0 ? GLIDE : -GLIDE; hold = HOLD; aim = -1; }
+                if (ev.kind == JT_EV_DRAG) dragged = 1;
+                else if (dragged) dragged = 0;   /* the release that ends a drag (jtsys.h): it never restarts or serves */
+                else if (ev.b >= TOP) { if (over) { reset(); full(); } else if (!ready) { ready = 1; scores(); } }
+            } else if (ev.kind == JT_EV_WHEEL) { pv = ev.a > 0 ? -GLIDE : GLIDE; hold = HOLD; aim = -1; }   /* a > 0 is wheel up, as in claude.c and portfolio.c */
             frame(); flags = JT_POLL_PRESENT;
             continue;
         }
