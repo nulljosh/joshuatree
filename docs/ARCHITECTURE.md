@@ -1704,7 +1704,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (404 checks)
+### The suite (405 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -1749,6 +1749,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | The whole web's roots: the Pi's trust anchors hold every root in Mozilla's list, each once, ISRG Root X1 among them, from a bundle under 18 months old (host only) | `tools/checks/tls-roots-check.py` | once |
 | CI tooling packs ARM checks across the ARM shards only and rejects fixed test paths before builds (host only) | `tools/checks/ci-tooling-check.py` | once |
 | Dock slot constants agree with kernel.c (static drift guard) | `tools/checks/dockslots-check.py` | once |
+| Keyrate (13.24.0): the page `keyrate` serves is one offline file of about 42 KB, loading nothing by src, href or import | `tools/checks/keyrate-offline-check.py` | once |
 | No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks) | `tools/checks/tmp-paths-check.py` | once |
 | docs/ARCHITECTURE.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static) | `tools/checks/design-doc-check.py` | once |
 | every source file the progress graph counts has a row in docs/ARCHITECTURE.md (docs at 100 percent, 6.59.1) (static) | `tools/checks/doc-coverage-check.py` | once |
@@ -2128,7 +2129,7 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 | Samantha | `tools/checks/arm64-calicon-check.py`, `tools/checks/arm64-claude-console-check.py`, `tools/checks/arm64-home-check.py`, `tools/checks/arm64-nimble-check.py`, `tools/checks/arm64-sam-hosted-check.py`, `tools/checks/arm64-samapp-check.py`, `tools/checks/arm64-sambuild-check.py`, `tools/checks/arm64-samtile-check.py`, `tools/checks/arm64-samtui-check.py`, `tools/checks/arm64-shortcut-check.py`, `tools/checks/arm64-touch-check.py`, `tools/checks/arm64-voice-check.py`, `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/iconart-check.py`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/relay-api-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-box-check.py`, `tools/checks/samantha-clock-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/arm64-weather-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs`, `tools/checks/worker-weather-check.mjs` |
 | Scrounge | `tools/checks/ring3curbfind-check.py` |
-| Keyrate | `tools/checks/arm64-games-check.py`, `tools/checks/ring3app-check.py`, `tools/checks/ring3seed-stale-check.py` |
+| Keyrate | `tools/checks/arm64-games-check.py`, `tools/checks/keyrate-offline-check.py`, `tools/checks/ring3app-check.py`, `tools/checks/ring3seed-stale-check.py` |
 | Bookrank | `tools/checks/ring3bookrank-check.py`, `tools/checks/ring3bookrank-live-check.py` |
 | Quotes | `tools/checks/arm64-stocks-check.py`, `tools/checks/ring3quotes-check.py`, `tools/checks/stocks-live-check.mjs` |
 | Patois | `tools/checks/ring3tonchi-check.py`, `tools/checks/ring3tonchi-live-check.py` |
