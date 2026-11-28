@@ -20,7 +20,7 @@
 
 ## Docs
 
-<img src="architecture.svg" width="100%" alt="Joshua Tree at a glance: where it runs, the layers, and Samantha">
+<img src="docs/architecture.svg" width="100%" alt="Joshua Tree at a glance: where it runs, the layers, and Samantha">
 
 [Guide](docs/GUIDE.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Testing](docs/TESTING.md)
 

@@ -57,5 +57,5 @@ for i, (ic, c, a, b) in enumerate([('seal', T, 'Sealed', 'anyone can run it.'),
     p.text(M + 24 + S[12] + 88, ry + 17, b, 13, MUT)
 y += 56 + 3 * S[32] + S[16]
 p.text(M, y + 13, 'Next: the Pi builds its own apps, with no Mac in the middle.', 13, T, 600)
-p.text(M, y + 37, 'Drawn by tools/gen/humans.py. The full map is architecture.svg.', 11, MUT)
+p.text(M, y + 37, 'Drawn by tools/gen/humans.py. The full map is docs/architecture.svg.', 11, MUT)
 p.save('docs/apps-for-humans.svg', y + 37 + M)

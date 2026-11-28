@@ -119,7 +119,7 @@ const problems = [];
 //    own document, same as an <img src="progress.svg"> would render it.
 {
   const page = await browser.newPage({ viewport: { width: 900, height: 400 } });
-  await page.goto('file://' + path.join(ROOT, 'progress.svg'));
+  await page.goto('file://' + path.join(ROOT, 'landing', 'progress.svg'));
   const rects = await textRects(page, null);
   if (!rects || rects.length === 0) {
     problems.push('progress.svg: no <text> elements found (missing or empty?)');

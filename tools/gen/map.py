@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Draws architecture.svg: Joshua Tree at a glance, three panels (where it runs, the layers, talking to Samantha). 13.21.3 cut
-it from seven panels and 2092 px to these, so the README stays short. The app count is read from progress.svg. Colours, spacing, radii
+"""Draws docs/architecture.svg: Joshua Tree at a glance, three panels (where it runs, the layers, talking to Samantha). 13.21.3 cut
+it from seven panels and 2092 px to these, so the README stays short. The app count is read from landing/progress.svg. Colours, spacing, radii
 and type come from the brand kit's tokens (docs/brand/tokens.css) through tools/gen/svgkit.py, so the map cannot drift."""
 import re, os
 from svgkit import Pic, ROOT, M, S, R, PAPER, INK, MUT, RULE, CARD, T, G
@@ -36,7 +36,7 @@ def chain(y, steps, kinds, back=None):
 
 def note(y, s): p.text(M, y + 12, s, 11, MUT); return y + 16
 
-svg = open(os.path.join(ROOT, 'progress.svg')).read()
+svg = open(os.path.join(ROOT, 'landing', 'progress.svg')).read()
 APPS = re.findall(r'data-apps="(\d+)"', svg)[-1]
 
 p.strip(0)
@@ -74,4 +74,4 @@ y = chain(y, [('You type or say', '"call Mom at 5"'), ('Turing', 'picks the tool
 
 y -= S[16]
 p.text(M, y + 4, 'Drawn by tools/gen/map.py. More in docs/ARCHITECTURE.md.', 11, MUT)
-p.save('architecture.svg', y + 4 + M)
+p.save('docs/architecture.svg', y + 4 + M)

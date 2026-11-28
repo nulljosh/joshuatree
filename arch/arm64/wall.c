@@ -1,8 +1,16 @@
 /* The ARM desktop's wallpaper. 8.9.0: on the Pi the default is a picture, Joshua Tree at dusk (park_wall.h, made by
    tools/gen/gen_park_wall.py). 13.27.0: a soft painting (art/wallpaper/park-dusk.jpg) at 960 x 540 in 256 colours, a byte a
    pixel, scaled to the screen; the 16-colour pixel scene and its scanlines are gone. Settings can pick a flat colour instead (settings.c); the QEMU builds start on the flat blue #3B6EA5, so the
-   checks that read bare wallpaper see one colour. No decoder, no heap: wall_px works out any pixel from the packed picture. */
+   checks that read bare wallpaper see one colour. 13.27.3: the pixels ship deflated (park_z) and are unpacked once, on first
+   use, into park_px; a damaged copy draws the flat blue instead. */
 #include "park_wall.h"
+#include "../../drivers/inflate.h"
+static unsigned char park_px[PARK_W * PARK_H];
+static int park_state;   /* 0 not unpacked yet, 1 ready, -1 damaged */
+static int park_ready(void) {
+    if (!park_state) park_state = inflate_checked(park_z, sizeof park_z, park_px, sizeof park_px, PARK_Z_SUM) ? -1 : 1;
+    return park_state > 0;
+}
 #define WALL_PARK 0x01000000u   /* settings.c's walls[]: the picture, not a colour */
 #if defined(PI_BUILD) || defined(PARK_WALL)   /* 13.22.0: PARK_WALL (KFLAGS=-DPARK_WALL) films the landing clips on the Pi's own picture */
 static unsigned wall_rgb = WALL_PARK;
@@ -14,8 +22,8 @@ static unsigned rb_swap(unsigned c) { return (c & 0xFF) << 16 | (c & 0xFF00) | c
 /* n pixels of row y from column x into dst, in the screen's byte order: the picture's row and scanline worked out once,
    each pixel a fixed-point step (the drag path repaints wallpaper every frame, so no division per pixel). */
 void wall_span(unsigned *dst, int x, int y, int n, int w, int h, int swap) {
-    if (!(wall_rgb & WALL_PARK)) {
-        unsigned c = swap ? rb_swap(wall_rgb) : wall_rgb;
+    if (!(wall_rgb & WALL_PARK) || !park_ready()) {
+        unsigned flat = (wall_rgb & WALL_PARK) ? 0x003B6EA5u : wall_rgb, c = swap ? rb_swap(flat) : flat;
         for (int i = 0; i < n; i++) dst[i] = c;
         return;
     }

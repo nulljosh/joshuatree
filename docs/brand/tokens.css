@@ -1,5 +1,5 @@
 /* Joshua Tree design tokens: the one place the colours, type scale, space ladder and radii are written down.
-   docs/brand/index.html links this file; tools/gen/map.py reads the light colours out of it for architecture.svg.
+   docs/brand/index.html links this file; tools/gen/map.py reads the light colours out of it for docs/architecture.svg.
    The type and space numbers are the ones tools/gen/typetokens.py generates into landing/index.html (nine sizes,
    a 4 px grid, one space ladder); the desktop colours are the kernel's constants, named in docs/ARCHITECTURE.md. */
 :root {
@@ -40,7 +40,7 @@
   --t64: 64px; --lh64: 84px; --tr64: -0.02em;   /* hero */
   /* Space, one ladder. */
   --s4: 4px; --s8: 8px; --s12: 12px; --s16: 16px; --s24: 24px; --s32: 32px; --s48: 48px; --s64: 64px; --s96: 96px;
-  /* Radii: windows and cards 18, chips 12, small 8 and 4. Icons are a superellipse, not a radius. */
+  /* Radii: windows and cards 18, chips 12, small 8 and 4. SVG icons are a superellipse, not a radius; the painted dock icons carry their own tile. */
   --r18: 18px; --r12: 12px; --r8: 8px; --r4: 4px;
 }
 @media (prefers-color-scheme: dark) {
