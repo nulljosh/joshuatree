@@ -48,7 +48,8 @@ if (typeof document !== "undefined") (function () {
   // real 430x760 portrait mode at scale 1 (kernel.c's boot_to_phone), not
   // the desktop's 960x540 shrunk to fit -- so this file's own logical
   // space has to switch to match, 1:1, instead of downscaling a desktop.
-  var IS_PHONE = typeof matchMedia === "function" && matchMedia("(max-width: 520px)").matches;
+  // 13.27.2: a narrow visitor gets the desktop too; her phone mode (and the portfolio) is opt-in with ?samantha or ?portfolio
+  var IS_PHONE = typeof matchMedia === "function" && matchMedia("(max-width: 520px)").matches && /[?&](samantha|portfolio)\b/.test(location.search);
   var LOGICAL_W = IS_PHONE ? 430 : 960, LOGICAL_H = IS_PHONE ? 760 : 540;
   // Pixel-exact desktop: at dpr 1 with a big enough box, ask the kernel for a
   // physical mode equal to the box in device px ("res=WxH", W multiple of 8,
@@ -70,7 +71,9 @@ if (typeof document !== "undefined") (function () {
   // look should be her, not a desktop tour). ?desktop is the opt-out ("See the desktop"
   // under the demo); ?portfolio and ?full keep their own boots. ?samantha stays an alias.
   var DESKTOP_MODE = /[?&]desktop\b/.test(location.search);
-  var HERO_SAMANTHA = !DESKTOP_MODE && !/[?&](portfolio|full)\b/.test(location.search);
+  // 13.27.2 (Joshua: "remove Samantha from the landing demo, it doesn't work properly right now"): the demo boots the
+  // desktop and its tour for everyone; ?samantha is the opt-in that brings back her full-screen hero exactly as before.
+  var HERO_SAMANTHA = !DESKTOP_MODE && /[?&]samantha\b/.test(location.search);
   var WANT_SAMANTHA = HERO_SAMANTHA || /[?&]samantha\b/.test(location.search);
   // 2.48.1: on a desktop her input is the page's own field too (#demo-composer), drawn by the browser at full
   // sharpness; the kernel's bar is one small bitmap font scaled up with the rest of the screen, so it read pixelated.
@@ -891,6 +894,7 @@ if (typeof document !== "undefined") (function () {
     if (composer && composeInput) {
       composer.hidden = PAGEBAR && !TOUCH ? !samanthaOpen : false;   // the desktop's bar shows only while she is open
       if (/[?&]portfolio\b/.test(location.search)) composeInput.placeholder = "Message Joshua";   // portfolio mode is his site
+      else if (!WANT_SAMANTHA) { composeInput.placeholder = "Type to the demo"; composeInput.setAttribute("aria-label", "Type to the demo"); }   // 13.27.2: the desktop, not her
       var frameEl = document.getElementById("demo-frame");
       if (frameEl) frameEl.classList.add(TOUCH ? "has-composer" : "pagebar");   // pagebar: floats over the bottom of her face
       var stageWrap = document.getElementById("stage-wrap");

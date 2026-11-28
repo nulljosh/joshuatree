@@ -127,7 +127,7 @@ const serial = page => page.evaluate(() => window.__jt && window.__jt.serial || 
 // ---- 1-3: desktop 1440x900, default boot --------------------------------------------------
 {
   const page = await newPage({ width: 1440, height: 900 });
-  await page.goto(base + '?demo');
+  await page.goto(base + '?demo&samantha');
   await page.waitForSelector('#hero-poster', { state: 'visible', timeout: 15000 }).catch(() => {});
   await page.waitForFunction(() => { const i = document.querySelector('#hero-poster img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 }).catch(() => {}); // a missing poster is reported by assertPosterPixels, not thrown here
   const before = await assertPosterPixels(page, 'desktop before click', true);
@@ -168,7 +168,7 @@ const serial = page => page.evaluate(() => window.__jt && window.__jt.serial || 
 // ---- 3b: keyboard takeover must lift the poster (Tab to the demo, Enter) --------------------
 {
   const page = await newPage({ width: 1440, height: 900 });
-  await page.goto(base + '?demo');
+  await page.goto(base + '?demo&samantha');
   await page.waitForSelector('#hero-poster', { state: 'visible', timeout: 15000 }).catch(() => {});
   await page.waitForFunction(() => window.__jt && window.__jt.ready, null, { timeout: DEADLINE });
   await page.focus('#v86-embed');
@@ -185,7 +185,7 @@ const serial = page => page.evaluate(() => window.__jt && window.__jt.serial || 
 const shotDir = process.env.HERO_SHOTS;
 async function wakeCase(tag, name, vp, mobile) {
   const page = await newPage(vp, { mobile });
-  await page.goto(base + '?demo');
+  await page.goto(base + '?demo&samantha');
   await page.waitForFunction(() => { const i = document.querySelector('#hero-poster img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 }).catch(() => {});
   if (shotDir) await page.screenshot({ path: path.join(shotDir, `${name}-1-before.png`) });
   if (mobile) await page.tap('#hero-poster'); else await page.click('#hero-poster');
@@ -228,32 +228,32 @@ await wakeCase('phone early tap', 'phone', { width: 390, height: 844 }, true);
 // ---- 3d: ?tour opts a phone into the scripted demo (four questions, then the apps) ---------
 {
   const page = await newPage({ width: 390, height: 844 }, { mobile: true });
-  await page.goto(base + '?tour');
+  await page.goto(base + '?tour&samantha');
   await page.waitForFunction(() => /samopen/.test(window.__jt.serial) && /face: hd=/.test(window.__jt.serial), null, { timeout: DEADLINE });
   await page.tap('#hero-poster');
   await page.waitForFunction(() => /samtyped=/.test(window.__jt.serial), null, { timeout: 60000 }).then(() => ok('phone ?tour: the scripted demo starts after the tap (she is asked something)'), () => fail('phone ?tour: the scripted demo never started'));
   await page.context().close();
 }
 
-// ---- 4: ?desktop ---------------------------------------------------------------------------
-{
+// ---- 4: ?desktop, and (13.27.2) the plain demo, which now boots the desktop too (Samantha is opt-in, ?samantha) ---------------------------------------------------------------------------
+for (const q of ['?desktop', '?demo']) {
   const page = await newPage({ width: 1440, height: 900 });
-  await page.goto(base + '?desktop');
+  await page.goto(base + q);
   const shown = await page.evaluate(() => { const e = document.getElementById('hero-poster'); return !!e && getComputedStyle(e).display !== 'none' && !e.hidden; });
-  if (shown) fail('?desktop still shows the poster'); else ok('?desktop shows no poster');
+  if (shown) fail(q + ' still shows the poster'); else ok(q + ' shows no poster');
   const linkHidden = await page.evaluate(() => { const a = document.getElementById('desktop-boot-link'); return !a || a.offsetParent === null; });
-  if (!linkHidden) fail('?desktop still offers "See the desktop"'); else ok('?desktop hides the "See the desktop" link (already there)');
+  if (!linkHidden) fail(q + ' still offers "See the desktop"'); else ok(q + ' hides the "See the desktop" link (already there)');
   await page.waitForFunction(() => window.__jt && window.__jt.ready, null, { timeout: DEADLINE });
   await page.waitForFunction(() => /menubarredraw|fullrepaint/.test(window.__jt.serial), null, { timeout: DEADLINE });
   const s = await serial(page);
-  if (/bootsamantha|samopen/.test(s)) fail('?desktop booted into Samantha'); else ok('?desktop boots the desktop (no samantha token, no samopen)');
+  if (/bootsamantha|samopen/.test(s)) fail(q + ' booted into Samantha'); else ok(q + ' boots the desktop (no samantha token, no samopen)');
   await page.context().close();
 }
 
 // ---- 5: phone 390 and tablet 820 -----------------------------------------------------------
 for (const [tag, vp, mobile, wantSrc, wantR] of [['phone 390', { width: 390, height: 844 }, true, 'samantha-phone.webp', 430 / 760], ['tablet 820', { width: 820, height: 1180 }, false, 'samantha.webp', 16 / 9]]) {
   const page = await newPage(vp, { mobile });
-  await page.goto(base + '?demo');
+  await page.goto(base + '?demo&samantha');
   await page.waitForFunction(() => { const i = document.querySelector('#hero-poster img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 }).catch(() => {}); // a missing poster is reported by assertPosterPixels, not thrown here
   const r = await assertPosterPixels(page, tag, true);
   if (r.problems.length) r.problems.forEach(p => fail(`${tag}: ${p}`)); else ok(`${tag}: poster is a real, undistorted portrait`);
@@ -279,7 +279,7 @@ for (const [tag, vp, mobile, wantSrc, wantR] of [['phone 390', { width: 390, hei
 // ---- 6: self-test, the assertion must FAIL when the poster is gone --------------------------
 {
   const page = await newPage({ width: 1440, height: 900 }, { blockPoster: true });
-  await page.goto(base + '?demo');
+  await page.goto(base + '?demo&samantha');
   await page.waitForTimeout(2000);
   const r = await assertPosterPixels(page, 'self-test, poster blocked', true);
   if (r.problems.length === 0) fail('self-test: the poster assertion PASSED with the poster images blocked, so it proves nothing'); else ok(`self-test: with the poster removed the assertion fails (${r.problems.length} problem${r.problems.length > 1 ? 's' : ''}: ${r.problems[0]})`);
