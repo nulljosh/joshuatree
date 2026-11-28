@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerate progress.svg.
+# Regenerate landing/progress.svg.
 #
 # v51: real rewrite, not a tweak, direct and repeated feedback ("still
 # unimpressive... more accurate and relevant, not just how many features
@@ -389,11 +389,10 @@ def build_svg(dots_markup, svg_id=None, extra_style="", extra_root_attrs=""):
 
 plain_svg = build_svg(dots)
 
-with open("progress.svg", "w") as f:
-    f.write(plain_svg)
-import shutil, os
+import os
 os.makedirs("landing", exist_ok=True)
-shutil.copy("progress.svg", "landing/progress.svg")
+with open("landing/progress.svg", "w") as f:   # 13.27.3: one copy, the landing's (the root twin went unused)
+    f.write(plain_svg)
 
 # Real interactive version for the landing page: same points, wrapped in
 # a <g> with a bigger invisible hit target (real dots are only r=3, too
@@ -451,6 +450,6 @@ html = html[:lsi + len(lede_start)] + lede + html[lei:]
 with open(landing_path, "w") as f:
     f.write(html)
 
-print(f"wrote progress.svg: {now_v} apps shipped, {doc_pct[-1]}% documented (real architecture-doc coverage), across {n} sampled points, {commit_count} total commits")
+print(f"wrote landing/progress.svg: {now_v} apps shipped, {doc_pct[-1]}% documented (real architecture-doc coverage), across {n} sampled points, {commit_count} total commits")
 print(f"spliced interactive chart into {landing_path}")
 PYEOF

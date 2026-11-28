@@ -64,6 +64,7 @@ cd "$(dirname "$0")/../.."
 # retry?  shard  name                                                   command
 manifest() {
 cat <<'EOF'
+once |5|Pi image size (13.27.3): kernel8.img stays under the 4128768 bytes a Pi's update can fetch (release.yml's limit), and the deflated wallpaper and splash unpack to their checksums|python3 ./tools/checks/arm64-image-size-check.py
 once |9|ARM menu notices: bounded messages, expiry, pixels and input|python3 ./tools/checks/arm64-notice-check.py
 once |9|Pi screen sleep and deep idle (10.1.0): idle deadline, wrap, active apps, refused mailbox requests, keyboard/mouse wake, and 50 loop passes a second asleep|python3 ./tools/checks/arm64-screen-idle-check.py
 retry|9|Auto lock on the Pi (13.24.0): the saver locks, a key wakes the card and is not typed, only the signed-in password opens it, and the desktop comes back exactly|python3 ./tools/checks/arm64-lock-check.py

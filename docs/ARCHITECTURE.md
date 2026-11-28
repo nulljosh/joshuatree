@@ -150,7 +150,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `tools/checks/arm64-calc-check.py` | Compiles `arch/arm64/calc.c` on the host and checks a table of sums, including sin(30deg)=0.5, 5!=120, 2^10=1024 and 1/0 as an error. |
 | `arch/arm64/wifi.c` (`wifi_hold`, `wifi_release`) | Bluetooth pairing holds the Wi-Fi radio (3.0.0): the chip has one antenna, and with Wi-Fi up a real mouse's first packets never reached the Pi (0x3e. |
 | `arch/arm64/wall.c` | The ARM desktop's wallpaper: one flat colour, the brand terracotta `#b5502c` in 3.0.0 , graphite grey `#6E6E6E` from 3.8.3 and a calm blue `#3B6EA5`. |
-| `arch/arm64/park_wall.h` | The Pi's default wallpaper, Joshua Tree at dusk (8.9.0). 13.27.0: a soft Surenix-style painting (`art/wallpaper/park-dusk.jpg`, made with Higgsfield from the old pixel scene) at 960 x 540 in 256 colours, a byte a pixel, no scanlines; written by `tools/gen/gen_park_wall.py`, drawn by `wall.c` with no decoder and no heap, modelled per pixel by `tools/checks/parkwall.py`. The dock icons got the same treatment: `art/icons/*.png`, painted and finished for the dock's lighting rules, win over their SVGs in `tools/gen/gen_icon_art.py`. |
+| `arch/arm64/park_wall.h` | The Pi's default wallpaper, Joshua Tree at dusk (8.9.0). 13.27.0: a soft Surenix-style painting (`art/wallpaper/park-dusk.jpg`, made with Higgsfield from the old pixel scene) at 960 x 540 in 256 colours, a byte a pixel, no scanlines; written by `tools/gen/gen_park_wall.py`, drawn by `wall.c`, modelled per pixel by `tools/checks/parkwall.py`. 13.27.3: the pixels ship deflated (`park_z`, 168 KB, not 518 KB raw) and `wall.c` unpacks them once with `drivers/inflate.c`, checked against `PARK_Z_SUM`; the splash mark (`splash_mark.h`) the same way. That put `kernel8.img` back under the 3.9 MiB a Pi's `update` can fetch (`arm64-image-size-check.py`). The dock icons got the same treatment: `art/icons/*.png`, painted and finished for the dock's lighting rules, win over their SVGs in `tools/gen/gen_icon_art.py`. |
 | `arch/arm64/userapps.S`, `arch/arm64/user_c.ld` | M3b (2.49.0) and M3c part 1 (2.50.0), C programs at EL0. |
 | `arch/arm64/ufile.c` | M3d (2.58.0): the file calls of `user/jtsys.h` for the one EL0 app, with i386's semantics from the System call ABI section. |
 | `arch/arm64/main.c` (EL0 apps in windows), `arch/arm64/vectors.S` (`resume_user`) | M3e (2.59.0): the EL0 arena is 32 MiB since 6.76.3 (16 MiB before), sixteen 2 MiB blocks of 4 KiB pages; from block two up to the. |
@@ -188,7 +188,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `arch/arm64/wifi_cfg.sh` | Writes the build file `arch/arm64/wifi_cfg.h` (gitignored, never in git): the network name and its key (worked out at build time, never the. |
 | `tools/checks/wpa-test.c` | Host test for `wpa.h` against the SHA-1, HMAC-SHA1, PRF and RFC 3394 key-unwrap test vectors; run by the suite. |
 | `tools/gen/sample-song.py` | Writes `HELLO.WAV`, the sample song: 8 bars at 120 bpm in C major (bass, arpeggio pad and lead), 16 s, 16-bit mono 22050 Hz, about 690 KB, pure arithmetic so every run is byte-identical. `tools/flash-pi.sh` puts it in `JT/MUSIC/` only when the folder has no `.WAV` or `.MP3`; `tools/checks/arm64-music-check.py` plays it as a third song. |
-| `tools/gen/map.py` | Draws `architecture.svg`, Joshua Tree at a glance in three panels: where it runs, the layers, talking to Samantha (13.21.3 cut it from seven, so the README stays short). Reads the app count from `progress.svg`, so it cannot drift. |
+| `tools/gen/map.py` | Draws `docs/architecture.svg`, Joshua Tree at a glance in three panels: where it runs, the layers, talking to Samantha (13.21.3 cut it from seven, so the README stays short). Reads the app count from `landing/progress.svg`, so it cannot drift. |
 | `tools/gen/gen_stickers.py` | Draws the sticker sheet in `docs/brand/stickers/` (13.21.5): the park circle, the `joshua@tree %` prompt and "A computer, from scratch.", 3 inch SVGs (the die-cut tree is `docs/brand/tree.png` itself) with the fonts and art inside, ready for a print shop. |
 | `tools/gen/gen_readme_banner.py` | Draws `docs/brand/readme-banner.png`, the README's banner (13.24.0, issue #1156): the landing hero as a still, the park painting, the glyph in one ink, Tree Sans Display at the hero's tracking and its gold. `tools/checks/readme-banner-check.py` keeps the README on it. |
 | `tools/gen/readme-shots.py` | Takes the README's Pi screenshot, `docs/brand/readme-weather.png` (13.25.0): one headless virt boot on the park wallpaper, Weather opened from the dock with a fixed reading served by the script, a QMP screendump with rounded corners. |
@@ -759,9 +759,9 @@ The crayon mark it replaced (3.0 to 7.9) is one Joshua tree drawn in crayon: ste
 Every minor version refreshes the mark above the landing footer, one step at a time. File: `landing/logo.svg`, the seal over the footer, inverted for a dark page with the hue turned back so the ground stays terracotta. Built with the `logo-refresh` skill and `tools/gen/logo.py`.
 
 - 1.3: the engraved badge traced to clean vector lines, sky hatching and small text dropped, window buttons, power-symbol sun and prompt added.
-- 1.4: new mark. The engraved Joshua tree on its own with a ground line at its base, one color, ink only. Poster: `docs/mark-1.4.png`.
+- 1.4: new mark. The engraved Joshua tree on its own with a ground line at its base, one color, ink only. Poster: `docs/brand/history/mark-1.4.png`.
 - 2.0: the brand mark (favicon, boot splash, landing seal) gets the engraved look. Tapered spike tufts in two rings, a flared trunk and a ground line, still one ink color. Built by `tools/gen/logo.py`, boot splash rebuilt by `tools/gen/gen_boot_mark.py`. Preview: `mark-2.0-preview.png`.
-- 2.12: the same tree, finished more carefully. The corners where the limbs meet the trunk and each other are rounded off, the arms run straight into their crowns with no knob, the blades alternate long and short and the two inner crowns lean apart so all four crowns stay separate at 32 px, the trunk stands on a short tapered ground line instead of a flat cut, and thin engraved grooves follow the trunk and each limb, lit from the upper left. Still one ink, the grooves are real holes so it works as a mask on light and dark. Built by `tools/gen/logo.py`, boot splash by `tools/gen/gen_boot_mark.py`, PNG copies by `tools/gen/gen_brand_art.py`. Preview: `docs/mark-2.12.png`.
+- 2.12: the same tree, finished more carefully. The corners where the limbs meet the trunk and each other are rounded off, the arms run straight into their crowns with no knob, the blades alternate long and short and the two inner crowns lean apart so all four crowns stay separate at 32 px, the trunk stands on a short tapered ground line instead of a flat cut, and thin engraved grooves follow the trunk and each limb, lit from the upper left. Still one ink, the grooves are real holes so it works as a mask on light and dark. Built by `tools/gen/logo.py`, boot splash by `tools/gen/gen_boot_mark.py`, PNG copies by `tools/gen/gen_brand_art.py`. Preview: `docs/brand/history/mark-2.12.png`.
 - 2.25: a new mark, much simpler. A crayon scribble of one Joshua tree in the style of a hand-drawn album cover: thin, wobbly lines for the trunk, three arms and the ground, a dense looping scribble for each tuft with a few blades flicking out, and a light crayon grain. Black ink on off-white, no fill. A clean, heavier copy drawn down the middle of each limb (`landing/mark-bold.svg`) keeps it a tree at 16 px. Built by `tools/gen/logo.py`. Preview: `landing/badge.png`.
 - 2.60 (the 3.0 mark): the same crayon tree, tightened. Steadier, heavier lines, a trunk that swells where the marker pressed, denser tufts with paper showing through, three or four short blades over each instead of a fan, a lighter grain, and the ground drawn in terracotta, the mark's first and only colour. The small copy leans with it and keeps the terracotta ground, which lands on one pixel row at 16 px. The boot placeholder's mask (`landing/mark-tree.svg`) stays one colour by nature; the hero and the footer seal keep the terracotta in both themes. Built by `tools/gen/logo.py`. Preview: `landing/badge.png`.
 - 8.0: a painting replaces the crayon. One Joshua tree in gouache, like a wildlife album cover, with a flat traced glyph for small sizes. `docs/brand/tree.png` is the source, `tools/gen/gen_brand_art.py` makes every copy.
@@ -771,6 +771,8 @@ Every minor version refreshes the mark above the landing footer, one step at a t
 Retired in 8.0.0. The crayon friend (a chubby tree with dot eyes and pink cheeks) was a child's drawing, and the painted mark replaced that style everywhere. Empty screens show the painted tree instead.
 
 ### Icons
+
+The dock's 13 icons are painted (13.27): Surenix-style pictures in `art/icons/*.png`, which win over the SVGs in `tools/gen/gen_icon_art.py`. They keep the rules below that a painting can keep: one soft light from the top, a highlight, no dark rim, no words. `iconart-check.py` matches every dock tile to its art, `iconlight-check.py` reads the light and `iconedge-check.py` keeps the Trash base solid. The rest of the icons are still the SVGs this section describes.
 
 Every icon is one picture on one tile. The tile is a superellipse, `SQUIRCLE_N = 4.8`, over the whole 128 unit canvas, and an icon's edge must land within `TOL_SQUIRCLE = 1.0` unit of that curve at every angle, with a soft anti-aliased edge. A plain rounded rectangle fails.
 
@@ -804,6 +806,8 @@ On the desktop, Mono is for a shell grid and nothing else: `MONO_APPS = panes, t
 The retina rule holds for type as it does for icons: stems are inked dense but stay anti-aliased. The 8x16 bitmap font is only the fallback for VGA text mode and for off-screen targets.
 
 ### Colour and light
+
+The wallpaper: the Pi's default is the park at dusk, painted soft (13.27): `art/wallpaper/park-dusk.jpg`, made 960 by 540 in 256 colours by `tools/gen/gen_park_wall.py` and scaled up smoothly with no scanlines. The landing, the README banner and the brand kit read the same picture (`docs/brand/park-wall.png`). iPhone copies are in `docs/brand/wallpaper/`.
 
 The wallpaper is plain grey, `DEFAULT_WALLPAPER = WALL_GREY`, the Pi's default colour. Terracotta, Clay and Ink are the other plain walls; none of them fetch anything or get tinted. The satellite photo (live tiles with a network, the baked capture without), the map themes and the tree photo are choices in Settings, never the boot default.
 
@@ -877,7 +881,7 @@ The numbers above are checked by `design-doc-check.py` against the file that def
 
 Run in the suite on every pull request: `iconinset-check.py` (the squircle and the edges on every icon, the glyph margin on the tiles with the shared header), `iconart-check.py` (the dock draws the colour each SVG states), `iconlight-check.py`, `iconhalo-check.py`, `iconedge-check.py` (its only hard assert is the Trash rim, the rest is a score to read), `calicon-check.py`, `clockicon-check.py`, `dockslots-check.py`, `dockband-check.py`, `dockhover-check.py`, `windowedge-check.py`, `windowsnap-check.py`, `windowdrag-check.py`, `arm64-resize-check.py` (every Pi window drags and resizes), `launchpad-centered-check.py`, `textsharp-check.py`, `textspacing-check.sh` and `termsharp-check.py`.
 
-Run by hand, not in CI yet: `iconsync-check.sh` and `dockshadow-check.py`.
+Run by hand, not in CI yet: `dockshadow-check.py`.
 
 Not measured, held by eye: a bold glyph, one picture per icon, no emblem or speech bubble, no stripes or decorative borders, and the glyph margin of the icons without the shared tile header (the other fleet icons, Movies, Panes and Portfolio).
 
@@ -1621,6 +1625,10 @@ The reader now pins the folder, opens with `O_NOFOLLOW` and checks the opened de
 
 What keeps going wrong when agents work this repo, and the rule that stops it.
 
+### A limit only the release job enforces
+
+13.27.0's painted art took `kernel8.img` to 4.33 MB. Only the release job, after the merge, knew the 3.9 MiB a Pi's `update` can fetch, so two releases shipped with no Pi kernel and nobody saw it. Rule: a limit a release depends on is checked in PR CI too (`arm64-image-size-check.py` reads its number from `release.yml`).
+
 ### Splitting a file
 
 **A macro defined in one part is invisible to the others.** Problem: `main.c` defined `APP_BOOT` for the windows and hang builds, and once `main()` moved to `boot.c` its `#if defined(APP_BOOT)` was false there, so the poll loop never ran.
@@ -1709,10 +1717,11 @@ Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`).
 - `JT_KEEP_TMP=1` keeps it for debugging.
 - `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-### The suite (409 checks)
+### The suite (410 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
+| Pi image size (13.27.3): kernel8.img stays under the 4128768 bytes a Pi's update can fetch (release.yml's limit), and the deflated wallpaper and splash unpack to their checksums | `tools/checks/arm64-image-size-check.py` | once |
 | ARM menu notices: bounded messages, expiry, pixels and input | `tools/checks/arm64-notice-check.py` | once |
 | Pi screen sleep and deep idle (10.1.0): idle deadline, wrap, active apps, refused mailbox requests, keyboard/mouse wake, and 50 loop passes a second asleep | `tools/checks/arm64-screen-idle-check.py` | once |
 | Auto lock on the Pi (13.24.0): the saver locks, a key wakes the card and is not typed, only the signed-in password opens it, and the desktop comes back exactly | `tools/checks/arm64-lock-check.py` | retry |

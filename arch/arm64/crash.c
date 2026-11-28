@@ -177,7 +177,12 @@ static unsigned mark_lerp(const unsigned char *m, int x0, int y0, int wx, int wy
    before. 8.0, Apple style: the flat glyph in one ink (splash_mark.h, 400 px coverage), each screen pixel the
    average coverage of the stored pixels under it. */
 #include "splash_mark.h"
+#include "../../drivers/inflate.h"
+static unsigned char splash_mark_cov[SPLASH_MARK_W * SPLASH_MARK_H];   /* 13.27.3: unpacked from splash_mark_z on first use */
 void splash_mark(int cx, int cy, int T, unsigned bg) {
+    static int ready;   /* 0 not yet, 1 ready, -1 damaged: no mark, the grey ground and bar still draw */
+    if (!ready) ready = inflate_checked(splash_mark_z, sizeof splash_mark_z, splash_mark_cov, sizeof splash_mark_cov, SPLASH_MARK_Z_SUM) ? -1 : 1;
+    if (ready < 0) return;
     const unsigned ink = 0x001C1C1E;
     int ox = cx - T / 2, oy = cy - T / 2, n = SPLASH_MARK_W;
     for (int row = 0; row < T; row++) for (int col = 0; col < T; col++) {

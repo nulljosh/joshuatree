@@ -14,7 +14,7 @@
 #   landing/mark-tree.svg   the same drawing with no grain, the name the landing CSS masks use
 #   landing/mark-bold.svg   no grain, the leaning tree drawn down its middle in heavy strokes on a tight box, with
 #                           the same terracotta ground, for 16 to 48 px (favicon, menu bar, About)
-#   landing/icon.svg, icon.svg   the mark on an off-white square (the repo-root copy is what README renders)
+#   landing/icon.svg             the mark on an off-white square
 # The ground is painted first and the tree over it, so the trunk's feet stand on the terracotta. The ground is its
 # own path with its own stroke colour, which is how the copies downstream find it: the boot splash draws it last.
 # The PNG copies (landing/mark.png, landing/badge.png, landing/og-image.png, docs/brand/) come from
@@ -248,7 +248,6 @@ def main():
             f'filter="url(#crayon)">{mark}</g>\n'
             '</svg>\n')
     write("landing/icon.svg", tile)
-    write("icon.svg", tile)
 
 
 if __name__ == "__main__":

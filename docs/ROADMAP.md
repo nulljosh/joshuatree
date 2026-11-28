@@ -6,7 +6,7 @@ Where it is going, and what has shipped. The open items are kept here; finished 
 
 A freestanding kernel for i386 and the Raspberry Pi 4, no libc. This is the forward plan; what shipped is in the [Shipped list](#shipped) and the [releases](https://github.com/nulljosh/joshuatree/releases).
 
-**Latest**: 13.22: GPU drawing.
+**Latest**: 13.27: A new look.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -66,16 +66,8 @@ A freestanding kernel for i386 and the Raspberry Pi 4, no libc. This is the forw
   - Never automatic. Always an explicit yes from Joshua with the cost shown first. One clip at a time. Nothing from Samantha on her own.
   - Check: a relay test that a request without a fresh yes is refused and that Samantha's actions cannot start one.
 
-<details><summary>Details (0 lines)</summary>
 
-
-</details>
-
-## The long road: version 3 to 10, and 100 (proposal, 2026-10-05)
-### [5.0] Talk to it: Claude Code in Joshua Tree
-- [ ] [5.0] [Opus] Claude phase 2: tools on Joshua Tree itself, so Claude can read and change the OS's own files. Needs real TLS on the box or a trusted relay protocol that calls back into the machine.
-
-## Pickup (written 2026-10-03, night)
+## Backlog (first written 2026-10-03)
 ### Landing and demo, to A+
 - [ ] [Sonnet] The tour is silent after the intro video.
   - Joshua speaks each stop in his cloned voice (`/api/speak` with `voice: "joshua"`, see the personas doc in the Turing repo).
@@ -230,10 +222,6 @@ Sources: Tom's Guide and TechRadar on macOS Tahoe 26, Pureinfotech and Digital C
 - [ ] [Sonnet] Music and Movies live in the Apps folder only, not on the dock.
 - [ ] [Sonnet] Silent movie clips play about twice too fast on this QEMU build.
 
-<details><summary>Details (0 lines)</summary>
-
-
-</details>
 
 ## Architecture to A+ (refreshed 2026-10-11)
 - [ ] Window open takes about 640 ms for a ring-3 app (CI frametime check, 2.0.0): profile the seed, private page table and first draw; preseed binaries at boot and skip zeroing pages that get overwritten. [Sonnet]
@@ -337,10 +325,6 @@ Measured against the closest from-scratch peers: SerenityOS (the one-person-scal
 - [ ] [Sonnet] Podcasts.
 - [ ] [Sonnet] Control Center in the menu bar.
 
-<details><summary>Details (0 lines)</summary>
-
-
-</details>
 
 ## Tests and the loop
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
@@ -357,15 +341,17 @@ Measured against the closest from-scratch peers: SerenityOS (the one-person-scal
 - [ ] [Joshua] Plugins system. Needs a design pass on what a plugin can touch first.
 - [ ] [Joshua] AI agent accounts: settings, bootstrapping, auth. Too undefined to scope yet.
 - [ ] [Joshua] Boot-to-disk install flow with install-speed numbers. Needs hardware boot support first.
+- [ ] [Opus] Claude phase 2: tools on Joshua Tree itself, so Claude can read and change the OS's own files. Needs real TLS on the box or a trusted relay protocol that calls back into the machine.
+- [ ] Repost to r/osdev once the account has 5+ karma (see launch/roadmap.md).
 
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background, that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
-1. **One input bar and a talking tour** (plain: a demo that talks you through it) [Sonnet]: the phone shows two bars and the tour is silent after the intro.
-2. **Pi relay security** (plain: skip) [Opus]: relay TLS is merged. Next: the Pi finds the relay by itself and Turing answers (PRs open), then a board retest.
-3. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
-4. **Every icon in one style** (plain: icons that match) [Sonnet]: the fleet icons keep their own tile colors.
-5. **Photos, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.
-6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after the Pi boots.
+1. **The desktop drawn by the GPU** (plain: a faster desktop drawn by the Pi's graphics chip) [Opus]: the V3D presents each frame (`gpu_blit` behind `fb_copy`, `gpu bench`), then 14.0.
+2. **Every icon painted** (plain: icons that match) [Sonnet]: the 13 dock icons are painted, the rest are still flat; Burrow needs a new picture.
+3. **Samantha back in the web demo** (plain: Samantha back in the demo) [Sonnet]: she is opt-in (`?samantha`) until she works reliably.
+4. **Split the biggest files** (plain: skip) [Sonnet]: `landing/v86/embed.js` first, then `user/samantha.c`, `arch/arm64/ask.c`.
+5. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
+6. **Photos, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.
 
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.
@@ -379,23 +365,10 @@ A computer you talk to, that anyone can trust, that anyone can read. The version
 
 ## Version plan
 
-Where this goes, one major version at a time. Up to 10 it's a plan: each version is one promise kept, and the roadmap holds the steps. Past 10 it's a direction, not a schedule. The loop works top down and moves this file as versions ship.
+Where this goes, one major version at a time. 1 to 13 shipped (see Shipped). Past that it's a direction, not a schedule. The loop works top down and moves this file as versions ship.
 
-<details><summary>Details (118 lines)</summary>
+<details><summary>Details (107 lines)</summary>
 
-
-### The plan to 10
-
-  - 1.7.7 took the first step: Keyrate runs as a real ring-3 process with its own window, and crashing it on purpose leaves the desktop standing.
-- 3.0: Hold it. Joshua Tree runs on a real Raspberry Pi 4: the desktop boots on the board and you can type and click on it, mouse included. Sound from the 3.5 mm jack, Samantha over Wi-Fi through the Mac relay, a new mark. The reference mini PC (UEFI, a real disk, a real network card) moves to a later 3.x.
-- 3.1: The Samantha box ships as a kit. The printed case from `docs/hardware/`, a Pi 4, a 7 inch screen, a speaker and the card, bring your own parts (MONEY.md has the math).
-- 4.0: Many windows. Real multitasking: a window server, real processes, pipes, a Terminal with tabs and splits. Three apps run at once, one crashes, the other two do not notice. Doom is the proof. May go mobile first: one app full screen, a home grid, gestures.
-- 5.0: Talk to it. Samantha is the interface: a full-screen face, speech in and out, a small model on the box. A ten-minute spoken conversation that opens and changes things on the machine. The phone shape, if 4.0 started it, is finished here.
-- 6.0: Yours. Accounts, a locked disk, snapshots and backups. Delete a file, go back in time, get it back.
-- 7.0: Online. TLS 1.3, Wi-Fi, a real browser, mail and calendar that sync. A normal day of web, mail and calendar on it.
-- 8.0: Build things. The Plank compiler on the box, an SDK, apps as signed bundles, a store. Someone who is not Joshua ships an app without touching the kernel.
-- 9.0: The kit. The hardware is a product: Neo revisions, two displays, GPU, USB audio, storage and camera. A stranger builds one from the guide and it boots first try.
-- 10.0: Daily driver. A security audit against the threat model, accessibility, languages, long-term support. Joshua uses it as his only computer for a month.
 
 ### 11 to 100: a direction, not a schedule
 
@@ -523,36 +496,32 @@ One line per major version. Each point release is in the GitHub releases and `gi
 
 ## Loop handoff
 
-Updated 2026-11-16, after midnight Vancouver time. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
+Updated 2026-11-28. The loop's working notes live in `~/.claude/loops/joshuatree.md` on Joshua's Mac; this is the public summary.
 
 **What the loop is.** One task, one branch, one PR, merged the moment CI is green. Every code PR bumps `VERSION` and adds a line to the Shipped log. The repo requires branches to be up to date, so PRs merge one at a time, the next rebased on main.
 
-**Board night, 2026-11-15 (stashed by Joshua's word, picked up next session).** Joshua ran a 13.3.0 card: most of it was broken. Open, in order:
-1. Merge #1131 (one film on the landing, 13.9.2), #1132 (board fixes, 13.9.3) and #1133 (Paddle A+ pass, 13.9.4), one at a time, regenerating VERSION and landing facts between them.
-2. Reflash the card once with 13.9.3: a stale card cannot set its clock (tls error 54 on every https site) and so cannot `update` to the fix. After that, sign each release with `tools/update-sign.sh` so `update` works.
-3. Plain-HTTP downloads stop after the first segment on the board: a 2.1 MB MP3 said "reply cut short, 800 of 2100300 bytes". Reproduce in QEMU against a 2 MB file served from the host, then fix the receive path.
-4. A 20 second freeze on the board, cause unknown; and the arrow vanished after a menu bar clock click (fixed blind in 13.9.3, TESTING.md 36 confirms).
-5. The wallpaper from Joshua's art brief (branch `pi/wall-anime`): 90s cel dusk, rays, a hatched cloud tower, glints. The tower is still faceted; loop it to A+, then animate the glints and stars with small repaints, then an iPhone wallpaper (1290 x 2796) from the same generator.
-6. Paddle, second /mobbin pass (Atari Recharged, Pongfinity, Pong Quest): a title screen with Easy, Normal and Hard; two players on one keyboard (w and s against the arrows); a win screen; special shots last.
-7. A Joshua Tree board: a Compute Module 5 carrier designed in KiCad, with a 3D render like a real board's.
-8. A verbose always-on self-test screen on the Pi, a boot mode for the bench.
-9. Board 1's Blender mockup to A+ (scripts on `pi/wall-anime` in `docs/hardware/board1/`): labels clear of parts, real port shapes, the mark on the silkscreen.
-10. Repo tidy: loose files and folders into place, README and docs simplified (Joshua's ask, 2026-11-16).
+**Still open from board night (2026-11-15).**
+1. Plain-HTTP downloads stop after the first segment on the board: a 2.1 MB MP3 said "reply cut short, 800 of 2100300 bytes". Reproduce in QEMU against a 2 MB file served from the host, then fix the receive path.
+2. A 20 second freeze on the board, cause unknown; and the arrow vanished after a menu bar clock click (fixed blind in 13.9.3, TESTING.md 36 confirms).
+3. Paddle, second /mobbin pass (Atari Recharged, Pongfinity, Pong Quest): a title screen with Easy, Normal and Hard; two players on one keyboard (w and s against the arrows); a win screen; special shots last.
+4. A Joshua Tree board: a Compute Module 5 carrier designed in KiCad, with a 3D render like a real board's.
+5. A verbose always-on self-test screen on the Pi, a boot mode for the bench.
+6. Board 1's Blender mockup to A+ (scripts on `pi/wall-anime` in `docs/hardware/board1/`): labels clear of parts, real port shapes, the mark on the silkscreen.
 
-**Where things stand (2026-11-28).** 13.27.2 takes Samantha out of the landing's web demo (Joshua: "it doesn't work properly right now"): it boots the desktop, on a phone too, with no poster, and `?samantha` opts back in (`hero-poster-check.mjs`). 13.27.1 makes the painted icons less sandy (Joshua: "too sandy, washed out"): light tiles move to a clean warm white, real colours (the pencil, the sun, the dots) keep theirs, and the four landing feature clips are refilmed on the new look. 13.27.0 is the new look: Surenix-style painted dock icons (`art/icons/*.png`, `iconart`, `iconlight` and `iconedge` checks read them) and a soft painted dusk wallpaper on the Pi, the landing and the README (`gen_park_wall.py`, 256 colours, no scanlines). 13.26.0 brings age file encryption to the Pi: `age keygen/pub/enc/dec` in `arch/arm64/age.c` write and read the age v1 format the `age` tool uses, checked both ways against it (`arm64-age-check.py`). 13.25.0 puts one real Pi screenshot in the README (Weather on the park, `tools/gen/readme-shots.py`, kept by `readme-banner-check.py`) and retags every [Fable] item [Opus], since Fable left the plan. It also makes the PC's Shut Down really power off: `kernel/acpi.c` reads the RSDP, FADT and `\_S5_` and writes PM1a_CNT, with the old halt screen only for a machine without ACPI (`acpi-off-check.py`, issue #1018). It signs in to Mail from the Mail window: its Sign in button asks the kernel for a sheet (server, address, app password) that the kernel draws, so the password never passes through the ring-3 app (`arm64-mail-sheet-check.py`). 13.24.0 lands three stale PRs on current main and closes a leak. Auto lock on the Pi: the saver or Sleep locks a signed-in desktop, only that person's password opens it, and a half-typed password is wiped when the saver returns (`arm64-lock-check.py`, `arm64-screen-idle-check.py`). Paddle's A+ pass: glide, mouse aim, the wheel, a trail and a big score (`ring3-paddle-check.py` now drives the wheel and a click). Keyrate 2.5.0 as one offline page (`keyrate-offline-check.py`). The leak: fat.c opens a file by its 8.3 form, so a standard user's `cat USERS.TXTX` printed every password hash (and `WIFI.TXTX` the network key); protected names now compare in 8.3 form, and RELAYKEY.TXT is protected too (`arm64-sudo-check.py`). 13.23.1: a held window is the whole pass on the Pi, `app_tick` gives the apps no 10 ms slices while one is dragged or resized (`arm64-ptrburst-check.py`); the board test is to drag with two apps open. 13.23.0 brings x86-64 slice 3: the multiboot memory map, a 4 KiB frame bitmap and kmalloc, and the PS/2 mouse on IRQ12 (`x86_64-mem-check.py`). 13.22.0 also lets a landing PR that touches docs, images, the architecture map, the sticker sheet or the landing's own checks skip the eleven-shard OS suite, and the landing-only job runs headline-sync, facts, roadmap, type-grid and versionsync. The PC's first plain wall is the Pi's blue `#3B6EA5` (was grey), which `wxtest` pins. `landing-shots.yml` refilms stills on a runner. The app wall no longer flashes as you scroll: clips load 600 px early and fade in over their stills (`landing-clip-still-check.py`). CI runs three checks at once on the i386 shards (`SUITE_JOBS`, ARM shards stay serial since each check rebuilds arch/arm64), aiming the slowest shard from ~1000 s at the ARM shards' ~800 s. It gives the Pi's V3D its first drawing work (gpu fill and copy, `arm64-gpu-check.py`), starts the desktop blue by default, and brings x86-64 slice 2: the IDT, the PIC and a 100 Hz PIT, and IRQ1 reading the keyboard (`x86_64-irq-check.py`). 13.21.7 puts the landing on one wallpaper, the Pi's painting of Joshua Tree at dusk, stops the app wall flashing on scroll, and shortens the hero readout to fit a phone. 13.21.6 keeps the hero's `joshua@tree %` readout inside the painted card on a phone (it ran into the right edge). 13.21.5 redesigns the landing hero as one painted card (the park at dusk, "A computer, from scratch." in its sky, frosted glass tiles, a floating nav pill), cuts the README to a few lines, redraws `architecture.svg` as three panels and adds the sticker sheet (`tools/gen/gen_stickers.py`). 13.21.4 repairs the CI shard balancer: it called gh with a flag gh lacks, read no logs, priced every check at 30 s and packed blind, so shard 8 ran 27 minutes of checks while others ran 11. It now packs from the median of real runs and refuses without them, the ARM checks spread over six shards (5 to 10), every shard installs Plank so no repacked check passes by skipping, and each shard proves no check sits on a shard CI never runs (`ci-tooling-check.py`). Slowest shard 1649 s to 926 s of checks. 13.21.2 trims the landing toward apple.com/macos: the top divider and the stats row that repeated the hero are gone, Download PC ISO sits next to Try it, the desktop clips are one sideways strip, and the Pi grid drops the tile that repeated the Protected section (`landing-facts-check.py`, `landing-shots-hero-check.mjs`). 13.21.1 gives tools/feature-clips.py the checks' clean FAT32 card, so the Spaces and Mission Control clips show Reminders as it really looks, not its "No card" line. 13.21.0 (2026-11-18) added update, Bluetooth and Samantha clips to the landing's desktop section, filmed by running their own checks through `tools/film/qemu-system-aarch64`, which records any ARM check unchanged. 13.20.0 (2026-11-18) turned the landing's app wall into short real clips: `tools/landing-shots.py --clips` films each of the 19 apps in i386 QEMU through a short scripted use (`PLAY`), the still stays as the poster, and each clip plays only while on screen and never under reduced motion. A new "desktop" section plays four Pi feature clips from `tools/feature-clips.py`: Spaces, Mission Control, Spotlight and Launchpad. Samantha, Bluetooth and update clips are next. 13.19.2 (2026-11-18) took the typewriter off the landing for good: the headline and the eyebrow now swap their text instantly, and hero-contrast-check.mjs fails if a per-letter animation comes back. 11.0.0, a laptop, is on main: deep idle, trackpad gestures from QEMU multitouch and USB precision touchpads, a MAX17048 battery gauge in the menu bar, and Sleep in the tree menu. 10.0.0 before it brought the screen reader, twelve languages and signed self-update. Lid close is the one 11.0 item left. 12.0.0 finished macOS 27 parity: Spaces, Mission Control, the Glass slider, Shortcuts, Blackcomb tab groups, Photos and parental controls. 13.0.0 brought classic Bluetooth: headphones, speakers and keyboards. 13.3.1 opened Spotify in Blackcomb (a `spotify:` page from the Mac's `tools/claude-relay/spotify.py`); 13.4.0 lets Blackcomb install a signed app it follows a link to, an admin's only once there are accounts.
+**Where things stand (2026-11-28).** 13.27.3 gets `update` working again on the Pi: 13.27.0's painted art took `kernel8.img` to 4.33 MB, over the 3.9 MiB a Pi can fetch, so the 13.27.x releases shipped without a Pi kernel. The wallpaper and splash now ship deflated (3.89 MB), and `arm64-image-size-check.py` fails any PR that goes over. It also tidies the repo (the root's loose SVGs into `docs/`, unused leftovers gone) and puts the brand kit on the new look, with iPhone wallpapers in `docs/brand/wallpaper/`. 13.27.2 takes Samantha out of the landing's web demo: it boots the desktop, and `?samantha` opts back in. 13.27.1 and 13.27.0 are the new look: Surenix-style painted dock icons and a soft dusk wallpaper. 13.26.0 brings age encryption to the Pi, 13.25.0 real ACPI power off on the PC and Mail sign-in from its window, 13.24.0 auto lock. Older releases: the Shipped section and each release's notes.
 
-**Waiting on Joshua.** Signing 11.0's kernel with `tools/update-sign.sh` on his Mac (the app key never leaves it), so a Pi's `update` offers the release. The board pass (`docs/TESTING.md`), with 11.0 flashed when the card is in. The physical halves of 9.0 and 10.0 (a stranger builds a Nimbus from the guide; a month as Joshua's only computer), the GPU and the camera stay open as board work.
+**Waiting on Joshua.** Signing each release's kernel with `tools/update-sign.sh` on his Mac (the app key never leaves it), so a Pi's `update` offers it; 13.27.3 is the first image small enough to fetch since 13.27.0. The board pass (`docs/TESTING.md`), with the newest card flashed when it is in. The physical halves of 9.0 and 10.0 (a stranger builds a Nimbus from the guide; a month as Joshua's only computer), the GPU and the camera stay open as board work.
 
 **Next, in order.**
-1. Whatever the board shows broken (`docs/TESTING.md`).
-2. The doc trim: the Shipped log to a line per major (the release notes keep the rest), the 2026-10-03 Pickup to its open items, ARCHITECTURE's history-titled sections in the present tense.
-3. 14.0's first slice: a render-only V3D job that clears a tile and stores it (no shaders), run by the `gpu` command, host-tested against the control-list bytes. 13.2.0's bring-up has not been run on the board yet, so this slice says so; after it, GPU work waits on Joshua's board result.
-4. The `kernel/kernel.c` split, one file per PR, all checkable in QEMU.
+1. Whatever the board shows broken (`docs/TESTING.md`), `update` first now that the image fits.
+2. Redraw the Burrow icon: its two-tone face reads as borrowed.
+3. Split the biggest files: `landing/v86/embed.js` (2,574 lines), then `user/samantha.c`, `arch/arm64/ask.c`, `main.c` and `browser.c`.
+4. The GPU present slice (`gpu_blit` behind `fb_copy`, `gpu present on|off`, `gpu bench`), then 14.0.
 
 Restart prompt:
 
 ```
-/loop Joshua Tree after 10.0: (1) whatever the board pass in docs/TESTING.md shows broken; (2) the doc trim: ROADMAP's Shipped log to one line per major, the 2026-10-03 Pickup to its open items, ARCHITECTURE's history-titled sections in the present tense, with the doc checks run by hand since a prose-only PR skips the suite; (3) 12's macOS 27 parity in ROADMAP (Spaces, Mission Control, the Glass slider and Shortcuts are in; next Blackcomb tab groups), then 13 to 15. The GPU (V3D) and the camera need the board: say so, never fake them. Rules: every feature gets a check in tools/checks wired into ci-suite.sh that fails when the fix is reverted; run touched checks locally one QEMU at a time, then the pre-push hook, push, gh pr create, gh pr merge --auto --squash; one PR open at a time; on a red CI read the job log and fix, never retry blind; regenerate generated files on conflict; bump VERSION and the shipped log each code PR; update the Loop handoff in docs/ROADMAP.md each merge; no new .md files; never flash the card unless Joshua says card in; keys never printed; replies to Joshua are 1 line TLDRs
+/loop Joshua Tree to 14.0: (1) whatever the board pass in docs/TESTING.md shows broken, update first; (2) the Burrow icon redrawn; (3) split the biggest files, embed.js first; (4) the GPU present slice (gpu_blit, gpu present on|off, gpu bench, host test); then 14.0. One PR at a time, merge on green CI. Very short replies.
 ```
 
 Rules kept:
@@ -561,6 +530,3 @@ Rules kept:
 - No keys on the public card. Flash only the dev card, and only when Joshua says it is in.
 - Every X.0.0 ships a refreshed logo and UI.
 - No number in landing or ad copy without a source (the $35 Pi price was wrong).
-
-## Ingested 2026-10-25
-- [ ] Repost to r/osdev once the account has 5+ karma (see launch/roadmap.md).
