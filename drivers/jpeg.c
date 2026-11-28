@@ -281,6 +281,7 @@ static int jpeg_run(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *chan
     u32 sos_header_end = 0;
     int have_sos = 0;
     int scan_ns = 0;
+    int saw_eoi = 0;   /* 13.27.0: a progressive file must reach EOI; one cut between scans used to decode as if whole */
 
     /* Pass 1: walk markers up to and including the SOS header (the scan's
        own component list), collecting DQT/DHT/SOF along the way. The
@@ -293,7 +294,7 @@ static int jpeg_run(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *chan
         if (mpos >= len) PFAIL(JPEG_E_TRUNCATED);
         u8 marker = data[mpos];
         pos = mpos + 1;
-        if (marker == 0xD9) { if (prog && have_sos) break; PFAIL(JPEG_E_FORMAT); } /* EOI: the end of a progressive file, too soon for a baseline one */
+        if (marker == 0xD9) { if (prog && have_sos) { saw_eoi = 1; break; } PFAIL(JPEG_E_FORMAT); } /* EOI: the end of a progressive file, too soon for a baseline one */
         if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) continue; /* TEM/RST: no payload */
         if (pos + 2 > len) PFAIL(JPEG_E_TRUNCATED);
         u32 seglen = be16(data + pos);
@@ -450,6 +451,7 @@ static int jpeg_run(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *chan
         pos += seglen;
     }
     if (!have_sos) PFAIL(JPEG_E_TRUNCATED);
+    if (prog && !saw_eoi) PFAIL(JPEG_E_TRUNCATED);   /* the data ran out between scans: some scans never arrived */
     if (have_dri) PFAIL(JPEG_E_UNSUPPORTED);
     for (int i = 0; i < nf; i++) if (!have_q[comp[i].tq]) PFAIL(JPEG_E_FORMAT);
     for (int i = 0; i < nf && !prog; i++) {

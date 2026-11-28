@@ -9,7 +9,7 @@ A cleanly anti-aliased corner ramps smoothly; a staircased one spikes.
 Usage: tools/checks/iconedge-check.py [out-prefix]
 Writes <out>-dock.png (1:1) and <out>-dock4x.png (nearest 4x) for eyeballing.
 """
-import json, os, socket, subprocess, sys, time
+import os, json, os, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
 
@@ -106,9 +106,18 @@ print(f"total {total}")
 TRASH_SLOT = 11
 TRASH_ROWS, TRASH_COLS = range(52, 57), range(30, 45)  # 2px inside the rim each side: the AA edge column is not a rib
 x0 = (SLOT0_X + TRASH_SLOT * PITCH) * SCALE; y0 = ICON_TOP_Y * SCALE
-bad = [(x, y, lum(img.getpixel((x0 + x, y0 + y)))) for y in TRASH_ROWS for x in TRASH_COLS
-       if lum(img.getpixel((x0 + x, y0 + y))) < 240]
-print(f"trash base band non-white pixels: {len(bad)}/{len(TRASH_ROWS) * len(TRASH_COLS)}")
+# 13.27.0: the painted can (art/icons/trash.png) is cream, not white, and its base band is rows 49-55, x 27-45
+# (measured on the artwork at dock size: 212-218 luminance there, the ribs end at row 47 and drop to ~140).
+# Same defect, same zero tolerance: a rib or a shadow stub in the band shows as a dark run, so the band must be
+# one tone (range <= 12) and nowhere under 200.
+PAINTED = os.path.exists("art/icons/trash.png")
+if PAINTED: TRASH_ROWS, TRASH_COLS = range(49, 56), range(27, 46)
+vals = [(x, y, lum(img.getpixel((x0 + x, y0 + y)))) for y in TRASH_ROWS for x in TRASH_COLS]
+if PAINTED:
+    lo = min(v for _, _, v in vals); bad = [t for t in vals if t[2] < 200] + ([("range", max(v for _, _, v in vals) - lo)] if max(v for _, _, v in vals) - lo > 12 else [])
+else:
+    bad = [t for t in vals if t[2] < 240]
+print(f"trash base band failing pixels: {len(bad)}/{len(TRASH_ROWS) * len(TRASH_COLS)}" + (" (painted can: one tone, none under 200)" if PAINTED else ""))
 if bad:
     print("  sample:", bad[:5])
     print("FAIL: Trash base rim is cut by ribs or shadow-rib stubs"); sys.exit(1)

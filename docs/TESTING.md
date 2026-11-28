@@ -50,5 +50,6 @@ Bench first. On the Mac, run the relay with `--bench-dir ~/.cache/joshuatree/ben
 42. **Mail sign-in (13.25.0).** Open Mail with no mail on the card: Sign in, then your server, address and an app password in the sheet. Your inbox opens in Blackcomb, and the Mail tile opens it from then on.
 43. **PC Shut Down (13.25.0).** On a real PC booted from the USB stick: tree menu, Shut Down. The machine powers off by itself, fans and lights out, not the "safe to turn off" screen.
 44. **age on the Pi (13.26.0).** Terminal: `age keygen`, then `age enc NOTE.TXT NOTE.AGE`. Card in the Mac: `age -d -i AGEKEY.TXT NOTE.AGE` prints the note. Back in the Pi, `age dec NOTE.AGE BACK.TXT` and `cat BACK.TXT` match.
+45. **New look (13.27.0).** Boot the Pi: the soft dusk painting fills the screen with no stripes, and the dock shows the new textured icons with today's date on Calendar. Drag a window: the painting comes back behind it.
 
 Steps 1 to 3 are 10.0. Step 4 is 9.0's touch screen. Steps 5 to 9 are the 8.x fixes.

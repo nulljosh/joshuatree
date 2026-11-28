@@ -111,7 +111,7 @@ images = [
     # name, x0, y0, w, h, alpha, zlib level, filters, expected first BTYPE
     ('rgb_dyn',   320, 180, 320, 180, False, 9, [0, 1, 2, 3, 4], 2),
     ('rgba_stored', 40, 400, 64, 36, True, 0, [4, 3, 2, 1, 0], 0),
-    ('rgb_fixed', 600, 20, 6, 5, False, 6, [1, 4, 2, 3, 0], 1),
+    ('rgb_fixed', 600, 19, 6, 5, False, 6, [1, 4, 2, 3, 0], 1),   # 13.27.0: one row up on the painting, where zlib still picks fixed Huffman
     # v75: 8-bit indexed (color type 3), the shape every real plain-HTTP map
     # tile server serves. The crop is quantized to a 40-color palette
     # (PIL median cut) so the expected pixels are PLTE lookups, NOT the

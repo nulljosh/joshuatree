@@ -92,7 +92,7 @@ img.putalpha(mask)
 out = os.path.join(ROOT, "docs/brand/readme-banner.png")
 img = img.resize((1600, 640), Image.LANCZOS)                  # 1600 wide is 2x the README column: sharp, and under 1 MB
 a = img.getchannel("A")
-img = img.convert("RGB").quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGBA")   # the painting is a palette already
+img = img.convert("RGB").quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG).convert("RGBA")   # 13.27.0: the painting is smooth now, so the palette is dithered
 img.putalpha(a)
 img.save(out, optimize=True)
 print(f"saved {os.path.relpath(out, ROOT)} {img.size} {os.path.getsize(out)} bytes")

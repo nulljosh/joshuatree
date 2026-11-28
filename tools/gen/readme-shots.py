@@ -84,8 +84,8 @@ def main():
     mask = Image.new("L", (W * 4, H * 4), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, W * 4 - 1, H * 4 - 1), R * 4, fill=255)
     im.putalpha(mask.resize((W, H), Image.LANCZOS))
-    a = im.getchannel("A")
-    im = im.convert("RGB").quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert("RGBA"); im.putalpha(a)
+    # full colour (13.27.0): a 256-colour palette spent itself on the painted wallpaper's gradients and turned the green
+    # window button grey
     out = sys.argv[1] if len(sys.argv) > 1 else OUT
     im.save(out, optimize=True)
     shutil.rmtree(tmp, ignore_errors=True)

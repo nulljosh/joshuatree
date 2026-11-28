@@ -1,6 +1,6 @@
-/* The ARM desktop's wallpaper. 8.9.0: on the Pi the default is a picture, Joshua Tree at dusk (park_wall.h, drawn by
-   tools/gen/gen_park_wall.py): 960 x 540 since 13.9.3 (480 x 270 before) in 16 colours, dithered, scaled to the screen with
-   every other row dimmed, a scanline look. Settings can pick a flat colour instead (settings.c); the QEMU builds start on the flat blue #3B6EA5, so the
+/* The ARM desktop's wallpaper. 8.9.0: on the Pi the default is a picture, Joshua Tree at dusk (park_wall.h, made by
+   tools/gen/gen_park_wall.py). 13.27.0: a soft painting (art/wallpaper/park-dusk.jpg) at 960 x 540 in 256 colours, a byte a
+   pixel, scaled to the screen; the 16-colour pixel scene and its scanlines are gone. Settings can pick a flat colour instead (settings.c); the QEMU builds start on the flat blue #3B6EA5, so the
    checks that read bare wallpaper see one colour. No decoder, no heap: wall_px works out any pixel from the packed picture. */
 #include "park_wall.h"
 #define WALL_PARK 0x01000000u   /* settings.c's walls[]: the picture, not a colour */
@@ -11,7 +11,6 @@ static unsigned wall_rgb = 0x003B6EA5u;   /* a calm blue (Joshua: "a nice blue, 
 #endif
 
 static unsigned rb_swap(unsigned c) { return (c & 0xFF) << 16 | (c & 0xFF00) | c >> 16; }   /* red and blue the other way round */
-static unsigned dimmed(unsigned c) { return ((c >> 16 & 0xFF) * 4 / 5) << 16 | ((c >> 8 & 0xFF) * 4 / 5) << 8 | (c & 0xFF) * 4 / 5; }   /* the scanline */
 /* n pixels of row y from column x into dst, in the screen's byte order: the picture's row and scanline worked out once,
    each pixel a fixed-point step (the drag path repaints wallpaper every frame, so no division per pixel). */
 void wall_span(unsigned *dst, int x, int y, int n, int w, int h, int swap) {
@@ -20,16 +19,13 @@ void wall_span(unsigned *dst, int x, int y, int n, int w, int h, int swap) {
         for (int i = 0; i < n; i++) dst[i] = c;
         return;
     }
-    static unsigned lut[4][16], made;   /* 13.9.3: the palette plain and scanline-dimmed, both byte orders, worked out once:
-                                           the dither changes colour almost every pixel, and the drag path repaints every frame */
-    if (!made) { for (int k = 0; k < 16; k++) { lut[0][k] = park_pal[k]; lut[1][k] = dimmed(park_pal[k]); lut[2][k] = rb_swap(lut[0][k]); lut[3][k] = rb_swap(lut[1][k]); } made = 1; }
-    const unsigned char *row = park_px + (unsigned)y * PARK_H / (unsigned)h * (PARK_W / 2);
-    const unsigned *pal = lut[(swap ? 2 : 0) + (y & 1)];   /* every other screen row is the scanline */
+    static unsigned lut[2][256], made;   /* 13.27.0: the painting's 256 colours in both byte orders, worked out once (the drag
+                                            path repaints wallpaper every frame); no scanline now, the picture is smooth */
+    if (!made) { for (int k = 0; k < 256; k++) { lut[0][k] = park_pal[k]; lut[1][k] = rb_swap(park_pal[k]); } made = 1; }
+    const unsigned char *row = park_px + (unsigned)y * PARK_H / (unsigned)h * PARK_W;
+    const unsigned *pal = lut[swap ? 1 : 0];
     unsigned step = (PARK_W << 16) / (unsigned)w, at = (unsigned)x * step;
-    for (int i = 0; i < n; i++, at += step) {
-        unsigned px = at >> 16;
-        dst[i] = pal[px & 1 ? row[px / 2] & 15 : row[px / 2] >> 4];
-    }
+    for (int i = 0; i < n; i++, at += step) dst[i] = pal[row[at >> 16]];
 }
 unsigned wall_px(int x, int y, int w, int h) {   /* the wallpaper's colour at screen pixel x, y of a w x h screen, 0x00RRGGBB */
     unsigned c;
