@@ -247,7 +247,7 @@ void cal_overlay(unsigned *tile, int pw, int today) {
     if (d >= 10) day[n++] = '0' + d / 10;
     day[n++] = '0' + d % 10; day[n] = 0;
     for (int y = pw * 50 / 128; y < pw * 116 / 128; y++)   /* 7.8.0: the page under the edge-to-edge band, as the PC clears it (clockicon.c) */
-        for (int x = pw * 12 / 128; x < pw * 116 / 128; x++) tile[y * pw + x] = 0x00E2D4C6;   /* 13.27.0: the painted page's linen cream, not white */
+        for (int x = pw * 12 / 128; x < pw * 116 / 128; x++) tile[y * pw + x] = 0x00E2D5CB;   /* 13.27.0: the painted page's linen cream, not white */
     int month_size = pw * 16 / 10, day_size = pw * 38 / 10;
     text_draw(1, months[mo], (pw - text_width(1, months[mo], month_size)) / 2,
               pw * 44 / 128, month_size, 0x00FFFFFF, tile, pw, pw, pw);
