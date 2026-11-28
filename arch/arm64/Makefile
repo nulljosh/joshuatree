@@ -90,8 +90,9 @@ tls.o: tls.c rng.h tls.h tls_ta.h ../../drivers/net.h ../../drivers/http.h
 # 6.54.0: app signatures (appsig.c). APP_KEY is the public key header the kernel trusts, app_key.h (Joshua's) unless a check
 # passes its throwaway one; FORCE rebuilds this one object every make, so a test key never survives into a build made without it.
 APP_KEY ?= app_key.h
-appsig.o: appsig.c appsig.h $(APP_KEY) FORCE
-	$(NETCC) -I$(BSSL)/inc -I$(BSSL)/shim -I../../lib -DAPP_KEY_H='"$(abspath $(APP_KEY))"' -c appsig.c -o $@
+RELEASE_KEY ?= release_key.h   # 13.27.4: CI's key, for the OS image only
+appsig.o: appsig.c appsig.h $(APP_KEY) $(RELEASE_KEY) FORCE
+	$(NETCC) -I$(BSSL)/inc -I$(BSSL)/shim -I../../lib -DAPP_KEY_H='"$(abspath $(APP_KEY))"' -DRELEASE_KEY_H='"$(abspath $(RELEASE_KEY))"' -c appsig.c -o $@
 # 6.55.0: the app store (store.c). STORE_BASE= points install at a stub for tools/checks/arm64-store-check.py only; FORCE, as nimble.o.
 STORE_BASE ?=
 store.o: store.c appsig.h uimg.h FORCE

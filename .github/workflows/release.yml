@@ -72,6 +72,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          JT_RELEASE_KEY: ${{ secrets.JT_RELEASE_KEY }}   # 13.27.4: CI's release key (tools/release-key.sh), for kernel8.sig
         run: |
           sudo apt-get install -y --no-install-recommends openssl python3-pil librsvg2-bin
           make -C arch/arm64 pi
@@ -84,6 +85,16 @@ jobs:
           size=$(stat -c%s kernel8.img)
           if [ "$size" -ge 4128768 ]; then gh release upload "${{ steps.rel.outputs.tag }}" version.txt; echo "::error::kernel8.img is $size bytes, over the 3.9 MiB a Pi can fetch (browser.c RAW_MAX)"; exit 1; fi
           gh release upload "${{ steps.rel.outputs.tag }}" kernel8.img kernel8.img.sha256 version.txt
+          # 13.27.4: sign it here, so a Pi updates with no step on Joshua's Mac. The kernel trusts this key for the OS image only
+          # (release_key.h, appsig_os_ok). The secret must match the public half this kernel was built with, or Pis would refuse it.
+          if [ -z "$JT_RELEASE_KEY" ]; then echo "::warning::no JT_RELEASE_KEY secret yet: run tools/release-key.sh on the Mac once, or sign with tools/update-sign.sh"; exit 0; fi
+          k="$RUNNER_TEMP/release.pem"; (umask 077; printf '%s\n' "$JT_RELEASE_KEY" > "$k")
+          want=$(python3 -c "import re;print(''.join(re.findall(r'0x([0-9a-f]{2})',open('arch/arm64/release_key.h').read())))")
+          have=$(openssl ec -in "$k" -pubout -outform DER 2>/dev/null | tail -c 65 | od -An -v -tx1 | tr -d ' \n')
+          if [ "$want" != "$have" ]; then rm -f "$k"; echo "::error::JT_RELEASE_KEY is not the key arch/arm64/release_key.h trusts; Pis would refuse its signature, so none is attached"; exit 1; fi
+          { printf 'JTAPP1\000os.image\000'; cat kernel8.img; } > "$RUNNER_TEMP/msg"
+          openssl dgst -sha256 -sign "$k" -out kernel8.sig "$RUNNER_TEMP/msg"; rm -f "$k"
+          gh release upload "${{ steps.rel.outputs.tag }}" kernel8.sig
       - name: Announce the release on X (dry run until the X keys are set)
         if: steps.rel.outputs.tag != ''
         env:

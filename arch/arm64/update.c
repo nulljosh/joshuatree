@@ -4,7 +4,8 @@
    `update install`) fetches kernel8.img and kernel8.sig from that version's own release (UPDATE_DL<version>/, never
    latest/, so a release published in between cannot mix) and checks the signature with appsig.c, under the name "os.image"
    (a dot no app name can have, so no signed app is ever a signed kernel), before it writes a byte. tools/update-sign.sh
-   signs the release's image on Joshua's Mac with the app key; CI never holds it. Then:
+   signs the release's image on Joshua's Mac with the app key; since 13.27.4 release.yml also signs it with CI's own release key
+   (release_key.h, trusted for the OS image only), so a release installs with no step on the Mac. Then:
    - KERNEL8.NEW and KERNEL8.SIG beside the running KERNEL8.IMG, TRYBOOT.TXT (config.txt plus kernel=kernel8.new), JT/UPDATE.VER;
    - a restart with the firmware's tryboot flag (mailbox tag 0x00038064), so that one boot reads TRYBOOT.TXT, and any boot
      after it reads config.txt again. A firmware that refuses the flag gets no restart: the staged files go.
@@ -103,7 +104,7 @@ void update_install(void) {   /* `update install`, or Update and Restart */
     int st = get(UPDATE_DL, latest, "kernel8.img", &img, &il);
     if (st != 200 || !img || il < 4096) { fail("update: the image could not be fetched; restart and try again\n", "The update could not be downloaded"); heap_release(mark); return; }
     st = get(UPDATE_DL, latest, "kernel8.sig", &sig, &sl);
-    if (st != 200 || !sig || sl > SIG_MAX || !appsig_ok("os.image", 8, img, il, (const unsigned char *)sig, sl)) {   /* nothing is written unless it is signed */
+    if (st != 200 || !sig || sl > SIG_MAX || !appsig_os_ok(img, il, (const unsigned char *)sig, sl)) {   /* nothing is written unless it is signed */
         fail(st == 200 ? "update: the image's signature does not match, so nothing was changed\n" : "update: the release has no signature, so nothing was changed\n", "The update was not signed; nothing changed");
         uart_puts("update: refused\n"); heap_release(mark); return;
     }
@@ -150,7 +151,7 @@ void update_tick(void) {   /* the poll loop: commit once the new kernel has run 
     fat_cwd_set(0);
     int n = img && sig ? fat_read_file("KERNEL8.NEW", img, cap) : -1;
     int sl = n > 0 ? fat_read_file("KERNEL8.SIG", sig, SIG_MAX) : -1;
-    int good = n > 0 && sl > 0 && (unsigned)n < cap && appsig_ok("os.image", 8, img, (unsigned)n, (const unsigned char *)sig, (unsigned)sl);   /* 10.0.0 audit: a short read never becomes the kernel */
+    int good = n > 0 && sl > 0 && (unsigned)n < cap && appsig_os_ok(img, (unsigned)n, (const unsigned char *)sig, (unsigned)sl);   /* 10.0.0 audit: a short read never becomes the kernel */
     int ok = good && fat_replace_file("KERNEL8.IMG", img, (unsigned)n);
     heap_release(mark);
     if (!good && ++tries < 5) {   /* no memory now, or a flaky read: once a minute, five times */

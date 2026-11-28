@@ -7,4 +7,6 @@
 #define APPSIG_MIN 8
 #define APPSIG_MAX 72
 int appsig_ok(const char *name, unsigned n, const void *img, unsigned long len, const unsigned char *sig, unsigned siglen);
+/* 13.27.4: a kernel image ("os.image") signed by the app key or by CI's release key (release_key.h). Apps never take the release key. */
+int appsig_os_ok(const void *img, unsigned long len, const unsigned char *sig, unsigned siglen);
 #endif
