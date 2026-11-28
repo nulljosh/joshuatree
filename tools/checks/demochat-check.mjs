@@ -364,7 +364,7 @@ try {
       await route.fulfill({ status: 403, body: '' });
     }
   });
-  await phonePage.goto(url, { waitUntil: 'load' });
+  await phonePage.goto(url + '&samantha', { waitUntil: 'load' });   // 13.27.2: her phone mode is opt-in
   try {
     await phonePage.waitForFunction(() => window.__jt && window.__jt.ready, null, { timeout: 60000 });
     await phonePage.evaluate(() => {
